@@ -25,7 +25,11 @@ class QueryRouteTests(unittest.TestCase):
         ) as mock_generate:
             response = self.client.post(
                 "/api/v1/agent/query",
-                json={"query": "what time is it?", "session_id": "session-123"},
+                json={
+                    "query": "what time is it?",
+                    "session_id": "session-123",
+                    "user_id": "user-123",
+                },
             )
 
         self.assertEqual(response.status_code, 200)
@@ -38,4 +42,21 @@ class QueryRouteTests(unittest.TestCase):
                 "trace_url": None,
             },
         )
-        mock_generate.assert_awaited_once_with("what time is it?")
+        mock_generate.assert_awaited_once_with(
+            query="what time is it?",
+            session_id="session-123",
+            user_id="user-123",
+        )
+
+    def test_query_route_returns_500_when_service_fails(self) -> None:
+        with patch(
+            "src.api.routes.query.generate_agent_response",
+            new=AsyncMock(side_effect=RuntimeError("boom")),
+        ):
+            response = self.client.post(
+                "/api/v1/agent/query",
+                json={"query": "what time is it?"},
+            )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json(), {"detail": "Failed to process query"})

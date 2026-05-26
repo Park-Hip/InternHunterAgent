@@ -1,10 +1,11 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Dict, Any
 from pathlib import Path
+from pydantic import Field
 import yaml
 
 class Settings(BaseSettings):
-    GROQ_API_KEY: str
+    GROQ_API_KEY: str = Field(..., min_length=1)
 
     LANGFUSE_SECRET_KEY: str
     LANGFUSE_PUBLIC_KEY: str
@@ -15,18 +16,23 @@ class Settings(BaseSettings):
     config_yaml: Dict[str, Any] = {}
     prompts_yaml: Dict[str, Any] = {}
 
+def _load_yaml_file(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise ValueError(f"Missing config file: {path}")
+    
+    with path.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    if not isinstance(data, dict):
+        raise ValueError(f"Invalid YAML structure in {path}: expected a mapping/object")
+
+    return data
+
 def load_settings() -> Settings:
     settings = Settings()
     
-    config_path = Path("config/settings.yaml")
-    if config_path.exists():
-        with open(config_path, "r", encoding="utf-8") as f:
-            settings.config_yaml = yaml.safe_load(f)
-            
-    prompts_path = Path("config/prompts.yaml")
-    if prompts_path.exists():
-        with open(prompts_path, "r", encoding="utf-8") as f:
-            settings.prompts_yaml = yaml.safe_load(f)
+    settings.config_yaml = _load_yaml_file(Path("config/settings.yaml"))
+    settings.prompts_yaml = _load_yaml_file(Path("config/prompts.yaml"))
             
     return settings
 

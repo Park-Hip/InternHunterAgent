@@ -19,5 +19,5 @@ class AgentProvider():
             timeout=groq_cfg.get("timeout", 30),
             max_retries=groq_cfg.get("max_retries", 2),
             streaming=groq_cfg.get("streaming", False),
-            groq_api_key=settings.GROQ_API_KEYS,
+            groq_api_key=settings.GROQ_API_KEY,
         )

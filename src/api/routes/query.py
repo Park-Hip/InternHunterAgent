@@ -8,8 +8,11 @@ router = APIRouter()
 @router.post("/agent/query", response_model=QueryResponse)
 async def query_agent(request: QueryRequest):
     try:
-        query = request.query
-        response = await generate_agent_response(query)
+        response = await generate_agent_response(
+            query=request.query,
+            session_id=request.session_id,
+            user_id=request.user_id,
+        )
         return QueryResponse(
             answer=response['answer'],
             session_id=request.session_id,

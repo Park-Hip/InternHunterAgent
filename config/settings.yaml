@@ -1,0 +1,9 @@
+agent:
+  provider: groq
+  groq:
+    model: llama-3.3-70b-versatile
+    temperature: 0.2
+    max_tokens: 1024
+    timeout: 30
+    max_retries: 2
+    streaming: False

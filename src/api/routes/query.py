@@ -11,8 +11,10 @@ async def query_agent(request: QueryRequest):
         query = request.query
         response = await generate_agent_response(query)
         return QueryResponse(
-            answer=response,
+            answer=response['answer'],
             session_id=request.session_id,
+            trace_id=response["trace_id"],
+            trace_url=response["trace_url"],
         )
     
     except Exception as e:

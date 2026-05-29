@@ -296,6 +296,71 @@ Success criteria:
 - Local failures are understandable
 - The app degrades cleanly when tracing fails
 
+## Milestone 6: First Real SQL Tool
+
+Objective: add one safe production tool over `clean_jobs` so the agent can answer real job-data questions while keeping the public API response simple.
+
+What to implement:
+
+- one SQL tool exposed through the agent runtime
+- schema/context builder for `clean_jobs`
+- SQL generation prompt for the tool path
+- strict read-only SQL validation
+- validated execution against the database
+- table shaping for internal tool/debug use
+- refusal path for unsafe or unsupported SQL
+
+Behavior rule:
+
+- if the user asks about jobs, counts, salaries, locations, titles, companies, filters, or trends that depend on `clean_jobs`, the agent must use the SQL tool
+
+Success criteria:
+
+- the agent can answer one real `clean_jobs` question end-to-end
+- unsafe SQL is rejected before execution
+- the public response includes a natural-language answer
+- tool output remains structured internally for tracing and future UX expansion
+- the SQL path is traceable in Langfuse
+- at least one success-path and one refusal/failure-path test exist
+
+Important note:
+
+This milestone should come before memory. A useful InternHunter MVP is defined first by trustworthy job-data answers, then by conversational refinement.
+
+Response note:
+
+For the first shipped MVP, prefer an answer-only public API response. Keep table-shaped results internal to the SQL tool and tracing path so the product can ship faster without committing to early output-format complexity.
+
+## Milestone 7: Native Short-Term Memory
+
+Objective: add lightweight multi-turn memory using LangChain/LangGraph's native checkpointer-based thread memory.
+
+What to implement:
+
+- native short-term memory through a shared checkpointer
+- `InMemorySaver` for MVP
+- `session_id` mapped to `thread_id`
+- memory automatically read and updated by the runtime on each invocation
+
+Constraints:
+
+- memory is session-scoped only
+- memory is in-process only for MVP
+- memory resets on app restart
+- no long-term or cross-session recall
+- no custom manual transcript store in the service layer
+
+Success criteria:
+
+- follow-up questions work inside the same `session_id`
+- separate sessions stay isolated
+- the app still works when `session_id` is missing
+- memory implementation remains invisible to the route layer
+
+Memory note:
+
+Use native checkpointer-based short-term memory before building any custom memory layer. If context growth later hurts latency or model quality, the next optimization should be message trimming, not long-term memory.
+
 ## First Implementation Plan
 
 If you want the shortest path to a working MVP, use this order:
@@ -344,14 +409,41 @@ The MVP is complete when all of the following are true:
 
 Once this is stable, the next logical expansions are:
 
-1. Add one real tool
-2. Add session-aware memory
-3. Add prompt versioning
-4. Add evaluation and feedback capture
-5. Add auth and rate limiting
-6. Add deployment environments
+1. Add prompt versioning
+2. Add evaluation and feedback capture
+3. Add auth and rate limiting
+4. Add deployment environments
+5. Add additional production tools only when product value is clear
+6. Consider persistent or long-term memory only after session memory proves necessary
 
 At that point, the existing request flow and tracing setup will give you a reliable base instead of forcing a rewrite.
+
+## Shippable MVP
+
+The MVP should be considered shippable when all of the following are true:
+
+- FastAPI boots locally and through Docker
+- `GET /health` works
+- the ReAct-style runtime is stable
+- Langfuse tracing works for the request path
+- hardening is complete enough that config and runtime failures are understandable
+- one safe SQL tool over `clean_jobs` works end-to-end
+- the agent returns a trustworthy natural-language answer grounded in SQL tool results
+- short-term memory works through native checkpointer-based thread memory
+- follow-up questions work within the same `session_id`
+
+The MVP does not require:
+
+- long-term memory
+- persistent memory storage
+- RAG
+- multiple production tools
+- multi-agent routing
+- autonomous workflows
+
+Product test for the shipped MVP:
+
+Can a user ask about jobs, refine the question naturally, and get a trustworthy result with visible evidence?
 
 ## Notes For This Repo
 

@@ -1,0 +1,52 @@
+Manual Verification Guide
+
+This document contains the required active verification steps for completed tickets. Do not assume a ticket works just because an automated build passes. Always execute manual checklists to catch obvious breakage before moving forward.
+
+T0000: Milestone 0 - Foundation
+
+* Run `uv run uvicorn src.api.app:app --reload` to boot the backend locally.
+* Open `http://127.0.0.1:8000/health` in a browser or API client.
+* Confirm the server starts cleanly and the health endpoint returns a successful JSON response.
+
+T0001: Milestone 1 - Runnable Request Flow
+
+* Run `uv run pytest tests/api/test_query.py` to verify the request-flow tests.
+* Open `http://127.0.0.1:8000/docs` in the browser.
+* Send a `POST /api/v1/agent/chat` request with a JSON body.
+* Confirm the API returns a structured response that includes the answer and request metadata.
+
+T0002: Milestone 2 - ReAct Agent Runtime
+
+* Run `uv run pytest tests/agents/runtime/test_react_agent.py` to verify the runtime tests.
+* Open `src/agents/runtime/react_agent.py` and inspect the agent execution wrapper.
+* Confirm the runtime builds messages, calls the LangChain agent, and returns a readable final answer outside the API layer.
+
+T0003: Milestone 3 - Self-Hosted Langfuse
+
+* Run `docker compose -f docker/docker-compose.yaml up --build` to start the local observability stack.
+* Open the Langfuse UI in a browser at the local web port.
+* Confirm the stack starts successfully and the Langfuse UI is reachable locally.
+
+T0004: Milestone 4 - Tracing Integration
+
+* Start the app with `uv run uvicorn src.api.app:app --reload`.
+* Start the Langfuse stack with `docker compose -f docker/docker-compose.yaml up`.
+* Send one `POST /api/v1/agent/chat` request to the API.
+* Open the Langfuse UI and confirm the request appears as a trace.
+* Confirm the API response includes trace metadata when it is available.
+
+T0005: Milestone 5 - Hardening
+
+* Run `uv run pytest` to verify the full test suite.
+* Break one required config value locally and restart the app.
+* Confirm the app fails clearly and surfaces a consistent error for the invalid configuration or provider failure.
+* Confirm the happy-path tests still pass after the hardening changes.
+
+T0006.1: DB Foundation
+
+* Run `docker compose up -d` from the repository root.
+* Confirm the Postgres container is healthy with `docker ps`.
+* Seed the schema with `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_clean_jobs.sql`.
+* Query `clean_jobs` with `docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT * FROM clean_jobs LIMIT 5;"`.
+* Start the app with `DATABASE_URL=postgresql+psycopg://internhunter:internhunter@localhost:5432/internhunter` in the environment.
+* Open `http://127.0.0.1:8000/api/v1/health` and confirm the API returns an online health response.

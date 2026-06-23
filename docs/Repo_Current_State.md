@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0006.2-query-result-models
+feature/t0006.3-table-formatter
 
 ## Completed tickets
 - T0000: Milestone 0 - Foundation (FastAPI, logging, health endpoint)
@@ -10,6 +10,7 @@ feature/t0006.2-query-result-models
 - T0005: Milestone 5 - Hardening (Error handling, timeouts, integration tests)
 - T0006.1: DB Foundation (Postgres, dependencies, settings, session factory)
 - T0006.2: Query result models (`TableArtifact`, `QueryRefusal`, `QueryToolResult` locked down + serialization tests)
+- T0006.3: Deterministic table formatter (`format_rows` in `src/services/query/table_formatter.py` + empty/single/multi/missing-key tests)
 
 ## Current folder structure
 ```text
@@ -81,7 +82,7 @@ Practical commands from the repository layout:
 ## Build/test status
 - Command run: `uv run pytest -q`
 - Result: passed
-- Summary: `10 passed in 1.87s`
+- Summary: `14 passed in 1.67s`
 
 ## Known issues
 - The repository appears to rely on import-time loading in `src/core/config.py`, which makes startup sensitive to working directory and missing config files.
@@ -93,4 +94,4 @@ Practical commands from the repository layout:
 - Previously, `pytest`/`pytest-asyncio`/`pytest-mock` were not declared as project dependencies. `uv run pytest` silently fell back to a global `pytest.exe` on `PATH` (a different Python install entirely), which lacked `psycopg` and had an older `langchain` without `langchain.messages`, causing spurious `ModuleNotFoundError`s in `tests/core/test_db.py`, `tests/agents/runtime/test_react_agent.py`, and `tests/api/test_query.py`. Fixed by adding them to `[dependency-groups] dev` via `uv add --dev pytest pytest-asyncio pytest-mock`, so `uv run pytest` now resolves inside the project `.venv`.
 
 ## Next recommended ticket
-T0006.3: Deterministic table formatter
+T0006.4: Schema context + SQL-generation prompt

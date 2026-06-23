@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0006.1-db-foundation
+feature/t0006.2-query-result-models
 
 ## Completed tickets
 - T0000: Milestone 0 - Foundation (FastAPI, logging, health endpoint)
@@ -9,6 +9,7 @@ feature/t0006.1-db-foundation
 - T0004: Milestone 4 - Tracing Integration
 - T0005: Milestone 5 - Hardening (Error handling, timeouts, integration tests)
 - T0006.1: DB Foundation (Postgres, dependencies, settings, session factory)
+- T0006.2: Query result models (`TableArtifact`, `QueryRefusal`, `QueryToolResult` locked down + serialization tests)
 
 ## Current folder structure
 ```text
@@ -37,7 +38,9 @@ feature/t0006.1-db-foundation
 |   |-- agents/
 |   |   |-- runtime/
 |   |   `-- tools/
-|   `-- api/
+|   |-- api/
+|   `-- services/
+|       `-- query/
 |-- main.py
 |-- pyproject.toml
 |-- uv.lock
@@ -58,12 +61,12 @@ Runtime dependencies declared in `pyproject.toml`:
 - `structlog>=25.5.0`
 - `uvicorn>=0.48.0`
 
-Dev/test dependencies are not declared separately in `pyproject.toml`; the current environment provides:
-- `pytest`
-- `pytest-asyncio`
-- `pytest-mock`
-- `anyio`
-- `langsmith`
+Dev/test dependencies are now declared in `pyproject.toml` under `[dependency-groups] dev`:
+- `pytest>=9.1.1`
+- `pytest-asyncio>=1.4.0`
+- `pytest-mock>=3.15.1`
+
+`anyio` and `langsmith` are transitive (pulled in by `fastapi`/`langchain`), not declared directly.
 
 ## Available scripts
 No package scripts or `tool.*.scripts` entries are defined in `pyproject.toml`.
@@ -76,9 +79,9 @@ Practical commands from the repository layout:
 - `docker compose -f docker/docker-compose.yaml up --build`
 
 ## Build/test status
-- Command run: `uv run --with pytest python -m pytest -q`
+- Command run: `uv run pytest -q`
 - Result: passed
-- Summary: `7 passed in 2.02s`
+- Summary: `10 passed in 1.87s`
 
 ## Known issues
 - The repository appears to rely on import-time loading in `src/core/config.py`, which makes startup sensitive to working directory and missing config files.
@@ -87,7 +90,7 @@ Practical commands from the repository layout:
 - `src/api/routes/query.py` converts all exceptions into a generic 500 response, which makes client-side debugging harder.
 - `docker/docker-compose.yaml` still contains several `CHANGEME` secrets and placeholder credentials.
 - `DATABASE_URL` is now required and must be set in the runtime environment before starting the app.
-- `pytest` is still provided by the local environment in this repo snapshot, so the most reliable verification command is `uv run --with pytest python -m pytest -q`.
+- Previously, `pytest`/`pytest-asyncio`/`pytest-mock` were not declared as project dependencies. `uv run pytest` silently fell back to a global `pytest.exe` on `PATH` (a different Python install entirely), which lacked `psycopg` and had an older `langchain` without `langchain.messages`, causing spurious `ModuleNotFoundError`s in `tests/core/test_db.py`, `tests/agents/runtime/test_react_agent.py`, and `tests/api/test_query.py`. Fixed by adding them to `[dependency-groups] dev` via `uv add --dev pytest pytest-asyncio pytest-mock`, so `uv run pytest` now resolves inside the project `.venv`.
 
 ## Next recommended ticket
-T0006: Milestone 6 - First Real SQL Tool
+T0006.3: Deterministic table formatter

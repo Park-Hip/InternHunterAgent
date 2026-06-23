@@ -50,3 +50,9 @@ T0006.1: DB Foundation
 * Query `clean_jobs` with `docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT * FROM clean_jobs LIMIT 5;"`.
 * Start the app with `DATABASE_URL=postgresql+psycopg://internhunter:internhunter@localhost:5432/internhunter` in the environment.
 * Open `http://127.0.0.1:8000/api/v1/health` and confirm the API returns an online health response.
+
+T0006.2: Query result models
+
+* Run `uv run pytest tests/services/query/test_models.py -v` and confirm 3 tests pass (`TableArtifact`, `QueryRefusal`, `QueryToolResult` serialization).
+* Open `src/services/query/models.py` and confirm only whitespace/formatting changed, plus the `rows` type tightened to `list[list[object]]` to match the design doc — no field additions or behavioral changes.
+* Run `uv run pytest -q` and confirm the full suite passes with no `ModuleNotFoundError` for `psycopg` or `langchain.messages` (these are now resolved by declaring `pytest`/`pytest-asyncio`/`pytest-mock` as dev dependencies in `pyproject.toml`).

@@ -15,3 +15,9 @@ class QueryToolResult(BaseModel):
     answer: str
     table: TableArtifact | None = None
     refusal: QueryRefusal | None = None
+
+
+class ValidationResult(BaseModel):
+    valid: bool
+    sql: str
+    reason: str = ""

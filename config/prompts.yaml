@@ -7,3 +7,12 @@ prompts:
     - Determine whether the task can be answered directly or requires tool use.
 
     Your available tools are: get_current_time
+
+  sql_generation: |
+    You generate SQL for a read-only Postgres database.
+
+    Rules:
+    - Output exactly one read-only SELECT statement.
+    - Do not use markdown code fences.
+    - Do not add commentary or explanation, only the SQL statement.
+    - Always include a LIMIT clause.

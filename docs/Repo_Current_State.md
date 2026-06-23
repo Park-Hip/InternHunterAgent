@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0006.3-table-formatter
+feature/t0006.4-schema-context
 
 ## Completed tickets
 - T0000: Milestone 0 - Foundation (FastAPI, logging, health endpoint)
@@ -11,6 +11,7 @@ feature/t0006.3-table-formatter
 - T0006.1: DB Foundation (Postgres, dependencies, settings, session factory)
 - T0006.2: Query result models (`TableArtifact`, `QueryRefusal`, `QueryToolResult` locked down + serialization tests)
 - T0006.3: Deterministic table formatter (`format_rows` in `src/services/query/table_formatter.py` + empty/single/multi/missing-key tests)
+- T0006.4: Schema context + SQL-generation prompt (`build_clean_jobs_schema_context()`, `sql_generation` prompt block, `load_sql_generation_prompt()`)
 
 ## Current folder structure
 ```text
@@ -82,7 +83,7 @@ Practical commands from the repository layout:
 ## Build/test status
 - Command run: `uv run pytest -q`
 - Result: passed
-- Summary: `14 passed in 1.67s`
+- Summary: `20 passed in 1.57s`
 
 ## Known issues
 - The repository appears to rely on import-time loading in `src/core/config.py`, which makes startup sensitive to working directory and missing config files.
@@ -92,6 +93,7 @@ Practical commands from the repository layout:
 - `docker/docker-compose.yaml` still contains several `CHANGEME` secrets and placeholder credentials.
 - `DATABASE_URL` is now required and must be set in the runtime environment before starting the app.
 - Previously, `pytest`/`pytest-asyncio`/`pytest-mock` were not declared as project dependencies. `uv run pytest` silently fell back to a global `pytest.exe` on `PATH` (a different Python install entirely), which lacked `psycopg` and had an older `langchain` without `langchain.messages`, causing spurious `ModuleNotFoundError`s in `tests/core/test_db.py`, `tests/agents/runtime/test_react_agent.py`, and `tests/api/test_query.py`. Fixed by adding them to `[dependency-groups] dev` via `uv add --dev pytest pytest-asyncio pytest-mock`, so `uv run pytest` now resolves inside the project `.venv`.
+- `load_sql_generation_prompt()` (T0006.4) returns a plain `str` rather than a `SystemMessage` like `load_system_prompt()`, since the SQL-generation flow needs to combine it with `build_clean_jobs_schema_context()` text before sending it to the model (T0006.7). Flagging in case the tool-adapter ticket expects a different shape.
 
 ## Next recommended ticket
-T0006.4: Schema context + SQL-generation prompt
+T0006.5: SQL validator (deterministic, read-only)

@@ -61,3 +61,10 @@ T0006.3: Deterministic table formatter
 
 * Run `uv run pytest tests/services/query/test_table_formatter.py -v` and confirm empty / single-row / multi-row / missing-key tests pass.
 * In a Python REPL: `from src.services.query.table_formatter import format_rows`, then call it with `[]`, a single dict, and rows where a later row omits a key present in the first row — confirm missing values render as `None`.
+
+T0006.4: Schema context + SQL-generation prompt
+
+* Run `uv run pytest tests/services/query/test_schema_context.py tests/agents/runtime/test_prompts.py -v` and confirm all tests pass.
+* In a Python REPL: `from src.services.query.schema_context import build_clean_jobs_schema_context; print(build_clean_jobs_schema_context())` — confirm output lists only `title`, `company`, `description`, `tech_stack` and no other columns.
+* With `DATABASE_URL` set in the environment, in a Python REPL: `from src.agents.runtime.prompts import load_sql_generation_prompt; print(load_sql_generation_prompt())` — confirm the SQL-generation prompt text (SELECT-only, no fences, LIMIT required).
+* Temporarily blank the `sql_generation` block in `config/prompts.yaml`, re-run the REPL check, and confirm `load_sql_generation_prompt()` raises a clear `ValueError`; then restore the block.

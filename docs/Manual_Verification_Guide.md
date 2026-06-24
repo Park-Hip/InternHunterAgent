@@ -104,3 +104,11 @@ T0006.9: Keep public API answer-only
 * Run `uv run pytest tests/api/test_query.py -v` and confirm all 3 tests pass (clock-tool path, job-data path, service-failure path) — both response-shape tests assert the exact key set `{answer, session_id, trace_id, trace_url}` with no `sql`/`table` keys.
 * With the local stack running (`docker compose up -d`), `POST /api/v1/agent/query` with `{"query": "What tech stack does Acme use?"}` and inspect the raw JSON — confirm only `answer`, `session_id`, `trace_id`, `trace_url` are present and `answer` reads as natural language, not a raw table/SQL dump.
 * Repeat with `{"query": "what time is it?"}` and confirm the same response shape.
+
+T0006.10: End-to-end manual verification
+
+* Run `docker compose up -d`, then `docker compose ps` and confirm `postgres` and `api` both report `healthy`.
+* `POST /api/v1/agent/query` with `{"query": "What companies use Python?"}` — confirm a readable natural-language answer, then look up the returned `trace_id` in Langfuse (`GET /api/public/traces/<trace_id>` with basic auth, or the Langfuse UI) and confirm a `query_clean_jobs` tool call appears in the message trace.
+* `POST /api/v1/agent/query` with `{"query": "what time is it?"}` — confirm the answer and confirm via the trace that `get_current_time` (not `query_clean_jobs`) was called.
+* Force the refusal path directly at the tool boundary (REPL): monkeypatch `generate_sql` to return `"DROP TABLE clean_jobs"` or `"SELECT * FROM pg_tables"` and call `query_clean_jobs.ainvoke(...)` — confirm a graceful refusal string (`"I can't run that query: ..."`), not a crash. (Asking the agent to delete/inspect schema in plain English typically gets refused by the model before it ever calls the tool, so this boundary check is the reliable way to exercise `validate_sql`'s rejection path.)
+* Confirm Langfuse is reachable (`GET /` → 200) and that both the `query_clean_jobs` and `get_current_time` traces are listed via `GET /api/public/traces`.

@@ -1,23 +1,5 @@
+name: langfuse
 services:
-  api:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    container_name: agent
-    ports: 
-      - "8000:8000"
-    depends_on:
-      langfuse-web: 
-        condition: service_started
-    env_file:
-      - ../.env
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
   langfuse-worker:
     image: docker.io/langfuse/langfuse-worker:3
     restart: always

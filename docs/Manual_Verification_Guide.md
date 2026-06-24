@@ -48,7 +48,7 @@ T0006.1: DB Foundation
 * Confirm the Postgres container is healthy with `docker ps`.
 * Seed the schema with `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_clean_jobs.sql`.
 * Query `clean_jobs` with `docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT * FROM clean_jobs LIMIT 5;"`.
-* Start the app with `DATABASE_URL=postgresql+psycopg://internhunter:internhunter@localhost:5432/internhunter` in the environment.
+* Start the app with `DATABASE_URL=postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter` in the environment.
 * Open `http://127.0.0.1:8000/api/v1/health` and confirm the API returns an online health response.
 
 T0006.2: Query result models
@@ -68,3 +68,19 @@ T0006.4: Schema context + SQL-generation prompt
 * In a Python REPL: `from src.services.query.schema_context import build_clean_jobs_schema_context; print(build_clean_jobs_schema_context())` — confirm output lists only `title`, `company`, `description`, `tech_stack` and no other columns.
 * With `DATABASE_URL` set in the environment, in a Python REPL: `from src.agents.runtime.prompts import load_sql_generation_prompt; print(load_sql_generation_prompt())` — confirm the SQL-generation prompt text (SELECT-only, no fences, LIMIT required).
 * Temporarily blank the `sql_generation` block in `config/prompts.yaml`, re-run the REPL check, and confirm `load_sql_generation_prompt()` raises a clear `ValueError`; then restore the block.
+
+T0006.5: SQL validator (deterministic, read-only)
+
+* Run `uv run pytest tests/services/query/test_sql_validator.py -v` and confirm all 13 tests pass.
+* In a Python REPL: `from src.services.query.sql_validator import validate_sql`, then check:
+  * `validate_sql("  SELECT title FROM clean_jobs LIMIT 10  ")` → `valid=True`.
+  * `validate_sql("DROP TABLE clean_jobs")` → `valid=False` with a clear reason.
+  * `validate_sql("SELECT * FROM clean_jobs; DELETE FROM clean_jobs")` → `valid=False` (multi-statement).
+  * `validate_sql("SELECT * FROM pg_tables")` → `valid=False` (system table / not `clean_jobs`).
+  * `validate_sql("SELECT title FROM clean_jobs -- comment")` → `valid=False` (comment injection).
+
+T0006.6: SQL executor (sync, threadpool-friendly)
+
+* Run `uv run pytest tests/services/query/test_executor.py -v` and confirm all 6 tests pass (row mapping, read-only-transaction-first, `ExecutorError` on `OperationalError`/`DBAPIError`, session closed on success/failure).
+* With Postgres running (`docker compose up -d`) and `clean_jobs` seeded, in a Python REPL: `from src.services.query.executor import execute_validated_sql; execute_validated_sql("SELECT title, company FROM clean_jobs LIMIT 5")` — confirm it returns a `list[dict]`.
+* Stop the Postgres container (`docker compose stop postgres`) and re-run the same call — confirm it raises `ExecutorError` instead of crashing or leaking a raw SQLAlchemy traceback; then restart Postgres.

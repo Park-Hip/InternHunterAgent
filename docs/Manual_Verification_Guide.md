@@ -90,3 +90,11 @@ T0006.7: query_clean_jobs LangChain tool adapter
 * Run `uv run pytest tests/agents/tools/test_query_clean_jobs.py -v` and confirm all 4 tests pass (happy path, no-rows, validator-rejection, `ExecutorError`).
 * With local Postgres running and `clean_jobs` seeded, in a Python REPL: `import asyncio; from src.agents.tools.query_clean_jobs import query_clean_jobs; asyncio.run(query_clean_jobs.ainvoke({"question": "What companies use Python?"}))` — confirm it returns a readable string, not a stack trace.
 * Force a validator rejection (e.g. monkeypatch `generate_sql` to return `"DROP TABLE clean_jobs"`) and confirm the tool returns a refusal string (`"I can't run that query: ..."`) instead of raising.
+
+T0006.8: Register tool in agent runtime + strengthen system prompt
+
+* Run `uv run pytest tests/agents/runtime/test_factory.py -v` and confirm the tool-registration test passes.
+* Run `uv run pytest tests/ -v` and confirm no regressions across the full suite.
+* In a Python REPL: `from src.agents.runtime.factory import agent_factory; agent = agent_factory()` — confirm it constructs without error and both `get_current_time` and `query_clean_jobs` are present among the agent's bound tools.
+* With local Postgres running and `clean_jobs` seeded, ask the agent "What tech stack does Acme Corp use?" and confirm (via trace/tool-call log) it calls `query_clean_jobs` rather than answering from general knowledge.
+* Ask the agent "What time is it?" and confirm the clock tool path is unaffected.

@@ -98,3 +98,9 @@ T0006.8: Register tool in agent runtime + strengthen system prompt
 * In a Python REPL: `from src.agents.runtime.factory import agent_factory; agent = agent_factory()` — confirm it constructs without error and both `get_current_time` and `query_clean_jobs` are present among the agent's bound tools.
 * With local Postgres running and `clean_jobs` seeded, ask the agent "What tech stack does Acme Corp use?" and confirm (via trace/tool-call log) it calls `query_clean_jobs` rather than answering from general knowledge.
 * Ask the agent "What time is it?" and confirm the clock tool path is unaffected.
+
+T0006.9: Keep public API answer-only
+
+* Run `uv run pytest tests/api/test_query.py -v` and confirm all 3 tests pass (clock-tool path, job-data path, service-failure path) — both response-shape tests assert the exact key set `{answer, session_id, trace_id, trace_url}` with no `sql`/`table` keys.
+* With the local stack running (`docker compose up -d`), `POST /api/v1/agent/query` with `{"query": "What tech stack does Acme use?"}` and inspect the raw JSON — confirm only `answer`, `session_id`, `trace_id`, `trace_url` are present and `answer` reads as natural language, not a raw table/SQL dump.
+* Repeat with `{"query": "what time is it?"}` and confirm the same response shape.

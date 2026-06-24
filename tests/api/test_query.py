@@ -48,6 +48,46 @@ class QueryRouteTests(unittest.TestCase):
             user_id="user-123",
         )
 
+    def test_query_route_returns_structured_response_for_job_data_question(self) -> None:
+        fake_response = {
+            "answer": "Acme uses Python, FastAPI, and Postgres.",
+            "trace_id": "trace-456",
+            "trace_url": None,
+        }
+
+        with patch(
+            "src.api.routes.query.generate_agent_response",
+            new=AsyncMock(return_value=fake_response),
+        ) as mock_generate:
+            response = self.client.post(
+                "/api/v1/agent/query",
+                json={
+                    "query": "What tech stack does Acme use?",
+                    "session_id": "session-123",
+                    "user_id": "user-123",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(set(body.keys()), {"answer", "session_id", "trace_id", "trace_url"})
+        self.assertEqual(
+            body,
+            {
+                "answer": "Acme uses Python, FastAPI, and Postgres.",
+                "session_id": "session-123",
+                "trace_id": "trace-456",
+                "trace_url": None,
+            },
+        )
+        self.assertNotIn("sql", body)
+        self.assertNotIn("table", body)
+        mock_generate.assert_awaited_once_with(
+            query="What tech stack does Acme use?",
+            session_id="session-123",
+            user_id="user-123",
+        )
+
     def test_query_route_returns_500_when_service_fails(self) -> None:
         with patch(
             "src.api.routes.query.generate_agent_response",

@@ -202,3 +202,62 @@
 * Verify the refusal path (unsafe generated SQL) and confirm Langfuse shows one trace per request with tool invocations visible.
 **Out of Scope:**
 * Any fix beyond what's needed to make the checklist pass; larger issues become follow-up tickets.
+
+### T0007: Milestone 7 - Conversation Memory (short-term, session-scoped, Postgres-backed)
+**Objective:** Give the agent short-term, session-scoped memory so a user can refine questions across turns within one conversation, with the conversation persisted in the application Postgres so it survives a restart and stays coherent across multiple instances. Memory must use LangChain/LangGraph's **native** checkpointer and **native** message trimming — no bespoke storage or trimming logic. Memory stays strictly within-conversation; cross-session recall, user profiles, and embedding retrieval remain out of scope (permanent exclusion, see `Full_Design_Document.md` §2). This milestone is broken into four dependency-ordered sub-tickets (T0007.1-T0007.4).
+**In Scope:**
+* Adding the native Postgres checkpointer dependency and an async psycopg connection pool, separate from the existing sync SQLAlchemy engine but on the same `DATABASE_URL` app database.
+* A FastAPI startup/shutdown lifecycle that opens the pool, runs the checkpointer's one-time table `setup()`, assembles the agent with the checkpointer injected, and closes the pool cleanly.
+* Mapping the API `session_id` to the runtime `thread_id`, generating a `session_id` when the client omits one, and returning the id actually used.
+* Bounding what the model sees per turn with LangChain's native `trim_messages`, driven by a config cap (`agent.memory.max_messages`).
+* Tests and a manual checklist proving multi-turn refinement, two-session isolation, generated-id return, persistence across a restart, and that the cap holds.
+**Out of Scope:**
+* Cross-session or long-term memory, user profiles, resume/embedding retrieval (permanent exclusion).
+* Summarization or any extra LLM call to compress history (count-based trimming only this milestone).
+* A typed error contract or auth (separate concerns).
+* Streaming responses or any change to the answer-only public contract.
+
+#### T0007.1: Startup lifecycle + async checkpointer foundation
+**Objective:** Stand up the missing async foundation that memory needs: the native Postgres checkpointer dependency, an async connection pool on the app database, and a FastAPI lifespan that assembles the agent at startup instead of at import time. No memory behavior changes yet — this ticket only relocates agent assembly and proves the checkpointer's tables can be created cleanly.
+**In Scope:**
+* Add `langgraph-checkpoint-postgres>=2.0` and the async psycopg extra to `pyproject.toml`.
+* Add an async psycopg connection pool (e.g. `AsyncConnectionPool`) configured for the checkpointer (`autocommit=True`, dict row factory, `prepare_threshold=0`); derive its DSN from `DATABASE_URL` by stripping the SQLAlchemy `+psycopg` driver suffix. Keep it separate from `src/core/db.py`'s sync engine.
+* Add a FastAPI `lifespan` to `src/api/app.py` that opens the pool, constructs `AsyncPostgresSaver`, runs `await checkpointer.setup()` once, builds the agent runtime with the checkpointer injected, stores the runtime for the service to reach, and closes the pool on shutdown.
+* Refactor `src/agents/runtime/react_agent.py` / `src/agents/runtime/factory.py` so the agent is assembled with an injected checkpointer (remove the import-time `runtime = AgentRuntime(agent=agent_factory())` singleton); `factory.agent_factory()` accepts an optional `checkpointer`.
+* Update `src/agents/service.py` to resolve the runtime from app state rather than a module-level import.
+**Out of Scope:**
+* Passing `thread_id` or any session wiring (T0007.2).
+* Message trimming (T0007.3).
+* Any change to the request/response schema.
+
+#### T0007.2: Wire checkpointer + `session_id -> thread_id` lifecycle
+**Objective:** Make memory observable: address each conversation by `thread_id`, generate a `session_id` when the client omits one, and return the id actually used so the client can continue the thread.
+**In Scope:**
+* Pass the injected `checkpointer` into `create_agent(...)` in `src/agents/runtime/factory.py`.
+* In `src/agents/runtime/react_agent.py::AgentRuntime.ainvoke`, merge `{"configurable": {"thread_id": session_id}}` into the existing `build_langfuse_config(...)` config (do not overwrite the Langfuse callbacks/metadata).
+* In `src/agents/service.py`, generate a `uuid4` `session_id` when none is supplied, use it as the thread key, and return the used `session_id` in the response dict.
+* Fix `src/api/routes/query.py` to return the `session_id` from the service result (the id actually used), not the blind `request.session_id` echo.
+* Update `tests/api/test_query.py` for the generated-and-returned id behavior.
+**Out of Scope:**
+* Trimming (T0007.3).
+* Multi-turn / isolation / persistence assertions (T0007.4).
+
+#### T0007.3: Native context trimming (count cap)
+**Objective:** Bound how much conversation history is sent to the model each turn using LangChain's native `trim_messages`, so latency and token cost stay predictable as a thread grows. Trimming affects only what the model sees per turn; the full thread remains persisted in the checkpointer.
+**In Scope:**
+* Add `agent.memory.max_messages` to `config/settings.yaml` (read through `src/core/config.py`).
+* Attach a thin `before_model` middleware to `create_agent` that calls native `trim_messages` (strategy `last`, count-based to `max_messages`) on the inbound message list.
+* Tests asserting that a thread longer than the cap sends only the most recent messages to the model (assert on the trimmed input, model call stubbed).
+**Out of Scope:**
+* Summarization or token-based budgeting (count cap only this MVP).
+* Mutating/pruning the stored checkpoint state (trim the model input only).
+
+#### T0007.4: Tests, manual verification, and doc status flips
+**Objective:** Prove every memory capability in `MVP_Spec.md` §2/§4 holds end-to-end and record the milestone as built.
+**In Scope:**
+* Tests: multi-turn refinement within one `session_id`; isolation between two different sessions; a generated `session_id` returned when none is supplied; persistence of a conversation across a fresh runtime/pool (restart simulation); the trimming cap holds on a long session.
+* A manual checklist: start the app with the documented command, hold a two-turn refinement, confirm the returned `session_id` continues the thread, restart the service and confirm the conversation resumes, and confirm Langfuse still shows one trace per request grouped by session.
+* Flip `Status: planned -> implemented` for memory in `docs/MVP_Technical_Design.md` (§2.4, §3 session lifecycle, §4 memory config, §6 memory tests) and update `docs/Repo_Current_State.md`.
+**Out of Scope:**
+* Any new capability beyond what §2 already promises.
+* Long-term/cross-session memory tests (permanently excluded).

@@ -21,6 +21,18 @@ class AgentFactoryTests(unittest.TestCase):
         self.assertIn(get_current_time, kwargs["tools"])
         self.assertIn(query_clean_jobs, kwargs["tools"])
 
+    @patch("src.agents.runtime.factory.create_agent")
+    @patch("src.agents.runtime.factory.load_system_prompt")
+    @patch("src.agents.runtime.factory.AgentProvider")
+    def test_agent_factory_accepts_optional_checkpointer(
+        self, mock_agent_provider, mock_load_system_prompt, mock_create_agent
+    ) -> None:
+        fake_checkpointer = object()
+
+        agent_factory(checkpointer=fake_checkpointer)
+
+        mock_create_agent.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

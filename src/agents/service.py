@@ -1,8 +1,9 @@
-from src.agents.runtime.react_agent import runtime
+from src.agents.runtime.react_agent import AgentRuntime
 
 
 async def generate_agent_response(
     query: str,
+    runtime: AgentRuntime,
     session_id: str | None = None,
     user_id: str | None = None,
 ) -> dict[str, str | None]:

@@ -10,8 +10,9 @@ dependencies = [
     "langchain-groq>=1.1.2",
     "langfuse>=4.6.1",
     "pydantic-settings>=2.14.1",
-    "psycopg[binary]>=3.2",
+    "psycopg[binary,pool]>=3.2",
     "sqlalchemy>=2.0",
+    "langgraph-checkpoint-postgres>=2.0",
     "structlog>=25.5.0",
     "uvicorn>=0.48.0",
 ]

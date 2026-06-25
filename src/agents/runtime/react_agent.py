@@ -54,6 +54,3 @@ class AgentRuntime:
             raise ValueError("Agent response did not contain a readable final answer")
 
         return content.strip()
-
-
-runtime = AgentRuntime(agent=agent_factory())

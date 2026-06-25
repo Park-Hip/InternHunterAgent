@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -10,6 +10,9 @@ from src.api.app import app
 
 class QueryRouteTests(unittest.TestCase):
     def setUp(self) -> None:
+        # Lifespan is not triggered (TestClient is not used as a context
+        # manager), so app.state.runtime would otherwise be unset.
+        app.state.runtime = AsyncMock()
         self.client = TestClient(app)
 
     def test_query_route_returns_structured_response(self) -> None:
@@ -46,6 +49,7 @@ class QueryRouteTests(unittest.TestCase):
             query="what time is it?",
             session_id="session-123",
             user_id="user-123",
+            runtime=ANY,
         )
 
     def test_query_route_returns_structured_response_for_job_data_question(self) -> None:
@@ -86,6 +90,7 @@ class QueryRouteTests(unittest.TestCase):
             query="What tech stack does Acme use?",
             session_id="session-123",
             user_id="user-123",
+            runtime=ANY,
         )
 
     def test_query_route_returns_500_when_service_fails(self) -> None:

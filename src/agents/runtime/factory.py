@@ -5,10 +5,9 @@ from src.agents.tools.query_clean_jobs import query_clean_jobs
 from src.agents.runtime.prompts import load_system_prompt
 from src.core.config import settings
 
-def agent_factory():
+def agent_factory(checkpointer=None):
     return create_agent(
         model=AgentProvider().build_model(),
         tools=[get_current_time, query_clean_jobs],
         system_prompt=load_system_prompt(),
-
     )

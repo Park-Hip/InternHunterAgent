@@ -30,9 +30,29 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             result,
             {
                 "answer": "The current time is 14:01:52.",
+                "session_id": "session-1",
                 "trace_id": "trace-123",
                 "trace_url": None,
             },
+        )
+
+    async def test_generate_agent_response_generates_session_id_when_omitted(self) -> None:
+        runtime = AsyncMock()
+        runtime.ainvoke.return_value = {
+            "answer": "The current time is 14:01:52.",
+            "trace_id": "trace-123",
+        }
+
+        result = await generate_agent_response(
+            query="what time is it?",
+            runtime=runtime,
+        )
+
+        self.assertIsNotNone(result["session_id"])
+        runtime.ainvoke.assert_awaited_once_with(
+            query="what time is it?",
+            session_id=result["session_id"],
+            user_id=None,
         )
 
 

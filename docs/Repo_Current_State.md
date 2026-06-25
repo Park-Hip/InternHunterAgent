@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0007.2-thread-id-wiring
+feature/t0007.3-context-trimming
 
 ## Completed tickets
 - T0000: Milestone 0 - Foundation (FastAPI, logging, health endpoint)
@@ -20,9 +20,10 @@ feature/t0007.2-thread-id-wiring
 - T0006.10: End-to-end manual verification (full stack exercised live; no code changes needed)
 - T0007.1: Startup lifecycle + async checkpointer foundation (`src/core/checkpointer.py`, FastAPI `lifespan` in `src/api/app.py`, agent assembled at startup via `app.state.runtime` instead of an import-time singleton; checkpointer accepted by `agent_factory()` but not yet wired into `create_agent`)
 - T0007.2: Wire checkpointer + `session_id -> thread_id` lifecycle (`agent_factory()` now passes the checkpointer into `create_agent(...)`; `AgentRuntime.ainvoke` merges `configurable.thread_id` into the Langfuse config; `service.py` generates a `uuid4` session_id when the client omits one and returns the id used; `query.py` returns the service-provided id instead of echoing the request payload)
+- T0007.3: Native context trimming (count cap) (`src/agents/runtime/middleware.py::TrimMessagesMiddleware` applies LangChain's native `trim_messages` — strategy `last`, count-based to `agent.memory.max_messages` — inside a `wrap_model_call`/`awrap_model_call` hook attached via `create_agent(middleware=...)`; trims only the per-turn model input, leaving the checkpointer's stored history intact)
 
 ## In progress
-- T0007.3: Message trimming (next up)
+- T0007.4: Tests, manual verification, and doc status flips (next up)
 
 ## Current folder structure
 ```text
@@ -44,6 +45,7 @@ feature/t0007.2-thread-id-wiring
 |   |-- agents/
 |   |   |-- runtime/
 |   |   |   |-- factory.py
+|   |   |   |-- middleware.py
 |   |   |   |-- prompts.py
 |   |   |   |-- provider.py
 |   |   |   `-- react_agent.py
@@ -117,7 +119,7 @@ Practical commands from the repository layout:
 ## Build/test status
 - Command run: `uv run pytest -q`
 - Result: passed
-- Summary: `53 passed in 1.96s`
+- Summary: `61 passed in 1.38s`
 
 ## Known issues
 - **Uncommitted stray edit**: `src/agents/tools/query_clean_jobs.py` currently has an untracked working-tree change appending a stray bare `1` (no trailing newline) after the `return _build_answer(table)` line. It's a harmless no-op statement but is clearly accidental editor/paste noise, not a real change — should be reverted before committing anything else on this branch.
@@ -131,8 +133,9 @@ Practical commands from the repository layout:
 - `DATABASE_URL` is required and must be set in the runtime environment before starting the app.
 - `load_sql_generation_prompt()` (T0006.4) returns a plain `str` rather than a `SystemMessage` like `load_system_prompt()`, since the SQL-generation flow combines it with `build_clean_jobs_schema_context()` text before sending it to the model (T0006.7).
 - Observed during T0006.10 verification: the agent sometimes calls `query_clean_jobs` twice in a row with identical arguments before producing its final answer (harmless — deterministic, no side effects — but wastes one round-trip). Candidate follow-up: investigate prompt/loop tuning to remove the redundant call.
-- Message trimming is not yet wired in (T0007.3) — long conversations grow the message list unbounded until that ticket lands.
+- Context trimming caps only what the model sees per turn (`agent.memory.max_messages`, default `20`); the full thread keeps growing in the checkpointer by design. There is no storage-side pruning or token-based budgeting in this MVP (summarization/token budgeting are explicit non-goals).
+- `config/settings.yaml` is `COPY`ed into the API image, so changing values like `agent.memory.max_messages` requires a `docker compose build --no-cache api` to take effect — a plain `--build` can reuse a cached `COPY config` layer and silently run stale config.
 - Observed during T0007.2 manual verification: asking a refining follow-up about an attribute that has no corresponding column in `clean_jobs` (e.g. "Which of those are remote?" — there is no `remote`/`location` column exposed in the schema context) makes the agent stall for several seconds before it works out it cannot answer, rather than recognizing quickly that the attribute isn't queryable. The eventual answer is still correct/non-fabricated, but the latency suggests the system/SQL-generation prompt could more explicitly guide the model to recognize out-of-schema attributes faster. Candidate follow-up: tune the schema-context or system prompt so the model short-circuits on out-of-schema refinements instead of spending a full reasoning pass figuring it out.
 
 ## Next recommended ticket
-T0007.3: Native context trimming (count cap) — apply LangChain/LangGraph's native message-trimming mechanism so long conversations don't grow the message list unbounded.
+T0007.4: Tests, manual verification, and doc status flips — add multi-turn / two-session isolation / persistence-across-restart assertions and flip the relevant `Status: planned` tags in `MVP_Technical_Design.md` (e.g. §2.4 Memory) to `implemented`.

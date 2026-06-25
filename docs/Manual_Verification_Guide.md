@@ -129,3 +129,11 @@ T0007.2: Wire checkpointer + session_id -> thread_id lifecycle
 * `POST /api/v1/agent/query` with an explicit `session_id` and confirm the same id is echoed back in the response.
 * (Optional) Inspect the checkpointer tables in Postgres (`docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT thread_id FROM checkpoints;"`) and confirm rows keyed by the returned `session_id` appear after a request.
 * Confirm Langfuse still receives traces with session metadata (callbacks were not clobbered by the thread_id merge).
+
+T0007.3: Native context trimming (count cap)
+
+* Run `uv run pytest tests/agents/runtime/test_trimming.py -v` and confirm the config-validation, sync-trim, async-trim, and "state intact" cases all pass.
+* Set `agent.memory.max_messages` to a small value (e.g. `4`) in `config/settings.yaml` and rebuild the API (`docker compose build --no-cache api && docker compose up -d api` — the config is baked into the image, so a no-cache rebuild is required to pick up the change).
+* On one `session_id`, hold a conversation with more turns than the cap: turn 1 establishes a fact (e.g. "Remember this code word: BANANA42"), then run two more unrelated turns, then ask "What was the code word I gave you earlier?" — confirm the agent no longer knows it (the oldest turn fell outside the cap), while the recent turns still answered normally and nothing 500s.
+* Confirm the full history is still persisted (trimming only affected the model input, not storage): `docker compose exec -T postgres psql -U internhunter -d internhunter -t -c "SELECT count(*) FROM checkpoint_blobs WHERE position('BANANA42' in encode(blob, 'escape')) > 0;"` and confirm a non-zero count — the trimmed-out fact is still in the checkpointer.
+* Restore `agent.memory.max_messages` to its normal value (`20`) and rebuild; confirm a normal short conversation (under the cap) behaves exactly as before.

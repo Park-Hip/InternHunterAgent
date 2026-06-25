@@ -24,13 +24,13 @@ async def query_agent(payload: QueryRequest, request: Request):
 
         logger.info(
             "query.succeeded",
-            session_id=payload.session_id,
+            session_id=response["session_id"],
             has_trace_id=bool(response["trace_id"]),
         )
 
         return QueryResponse(
             answer=response['answer'],
-            session_id=payload.session_id,
+            session_id=response["session_id"],
             trace_id=response["trace_id"],
             trace_url=response["trace_url"],
         )

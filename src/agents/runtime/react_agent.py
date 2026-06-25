@@ -17,6 +17,8 @@ class AgentRuntime:
         session_id: str | None = None,
     ) -> dict[str, str | None]:
         config = build_langfuse_config(session_id=session_id, user_id=user_id)
+        if session_id:
+            config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
 
         response = await self.agent.ainvoke(messages, config=config or None)

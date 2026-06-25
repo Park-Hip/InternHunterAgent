@@ -120,3 +120,12 @@ T0007.1: Startup lifecycle + async checkpointer foundation
 * Connect to the app Postgres (`docker compose exec -T postgres psql -U internhunter -d internhunter -c "\dt"`) and confirm the checkpointer tables (`checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations`) were created by `setup()`.
 * `POST /api/v1/agent/query` with `{"query": "what time is it?"}` and `{"query": "What companies use Python?"}` — confirm both still return the same answer-only response shape (`answer`, `session_id`, `trace_id`, `trace_url`), now served via the app-state runtime instead of an import-time singleton.
 * Stop the API container (`docker compose stop api`) and confirm the shutdown logs show `Waiting for application shutdown.` / `Application shutdown complete.` with no errors or warnings (the checkpointer connection pool closes cleanly).
+
+T0007.2: Wire checkpointer + session_id -> thread_id lifecycle
+
+* Run `uv run pytest tests/api/test_query.py -v` and confirm the supplied-id and generated-id cases both pass.
+* With the stack up (`docker compose up -d`, API running), `POST /api/v1/agent/query` with `{"query": "what time is it?"}` and no `session_id` — confirm the response contains a non-null `session_id` (a UUID).
+* `POST /api/v1/agent/query` with that returned `session_id` and a refining question (e.g. first "What companies use Python?", then "Which of those also use SQL?") — confirm the agent's answer reflects awareness of the prior turn (memory is working).
+* `POST /api/v1/agent/query` with an explicit `session_id` and confirm the same id is echoed back in the response.
+* (Optional) Inspect the checkpointer tables in Postgres (`docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT thread_id FROM checkpoints;"`) and confirm rows keyed by the returned `session_id` appear after a request.
+* Confirm Langfuse still receives traces with session metadata (callbacks were not clobbered by the thread_id merge).

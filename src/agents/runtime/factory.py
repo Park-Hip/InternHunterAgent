@@ -10,4 +10,5 @@ def agent_factory(checkpointer=None):
         model=AgentProvider().build_model(),
         tools=[get_current_time, query_clean_jobs],
         system_prompt=load_system_prompt(),
+        checkpointer=checkpointer,
     )

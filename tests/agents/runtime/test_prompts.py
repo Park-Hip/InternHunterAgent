@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from src.agents.runtime.prompts import load_sql_generation_prompt
+from src.agents.runtime.prompts import load_schema_context, load_sql_generation_prompt
 
 
 class LoadSqlGenerationPromptTests(unittest.TestCase):
@@ -37,3 +37,50 @@ class LoadSqlGenerationPromptTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             load_sql_generation_prompt()
+
+
+class LoadSchemaContextTests(unittest.TestCase):
+    @patch("src.agents.runtime.prompts.settings")
+    def test_returns_stripped_string(self, mock_settings) -> None:
+        mock_settings.prompts_yaml = {
+            "prompts": {"schema_context": "  Table: clean_jobs\nColumns: title  "}
+        }
+
+        result = load_schema_context()
+
+        self.assertEqual(result, "Table: clean_jobs\nColumns: title")
+
+    @patch("src.agents.runtime.prompts.settings")
+    def test_raises_when_prompts_section_missing(self, mock_settings) -> None:
+        mock_settings.prompts_yaml = {}
+
+        with self.assertRaises(ValueError):
+            load_schema_context()
+
+    @patch("src.agents.runtime.prompts.settings")
+    def test_raises_when_schema_context_missing(self, mock_settings) -> None:
+        mock_settings.prompts_yaml = {"prompts": {}}
+
+        with self.assertRaises(ValueError):
+            load_schema_context()
+
+    @patch("src.agents.runtime.prompts.settings")
+    def test_raises_when_schema_context_blank(self, mock_settings) -> None:
+        mock_settings.prompts_yaml = {"prompts": {"schema_context": "   "}}
+
+        with self.assertRaises(ValueError):
+            load_schema_context()
+
+    def test_yaml_schema_context_mentions_only_four_real_columns(self) -> None:
+        result = load_schema_context()
+
+        for column in ("title", "company", "description", "tech_stack"):
+            self.assertIn(column, result)
+
+        for column in ("salary_min", "salary_max", "location", "remote", "id"):
+            self.assertNotIn(column, result)
+
+    def test_yaml_schema_context_mentions_clean_jobs_table(self) -> None:
+        result = load_schema_context()
+
+        self.assertIn("clean_jobs", result)

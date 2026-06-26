@@ -261,3 +261,104 @@
 **Out of Scope:**
 * Any new capability beyond what §2 already promises.
 * Long-term/cross-session memory tests (permanently excluded).
+
+### T0008: Milestone 8 - System Prompt & Persona Refinement
+**Objective:** Refine the agent's prompts so it behaves like a trustworthy, on-topic assistant named **Resumi**, holds the Spec §3 honesty bar, follows multi-turn refinements, and generates correct SQL against the real `clean_jobs` shape. Also resolve a config-placement inconsistency by moving the hardcoded schema context into `config/prompts.yaml` so the entire SQL-generation input is tunable without a code change. This is prompt/config tuning only — no new runtime capability, no new tool, no eval harness. Depends on T0007 (refinement rules assume short-term memory exists). Broken into three independently mergeable sub-tickets (T0008.1-T0008.3).
+**In Scope:**
+* Give the agent a defined persona (Resumi) and an explicit on-topic policy: answer greetings and "what can you do" style questions, politely decline everything else and steer back to internship postings.
+* Add honesty/scope/refinement rules to the system prompt: ground answers in returned data, admit when the data can't answer (salary/location/remote/deadlines are not columns), resolve follow-up references from prior turns, and ask one clarifying question when ambiguous.
+* Harden the SQL-generation prompt for the real schema (case-insensitive `ILIKE`, `tech_stack` as a comma-separated string, columns-only).
+* Move the schema context from hardcoded Python into `config/prompts.yaml` and load it through the same path as the other prompts.
+* A fixed manual question checklist (one per user intent) to eyeball answers before/after.
+**Out of Scope:**
+* An automated evaluation/eval harness (future platform track).
+* Resume understanding, embedding retrieval, or any new tool/capability.
+* Few-shot example libraries, chain-of-thought scaffolding, or self-critique loops (over-engineering for a 7-row dataset).
+* Any change to the answer-only public contract or runtime wiring.
+
+#### T0008.1: Resumi persona + on-topic policy + honesty rules
+**Objective:** Rewrite `prompts.system_prompt` so the agent is Resumi — friendly, on-topic, honest about what the data does and does not contain, and able to follow a conversation.
+**In Scope:**
+* Rewrite `prompts.system_prompt` in `config/prompts.yaml` to: introduce the Resumi persona; answer greetings and capability ("what can you do") questions; politely decline off-topic requests and steer back (resume help explicitly deferred as a future phase); keep the existing rule to always use `query_clean_jobs` for job/company/role/tech questions and never answer them from memory.
+* Add the available-fields gate (only title/company/description/tech_stack; salary/location/remote/deadline are not in the data — say so, don't guess), the refinement rule (resolve "those"/"the first one"/"only the Python ones" from prior turns; ask one clarifying question when ambiguous), and the honesty + no-SQL/no-raw-table style rules.
+**Out of Scope:**
+* SQL-generation prompt or schema context changes (T0008.2).
+* Any code change (this sub-ticket is `config/prompts.yaml` only).
+
+#### T0008.2: SQL-generation prompt hardening + schema context to YAML
+**Objective:** Make generated SQL correct for the real `clean_jobs` shape, and remove the config-placement inconsistency where the schema context is hardcoded in Python while its prompt lives in YAML.
+**In Scope:**
+* Strengthen `prompts.sql_generation` with: case-insensitive `ILIKE '%term%'` for all text matching (never `=`); `tech_stack` is a comma-separated string so match a technology with `tech_stack ILIKE '%Python%'`; reference only the real columns, never invent one.
+* Add a `prompts.schema_context` key in `config/prompts.yaml` carrying the schema facts (the four columns, read-only, and that `tech_stack` is a comma-separated list).
+* Add `load_schema_context()` to `src/agents/runtime/prompts.py` (mirroring `load_sql_generation_prompt`), have `src/agents/tools/query_clean_jobs.py::generate_sql` call it, and retire `src/services/query/schema_context.py`.
+* Update `tests/services/query/test_schema_context.py` to assert against the YAML-loaded value (or relocate the assertion to the new loader's test).
+**Out of Scope:**
+* Validator/executor logic (unchanged; the validator stays the trust boundary).
+* The system prompt / persona (T0008.1).
+
+#### T0008.3: Manual verification checklist
+**Objective:** Prove the refined prompts hold the Spec §3 bar across the real range of user questions; no code change expected.
+**In Scope:**
+* Run a fixed ~12-question checklist covering one example per intent: greeting, "what can you do", tech filter, role filter, count, field lookup, a two-turn refinement ("only the Python ones" / "the first one"), an empty result ("any Rust jobs"), an out-of-schema field ("what's the salary"), an off-topic request ("write my resume"), and an unsafe request ("drop the table").
+* Confirm: Resumi stays on topic, grounds answers in data, admits missing fields instead of guessing, resolves the follow-ups, and refuses unsafe/out-of-scope requests cleanly.
+**Out of Scope:**
+* Turning the checklist into an automated eval harness (future).
+* Any fix beyond what's needed to pass; larger issues become follow-up tickets.
+**Status: completed (2026-06-26). All 12 checklist items passed after rebuilding the API image with `docker compose build --no-cache api`. No defect follow-up tickets required.**
+
+### T0009: Milestone 9 - Evaluation Harness
+**Objective:** Promote the T0008.3 manual checklist into an automated, scored evaluation of the agent against a fixed question set covering the `MVP_Spec.md` §2/§3 capabilities, so every later change (prompts, RAG, larger dataset) is measured rather than guessed. The harness has three layers, each an independently mergeable sub-ticket: a deterministic in-repo runner is the spine and works alone; an LLM-as-judge layer grades fuzzy answer quality; and Langfuse Datasets/Experiments give run history and a UI. The eval calls the real model — it is non-deterministic and token-costing, so it is a separate `eval` command, never part of the standard unit-test CI gate. Depends on T0007 (multi-turn cases need memory) and T0008 (the persona/honesty behavior being evaluated). This is measurement only — no new agent capability, no new tool.
+**In Scope:**
+* A version-controlled case file describing questions, categories, and behavioral assertions for the Spec §2/§3 bar (grounding, correct filtering, honest missing-field handling, empty results, refusal, on-topic persona, multi-turn refinement).
+* An in-repo runner that invokes the real agent and scores each case deterministically.
+* An optional LLM-as-judge layer for answer-quality grading on fuzzy cases.
+* Publishing the case set and scores to the self-hosted Langfuse stack.
+* A documented command to run the eval and read the summary.
+**Out of Scope:**
+* A third-party eval framework (ragas/deepeval/promptfoo) or any new heavy dependency.
+* Making the eval a blocking unit-test/CI gate (it is real-model, non-deterministic, and costs tokens).
+* Any change to the agent, tools, prompts, or public contract (this milestone only observes).
+* RAG, resume, charts, or dataset expansion (later milestones).
+
+#### T0009.1: Eval dataset + in-repo deterministic runner
+**Objective:** Build the spine — a fixed case set and a runner that invokes the real agent and scores behavioral pass/fail — that is useful on its own without the judge or Langfuse layers.
+**In Scope:**
+* Add an eval case file (e.g. `eval/cases.yaml`) with entries: `id`, `category`, `turns` (one or more user messages for multi-turn), and `assertions` (e.g. `must_refuse`, `must_contain_any`, `must_not_contain`, `says_no_results`, `names_real_company`).
+* Add a standalone runner script `scripts/run_eval.py` (not a pytest/CI target) that calls the agent per case (driving a session for multi-turn cases), maps each assertion type to a deterministic check, and prints a scored summary with per-category counts.
+* Cases covering: grounding, correct filtering (ILIKE on the CSV `tech_stack`), honest missing-field (salary/remote), empty result (Rust), refusal (drop table), on-topic persona (greeting, "what can you do", decline "write my resume"), and a two-turn refinement.
+* README/`docs` note documenting the single command to run it.
+**Out of Scope:**
+* LLM-as-judge scoring (T0009.2).
+* Langfuse dataset/experiment publishing (T0009.3).
+
+#### T0009.2: LLM-as-judge scoring layer
+**Objective:** Add an optional quality-grading layer for fuzzy cases where a deterministic substring check is too blunt, isolated so the deterministic runner still works without it.
+**In Scope:**
+* Add an `eval_judge` prompt block to `config/prompts.yaml` and a loader following the existing `load_*_prompt()` pattern.
+* A judge function that calls a **distinct judge model** (configured under `eval.judge.*` in `config/settings.yaml` — its own model/provider/key, temperature 0, offline only; permitted because the single-provider law is serving-path-scoped per `Full_Design_Document.md` §7) to grade a case's answer against a rubric and return a score/verdict.
+* Config flag to enable/disable the judge layer; when disabled, the deterministic runner is unaffected.
+* Apply the judge only to a tagged subset of cases to control cost and flakiness.
+**Out of Scope:**
+* Replacing deterministic checks (the judge augments, never the sole gate).
+* Any Langfuse integration (T0009.3).
+
+#### T0009.3: Langfuse Datasets + Experiments integration
+**Objective:** Give the eval run history and a UI by publishing the case set as a Langfuse dataset and attaching scores to the runs, reusing the already self-hosted stack.
+**In Scope:**
+* Push the eval case set to a Langfuse dataset; link each eval run's traces to its dataset items.
+* Attach deterministic (and, if enabled, judge) scores to the run for per-case and aggregate views.
+* Degrade to a no-op when Langfuse credentials/stack are absent — the in-repo eval must still run (same principle as the tracing layer).
+**Out of Scope:**
+* Moving the source of truth into Langfuse (the in-repo case file stays canonical).
+* Any change to the request-path tracing already built in T0004.
+
+### T0010: Milestone 10 - Larger Dataset (outline)
+**Objective:** Replace the 7-row fixture sample with a larger curated **fixed** dataset on the same pipeline, so the evaluation harness and any future RAG/semantic work operate on realistic volume and variety. This remains a fixed sample — live or real-time ingestion stays a later phase.
+**In Scope (provisional):**
+* A larger curated `clean_jobs` seed (target ~50-150 rows) covering varied roles, companies, and tech stacks, loaded through the existing `scripts/init_clean_jobs.sql` path.
+* Re-running the T0009 eval against the new data and updating any data-dependent assertions (e.g. expected company names).
+**Out of Scope:**
+* Live/real-time job ingestion (later phase).
+* RAG/embeddings/semantic retrieval (separate future milestone).
+**Open decision (resolve when this milestone is picked up, not before):**
+* Keep the four columns (`title`, `company`, `description`, `tech_stack`) or enrich the schema with fields users actually ask about (location, remote/on-site, salary). Enriching lets the agent answer questions it currently declines, but expands the SQL validator, schema context, and the T0008 honesty rules — so it is a deliberate scope choice, not a default.

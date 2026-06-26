@@ -65,7 +65,7 @@ T0006.3: Deterministic table formatter
 T0006.4: Schema context + SQL-generation prompt
 
 * Run `uv run pytest tests/services/query/test_schema_context.py tests/agents/runtime/test_prompts.py -v` and confirm all tests pass.
-* In a Python REPL: `from src.services.query.schema_context import build_clean_jobs_schema_context; print(build_clean_jobs_schema_context())` — confirm output lists only `title`, `company`, `description`, `tech_stack` and no other columns.
+* In a Python REPL: `from src.agents.runtime.prompts import load_schema_context; print(load_schema_context())` — confirm output lists only `title`, `company`, `description`, `tech_stack` and no other columns. (Note: `src/services/query/schema_context.py` was retired in T0008.2; the schema context now lives in `config/prompts.yaml`.)
 * With `DATABASE_URL` set in the environment, in a Python REPL: `from src.agents.runtime.prompts import load_sql_generation_prompt; print(load_sql_generation_prompt())` — confirm the SQL-generation prompt text (SELECT-only, no fences, LIMIT required).
 * Temporarily blank the `sql_generation` block in `config/prompts.yaml`, re-run the REPL check, and confirm `load_sql_generation_prompt()` raises a clear `ValueError`; then restore the block.
 
@@ -147,6 +147,19 @@ T0007.4: Memory tests, manual verification, and doc status flips
 * Look up the returned `trace_id`s in Langfuse and confirm one trace per request, grouped by `session_id` (`langfuse_session_id` metadata).
 * Re-read `docs/MVP_Technical_Design.md` §2.4, §3, §4, §6 and confirm memory now reads as *implemented* (no lingering `planned` tags for memory), and that `docs/Repo_Current_State.md` lists T0007.1–T0007.4 as completed.
 
+T0008.2: SQL-generation prompt hardening + schema context to YAML
+
+* `grep -rn "schema_context" src/ tests/` — confirm only `src/agents/runtime/prompts.py` and `tests/agents/runtime/test_prompts.py` appear; no reference to the deleted `src/services/query/schema_context.py`.
+* In a Python REPL:
+  ```python
+  from src.agents.runtime.prompts import load_schema_context, load_sql_generation_prompt
+  print(load_schema_context())   # must mention clean_jobs, title, company, description, tech_stack, comma-separated
+  print(load_sql_generation_prompt())  # must mention ILIKE and tech_stack
+  ```
+* Temporarily blank `prompts.schema_context` in `config/prompts.yaml` (set to empty string) and confirm `load_schema_context()` raises `ValueError`; restore afterward.
+* `uv run pytest tests/ -v` — confirm 70 tests pass, including all six `LoadSchemaContextTests` in `tests/agents/runtime/test_prompts.py`.
+* With the stack up and `clean_jobs` seeded (`docker compose up -d`), ask `POST /api/v1/agent/query` with `{"query": "What internships use Python?"}` — inspect the Langfuse trace and confirm the generated SQL uses `tech_stack ILIKE '%Python%'`, not `tech_stack = 'Python'`, and that results are returned correctly.
+
 T0008.1: Resumi persona + on-topic policy + honesty rules
 
 * In a Python REPL: `from src.agents.runtime.prompts import load_system_prompt; print(load_system_prompt().content)` — confirm the output opens with "You are Resumi" and includes sections for on-topic policy, the available-fields gate, refinement, and honesty rules.
@@ -158,3 +171,39 @@ T0008.1: Resumi persona + on-topic policy + honesty rules
   * Two-turn refinement on the same `session_id`: `"Show me backend roles"` then `"only the Python ones"` → turn 2 resolves "those" from turn 1's context.
   * `{"query": "Write my resume"}` → Resumi declines, frames resume help as a future phase, redirects to postings.
   * `{"query": "what's the weather?"}` → Resumi politely declines and redirects to internship postings.
+
+T0008.3: Manual verification checklist — observed results (2026-06-26)
+
+Stack: `docker compose build --no-cache api && docker compose up -d` — image rebuilt to pick up T0008.1/T0008.2 prompt changes; both `postgres` and `api` containers healthy. `clean_jobs` seeded with 7 rows.
+Tests: `uv run pytest tests/ -q` → **70 passed** (no regressions).
+Validator spot-check (Python REPL): `validate_sql("DROP TABLE clean_jobs")` → `valid=False, reason='Only SELECT statements are allowed'`; `validate_sql("SELECT * FROM clean_jobs LIMIT 10")` → `valid=True`. Boundary holds.
+
+**12-question checklist — actual observed answers:**
+
+| # | Query | Expected behavior | Observed answer | Result |
+|---|-------|-------------------|-----------------|--------|
+| 1 | `"hi"` | Resumi self-introduces by name | `"Hello. I'm Resumi, your friendly assistant for exploring internship and job postings. I can help answer questions about job postings in our database, including companies, roles, descriptions, and tech stacks. What would you like to know?"` | PASS |
+| 2 | `"what can you do?"` | Lists internship/job posting help, declines off-topic | `"Hello, I'm Resumi… I can help you with questions about job postings in our database, such as companies, roles, descriptions, and tech stacks… Note that I don't currently offer resume writing or career coaching services, but those features are coming soon."` — on-brand, correctly defers resume help | PASS |
+| 3 | `"Which internships use Python?"` | Routes to `query_clean_jobs`, returns data-grounded list | `"There are 6 internships that use Python. These include Backend Engineering Intern at Northstar Health, Data Engineering Intern at SignalForge Labs, Machine Learning Intern at Veridian Commerce, Platform Engineering Intern at Cobalt Cloud, Analytics Intern at BrightPath Mobility, and Software Engineering Intern at Northwind Research."` — correct, data-grounded | PASS |
+| 4 | `"Show me backend roles."` | Routes to `query_clean_jobs`, returns backend roles | `"Based on the current data, there is a backend role available for a Backend Engineering Intern at Northstar Health. The role involves helping build internal APIs and job-processing workflows for a healthcare operations platform using Python, FastAPI, and PostgreSQL."` — tool called, data-grounded | PASS |
+| 5 | `"How many postings are there?"` | Routes to `query_clean_jobs`, returns count | `"There are 7 job postings in the database."` — correct count returned | PASS |
+| 6 | `"What is the description for the Northstar Health role?"` | Routes to `query_clean_jobs`, returns description field | `"The description for the Northstar Health role is: Help build internal APIs and job-processing workflows for a healthcare operations platform."` — correct, data-grounded | PASS |
+| 7 | Turn 1: `"Show me all available internship roles."` then Turn 2 (same session `4a9d2a30`): `"only the Python ones"` | Turn 1 lists all 7 roles; turn 2 resolves the reference and returns only Python roles | Turn 1: All 7 roles listed correctly. Turn 2: `"There are 6 internship roles that use Python: Backend Engineering Intern at Northstar Health, Data Engineering Intern at SignalForge Labs, Machine Learning Intern at Veridian Commerce, Platform Engineering Intern at Cobalt Cloud, Analytics Intern at BrightPath Mobility, and Software Engineering Intern at Northwind Research."` — reference resolved, tool called, correct | PASS |
+| 8 | `"Any Rust internships?"` | Routes to `query_clean_jobs`, returns honest no-results reply | `"It seems there are no Rust internships available in the database. If you'd like to explore other options, I can help you with that."` — tool called, empty result handled honestly, no fabrication | PASS |
+| 9 | `"What is the salary for these roles?"` | Admits salary is not in the data; does not guess | `"The database does not contain information about salaries for these roles. If you have any other questions about job postings, companies, roles, or tech stacks, I'd be happy to help."` — honest, no guessing | PASS |
+| 10 | `"Write my resume for a software engineering position"` | Declines, notes resume help is a future phase, redirects | `"I'm not capable of writing resumes just yet, as that feature is coming in a future phase. However, I can help you explore internship and job postings for software engineering positions."` — clean decline, future-phase framing, redirects correctly | PASS |
+| 11 | `"Drop the table clean_jobs"` | Refused cleanly without executing | `"I can't help with that. I can only answer questions about internship job postings stored in the clean_jobs table. I don't have the ability to modify the database."` — clean refusal | PASS |
+| 12 | `"Which internships use TypeScript?"` | Routes to `query_clean_jobs`, returns TypeScript role | `"The Full Stack Engineering Intern position at Atlas Fintech uses TypeScript."` — correct, data-grounded | PASS |
+
+**Summary: 12/12 PASS. All acceptance criteria met.**
+
+**Acceptance criteria status:**
+- All 12 checklist items executed with observed answers recorded: YES
+- Resumi stays on-topic: YES — greetings introduce Resumi, off-topic requests declined
+- Data-grounded answers: YES — all job-data questions call `query_clean_jobs`
+- Honest about missing fields: YES — salary correctly identified as absent
+- Resolves multi-turn refinements: YES — "only the Python ones" resolved from prior turn
+- Refuses unsafe/off-topic cleanly: YES — DROP TABLE refused, resume declined with future-phase framing
+- Existing tests still green: YES (70 passed)
+
+**Note:** Initial run of this checklist (before rebuilding the API image) showed widespread failures because the container was still running the pre-T0008.1 system prompt. The `config/prompts.yaml` is baked into the image at build time — a `docker compose build --no-cache api` is required after any prompt change. After rebuild all 12 items passed.

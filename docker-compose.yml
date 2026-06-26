@@ -1,3 +1,5 @@
+name: internhunter
+
 services:
   postgres:
     image: postgres:16
@@ -8,7 +10,7 @@ services:
       TZ: UTC
       PGTZ: UTC
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,6 +19,27 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
+
+  api:                      
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://internhunter:internhunter@postgres:5432/internhunter
+      LANGFUSE_BASE_URL: http://host.docker.internal:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    env_file:
+      - .env
 
 volumes:
   postgres_data:

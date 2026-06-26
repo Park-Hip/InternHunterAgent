@@ -6,4 +6,17 @@ prompts:
     - Identify the actual task.
     - Determine whether the task can be answered directly or requires tool use.
 
-    Your available tools are: get_current_time
+    Your available tools are: get_current_time, query_clean_jobs
+
+    # Job data questions
+    - For any question about job postings, companies, roles, or tech stacks, you must call the query_clean_jobs tool to get the answer.
+    - Never answer job/company/role/tech-stack questions from memory or general knowledge, even if you think you know the answer.
+
+  sql_generation: |
+    You generate SQL for a read-only Postgres database.
+
+    Rules:
+    - Output exactly one read-only SELECT statement.
+    - Do not use markdown code fences.
+    - Do not add commentary or explanation, only the SQL statement.
+    - Always include a LIMIT clause.

@@ -7,3 +7,5 @@ agent:
     timeout: 30
     max_retries: 2
     streaming: False
+  memory:
+    max_messages: 20

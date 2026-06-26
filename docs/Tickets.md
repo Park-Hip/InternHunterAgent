@@ -304,40 +304,7 @@
 **Out of Scope:**
 * Turning the checklist into an automated eval harness (future).
 * Any fix beyond what's needed to pass; larger issues become follow-up tickets.
-**Status: completed (2026-06-26). Found 4 behavioral defects — see T0008.4/T0008.5/T0008.6 below.**
-
-#### T0008.4: Fix tool invocation reliability (DEF-1 + DEF-4)
-**Objective:** Make `query_clean_jobs` reliably invoked for all job-data question shapes — role-type filters, count queries, short tech-name filters, empty-result queries, and two-turn conversational follow-ups — which all currently return a generic non-answer instead of calling the tool.
-**Background:** T0008.3 verification found that Python-specific queries and company-name lookups trigger the tool correctly, but role-type filters ("Show me backend roles"), count questions ("How many postings?"), single-tech queries ("TypeScript"), empty-result cases ("Any Rust internships?"), and two-turn refinements ("only the Python ones") all receive a generic "I'm ready to assist you" response. The tool rule in the system prompt is not enforced consistently by the underlying model.
-**In Scope:**
-* Investigate whether strengthening the tool-rule wording in `config/prompts.yaml::prompts.system_prompt` (e.g. more explicit imperative phrasing, examples of triggering phrases) resolves the inconsistency.
-* Investigate whether increasing `few_shot` guidance or changing the prompt structure improves coverage.
-* Re-run the failing T0008.3 checklist items (Q4, Q5, Q7, Q8, Q9, Q12) and confirm each passes before closing the ticket.
-* Update `docs/Manual_Verification_Guide.md` with revised results.
-**Out of Scope:**
-* Switching the underlying model provider (separate decision).
-* Changing the validator, executor, or tool adapter.
-* Automated eval harness (T0009 track).
-
-#### T0008.5: Fix off-topic policy enforcement (DEF-2)
-**Objective:** Ensure the agent declines off-topic requests (resume writing, career coaching, unrelated tasks) instead of fulfilling them.
-**Background:** T0008.3 Q10: "Write my resume for a software engineering position" was answered with a 500-word resume template instead of declining. The system prompt's on-topic policy ("politely decline anything outside internship/job postings") is being ignored for this case.
-**In Scope:**
-* Strengthen the on-topic/off-topic policy wording in `config/prompts.yaml::prompts.system_prompt` so the decline instruction is followed.
-* Re-run Q10 and similar off-topic queries and confirm the agent declines and redirects.
-* Update `docs/Manual_Verification_Guide.md`.
-**Out of Scope:**
-* Tool, validator, or executor changes.
-* Resume understanding or new capabilities.
-
-#### T0008.6: Fix greeting persona (DEF-3, low priority)
-**Objective:** Have Resumi introduce itself by name when greeted ("hi", "hello").
-**Background:** T0008.3 Q1: "hi" returned "Hello. Is there something I can help you with, or would you like to know the current time?" — no Resumi self-introduction, and the clock tool mention is off-brand.
-**In Scope:**
-* Adjust `config/prompts.yaml::prompts.system_prompt` greeting instruction so the model introduces itself as Resumi and focuses on internship postings.
-* Re-run Q1/Q2 and confirm the persona is established.
-**Out of Scope:**
-* Any code or tool change.
+**Status: completed (2026-06-26). All 12 checklist items passed after rebuilding the API image with `docker compose build --no-cache api`. No defect follow-up tickets required.**
 
 ### T0009: Milestone 9 - Evaluation Harness
 **Objective:** Promote the T0008.3 manual checklist into an automated, scored evaluation of the agent against a fixed question set covering the `MVP_Spec.md` §2/§3 capabilities, so every later change (prompts, RAG, larger dataset) is measured rather than guessed. The harness has three layers, each an independently mergeable sub-ticket: a deterministic in-repo runner is the spine and works alone; an LLM-as-judge layer grades fuzzy answer quality; and Langfuse Datasets/Experiments give run history and a UI. The eval calls the real model — it is non-deterministic and token-costing, so it is a separate `eval` command, never part of the standard unit-test CI gate. Depends on T0007 (multi-turn cases need memory) and T0008 (the persona/honesty behavior being evaluated). This is measurement only — no new agent capability, no new tool.
@@ -357,7 +324,7 @@
 **Objective:** Build the spine — a fixed case set and a runner that invokes the real agent and scores behavioral pass/fail — that is useful on its own without the judge or Langfuse layers.
 **In Scope:**
 * Add an eval case file (e.g. `eval/cases.yaml`) with entries: `id`, `category`, `turns` (one or more user messages for multi-turn), and `assertions` (e.g. `must_refuse`, `must_contain_any`, `must_not_contain`, `says_no_results`, `names_real_company`).
-* Add a runner (e.g. `scripts/run_eval.py` or `tests/eval/`) that calls the agent per case (driving a session for multi-turn cases), maps each assertion type to a deterministic check, and prints a pass/fail summary with per-category counts.
+* Add a standalone runner script `scripts/run_eval.py` (not a pytest/CI target) that calls the agent per case (driving a session for multi-turn cases), maps each assertion type to a deterministic check, and prints a scored summary with per-category counts.
 * Cases covering: grounding, correct filtering (ILIKE on the CSV `tech_stack`), honest missing-field (salary/remote), empty result (Rust), refusal (drop table), on-topic persona (greeting, "what can you do", decline "write my resume"), and a two-turn refinement.
 * README/`docs` note documenting the single command to run it.
 **Out of Scope:**
@@ -368,7 +335,7 @@
 **Objective:** Add an optional quality-grading layer for fuzzy cases where a deterministic substring check is too blunt, isolated so the deterministic runner still works without it.
 **In Scope:**
 * Add an `eval_judge` prompt block to `config/prompts.yaml` and a loader following the existing `load_*_prompt()` pattern.
-* A judge function that calls the model (reusing `AgentProvider`, temperature 0) to grade a case's answer against a rubric and return a score/verdict.
+* A judge function that calls a **distinct judge model** (configured under `eval.judge.*` in `config/settings.yaml` — its own model/provider/key, temperature 0, offline only; permitted because the single-provider law is serving-path-scoped per `Full_Design_Document.md` §7) to grade a case's answer against a rubric and return a score/verdict.
 * Config flag to enable/disable the judge layer; when disabled, the deterministic runner is unaffected.
 * Apply the judge only to a tagged subset of cases to control cost and flakiness.
 **Out of Scope:**

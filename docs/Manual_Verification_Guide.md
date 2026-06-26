@@ -137,3 +137,12 @@ T0007.3: Native context trimming (count cap)
 * On one `session_id`, hold a conversation with more turns than the cap: turn 1 establishes a fact (e.g. "Remember this code word: BANANA42"), then run two more unrelated turns, then ask "What was the code word I gave you earlier?" — confirm the agent no longer knows it (the oldest turn fell outside the cap), while the recent turns still answered normally and nothing 500s.
 * Confirm the full history is still persisted (trimming only affected the model input, not storage): `docker compose exec -T postgres psql -U internhunter -d internhunter -t -c "SELECT count(*) FROM checkpoint_blobs WHERE position('BANANA42' in encode(blob, 'escape')) > 0;"` and confirm a non-zero count — the trimmed-out fact is still in the checkpointer.
 * Restore `agent.memory.max_messages` to its normal value (`20`) and rebuild; confirm a normal short conversation (under the cap) behaves exactly as before.
+
+T0007.4: Memory tests, manual verification, and doc status flips
+
+* Run `uv run pytest tests/ -v` and confirm the full suite passes, including the five memory capabilities in `tests/agents/runtime/test_memory.py` (multi-turn refinement, session isolation, generated-id returned, persistence across restart, trimming cap).
+* With the stack up (`docker compose up -d`, API running), hold a two-turn refinement on a *generated* `session_id`: first `POST /api/v1/agent/query` with `{"query": "What companies use Python?"}` and no `session_id`; note the returned `session_id`, then `POST` again with that id and `{"query": "Which of those also use SQL?"}` — confirm turn 2's answer reflects turn-1 context (memory is working).
+* Restart the service (`docker compose restart api`) and `POST` again with the *same* `session_id` and a follow-up — confirm the conversation resumes (history survived the restart because it lives in Postgres, not process memory).
+* Start a *second* `session_id` (omit it to get a fresh one) and ask an unrelated question — confirm it does not see the first session's history.
+* Look up the returned `trace_id`s in Langfuse and confirm one trace per request, grouped by `session_id` (`langfuse_session_id` metadata).
+* Re-read `docs/MVP_Technical_Design.md` §2.4, §3, §4, §6 and confirm memory now reads as *implemented* (no lingering `planned` tags for memory), and that `docs/Repo_Current_State.md` lists T0007.1–T0007.4 as completed.

@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0007.3-context-trimming
+feature/t0007.4-memory-tests-and-docs
 
 ## Completed tickets
 - T0000: Milestone 0 - Foundation (FastAPI, logging, health endpoint)
@@ -21,9 +21,10 @@ feature/t0007.3-context-trimming
 - T0007.1: Startup lifecycle + async checkpointer foundation (`src/core/checkpointer.py`, FastAPI `lifespan` in `src/api/app.py`, agent assembled at startup via `app.state.runtime` instead of an import-time singleton; checkpointer accepted by `agent_factory()` but not yet wired into `create_agent`)
 - T0007.2: Wire checkpointer + `session_id -> thread_id` lifecycle (`agent_factory()` now passes the checkpointer into `create_agent(...)`; `AgentRuntime.ainvoke` merges `configurable.thread_id` into the Langfuse config; `service.py` generates a `uuid4` session_id when the client omits one and returns the id used; `query.py` returns the service-provided id instead of echoing the request payload)
 - T0007.3: Native context trimming (count cap) (`src/agents/runtime/middleware.py::TrimMessagesMiddleware` applies LangChain's native `trim_messages` — strategy `last`, count-based to `agent.memory.max_messages` — inside a `wrap_model_call`/`awrap_model_call` hook attached via `create_agent(middleware=...)`; trims only the per-turn model input, leaving the checkpointer's stored history intact)
+- T0007.4: Memory tests, manual verification, and doc status flips (closes Milestone 7) — `tests/agents/runtime/test_memory.py` proves the five memory capabilities (multi-turn refinement within one `session_id`, session isolation, generated-id returned, persistence across a simulated restart, trimming cap holds); flipped the `Status: planned` tags for memory in `MVP_Technical_Design.md` §2.4/§3/§4/§6 to `implemented`; added the T0007.4 manual checklist. No runtime/source behavior changed — tests and docs only.
 
 ## In progress
-- T0007.4: Tests, manual verification, and doc status flips (next up)
+- None. Milestone 7 (Memory) is complete. Next: Milestone 8 (see `Tickets.md`).
 
 ## Current folder structure
 ```text
@@ -119,7 +120,7 @@ Practical commands from the repository layout:
 ## Build/test status
 - Command run: `uv run pytest -q`
 - Result: passed
-- Summary: `61 passed in 1.38s`
+- Summary: `66 passed in 1.69s`
 
 ## Known issues
 - **Uncommitted stray edit**: `src/agents/tools/query_clean_jobs.py` currently has an untracked working-tree change appending a stray bare `1` (no trailing newline) after the `return _build_answer(table)` line. It's a harmless no-op statement but is clearly accidental editor/paste noise, not a real change — should be reverted before committing anything else on this branch.
@@ -138,4 +139,4 @@ Practical commands from the repository layout:
 - Observed during T0007.2 manual verification: asking a refining follow-up about an attribute that has no corresponding column in `clean_jobs` (e.g. "Which of those are remote?" — there is no `remote`/`location` column exposed in the schema context) makes the agent stall for several seconds before it works out it cannot answer, rather than recognizing quickly that the attribute isn't queryable. The eventual answer is still correct/non-fabricated, but the latency suggests the system/SQL-generation prompt could more explicitly guide the model to recognize out-of-schema attributes faster. Candidate follow-up: tune the schema-context or system prompt so the model short-circuits on out-of-schema refinements instead of spending a full reasoning pass figuring it out.
 
 ## Next recommended ticket
-T0007.4: Tests, manual verification, and doc status flips — add multi-turn / two-session isolation / persistence-across-restart assertions and flip the relevant `Status: planned` tags in `MVP_Technical_Design.md` (e.g. §2.4 Memory) to `implemented`.
+None open. T0007.4 is the last ticket in `docs/Tickets.md`; Milestone 7 (Conversation Memory) is the final defined milestone and is now complete (T0007.1–T0007.4). The whole MVP backlog is built. Further work (future phases — larger/live dataset, resume/embedding retrieval, charts, typed error contract) needs new tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.

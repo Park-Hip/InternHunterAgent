@@ -65,7 +65,7 @@ The MVP ships two tools:
 
 ### 2.4 Memory
 
-*Status: planned*
+*Status: implemented*
 
 Short-term, session-scoped memory is one component of the agent — it lets a user refine questions across turns within a conversation. It is **not** the whole agent, and it is deliberately scoped:
 
@@ -85,7 +85,7 @@ Tracing is built once in `src/agents/tracing/langfuse.py` and injected into the 
 
 ## 3. Public Contract
 
-*Status: implemented (session_id lifecycle: planned)*
+*Status: implemented*
 
 The API exchanges two Pydantic models (`src/api/schemas.py`):
 
@@ -94,7 +94,7 @@ The API exchanges two Pydantic models (`src/api/schemas.py`):
 
 The response is **answer-only**: no SQL, table rows, or tool internals ever appear, regardless of which tools run. Internal richness (e.g. `TableArtifact`) must collapse to a plain string before crossing the API boundary.
 
-**`session_id` lifecycle (planned).** Today `session_id` is a passive echo. Once memory exists it becomes the conversation key: when a request omits it, the system **generates one and returns it** so the client can continue the thread, and the response carries the id actually used — not a blind echo.
+**`session_id` lifecycle.** `session_id` is the conversation key: when a request omits it, the system **generates one and returns it** (`src/agents/service.py`) so the client can continue the thread, and the response carries the id actually used — not a blind echo.
 
 *Provisional:* the answer-only shape is an MVP choice, not a permanent law. The future charting capability (a chart is not a string) will revisit it.
 
@@ -104,12 +104,12 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 
 ## 4. Data & Configuration
 
-*Status: implemented (memory config: planned)*
+*Status: implemented*
 
 - **Dataset.** The MVP runs on a small fixed sample of internship postings in the `clean_jobs` table (`scripts/init_clean_jobs.sql`). Columns: `id` (Integer PK), `title` (Text), `company` (Text), `description` (Text), `tech_stack` (Text — a comma-separated list, **not** a SQL array; filters must treat it as a string). A larger and then live dataset are future phases.
 - **Database.** PostgreSQL via SQLAlchemy; the engine and session factory live in `src/core/db.py` (`pool_pre_ping=True`). This app database is entirely separate from Langfuse's internal Postgres — different owners, lifecycles, and schemas.
 - **Required environment.** `DATABASE_URL`, `GROQ_API_KEY`, and the `LANGFUSE_*` keys (tracing degrades gracefully if the Langfuse keys are absent).
-- **Tunable parameters** live in `config/settings.yaml` (read through `src/core/config.py`): `agent.groq.*` for the model, and `agent.memory.*` (e.g. `max_messages`) for memory once built. Per project convention, parameters are configured here, not hard-coded.
+- **Tunable parameters** live in `config/settings.yaml` (read through `src/core/config.py`): `agent.groq.*` for the model, and `agent.memory.*` (`max_messages`) for memory. Per project convention, parameters are configured here, not hard-coded.
 
 ---
 
@@ -136,6 +136,6 @@ Tests prove the Spec's capabilities, not implementation trivia. The strategy spa
 - **Unit — deterministic internals.** The SQL validator (safe/unsafe cases, SELECT-only enforcement), the table formatter (empty/single/multi/missing-key), and result-model serialization. These are the safety- and correctness-critical pure functions.
 - **Tool path.** `query_clean_jobs` end to end with the model call stubbed: a success path (validated SQL → rows → answer) and a refusal path (validator rejects unsafe SQL before execution).
 - **Request integration.** A `POST /api/v1/agent/query` happy path returning a well-formed answer-only response, and a failure path proving the process degrades cleanly.
-- **Memory behavior (planned).** Multi-turn refinement within one `session_id`; isolation between two different sessions; a generated `session_id` returned when none is supplied; persistence of a conversation across a restart; and that the history cap holds on long sessions.
+- **Memory behavior (implemented).** Multi-turn refinement within one `session_id`; isolation between two different sessions; a generated `session_id` returned when none is supplied; persistence of a conversation across a restart (simulated by rebuilding the runtime against the same checkpointer); and that the history cap holds on long sessions. See `tests/agents/runtime/test_memory.py`.
 
 The bar: every capability in `MVP_Spec.md` §2 maps to at least one observable test here.

@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0007.4-memory-tests-and-docs
+feature/t0008.1-resumi-persona
 
 ## Completed tickets
 - T0000: Milestone 0 - Foundation (FastAPI, logging, health endpoint)
@@ -22,9 +22,10 @@ feature/t0007.4-memory-tests-and-docs
 - T0007.2: Wire checkpointer + `session_id -> thread_id` lifecycle (`agent_factory()` now passes the checkpointer into `create_agent(...)`; `AgentRuntime.ainvoke` merges `configurable.thread_id` into the Langfuse config; `service.py` generates a `uuid4` session_id when the client omits one and returns the id used; `query.py` returns the service-provided id instead of echoing the request payload)
 - T0007.3: Native context trimming (count cap) (`src/agents/runtime/middleware.py::TrimMessagesMiddleware` applies LangChain's native `trim_messages` — strategy `last`, count-based to `agent.memory.max_messages` — inside a `wrap_model_call`/`awrap_model_call` hook attached via `create_agent(middleware=...)`; trims only the per-turn model input, leaving the checkpointer's stored history intact)
 - T0007.4: Memory tests, manual verification, and doc status flips (closes Milestone 7) — `tests/agents/runtime/test_memory.py` proves the five memory capabilities (multi-turn refinement within one `session_id`, session isolation, generated-id returned, persistence across a simulated restart, trimming cap holds); flipped the `Status: planned` tags for memory in `MVP_Technical_Design.md` §2.4/§3/§4/§6 to `implemented`; added the T0007.4 manual checklist. No runtime/source behavior changed — tests and docs only.
+- T0008.1: Resumi persona + on-topic policy + honesty rules — rewrote `config/prompts.yaml` `prompts.system_prompt` only; introduced the Resumi persona, on-topic/off-topic policy, the available-fields gate (title/company/description/tech_stack; salary/location/remote/deadline not present), multi-turn refinement rule, and honesty + no-SQL/no-raw-table style rules. No source code changed.
 
 ## In progress
-- None. Milestone 7 (Memory) is complete. Next: Milestone 8 (see `Tickets.md`).
+- T0008.2: SQL-generation prompt / schema context changes (next sub-ticket)
 
 ## Current folder structure
 ```text

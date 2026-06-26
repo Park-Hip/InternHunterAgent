@@ -146,3 +146,15 @@ T0007.4: Memory tests, manual verification, and doc status flips
 * Start a *second* `session_id` (omit it to get a fresh one) and ask an unrelated question — confirm it does not see the first session's history.
 * Look up the returned `trace_id`s in Langfuse and confirm one trace per request, grouped by `session_id` (`langfuse_session_id` metadata).
 * Re-read `docs/MVP_Technical_Design.md` §2.4, §3, §4, §6 and confirm memory now reads as *implemented* (no lingering `planned` tags for memory), and that `docs/Repo_Current_State.md` lists T0007.1–T0007.4 as completed.
+
+T0008.1: Resumi persona + on-topic policy + honesty rules
+
+* In a Python REPL: `from src.agents.runtime.prompts import load_system_prompt; print(load_system_prompt().content)` — confirm the output opens with "You are Resumi" and includes sections for on-topic policy, the available-fields gate, refinement, and honesty rules.
+* Run `uv run pytest tests/ -v` — confirm 66 tests pass, no regressions.
+* With the stack up (`docker compose up -d`), exercise each behavior via `POST /api/v1/agent/query`:
+  * `{"query": "hi"}` or `{"query": "what can you do?"}` → Resumi introduces itself and lists internship/job postings as its focus.
+  * `{"query": "What companies use Python?"}` → routes to `query_clean_jobs`, returns a data-backed answer (not from general knowledge).
+  * `{"query": "What's the salary for that role?"}` → Resumi replies that salary is not in the data; does not guess.
+  * Two-turn refinement on the same `session_id`: `"Show me backend roles"` then `"only the Python ones"` → turn 2 resolves "those" from turn 1's context.
+  * `{"query": "Write my resume"}` → Resumi declines, frames resume help as a future phase, redirects to postings.
+  * `{"query": "what's the weather?"}` → Resumi politely declines and redirects to internship postings.

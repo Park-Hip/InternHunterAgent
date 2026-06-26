@@ -3,17 +3,16 @@ import asyncio
 from langchain.messages import HumanMessage
 from langchain.tools import tool
 
-from src.agents.runtime.prompts import load_sql_generation_prompt
+from src.agents.runtime.prompts import load_schema_context, load_sql_generation_prompt
 from src.agents.runtime.provider import AgentProvider
 from src.services.query.executor import ExecutorError, execute_validated_sql
 from src.services.query.models import TableArtifact
-from src.services.query.schema_context import build_clean_jobs_schema_context
 from src.services.query.sql_validator import validate_sql
 from src.services.query.table_formatter import format_rows
 
 
 def generate_sql(question: str) -> str:
-    schema_context = build_clean_jobs_schema_context()
+    schema_context = load_schema_context()
     sql_generation_prompt = load_sql_generation_prompt()
     model = AgentProvider().build_model()
 

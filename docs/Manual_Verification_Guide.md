@@ -65,7 +65,7 @@ T0006.3: Deterministic table formatter
 T0006.4: Schema context + SQL-generation prompt
 
 * Run `uv run pytest tests/services/query/test_schema_context.py tests/agents/runtime/test_prompts.py -v` and confirm all tests pass.
-* In a Python REPL: `from src.services.query.schema_context import build_clean_jobs_schema_context; print(build_clean_jobs_schema_context())` — confirm output lists only `title`, `company`, `description`, `tech_stack` and no other columns.
+* In a Python REPL: `from src.agents.runtime.prompts import load_schema_context; print(load_schema_context())` — confirm output lists only `title`, `company`, `description`, `tech_stack` and no other columns. (Note: `src/services/query/schema_context.py` was retired in T0008.2; the schema context now lives in `config/prompts.yaml`.)
 * With `DATABASE_URL` set in the environment, in a Python REPL: `from src.agents.runtime.prompts import load_sql_generation_prompt; print(load_sql_generation_prompt())` — confirm the SQL-generation prompt text (SELECT-only, no fences, LIMIT required).
 * Temporarily blank the `sql_generation` block in `config/prompts.yaml`, re-run the REPL check, and confirm `load_sql_generation_prompt()` raises a clear `ValueError`; then restore the block.
 
@@ -146,6 +146,19 @@ T0007.4: Memory tests, manual verification, and doc status flips
 * Start a *second* `session_id` (omit it to get a fresh one) and ask an unrelated question — confirm it does not see the first session's history.
 * Look up the returned `trace_id`s in Langfuse and confirm one trace per request, grouped by `session_id` (`langfuse_session_id` metadata).
 * Re-read `docs/MVP_Technical_Design.md` §2.4, §3, §4, §6 and confirm memory now reads as *implemented* (no lingering `planned` tags for memory), and that `docs/Repo_Current_State.md` lists T0007.1–T0007.4 as completed.
+
+T0008.2: SQL-generation prompt hardening + schema context to YAML
+
+* `grep -rn "schema_context" src/ tests/` — confirm only `src/agents/runtime/prompts.py` and `tests/agents/runtime/test_prompts.py` appear; no reference to the deleted `src/services/query/schema_context.py`.
+* In a Python REPL:
+  ```python
+  from src.agents.runtime.prompts import load_schema_context, load_sql_generation_prompt
+  print(load_schema_context())   # must mention clean_jobs, title, company, description, tech_stack, comma-separated
+  print(load_sql_generation_prompt())  # must mention ILIKE and tech_stack
+  ```
+* Temporarily blank `prompts.schema_context` in `config/prompts.yaml` (set to empty string) and confirm `load_schema_context()` raises `ValueError`; restore afterward.
+* `uv run pytest tests/ -v` — confirm 70 tests pass, including all six `LoadSchemaContextTests` in `tests/agents/runtime/test_prompts.py`.
+* With the stack up and `clean_jobs` seeded (`docker compose up -d`), ask `POST /api/v1/agent/query` with `{"query": "What internships use Python?"}` — inspect the Langfuse trace and confirm the generated SQL uses `tech_stack ILIKE '%Python%'`, not `tech_stack = 'Python'`, and that results are returned correctly.
 
 T0008.1: Resumi persona + on-topic policy + honesty rules
 

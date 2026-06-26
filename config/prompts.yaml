@@ -26,6 +26,15 @@ prompts:
     - Never expose raw SQL or raw table dumps in your answer — always respond in natural language.
     - Keep answers concise and friendly.
 
+  schema_context: |
+    Table: clean_jobs
+    Columns:
+    - title (text)
+    - company (text)
+    - description (text)
+    - tech_stack (text, comma-separated list of technologies)
+    This table is read-only. Only these four columns exist.
+
   sql_generation: |
     You generate SQL for a read-only Postgres database.
 
@@ -34,3 +43,6 @@ prompts:
     - Do not use markdown code fences.
     - Do not add commentary or explanation, only the SQL statement.
     - Always include a LIMIT clause.
+    - Use ILIKE '%term%' for all text matching — never use = for text columns.
+    - tech_stack is a comma-separated string (e.g. "Python, SQL, React"). Match a technology with: tech_stack ILIKE '%Python%'.
+    - Reference only real columns: title, company, description, tech_stack. Never invent a column.

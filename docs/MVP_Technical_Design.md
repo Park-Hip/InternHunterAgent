@@ -53,7 +53,7 @@ The MVP ships two tools:
 - **`get_current_time`** (`src/agents/tools/time.py`) — returns the current time. Trivial; exists to prove the multi-tool path.
 - **`query_clean_jobs`** (`src/agents/tools/query_clean_jobs.py`) — answers questions about internship postings. It runs a fixed, deterministic pipeline rather than handing SQL power to the model:
 
-  1. `src/services/query/schema_context.py::build_clean_jobs_schema_context()` supplies the table shape to the model.
+  1. `config/prompts.yaml::prompts.schema_context` (loaded via `src/agents/runtime/prompts.py::load_schema_context()`) supplies the table shape to the model.
   2. A dedicated model call (`generate_sql`, using `prompts.sql_generation` via `load_sql_generation_prompt()`) turns the question into a candidate `SELECT`.
   3. `src/services/query/sql_validator.py::validate_sql` is the **security boundary** — a deterministic, hand-rolled read-only validator (SELECT-only, allowlist/denylist checks). Generation is untrusted; validation is what makes the path safe.
   4. Only validated SQL reaches `src/services/query/executor.py::execute_validated_sql`, run in a read-only transaction off the event loop via `asyncio.to_thread`.

@@ -111,6 +111,14 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 - **Required environment.** `DATABASE_URL`, `GROQ_API_KEY`, and the `LANGFUSE_*` keys (tracing degrades gracefully if the Langfuse keys are absent).
 - **Tunable parameters** live in `config/settings.yaml` (read through `src/core/config.py`): `agent.groq.*` for the model, and `agent.memory.*` (`max_messages`) for memory. Per project convention, parameters are configured here, not hard-coded.
 
+**Schema evolution.** *Status: planned (T0010).* The current four columns are a deliberately simple stand-in for the eventual real job-posting schema; the design keeps growth cheap (the permanent principle is in `Full_Design_Document.md` §6):
+
+- **Adding a column is free in code.** The SQL validator allowlists the *table* `clean_jobs`, not its columns, and `executor.py`/`table_formatter.py` are key-driven, so a new column reaches the answer with no code change — only the schema description the model reads (`schema_context`) and, where relevant, the honesty rules need an edit.
+- **Adding tables, joins, or renames is the boundary** where this stops being free: it crosses the validator's single-table allowlist. Staying single-table is the design choice that keeps evolution cheap.
+- **Multi-value fields.** `tech_stack` is a comma-separated string today; the path for the real dataset is a Postgres `TEXT[]` or `JSONB`, adopted only when the data demands it — not on the throwaway sample.
+- **Migrations deferred.** The schema is seeded by `scripts/init_*.sql`; a migration tool (e.g. Alembic) is intentionally not adopted until the schema stops being a fixed sample (i.e. real ingestion).
+- **Open decision (T0010).** Whether T0010 adds real-posting columns (location, remote, salary) or only grows the row count on the current four is deliberately left open until that milestone is picked up — both are supported by the cheap-growth design above, and because honesty is derived from the documented schema, either choice stays consistent without rework elsewhere.
+
 ---
 
 ## 5. Error Handling & Resilience
@@ -139,3 +147,21 @@ Tests prove the Spec's capabilities, not implementation trivia. The strategy spa
 - **Memory behavior (implemented).** Multi-turn refinement within one `session_id`; isolation between two different sessions; a generated `session_id` returned when none is supplied; persistence of a conversation across a restart (simulated by rebuilding the runtime against the same checkpointer); and that the history cap holds on long sessions. See `tests/agents/runtime/test_memory.py`.
 
 The bar: every capability in `MVP_Spec.md` §2 maps to at least one observable test here.
+
+> The scored, real-model **capability evaluation** is a separate offline concern — see §7 — distinct from this CI test suite. Unit and integration tests here stay deterministic and model-free; the eval harness deliberately runs the real model outside CI.
+
+---
+
+## 7. Evaluation Harness
+
+*Status: planned (T0009)*
+
+Evaluation is an **offline consumer** of the system, not a new internal layer: it drives the same service seam the API uses (`generate_agent_response`) from outside, and never reaches into the runtime or tools. The permanent boundary rules it relies on — a distinct judge model, direct Langfuse use, and exemption from no-post-tool-narration — are set in `Full_Design_Document.md` §7.
+
+- **Case set (canonical, in-repo).** A version-controlled file (e.g. `eval/cases.yaml`) of questions, each tagged with a category and behavioral assertions. Assertions split in two: **data-independent** (refusal, honest missing-field handling, persona/on-topic — survive a dataset swap) and **data-dependent** (names a real company — re-baselined when T0010 changes the data). This split keeps the larger-dataset milestone from invalidating the whole suite.
+- **Runner (standalone script).** A documented command (e.g. `scripts/run_eval.py`) invokes the real agent per case — driving a session for multi-turn cases — maps each assertion to a deterministic check, and prints a scored summary. It is **not** part of the pytest/CI gate: it calls the real model, costs tokens, and is non-deterministic, so it asserts on *behavior*, not exact strings, and pins eval temperature to 0 for stability.
+- **LLM-as-judge (distinct model).** A tagged subset of fuzzy-quality cases is graded by a separate judge model, configured under `eval.judge.*` in `config/settings.yaml` (its own model/provider/key, used only offline — permitted because the single-provider law is serving-path-scoped). The judge prompt lives in `config/prompts.yaml`. The deterministic runner works fully without the judge; the judge augments, never replaces it.
+- **Langfuse mirror.** The case set is published as a Langfuse dataset and runs link to it, with deterministic and judge scores attached for history and a UI. The in-repo case file stays the source of truth; if Langfuse is absent the in-repo eval still runs (the same degrade-to-no-op principle as serving-path tracing).
+- **Config.** An `eval.*` block in `config/settings.yaml` holds the judge model settings, enable/disable flags, and the Langfuse dataset name.
+
+This harness is what lets every later change — T0008 prompt tuning, the T0010 dataset, future RAG — be measured against the `MVP_Spec.md` §2/§3 bar rather than eyeballed.

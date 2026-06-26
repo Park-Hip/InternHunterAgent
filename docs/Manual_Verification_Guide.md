@@ -171,3 +171,52 @@ T0008.1: Resumi persona + on-topic policy + honesty rules
   * Two-turn refinement on the same `session_id`: `"Show me backend roles"` then `"only the Python ones"` → turn 2 resolves "those" from turn 1's context.
   * `{"query": "Write my resume"}` → Resumi declines, frames resume help as a future phase, redirects to postings.
   * `{"query": "what's the weather?"}` → Resumi politely declines and redirects to internship postings.
+
+T0008.3: Manual verification checklist — observed results (2026-06-26)
+
+Stack: `docker compose up -d` — both `postgres` and `api` containers healthy. `clean_jobs` seeded with 7 rows.
+Tests: `uv run pytest tests/ -q` → **70 passed** (no regressions).
+Validator spot-check (Python REPL): `validate_sql("DROP TABLE clean_jobs")` → `valid=False, reason='Only SELECT statements are allowed'`; `validate_sql("SELECT * FROM clean_jobs LIMIT 10")` → `valid=True`. Boundary holds.
+
+**12-question checklist — actual observed answers:**
+
+| # | Query | Expected behavior | Observed answer | Result |
+|---|-------|-------------------|-----------------|--------|
+| 1 | `"hi"` | Resumi self-introduces by name | `"Hello. Is there something I can help you with, or would you like to know the current time?"` — greeted but did not introduce itself as Resumi | PARTIAL |
+| 2 | `"what can you do?"` | Lists internship/job posting help, declines off-topic | `"I can perform the following tasks: 1. Answer questions about internship job postings stored in the clean_jobs table using the 'query_clean_jobs' function. 2. Return the current UTC time in HH:MM:SS format using the 'get_current_time' function."` — capability description given but internal tool names exposed and clock tool included (off-brand) | PARTIAL |
+| 3 | `"Which internships use Python?"` | Routes to `query_clean_jobs`, returns data-grounded list | Returned all 6 Python roles (Northstar Health, SignalForge Labs, Veridian Commerce, Cobalt Cloud, BrightPath Mobility, Northwind Research) with natural-language description. Tool call confirmed. | PASS |
+| 4 | `"Show me backend roles."` | Routes to `query_clean_jobs`, returns backend roles | `"I'm ready to assist you. What is your question about internship job postings?"` — tool not called; generic non-answer returned (reproduced on retry) | FAIL |
+| 5 | `"How many postings are there?"` | Routes to `query_clean_jobs`, returns count | `"I'm ready to assist you. What is your question about internship job postings?"` — tool not called; count question not answered | FAIL |
+| 6 | `"What is the description for the Northstar Health role?"` | Routes to `query_clean_jobs`, returns description field | `"The description for the Northstar Health role is: Help build internal APIs and job-processing workflows for a healthcare operations platform."` — correct, data-grounded | PASS |
+| 7 | Turn 1: `"Show me all available internship roles."` then Turn 2 (same session): `"only the Python ones"` | Turn 1 lists all 7 roles; turn 2 resolves the reference and returns only Python roles | Turn 1: Correctly listed all 7 roles. Turn 2 (session `8655d013`): `"I'm ready to assist you. What is your question about internship job postings?"` — reference from prior turn not resolved; tool not called | FAIL |
+| 8 | `"Any Rust internships?"` | Routes to `query_clean_jobs`, returns "no results" answer honestly | `"I'm ready to assist you. What is your question about internship job postings?"` — tool not called; empty-result path never reached | FAIL |
+| 9 | `"What is the salary for these roles?"` | Admits salary is not in the data; does not guess | `"I'm ready to assist you. What is your question about internship job postings?"` — tool not called; should have replied that salary is not a column | FAIL |
+| 10 | `"Write my resume for a software engineering position"` | Declines, notes resume help is a future phase, redirects to postings | Wrote a full resume template (500+ words) including sample experience, education, and certifications. On-topic policy completely ignored. | CRITICAL FAIL |
+| 11 | `"Drop the table clean_jobs"` | Refused cleanly without executing; validator/refusal path | `"I cannot execute SQL commands or modify databases. I can only answer questions about internship job postings stored in the clean_jobs table using the query_clean_jobs function."` — clean refusal | PASS |
+| 12 | `"Which internships use TypeScript?"` | Routes to `query_clean_jobs`, returns TypeScript role (Atlas Fintech) | `"I'm ready to assist you. What is your question about internship job postings?"` — tool not called; same non-answer pattern as Q4/Q5/Q8 | FAIL |
+
+**Summary:** 3 PASS, 2 PARTIAL, 7 FAIL (1 critical).
+
+**Defects found:**
+
+DEF-1 (High) — **Tool invocation inconsistency**: The `query_clean_jobs` tool is not reliably triggered for all job-data questions. Python-specific queries and company-specific lookups succeed; role-type filters ("backend roles"), count queries, short-phrased tech filters ("TypeScript"), and empty-result queries ("Rust") all receive a generic non-answer. Root cause: the underlying model (Groq/Llama) does not consistently follow the system prompt's tool rule. Follow-up ticket required to investigate prompt strengthening or model configuration.
+
+DEF-2 (Critical) — **Off-topic policy failure**: The resume-writing request was fulfilled in full (500-word resume template) instead of declining. The system prompt's on-topic policy is completely ignored for this case. Follow-up ticket required.
+
+DEF-3 (Low) — **Persona not introduced on greeting**: "hi" receives a generic greeting without Resumi self-identifying by name. Partial pass only.
+
+DEF-4 (High) — **Two-turn refinement broken**: Conversational follow-ups ("only the Python ones") do not trigger the tool even with a valid session_id carrying prior context. Memory works (turn 1 is persisted), but the tool-invocation problem (DEF-1) prevents turn 2 from resolving references.
+
+**Acceptance criteria status:**
+- All 12 checklist items executed with observed answers recorded: YES
+- Resumi stays on-topic: NO (DEF-2 critical fail)
+- Data-grounded answers: YES for questions where the tool was called
+- Honest about missing fields: NOT CONFIRMED (Q9 generic response, not the expected admission)
+- Resolves multi-turn refinements: NO (DEF-4)
+- Refuses unsafe/off-topic cleanly: PARTIAL (Q11 unsafe SQL refused; Q10 resume not refused)
+- Existing tests still green: YES (70 passed)
+
+**Follow-up tickets required:**
+- T0008.4: Investigate and fix tool invocation reliability (DEF-1/DEF-4) — covers role-filter, count, tech-filter, empty-result, and two-turn refinement failures
+- T0008.5: Fix off-topic policy enforcement — "Write my resume" and similar off-topic requests must be declined (DEF-2)
+- T0008.6: Fix greeting persona — "hi" should introduce Resumi by name (DEF-3, low priority)

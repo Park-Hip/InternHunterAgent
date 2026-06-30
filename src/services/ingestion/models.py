@@ -1,9 +1,60 @@
 from datetime import date, datetime
 
+from pydantic import BaseModel
 from sqlalchemy import BigInteger, Boolean, Date, Numeric, Text, UniqueConstraint
 from sqlalchemy import TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+# ---------------------------------------------------------------------------
+# Pydantic record models — internal pipeline DTOs (no DB connection on import)
+# ---------------------------------------------------------------------------
+
+
+class RawPosting(BaseModel):
+    """Verbatim landing record yielded by a source adapter and upserted into raw_jobs.
+
+    Fields mirror the raw_jobs insert shape; surrogate id and fetched_at are
+    assigned by the database, not the adapter.
+    """
+
+    source: str
+    external_id: str
+    source_url: str | None
+    raw_payload: dict
+    content_hash: str
+
+
+class NormalizedJob(BaseModel):
+    """Canonical shape produced by the normalizer + shared transform.
+
+    Consumed by the T0009.6 loader to upsert into clean_jobs. Fields map
+    one-to-one onto the agent-visible clean_jobs columns; surrogate id is
+    assigned by the database. Field values are populated by later sub-tickets.
+    """
+
+    source: str
+    external_id: str
+    source_url: str | None = None
+    title: str
+    company: str
+    role: str
+    description: str | None = None
+    tech_stack: str | None = None
+    job_level: str | None = None
+    location: str | None = None
+    posted_date: date | None = None
+    is_internship: bool
+    salary_min: float | None = None
+    salary_max: float | None = None
+    salary_currency: str | None = None
+    is_salary_negotiable: bool
+
+
+# ---------------------------------------------------------------------------
+# SQLAlchemy ORM models
+# ---------------------------------------------------------------------------
 
 
 class Base(DeclarativeBase):

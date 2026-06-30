@@ -1,0 +1,184 @@
+api:
+  url: "https://ms.vietnamworks.com/job-search/v1.0/search"
+  hits_per_page: 50
+  pages_per_query: 2
+  timeout_seconds: 30
+  delay_seconds: 0.6
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+
+queries:
+  - "data scientist"
+  - "data engineer"
+  - "data analyst"
+  - "machine learning"
+  - "AI engineer"
+  - "MLOps"
+  - "computer vision"
+  - "deep learning"
+
+job_function:
+  parent_id: 5
+  child_ids: [27]
+
+max_jobs: 50
+
+# Technology keyword dictionary — technologies only (languages, frameworks, platforms).
+# Role/category labels are excluded. Tunable: add terms as gaps surface (research §5/§9).
+tech_dictionary:
+  # Languages
+  - Python
+  - SQL
+  - R
+  - Java
+  - Scala
+  - Go
+  - C++
+  - C#
+  - TypeScript
+  - JavaScript
+  - Bash
+  - MATLAB
+  # ML / AI frameworks & libraries
+  - TensorFlow
+  - Keras
+  - PyTorch
+  - Scikit-learn
+  - XGBoost
+  - LightGBM
+  - CatBoost
+  - Hugging Face
+  - LangChain
+  - OpenCV
+  - YOLO
+  - BERT
+  - Transformers
+  # Data / analytics
+  - Pandas
+  - NumPy
+  - Spark
+  - PySpark
+  - Kafka
+  - Flink
+  - Airflow
+  - dbt
+  - Prefect
+  - Luigi
+  - MLflow
+  - Kubeflow
+  - Great Expectations
+  # Databases
+  - PostgreSQL
+  - MySQL
+  - MongoDB
+  - Redis
+  - Elasticsearch
+  - BigQuery
+  - Redshift
+  - Snowflake
+  - Cassandra
+  - ClickHouse
+  # Cloud & infra
+  - AWS
+  - GCP
+  - Azure
+  - Docker
+  - Kubernetes
+  - Terraform
+  - Helm
+  # BI / visualisation
+  - Power BI
+  - Tableau
+  - Looker
+  - Metabase
+  - Superset
+  # Web frameworks (common in data-adjacent roles)
+  - FastAPI
+  - Flask
+  - Django
+  - Node.js
+  - React
+  # Dev tools
+  - Git
+  - Linux
+  - Jupyter
+  - Databricks
+
+# Role taxonomy — canonical role → match keywords/patterns applied to the raw job title.
+# Matching is case-insensitive; first match wins; jobFunction child_id 27 breaks ties
+# for the AI/Data cluster. Unmatched titles fall back to "Other" (transform default).
+role_taxonomy:
+  "AI Engineer":
+    keywords:
+      - "ai engineer"
+      - "artificial intelligence engineer"
+      - "engineer ai"
+      - "kỹ sư ai"
+      - "kỹ sư trí tuệ"
+  "Data Scientist":
+    keywords:
+      - "data scientist"
+      - "nhà khoa học dữ liệu"
+      - "research scientist"
+      - "applied scientist"
+  "Data Engineer":
+    keywords:
+      - "data engineer"
+      - "kỹ sư dữ liệu"
+      - "data pipeline"
+      - "etl engineer"
+      - "platform engineer"
+      - "analytics engineer"
+  "Data Analyst":
+    keywords:
+      - "data analyst"
+      - "phân tích dữ liệu"
+      - "business analyst"
+      - "bi analyst"
+      - "business intelligence"
+      - "reporting analyst"
+  "ML Engineer":
+    keywords:
+      - "ml engineer"
+      - "machine learning engineer"
+      - "mlops engineer"
+      - "kỹ sư machine learning"
+      - "deep learning engineer"
+      - "nlp engineer"
+      - "computer vision engineer"
+  "Software Developer":
+    keywords:
+      - "software developer"
+      - "software engineer"
+      - "backend developer"
+      - "frontend developer"
+      - "fullstack"
+      - "full-stack"
+      - "full stack"
+      - "lập trình viên"
+      - "developer"
+      - "kỹ sư phần mềm"
+
+# City alias map — alias (lowercased source string) → canonical city/province.
+# The transform lowercases the source address before lookup.
+# Unknown values fall back to "Other" (transform default, not encoded here).
+city_alias_map:
+  "ha noi": "Hanoi"
+  "hanoi": "Hanoi"
+  "hà nội": "Hanoi"
+  "hn": "Hanoi"
+  "hcm": "Ho Chi Minh City"
+  "tphcm": "Ho Chi Minh City"
+  "ho chi minh": "Ho Chi Minh City"
+  "hcmc": "Ho Chi Minh City"
+  "ho chi minh city": "Ho Chi Minh City"
+  "tp hcm": "Ho Chi Minh City"
+  "tp. hcm": "Ho Chi Minh City"
+  "thành phố hồ chí minh": "Ho Chi Minh City"
+  "hồ chí minh": "Ho Chi Minh City"
+  "da nang": "Da Nang"
+  "danang": "Da Nang"
+  "đà nẵng": "Da Nang"
+  "can tho": "Can Tho"
+  "cần thơ": "Can Tho"
+  "hai phong": "Hai Phong"
+  "hải phòng": "Hai Phong"

@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0009.1-schema-migration
+feature/t0009.2-config-models
 
 ## Completed tickets
 - T0000: Milestone 0 - Foundation (FastAPI, logging, health endpoint)
@@ -26,14 +26,16 @@ feature/t0009.1-schema-migration
 - T0008.2: SQL-generation prompt hardening + schema context to YAML — moved schema facts from `src/services/query/schema_context.py` (deleted) into `config/prompts.yaml::prompts.schema_context`; added `load_schema_context()` to `src/agents/runtime/prompts.py`; updated `generate_sql()` to call `load_schema_context()`; strengthened `prompts.sql_generation` with ILIKE/'%term%' rules and comma-separated tech_stack guidance; relocated schema-context tests from the deleted `tests/services/query/test_schema_context.py` into `tests/agents/runtime/test_prompts.py`.
 - T0008.3: Manual verification checklist (closes Milestone 8) — rebuilt API image (`docker compose build --no-cache api`) to pick up T0008.1/T0008.2 prompt changes, ran 12-question checklist against the live stack, all 12 items passed; recorded observed answers in `docs/Manual_Verification_Guide.md`; confirmed 70 tests still pass (no regressions). No source code changed.
 - T0009.1: Schema & migration — `raw_jobs` + enriched `clean_jobs`. Replaced `scripts/init_clean_jobs.sql` (7 fixtures, 4 old columns) with `scripts/init_db.sql` (idempotent, no seed rows). New `raw_jobs` table (verbatim landing with JSONB payload + content_hash). `clean_jobs` enriched with `role`, `source`, `external_id`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary (`salary_min`/`salary_max` NUMERIC nullable, `salary_currency`, `is_salary_negotiable`); unique `(source, external_id)` on both tables; both PKs use GENERATED ALWAYS AS IDENTITY. Added `src/services/ingestion/__init__.py` + `src/services/ingestion/models.py` (SQLAlchemy 2.0 declarative `RawJob` + `CleanJob` mirroring the DDL; no eager DB connection). 70 tests still pass.
+- T0009.2: Config & ingestion models — created `config/ingestion.yaml` (separate file loaded via `settings.ingestion_yaml`) containing the full ingestion config: VietnamWorks API params (URL, hits_per_page, pages_per_query, timeout, delay, User-Agent), 8 AI/Data keyword queries, jobFunction ids (parent 5 / child 27), max_jobs cap (50), tech_dictionary (~69 terms), role_taxonomy (6 canonical roles with keyword match lists), and city_alias_map (seeded aliases for Hanoi / Ho Chi Minh City / Da Nang + Hai Phong / Can Tho). Added `ingestion_yaml` field to `Settings` and wired `_load_yaml_file("config/ingestion.yaml")` in `load_settings()`. Added `RawPosting` and `NormalizedJob` Pydantic models to `src/services/ingestion/models.py`. 70 tests still pass.
 
 ## In progress
-- T0009.1 closed. Next: T0009.2 (config & ingestion models).
+- T0009.2 closed. Next: T0009.3 (JobSource interface + VietnamWorksSource adapter).
 
 ## Current folder structure
 ```text
 .
 |-- config/
+|   |-- ingestion.yaml
 |   |-- prompts.yaml
 |   `-- settings.yaml
 |-- docker-compose.yml
@@ -146,6 +148,6 @@ Practical commands from the repository layout:
 - Observed during T0007.2 manual verification: asking a refining follow-up about an attribute that has no corresponding column in `clean_jobs` (e.g. "Which of those are remote?" — there is no `remote`/`location` column exposed in the schema context) makes the agent stall for several seconds before it works out it cannot answer, rather than recognizing quickly that the attribute isn't queryable. The eventual answer is still correct/non-fabricated, but the latency suggests the system/SQL-generation prompt could more explicitly guide the model to recognize out-of-schema attributes faster. Candidate follow-up: tune the schema-context or system prompt so the model short-circuits on out-of-schema refinements instead of spending a full reasoning pass figuring it out.
 
 ## Next recommended ticket
-**T0009.2 — Config & ingestion models** — centralise every ingestion parameter in `config/settings.yaml` and define the internal record models (`RawPosting`, `NormalizedJob`) the pipeline passes around. T0009.1 (schema) is done; T0009.2 is next in dependency order.
+**T0009.3 — `JobSource` interface + `VietnamWorksSource` adapter** — graduate `scripts/scrape_spike.py` into a provider-agnostic `JobSource` interface with the single VietnamWorks adapter; reads API params from `settings.ingestion_yaml`; yields `RawPosting`; unit-tested on the captured fixture (no live network call in tests).
 
 Remaining future phases (resume/embedding retrieval, charts, typed error contract, evaluation harness) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.

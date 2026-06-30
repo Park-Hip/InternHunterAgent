@@ -252,3 +252,53 @@ T0009.1: Schema & migration — raw_jobs + enriched clean_jobs
 8. Run tests:
    uv run pytest -q
    Confirm: 70 passed, 0 failed.
+
+
+T0009.2: Config & ingestion models
+
+1. Verify ingestion.yaml parses and is reachable via settings:
+   uv run python -c "
+   from src.core.config import settings
+   i = settings.ingestion_yaml
+   print(len(i['queries']), 'queries')
+   print('job_function:', i['job_function'])
+   print(len(i['tech_dictionary']), 'techs')
+   print('roles:', list(i['role_taxonomy'].keys()))
+   print('api url:', i['api']['url'])
+   "
+   Expected: 8 queries, job_function: {'parent_id': 5, 'child_ids': [27]}, ~69 techs,
+   6 canonical roles (AI Engineer / Data Scientist / Data Engineer / Data Analyst /
+   ML Engineer / Software Developer), correct API URL.
+
+2. Verify Pydantic models expose the right fields with no DB connection:
+   uv run python -c "
+   from src.services.ingestion.models import RawPosting, NormalizedJob
+   print(list(RawPosting.model_fields.keys()))
+   print(list(NormalizedJob.model_fields.keys()))
+   "
+   Expected RawPosting fields: source, external_id, source_url, raw_payload, content_hash
+   Expected NormalizedJob fields: source, external_id, source_url, title, company, role,
+   description, tech_stack, job_level, location, posted_date, is_internship,
+   salary_min, salary_max, salary_currency, is_salary_negotiable
+
+3. Quick instantiation check — no DB connection triggered:
+   uv run python -c "
+   from src.services.ingestion.models import RawPosting, NormalizedJob
+   r = RawPosting(source='vietnamworks', external_id='1', source_url=None, raw_payload={}, content_hash='x')
+   n = NormalizedJob(source='vietnamworks', external_id='1', title='Data Engineer',
+       company='Acme', role='Data Engineer', is_internship=False, is_salary_negotiable=False)
+   print('RawPosting:', r.source, r.external_id)
+   print('NormalizedJob:', n.title, n.role)
+   "
+   Confirm both print without error and no database connection is opened.
+
+4. Confirm existing agent: block in settings.yaml is unchanged:
+   uv run python -c "
+   from src.core.config import settings
+   print(settings.config_yaml['agent']['provider'])
+   "
+   Expected: groq
+
+5. Run tests:
+   uv run pytest -q
+   Confirm: 70 passed, 0 failed.

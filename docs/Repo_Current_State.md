@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0008.3-prompt-manual-verification
+feature/t0009.1-schema-migration
 
 ## Completed tickets
 - T0000: Milestone 0 - Foundation (FastAPI, logging, health endpoint)
@@ -25,9 +25,10 @@ feature/t0008.3-prompt-manual-verification
 - T0008.1: Resumi persona + on-topic policy + honesty rules — rewrote `config/prompts.yaml` `prompts.system_prompt` only; introduced the Resumi persona, on-topic/off-topic policy, the available-fields gate (title/company/description/tech_stack; salary/location/remote/deadline not present), multi-turn refinement rule, and honesty + no-SQL/no-raw-table style rules. No source code changed.
 - T0008.2: SQL-generation prompt hardening + schema context to YAML — moved schema facts from `src/services/query/schema_context.py` (deleted) into `config/prompts.yaml::prompts.schema_context`; added `load_schema_context()` to `src/agents/runtime/prompts.py`; updated `generate_sql()` to call `load_schema_context()`; strengthened `prompts.sql_generation` with ILIKE/'%term%' rules and comma-separated tech_stack guidance; relocated schema-context tests from the deleted `tests/services/query/test_schema_context.py` into `tests/agents/runtime/test_prompts.py`.
 - T0008.3: Manual verification checklist (closes Milestone 8) — rebuilt API image (`docker compose build --no-cache api`) to pick up T0008.1/T0008.2 prompt changes, ran 12-question checklist against the live stack, all 12 items passed; recorded observed answers in `docs/Manual_Verification_Guide.md`; confirmed 70 tests still pass (no regressions). No source code changed.
+- T0009.1: Schema & migration — `raw_jobs` + enriched `clean_jobs`. Replaced `scripts/init_clean_jobs.sql` (7 fixtures, 4 old columns) with `scripts/init_db.sql` (idempotent, no seed rows). New `raw_jobs` table (verbatim landing with JSONB payload + content_hash). `clean_jobs` enriched with `role`, `source`, `external_id`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary (`salary_min`/`salary_max` NUMERIC nullable, `salary_currency`, `is_salary_negotiable`); unique `(source, external_id)` on both tables; both PKs use GENERATED ALWAYS AS IDENTITY. Added `src/services/ingestion/__init__.py` + `src/services/ingestion/models.py` (SQLAlchemy 2.0 declarative `RawJob` + `CleanJob` mirroring the DDL; no eager DB connection). 70 tests still pass.
 
 ## In progress
-- None. T0008.3 closes Milestone 8. Further work (larger dataset, resume/embedding retrieval, charts) needs new tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6.
+- T0009.1 closed. Next: T0009.2 (config & ingestion models).
 
 ## Current folder structure
 ```text
@@ -43,7 +44,7 @@ feature/t0008.3-prompt-manual-verification
 |       |-- docker-compose.yaml
 |       `-- README.md
 |-- scripts/
-|   `-- init_clean_jobs.sql
+|   `-- init_db.sql
 |-- docs/
 |-- src/
 |   |-- agents/
@@ -66,6 +67,9 @@ feature/t0008.3-prompt-manual-verification
 |   |   |-- db.py
 |   |   `-- logger.py
 |   `-- services/
+|       |-- ingestion/
+|       |   |-- __init__.py
+|       |   `-- models.py
 |       `-- query/
 |           |-- executor.py
 |           |-- models.py
@@ -117,7 +121,7 @@ Practical commands from the repository layout:
 - `uv run uvicorn src.api.app:app --reload`
 - `uv run pytest`
 - `docker compose up -d` (root `docker-compose.yml`: Postgres + API, port `5433` host-side)
-- `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_clean_jobs.sql`
+- `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql`
 - `docker compose -f infra/langfuse/docker-compose.yaml up --build` (Langfuse observability stack)
 
 ## Build/test status
@@ -142,4 +146,6 @@ Practical commands from the repository layout:
 - Observed during T0007.2 manual verification: asking a refining follow-up about an attribute that has no corresponding column in `clean_jobs` (e.g. "Which of those are remote?" — there is no `remote`/`location` column exposed in the schema context) makes the agent stall for several seconds before it works out it cannot answer, rather than recognizing quickly that the attribute isn't queryable. The eventual answer is still correct/non-fabricated, but the latency suggests the system/SQL-generation prompt could more explicitly guide the model to recognize out-of-schema attributes faster. Candidate follow-up: tune the schema-context or system prompt so the model short-circuits on out-of-schema refinements instead of spending a full reasoning pass figuring it out.
 
 ## Next recommended ticket
-None open. T0008.3 closes the MVP prompt-hardening work. The whole MVP backlog is built. Further work (future phases — larger/live dataset, resume/embedding retrieval, charts, typed error contract, evaluation harness) needs new tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.
+**T0009.2 — Config & ingestion models** — centralise every ingestion parameter in `config/settings.yaml` and define the internal record models (`RawPosting`, `NormalizedJob`) the pipeline passes around. T0009.1 (schema) is done; T0009.2 is next in dependency order.
+
+Remaining future phases (resume/embedding retrieval, charts, typed error contract, evaluation harness) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.

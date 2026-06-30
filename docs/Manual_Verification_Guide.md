@@ -207,3 +207,48 @@ Validator spot-check (Python REPL): `validate_sql("DROP TABLE clean_jobs")` → 
 - Existing tests still green: YES (70 passed)
 
 **Note:** Initial run of this checklist (before rebuilding the API image) showed widespread failures because the container was still running the pre-T0008.1 system prompt. The `config/prompts.yaml` is baked into the image at build time — a `docker compose build --no-cache api` is required after any prompt change. After rebuild all 12 items passed.
+
+T0009.1: Schema & migration — raw_jobs + enriched clean_jobs
+
+1. Start Postgres:
+   docker compose up -d
+   Confirm: `docker compose ps` shows postgres healthy.
+
+2. Run init script:
+   docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
+   Confirm: no errors printed; output shows `CREATE TABLE` twice.
+
+3. Inspect raw_jobs schema:
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "\d raw_jobs"
+   Confirm columns: id (bigint, identity PK), source (text not null), external_id (text not null),
+   source_url (text nullable), raw_payload (jsonb not null), content_hash (text not null),
+   fetched_at (timestamptz not null default now()).
+   Confirm UNIQUE constraint on (source, external_id).
+
+4. Inspect clean_jobs schema:
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "\d clean_jobs"
+   Confirm columns: id (bigint, identity PK), source, external_id, source_url, title, company,
+   role (not null), description (nullable), tech_stack (nullable), job_level (nullable),
+   location (nullable), posted_date (date nullable), is_internship (boolean not null default false),
+   salary_min (numeric nullable), salary_max (numeric nullable), salary_currency (text nullable),
+   is_salary_negotiable (boolean not null default false).
+   Confirm UNIQUE constraint on (source, external_id).
+   Confirm NO salary/requirement/benefits text columns.
+
+5. Confirm tables are empty:
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT count(*) FROM clean_jobs;"
+   Expected: 0
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT count(*) FROM raw_jobs;"
+   Expected: 0
+
+6. Re-run init script (idempotency):
+   docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
+   Confirm: no errors (CREATE TABLE IF NOT EXISTS is a no-op on the second run).
+
+7. Verify import — no DB connection triggered:
+   python -c "import src.services.ingestion.models; print('import OK')"
+   Confirm: prints "import OK" with no connection error, even when DATABASE_URL is unset.
+
+8. Run tests:
+   uv run pytest -q
+   Confirm: 70 passed, 0 failed.

@@ -14,19 +14,21 @@ docker compose up -d
 
 The service exposes Postgres on host port `5433` (mapped to the container's `5432`) and defaults to the `internhunter` database.
 
-### 2. Seed the `clean_jobs` table
+### 2. Initialise the database schema
 
 Use `psql` from your machine if it is installed:
 
 ```bash
-psql -h localhost -p 5433 -U internhunter -d internhunter -f scripts/init_clean_jobs.sql
+psql -h localhost -p 5433 -U internhunter -d internhunter -f scripts/init_db.sql
 ```
 
-If you prefer to run the seed from inside the container:
+If you prefer to run it from inside the container:
 
 ```bash
-docker compose exec -T postgres psql -U internhunter -d internhunter < scripts/init_clean_jobs.sql
+docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
 ```
+
+The script is idempotent (`CREATE TABLE IF NOT EXISTS`) — re-running it is safe and a no-op.
 
 ### 3. Configure the app
 

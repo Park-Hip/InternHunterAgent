@@ -20,7 +20,7 @@ Design philosophy: every layer must be replaceable in isolation without forcing 
 
 These are deliberate, permanent decisions — not gaps to be closed by a future ticket:
 
-- **Single LLM provider on the serving path** (Groq, via `AgentProvider`) — no multi-provider routing or model-selection logic in the request pipeline. (Offline evaluation tooling may invoke a distinct judge model — see §7.)
+- **Single LLM provider** (Groq, via `AgentProvider`) — no multi-provider routing or model-selection logic in the request pipeline.
 - **No multi-agent routing**, sub-agents, or agent-to-agent delegation.
 - **No autonomous or background execution** — no cron jobs, queues, or schedulers.
 - **No cross-session or long-term memory.** Conversation memory is permanently limited to **session-scoped, short-term** context — what the agent needs to follow refinements within a single conversation. This memory may be *persisted* (so a conversation survives a restart and stays coherent across instances), but it is never shared across sessions and never accumulates into user profiles or a long-term store. Long-term recall — user history, resume understanding, embedding/similarity retrieval — is the excluded capability, regardless of how it might be stored.
@@ -42,12 +42,14 @@ These are deliberate, permanent decisions — not gaps to be closed by a future 
 
 **Core layer** (`src/core/config.py`, `logger.py`, `db.py`) — Cross-cutting primitives only: settings (`GROQ_API_KEY`, `DATABASE_URL`, `LANGFUSE_*`), structured JSON logging, and the SQLAlchemy engine/session factory. Core holds no business logic and depends on nothing else in the system; every other layer may depend on Core, never the reverse.
 
+**Ingestion layer** (`src/services/ingestion/`) — Offline batch tooling that *writes* the domain data the agent later reads (e.g. `raw_jobs`, `clean_jobs`). It runs out-of-band as a manually invoked CLI, never inside a request, and the request pipeline (API, service, runtime, tools, tracing) must **never import it** — the dependency only ever points the other way, with both sharing Core's settings and DB primitives. This isolation is what lets data acquisition evolve (new sources, new cleaning) without touching the serving path. Acquisition is kept source-agnostic behind a provider interface so a new source is a new adapter, not a reshape. (This offline tooling is distinct from the §2 exclusion of *in-request* background execution; turning ingestion into a scheduled job is a separate decision that must be reconciled against that exclusion, not assumed.)
+
 ## 4. Cross-Boundary Invariants
 
 Some types and data structures are permitted *inside* a layer but must never cross out of it. These are the standing "never leak" laws:
 
 - **Raw SQL and tool-internal data structures stop at the tools layer.** Internal DTOs (e.g. `src/services/query/models.py`'s `TableArtifact`, `QueryToolResult`) may be used freely within tools and services, but must collapse to a plain string before the result leaves the tool.
-- **Langfuse SDK objects stop at the tracing layer** (serving path). No route, service, or tool in the request pipeline touches a Langfuse client directly. Offline evaluation tooling is exempt — see §7.
+- **Langfuse SDK objects stop at the tracing layer.** No route, service, or tool touches a Langfuse client directly.
 - **LangChain types** (messages, runnables, agent objects) **stop at the runtime layer.** The service and API layers never see them.
 - **The API response is answer-only.** No raw SQL, table rows, or tool internals may ever appear in a `QueryResponse`, regardless of which tools exist behind the runtime.
 
@@ -59,8 +61,6 @@ Two Postgres instances exist and must never be conflated: the app's own `DATABAS
 
 Tracing integration follows one pattern: a single `CallbackHandler` is built once in `src/agents/tracing/langfuse.py` and injected into the agent invocation through `build_langfuse_config()` — no route, service, or tool builds its own Langfuse client. The standing invariant for every request is **one trace per request, with every tool invocation appearing as a child span underneath it.** This invariant is the verification bar for all future tools, not just the ones that exist today — a new tool that doesn't show up as a traced span is an incomplete tool, regardless of whether it returns the right answer.
 
-This pattern governs the **serving path**. Offline evaluation tooling may use the Langfuse SDK directly for datasets and experiments (see §7); it is a separate consumer, not part of the request pipeline.
-
 ## 6. Engineering Principles
 
 The system is built infra-and-reliability-first: a stable, traced, hardened request path is proven *before* any tool is added, so tool work never gets to skip validation, configuration checking, or tracing. (The concrete ticket sequence that followed this principle lives in `Tickets.md`.)
@@ -69,17 +69,6 @@ The system is built infra-and-reliability-first: a stable, traced, hardened requ
 
 - **SQL is LLM-generated, then deterministically validated.** The tool calls the model to *propose* a `SELECT`, but a deterministic, hand-rolled validator (allowlist/denylist checks, read-only execution) is the safety boundary that must approve it before execution. The generator is untrusted; the validator — not the model — is what makes the path safe. There is no LLM-driven query-planning or execution layer.
 - **One model provider abstraction** (`AgentProvider`/`ChatGroq`), with no provider-swap matrix built in advance of needing one.
-- **No post-tool narration.** A tool returns a single deterministic answer string; there is no second LLM call to summarize or re-narrate what a tool already produced. (This is distinct from the SQL-generation call *inside* the tool, which produces the query, not the answer.) This is a serving-path rule; it does not constrain offline evaluation grading — see §7.
+- **No post-tool narration.** A tool returns a single deterministic answer string; there is no second LLM call to summarize or re-narrate what a tool already produced. (This is distinct from the SQL-generation call *inside* the tool, which produces the query, not the answer.)
 - **Internal richness, external simplicity.** Tools and services may use structured data freely for efficiency and traceability, but that richness must collapse to a plain string by the time it crosses the API boundary — internal complexity is allowed, external leakage is not.
 - **Schema growth is column-cheap, table-costly.** The SQL validator allowlists the *table* (`clean_jobs`), not its columns, and the executor and formatter are key-driven, so adding a column reaches the answer with no code change — only the schema description the model reads. Adding tables, joins, or renames crosses the validator's single-table allowlist and is the deliberate boundary where schema evolution stops being free. Answer honesty is derived from the documented schema, never a hardcoded field list, so growing the schema never silently turns an honesty rule into a falsehood.
-
-## 7. Serving Path vs Offline Tooling
-
-The laws above constrain the **serving path** — the request/response pipeline a user's query flows through. Evaluation and other offline tooling are **separate consumers** of the system, and a few laws are deliberately scoped so they bind the serving path without contorting offline work:
-
-- **Offline evaluation drives the system through the service seam** (`generate_agent_response`), exactly as the API layer does. It is a consumer, never a new internal layer, and never reaches inside the runtime or tools.
-- **The single-provider rule (§2) constrains the serving agent only.** Offline evaluation may invoke a distinct judge model to grade answers; that model never runs on the serving path.
-- **The "only the tracing layer imports Langfuse" rule (§4, §5) is a serving-path rule.** The offline eval module may use the Langfuse SDK directly for datasets and experiments.
-- **"No post-tool narration" (§6) is a serving-path rule** about not re-narrating a tool's answer mid-request; it does not constrain offline grading.
-
-What stays absolute regardless of consumer: the **answer-only API response**, **read-only data access**, and the **never-leak type boundaries** (§4). Offline tooling earns no exemption from these.

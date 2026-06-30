@@ -106,7 +106,7 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 
 *Status: implemented*
 
-- **Dataset.** The MVP runs on a small fixed sample of internship postings in the `clean_jobs` table (`scripts/init_clean_jobs.sql`). Columns: `id` (Integer PK), `title` (Text), `company` (Text), `description` (Text), `tech_stack` (Text — a comma-separated list, **not** a SQL array; filters must treat it as a string). A larger and then live dataset are future phases.
+- **Dataset.** The MVP began on a small fixed sample of internship postings in the `clean_jobs` table (`scripts/init_clean_jobs.sql`). Columns: `id` (Integer PK), `title` (Text), `company` (Text), `description` (Text), `tech_stack` (Text — a comma-separated list, **not** a SQL array; filters must treat it as a string). *Status: real ingestion is planned (T0009)* — it replaces the fixtures with live VietnamWorks AI/Data postings and enriches the schema (see §7).
 - **Database.** PostgreSQL via SQLAlchemy; the engine and session factory live in `src/core/db.py` (`pool_pre_ping=True`). This app database is entirely separate from Langfuse's internal Postgres — different owners, lifecycles, and schemas.
 - **Required environment.** `DATABASE_URL`, `GROQ_API_KEY`, and the `LANGFUSE_*` keys (tracing degrades gracefully if the Langfuse keys are absent).
 - **Tunable parameters** live in `config/settings.yaml` (read through `src/core/config.py`): `agent.groq.*` for the model, and `agent.memory.*` (`max_messages`) for memory. Per project convention, parameters are configured here, not hard-coded.
@@ -117,7 +117,7 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 - **Adding tables, joins, or renames is the boundary** where this stops being free: it crosses the validator's single-table allowlist. Staying single-table is the design choice that keeps evolution cheap.
 - **Multi-value fields.** `tech_stack` is a comma-separated string today; the path for the real dataset is a Postgres `TEXT[]` or `JSONB`, adopted only when the data demands it — not on the throwaway sample.
 - **Migrations deferred.** The schema is seeded by `scripts/init_*.sql`; a migration tool (e.g. Alembic) is intentionally not adopted until the schema stops being a fixed sample (i.e. real ingestion).
-- **Open decision (T0010).** Whether T0010 adds real-posting columns (location, remote, salary) or only grows the row count on the current four is deliberately left open until that milestone is picked up — both are supported by the cheap-growth design above, and because honesty is derived from the documented schema, either choice stays consistent without rework elsewhere.
+- **Open decision (T0010) — now answered by T0009.** The question of whether to add real-posting columns (location, salary) vs. only grow the row count is **resolved by T0009**, which enriches `clean_jobs` (adds `role`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary: `salary_min`, `salary_max`, `salary_currency`, `is_salary_negotiable`) while landing real data. The cheap-growth design above is exactly what makes that enrichment column-cheap. T0010 is consequently re-scoped (see `Tickets.md`).
 
 ---
 
@@ -148,20 +148,43 @@ Tests prove the Spec's capabilities, not implementation trivia. The strategy spa
 
 The bar: every capability in `MVP_Spec.md` §2 maps to at least one observable test here.
 
-> The scored, real-model **capability evaluation** is a separate offline concern — see §7 — distinct from this CI test suite. Unit and integration tests here stay deterministic and model-free; the eval harness deliberately runs the real model outside CI.
-
 ---
 
-## 7. Evaluation Harness
+## 7. Data Ingestion Pipeline (offline)
 
 *Status: planned (T0009)*
 
-Evaluation is an **offline consumer** of the system, not a new internal layer: it drives the same service seam the API uses (`generate_agent_response`) from outside, and never reaches into the runtime or tools. The permanent boundary rules it relies on — a distinct judge model, direct Langfuse use, and exemption from no-post-tool-narration — are set in `Full_Design_Document.md` §7.
+Ingestion is **offline batch tooling** under `src/services/ingestion/`, isolated from the request pipeline — it is never imported by the API, service, runtime, tools, or tracing layers (the layer law is in `Full_Design_Document.md` §3). It runs as a manual, re-runnable CLI, not on a schedule. The deep research behind every decision here is `research/data-ingestion-stage.md` (§0.1, the ✅ reliable & schedulable VietnamWorks experiment) and `research/job-site-comparison.md`; do not re-derive it.
 
-- **Case set (canonical, in-repo).** A version-controlled file (e.g. `eval/cases.yaml`) of questions, each tagged with a category and behavioral assertions. Assertions split in two: **data-independent** (refusal, honest missing-field handling, persona/on-topic — survive a dataset swap) and **data-dependent** (names a real company — re-baselined when T0010 changes the data). This split keeps the larger-dataset milestone from invalidating the whole suite.
-- **Runner (standalone script).** A documented command (e.g. `scripts/run_eval.py`) invokes the real agent per case — driving a session for multi-turn cases — maps each assertion to a deterministic check, and prints a scored summary. It is **not** part of the pytest/CI gate: it calls the real model, costs tokens, and is non-deterministic, so it asserts on *behavior*, not exact strings, and pins eval temperature to 0 for stability.
-- **LLM-as-judge (distinct model).** A tagged subset of fuzzy-quality cases is graded by a separate judge model, configured under `eval.judge.*` in `config/settings.yaml` (its own model/provider/key, used only offline — permitted because the single-provider law is serving-path-scoped). The judge prompt lives in `config/prompts.yaml`. The deterministic runner works fully without the judge; the judge augments, never replaces it.
-- **Langfuse mirror.** The case set is published as a Langfuse dataset and runs link to it, with deterministic and judge scores attached for history and a UI. The in-repo case file stays the source of truth; if Langfuse is absent the in-repo eval still runs (the same degrade-to-no-op principle as serving-path tracing).
-- **Config.** An `eval.*` block in `config/settings.yaml` holds the judge model settings, enable/disable flags, and the Langfuse dataset name.
+**Design intent: source-agnostic.** v1 ingests **VietnamWorks only**, but the schema, cleaning, and interfaces are built so a future board is just a new adapter + normalizer with **no table reshape**. Only two components ever know a source's specifics — the **adapter** (fetch) and the **normalizer** (payload → common shape). Everything downstream is shared.
 
-This harness is what lets every later change — T0008 prompt tuning, the T0010 dataset, future RAG — be measured against the `MVP_Spec.md` §2/§3 bar rather than eyeballed.
+**Dataflow.**
+
+```
+JobSource (VietnamWorksSource) --RawPosting--> raw_jobs (verbatim landing, upsert on (source, external_id))
+   -> Normalizer (source-specific: payload -> NormalizedJob)
+   -> Transform (SHARED, deterministic, no LLM, no network):
+        HTML->text · is_internship · tech_stack keyword finder · role taxonomy · location city-alias map
+   -> Loader: upsert into clean_jobs on (source, external_id)
+```
+
+**Tables.**
+
+- **`raw_jobs`** — verbatim landing: `id`, `source`, `external_id`, `source_url`, `raw_payload` (JSONB), `content_hash`, `fetched_at`; unique `(source, external_id)`. Never lossy. Lives in the application `DATABASE_URL` Postgres alongside `clean_jobs` (never Langfuse's Postgres).
+- **`clean_jobs`** (enriched, agent-facing) — the original `title`, `company`, `description`, `tech_stack` plus `role`, `source`, `external_id`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary (`salary_min`, `salary_max`, `salary_currency`, `is_salary_negotiable`). `title` stays the raw posting title; `role` and `location` hold canonical normalized values. **`description` is a single merged free-text blob** (job description + requirements + benefits) — there are deliberately **no `requirement`/`benefits` columns**, because that is the common shape across all boards (most return one blob; VietnamWorks' separately-provided `jobRequirement`/`benefits` are concatenated back in its normalizer, and survive verbatim in `raw_jobs`). Unique `(source, external_id)`.
+
+**Deterministic cleaning** (all pure, unit-tested, no LLM — keeps ingestion testable and aligned with the project's "no over-engineering" rule; LLM extraction is a deferred future enhancement):
+
+- **`tech_stack`** — a keyword finder matches the source skills array + the description text against a curated **technology dictionary** (`config/settings.yaml`), keeps technologies only (role/category labels dropped), dedups, emits the comma-separated string the SQL agent already expects.
+- **`role`** — a **role taxonomy** maps the messy title into a fixed canonical set (AI Engineer, Data Scientist, Data Engineer, Data Analyst, ML Engineer, Software Developer), using keyword/pattern rules with the source `jobFunction` as a tiebreaker; unmatched titles fall to `Other` (never dropped).
+- **`location`** — a **city alias map** collapses messy location text to a unified city/province (`Ha Noi`/`Hanoi` → `Hanoi`; `HCM`/`TPHCM`/`Ho Chi Minh`/`hcm` → `Ho Chi Minh City`); multi-city → comma-separated canonical set; street address discarded.
+- **`description`** — source text is merged into **one free-text blob** (HTML stripped). VietnamWorks arrives pre-split, so its normalizer concatenates `jobDescription` + `jobRequirement` + benefit values back together; the other boards already return a single blob. This keeps one shape across all sources and one field for the agent to read.
+- **salary** — mapped into **structured** fields rather than a display string, so the agent can range-filter and sort (the core "pay ≥ X" query): `salary_min`, `salary_max` (numeric, nullable), `salary_currency` (e.g. USD/VND — required whenever a number is present, since VietnamWorks mixes currencies), and `is_salary_negotiable` (bool). VietnamWorks maps `salaryMin`/`salaryMax`/`salaryCurrency` directly and sets `is_salary_negotiable = not isSalaryVisible`; a future string-only board parses its salary string deterministically, else leaves min/max NULL with `is_salary_negotiable = true`.
+
+**Identity & idempotency.** Upsert on `(source, external_id)` with a `content_hash` for change detection; re-running refreshes rather than duplicating. The fixtures are replaced; a tunable `max_jobs` cap (~50) bounds a run.
+
+**Configuration.** Everything tunable lives in `config/settings.yaml` `ingestion.*`: API URL, AI/Data keyword queries, `jobFunction` ids, cap, delay, User-Agent, the technology dictionary, the role taxonomy, and the city alias map. Internal records (`RawPosting`, `NormalizedJob`) and the table models live in `models.py`, per project convention.
+
+**Agent-layer impact.** Because the new `clean_jobs` columns are agent-visible, T0009 also updates `prompts.schema_context`, the SQL-generation prompt, and the T0008 honesty rules (notably: salary is numeric and currency-scoped — filter within a `salary_currency` — and may be NULL / `is_salary_negotiable = true` → "may be missing or negotiable for some postings", not "not in the data"). This is the column-cheap schema growth §4 describes, applied.
+
+**Deferred.** Other boards, anti-bot scrapers, a scheduler/cron, LLM extraction, parsing a salary *string* into numbers (not needed for VietnamWorks, which supplies the numbers directly), translating source text to a single language, and cross-board dedup are out of scope (see `Tickets.md` T0009 Out of Scope and `research/job-site-comparison.md`).

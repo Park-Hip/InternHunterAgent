@@ -306,59 +306,96 @@
 * Any fix beyond what's needed to pass; larger issues become follow-up tickets.
 **Status: completed (2026-06-26). All 12 checklist items passed after rebuilding the API image with `docker compose build --no-cache api`. No defect follow-up tickets required.**
 
-### T0009: Milestone 9 - Evaluation Harness
-**Objective:** Promote the T0008.3 manual checklist into an automated, scored evaluation of the agent against a fixed question set covering the `MVP_Spec.md` §2/§3 capabilities, so every later change (prompts, RAG, larger dataset) is measured rather than guessed. The harness has three layers, each an independently mergeable sub-ticket: a deterministic in-repo runner is the spine and works alone; an LLM-as-judge layer grades fuzzy answer quality; and Langfuse Datasets/Experiments give run history and a UI. The eval calls the real model — it is non-deterministic and token-costing, so it is a separate `eval` command, never part of the standard unit-test CI gate. Depends on T0007 (multi-turn cases need memory) and T0008 (the persona/honesty behavior being evaluated). This is measurement only — no new agent capability, no new tool.
+### T0009: Milestone 9 - Data Ingestion (VietnamWorks, real AI/Data postings)
+**Objective:** Replace the hand-written `clean_jobs` fixtures with **real** Vietnamese IT / AI-Data job postings fetched from the VietnamWorks public JSON search API, through a deterministic raw→clean pipeline that is built **source-agnostic** so future job boards drop in as new adapters without reshaping the schema or the cleaning core. The pipeline is offline batch tooling under `src/services/ingestion/`, fully isolated from the API / service / runtime / tracing layers (it is never imported by the request path). v1 source is **VietnamWorks only**; all research behind these decisions lives in `research/data-ingestion-stage.md` (§0.1, ✅ reliable & schedulable) and `research/job-site-comparison.md`. This milestone is broken into eight dependency-ordered sub-tickets (T0009.1-T0009.8).
 **In Scope:**
-* A version-controlled case file describing questions, categories, and behavioral assertions for the Spec §2/§3 bar (grounding, correct filtering, honest missing-field handling, empty results, refusal, on-topic persona, multi-turn refinement).
-* An in-repo runner that invokes the real agent and scores each case deterministically.
-* An optional LLM-as-judge layer for answer-quality grading on fuzzy cases.
-* Publishing the case set and scores to the self-hosted Langfuse stack.
-* A documented command to run the eval and read the summary.
+* A new `raw_jobs` landing table (verbatim source payload + provenance) and an enriched, source-neutral `clean_jobs` (Rich agent-visible schema: adds `role`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary `salary_min`/`salary_max`/`salary_currency`/`is_salary_negotiable` to the existing four columns; `description` stays a single merged blob — no `requirement`/`benefits` columns).
+* A provider-agnostic `JobSource` interface with **one** adapter, `VietnamWorksSource` (graduates `scripts/scrape_spike.py`): keyword-recall + `jobFunction` precision, `httpx` POST, polite delay, no browser / no anti-bot library.
+* A deterministic, source-agnostic transform: HTML→text; **merge source text into one `description`** (VietnamWorks concatenates `jobDescription` + `jobRequirement` + benefit values); internship flag; **`tech_stack` keyword finder** (technologies-only, comma-separated); **`role` taxonomy** (messy title → canonical role); **`location` city alias map** (unified city/province); **structured salary** (`salary_min`/`salary_max`/`salary_currency`/`is_salary_negotiable`).
+* An idempotent batch loader (re-runnable CLI) upserting on `(source, external_id)`; fixtures replaced; ~50-job cap, tunable.
+* All parameters (API config, keyword queries, `jobFunction` ids, cap, tech dictionary, role taxonomy, city alias map) in `config/settings.yaml`; models in `models.py`.
+* Agent-layer follow-through for the new agent-visible columns: `prompts.schema_context`, the SQL-generation prompt, and the T0008 honesty rules.
 **Out of Scope:**
-* A third-party eval framework (ragas/deepeval/promptfoo) or any new heavy dependency.
-* Making the eval a blocking unit-test/CI gate (it is real-model, non-deterministic, and costs tokens).
-* Any change to the agent, tools, prompts, or public contract (this milestone only observes).
-* RAG, resume, charts, or dataset expansion (later milestones).
+* Any second board (ITviec / TopDev / TopCV / LinkedIn) — the interface is built now; the adapters are future tickets.
+* `cloudscraper` / Scrapfly or any anti-bot path (not needed for the VietnamWorks JSON API).
+* A scheduler / cron for ingestion — runs are **manual** this milestone (automated scheduling is a deploy-research concern and intersects the permanent no-background-execution law; see Follow-ups).
+* LLM-based tech/role extraction (deterministic dictionary/taxonomy only).
+* Cross-board duplicate detection beyond `(source, external_id)` + `content_hash`.
+* Parsing a salary *string* into numbers (unneeded for VietnamWorks, which supplies `salaryMin`/`salaryMax` directly; only a future string-only board would need it), structured multi-field location, and translating source text to a single language (descriptions are stored in their original VI/EN — retrieval is language-independent because role/location/tech are normalized; single-language standardization is a future RAG-milestone concern).
 
-#### T0009.1: Eval dataset + in-repo deterministic runner
-**Objective:** Build the spine — a fixed case set and a runner that invokes the real agent and scores behavioral pass/fail — that is useful on its own without the judge or Langfuse layers.
+#### T0009.1: Schema & migration - `raw_jobs` + enriched `clean_jobs`
+**Objective:** Stand up the source-agnostic storage both halves of the pipeline assume: a verbatim `raw_jobs` landing table and the enriched `clean_jobs`, keyed for idempotent multi-source upserts.
 **In Scope:**
-* Add an eval case file (e.g. `eval/cases.yaml`) with entries: `id`, `category`, `turns` (one or more user messages for multi-turn), and `assertions` (e.g. `must_refuse`, `must_contain_any`, `must_not_contain`, `says_no_results`, `names_real_company`).
-* Add a standalone runner script `scripts/run_eval.py` (not a pytest/CI target) that calls the agent per case (driving a session for multi-turn cases), maps each assertion type to a deterministic check, and prints a scored summary with per-category counts.
-* Cases covering: grounding, correct filtering (ILIKE on the CSV `tech_stack`), honest missing-field (salary/remote), empty result (Rust), refusal (drop table), on-topic persona (greeting, "what can you do", decline "write my resume"), and a two-turn refinement.
-* README/`docs` note documenting the single command to run it.
+* Add `raw_jobs` (`id`, `source`, `external_id`, `source_url`, `raw_payload` JSONB, `content_hash`, `fetched_at`; unique `(source, external_id)`).
+* Enrich `clean_jobs` with `role`, `source`, `external_id`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary (`salary_min`, `salary_max` numeric nullable; `salary_currency`; `is_salary_negotiable` bool); add unique `(source, external_id)`. `title` stays the raw posting title; `role`/`location` hold canonical values; `description` is a single merged blob (no `requirement`/`benefits` columns — those survive only in `raw_jobs.raw_payload`).
+* Update `scripts/init_clean_jobs.sql` (and/or a new init script) to create both tables and stop seeding the 7 fixtures.
+* Add SQLAlchemy models for both tables in `models.py`.
 **Out of Scope:**
-* LLM-as-judge scoring (T0009.2).
-* Langfuse dataset/experiment publishing (T0009.3).
+* The adapter, transform, or loader (later sub-tickets).
+* A migration tool (Alembic) — seeding stays SQL-script based for this milestone.
 
-#### T0009.2: LLM-as-judge scoring layer
-**Objective:** Add an optional quality-grading layer for fuzzy cases where a deterministic substring check is too blunt, isolated so the deterministic runner still works without it.
+#### T0009.2: Config & ingestion models
+**Objective:** Centralize every ingestion parameter in `config/settings.yaml` and define the internal record models the pipeline passes around.
 **In Scope:**
-* Add an `eval_judge` prompt block to `config/prompts.yaml` and a loader following the existing `load_*_prompt()` pattern.
-* A judge function that calls a **distinct judge model** (configured under `eval.judge.*` in `config/settings.yaml` — its own model/provider/key, temperature 0, offline only; permitted because the single-provider law is serving-path-scoped per `Full_Design_Document.md` §7) to grade a case's answer against a rubric and return a score/verdict.
-* Config flag to enable/disable the judge layer; when disabled, the deterministic runner is unaffected.
-* Apply the judge only to a tagged subset of cases to control cost and flakiness.
+* `config/settings.yaml` `ingestion.*`: API URL, AI/Data keyword queries, `jobFunction` ids (parent 5 / child 27), `max_jobs` cap, page count, polite delay, User-Agent, the **technology keyword dictionary**, the **role taxonomy** (canonical role → match rules), and the **city alias map** (alias → canonical city/province).
+* `models.py`: `RawPosting` (source-agnostic landing record) and `NormalizedJob` (common shape feeding the transform).
 **Out of Scope:**
-* Replacing deterministic checks (the judge augments, never the sole gate).
-* Any Langfuse integration (T0009.3).
+* Reading these values in the adapter/transform (later sub-tickets wire them).
 
-#### T0009.3: Langfuse Datasets + Experiments integration
-**Objective:** Give the eval run history and a UI by publishing the case set as a Langfuse dataset and attaching scores to the runs, reusing the already self-hosted stack.
+#### T0009.3: `JobSource` interface + `VietnamWorksSource` adapter
+**Objective:** Graduate the throwaway spike into a provider-agnostic source interface with the single v1 adapter, so a second board later is just another implementation.
 **In Scope:**
-* Push the eval case set to a Langfuse dataset; link each eval run's traces to its dataset items.
-* Attach deterministic (and, if enabled, judge) scores to the run for per-case and aggregate views.
-* Degrade to a no-op when Langfuse credentials/stack are absent — the in-repo eval must still run (same principle as the tracing layer).
+* `src/services/ingestion/sources/base.py` — a `JobSource` interface yielding `RawPosting`.
+* `src/services/ingestion/sources/vietnamworks.py` — fetch via `httpx` POST, keyword-recall + `jobFunction` precision (parent 5 / child 27), honor the cap/delay/User-Agent from settings, emit `RawPosting` with `content_hash`.
+* Unit tests over the captured fixture `research/experiments/vietnamworks_ai_data_sample.json` (no live network call in tests).
 **Out of Scope:**
-* Moving the source of truth into Langfuse (the in-repo case file stays canonical).
-* Any change to the request-path tracing already built in T0004.
+* Persisting to `raw_jobs` (T0009.4); any transform/normalize (T0009.5).
 
-### T0010: Milestone 10 - Larger Dataset (outline)
-**Objective:** Replace the 7-row fixture sample with a larger curated **fixed** dataset on the same pipeline, so the evaluation harness and any future RAG/semantic work operate on realistic volume and variety. This remains a fixed sample — live or real-time ingestion stays a later phase.
-**In Scope (provisional):**
-* A larger curated `clean_jobs` seed (target ~50-150 rows) covering varied roles, companies, and tech stacks, loaded through the existing `scripts/init_clean_jobs.sql` path.
-* Re-running the T0009 eval against the new data and updating any data-dependent assertions (e.g. expected company names).
+#### T0009.4: Raw landing - upsert into `raw_jobs`
+**Objective:** Persist fetched postings verbatim before any transform, idempotently.
+**In Scope:**
+* `src/services/ingestion/raw_store.py` upserting `RawPosting` into `raw_jobs` on `(source, external_id)` with `content_hash`; re-runs refresh, never duplicate.
+* Tests mocking the session factory for insert/upsert behavior.
 **Out of Scope:**
-* Live/real-time job ingestion (later phase).
-* RAG/embeddings/semantic retrieval (separate future milestone).
-**Open decision (resolve when this milestone is picked up, not before):**
-* Keep the four columns (`title`, `company`, `description`, `tech_stack`) or enrich the schema with fields users actually ask about (location, remote/on-site, salary). Enriching lets the agent answer questions it currently declines, but expands the SQL validator, schema context, and the T0008 honesty rules — so it is a deliberate scope choice, not a default.
+* The transform and `clean_jobs` load (T0009.5-T0009.6).
+
+#### T0009.5: Normalize + transform (role, location, tech_stack, salary, description)
+**Objective:** Turn a raw payload into a clean, canonical `NormalizedJob` using only deterministic, unit-testable pure functions.
+**In Scope:**
+* `src/services/ingestion/normalize/vietnamworks.py` — map the VietnamWorks payload to `NormalizedJob` (the only source-specific transform code): **merge `jobDescription` + `jobRequirement` + benefit values into one `description`**, and map `salaryMin`/`salaryMax`/`salaryCurrency`/`not isSalaryVisible` into the structured salary fields.
+* `src/services/ingestion/transform.py` (shared, source-agnostic): HTML→text; `is_internship` from level; **`tech_stack` keyword finder** (skills + description → dictionary → dedup → comma-separated); **`role` taxonomy** (title + `jobFunction` → canonical role, unmatched → `Other`); **`location` city alias map** (address/`workingLocations` → unified city/province, multi-city → comma-separated).
+* Unit tests including edge cases: `TPHCM`/`Ha Noi` aliasing, multi-city, an unmatched title → `Other`, a description-only tech hit, an HTML-heavy description, a hidden-salary row (→ NULL min/max + `is_salary_negotiable = true`), and a merged-description shape (requirements/benefits present in the single `description`).
+**Out of Scope:**
+* The DB upsert into `clean_jobs` (T0009.6).
+* Any LLM call (forbidden in the transform).
+
+#### T0009.6: Loader - idempotent upsert into `clean_jobs`
+**Objective:** Provide the runnable batch entrypoint that drives the whole pipeline and lands clean rows without duplicating on re-run.
+**In Scope:**
+* `src/services/ingestion/loader.py` (or a `scripts/` CLI wrapper) chaining source → `raw_jobs` → normalize/transform → upsert `clean_jobs` on `(source, external_id)`.
+* Replace (not append to) the fixtures; respect the `max_jobs` cap.
+* A README/`Manual_Verification_Guide.md` snippet documenting the run command.
+**Out of Scope:**
+* FastAPI startup wiring (the loader is manual batch tooling, never in the request path).
+* Scheduling/cron.
+
+#### T0009.7: Agent-layer follow-through (Rich schema)
+**Objective:** Teach the agent about the new agent-visible columns so it can use them and stays honest about sparse ones.
+**In Scope:**
+* Update `prompts.schema_context` to describe `role`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary (`salary_min`, `salary_max`, `salary_currency`, `is_salary_negotiable`) — and that `role`/`location` are **canonical** values, `tech_stack` a comma-separated string, `description` a single merged blob.
+* Update the `prompts.sql_generation` guidance (e.g. `role ILIKE '%Data Scientist%'`, `location ILIKE '%Ho Chi Minh%'`, and currency-scoped salary ranges like `salary_min >= 1000 AND salary_currency = 'USD'`).
+* Update the T0008 honesty rules: salary may be NULL / `is_salary_negotiable = true` ("may be missing or negotiable for some postings") rather than "not in the data."
+* Minimal SQL-validator touch only if needed (the allowlist is table-level, so usually none).
+**Out of Scope:**
+* Any change to the ingestion pipeline internals (T0009.1-T0009.6).
+* New tools or runtime wiring.
+
+#### T0009.8: End-to-end manual verification
+**Objective:** Prove the milestone works end-to-end on a running stack; no code changes expected.
+**In Scope:**
+* `docker compose up -d` healthy; run the ingestion CLI; confirm fetched/landed/upserted counts.
+* Inspect `raw_jobs` (verbatim JSON, live `source_url`) and `clean_jobs` (real VN companies; `tech_stack` techs-only; `role` canonical not raw title; `location` unified e.g. `Ho Chi Minh City` never `TPHCM`; at least one `is_internship = true`; fixtures gone).
+* Re-run → row count unchanged (idempotent).
+* Agent questions: tech filter, **role filter** ("data scientist roles"), **city filter** ("jobs in Hanoi" and "jobs in HCM" hit the same canonical city), **salary range** ("internships paying at least $500" → uses `salary_min`/`salary_currency`), freshness, `source_url`/link, internship-only, and a hidden-salary row (honest "not available / negotiable").
+**Out of Scope:**
+* Any fix beyond what's needed to pass; larger issues become follow-up tickets.

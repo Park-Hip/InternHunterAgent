@@ -1,0 +1,683 @@
+# Deployment Research Plan — InternHunterAgent
+
+> **Status:** Research **skeleton** / pre-design. This is an *outline of what to research*,
+> not the findings. Each section states the question, what to search the web for, and the
+> decision it will drive. Fill the "Findings" / "Decision" blanks as the research is done.
+> Output feeds a future deployment design doc and `docs/Tickets.md` deploy tickets.
+>
+> **Constraint (standing):** hosting cost must be **free or minimal** — prefer free tiers;
+> flag anything that risks a recurring bill.
+
+---
+
+## 0. What we are deploying (context — fill before researching)
+
+So every option is judged against the *actual* system, list the moving parts first:
+
+- **Serving path:** FastAPI app + LangChain agent (Groq LLM via API) + Langfuse tracing.
+- **Datastore:** Postgres (`clean_jobs` served read-only to the agent; LangGraph
+  checkpointer also uses Postgres).
+- **Offline job:** scheduled data-ingestion (see `data-ingestion-stage.md`,
+  `job-site-comparison.md`) — runs on a cron, writes `raw_jobs` → `clean_jobs`.
+- **External deps that must be reachable from prod:** Groq API, Langfuse (cloud or
+  self-hosted), the job-board source endpoints.
+- **Expected traffic:** Demo / portfolio — single user or very low QPS. Scale-to-zero
+  is acceptable; a cold start of 30–60 s is tolerable.
+
+> The deploy target is **3 workloads, not 1**: (a) the web API, (b) the Postgres DB,
+> (c) the scheduled ingestion job. Each section below should answer for all three.
+
+---
+
+## 1. Hosting platform for the FastAPI app
+
+**Question:** Where does the always-on (or scale-to-zero) web API run, cheapest?
+
+**Research / web searches:**
+- `Render vs Railway vs Fly.io vs Koyeb free tier 2026 FastAPI`
+- `free tier always-on web service no cold start 2026`
+- `Hugging Face Spaces Docker FastAPI free hosting limits`
+- `Google Cloud Run free tier scale to zero FastAPI cost`
+- `fly.io free allowance 2026 changes`
+
+**Compare on:** free-tier hours/limits, cold-start / spin-down behavior, Docker support,
+custom domain + HTTPS included, RAM/CPU ceiling, region (latency to Vietnam users),
+egress limits, does it sleep on idle.
+
+**Findings:**
+
+| Platform | Free limits (2026) | Spin-down / cold start | Docker support | Egress free | Vietnam latency | Verdict |
+|---|---|---|---|---|---|---|
+| **Render** | 750 instance-hours/workspace/month; 512 MB RAM on free instance | Spins down after **15 min** idle; restarts in **~1 min** | Yes — build from Dockerfile | 100 GB/month | Singapore region available (lower latency to VN than US-East) | **Best free option** for this project |
+| **Railway** | $5 one-time trial credit, expires in 30 days; then Hobby plan at **$5/month** | No spin-down (always-on while credits/plan active) | Yes | Included in plan | US/EU regions | **Not free** — eliminated permanent free tier in 2023; not viable |
+| **Fly.io** | Free tier removed 2024. New users get a **2-VM-hour / 7-day trial only**; minimum ~$5/month after | No spin-down on paid; legacy free users kept 3 VMs | Yes | Legacy: 100 GB; paid: varies | 30+ regions globally | **Not free** for new users; eliminated in 2024 |
+| **Koyeb** | Was: 512 MB RAM / 0.1 vCPU / 2 GB SSD, 1 free instance. **⚠️ New signups for free Starter tier closed after Mistral AI acquisition (Feb 2026)** | Scaled to zero after 1 hr; cold start unknown | Yes | 100 GB/month | Frankfurt or Washington DC only | **No longer available** for new users; do not plan around it |
+| **HuggingFace Spaces** | CPU Basic: 2 vCPU, 16 GB RAM — free. **Write access to `/tmp` only** (no persistent storage). 250 MB unzipped package size cap | No spin-down on CPU Basic; always-on | Yes — Docker Spaces | Not specified | US only | Viable for stateless API demo; no persistent disk is a limitation if any file state is needed |
+| **Google Cloud Run** | 2M requests/month, 360K GB-seconds memory, 180K vCPU-seconds — **always-free tier**. Must link billing account (bill stays $0 within limits). Scale to zero when idle | Scales to zero; cold start on first request (typically **100–500 ms** for warm containers, longer for cold) | Yes — deploy from Dockerfile or source | 1 GB/month free egress to internet (then $0.08–$0.12/GB) | Closest region: `asia-southeast1` (Singapore) | Strong option — generous always-free tier, no spin-down penalty, best latency to VN via Singapore |
+
+**Summary for this project:**
+- **Render free tier** is the simplest path: connect GitHub, deploy Dockerfile, get `*.onrender.com` + auto TLS. 750 hrs/month is enough for a low-QPS demo (one service running ~24 hrs/day ≈ 720 hrs). Cold start of ~1 min after 15-min idle is acceptable.
+- **Google Cloud Run** is the more scalable free option: true scale-to-zero with faster cold starts, a richer free quota, and Singapore region for better Vietnam latency. Requires linking a billing account (charge only if limits exceeded).
+- Railway, Fly.io, and Koyeb are **not genuinely free** for new users in mid-2026.
+- HuggingFace Spaces is viable only if the API is stateless and has no disk-write needs outside `/tmp`.
+
+Sources:
+- [Render free tier policy (render.com)](https://render.com/articles/platforms-with-a-real-free-tier-for-developers-in-2026)
+- [Railway free tier history (saaspricepulse.com)](https://www.saaspricepulse.com/blog/railway-pricing-history)
+- [Fly.io free tier 2026 (saaspricepulse.com)](https://www.saaspricepulse.com/blog/flyio-free-tier-2026)
+- [Koyeb free tier 2026 — Mistral acquisition note (srvrlss.io)](https://www.srvrlss.io/provider/koyeb/)
+- [HuggingFace Spaces Docker (huggingface.co)](https://huggingface.co/docs/hub/en/spaces-sdks-docker)
+- [Google Cloud Run free tier 2026 (lalatenduswain.medium.com)](https://lalatenduswain.medium.com/building-cloud-native-apps-for-free-in-2026-the-complete-developers-guide-to-google-cloud-s-3d93b77c4adb)
+- [Cloud Run pricing (cloud.google.com)](https://cloud.google.com/run/pricing)
+
+**Decision:** _____
+
+---
+
+## 2. Containerization & build
+
+**Question:** How is the app packaged and built for that platform?
+
+**Research / web searches:**
+- `uv Docker production image FastAPI multi-stage build 2026`
+- `uv sync --frozen --no-dev Dockerfile best practice`
+- `distroless vs slim python image size security 2026`
+- `platform X build from Dockerfile vs nixpacks vs buildpacks`
+
+**Compare on:** image size, build time on the host's free builder, does the platform build
+the Dockerfile or need its own buildpack, reproducibility (`uv.lock`).
+
+**Findings:**
+
+**Recommended Dockerfile pattern (2026 uv + multi-stage):**
+
+The canonical uv + FastAPI multi-stage Dockerfile (from `astral-sh/uv-docker-example` and
+the uv docs) works as follows:
+
+```dockerfile
+# --- builder stage ---
+FROM python:3.12-slim AS builder
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project   # cache deps layer
+COPY . .
+RUN uv sync --frozen --no-dev                         # install project itself
+
+# --- runtime stage ---
+FROM python:3.12-slim
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app /app
+ENV PATH="/app/.venv/bin:$PATH"
+RUN adduser --disabled-password worker && chown -R worker /app
+USER worker
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+Key points:
+- **`uv sync --frozen --no-dev`** uses `uv.lock` for reproducible installs (~10–100× faster than pip).
+- **Two-layer cache**: copying `pyproject.toml` + `uv.lock` before source files means dep layer is only rebuilt when dependencies change.
+- **Non-root user** (`worker`) is non-negotiable in 2026 for most platforms' security policies.
+- **BuildKit cache mounts** (`--mount=type=cache,target=/root/.cache/uv`) can speed up local builds further but are optional for hosted CI.
+
+**Image size options:**
+
+| Base image | Approx. uncompressed size | Security (CVE count) | Debuggability | Verdict for this project |
+|---|---|---|---|---|
+| `python:3.12` (full) | ~1 GB | High CVE count | Easy | Too large; avoid |
+| `python:3.12-slim` | ~149 MB | Medium (~107 CVEs) | Has shell/package manager | **Good default for MVP** |
+| `gcr.io/distroless/python3-debian12` | ~66 MB | Low (~53 CVEs; 32 packages) | No shell — hard to debug | Good for security-conscious prod; harder to troubleshoot |
+| Alpine (`python:3.12-alpine`) | ~50 MB | Very low | musl-libc can break C-ext deps | Avoid unless all deps are pure Python |
+
+Recommendation for InternHunterAgent MVP: **`python:3.12-slim` runtime** (simple, debuggable, reasonable size). Migrate to distroless if the project later needs security hardening.
+
+**Platform build compatibility:**
+
+| Platform | Dockerfile support | Nixpacks / buildpack fallback | Notes |
+|---|---|---|---|
+| Render | Yes — detects `Dockerfile` automatically | Nixpacks as fallback (auto-detects Python) | Dockerfile preferred for uv |
+| Google Cloud Run | Yes — `gcloud run deploy --source .` uses Cloud Build | Google Buildpacks as fallback | `gcloud` CLI handles the build + push |
+| HuggingFace Spaces | Yes — `Dockerfile` in repo root | None | Port must be 7860 |
+| Railway | Yes | Nixpacks default | Dockerfile takes priority if present |
+| Fly.io | Yes | None | `fly.toml` controls; `Dockerfile` auto-detected |
+
+Sources:
+- [uv Docker integration docs (astral.sh)](https://docs.astral.sh/uv/guides/integration/docker/)
+- [uv FastAPI integration docs (astral.sh)](https://docs.astral.sh/uv/guides/integration/fastapi/)
+- [Multi-stage uv Dockerfile deep dive (medium.com/@benitomartin)](https://medium.com/@benitomartin/deep-dive-into-uv-dockerfiles-by-astral-image-size-performance-best-practices-5790974b9579)
+- [Distroless Python with uv 2026 (nerdleveltech.com)](https://nerdleveltech.com/distroless-python-containers-with-uv-tutorial)
+- [Docker image size comparison (chainguard.dev)](https://www.chainguard.dev/supply-chain-security-101/best-python-docker-image-top-options-compared)
+
+**Decision:** _____
+
+---
+
+## 3. Managed Postgres in production
+
+**Question:** Where does prod Postgres live (free, no surprise pause)?
+
+**Research / web searches:**
+- `Neon vs Supabase free Postgres 2026 idle pause storage limits` *(partly done — Neon
+  0.5 GB, no weekly pause; Supabase pauses after 1 week)*
+- `free Postgres tier connection limits pgbouncer serverless`
+- `Neon scale to zero cold start latency Postgres`
+- `does platform X bundle a free Postgres add-on 2026`
+
+**Compare on:** storage cap (our data is tiny, <50 MB), connection pooling (serverless
+Postgres + FastAPI = pooling matters), idle/pause policy, backups, region.
+
+**Findings:**
+
+| Provider | Free storage | Idle / pause policy | Connection pooling | Region | Notes |
+|---|---|---|---|---|---|
+| **Neon** | 3 GiB per branch / project (updated 2026; was 0.5 GB) · 100 CU-hours compute/month | Suspends after **5 min** idle; resumes in **~300–500 ms** (median cold start; 95th pct ~2.6 s; team targeting sub-1 s by end 2026) | Built-in PgBouncer via `-pooler` hostname suffix (up to 10,000 client connections in transaction mode) | AWS us-east-1, eu-central-1, ap-southeast-1 (Singapore) | **No weekly pause.** 100 projects per account. |
+| **Supabase** | 500 MB · 2 projects max | **Pauses entire project after 1 week of inactivity** (policy tightened Feb 2026); requires manual unpause from dashboard — not safe for a daily cron setup | PgBouncer included; pooled connection string required for serverless | AWS us-east-1 + several others | Also bundles auth/storage/realtime — overkill for this project |
+| **Render Postgres (free)** | 1 GB | **Expires after 30 days** then 14-day grace, then deleted | None bundled | Oregon (US-West) | Temporary by design; **not viable for a permanent free DB** |
+| **Railway Postgres** | Counted against $5/month credit allowance; pauses when credits run out | Pauses end of month when credits exhausted | Not bundled | US-West | Not reliably free; tied to paid plan |
+
+**Key numbers for InternHunterAgent:**
+- Our dataset is <50 MB (112 AI/Data jobs per run × daily = still well under 50 MB even after months of data). Neon's 3 GiB free cap is approximately **60×** our expected data size — no storage risk.
+- FastAPI + LangGraph checkpointer will hold persistent connections. Use Neon's `-pooler` hostname in the DSN for all application connections (transaction mode pooling). Keep a direct (non-pooled) connection only for migrations.
+- Neon's 5-minute suspend is compatible with a daily cron (cron wakes the DB, runs its queries, DB suspends again). Cold start of ~500 ms is acceptable.
+- Neon cold-start note: if both the API (Render, scale-to-zero) and the DB (Neon, suspend) are cold simultaneously, the first request after extended idle could see a 1–2 min compound delay (API spin-up + DB wake). This is acceptable for a portfolio demo but worth documenting.
+- Supabase's weekly-pause behavior would cause the daily ingestion cron to fail silently after 7 idle days — a silent data loss risk. Eliminated from consideration.
+
+**Local vs. deploy DSN strategy:**
+- Local dev: `DATABASE_URL` in `.env` → local Postgres (Docker Compose or `brew services`)
+- CI/testing: Neon branch (Neon supports per-branch DBs for free) or in-memory SQLite shim if tests allow
+- Production: Neon pooler DSN injected as `DATABASE_URL` env var on the hosting platform
+
+Sources:
+- [Neon vs Supabase 2026 (getautonoma.com)](https://getautonoma.com/blog/supabase-vs-neon)
+- [Neon vs Supabase free tier deep dive (agentdeals.dev)](https://agentdeals.dev/neon-vs-supabase)
+- [Neon connection pooling docs (neon.com)](https://neon.com/docs/connect/connection-pooling)
+- [Neon cold-start latency benchmarks (neon.com)](https://neon.com/docs/guides/benchmarking-latency)
+- [Render Postgres free tier (kuberns.com)](https://kuberns.com/blogs/render-postgres-pricing-setup-limits/)
+
+**Decision (local vs deploy DSN strategy):** _____
+
+---
+
+## 4. Scheduling the ingestion job in production
+
+**Question:** What runs the daily ingestion cron in prod, free?
+
+**Research / web searches:**
+- `GitHub Actions scheduled workflow private repo cost 2026` *(partly done — ~$0.002/min;
+  free for public repos; UTC-only; auto-disables after 60 days idle)*
+- `Render cron job free tier 2026`
+- `cloud scheduler free tier cron serverless 2026`
+- `run scheduled Python job free no server`
+
+**Compare on:** cost at daily cadence, secret handling, max runtime, observability of a
+failed run, whether it can reach the DB + source sites.
+
+**Findings:**
+
+| Option | Cost at daily cadence | Secret handling | Max runtime | Observability | Internet access to job-boards | Verdict |
+|---|---|---|---|---|---|---|
+| **GitHub Actions (public repo)** | **$0** — unlimited free minutes for public repos | GitHub encrypted secrets; referenced as `${{ secrets.NAME }}` | 6 hours per job | Full logs in Actions UI; email/Slack notification on failure | Yes — outbound internet from GitHub-hosted runners | **Best option** |
+| **GitHub Actions (private repo)** | 2,000 Linux min/month free → **~$0 for daily 10-min cron** (300 min/month used, well within quota). Overage: $0.006/min (reduced from $0.008 in Jan 2026) | Same as above | 6 hours per job | Same as above | Yes | **Still free** for this workload size |
+| **Render Cron Job** | **Minimum $1/month** (billing is per second of execution, with a floor). Not in free tier. | Render env vars (set in dashboard) | Limited by instance timeout | Render dashboard logs | Yes | **Not free** — skip |
+| **GCP Cloud Scheduler** | 3 free jobs/month on always-free tier; can trigger Cloud Run job or Cloud Function | GCP Secret Manager | Limited by triggered service | Cloud Logging | Yes | Viable only if already on Cloud Run; adds GCP IAM complexity |
+| **Self-hosted cron (e.g., on a VPS)** | Depends on VPS; cheapest ~$4/month (Oracle Cloud free tier ARM VMs exist but are capacity-constrained) | Manual env-file management | Unlimited | systemd journal | Yes | Overkill for this project |
+
+**GitHub Actions specifics for this project:**
+- **Schedule syntax:** `cron: '0 2 * * *'` = 02:00 UTC daily (09:00 Vietnam time / ICT = UTC+7). UTC-only — no timezone support.
+- **60-day auto-disable:** GitHub automatically disables scheduled workflows if the repo has no commits/PRs/issues for 60 consecutive days. Prevention: add a `keepalive-workflow` action (uses GitHub API to touch the repo every 45 days) or ensure regular development activity. See [marketplace action](https://github.com/marketplace/actions/keepalive-workflow).
+- **Network:** GitHub-hosted runners have full outbound internet access (→ VietnamWorks API, ITviec via cloudscraper all reachable). The scraping IP will be a GitHub Actions IP, **not** the API server's IP — a useful separation.
+- **Secrets available in cron:** `DATABASE_URL` (Neon DSN), `GROQ_API_KEY` (if LLM is used in ingestion, else not needed), stored in GitHub repo or environment secrets.
+- **Estimated runtime:** current scrape_spike.py runs in under 30 seconds. Even with full multi-source ingestion, a daily job should complete in <10 minutes. 2,000 min/month budget is ~200× the expected use.
+
+Sources:
+- [GitHub Actions billing docs (docs.github.com)](https://docs.github.com/en/actions/concepts/billing-and-usage)
+- [GitHub Actions 2026 pricing changes (resources.github.com)](https://resources.github.com/actions/2026-pricing-changes-for-github-actions/)
+- [GitHub Actions 60-day auto-disable (github.com/orgs/community)](https://github.com/orgs/community/discussions/57858)
+- [Keepalive Workflow action (github.com marketplace)](https://github.com/marketplace/actions/keepalive-workflow)
+- [Render cron job pricing (render.com)](https://render.com/docs/cronjobs)
+
+**Decision:** _____
+
+---
+
+## 5. Secrets & configuration management
+
+**Question:** How are Groq key, Langfuse keys, and the DB DSN injected safely?
+
+**Research / web searches:**
+- `platform X environment variables secrets management free tier`
+- `GitHub Actions secrets vs environments for scheduled jobs`
+- `pydantic-settings env var production 12-factor config`
+- `keep API keys out of Docker image best practice 2026`
+
+**Compare on:** env-var injection, secret rotation, no secrets in the image/repo, parity
+between the API host and the cron host, mapping to existing `config/settings.yaml` +
+`pydantic-settings`.
+
+**Findings:**
+
+**The 12-factor pattern (applicable to both Render web service and GitHub Actions cron):**
+
+All secrets are injected as environment variables at runtime — never baked into the Docker
+image, never committed to the repo. `pydantic-settings` reads env vars with higher priority
+than `.env` files, so the same `Settings` class works in all environments.
+
+**Secrets inventory for InternHunterAgent:**
+
+| Secret | Where it lives in prod | Where it lives in cron | Local dev |
+|---|---|---|---|
+| `DATABASE_URL` (Neon pooler DSN) | Render env var (dashboard) | GitHub Actions secret | `.env` (git-ignored) |
+| `GROQ_API_KEY` | Render env var | GitHub Actions secret (only if LLM used in ingestion) | `.env` |
+| `LANGFUSE_PUBLIC_KEY` | Render env var | GitHub Actions secret (if tracing ingestion) | `.env` |
+| `LANGFUSE_SECRET_KEY` | Render env var | GitHub Actions secret | `.env` |
+| `LANGFUSE_HOST` | Render env var (or non-secret config) | GitHub Actions env or secret | `.env` / `config/settings.yaml` |
+
+**Injection pattern per workload:**
+- **API (Render):** set env vars in the Render dashboard service settings. They are injected into the container at startup. Never pass via `CMD` or Dockerfile `ENV`.
+- **Cron (GitHub Actions):** store secrets under `Settings → Secrets and variables → Actions` in the GitHub repo. Reference as `env: GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}` in the workflow YAML.
+- **Local dev:** `.env` file in project root (added to `.gitignore`). `pydantic-settings` auto-loads it via `model_config = SettingsConfigDict(env_file=".env")`.
+
+**Mapping to `config/settings.yaml` + `pydantic-settings`:**
+- `config/settings.yaml` holds **non-secret** config (scraper URLs, pagination caps, tech keyword dict, rate-limit delays, model names). These are safe to commit.
+- `pydantic-settings` `BaseSettings` subclass reads env vars at startup; env vars **override** `.env` file values which **override** any defaults. Secrets never touch `settings.yaml`.
+- Fail-fast at startup: mark secret fields as required (no default). If `DATABASE_URL` is missing, the app crashes immediately with a clear error rather than failing silently on first DB call.
+
+**Secret rotation:** Render and GitHub Actions both support updating env vars / secrets without redeploying (Render redeploys on env-var change by default; GitHub Actions reads secrets fresh each run). No secret rotation tooling needed for an MVP demo.
+
+Sources:
+- [FastAPI + pydantic-settings twelve-factor guide (medium.com)](https://medium.com/@hadiyolworld007/fastapi-pydantic-settings-twelve-factor-secrets-and-config-without-footguns-7990e2f20919)
+- [pydantic-settings docs (pydantic.dev)](https://pydantic.dev/docs/validation/latest/concepts/pydantic_settings/)
+- [GitHub Actions secrets docs (docs.github.com)](https://docs.github.com/billing/managing-billing-for-github-actions/about-billing-for-github-actions)
+
+**Decision:** _____
+
+---
+
+## 6. Langfuse hosting (tracing in prod)
+
+**Question:** Langfuse Cloud free tier vs self-host — which for prod tracing?
+
+**Research / web searches:**
+- `Langfuse Cloud free tier limits 2026 events ingestion`
+- `self-host Langfuse docker resource requirements`
+- `Langfuse cloud vs self-hosted cost small project`
+
+**Compare on:** free event/trace volume, data residency, whether self-hosting adds a 4th
+workload (and its cost), ease vs the cloud free tier.
+
+**Findings:**
+
+**Langfuse Cloud — Hobby (free) tier:**
+
+| Limit | Value |
+|---|---|
+| Monthly units (traces + observations + scores) | **50,000 units/month** |
+| Data retention | 30 days |
+| Users | 2 |
+| Support | Community (GitHub, Discord) |
+| Time-limited? | No — permanent free tier |
+| Cost | $0 |
+
+A "unit" = 1 trace + 1 per observation (LLM call, span, event) + 1 per score. A typical
+single-user agent session (1 trace, ~3–5 LLM observations, 0–1 scores) = ~5–6 units.
+At 50,000 units/month ÷ 6 units/session ≈ **8,333 sessions/month** before the cap is hit.
+For a portfolio demo with one user, this is more than sufficient — months of heavy use
+would not approach the limit.
+
+**Self-hosted Langfuse v3 — resource requirements:**
+
+| Component | Min spec (stable) | Recommended |
+|---|---|---|
+| All containers combined | 2 vCPU / 4 GB RAM | 4 vCPU / 8 GB RAM |
+| v3 services | 6 containers: web UI, worker, PostgreSQL, **ClickHouse**, Redis, MinIO | — |
+| Idle RAM (homelab measurement) | ~1.5 GB (ClickHouse dominates) | — |
+| VPS cost estimate | ~$6–12/month (2 vCPU / 4 GB; e.g., Hetzner CX22) | Adds a **4th paid workload** |
+
+**Verdict:**
+
+| Option | Monthly cost | Complexity | Data residency | Trace volume |
+|---|---|---|---|---|
+| **Langfuse Cloud Hobby** | **$0** | Zero — just set 3 env vars | Langfuse EU/US servers | 50K units/month — ample for demo |
+| Self-host (v3 Docker Compose) | ~$6–12/month VPS | High — 6 containers, ClickHouse maintenance | Your own server | Unlimited |
+
+For a single-user portfolio demo, **Langfuse Cloud Hobby** eliminates an entire infrastructure concern for free and the 30-day retention window is adequate. Self-hosting only makes sense if data residency is a requirement or if trace volume exceeds 50K units/month.
+
+Sources:
+- [Langfuse pricing (langfuse.com)](https://langfuse.com/pricing)
+- [Langfuse pricing teardown 2026 (dev.to)](https://dev.to/beton/langfuse-pricing-teardown-2026-2pi9)
+- [Langfuse self-hosting containers docs (langfuse.com)](https://langfuse.com/self-hosting/deployment/infrastructure/containers)
+- [Langfuse v3 self-hosting discussion (github.com/orgs/langfuse)](https://github.com/orgs/langfuse/discussions/5669)
+- [Langfuse pricing breakdown (cekura.ai)](https://www.cekura.ai/blogs/langfuse-pricing)
+
+**Decision:** _____
+
+---
+
+## 7. Domain, HTTPS & networking
+
+**Question:** Public URL, TLS, and CORS for the API.
+
+**Research / web searches:**
+- `platform X custom domain free HTTPS automatic TLS`
+- `free subdomain for hobby project 2026`
+- `FastAPI CORS production config`
+
+**Compare on:** included HTTPS, custom-domain support on free tier, default `*.platform`
+URL acceptability for a portfolio demo.
+
+**Findings:**
+
+**Default subdomains + automatic HTTPS by platform:**
+
+| Platform | Default subdomain | Auto TLS (HTTPS) | Custom domain on free tier | Notes |
+|---|---|---|---|---|
+| **Render** | `<service-name>.onrender.com` | Yes — auto-provisioned + renewed | Included (workspace allowance; $0.25/domain beyond that) | Services keep both the `.onrender.com` URL and any custom domain |
+| **Google Cloud Run** | `<service>-<hash>-<region>.run.app` | Yes — Google-managed certs | Yes — custom domain mapping free (cert auto-provisioned) | Stable URL if `--no-traffic` revision management used |
+| **HuggingFace Spaces** | `<user>-<space>.hf.space` | Yes | Not supported on free tier | URL is stable as long as the Space exists |
+| Koyeb (legacy free) | `<app>.koyeb.app` | Yes — auto TLS | 10 domains free | **Closed to new signups (Feb 2026)** |
+
+**For a portfolio demo:** the default `*.onrender.com` or `*.run.app` subdomain is
+entirely acceptable. A custom domain is a cosmetic upgrade, not a blocker.
+
+**FastAPI CORS configuration for production:**
+```python
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://your-frontend.vercel.app"],  # specific origins, not "*"
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+```
+- Never use `allow_origins=["*"]` with `allow_credentials=True` (CORS spec forbids it).
+- For a demo with no browser frontend, CORS may not be required at all.
+- If the API is consumed via curl / Postman only, skip the middleware entirely.
+
+**HTTPS note:** all candidate platforms (Render, Cloud Run, HuggingFace) provision and
+renew TLS certificates automatically. No manual cert management needed.
+
+Sources:
+- [Render custom domains docs (render.com)](https://render.com/docs/custom-domains)
+- [Koyeb domains docs (koyeb.com)](https://www.koyeb.com/docs/run-and-scale/domains)
+- [FastAPI CORS middleware docs (fastapi.tiangolo.com)](https://fastapi.tiangolo.com/deployment/docker/)
+- [Koyeb free tier + Mistral acquisition (srvrlss.io)](https://www.srvrlss.io/provider/koyeb/)
+
+**Decision:** _____
+
+---
+
+## 8. CI/CD (build, test, deploy)
+
+**Question:** How does a push become a deploy?
+
+**Research / web searches:**
+- `GitHub Actions deploy to Render/Railway/Fly on push 2026`
+- `platform X auto-deploy from GitHub free`
+- `run pytest in CI before deploy gate`
+
+**Compare on:** auto-deploy-on-push, ability to gate on `pytest`, preview environments,
+rollback. Aligns with the repo's branch-per-ticket flow.
+
+**Findings:**
+
+**Platform native auto-deploy vs GitHub Actions deploy step:**
+
+| Platform | Native auto-deploy from GitHub | Gate on pytest | Rollback | Free CI build time |
+|---|---|---|---|---|
+| **Render** | Yes — connect GitHub repo + branch; deploys on every push automatically | Not natively; add a GH Actions pytest step that must pass before merge (branch protection) | Manual via Render dashboard (redeploy previous deploy) | Render builds on their infra; GitHub Actions (free) runs tests |
+| **Google Cloud Run** | Via GitHub Actions + `gcloud run deploy`; no native GH integration | Yes — add `pytest` step before the deploy step in the Actions workflow | `gcloud run services update-traffic --to-revisions=PREV=100` | Free for public repos |
+| **Railway** | Yes — auto-deploys; can wait for GH Actions to pass before triggering | Yes (with branch protection) | One-click rollback in Railway dashboard | Requires paid plan |
+| **Fly.io** | Via `flyctl deploy` in a GH Actions workflow | Yes | `fly releases rollback` | Requires paid plan |
+
+**Recommended CI/CD pattern for this project (Render + GitHub Actions):**
+
+```
+main branch ← PRs from feature/* branches
+  ↓
+[GitHub Actions: PR check]
+  └── pytest (unit tests)
+  └── docker build --check (syntax only, no push)
+  ↑ branch protection: require this to pass before merge
+
+[After merge to main]
+  └── Render native auto-deploy triggered automatically
+      (Render builds the Dockerfile, deploys the container)
+```
+
+Or, for Cloud Run:
+```
+[After merge to main → GitHub Actions deploy workflow]
+  └── pytest
+  └── docker build + push to GCR / Artifact Registry
+  └── gcloud run deploy
+```
+
+**Aligning with branch-per-ticket flow (from CLAUDE.md):**
+The repo uses `feature/t####-<name>` branches that merge to `main`. Branch protection on
+`main` requiring the `pytest` Actions job to pass enforces the gate. Render's
+auto-deploy on push to `main` then triggers automatically — no separate deploy step needed.
+
+**Preview environments:** Render supports preview environments on paid plans only. For free
+tier: no preview environments. Test locally + on a dev branch before merging.
+
+Sources:
+- [Render GitHub auto-deploy (render.com)](https://render.com/articles/fastapi-production-deployment-best-practices)
+- [Railway GitHub autodeploys docs (docs.railway.com)](https://docs.railway.com/deployments/github-autodeploys)
+- [Fly.io continuous deployment with GitHub Actions (fly.io)](https://fly.io/docs/launch/continuous-deployment-with-github-actions/)
+- [Railway vs Render 2026 (thesoftwarescout.com)](https://thesoftwarescout.com/railway-vs-render-2026-best-platform-for-deploying-apps/)
+
+**Decision:** _____
+
+---
+
+## 9. Observability & health (beyond Langfuse)
+
+**Question:** How do we know prod is up and the cron succeeded?
+
+**Research / web searches:**
+- `FastAPI health check endpoint readiness liveness`
+- `free uptime monitoring cron dead-man-switch 2026` (e.g. healthchecks.io, UptimeRobot)
+- `structured logging structlog production aggregation free`
+
+**Compare on:** uptime ping, cron dead-man's-switch (alert if the daily run *didn't*
+happen), log retention on the host, ties to the ingestion health checks already designed
+in `job-site-comparison.md`.
+
+**Findings:**
+
+**A. FastAPI health check endpoint:**
+
+Minimal pattern (does not rate-limit health probes):
+```python
+@app.get("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok", "version": settings.app_version}
+```
+For readiness (checks DB reachability):
+```python
+@app.get("/ready", include_in_schema=False)
+async def ready(db: AsyncSession = Depends(get_db)):
+    await db.execute(text("SELECT 1"))
+    return {"status": "ready"}
+```
+Important: **never rate-limit `/health` or `/ready`** — throttling probe traffic causes
+false-positive failures in platform health checks and load balancers.
+
+**B. Uptime monitoring (is the API up?):**
+
+| Tool | Free tier | Check interval | Cron dead-man support | Alert channels |
+|---|---|---|---|---|
+| **UptimeRobot** | 50 monitors | 5 minutes | Yes (heartbeat monitors) | Email, Slack, webhook |
+| **healthchecks.io** | 20 checks; 3-month log history | Configurable window | **Yes — primary use case (dead man's switch)** | Email, Slack, webhook, PagerDuty |
+
+Recommendation: use **UptimeRobot** (free, 50 monitors) to ping `GET /health` every 5 min
+for API uptime. Use **healthchecks.io** (free, 20 checks) as the cron dead-man's switch.
+
+**C. Cron dead-man's switch (did the daily job run?):**
+
+Pattern:
+1. Create a healthchecks.io check with `period=24h, grace=2h`.
+2. At the end of the ingestion job (if all health-check assertions pass), `curl -fsS --retry 3 <check-url>`.
+3. If the curl is not received within 26 hours (24 + 2 grace), healthchecks.io sends an email alert.
+
+This maps directly to the health checks already designed in `job-site-comparison.md`:
+> HTTP success rate, total + per-keyword yield, IT→AI/Data ratio, field-completeness %,
+> delta vs. previous run.
+
+Emit these as structured log lines in the cron script; ping healthchecks.io only if all
+assertions pass. A sharp-drop assertion failure or a missing ping both produce an alert.
+
+**D. Structured logging:**
+
+Use **`structlog`** for JSON log output in the FastAPI app:
+- `fastapi-structlog` package (released Jan 2026) provides structlog middleware + correlation IDs out of the box.
+- In production, set `LOG_LEVEL=INFO` and configure structlog to output JSON (not colorized console).
+- **Log aggregation:**
+  - Render: streams stdout logs; accessible in dashboard for 7 days (free tier). No external aggregation needed for MVP.
+  - Google Cloud Run: logs auto-shipped to Cloud Logging (50 GB/month free). Structured JSON logs appear as parsed fields in Cloud Logging — searchable, free for this scale.
+- The cron job (GitHub Actions) logs are preserved in the Actions run history for 90 days (free tier) — no separate aggregation needed.
+
+Sources:
+- [FastAPI health check best practices (render.com)](https://render.com/articles/fastapi-production-deployment-best-practices)
+- [healthchecks.io free tier (quietpulse.xyz)](https://quietpulse.xyz/blog/free-cron-monitoring-tools-for-developers)
+- [UptimeRobot free plan (uptimerobot.com)](https://uptimerobot.com/)
+- [fastapi-structlog package (pypi.org)](https://pypi.org/project/fastapi-structlog/)
+- [Structured logging with structlog + FastAPI (ouassim.tech)](https://ouassim.tech/notes/setting-up-structured-logging-in-fastapi-with-structlog/)
+- [Best cron monitoring tools 2026 (apistatuscheck.com)](https://apistatuscheck.com/blog/best-cron-job-monitoring-tools-2026)
+
+**Decision:** _____
+
+---
+
+## 10. Scaling, limits & cost ceiling
+
+**Question:** What breaks first, and what would force a paid tier?
+
+**Research / web searches:**
+- `free tier egress bandwidth limits comparison 2026`
+- `Groq API rate limits free tier 2026`
+- `when does platform X start charging hobby project`
+
+**Compare on:** the binding free-tier limit (RAM? egress? DB storage? Groq quota?), the
+first paid step, and a hard "do-not-exceed" cost line.
+
+**Findings:**
+
+**Free-tier ceilings for each component (June 2026):**
+
+| Component | Free limit | Expected monthly use | Headroom | First paid step if exceeded |
+|---|---|---|---|---|
+| **Render web service** | 750 instance-hours/month; 512 MB RAM; 100 GB egress | Demo: ~100–300 hrs (spins down idle). RAM: FastAPI + LangChain ~150–300 MB peak | ~2.5–7.5× hours; 2 GB expected egress | $7/month Starter (0.5 vCPU / 512 MB, always-on) |
+| **Neon Postgres** | 3 GiB storage; 100 CU-hours compute | <50 MB data; compute: seconds/day (tiny queries + daily cron) | ~60× storage; >99× compute | $19/month Launch plan (10 GiB, 300 CU-h/month) |
+| **GitHub Actions (public repo)** | Unlimited minutes | Daily 10-min cron + occasional CI = ~500 min/month | Unlimited | $0 — always free for public repos |
+| **GitHub Actions (private repo)** | 2,000 Linux min/month | ~500 min/month | ~4× | $4/month (additional 1,000 min bundles) |
+| **Groq API (free tier)** | 30 RPM / 6,000 TPM / **1,000 RPD** (requests per day) | Demo: 10–50 agent sessions/day × 2–4 LLM calls each = 20–200 calls/day | 5–50× (depending on session frequency) | Pay-as-you-go: Llama 3.1 8B = $0.05/M tokens; Llama 3.3 70B = $0.59/M input tokens |
+| **Langfuse Cloud Hobby** | 50,000 units/month | ~6 units/session × 50 sessions/day × 30 days = 9,000 units | ~5.5× | $29/month Core plan (100K units) |
+
+**Binding limit analysis:**
+- At **very low traffic** (1–5 sessions/day): all components stay well within free tiers. Total cost = $0.
+- At **moderate traffic** (~50–100 sessions/day): Groq's 1,000 RPD is the first limit hit if sessions use multiple LLM calls. Mitigation: switch to a cheaper/higher-quota model, or add response caching.
+- At **high traffic** (~200+ sessions/day): Render instance hours and Groq RPD both become binding.
+
+**Do-not-exceed cost line:** this is a portfolio/demo project. Suggested hard ceiling: **$10/month**. The first paid upgrade most likely to be needed is either Render paid tier ($7/month, eliminates cold starts) or Groq pay-as-you-go (charged per token, very low at demo scale).
+
+**Egress summary:**
+- Render: 100 GB/month free. A FastAPI JSON response is ~1–10 KB. 100 GB ÷ 10 KB = 10M responses before paying egress. This will never be the binding limit.
+- Google Cloud Run: 1 GB/month free egress to internet; then $0.08–$0.12/GB. For a demo, still not the binding limit.
+
+Sources:
+- [Render pricing 2026 (saaspricepulse.com)](https://www.saaspricepulse.com/tools/render)
+- [Neon pricing 2026 (vela.simplyblock.io)](https://vela.simplyblock.io/articles/neon-serverless-postgres-pricing-2026/)
+- [Groq free tier limits 2026 (grizzlypeaksoftware.com)](https://www.grizzlypeaksoftware.com/articles/p/groq-api-free-tier-limits-in-2026-what-you-actually-get-uwysd6mb)
+- [Groq rate limits docs (console.groq.com)](https://console.groq.com/docs/rate-limits)
+- [Langfuse pricing (langfuse.com)](https://langfuse.com/pricing)
+- [Egress bandwidth comparison 2026 (gpuperhour.com)](https://gpuperhour.com/reference/data-egress)
+
+**Decision (cost ceiling):** _____
+
+---
+
+## 11. Security & compliance (lightweight)
+
+**Question:** Minimum responsible posture for a public demo.
+
+**Research / web searches:**
+- `FastAPI production security checklist 2026`
+- `rate limiting FastAPI free` (abuse protection on a public endpoint)
+- `scraping ToS robots.txt legal hosting Vietnam` (ingestion runs from prod IP)
+
+**Compare on:** public-endpoint abuse protection, secrets hygiene (§5), and the
+scraping-from-prod-IP ToS/robots question raised in `job-site-comparison.md`.
+
+**Findings:**
+
+**A. FastAPI production security checklist (minimum for a public demo):**
+
+| Control | Implementation | Cost |
+|---|---|---|
+| HTTPS enforced | Platform auto-TLS (Render / Cloud Run) — no action needed | $0 |
+| Secrets out of image/repo | env vars only (§5) | $0 |
+| Rate limiting per IP | `slowapi` library (in-process, Redis optional) | $0 |
+| CORS restricted | `CORSMiddleware` with specific origins (§7) | $0 |
+| Input validation | Pydantic models on all request bodies (already enforced by FastAPI) | $0 |
+| No exposed `/docs` in prod | `app = FastAPI(docs_url=None, redoc_url=None)` if public | $0 |
+| Security headers | `starlette-securecookies` or a custom middleware adding `X-Content-Type-Options`, `X-Frame-Options` | $0 |
+| Health endpoints not rate-limited | Exclude `/health` from `slowapi` limiter | $0 |
+
+**B. Rate limiting for the public API endpoint:**
+
+`slowapi` is the standard free in-process rate limiter for FastAPI (wraps the `limits` library):
+```python
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
+
+@app.get("/query")
+@limiter.limit("10/minute")
+async def query_agent(request: Request, ...):
+    ...
+```
+- Per-IP, per-endpoint limits. No Redis required for a single-instance deploy.
+- Recommended limit for a demo: 10 req/min per IP (well above any legitimate single-user use; blocks simple abuse scripts).
+- Redis backend needed only for multi-instance rate limiting — not relevant at this scale.
+
+**C. Scraping from prod IP — ToS / robots.txt:**
+
+The ingestion cron runs on **GitHub Actions**, not on the API server. This means:
+- The scraping IP is a **GitHub-hosted runner IP** (one of GitHub's outbound IP ranges), not the Render/Cloud Run API server IP.
+- The two concerns (API hosting and scraping) are naturally separated at the IP level.
+
+Robots.txt status per source (from `data-ingestion-stage.md`):
+- **TopCV:** `robots.txt` permits scraping of listing/detail paths (confirmed by VietJobs academic dataset). ✅
+- **VietnamWorks:** robots.txt + ToS **must be checked before production use** (flagged in `data-ingestion-stage.md §0.1`). The API endpoint used (`ms.vietnamworks.com`) is undocumented — check `ms.vietnamworks.com/robots.txt` specifically. ⚠️ Unverified — needs manual check.
+- **ITviec:** `robots.txt` allows everything except `/subscriptions/new`; our paths (`/segments/viec-lam-ai-data`, `/it-jobs/*`) are permitted. ✅
+
+General 2026 legal posture for scraping public job postings:
+- Scraping public, non-personal, factual job-posting data is **generally defensible** in most jurisdictions. The main legal risks concentrate at: personal data, auth bypass, copyrighted content reproduction at scale, server overload, and explicit ToS breach.
+- ToS violations are typically **civil** (breach of contract), not criminal, for publicly accessible data (the CFAA does not criminalize ToS breach for public sites in the US after *hiQ v. LinkedIn*).
+- Vietnam has no specific web scraping law. PDPD (Personal Data Protection Decree, 2023) applies to personal data — job postings (company name, role, description) are not personal data.
+- **Action required before production:** fetch and read `robots.txt` for VietnamWorks API host; review VietnamWorks ToS. Keep scraping volume low and polite (already designed: 0.6 s delay, daily cadence).
+
+Sources:
+- [FastAPI security guide (davidmuraya.com)](https://davidmuraya.com/blog/fastapi-security-guide/)
+- [Rate limiting FastAPI (patrykgolabek.dev)](https://patrykgolabek.dev/guides/fastapi-production/rate-limiting/)
+- [Is web scraping legal 2026 (browserless.io)](https://www.browserless.io/blog/is-web-scraping-legal)
+- [Job board scraping legal risks 2026 (jobboardly.com)](https://www.jobboardly.com/blog/job-board-scraping-complete-guide-2025)
+- [Web scraping ethics + robots.txt (medium.com/@ridhopujiono)](https://medium.com/@ridhopujiono.work/web-scraping-2-ethics-legality-robots-txt-how-to-stay-out-of-trouble-39052f7dc63f)
+- [Scraping job postings 2026 (cavuno.com)](https://cavuno.com/blog/job-scraping)
+
+**Decision:** _____
+
+---
+
+## 12. Synthesis — recommended deployment topology
+
+_Fill last._ One diagram + one paragraph: chosen host for the API, the DB, the cron; the
+secret flow; the deploy trigger; and the total monthly cost (target: **$0 → minimal**).
+Then hand off to a deployment **design doc** + deploy tickets.
+
+**Candidate topology (to confirm):** API on _____ · Postgres on _____ · cron on _____ ·
+Langfuse on _____ · CI via _____.
+**Total expected cost:** _____

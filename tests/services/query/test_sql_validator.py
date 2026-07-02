@@ -82,6 +82,50 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertTrue(result.valid)
         self.assertEqual(result.sql, "SELECT title FROM clean_jobs LIMIT 10")
 
+    def test_rejects_join_to_other_table(self) -> None:
+        result = validate_sql(
+            "SELECT * FROM clean_jobs JOIN raw_jobs USING (source, external_id)"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_rejects_comma_join_to_other_table(self) -> None:
+        result = validate_sql("SELECT c.title FROM clean_jobs c, raw_jobs r")
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_rejects_bare_select_from_other_table(self) -> None:
+        result = validate_sql("SELECT * FROM raw_jobs")
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_allows_clean_jobs_query_with_where_clause(self) -> None:
+        result = validate_sql(
+            "SELECT title, company FROM clean_jobs WHERE location = 'Hanoi'"
+        )
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.reason, "")
+
+    def test_allows_clean_jobs_query_with_other_table_name_in_string_literal(
+        self,
+    ) -> None:
+        result = validate_sql(
+            "SELECT title FROM clean_jobs WHERE description ILIKE '%raw_jobs%'"
+        )
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.reason, "")
+
+    def test_allows_table_less_select(self) -> None:
+        result = validate_sql("SELECT 1")
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.reason, "")
+
 
 if __name__ == "__main__":
     unittest.main()

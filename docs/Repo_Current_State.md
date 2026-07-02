@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0009.11-job-detail-tool
+feature/t0010.1-graceful-answer
 
 ## Completed tickets
 - T0000: Milestone 0 - Foundation (FastAPI, logging, health endpoint)
@@ -36,9 +36,10 @@ feature/t0009.11-job-detail-tool
 - T0009.9: Explicit schema reset path — added `scripts/reset_db.sql` (`DROP TABLE IF EXISTS clean_jobs, raw_jobs CASCADE;` then `\i scripts/init_db.sql`, no duplicated `CREATE` statements) as the explicit, manual schema-change mechanism; `scripts/init_db.sql` itself is untouched and stays non-destructive (`CREATE TABLE IF NOT EXISTS`). Documented the "reset then re-ingest" workflow in `README.md` and `docs/Manual_Verification_Guide.md`. Reframed the T0009.8 migration-gap entry in `Known_Issues.md` as resolved by this ticket, with Alembic still named as the future escalation trigger ("when deployed data becomes irreplaceable"). No Python/ORM/entrypoint code touched; no new deps; schema shape unchanged. 184 tests still pass.
 - T0009.10: Bounded query output (fixes the Groq TPM `413`) — enforces the bounded-output law deterministically at the tool boundary, independent of the model's SQL. `src/services/query/table_formatter.py::format_rows(rows, max_rows)` now drops any column named `description` (case-insensitive) from the returned result regardless of what was `SELECT`ed, and caps the rows returned to the model at `max_rows` while `row_count` carries the true total match count. `src/agents/tools/query_clean_jobs.py` adds `load_max_rows()` (mirrors `load_max_messages()`'s config-validation pattern) reading `agent.query.max_rows` from `config/settings.yaml` (new value: `20`), and `_build_answer` now says `"Showing N of M matching result(s) (narrow your search to see the rest)"` when truncated, or the unchanged `"Found M result(s)"` wording when not. `COUNT(*)`/aggregate results pass through unaffected (single row, never truncated). Reframed the `Known_Issues.md` Capacity & performance entry as resolved. 8 new/updated tests (4 in `test_table_formatter.py`, 2 new in `test_query_clean_jobs.py` for truncation notice and `COUNT(*)` pass-through); 188 tests total pass.
 - T0009.11: Job detail tool (`get_job_details`) — completes the structured-query-vs-detail split. `src/services/query/job_details.py::fetch_job_details(ids)` is a deterministic, parameterized fetch-by-id (`WHERE id = ANY(:ids)`, ids bound as a param, never string-interpolated) mirroring `executor.py`'s `SET TRANSACTION READ ONLY` + `ExecutorError` pattern; returns full rows incl. `description` (the only place description is allowed to surface); empty input returns `[]` without hitting the DB; no cap applied here. `src/agents/tools/get_job_details.py` is the `@tool async def get_job_details(ids: list[int]) -> str` wrapper: `load_max_detail_ids()` reads `agent.query.max_detail_ids` (new value: `3`) with the same validation shape as `load_max_rows()`; caps ids client-side and states "Showing N of M requested" when capped; runs the fetch via `asyncio.to_thread`; returns a plain string with a readable block per row, "No posting found for id X" for unmatched ids, and the safe DB-error string on `ExecutorError` (no exception leakage); empty `ids` returns short guidance instead of hitting the DB. Registered in `src/agents/runtime/factory.py`'s `tools=[...]`. `config/prompts.yaml`: added `id (bigint)` to `schema_context`; `sql_generation` now says to always `SELECT id` first when listing rows (never for `COUNT`/aggregate/`GROUP BY`); `system_prompt` "# Available fields" includes `id`, plus a routing line sending "tell me more about / compare specific jobs" to `get_job_details`. `config/settings.yaml` adds `agent.query.max_detail_ids: 3`. Updated pinned tests: `test_prompts.py::test_yaml_schema_context_mentions_rich_schema` now asserts `id` present (moved out of the not-in tuple); `test_factory.py` extended to assert `get_job_details` is registered. New tests: `tests/services/query/test_job_details.py` (6 tests — row mapping incl. description, empty-input short-circuit, `READ ONLY` transaction, parameterized `ids` bind (not interpolated), both error types wrapped as `ExecutorError`), `tests/agents/tools/test_get_job_details.py` (5 tests — plain-string happy path, id cap + notice, missing-id graceful degradation, empty-ids guidance without DB hit, `ExecutorError` safe string). Logged the id-in-SQL nudge's best-effort nature (model-generated SQL may omit `id` on some turns) in `Known_Issues.md` — intentionally not "fixed" by force-injecting `id` into the model's SQL, to keep the model-generated-vs-deterministic tool-boundary line intact. 199 tests total pass.
+- T0010.1: Graceful answer + minimal typed error contract — stops two failure modes (C1, C5) from collapsing into an opaque `500 "Failed to process query"`. `src/agents/service.py` now returns a local `AgentResponse` `TypedDict` (`answer: str`, not `str | None`) and coerces a `None`/empty/whitespace-only runtime answer into `FALLBACK_ANSWER` ("I couldn't produce an answer for that — please try rephrasing."). New `src/core/errors.py::InvalidQueryError` (`ValueError` subclass, no hierarchy). `src/api/routes/query.py` raises `InvalidQueryError` for a blank/whitespace-only `payload.query` and maps it to `400 "Query must not be empty."` before `generate_agent_response` is called; genuine internal failures still map to `500 "Failed to process query"` with the `query.failed` server-side log intact; an `except HTTPException: raise` guard keeps the 400 from being re-swallowed by the broad `except Exception`. `answer`/`session_id`/`trace_id`/`trace_url` response shape unchanged; `trace_url` remains `None` (C4, still open, out of scope). Added `GenerateAgentResponseTests` (service-level, mocked runtime) and route-level 400/fallback tests to `tests/api/test_query.py`. `uv run mypy` no longer flags the `service.py`/`query.py` null-into-`str` union error; 3 pre-existing benign residuals remain (documented in `Known_Issues.md`). 204 tests total pass.
 
 ## In progress
-- Milestone 9 (T0009: data ingestion) closed; T0009.9, T0009.10, and T0009.11 follow-ups also closed. The structured-query-vs-detail split (`query_clean_jobs` → `get_job_details`) is now complete. Remaining lower-priority items: the freshness-honesty and hidden-salary-phrasing determinism issues logged in `Known_Issues.md`, and the id-in-SQL nudge's best-effort nature (also logged there).
+- Milestone 9 (T0009: data ingestion) closed; T0009.9, T0009.10, and T0009.11 follow-ups also closed. The structured-query-vs-detail split (`query_clean_jobs` → `get_job_details`) is now complete. Milestone 10 (T0010: pre-deploy hardening) in progress — T0010.1 (C1/C5) closed; C4 (`trace_url`) remains open, and further T0010 sub-tickets from the audit may follow. Remaining lower-priority items: the freshness-honesty and hidden-salary-phrasing determinism issues logged in `Known_Issues.md`, and the id-in-SQL nudge's best-effort nature (also logged there).
 
 ## Current folder structure
 ```text
@@ -78,6 +79,7 @@ feature/t0009.11-job-detail-tool
 |   |   |-- checkpointer.py
 |   |   |-- config.py
 |   |   |-- db.py
+|   |   |-- errors.py
 |   |   `-- logger.py
 |   `-- services/
 |       |-- ingestion/
@@ -160,7 +162,11 @@ Practical commands from the repository layout:
 ## Build/test status
 - Command run: `uv run pytest -q`
 - Result: passed
-- Summary: `199 passed, 4 subtests passed in 1.54s`
+- Summary: `204 passed, 4 subtests passed in 1.68s`
+- Command run: `uv run mypy`
+- Result: `Found 3 errors in 3 files (checked 40 source files)` — all 3 are pre-existing, documented residuals (`checkpointer.py:25`, `middleware.py:48`, `query_clean_jobs.py:41`); the C1 `service.py`/`query.py` null-into-`str` error is gone.
+- Command run: `uv run ruff check .`
+- Result: `All checks passed!`
 
 ## Known issues
 Known issues, risks, and out-of-scope follow-ups now live in their own living register:

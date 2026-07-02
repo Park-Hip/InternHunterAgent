@@ -5,6 +5,7 @@ from unittest.mock import ANY, AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from src.agents.service import FALLBACK_ANSWER, generate_agent_response
 from src.api.app import app
 
 
@@ -134,3 +135,82 @@ class QueryRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json(), {"detail": "Failed to process query"})
+
+    def test_query_route_returns_400_for_blank_query(self) -> None:
+        with patch(
+            "src.api.routes.query.generate_agent_response",
+            new=AsyncMock(),
+        ) as mock_generate:
+            response = self.client.post(
+                "/api/v1/agent/chat",
+                json={"query": "   "},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": "Query must not be empty."})
+        mock_generate.assert_not_awaited()
+
+    def test_query_route_returns_fallback_answer_when_runtime_answer_is_none(self) -> None:
+        fake_response = {
+            "answer": FALLBACK_ANSWER,
+            "session_id": "session-123",
+            "trace_id": None,
+            "trace_url": None,
+        }
+
+        with patch(
+            "src.api.routes.query.generate_agent_response",
+            new=AsyncMock(return_value=fake_response),
+        ):
+            response = self.client.post(
+                "/api/v1/agent/chat",
+                json={"query": "what time is it?", "session_id": "session-123"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["answer"], FALLBACK_ANSWER)
+
+
+class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
+    async def test_none_runtime_answer_coerces_to_fallback(self) -> None:
+        runtime = AsyncMock()
+        runtime.ainvoke = AsyncMock(
+            return_value={"answer": None, "trace_id": "trace-1"}
+        )
+
+        result = await generate_agent_response(
+            query="what time is it?",
+            runtime=runtime,
+            session_id="session-123",
+        )
+
+        self.assertEqual(result["answer"], FALLBACK_ANSWER)
+        self.assertEqual(result["session_id"], "session-123")
+        self.assertEqual(result["trace_id"], "trace-1")
+        self.assertIsNone(result["trace_url"])
+
+    async def test_blank_runtime_answer_coerces_to_fallback(self) -> None:
+        runtime = AsyncMock()
+        runtime.ainvoke = AsyncMock(
+            return_value={"answer": "   ", "trace_id": None}
+        )
+
+        result = await generate_agent_response(
+            query="what time is it?",
+            runtime=runtime,
+        )
+
+        self.assertEqual(result["answer"], FALLBACK_ANSWER)
+
+    async def test_normal_runtime_answer_passes_through(self) -> None:
+        runtime = AsyncMock()
+        runtime.ainvoke = AsyncMock(
+            return_value={"answer": "The current time is 14:01:52.", "trace_id": None}
+        )
+
+        result = await generate_agent_response(
+            query="what time is it?",
+            runtime=runtime,
+        )
+
+        self.assertEqual(result["answer"], "The current time is 14:01:52.")

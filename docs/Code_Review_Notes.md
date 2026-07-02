@@ -39,21 +39,27 @@ Severity is about real-world impact, not style. Nothing here is auto-fixed (per 
    (seconds) blocked *every* concurrent request and the health probe for its duration.
    Now `sql = await asyncio.to_thread(generate_sql, question)`. Detail: `Known_Issues.md`.
 
-3. **[MED] Ingestion aborts inconsistently on one bad payload.**
-   `loader.run_ingestion` upserts `raw_jobs` first, then does
+3. ~~**[MED] Ingestion aborts inconsistently on one bad payload.**~~ **Fixed** (2026-07-02):
+   `loader.run_ingestion` upserted `raw_jobs` first, then did
    `[to_normalized_job(p.raw_payload) for p in postings]` with no per-record guard.
    `to_normalized_job` does `payload["jobId"]` (hard key) and constructs a pydantic model,
-   so a single malformed record raises → normalization aborts → `replace_clean_jobs` never
-   runs. Net state: `raw_jobs` refreshed, `clean_jobs` left stale, no error surfaced to a
-   scheduled run beyond a stack trace. Fix: isolate per-record normalization (skip + log
-   bad records) so one bad row can't silently desync the two tables.
+   so a single malformed record raised → normalization aborted → `replace_clean_jobs` never
+   ran. Net state: `raw_jobs` refreshed, `clean_jobs` left stale, no error surfaced to a
+   scheduled run beyond a stack trace. Now normalization runs per-record inside a
+   `try/except`, skipping and logging (`ingestion.normalize_skipped`) any bad payload; the
+   run summary carries a new `skipped` count and `main()` logs the completed summary via
+   `logger.info` instead of `print`. One bad row can no longer desync the two tables.
+   Verified via `tests/services/ingestion/test_loader.py::test_malformed_payload_is_skipped_not_fatal`.
 
-4. **[MED] Denylist matches keywords inside string literals.**
-   `sql_validator` tokenizes the *entire* statement, including the contents of string
-   literals, then rejects any token in `DENYLISTED_KEYWORDS`. So legitimate queries are
-   refused: `... WHERE description ILIKE '%replace%'`, a company named `Merge`, a title
-   containing `call`/`exec`/`grant`, etc. → "Unsafe keyword(s) detected". False-positive
-   refusals on valid user questions.
+4. ~~**[MED] Denylist matches keywords inside string literals.**~~ **Fixed** (2026-07-02):
+   `sql_validator` previously tokenized the *entire* statement, including the contents of
+   string literals, then rejected any token in `DENYLISTED_KEYWORDS`. So legitimate queries
+   were refused: `... WHERE description ILIKE '%replace%'`, a company named `Merge`, a title
+   containing `call`/`exec`/`grant`, etc. → "Unsafe keyword(s) detected". Now the denylist
+   token scan reuses the same `STRING_LITERAL_PATTERN` masking already used for the table
+   check, running against the masked statement instead of the raw one; the comment-sequence
+   check still runs on the unmasked statement. A denylisted verb outside a literal (e.g.
+   `SELECT * FROM clean_jobs UPDATE ...`) is still rejected. Detail: `Known_Issues.md`.
 
 5. **[MED] "Showing N of M" can understate the true match count.**
    `table_formatter.format_rows` sets `row_count = len(rows)` — the count of rows the SQL
@@ -170,3 +176,75 @@ Severity is about real-world impact, not style. Nothing here is auto-fixed (per 
    `runtime.ainvoke` raises before the coercion runs and the exception falls through to the
    generic 500 in `query.py`. Tracked as its own open item in `Known_Issues.md` (API layer)
    rather than reopening T0010.1.
+
+---
+
+## 🏗️ Deploy / multi-source design notes (record before scaling past one source)
+
+These are **broader architectural notes**, not bugs and not yet tickets — captured so the
+decisions are on record before the Deploy and multi-source milestones. They inform (but are
+larger than) bug 3 above (now fixed at the per-record-guard level; DN-1 move 1, transforming
+from `raw_jobs` instead of the fetch batch, remains open).
+
+### DN-1. `clean_jobs` should be a re-derivable projection of `raw_jobs`, not of the fetch batch.
+**Current:** `loader.run_ingestion` upserts `raw_jobs`, then transforms the **in-memory fetch
+batch** (`[to_normalized_job(p.raw_payload) for p in postings]`) and `TRUNCATE`s + rebuilds
+`clean_jobs` from that batch. So `raw_jobs` is the durable, accumulating store while `clean_jobs`
+only ever contains what *this run* fetched — the two are coupled through the fetch, not through
+the table. Consequences:
+- A posting that drops out of search results one day vanishes from `clean_jobs` even though it
+  still lives in `raw_jobs`.
+- `raw_jobs` and `clean_jobs` are written in **separate transactions**, so a failure between them
+  can still desync the two (bug 3's per-record normalization guard prevents one bad *payload*
+  from aborting the whole batch, but a crash between the two writes is still possible).
+- `content_hash` is stored but **never read** — the intended "filter existing / skip unchanged"
+  delta step does not exist; every run re-processes the whole batch.
+
+**Suggested deploy flow.** Make `raw_jobs` the source of truth and `clean_jobs` a pure function
+of it:
+```
+[scheduler: daily]
+      │
+      ▼
+fetch per source ──► upsert raw_jobs (source, external_id) + content_hash + last_seen_at
+      │                    │  (content_hash unchanged? → skip re-transform for that row)
+      ▼                    ▼
+ run summary  ◄──  transform FROM raw_jobs (per-record, guarded) ──► load clean_jobs
+```
+Five moves, in rough priority:
+1. **Transform from `raw_jobs`, not the batch** → `clean_jobs` becomes fully reproducible; a run
+   that fetches nothing new can still rebuild clean correctly.
+2. ~~**Per-record guard in normalization (fixes bug 3)**~~ **Done** — `try/except` around
+   `to_normalized_job`, skip + log the bad record. One malformed payload can no longer abort
+   the whole normalization pass.
+3. **Scheduler** — cheapest MVP is an external cron / container scheduler invoking the ingestion
+   entrypoint; avoid an in-process scheduler dependency. (Deploy-milestone item.)
+4. **Use `content_hash` for the delta** — compare incoming vs stored hash, skip re-transform of
+   unchanged rows. This is the missing "filter existing" step; optional for correctness but it's
+   the reason the hash is stored.
+5. **Keep the clean load simple** — `TRUNCATE + rebuild from raw` is safe *once (1) is in place*
+   (clean = full projection of raw, atomic in one transaction). Only move to per-row upsert +
+   `last_seen`/`is_active` if freshness/expiry semantics are later required. Do **not** build
+   that now (no over-engineering).
+
+Not yet built and explicitly out of MVP scope: the daily scheduler itself, and any
+raw-row pruning/expiry policy.
+
+### DN-2. `content_hash` does not (and cannot) dedup the *same job across two sources*.
+The identity model is safe; the hash is a **within-row change-detector**, not a cross-source
+merge key. Three layers:
+- **Row identity — safe.** PK is `(source, external_id)`; `source` namespaces the id. The same
+  real-world job on VietnamWorks and (future) TopCV becomes two *different* keys → two rows, no
+  collision, no overwrite.
+- **Hash collision — not a real risk.** `content_hash` is sha256 of the payload; it is only ever
+  compared against the prior hash of the *same* `(source, external_id)` row. Cryptographic
+  collision is negligible and irrelevant to identity.
+- **The actual gap — cross-source duplicate *jobs*.** The same job on two boards produces two
+  `clean_jobs` rows (user sees it twice). `content_hash` cannot merge them: each site's payload
+  has different fields/formatting/IDs → **different hashes even for the identical job**. Real
+  cross-source dedup needs a *semantic* identity (normalized `(title, company, location)` or a
+  canonicalized apply-URL) with fuzzy/near-duplicate matching — a genuinely harder problem.
+
+**Status:** acceptable today (single source ⇒ cross-source duplication can't occur). Becomes a
+real "duplicate listings" problem the moment a second source is added, and `content_hash` will
+**not** solve it. Deliberate later-milestone item, not a bug.

@@ -63,6 +63,17 @@ The MVP ships two tools:
 
   > Design note: an earlier draft specified parameterized tools exposing typed arguments (`title`, `tech_stack`). The shipped design uses NL → validated-SQL because the validator, not the tool signature, is the trust boundary.
 
+  **Bounded retrieval: structured query vs. detail fetch.** *Status: planned (T0009.10–T0009.11).* Real ingestion (T0009) turned `clean_jobs` into ~50 verbose rows, each carrying a large merged `description` blob. A single tool that returned every column of every matched row then overflowed the model's token budget on broad queries (the Groq TPM `413` recorded in `Known_Issues.md`). The fix is architectural, not a bigger model — it splits retrieval along the **intent** the user actually has:
+
+  - **`query_clean_jobs`** (structured query — list, count, aggregate). Runs the LLM→validated-SQL pipeline above, but the tool boundary enforces two deterministic guarantees the model cannot override (the `Full_Design_Document.md` §4 bounded-output law): it **never projects the `description` blob** into its result, and it **caps result rows** at `agent.query.max_rows` (config), reporting "showing N of M" when it truncates. It serves scalar/aggregate results (`COUNT`, `AVG`, `MIN/MAX`, small `GROUP BY`) as naturally as row lists.
+  - **`get_job_details(ids)`** (detail — full prose). A **deterministic, parameterized** fetch by id (no LLM, no SQL generation — ids carry no natural-language ambiguity), returning the full `description` for a **few** jobs (`agent.query.max_detail_ids`). This is the *only* path that surfaces description prose to the model.
+
+  This makes the **`description` field three-moded**: *filter-only* inside `query_clean_jobs` (Postgres reads it via `ILIKE` server-side; the text never reaches the model), *full-text* only via `get_job_details`, and *never listed* in bulk. The bridge between the two tools is the row `id` that `query_clean_jobs` returns, which the agent passes back into `get_job_details` for "tell me about that one" follow-ups. (Surrogate ids are stable within a conversation; they are not stable across an ingestion reload — the durable handle, if ever needed, is `(source, external_id)`.)
+
+  **Question coverage & the one deferred gap.** Every question resolves on two axes — *does it need the description's prose?* and *does it want a scalar, a list, or a few full records?* Structured filters/counts/rankings (including literal keyword hits inside `description` via `ILIKE`) are served by `query_clean_jobs`; "tell me about / compare these" is served by `get_job_details`. The single uncovered cell is **semantic search over the whole corpus** ("which postings are beginner-friendly?" by *meaning*, not keyword) — that needs embeddings and is the future RAG milestone, not this design. The honest MVP behavior there is to answer literal keywords and say plainly that it cannot yet search postings by meaning.
+
+  **Attributes not backed by a column** (remote, mentorship, visa sponsorship) are answered by keyword-matching the `description` text, with an honesty hedge that the match is based on posting wording and may be imperfect — the same "promote hot text into a real column at ingestion" path that produced `role`/`location`/`tech_stack` is the escalation when one becomes a common filter. Salary ranking guidance (`NULLS LAST`, mandatory single-currency scoping) and the "count, don't list" rule for *how-many* questions live in `prompts.sql_generation`.
+
 ### 2.4 Memory
 
 *Status: implemented*

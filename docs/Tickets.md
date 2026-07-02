@@ -411,3 +411,30 @@
 * Alembic or any versioned-migration framework / `migrations/` directory (deferred; not needed while all tables are reproducible).
 * Auto-running the reset on FastAPI startup or in an entrypoint — it stays a manual, explicit step.
 * Any **new** schema change (this only adds the reset mechanism; the schema stays the T0009.1 shape).
+
+#### T0009.10: Bounded query output (fix the Groq TPM `413`)
+**Objective:** Stop `query_clean_jobs` from overflowing the model's token budget on broad queries. Since T0009 landed ~50 verbose rows, a query that returns every column of every matched row (each with the large merged `description` blob) reproducibly triggers a Groq `413` (see `docs/Known_Issues.md`, Capacity & performance). Enforce the `Full_Design_Document.md` §4 bounded-output law **deterministically at the tool boundary** — the model's SQL must not be trusted to keep the payload small. This is the standalone, urgent bug fix; it does **not** depend on T0009.11.
+**In Scope:**
+* In the tool/formatter path (`src/agents/tools/query_clean_jobs.py`, `src/services/query/table_formatter.py`): **drop the `description` column from the returned result** regardless of what the SQL selected (deterministic projection filter — a stray `SELECT *` must not leak it), and **cap the returned rows** at `agent.query.max_rows`.
+* When rows are truncated, surface it honestly — the answer states "showing N of M" (carry the true match count, e.g. from `row_count`, so the agent never implies it listed all matches).
+* Add `agent.query.max_rows` (e.g. `20`) to `config/settings.yaml`, read via `src/core/config.py` (per convention — params in config, not hard-coded).
+* Prompt guidance in `config/prompts.yaml` `sql_generation` is **already updated** (never SELECT description; use `COUNT(*)` for "how many"; `NULLS LAST` + single-currency for ranking) — this ticket is the deterministic enforcement behind those nudges, not the nudges themselves. Verify the two stay consistent.
+* Tests: a wide result set is capped and description-free; the "showing N of M" notice appears only when truncated; a `COUNT(*)` result still passes through; an aggregate/`GROUP BY` result is unaffected.
+**Out of Scope:**
+* The `get_job_details` tool and any full-description retrieval (T0009.11).
+* Pagination / `OFFSET` ("show me more") — deferred; the "showing N of M, narrow your search" behavior is the MVP answer.
+* Semantic/embedding search over descriptions (future RAG milestone).
+
+#### T0009.11: Job detail tool (`get_job_details`)
+**Objective:** Give the agent the *only* path to full `description` prose — a bounded, deterministic fetch by id — so "tell me about that job / compare these" works without ever dumping prose in bulk. Completes the structured-query-vs-detail split described in `MVP_Technical_Design.md` §2.3. Depends on T0009.10 (which makes `query_clean_jobs` return `id`s and stop emitting description).
+**In Scope:**
+* A deterministic, **parameterized** fetch-by-id in `src/services/query/` (no LLM, no SQL generation — ids carry no natural-language ambiguity; parameterization is the safety boundary). Accepts a list of ids, caps at `agent.query.max_detail_ids` (e.g. `3`), returns the full row incl. `description` for those ids.
+* A new tool `src/agents/tools/get_job_details.py` wrapping it (natural-language/opaque-handle in, plain string out — see `Full_Design_Document.md` §3), registered in `factory.py` (the only place tools are registered).
+* Ensure `query_clean_jobs` returns a stable `id` per row so the agent can bridge list → detail (surrogate `id` is sufficient within a conversation; note the non-durability across ingestion reloads).
+* Add `agent.query.max_detail_ids` to `config/settings.yaml`.
+* Agent guidance so the model routes "tell me about / details of / compare these" to `get_job_details(ids)` and everything else to `query_clean_jobs` (via the tool docstring and/or `system_prompt`; do **not** hard-code tool internals into the prompt beyond routing intent).
+* Tests: fetch-by-id returns the right rows incl. description; the id cap holds; an id with no match degrades gracefully; the tool result is a plain string and appears as a traced child span (the standing tracing invariant).
+**Out of Scope:**
+* Filter-based detail (detail is strictly id-driven; the agent chains `query_clean_jobs` → `get_job_details`).
+* Multi-row prose scans / semantic search (future RAG).
+* Any change to the ingestion pipeline or schema.

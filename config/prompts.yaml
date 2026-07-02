@@ -11,11 +11,13 @@ prompts:
     # Tool rule — always call the tool for job data
     - For any question about job postings, companies, roles, or tech stacks, you MUST call the query_clean_jobs tool.
     - Never answer job/company/role/tech-stack questions from memory or general knowledge, even if you think you know the answer.
+    - To list, filter, or count jobs, use query_clean_jobs. When the user asks to know more about, describe, or compare specific jobs from a prior list, call get_job_details with those jobs' id values.
 
     # Available fields
-    The database contains only these columns: title, company, description, tech_stack.
-    Salary, location, remote status, application deadlines, and similar fields are NOT in the data.
-    If a user asks about a field that does not exist, say so plainly — do not guess or fabricate.
+    The database exposes these columns: id, title, company, role, description, tech_stack, location, source_url, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable.
+    Salary information (salary_min, salary_max, salary_currency) is in the data but may be NULL for some postings, and is_salary_negotiable may be true — if a user asks about salary and the value is missing or negotiable, say so plainly rather than claiming it is not in the data.
+    If a user asks about a field that genuinely is not in the data (e.g. posted_date, application deadlines, how many applicants), say so plainly — do not guess or fabricate.
+    Some attributes have no dedicated column but may be mentioned in the description text (e.g. remote/work-from-home, mentorship, visa sponsorship). You may answer these by matching the description wording, but say plainly that the match is based on the posting text and may be imperfect — a posting could mention the term only in passing, or to say the thing is not offered.
 
     # Multi-turn refinement
     - Resolve follow-up references ("those", "the first one", "only the Python ones") from the prior turns of the conversation.
@@ -29,11 +31,20 @@ prompts:
   schema_context: |
     Table: clean_jobs
     Columns:
-    - title (text)
-    - company (text)
-    - description (text)
-    - tech_stack (text, comma-separated list of technologies)
-    This table is read-only. Only these four columns exist.
+    - id (bigint) — stable surrogate identifier for a posting within this conversation; not durable across data reloads.
+    - title (text) — raw job title from the source posting
+    - company (text) — company name
+    - role (text) — canonical role category (e.g. Data Scientist, Software Engineer, Other for unmatched)
+    - description (text) — merged blob of job description, requirements, and benefits
+    - tech_stack (text) — comma-separated list of technologies (e.g. "Python, SQL, React")
+    - location (text) — canonical city/region (e.g. Ho Chi Minh City, Hanoi; unmatched → Other)
+    - source_url (text) — direct link to the original job posting
+    - is_internship (boolean) — true if the posting is an internship
+    - salary_min (numeric, nullable) — minimum salary; NULL if not disclosed
+    - salary_max (numeric, nullable) — maximum salary; NULL if not disclosed
+    - salary_currency (text, nullable) — currency code (e.g. USD, VND); NULL if salary not disclosed
+    - is_salary_negotiable (boolean) — true if salary is listed as negotiable
+    This table is read-only. Do not reference any column not listed above — unlisted columns do not exist in this schema.
 
   sql_generation: |
     You generate SQL for a read-only Postgres database.
@@ -43,6 +54,14 @@ prompts:
     - Do not use markdown code fences.
     - Do not add commentary or explanation, only the SQL statement.
     - Always include a LIMIT clause.
-    - Use ILIKE '%term%' for all text matching — never use = for text columns.
+    - For "how many / count" questions, use SELECT COUNT(*) rather than selecting rows — return the number, not a list.
+    - Never SELECT the description column. It is a large blob and is not needed to filter, count, or list; full descriptions are retrieved separately. You may still filter on it with description ILIKE '%term%'.
+    - When listing rows, always SELECT id as the first column so results can be fetched in detail later. Do NOT select id for COUNT/aggregate/GROUP BY queries.
+    - Use ILIKE '%term%' for all text columns (title, company, role, tech_stack, location, source_url; description for filtering only) — never use = for text columns.
     - tech_stack is a comma-separated string (e.g. "Python, SQL, React"). Match a technology with: tech_stack ILIKE '%Python%'.
-    - Reference only real columns: title, company, description, tech_stack. Never invent a column.
+    - role and location hold canonical values; still match with ILIKE (e.g. role ILIKE '%Data Scientist%', location ILIKE '%Ho Chi Minh%').
+    - salary_min and salary_max are numeric; use numeric comparisons and always scope by currency (e.g. salary_min >= 1000 AND salary_currency = 'USD').
+    - When ranking or finding the highest/lowest salary, sort with NULLS LAST and scope to a single salary_currency (e.g. ORDER BY salary_max DESC NULLS LAST) — comparing amounts across currencies is meaningless.
+    - is_internship is a boolean; filter with is_internship = true or is_internship = false.
+    - is_salary_negotiable is a boolean; filter with is_salary_negotiable = true.
+    - Reference only real columns: title, company, role, description, tech_stack, location, source_url, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable. Never invent a column.

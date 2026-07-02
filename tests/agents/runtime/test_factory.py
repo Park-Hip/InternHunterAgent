@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from src.agents.runtime.factory import agent_factory
 from src.agents.tools.query_clean_jobs import query_clean_jobs
+from src.agents.tools.get_job_details import get_job_details
 from src.agents.tools.time import get_current_time
 
 
@@ -20,6 +21,7 @@ class AgentFactoryTests(unittest.TestCase):
         _, kwargs = mock_create_agent.call_args
         self.assertIn(get_current_time, kwargs["tools"])
         self.assertIn(query_clean_jobs, kwargs["tools"])
+        self.assertIn(get_job_details, kwargs["tools"])
 
     @patch("src.agents.runtime.factory.create_agent")
     @patch("src.agents.runtime.factory.load_system_prompt")

@@ -87,6 +87,46 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("database error", result)
         self.assertNotIn("connection refused", result)
 
+    @patch("src.agents.tools.query_clean_jobs.load_max_rows")
+    @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_wide_result_is_truncated_with_honest_notice(
+        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql, mock_load_max_rows
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import query_clean_jobs
+
+        mock_generate_sql.return_value = "SELECT title FROM clean_jobs"
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql="SELECT title FROM clean_jobs")
+        mock_execute_validated_sql.return_value = [
+            {"title": "Intern A", "description": "long blob"},
+            {"title": "Intern B", "description": "long blob"},
+            {"title": "Intern C", "description": "long blob"},
+        ]
+        mock_load_max_rows.return_value = 2
+
+        result = await query_clean_jobs.ainvoke({"question": "jobs in Hanoi"})
+
+        self.assertIn("Showing 2 of 3", result)
+        self.assertNotIn("long blob", result)
+
+    @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_count_result_passes_through_without_truncation_notice(
+        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import query_clean_jobs
+
+        mock_generate_sql.return_value = "SELECT COUNT(*) FROM clean_jobs"
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql="SELECT COUNT(*) FROM clean_jobs")
+        mock_execute_validated_sql.return_value = [{"count": 42}]
+
+        result = await query_clean_jobs.ainvoke({"question": "how many jobs are there?"})
+
+        self.assertIn("42", result)
+        self.assertNotIn("Showing", result)
+
 
 if __name__ == "__main__":
     unittest.main()

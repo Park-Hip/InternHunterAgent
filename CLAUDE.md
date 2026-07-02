@@ -52,5 +52,5 @@ Update a Repo_Current_State.md file after completion. Include the following:
 * Installed dependencies.
 * Available scripts.
 * Build/test status.
-* Known issues.
+* Known issues — do not list these inline; record them in `docs/Known_Issues.md` (the living register) and link to it from Repo_Current_State.md.
 * Next recommended ticket.

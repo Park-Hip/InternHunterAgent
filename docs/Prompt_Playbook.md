@@ -9,6 +9,7 @@ Before coding, review:
 - docs/Tickets.md
 - docs/Repo_Current_State.md
 - docs/Manual_Verification_Guide.md
+- docs/Known_Issues.md
 
 Implement this ticket only.
 
@@ -49,6 +50,9 @@ Project rules:
 - Do not introduce new architecture unless required.
 - Avoid unnecessary dependencies.
 - Keep changes small and testable.
+- Do not fix unrelated issues inline. When you encounter a risk, bug, sharp edge, or
+  deferred/out-of-scope item, append it as a bullet to docs/Known_Issues.md (note where
+  it was found and a candidate follow-up) rather than fixing it here.
 
 After implementation, provide:
 - Summary of what changed
@@ -57,4 +61,4 @@ After implementation, provide:
 - Build/test results
 - Manual verification steps
 - Whether docs need updating
-- Any risks or follow-up tickets
+- Any risks or follow-up tickets — and confirm each was appended to docs/Known_Issues.md

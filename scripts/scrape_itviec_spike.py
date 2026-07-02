@@ -259,7 +259,7 @@ def main() -> None:
     runs = reliability_harness(scraper)
 
     # 3. collect detail URLs from the segment page
-    print(f"\n[collect] reading AI/Data segment ...")
+    print("\n[collect] reading AI/Data segment ...")
     detail_pairs = collect_detail_urls(scraper)
     print(f"  -> {len(detail_pairs)} unique AI/Data detail URLs found")
 

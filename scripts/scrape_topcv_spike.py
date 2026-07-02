@@ -306,7 +306,7 @@ def main() -> None:
         return
 
     # 2. reliability harness
-    print(f"\n[reliability harness]")
+    print("\n[reliability harness]")
     runs = reliability_harness(scraper)
 
     # 3. collect detail URLs from listing pages

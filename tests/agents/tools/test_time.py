@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import unittest
 
 from src.agents.tools.time import get_current_time

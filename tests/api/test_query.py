@@ -28,7 +28,7 @@ class QueryRouteTests(unittest.TestCase):
             new=AsyncMock(return_value=fake_response),
         ) as mock_generate:
             response = self.client.post(
-                "/api/v1/agent/query",
+                "/api/v1/agent/chat",
                 json={
                     "query": "what time is it?",
                     "session_id": "session-123",
@@ -66,7 +66,7 @@ class QueryRouteTests(unittest.TestCase):
             new=AsyncMock(return_value=fake_response),
         ) as mock_generate:
             response = self.client.post(
-                "/api/v1/agent/query",
+                "/api/v1/agent/chat",
                 json={
                     "query": "What tech stack does Acme use?",
                     "session_id": "session-123",
@@ -108,7 +108,7 @@ class QueryRouteTests(unittest.TestCase):
             new=AsyncMock(return_value=fake_response),
         ) as mock_generate:
             response = self.client.post(
-                "/api/v1/agent/query",
+                "/api/v1/agent/chat",
                 json={"query": "what time is it?"},
             )
 
@@ -128,7 +128,7 @@ class QueryRouteTests(unittest.TestCase):
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ):
             response = self.client.post(
-                "/api/v1/agent/query",
+                "/api/v1/agent/chat",
                 json={"query": "what time is it?"},
             )
 

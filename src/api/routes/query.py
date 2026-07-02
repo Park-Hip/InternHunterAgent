@@ -6,7 +6,7 @@ from src.agents.service import generate_agent_response
 router = APIRouter()
 
 
-@router.post("/agent/query", response_model=QueryResponse)
+@router.post("/agent/chat", response_model=QueryResponse)
 async def query_agent(payload: QueryRequest, request: Request):
     try:
         logger.info(

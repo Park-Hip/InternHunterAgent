@@ -10,7 +10,7 @@
 
 ## 1. Request Lifecycle
 
-The MVP serves one endpoint, `POST /api/v1/agent/query` (`src/api/routes/query.py`), and every request follows one fixed path:
+The MVP serves one endpoint, `POST /api/v1/agent/chat` (`src/api/routes/query.py`), and every request follows one fixed path:
 
 ```
 QueryRequest
@@ -122,7 +122,7 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 - **Required environment.** `DATABASE_URL`, `GROQ_API_KEY`, and the `LANGFUSE_*` keys (tracing degrades gracefully if the Langfuse keys are absent).
 - **Tunable parameters** live in `config/settings.yaml` (read through `src/core/config.py`): `agent.groq.*` for the model, and `agent.memory.*` (`max_messages`) for memory. Per project convention, parameters are configured here, not hard-coded.
 
-**Schema evolution.** *Status: planned (T0010).* The current four columns are a deliberately simple stand-in for the eventual real job-posting schema; the design keeps growth cheap (the permanent principle is in `Full_Design_Document.md` §6):
+**Schema evolution.** *Status: implemented (T0009 enriched `clean_jobs` to its current 12 agent-visible columns).* The schema grew from the original four-column sample into the real job-posting shape exactly along the cheap-growth path below (the permanent principle is in `Full_Design_Document.md` §6):
 
 - **Adding a column is free in code.** The SQL validator allowlists the *table* `clean_jobs`, not its columns, and `executor.py`/`table_formatter.py` are key-driven, so a new column reaches the answer with no code change — only the schema description the model reads (`schema_context`) and, where relevant, the honesty rules need an edit.
 - **Adding tables, joins, or renames is the boundary** where this stops being free: it crosses the validator's single-table allowlist. Staying single-table is the design choice that keeps evolution cheap.
@@ -154,7 +154,7 @@ Tests prove the Spec's capabilities, not implementation trivia. The strategy spa
 
 - **Unit — deterministic internals.** The SQL validator (safe/unsafe cases, SELECT-only enforcement), the table formatter (empty/single/multi/missing-key), and result-model serialization. These are the safety- and correctness-critical pure functions.
 - **Tool path.** `query_clean_jobs` end to end with the model call stubbed: a success path (validated SQL → rows → answer) and a refusal path (validator rejects unsafe SQL before execution).
-- **Request integration.** A `POST /api/v1/agent/query` happy path returning a well-formed answer-only response, and a failure path proving the process degrades cleanly.
+- **Request integration.** A `POST /api/v1/agent/chat` happy path returning a well-formed answer-only response, and a failure path proving the process degrades cleanly.
 - **Memory behavior (implemented).** Multi-turn refinement within one `session_id`; isolation between two different sessions; a generated `session_id` returned when none is supplied; persistence of a conversation across a restart (simulated by rebuilding the runtime against the same checkpointer); and that the history cap holds on long sessions. See `tests/agents/runtime/test_memory.py`.
 
 The bar: every capability in `MVP_Spec.md` §2 maps to at least one observable test here.

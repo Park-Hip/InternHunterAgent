@@ -23,14 +23,14 @@ T0002: Milestone 2 - ReAct Agent Runtime
 
 T0003: Milestone 3 - Self-Hosted Langfuse
 
-* Run `docker compose -f docker/docker-compose.yaml up --build` to start the local observability stack.
+* Run `docker compose -f infra/docker-compose.yaml up --build` to start the local observability stack.
 * Open the Langfuse UI in a browser at the local web port.
 * Confirm the stack starts successfully and the Langfuse UI is reachable locally.
 
 T0004: Milestone 4 - Tracing Integration
 
 * Start the app with `uv run uvicorn src.api.app:app --reload`.
-* Start the Langfuse stack with `docker compose -f docker/docker-compose.yaml up`.
+* Start the Langfuse stack with `docker compose -f infra/docker-compose.yaml up`.
 * Send one `POST /api/v1/agent/chat` request to the API.
 * Open the Langfuse UI and confirm the request appears as a trace.
 * Confirm the API response includes trace metadata when it is available.
@@ -102,14 +102,14 @@ T0006.8: Register tool in agent runtime + strengthen system prompt
 T0006.9: Keep public API answer-only
 
 * Run `uv run pytest tests/api/test_query.py -v` and confirm all 3 tests pass (clock-tool path, job-data path, service-failure path) — both response-shape tests assert the exact key set `{answer, session_id, trace_id, trace_url}` with no `sql`/`table` keys.
-* With the local stack running (`docker compose up -d`), `POST /api/v1/agent/query` with `{"query": "What tech stack does Acme use?"}` and inspect the raw JSON — confirm only `answer`, `session_id`, `trace_id`, `trace_url` are present and `answer` reads as natural language, not a raw table/SQL dump.
+* With the local stack running (`docker compose up -d`), `POST /api/v1/agent/chat` with `{"query": "What tech stack does Acme use?"}` and inspect the raw JSON — confirm only `answer`, `session_id`, `trace_id`, `trace_url` are present and `answer` reads as natural language, not a raw table/SQL dump.
 * Repeat with `{"query": "what time is it?"}` and confirm the same response shape.
 
 T0006.10: End-to-end manual verification
 
 * Run `docker compose up -d`, then `docker compose ps` and confirm `postgres` and `api` both report `healthy`.
-* `POST /api/v1/agent/query` with `{"query": "What companies use Python?"}` — confirm a readable natural-language answer, then look up the returned `trace_id` in Langfuse (`GET /api/public/traces/<trace_id>` with basic auth, or the Langfuse UI) and confirm a `query_clean_jobs` tool call appears in the message trace.
-* `POST /api/v1/agent/query` with `{"query": "what time is it?"}` — confirm the answer and confirm via the trace that `get_current_time` (not `query_clean_jobs`) was called.
+* `POST /api/v1/agent/chat` with `{"query": "What companies use Python?"}` — confirm a readable natural-language answer, then look up the returned `trace_id` in Langfuse (`GET /api/public/traces/<trace_id>` with basic auth, or the Langfuse UI) and confirm a `query_clean_jobs` tool call appears in the message trace.
+* `POST /api/v1/agent/chat` with `{"query": "what time is it?"}` — confirm the answer and confirm via the trace that `get_current_time` (not `query_clean_jobs`) was called.
 * Force the refusal path directly at the tool boundary (REPL): monkeypatch `generate_sql` to return `"DROP TABLE clean_jobs"` or `"SELECT * FROM pg_tables"` and call `query_clean_jobs.ainvoke(...)` — confirm a graceful refusal string (`"I can't run that query: ..."`), not a crash. (Asking the agent to delete/inspect schema in plain English typically gets refused by the model before it ever calls the tool, so this boundary check is the reliable way to exercise `validate_sql`'s rejection path.)
 * Confirm Langfuse is reachable (`GET /` → 200) and that both the `query_clean_jobs` and `get_current_time` traces are listed via `GET /api/public/traces`.
 
@@ -118,15 +118,15 @@ T0007.1: Startup lifecycle + async checkpointer foundation
 * Run `uv sync` and confirm `langgraph-checkpoint-postgres` and `psycopg-pool` install without conflicts.
 * With Postgres up (`docker compose up -d`), start the API (`docker compose up -d --build api` or `uv run uvicorn src.api.app:app`) and confirm it boots cleanly — no import-time agent construction error, logs show `Application startup complete.` with no traceback.
 * Connect to the app Postgres (`docker compose exec -T postgres psql -U internhunter -d internhunter -c "\dt"`) and confirm the checkpointer tables (`checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations`) were created by `setup()`.
-* `POST /api/v1/agent/query` with `{"query": "what time is it?"}` and `{"query": "What companies use Python?"}` — confirm both still return the same answer-only response shape (`answer`, `session_id`, `trace_id`, `trace_url`), now served via the app-state runtime instead of an import-time singleton.
+* `POST /api/v1/agent/chat` with `{"query": "what time is it?"}` and `{"query": "What companies use Python?"}` — confirm both still return the same answer-only response shape (`answer`, `session_id`, `trace_id`, `trace_url`), now served via the app-state runtime instead of an import-time singleton.
 * Stop the API container (`docker compose stop api`) and confirm the shutdown logs show `Waiting for application shutdown.` / `Application shutdown complete.` with no errors or warnings (the checkpointer connection pool closes cleanly).
 
 T0007.2: Wire checkpointer + session_id -> thread_id lifecycle
 
 * Run `uv run pytest tests/api/test_query.py -v` and confirm the supplied-id and generated-id cases both pass.
-* With the stack up (`docker compose up -d`, API running), `POST /api/v1/agent/query` with `{"query": "what time is it?"}` and no `session_id` — confirm the response contains a non-null `session_id` (a UUID).
-* `POST /api/v1/agent/query` with that returned `session_id` and a refining question (e.g. first "What companies use Python?", then "Which of those also use SQL?") — confirm the agent's answer reflects awareness of the prior turn (memory is working).
-* `POST /api/v1/agent/query` with an explicit `session_id` and confirm the same id is echoed back in the response.
+* With the stack up (`docker compose up -d`, API running), `POST /api/v1/agent/chat` with `{"query": "what time is it?"}` and no `session_id` — confirm the response contains a non-null `session_id` (a UUID).
+* `POST /api/v1/agent/chat` with that returned `session_id` and a refining question (e.g. first "What companies use Python?", then "Which of those also use SQL?") — confirm the agent's answer reflects awareness of the prior turn (memory is working).
+* `POST /api/v1/agent/chat` with an explicit `session_id` and confirm the same id is echoed back in the response.
 * (Optional) Inspect the checkpointer tables in Postgres (`docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT thread_id FROM checkpoints;"`) and confirm rows keyed by the returned `session_id` appear after a request.
 * Confirm Langfuse still receives traces with session metadata (callbacks were not clobbered by the thread_id merge).
 
@@ -141,7 +141,7 @@ T0007.3: Native context trimming (count cap)
 T0007.4: Memory tests, manual verification, and doc status flips
 
 * Run `uv run pytest tests/ -v` and confirm the full suite passes, including the five memory capabilities in `tests/agents/runtime/test_memory.py` (multi-turn refinement, session isolation, generated-id returned, persistence across restart, trimming cap).
-* With the stack up (`docker compose up -d`, API running), hold a two-turn refinement on a *generated* `session_id`: first `POST /api/v1/agent/query` with `{"query": "What companies use Python?"}` and no `session_id`; note the returned `session_id`, then `POST` again with that id and `{"query": "Which of those also use SQL?"}` — confirm turn 2's answer reflects turn-1 context (memory is working).
+* With the stack up (`docker compose up -d`, API running), hold a two-turn refinement on a *generated* `session_id`: first `POST /api/v1/agent/chat` with `{"query": "What companies use Python?"}` and no `session_id`; note the returned `session_id`, then `POST` again with that id and `{"query": "Which of those also use SQL?"}` — confirm turn 2's answer reflects turn-1 context (memory is working).
 * Restart the service (`docker compose restart api`) and `POST` again with the *same* `session_id` and a follow-up — confirm the conversation resumes (history survived the restart because it lives in Postgres, not process memory).
 * Start a *second* `session_id` (omit it to get a fresh one) and ask an unrelated question — confirm it does not see the first session's history.
 * Look up the returned `trace_id`s in Langfuse and confirm one trace per request, grouped by `session_id` (`langfuse_session_id` metadata).
@@ -158,13 +158,13 @@ T0008.2: SQL-generation prompt hardening + schema context to YAML
   ```
 * Temporarily blank `prompts.schema_context` in `config/prompts.yaml` (set to empty string) and confirm `load_schema_context()` raises `ValueError`; restore afterward.
 * `uv run pytest tests/ -v` — confirm 70 tests pass, including all six `LoadSchemaContextTests` in `tests/agents/runtime/test_prompts.py`.
-* With the stack up and `clean_jobs` seeded (`docker compose up -d`), ask `POST /api/v1/agent/query` with `{"query": "What internships use Python?"}` — inspect the Langfuse trace and confirm the generated SQL uses `tech_stack ILIKE '%Python%'`, not `tech_stack = 'Python'`, and that results are returned correctly.
+* With the stack up and `clean_jobs` seeded (`docker compose up -d`), ask `POST /api/v1/agent/chat` with `{"query": "What internships use Python?"}` — inspect the Langfuse trace and confirm the generated SQL uses `tech_stack ILIKE '%Python%'`, not `tech_stack = 'Python'`, and that results are returned correctly.
 
 T0008.1: Resumi persona + on-topic policy + honesty rules
 
 * In a Python REPL: `from src.agents.runtime.prompts import load_system_prompt; print(load_system_prompt().content)` — confirm the output opens with "You are Resumi" and includes sections for on-topic policy, the available-fields gate, refinement, and honesty rules.
 * Run `uv run pytest tests/ -v` — confirm 66 tests pass, no regressions.
-* With the stack up (`docker compose up -d`), exercise each behavior via `POST /api/v1/agent/query`:
+* With the stack up (`docker compose up -d`), exercise each behavior via `POST /api/v1/agent/chat`:
   * `{"query": "hi"}` or `{"query": "what can you do?"}` → Resumi introduces itself and lists internship/job postings as its focus.
   * `{"query": "What companies use Python?"}` → routes to `query_clean_jobs`, returns a data-backed answer (not from general knowledge).
   * `{"query": "What's the salary for that role?"}` → Resumi replies that salary is not in the data; does not guess.
@@ -299,9 +299,6 @@ T0009.2: Config & ingestion models
    "
    Expected: groq
 
-5. Run tests:
-   uv run pytest -q
-   Confirm: 70 passed, 0 failed.
 5. Run tests:
    uv run pytest -q
    Confirm: 70 passed, 0 failed.

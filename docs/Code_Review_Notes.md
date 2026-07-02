@@ -16,78 +16,28 @@ Severity is about real-world impact, not style. Nothing here is auto-fixed (per 
 
 ---
 
-## 🐞 Bugs found (detail — also in Known_Issues.md)
+## 🐞 Bugs found (one-line index — full status in Known_Issues.md)
 
-1. ~~**[HIGH] SQL validator does not actually enforce a single table.**~~ **Fixed by T0010.3**
-   (2026-07-02): `sql_validator.py` only checked `"clean_jobs" in statement.lower()` — a
-   *substring* presence test. A query that also referenced another table passed, e.g.
-   `SELECT * FROM clean_jobs JOIN raw_jobs USING (source, external_id)` or
-   `SELECT ... FROM clean_jobs, raw_jobs ...`. `JOIN`/`,` were not denylisted, so the agent
-   could read `raw_jobs` (verbatim JSONB payloads) or any other table alongside `clean_jobs`.
-   This **contradicted the stated invariant** in `Full_Design_Document.md` §6 ("The SQL
-   validator allowlists the *table* `clean_jobs`") and §3's curated-schema boundary.
-   The `SET TRANSACTION READ ONLY` in `executor.py` still prevented writes, so this was a
-   *read-scope* escape, not a write hole — but it defeated the "agent only sees the curated
-   `clean_jobs` columns" guarantee. Now fixed: string-literal masking + a `TABLE_REF_PATTERN`
-   check requires every `FROM`/`JOIN` table reference to equal `clean_jobs`, and a
-   comma-separated `FROM` list is rejected outright. Detail: `Known_Issues.md`.
+`Known_Issues.md` is the living source of truth for bug status. These are pointers only —
+do **not** maintain fix-history here; strike through / update the entry in `Known_Issues.md`.
 
-2. ~~**[MED-HIGH] Blocking LLM call on the async event loop.**~~ **Fixed by T0010.4**
-   (2026-07-02): `query_clean_jobs` is `async`, and it correctly offloads the DB call via
-   `asyncio.to_thread(execute_validated_sql, …)` — but `generate_sql(question)` ran
-   `model.invoke(...)` **synchronously on the event loop**. That Groq round-trip
-   (seconds) blocked *every* concurrent request and the health probe for its duration.
-   Now `sql = await asyncio.to_thread(generate_sql, question)`. Detail: `Known_Issues.md`.
-
-3. ~~**[MED] Ingestion aborts inconsistently on one bad payload.**~~ **Fixed** (2026-07-02):
-   `loader.run_ingestion` upserted `raw_jobs` first, then did
-   `[to_normalized_job(p.raw_payload) for p in postings]` with no per-record guard.
-   `to_normalized_job` does `payload["jobId"]` (hard key) and constructs a pydantic model,
-   so a single malformed record raised → normalization aborted → `replace_clean_jobs` never
-   ran. Net state: `raw_jobs` refreshed, `clean_jobs` left stale, no error surfaced to a
-   scheduled run beyond a stack trace. Now normalization runs per-record inside a
-   `try/except`, skipping and logging (`ingestion.normalize_skipped`) any bad payload; the
-   run summary carries a new `skipped` count and `main()` logs the completed summary via
-   `logger.info` instead of `print`. One bad row can no longer desync the two tables.
-   Verified via `tests/services/ingestion/test_loader.py::test_malformed_payload_is_skipped_not_fatal`.
-
-4. ~~**[MED] Denylist matches keywords inside string literals.**~~ **Fixed** (2026-07-02):
-   `sql_validator` previously tokenized the *entire* statement, including the contents of
-   string literals, then rejected any token in `DENYLISTED_KEYWORDS`. So legitimate queries
-   were refused: `... WHERE description ILIKE '%replace%'`, a company named `Merge`, a title
-   containing `call`/`exec`/`grant`, etc. → "Unsafe keyword(s) detected". Now the denylist
-   token scan reuses the same `STRING_LITERAL_PATTERN` masking already used for the table
-   check, running against the masked statement instead of the raw one; the comment-sequence
-   check still runs on the unmasked statement. A denylisted verb outside a literal (e.g.
-   `SELECT * FROM clean_jobs UPDATE ...`) is still rejected. Detail: `Known_Issues.md`.
-
-5. **[MED] "Showing N of M" can understate the true match count.**
-   `table_formatter.format_rows` sets `row_count = len(rows)` — the count of rows the SQL
-   *returned*, not the true number of matches. The prompt tells the model to "always
-   include a LIMIT", so when the model's own `LIMIT` (say 20) is below the real match count
-   (say 50), the tool reports "Found 20 result(s)" and never shows the "narrow your search"
-   notice — implying 20 is the total. The T0009.10 design intent ("carry the true match
-   count") isn't fully met because the true count is only knowable via a separate
-   `COUNT(*)`, which list queries don't run.
-
-6. **[MED] `normalize_location` only matches on an exact full-string lookup.**
-   It lowercases each source and does `city_alias_map.get(lower)` — an *exact* dict-key
-   match. A free-form `address` like `"12 Nguyen Hue, District 1, Ho Chi Minh City"` never
-   equals an alias key, so it contributes nothing; location canonicalization depends
-   entirely on clean `workingLocations[].cityName` values. (This is why the T0009.8
-   `cityName` field-name bug made *every* row "Other".) A substring/contains match against
-   alias keys would make location far more robust.
-
-7. **[LOW] Per-request `client.flush()` on the event loop.**
-   `react_agent.ainvoke` calls the Langfuse client's `flush()` synchronously on every
-   request. It's blocking I/O on the async path and defeats Langfuse's batching. Prefer a
-   background/periodic flush, or offload it.
-
-8. **[LOW/latent] `replace_clean_jobs` would crash on intra-batch duplicate keys.**
-   `INSERT ... ON CONFLICT (source, external_id) DO UPDATE` errors ("cannot affect row a
-   second time") if the *same* `(source, external_id)` appears twice in one batch. The
-   VietnamWorks source dedups by `jobId`, so it can't happen today — but a future source
-   that doesn't dedup would crash the load. Cheap guard: dedup in `replace_clean_jobs`.
+1. ~~[HIGH] SQL validator did not enforce a single table.~~ **Fixed by T0010.3** →
+   `Known_Issues.md` § Query tooling & SQL safety.
+2. ~~[MED-HIGH] Blocking LLM call on the async event loop.~~ **Fixed by T0010.4** →
+   `Known_Issues.md` § Query tooling & SQL safety.
+3. ~~[MED] Ingestion aborts inconsistently on one bad payload.~~ **Fixed** (per-record guard;
+   DN-1 redesign still open) → `Known_Issues.md` § Resolved.
+4. ~~[MED] Denylist matched keywords inside string literals.~~ **Fixed** →
+   `Known_Issues.md` § Resolved.
+5. **[MED] OPEN — "Showing N of M" can understate the true match count.** `format_rows` sets
+   `row_count = len(rows)` (post the model's own `LIMIT`), not the true total → `Known_Issues.md`
+   § Query tooling & SQL safety.
+6. ~~[MED] `normalize_location` only matches on an exact full-string lookup.~~ **Fixed by
+   T0010.6** → `Known_Issues.md` § Resolved.
+7. ~~[LOW] Per-request `client.flush()` on the event loop.~~ **Fixed** →
+   `Known_Issues.md` § Capacity & performance.
+8. ~~[LOW/latent] `replace_clean_jobs` would crash on intra-batch duplicate keys.~~ **Fixed** →
+   `Known_Issues.md` § Data & ingestion / database schema.
 
 ---
 

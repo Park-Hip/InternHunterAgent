@@ -1,0 +1,105 @@
+{
+  "data": [
+    {
+      "jobId": 1001,
+      "jobTitle": "Data Scientist",
+      "companyName": "TechCorp Vietnam",
+      "jobUrl": "https://www.vietnamworks.com/data-scientist--i-1001-jv",
+      "jobLevel": "Senior",
+      "jobLevelVI": "Chuyên viên",
+      "address": "Hồ Chí Minh",
+      "prettySalary": "1,500 - 2,500 USD",
+      "salaryMin": 1500,
+      "salaryMax": 2500,
+      "salaryCurrency": "USD",
+      "isSalaryVisible": true,
+      "jobFunction": {
+        "parentId": 5,
+        "children": [{"id": 27, "name": "Data Engineer/Data Analyst/AI"}]
+      },
+      "skills": [{"skillName": "Python"}, {"skillName": "SQL"}],
+      "jobDescription": "<p>Build and deploy ML models.</p>",
+      "jobRequirement": "<p>3+ years experience in data science.</p>",
+      "benefits": [
+        {
+          "benefitName": "Health Insurance",
+          "benefitValue": "<b>Full health and dental coverage</b> for all employees."
+        },
+        {
+          "benefitName": "Remote Work",
+          "benefitValue": "Flexible remote work options available."
+        }
+      ],
+      "workingLocations": [
+        {"cityId": 1, "cityName": "Ho Chi Minh"},
+        {"cityId": 2, "cityName": "Ha Noi"}
+      ]
+    },
+    {
+      "jobId": 1002,
+      "jobTitle": "Marketing Manager",
+      "companyName": "RetailVN Co",
+      "jobUrl": "https://www.vietnamworks.com/marketing-manager-i-1002-jv",
+      "jobLevel": "Manager",
+      "jobLevelVI": "Quản lý",
+      "address": "Hà Nội",
+      "prettySalary": "Thương lượng",
+      "salaryMin": null,
+      "salaryMax": null,
+      "salaryCurrency": null,
+      "isSalaryVisible": false,
+      "jobFunction": {
+        "parentId": 9,
+        "children": [{"id": 45, "name": "Marketing/PR"}]
+      },
+      "skills": [],
+      "jobDescription": "<p>Lead the marketing team.</p>",
+      "jobRequirement": ""
+    },
+    {
+      "jobId": 1003,
+      "jobTitle": "Thực Tập Sinh Data Engineer",
+      "companyName": "DataStartup VN",
+      "jobUrl": "https://www.vietnamworks.com/intern-data-engineer-i-1003-jv",
+      "jobLevel": "Intern",
+      "jobLevelVI": "Thực tập",
+      "address": "Hồ Chí Minh",
+      "prettySalary": "3 - 5 triệu VND",
+      "salaryMin": 3000000,
+      "salaryMax": 5000000,
+      "salaryCurrency": "VND",
+      "isSalaryVisible": true,
+      "jobFunction": {
+        "parentId": 5,
+        "children": [
+          {"id": 27, "name": "Data Engineer/Data Analyst/AI"},
+          {"id": 28, "name": "Software Development"}
+        ]
+      },
+      "skills": [{"skillName": "Python"}, {"skillName": "Airflow"}],
+      "jobDescription": "<p>Internship in data engineering.</p>",
+      "jobRequirement": "<p>Final-year students welcome.</p>"
+    },
+    {
+      "jobId": 1004,
+      "jobTitle": "IT Project Manager",
+      "companyName": "ITConsult VN",
+      "jobUrl": "https://www.vietnamworks.com/it-pm-i-1004-jv",
+      "jobLevel": "Manager",
+      "jobLevelVI": "Quản lý",
+      "address": "Hà Nội",
+      "prettySalary": "Thương lượng",
+      "salaryMin": null,
+      "salaryMax": null,
+      "salaryCurrency": null,
+      "isSalaryVisible": false,
+      "jobFunction": {
+        "parentId": 5,
+        "children": [{"id": 15, "name": "Project Management"}]
+      },
+      "skills": [],
+      "jobDescription": "<p>Manage IT delivery projects.</p>",
+      "jobRequirement": ""
+    }
+  ]
+}

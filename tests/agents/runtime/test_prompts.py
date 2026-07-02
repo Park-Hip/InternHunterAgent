@@ -71,13 +71,17 @@ class LoadSchemaContextTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_schema_context()
 
-    def test_yaml_schema_context_mentions_only_four_real_columns(self) -> None:
+    def test_yaml_schema_context_mentions_rich_schema(self) -> None:
         result = load_schema_context()
 
-        for column in ("title", "company", "description", "tech_stack"):
+        for column in (
+            "id", "title", "company", "role", "description", "tech_stack",
+            "location", "source_url", "is_internship",
+            "salary_min", "salary_max", "salary_currency", "is_salary_negotiable",
+        ):
             self.assertIn(column, result)
 
-        for column in ("salary_min", "salary_max", "location", "remote", "id"):
+        for column in ("remote", "posted_date"):
             self.assertNotIn(column, result)
 
     def test_yaml_schema_context_mentions_clean_jobs_table(self) -> None:

@@ -302,3 +302,302 @@ T0009.2: Config & ingestion models
 5. Run tests:
    uv run pytest -q
    Confirm: 70 passed, 0 failed.
+5. Run tests:
+   uv run pytest -q
+   Confirm: 70 passed, 0 failed.
+
+T0009.3: JobSource interface + VietnamWorksSource adapter
+
+1. Verify clean import — no network call at import time:
+   uv run python -c "from src.services.ingestion.sources.vietnamworks import VietnamWorksSource; print('import ok')"
+   Expected: "import ok" with no error and no outbound HTTP.
+
+2. Run the adapter unit tests (no live network):
+   uv run pytest -q tests/services/ingestion/
+   Expected: 14 passed.
+
+3. Run the full suite to confirm no regressions:
+   uv run pytest -q
+   Expected: 84 passed.
+
+4. (Optional live smoke — requires network; not part of CI)
+   uv run python -c "
+   from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
+   source = VietnamWorksSource()
+   for i, p in enumerate(source.fetch()):
+       print(p.external_id, p.source_url, p.content_hash[:12])
+       if i >= 4:
+           break
+   "
+   Expected: 5 RawPosting lines, each with a real external_id, a vietnamworks.com URL,
+   and a non-empty content_hash prefix. Re-run on the same payload → identical hash.
+
+5. Confirm spike is unchanged:
+   git diff HEAD -- scripts/scrape_spike.py
+   Expected: no output (file untouched).
+
+6. Confirm config/ingestion.yaml has no new keys:
+   uv run python -c "
+   from src.core.config import settings
+   print(sorted(settings.ingestion_yaml.keys()))
+   "
+   Expected: same keys as after T0009.2 (api, city_alias_map, job_function, max_jobs,
+   queries, role_taxonomy, tech_dictionary).
+
+T0009.4: Raw landing — upsert RawPosting into raw_jobs
+
+1. Run unit tests (no DB required):
+   uv run pytest -q tests/services/ingestion/test_raw_store.py
+   Expected: 9 passed.
+
+2. Run the full suite to confirm no regressions:
+   uv run pytest -q
+   Expected: 93 passed.
+
+3. Verify import triggers no DB connection:
+   uv run python -c "from src.services.ingestion.raw_store import upsert_raw_postings; print('import ok')"
+   Expected: "import ok" with no error, even when DATABASE_URL is unset or Postgres is down.
+
+4. (Live idempotency check — requires Postgres)
+   Start Postgres and init schema:
+     docker compose up -d
+     docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
+
+   In a Python REPL (with DATABASE_URL set):
+     from src.services.ingestion.models import RawPosting
+     from src.services.ingestion.raw_store import upsert_raw_postings
+
+     postings = [
+         RawPosting(source="vietnamworks", external_id="job-001", source_url="https://example.com/1",
+                    raw_payload={"title": "Intern A"}, content_hash="hash-a"),
+         RawPosting(source="vietnamworks", external_id="job-002", source_url="https://example.com/2",
+                    raw_payload={"title": "Intern B"}, content_hash="hash-b"),
+     ]
+     print(upsert_raw_postings(postings))   # expect: 2
+
+   Confirm row count:
+     docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT count(*) FROM raw_jobs;"
+     Expected: 2
+
+5. Confirm idempotency — re-run with identical postings:
+   print(upsert_raw_postings(postings))   # expect: 2 (returns count, no duplicate key error)
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT count(*) FROM raw_jobs;"
+   Expected: still 2
+
+T0009.6: Loader — idempotent replace of clean_jobs
+
+1. Run unit tests (no DB, no network):
+   uv run pytest -q tests/services/ingestion/test_clean_store.py tests/services/ingestion/test_loader.py
+   Expected: 14 passed.
+
+2. Run the full suite to confirm no regressions:
+   uv run pytest -q
+   Expected: 184 passed, 4 subtests passed.
+
+3. Verify import triggers no DB or network connection:
+   uv run python -c "from src.services.ingestion.loader import run_ingestion; print('import ok')"
+   Expected: "import ok" with no error, even when DATABASE_URL is unset or Postgres is down.
+
+4. (Live end-to-end — requires Postgres + network)
+   Start Postgres and init schema:
+     docker compose up -d
+     docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
+
+   Run the full pipeline:
+     uv run python -m src.services.ingestion.loader
+   Expected: prints something like {'fetched': N, 'raw_upserted': N, 'clean_loaded': N} with N > 0.
+
+5. Confirm clean_jobs is populated:
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT count(*) FROM clean_jobs;"
+   Expected: N > 0 (matches fetched count)
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT count(*) FROM raw_jobs;"
+   Expected: N > 0
+
+6. Spot-check a row:
+   docker compose exec -T postgres psql -U internhunter -d internhunter \
+     -c "SELECT source, role, location, tech_stack, is_salary_negotiable, salary_min FROM clean_jobs LIMIT 3;"
+   Confirm: source = 'vietnamworks'; role is a canonical value (e.g. Data Scientist / Data Engineer / Other);
+   location is a canonical city name or "Other"; tech_stack is comma-separated or NULL;
+   rows with hidden salary show is_salary_negotiable = true and NULL salary_min.
+
+7. Confirm idempotency — re-run loader:
+   uv run python -m src.services.ingestion.loader
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT count(*) FROM clean_jobs;"
+   Expected: same count as after first run (replace is atomic; row count identical after re-run).
+
+8. Confirm raw_jobs accumulates (never truncated):
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT count(*) FROM raw_jobs;"
+   Expected: same count (or more if any hashes changed); raw rows are never deleted.
+
+9. Confirm empty-fetch guard — clean_jobs untouched if source returns nothing:
+   In Python REPL (with DB up):
+     from src.services.ingestion.clean_store import replace_clean_jobs
+     result = replace_clean_jobs([])
+     print(result)   # 0
+   Then confirm clean_jobs still has the same row count as step 5 (TRUNCATE was NOT executed).
+
+T0009.5: Normalize + transform — pure function pipeline
+
+1. Run unit tests (no DB, no network required):
+   uv run pytest -q tests/services/ingestion/
+   Expected: 100 passed (adapter + raw_store + transform + normalize tests).
+
+2. Verify clean import — no DB or network side effects:
+   uv run python -c "from src.services.ingestion.normalize.vietnamworks import to_normalized_job; print('import ok')"
+   Expected: "import ok" with no error, even when DATABASE_URL is unset or Postgres is down.
+
+3. REPL smoke-test against the fixture:
+   uv run python -c "
+   import json; from pathlib import Path
+   from src.services.ingestion.normalize.vietnamworks import to_normalized_job
+   jobs = {j['jobId']: j for j in json.loads(Path('tests/services/ingestion/fixtures/vietnamworks_raw.json').read_text(encoding='utf-8'))['data']}
+
+   j1 = to_normalized_job(jobs[1001])
+   print('role:', j1.role)               # expect: Data Scientist
+   print('location:', j1.location)       # expect: Ho Chi Minh City, Hanoi (multi-city)
+   print('tech_stack:', j1.tech_stack)   # expect: Python, SQL (comma-separated canonical names)
+   print('salary:', j1.salary_min, j1.salary_max, j1.salary_currency)  # expect: 1500.0 2500.0 USD
+   print('negotiable:', j1.is_salary_negotiable)  # expect: False
+   print('posted_date:', j1.posted_date)           # expect: None
+   print()
+
+   j2 = to_normalized_job(jobs[1002])   # hidden-salary Marketing Manager
+   print('hidden salary_min:', j2.salary_min)      # expect: None
+   print('hidden negotiable:', j2.is_salary_negotiable)  # expect: True
+   print()
+
+   j3 = to_normalized_job(jobs[1003])   # intern Data Engineer
+   print('intern is_internship:', j3.is_internship)  # expect: True
+   print('intern role:', j3.role)                     # expect: Data Engineer
+
+   j4 = to_normalized_job(jobs[1004])
+   print('PM role:', j4.role)          # expect: Other (no taxonomy keyword match)
+   "
+   Confirm each expected value printed above.
+
+4. Confirm transform functions work standalone:
+   uv run python -c "
+   from src.services.ingestion.transform import (
+       html_to_text, find_tech_stack, classify_role, normalize_location, derive_is_internship
+   )
+   print(html_to_text('<p>Hello &amp; World</p>'))  # Hello & World
+   print(find_tech_stack('Python', 'uses Airflow and Docker'))  # Python, Airflow, Docker
+   print(find_tech_stack('Experience with Keras'))  # Keras — NOT R (word-boundary guard)
+   print(classify_role('Machine Learning Engineer', None))  # ML Engineer
+   print(classify_role('Product Owner', None))              # Other
+   print(normalize_location('TPHCM'))                       # Ho Chi Minh City
+   print(normalize_location('Hồ Chí Minh', 'Hà Nội'))     # Ho Chi Minh City, Hanoi
+   print(normalize_location('Unknown City'))                # Other
+   print(derive_is_internship('Intern', None))              # True
+   print(derive_is_internship('Senior', 'Chuyên viên'))     # False
+   "
+
+5. Confirm fixture extension is additive (adapter tests still pass):
+   uv run pytest -q tests/services/ingestion/test_vietnamworks.py
+   Expected: 14 passed (the new benefits/workingLocations fields in job 1001 are
+   reflected equally in both posting.raw_payload and the fixture expectation, so
+   test_raw_payload_is_verbatim still holds).
+
+6. Confirm update on changed payload:
+   changed = [
+       RawPosting(source="vietnamworks", external_id="job-001", source_url="https://example.com/1",
+                  raw_payload={"title": "Intern A UPDATED"}, content_hash="hash-a-v2"),
+   ]
+   print(upsert_raw_postings(changed))   # expect: 1
+
+   docker compose exec -T postgres psql -U internhunter -d internhunter \
+     -c "SELECT external_id, raw_payload->>'title', content_hash, fetched_at FROM raw_jobs ORDER BY external_id;"
+   Expected:
+     - job-001: title = "Intern A UPDATED", content_hash = "hash-a-v2", fetched_at advanced
+     - job-002: unchanged
+     - count still 2
+
+T0009.7: Agent-layer follow-through (Rich schema)
+
+1. Run targeted prompt tests:
+   uv run pytest -q tests/agents/runtime/test_prompts.py
+   Expected: 10 passed.
+
+2. Run the full suite to confirm no regressions:
+   uv run pytest -q
+   Expected: 184 passed, 4 subtests passed.
+
+3. (Live stack — requires Postgres + clean_jobs populated via T0009.6 loader)
+   docker compose up -d
+   docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
+   uv run python -m src.services.ingestion.loader
+   uv run uvicorn src.api.app:app --reload
+
+   Then POST to http://127.0.0.1:8000/api/v1/agent/chat with the queries below.
+   For each, confirm the tool is called and the answer is grounded in the DB.
+
+   a. "Show me Data Scientist roles in Ho Chi Minh City"
+      Expected: SQL uses `role ILIKE '%Data Scientist%'` AND `location ILIKE '%Ho Chi Minh%'`; returns matching rows or honest "none found."
+
+   b. "Which postings pay over 1000 USD?"
+      Expected: SQL uses `salary_min >= 1000 AND salary_currency = 'USD'`; returns rows or honest "none found."
+
+   c. "Any internships available?"
+      Expected: SQL uses `is_internship = true`; returns internship rows.
+
+   d. "What's the salary for [a posting where salary is NULL or negotiable]?"
+      Expected: agent says salary may be missing or negotiable for some postings — does NOT say "not in the data" and does NOT fabricate a number.
+
+4. Confirm the agent never references a non-existent column (posted_date, remote, id):
+   Ask: "What date was this job posted?" or "Are any jobs remote?"
+   Expected: agent says the information is not available in the data — does not attempt a SQL query for posted_date or remote.
+
+T0009.8: End-to-end manual verification — observed results (2026-07-01)
+
+Stack: `docker compose up -d` (postgres + api healthy) → `docker compose build --no-cache api && docker compose up -d api` (picks up T0009.7 prompt changes and the location-normalization fix below).
+
+**Pre-existing-state note:** the local Postgres volume (running 7 days across prior milestone sessions) still had the *pre-T0009* 5-column `clean_jobs` (7 demo rows). `scripts/init_db.sql` uses `CREATE TABLE IF NOT EXISTS`, so it silently skipped migrating it. With the user's explicit go-ahead, dropped and recreated `clean_jobs` via the init script to pick up the T0009.1 rich schema before verification could proceed. `raw_jobs` did not exist yet either; created via the same script (piped over stdin since `scripts/` is not volume-mounted into the postgres container — `docker compose exec -T postgres psql ... < scripts/init_db.sql` rather than `-f`).
+
+**Defect found and fixed (trivial, required to pass):** `to_normalized_job` (`src/services/ingestion/normalize/vietnamworks.py`) read `loc["name"]` from the `workingLocations` array, but the live VietnamWorks API returns `cityName` (confirmed directly against `raw_jobs.raw_payload`, e.g. `{"cityId": 24, "cityName": "Ha Noi", ...}`). Since `"name"` never exists, `working_location_names` was always empty, so every row fell through to `location = "Other"` — location canonicalization silently never ran (`city_alias_map` itself was correct). Fixed the field name to `cityName`; updated the test fixture (`tests/services/ingestion/fixtures/vietnamworks_raw.json`), which encoded the same wrong field name, to match. `tests/services/ingestion/test_normalize_vietnamworks.py` (28 tests) still pass after the fix. This was required to pass step C (location spot-check) and F.3 (city-filter agent question) below.
+
+**A. Ingestion pipeline:** `uv run python -m src.services.ingestion.loader` → `{'fetched': 50, 'raw_upserted': 50, 'clean_loaded': 50}`, exit 0, no stack trace. PASS
+
+**B. raw_jobs:** `SELECT count(*) FROM raw_jobs;` → 50. Spot-check: `source='vietnamworks'`, live `vietnamworks.com` URLs (e.g. `https://www.vietnamworks.com/ai-engineer-2075712-jv`), `jsonb_typeof(raw_payload) = 'object'`. PASS
+
+**C. clean_jobs:** `SELECT count(*) FROM clean_jobs;` → 50; `SELECT DISTINCT source FROM clean_jobs;` → only `vietnamworks` (old fixtures gone). Spot-check 8 rows: `title` is the raw posting title (including Vietnamese titles, unstripped); `role` is canonical (`AI Engineer`, `Data Scientist`, `Data Analyst`, `Other` for unmatched); `tech_stack` is comma-separated technologies only (e.g. `Python, PyTorch, LangChain, Airflow`); `location` is unified (`Hanoi`: 28, `Ho Chi Minh City`: 19, multi-city rows, 1 `Other`) after the fix above; `description` is a single merged blob. `is_salary_negotiable = true AND salary_min IS NULL` → 43 rows. `is_internship = true` → 1 row. PASS
+
+**D. Idempotency:** re-ran the loader → `{'fetched': 50, 'raw_upserted': 50, 'clean_loaded': 50}`; `clean_jobs` count unchanged (50); `raw_jobs` count unchanged (50); zero duplicate `(source, external_id)` pairs. PASS
+
+**E. Empty-fetch / error-propagation guard:** `uv run pytest -q tests/services/ingestion/test_clean_store.py` → 9 passed, confirming `replace_clean_jobs([])` returns 0 and skips `TRUNCATE`. Code read of `run_ingestion` (`loader.py`): `postings = list(source.fetch())` runs and can raise before `upsert_raw_postings`/`replace_clean_jobs` are ever called — a source exception aborts before any DB write. PASS (verified per Known_Issues.md #34 — see below)
+
+**F. Agent questions (live stack, `POST /api/v1/agent/chat`):**
+
+| # | Query | Expected | Observed | Result |
+|---|-------|----------|----------|--------|
+| 1 | "Show jobs using PyTorch" | `tech_stack ILIKE '%PyTorch%'` | Listed 5 real postings (Vinsmart Future, MBBank ×3, Hoya Glass Disk), data-grounded | PASS |
+| 2 | "Show me data scientist roles" | `role ILIKE '%Data Scientist%'` | Listed 3 real postings with company/salary detail | PASS |
+| 3a | "jobs in Hanoi" | Canonical city hit | **FAIL first attempt** — `500 {"detail":"Failed to process query"}`; API log shows Groq `413` — result set (28 Hanoi rows × full descriptions) exceeds the org's 12000 TPM limit (`Requested 14020`/`14527`). Reproduced twice. See Known_Issues below. |
+| 3b | "jobs in Ho Chi Minh City" | Canonical city hit | Listed 21 real postings after one internal retry/backoff; same token-budget risk, narrowly avoided | PASS (marginal — see Known_Issues) |
+| 4 | "internships paying at least 500 USD" | `salary_min >= 500 AND salary_currency = 'USD' AND is_internship = true` | "I couldn't find any internships with a salary of at least $500" — verified against DB: the one internship row has `salary_min IS NULL`, so the honest no-result is correct | PASS |
+| 5 | "Which of the AI Engineer jobs were posted most recently?" (+ exact ticket wording, 3 attempts total) | Honest decline, no fabricated date | **Non-deterministic**: 1 of 3 attempts fabricated a specific "most recently posted" job despite `posted_date` being absent from the schema; 2 of 3 correctly declined ("the data does not contain information about the posting date"). See Known_Issues below. | FAIL (intermittent) |
+| 6 | "Give me the link to the AI Engineer job at Vinsmart Future" | Returns real `source_url` | Returned `https://www.vietnamworks.com/ai-engineer-2075712-jv` — verified exact match against `clean_jobs.source_url` | PASS |
+| 7 | "show only internships" | `is_internship = true` | Returned the one internship row (AI Engineer Intern, K&M Holdings) with correct detail | PASS |
+| 8 | "What is the salary for the AI Engineer job at Vinsmart Future?" (hidden-salary row, 2 attempts) | "may be missing/negotiable" framing, not "not in the data" | Both attempts: "The salary information ... is not available in the data" — reproducibly uses phrasing the T0009.7 honesty rule explicitly says not to use. Confirmed this is LLM prompt-adherence, not a formatting bug (the table formatter renders raw column values only). See Known_Issues below. | FAIL (reproducible) |
+
+**Summary: 5/8 clean PASS, 1/8 marginal PASS, 2/8 FAIL (both logged to Known_Issues.md as follow-ups, not fixed here per ticket scope).**
+
+**G. robots.txt / ToS:** `https://ms.vietnamworks.com/robots.txt` → HTTP 404 (no robots.txt exists on the API host — no restrictions declared). `https://www.vietnamworks.com/robots.txt` (main site, for context) disallows only login/profile/apply/preview paths (`/my-profile`, `/dang-nhap/`, `/jobseekers/apply_online.php`, `/company/preview/*`, etc.) — nothing touching `/job-search/v1.0/search`. The API path used by `VietnamWorksSource` is clear. PASS
+
+**Tests:** `uv run pytest -q` → 184 passed, 4 subtests passed (no regressions after the location fix).
+
+**Acceptance criteria status:**
+- Full pipeline runs live, counts non-zero, re-run idempotent: YES
+- raw_jobs/clean_jobs contents match every criterion (after the location fix), ≥1 internship, ≥1 hidden-salary row: YES
+- All eight agent questions behave as specified: **NO** — city filter (Hanoi) and freshness honesty and hidden-salary phrasing surfaced real, reproducible issues; logged as follow-ups per ticket scope ("only make a code change if it's trivial and strictly required to pass")
+- `uv run pytest -q` still green: YES (184 passed, 4 subtests)
+- Docs updated, milestone closed: YES (this section, `Repo_Current_State.md`, `Known_Issues.md`)
+
+T0009.9: Explicit schema reset path
+
+* When the schema shape changes and `init_db.sql` (`CREATE TABLE IF NOT EXISTS`) silently skips a table that already exists with the wrong shape, use the reset workflow instead of a manual `DROP TABLE`:
+  1. `docker compose up -d`; confirm Postgres is healthy and both tables exist with data — `docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT count(*) FROM clean_jobs;"` returns a non-zero count after an ingest.
+  2. Run the reset: `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/reset_db.sql`. Expect no errors; the `\i` include echoes the `CREATE` statements from `init_db.sql`.
+  3. Confirm the schema was recreated empty: `docker compose exec -T postgres psql -U internhunter -d internhunter -c "\d clean_jobs"` and `"\d raw_jobs"` show the full T0009.1 columns; `SELECT count(*) FROM clean_jobs;` → `0`.
+  4. Re-ingest: `uv run python -m src.services.ingestion.loader` → counts non-zero again; the app answers a normal question.
+  5. Confirm `init_db.sql` alone is still non-destructive: re-run `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql` against the populated DB and verify row counts are unchanged (`IF NOT EXISTS` skips recreation).
+* `uv run pytest -q` still passes (no code touched by this ticket).

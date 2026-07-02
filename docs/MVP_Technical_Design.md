@@ -106,7 +106,7 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 
 *Status: implemented*
 
-- **Dataset.** The MVP began on a small fixed sample of internship postings in the `clean_jobs` table (`scripts/init_clean_jobs.sql`). Columns: `id` (Integer PK), `title` (Text), `company` (Text), `description` (Text), `tech_stack` (Text — a comma-separated list, **not** a SQL array; filters must treat it as a string). *Status: real ingestion is planned (T0009)* — it replaces the fixtures with live VietnamWorks AI/Data postings and enriches the schema (see §7).
+- **Dataset.** The MVP began on a small fixed sample of internship postings in the original 4-column `clean_jobs` table. *Status: real ingestion implemented (T0009)* — `clean_jobs` now lands live VietnamWorks AI/Data postings (via `scripts/init_db.sql` + `src/services/ingestion/`) with the enriched schema described in §7; the old fixture seed script and its 4-column shape are retired.
 - **Database.** PostgreSQL via SQLAlchemy; the engine and session factory live in `src/core/db.py` (`pool_pre_ping=True`). This app database is entirely separate from Langfuse's internal Postgres — different owners, lifecycles, and schemas.
 - **Required environment.** `DATABASE_URL`, `GROQ_API_KEY`, and the `LANGFUSE_*` keys (tracing degrades gracefully if the Langfuse keys are absent).
 - **Tunable parameters** live in `config/settings.yaml` (read through `src/core/config.py`): `agent.groq.*` for the model, and `agent.memory.*` (`max_messages`) for memory. Per project convention, parameters are configured here, not hard-coded.
@@ -117,7 +117,7 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 - **Adding tables, joins, or renames is the boundary** where this stops being free: it crosses the validator's single-table allowlist. Staying single-table is the design choice that keeps evolution cheap.
 - **Multi-value fields.** `tech_stack` is a comma-separated string today; the path for the real dataset is a Postgres `TEXT[]` or `JSONB`, adopted only when the data demands it — not on the throwaway sample.
 - **Migrations deferred.** The schema is seeded by `scripts/init_*.sql`; a migration tool (e.g. Alembic) is intentionally not adopted until the schema stops being a fixed sample (i.e. real ingestion).
-- **Open decision (T0010) — now answered by T0009.** The question of whether to add real-posting columns (location, salary) vs. only grow the row count is **resolved by T0009**, which enriches `clean_jobs` (adds `role`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary: `salary_min`, `salary_max`, `salary_currency`, `is_salary_negotiable`) while landing real data. The cheap-growth design above is exactly what makes that enrichment column-cheap. T0010 is consequently re-scoped (see `Tickets.md`).
+- **Open decision (T0010) — now answered by T0009.** The question of whether to add real-posting columns (location, salary) vs. only grow the row count is **resolved by T0009**, which enriches `clean_jobs` (adds `role`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary: `salary_min`, `salary_max`, `salary_currency`, `is_salary_negotiable`) while landing real data. The cheap-growth design above is exactly what makes that enrichment column-cheap. The original open T0010 question is therefore closed. Schema *tooling* is handled lightly by **T0009.9** (an explicit `reset_db.sql` drop-and-recreate path, appropriate because every table is reproducible from a re-ingest); a full migration framework (Alembic) is deferred until deployed data becomes irreplaceable.
 
 ---
 
@@ -152,7 +152,7 @@ The bar: every capability in `MVP_Spec.md` §2 maps to at least one observable t
 
 ## 7. Data Ingestion Pipeline (offline)
 
-*Status: planned (T0009)*
+*Status: implemented*
 
 Ingestion is **offline batch tooling** under `src/services/ingestion/`, isolated from the request pipeline — it is never imported by the API, service, runtime, tools, or tracing layers (the layer law is in `Full_Design_Document.md` §3). It runs as a manual, re-runnable CLI, not on a schedule. The deep research behind every decision here is `research/data-ingestion-stage.md` (§0.1, the ✅ reliable & schedulable VietnamWorks experiment) and `research/job-site-comparison.md`; do not re-derive it.
 

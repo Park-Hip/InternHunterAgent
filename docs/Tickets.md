@@ -399,3 +399,15 @@
 * Agent questions: tech filter, **role filter** ("data scientist roles"), **city filter** ("jobs in Hanoi" and "jobs in HCM" hit the same canonical city), **salary range** ("internships paying at least $500" → uses `salary_min`/`salary_currency`), freshness, `source_url`/link, internship-only, and a hidden-salary row (honest "not available / negotiable").
 **Out of Scope:**
 * Any fix beyond what's needed to pass; larger issues become follow-up tickets.
+
+#### T0009.9: Explicit schema reset path
+**Objective:** Fix the gap observed during T0009.8 where `scripts/init_db.sql` (`CREATE TABLE IF NOT EXISTS`) silently skips a table that already exists with the wrong shape, so a schema change cannot be applied without a manual `DROP TABLE`. Because both tables are **fully reproducible** — `clean_jobs` is rebuilt by the loader on every ingestion run and `raw_jobs` is re-fetchable by re-running the adapter — the MVP-appropriate fix is an explicit, repeatable **reset** path, **not** a migration framework. A full migration tool (Alembic) is deliberately deferred until there is deployed data that is genuinely irreplaceable; see `docs/Known_Issues.md`.
+**In Scope:**
+* Add a destructive, explicit reset path — `scripts/reset_db.sql` doing `DROP TABLE IF EXISTS clean_jobs, raw_jobs CASCADE;` followed by the existing `CREATE` statements (reuse the DDL from `init_db.sql`; no duplication of truth beyond the drop lines).
+* Keep `scripts/init_db.sql` itself **non-destructive** (`CREATE TABLE IF NOT EXISTS`) so a routine run never wipes data; the reset script is run only when the schema changes.
+* Document in `README.md` and `docs/Manual_Verification_Guide.md`: when the schema changes, run the reset script, then re-ingest.
+* Reframe/close the migration entry in `docs/Known_Issues.md` (reset script is now the mechanism; Alembic named as the future escalation trigger — "when deployed data becomes irreplaceable"); note the reset workflow in `Repo_Current_State.md`.
+**Out of Scope:**
+* Alembic or any versioned-migration framework / `migrations/` directory (deferred; not needed while all tables are reproducible).
+* Auto-running the reset on FastAPI startup or in an entrypoint — it stays a manual, explicit step.
+* Any **new** schema change (this only adds the reset mechanism; the schema stays the T0009.1 shape).

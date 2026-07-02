@@ -17,8 +17,8 @@ queries:
   - "deep learning"
 
 job_function:
-  parent_id: 5
-  child_ids: [27]
+  parent_id: 5    # "Information Technology/Telecommunications" — IT precision filter
+  child_ids: [27] # "Data Engineer/Data Analyst/AI" — AI/Data focus subset
 
 max_jobs: 50
 

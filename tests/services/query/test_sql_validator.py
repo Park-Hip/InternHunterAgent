@@ -126,6 +126,28 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertTrue(result.valid)
         self.assertEqual(result.reason, "")
 
+    def test_allows_denylisted_word_inside_string_literal(self) -> None:
+        result = validate_sql(
+            "SELECT * FROM clean_jobs WHERE description ILIKE '%replace%'"
+        )
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.reason, "")
+
+    def test_allows_denylisted_word_as_literal_value(self) -> None:
+        result = validate_sql("SELECT * FROM clean_jobs WHERE company_name = 'Merge'")
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.reason, "")
+
+    def test_rejects_denylisted_verb_outside_literal(self) -> None:
+        result = validate_sql(
+            "SELECT * FROM clean_jobs UPDATE SET title = 'x'"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
 
 if __name__ == "__main__":
     unittest.main()

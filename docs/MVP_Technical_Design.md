@@ -109,7 +109,7 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 
 *Provisional:* the answer-only shape is an MVP choice, not a permanent law. The future charting capability (a chart is not a string) will revisit it.
 
-*Deferred, documented:* `trace_url` is currently always `null`, and errors are not yet a typed contract (see §5).
+*Deferred, documented:* `trace_url` is currently always `null` (see §5). A minimal typed error contract landed in T0010.1 (see §5) — a blank/whitespace-only `query` now returns a clean `400`, distinct from the generic `500` for internal failures.
 
 ---
 
@@ -134,15 +134,16 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 
 ## 5. Error Handling & Resilience
 
-*Status: target design (partially implemented)*
+*Status: target design (mostly implemented, T0010.1)*
 
 The Spec's quality bar (`MVP_Spec.md` §3) requires that imperfect input or a backend hiccup yields a clean response, never a crash and never a leaked internal error. The target behavior:
 
 - **Tool/DB failures** are caught inside the tool and returned as a safe natural-language message (implemented for `query_clean_jobs`: validator refusals and `ExecutorError` both degrade gracefully).
 - **Tracing failures** never affect the request path — tracing is a no-op when unavailable (implemented).
-- **Unexpected runtime failures** are mapped by the service/route to a safe response without exposing internals.
+- **Client-input errors** are distinguished from server/provider errors (implemented, T0010.1): `src/api/routes/query.py` raises `InvalidQueryError` (`src/core/errors.py`) for a blank/whitespace-only `payload.query`, mapped to a `400 "Query must not be empty."`; genuine internal failures still map to the generic `500 "Failed to process query"` with no internals leaked.
+- **A `None`/empty runtime answer** is coerced to a safe fallback string (`FALLBACK_ANSWER` in `src/agents/service.py`) rather than failing Pydantic validation — implemented, T0010.1.
 
-*Deferred, documented:* the route currently collapses every failure into a generic `500`, so a bad request body, a model timeout, and an internal bug are indistinguishable to the client. A **typed error contract** (distinguishing client-input errors from server/provider errors, with a consistent response shape) is a recognized refinement, not part of this MVP. It is recorded here so the gap is intentional, not forgotten.
+*Deferred, documented:* the typed error contract above is intentionally minimal (a single `4xx`/`5xx` split, not a broader error taxonomy), matching the MVP scope. One known residual gap: `react_agent._extract_answer` currently *raises* on empty/unreadable final content rather than returning it, so the `FALLBACK_ANSWER` coercion in `service.py` is not yet reachable on that path — an empty agent answer still surfaces as a `500` today. Tracked in `Known_Issues.md` (API layer).
 
 ---
 

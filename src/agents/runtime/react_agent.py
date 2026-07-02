@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 
 from langchain.messages import HumanMessage
@@ -31,7 +32,7 @@ class AgentRuntime:
 
         client = get_langfuse_client()
         if client is not None:
-            client.flush()
+            await asyncio.to_thread(client.flush)
 
         return {
             "answer": answer,

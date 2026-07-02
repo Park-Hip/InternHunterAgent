@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
 from src.api.schemas import QueryRequest, QueryResponse
+from src.core.errors import InvalidQueryError
 from src.core.logger import logger
 from src.agents.service import generate_agent_response
 
@@ -9,6 +10,9 @@ router = APIRouter()
 @router.post("/agent/chat", response_model=QueryResponse)
 async def query_agent(payload: QueryRequest, request: Request):
     try:
+        if not payload.query or not payload.query.strip():
+            raise InvalidQueryError("Query must not be empty.")
+
         logger.info(
             "query.started",
             session_id=payload.session_id,
@@ -35,6 +39,10 @@ async def query_agent(payload: QueryRequest, request: Request):
             trace_url=response["trace_url"],
         )
 
+    except HTTPException:
+        raise
+    except InvalidQueryError:
+        raise HTTPException(status_code=400, detail="Query must not be empty.")
     except Exception as e:
         logger.error(
             "query.failed",
@@ -42,4 +50,3 @@ async def query_agent(payload: QueryRequest, request: Request):
             error=str(e),
         )
         raise HTTPException(status_code=500, detail="Failed to process query")
-

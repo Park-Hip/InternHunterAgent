@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -126,6 +127,30 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("42", result)
         self.assertNotIn("Showing", result)
+
+    @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_generate_sql_runs_off_the_event_loop_thread(
+        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import query_clean_jobs
+
+        loop_thread_ident = threading.get_ident()
+        observed_idents: list[int] = []
+
+        def fake_generate_sql(question: str) -> str:
+            observed_idents.append(threading.get_ident())
+            return "SELECT title FROM clean_jobs"
+
+        mock_generate_sql.side_effect = fake_generate_sql
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql="SELECT title FROM clean_jobs")
+        mock_execute_validated_sql.return_value = []
+
+        await query_clean_jobs.ainvoke({"question": "jobs in Hanoi"})
+
+        self.assertEqual(len(observed_idents), 1)
+        self.assertNotEqual(observed_idents[0], loop_thread_ident)
 
 
 if __name__ == "__main__":

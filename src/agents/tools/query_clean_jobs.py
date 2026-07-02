@@ -64,7 +64,7 @@ def _build_answer(table: TableArtifact) -> str:
 @tool
 async def query_clean_jobs(question: str) -> str:
     """Answer questions about internship job postings stored in the clean_jobs table."""
-    sql = generate_sql(question)
+    sql = await asyncio.to_thread(generate_sql, question)
     validation = validate_sql(sql)
 
     if not validation.valid:

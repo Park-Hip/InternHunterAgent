@@ -8,7 +8,7 @@ from src.agents.runtime.provider import AgentProvider
 from src.core.config import settings
 from src.services.query.executor import ExecutorError, execute_validated_sql
 from src.services.query.models import TableArtifact
-from src.services.query.row_bound import enforce_fetch_limit
+from src.services.query.row_bound import resolve_bounds
 from src.services.query.sql_validator import validate_sql
 from src.services.query.table_formatter import format_rows
 
@@ -71,12 +71,12 @@ async def query_clean_jobs(question: str) -> str:
         return f"I can't run that query: {validation.reason}"
 
     max_rows = load_max_rows()
-    bounded_sql = enforce_fetch_limit(validation.sql, max_rows + 1)
+    bounds = resolve_bounds(validation.sql, max_rows)
 
     try:
-        rows = await asyncio.to_thread(execute_validated_sql, bounded_sql)
+        rows = await asyncio.to_thread(execute_validated_sql, bounds.sql)
     except ExecutorError:
         return "I couldn't retrieve the requested data due to a database error. Please try again later."
 
-    table = format_rows(rows, max_rows)
+    table = format_rows(rows, bounds.display_cap)
     return _build_answer(table)

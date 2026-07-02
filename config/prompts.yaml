@@ -53,7 +53,7 @@ prompts:
     - Output exactly one read-only SELECT statement.
     - Do not use markdown code fences.
     - Do not add commentary or explanation, only the SQL statement.
-    - Always include a LIMIT clause.
+    - Add a LIMIT clause ONLY when the user explicitly asks for a specific number of results (e.g. "top 5", "show me 3 jobs"). Otherwise do NOT add a LIMIT — the system applies its own result cap.
     - For "how many / count" questions, use SELECT COUNT(*) rather than selecting rows — return the number, not a list.
     - Never SELECT the description column. It is a large blob and is not needed to filter, count, or list; full descriptions are retrieved separately. You may still filter on it with description ILIKE '%term%'.
     - When listing rows, always SELECT id as the first column so results can be fetched in detail later. Do NOT select id for COUNT/aggregate/GROUP BY queries.

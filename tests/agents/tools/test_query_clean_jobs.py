@@ -112,6 +112,29 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("there are more", result)
         self.assertNotIn("long blob", result)
 
+    @patch("src.agents.tools.query_clean_jobs.load_max_rows")
+    @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_explicit_user_requested_count_is_honored_without_truncation_notice(
+        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql, mock_load_max_rows
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import query_clean_jobs
+
+        sql = "SELECT id, title FROM clean_jobs ORDER BY salary_max DESC NULLS LAST LIMIT 2"
+        mock_generate_sql.return_value = sql
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql=sql)
+        mock_execute_validated_sql.return_value = [
+            {"id": 1, "title": "Data Analyst Intern"},
+            {"id": 2, "title": "ML Intern"},
+        ]
+        mock_load_max_rows.return_value = 20
+
+        result = await query_clean_jobs.ainvoke({"question": "show me the top 2 highest-paying internships"})
+
+        self.assertIn("Found 2 result(s)", result)
+        self.assertNotIn("there are more", result)
+
     @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
     @patch("src.agents.tools.query_clean_jobs.validate_sql")
     @patch("src.agents.tools.query_clean_jobs.generate_sql")

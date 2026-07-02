@@ -515,3 +515,16 @@ Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the foll
 * Fuzzy/edit-distance matching or a new dependency.
 * District/ward normalization.
 * `normalize/vietnamworks.py` or the DN-1 `raw_jobs` redesign.
+
+#### T0010.7: Honor explicit user-requested result counts (LIMIT intent)
+**Objective:** Let `query_clean_jobs` return exactly N rows when the user explicitly asks for a count ("top 3", "show me 5"), instead of always applying the system cap. T0010.5 made the system strip any model-written `LIMIT` and own the row bound, which fixed the "Found 20" honesty bug but as a side effect also silently discarded a genuine user-requested count. This requires the prompt to stop emitting an arbitrary default `LIMIT` so that a `LIMIT`'s presence becomes a trustworthy signal of explicit user intent.
+**In Scope:**
+* `config/prompts.yaml` `sql_generation`: replace "Always include a LIMIT clause." with guidance to add `LIMIT` only for an explicit user-requested count; otherwise omit it and let the system apply its own cap.
+* `src/services/query/row_bound.py`: replace `enforce_fetch_limit` with `resolve_bounds(sql, max_rows) -> FetchBounds` (local `NamedTuple` with `sql` and `display_cap`). Parses the trailing `LIMIT` value; if present and `<= max_rows`, honors it exactly (fetch and display exactly that count); otherwise falls back to the existing `max_rows + 1` fetch sentinel with `display_cap = max_rows`. Always returns SQL ending in a `LIMIT`.
+* `src/agents/tools/query_clean_jobs.py`: call `resolve_bounds(validation.sql, max_rows)` and pass `bounds.sql` to the executor and `bounds.display_cap` to `format_rows`.
+* Tests: `tests/services/query/test_row_bound.py` rewritten for `resolve_bounds`; `tests/agents/tools/test_query_clean_jobs.py` gains a test asserting an honored explicit count answers "Found N result(s)" with no truncation notice, while the existing unbounded-truncation test is unchanged.
+* Docs: `MVP_Technical_Design.md` §2.3 updated to describe the honor-explicit-count behavior.
+**Out of Scope:**
+* Hinting that more results exist beyond an honored explicit count (e.g. "here are the 3 you asked for — more exist") — logged as a follow-up in `docs/Known_Issues.md`.
+* Changes to `_build_answer`, `TableArtifact`, `format_rows`'s signature, the validator, the executor, or `get_job_details`.
+* New config keys or model/provider caching.

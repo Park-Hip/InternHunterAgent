@@ -5,6 +5,7 @@ class TableArtifact(BaseModel):
     columns: list[str]
     rows: list[list[object]]
     row_count: int
+    truncated: bool = False
 
 
 class QueryRefusal(BaseModel):

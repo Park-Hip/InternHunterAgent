@@ -108,7 +108,8 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
         result = await query_clean_jobs.ainvoke({"question": "jobs in Hanoi"})
 
-        self.assertIn("Showing 2 of 3", result)
+        self.assertIn("Showing the first 2 results", result)
+        self.assertIn("there are more", result)
         self.assertNotIn("long blob", result)
 
     @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")

@@ -19,6 +19,7 @@ class TableArtifactTests(unittest.TestCase):
                 "columns": ["title", "company"],
                 "rows": [["Data Analyst", "Acme"]],
                 "row_count": 1,
+                "truncated": False,
             },
         )
 
@@ -43,6 +44,7 @@ class QueryToolResultTests(unittest.TestCase):
                     "columns": ["title"],
                     "rows": [["ML Intern"]],
                     "row_count": 1,
+                    "truncated": False,
                 },
                 "refusal": None,
             },

@@ -486,6 +486,22 @@ Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the foll
 * Caching/reusing the `AgentProvider`/`ChatGroq` model instance (backlog cleanup in `Code_Review_Notes.md`).
 * The per-request Langfuse `flush()` on the event loop (bug 7) — separate low-priority follow-up.
 
+#### T0010.5: Honest match-count / truncation notice for `query_clean_jobs`
+**Objective:** Stop `query_clean_jobs` from implying a truncated result is the complete total. `table_formatter.format_rows` set `row_count = len(rows)`, but `rows` had already been capped by the **model's own** `LIMIT` in the generated SQL — so when the model wrote `LIMIT 20` and 50 rows really matched, the tool reported "Found 20 result(s)" and never showed a truncation notice, implying 20 was the total (`docs/Known_Issues.md`, Query tooling & SQL safety, bug 5).
+**In Scope:**
+* New `src/services/query/row_bound.py::enforce_fetch_limit(sql, fetch_limit)`: strips any trailing model-written `LIMIT`/`OFFSET` and appends a system-owned `LIMIT`, so the tool — not the model — controls how many rows are fetched.
+* In `src/agents/tools/query_clean_jobs.py`: after `validate_sql` succeeds, rewrite the validated SQL via `enforce_fetch_limit(validation.sql, max_rows + 1)` and execute that; the `+1` row is a sentinel for "more matches exist."
+* `TableArtifact` (`src/services/query/models.py`) gains `truncated: bool = False`.
+* `table_formatter.format_rows` now treats `row_count` as the **displayed** count (not a fabricated total) and sets `truncated = len(rows) > max_rows`.
+* `_build_answer` wording: truncated → "Showing the first N results — there are more matches. Narrow your search…"; otherwise → "Found N result(s)…", unchanged for scalar/`COUNT(*)` results.
+* Tests: `tests/services/query/test_row_bound.py` (new), `tests/services/query/test_table_formatter.py` and `tests/agents/tools/test_query_clean_jobs.py` updated to the new +1-sentinel semantics.
+* Docs: `MVP_Technical_Design.md` §2.3, `Known_Issues.md` bug 5, `Code_Review_Notes.md` bug 5 index + doc-insight §2 updated to reflect the fix.
+**Out of Scope:**
+* Computing an exact total via `COUNT(*)` (rejected Option B) — no exact total is available for list queries in this MVP.
+* Pagination/`OFFSET` support — stripping a model-written `OFFSET` is acceptable for MVP.
+* Wiring in `QueryToolResult`/`QueryRefusal` (separate backlog item, `Code_Review_Notes.md`).
+* Changes to `config/prompts.yaml`, the validator's table/denylist checks, the executor's transaction logic, or `get_job_details`.
+
 #### T0010.6: Word-boundary matching in `normalize_location`
 **Objective:** Make `normalize_location` (`src/services/ingestion/transform.py`) recognize a known city that appears *inside* a free-form address, not only when the whole string is exactly an alias key. It currently does `city_alias_map.get(lower)` on the whole source string, so a real address like `"12 Nguyen Hue, District 1, Ho Chi Minh City"` never canonicalizes and falls through to `"Other"` (`docs/Known_Issues.md`, Data & ingestion / database schema, bug 6).
 **In Scope:**

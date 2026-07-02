@@ -29,9 +29,8 @@ do **not** maintain fix-history here; strike through / update the entry in `Know
    DN-1 redesign still open) → `Known_Issues.md` § Resolved.
 4. ~~[MED] Denylist matched keywords inside string literals.~~ **Fixed** →
    `Known_Issues.md` § Resolved.
-5. **[MED] OPEN — "Showing N of M" can understate the true match count.** `format_rows` sets
-   `row_count = len(rows)` (post the model's own `LIMIT`), not the true total → `Known_Issues.md`
-   § Query tooling & SQL safety.
+5. ~~[MED] "Showing N of M" can understate the true match count.~~ **Fixed by T0010.5** →
+   `Known_Issues.md` § Resolved.
 6. ~~[MED] `normalize_location` only matches on an exact full-string lookup.~~ **Fixed by
    T0010.6** → `Known_Issues.md` § Resolved.
 7. ~~[LOW] Per-request `client.flush()` on the event loop.~~ **Fixed** →
@@ -113,10 +112,12 @@ do **not** maintain fix-history here; strike through / update the entry in `Know
    the code did **not** enforce (bug 1). Option (a) was taken — `sql_validator` now enforces a
    true single-table allowlist — so the doc's claim is accurate again; no doc edit needed.
 
-2. **`MVP_Technical_Design.md` §2.3 "carry the true match count".** The bounded-output
-   description should note the current limitation (bug 5): the true total is only known for
-   `COUNT(*)` queries; for list queries `row_count` is post-`LIMIT`. Worth an explicit
-   "known limitation" line so the honesty claim isn't overstated.
+2. ~~**`MVP_Technical_Design.md` §2.3 "carry the true match count".**~~ **Resolved by T0010.5**
+   (2026-07-02): §2.3 now describes the honest Option-A behavior — the system owns the fetch
+   bound (`row_bound.py::enforce_fetch_limit`, fetching `max_rows + 1` regardless of the
+   model's `LIMIT`) and reports a "there are more — narrow your search" notice without
+   fabricating an exact total; a true total is explicitly out of scope for list queries
+   (would require a separate `COUNT(*)`).
 
 3. **T0010.1 is closed, with one residual gap.** `query.py` returns 400 for empty input
    and re-raises `HTTPException`; `core/errors.py::InvalidQueryError` exists and is wired;

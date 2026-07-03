@@ -4,6 +4,9 @@ from src.services.query.models import ValidationResult
 
 ALLOWED_TABLE = "clean_jobs"
 
+# Write / DDL / procedure verbs that must never appear as a bare word (token) in a
+# query. Matched case-insensitively against whole words only (see TOKEN_PATTERN), so
+# `UPDATE` is caught but `updated_at` is not.
 DENYLISTED_KEYWORDS = {
     "INSERT",
     "UPDATE",
@@ -21,10 +24,27 @@ DENYLISTED_KEYWORDS = {
     "CALL",
 }
 
+# Blocks Postgres catalog/metadata tables: any identifier starting with `pg_`
+# (pg_tables, pg_class, ...) or the literal `information_schema`. `\b` = word boundary.
 SYSTEM_TABLE_PATTERN = re.compile(r"\bpg_\w*|\binformation_schema\b", re.IGNORECASE)
+
+# One SQL identifier/word: a letter or underscore, then letters/digits/underscores.
+# Used to split the statement into whole words for the denylist check.
 TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+# A single-quoted string literal, allowing escaped quotes (`''` inside). Used to blank
+# out literal contents before the table check so a value like '%raw_jobs%' or a company
+# name isn't mistaken for a table reference.
 STRING_LITERAL_PATTERN = re.compile(r"'(?:[^']|'')*'")
+
+# The table name that immediately follows a FROM or JOIN keyword. Captures the
+# identifier (group 1), which may be schema-qualified (letters/digits/underscore/dot).
+# Every captured name must equal ALLOWED_TABLE.
 TABLE_REF_PATTERN = re.compile(r"\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_.]*)", re.IGNORECASE)
+
+# A comma-separated table list in the FROM clause — `FROM clean_jobs, raw_jobs` — the
+# old-style (implicit) join. Matches FROM, a table (optionally with an alias), then a
+# comma. TABLE_REF_PATTERN alone can't catch the second table here, so this guards it.
 FROM_CLAUSE_LIST_PATTERN = re.compile(
     r"\bFROM\s+[A-Za-z_][A-Za-z0-9_.]*(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s*,", re.IGNORECASE
 )
@@ -35,35 +55,62 @@ def _invalid(sql: str, reason: str) -> ValidationResult:
 
 
 def validate_sql(sql: str) -> ValidationResult:
+    """Deterministically vet an LLM-generated SQL string before it is executed.
+
+    This is the trust boundary: the query only runs if every check below passes.
+    Returns a ValidationResult (valid + cleaned sql, or invalid + a reason). The
+    checks run in order and reject on the first failure:
+
+      1. Not empty.
+      2. Single statement only (no `;` separating statements).
+      3. Read-only: must begin with SELECT.
+      4. No SQL comment sequences (`--`, `/* */`) — a common injection vector.
+      5. No write/DDL/procedure verbs (DENYLISTED_KEYWORDS).
+      6. No Postgres system/catalog tables (SYSTEM_TABLE_PATTERN).
+      7. Single-table allowlist: every table referenced must be `clean_jobs`.
+
+    Read-only enforcement at execution time is handled separately by the executor's
+    `SET TRANSACTION READ ONLY`; this layer restricts *scope* (which statements and
+    which tables the agent may reach).
+    """
+    # Normalize: drop surrounding whitespace and a single trailing semicolon.
     statement = sql.strip().rstrip(";").strip()
 
     if not statement:
         return _invalid(statement, "Empty SQL is not allowed")
 
+    # A `;` still present after stripping one trailing `;` means multiple statements.
     if ";" in statement:
         return _invalid(statement, "Multiple statements are not allowed")
 
+    # Read-only gate: only SELECT queries are permitted.
     if not statement.upper().startswith("SELECT"):
         return _invalid(statement, "Only SELECT statements are allowed")
 
+    # Comments can hide a second statement or smuggle keywords past the token scan.
     if "--" in statement or "/*" in statement or "*/" in statement:
         return _invalid(statement, "Comment sequences are not allowed")
 
-    tokens = {token.upper() for token in TOKEN_PATTERN.findall(statement)}
+    # Blank out string-literal contents so a literal that happens to contain a denylisted
+    # word or a table name (e.g. WHERE description ILIKE '%replace%') isn't mistaken for
+    # a real keyword or table reference by the checks below.
+    masked = STRING_LITERAL_PATTERN.sub("''", statement)
+
+    # Split into whole words and reject any that is a denylisted verb (case-insensitive).
+    tokens = {token.upper() for token in TOKEN_PATTERN.findall(masked)}
     forbidden = sorted(DENYLISTED_KEYWORDS & tokens)
     if forbidden:
         return _invalid(statement, f"Unsafe keyword(s) detected: {', '.join(forbidden)}")
 
+    # Block access to Postgres catalog/metadata tables.
     if SYSTEM_TABLE_PATTERN.search(statement):
         return _invalid(statement, "Access to system tables is not allowed")
 
-    # Masking is scoped to this table check only; it does not fix the denylist
-    # keyword false-positives on string literals (bug 4, tracked separately).
-    masked = STRING_LITERAL_PATTERN.sub("''", statement)
-
+    # Reject old-style comma joins (`FROM clean_jobs, raw_jobs`).
     if FROM_CLAUSE_LIST_PATTERN.search(masked):
         return _invalid(statement, "Query may only reference the clean_jobs table")
 
+    # Reject if any FROM/JOIN target is a table other than clean_jobs (e.g. JOIN raw_jobs).
     table_refs = TABLE_REF_PATTERN.findall(masked)
     if any(ref.lower() != ALLOWED_TABLE for ref in table_refs):
         return _invalid(statement, "Query may only reference the clean_jobs table")

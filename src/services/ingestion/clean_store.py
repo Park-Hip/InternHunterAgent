@@ -34,6 +34,15 @@ def replace_clean_jobs(jobs: Iterable[NormalizedJob]) -> int:
         }
         for j in jobs
     ]
+
+    # Postgres ON CONFLICT DO UPDATE cannot affect the same key twice in one
+    # statement, so a batch with a duplicate (source, external_id) would crash.
+    # Dedup here, keeping the last occurrence (last-write-wins for a refresh).
+    deduped: dict[tuple[object, object], dict] = {}
+    for row in rows:
+        deduped[(row["source"], row["external_id"])] = row
+    rows = list(deduped.values())
+
     if not rows:
         return 0
 

@@ -65,7 +65,7 @@ The MVP ships two tools:
 
   **Bounded retrieval: structured query vs. detail fetch.** *Status: planned (T0009.10–T0009.11).* Real ingestion (T0009) turned `clean_jobs` into ~50 verbose rows, each carrying a large merged `description` blob. A single tool that returned every column of every matched row then overflowed the model's token budget on broad queries (the Groq TPM `413` recorded in `Known_Issues.md`). The fix is architectural, not a bigger model — it splits retrieval along the **intent** the user actually has:
 
-  - **`query_clean_jobs`** (structured query — list, count, aggregate). Runs the LLM→validated-SQL pipeline above, but the tool boundary enforces two deterministic guarantees the model cannot override (the `Full_Design_Document.md` §4 bounded-output law): it **never projects the `description` blob** into its result, and it **caps result rows** at `agent.query.max_rows` (config), reporting "showing N of M" when it truncates. It serves scalar/aggregate results (`COUNT`, `AVG`, `MIN/MAX`, small `GROUP BY`) as naturally as row lists.
+  - **`query_clean_jobs`** (structured query — list, count, aggregate). Runs the LLM→validated-SQL pipeline above, but the tool boundary enforces two deterministic guarantees the model cannot override (the `Full_Design_Document.md` §4 bounded-output law): it **never projects the `description` blob** into its result, and it **caps result rows** at `agent.query.max_rows` (config). The fetch bound is system-owned, not model-owned: `src/services/query/row_bound.py::resolve_bounds(sql, max_rows)` inspects any trailing `LIMIT` the model wrote and treats it as a signal of *explicit user intent* — the prompt (`config/prompts.yaml` `sql_generation`) only asks the model to emit a `LIMIT` when the user explicitly requested a specific count (e.g. "top 5"). If that `LIMIT` is within the safety cap (`<= max_rows`), it is honored exactly: the tool fetches and displays exactly that many rows, with no truncation notice. Otherwise (no `LIMIT`, or one above the cap) the tool falls back to fetching `max_rows + 1` rows as a truncation sentinel and displays `max_rows`, so unbounded/broad queries still get an honest "there are more matches — narrow your search" notice. It deliberately does **not** compute an exact total for list queries (a precise count would require a separate `COUNT(*)` — rejected as unnecessary MVP complexity). It serves scalar/aggregate results (`COUNT`, `AVG`, `MIN/MAX`, small `GROUP BY`) as naturally as row lists, passing those through untouched (no truncation notice applies to scalar results).
   - **`get_job_details(ids)`** (detail — full prose). A **deterministic, parameterized** fetch by id (no LLM, no SQL generation — ids carry no natural-language ambiguity), returning the full `description` for a **few** jobs (`agent.query.max_detail_ids`). This is the *only* path that surfaces description prose to the model.
 
   This makes the **`description` field three-moded**: *filter-only* inside `query_clean_jobs` (Postgres reads it via `ILIKE` server-side; the text never reaches the model), *full-text* only via `get_job_details`, and *never listed* in bulk. The bridge between the two tools is the row `id` that `query_clean_jobs` returns, which the agent passes back into `get_job_details` for "tell me about that one" follow-ups. (Surrogate ids are stable within a conversation; they are not stable across an ingestion reload — the durable handle, if ever needed, is `(source, external_id)`.)
@@ -109,7 +109,7 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 
 *Provisional:* the answer-only shape is an MVP choice, not a permanent law. The future charting capability (a chart is not a string) will revisit it.
 
-*Deferred, documented:* `trace_url` is currently always `null`, and errors are not yet a typed contract (see §5).
+*Deferred, documented:* `trace_url` is currently always `null` (see §5). A minimal typed error contract landed in T0010.1 (see §5) — a blank/whitespace-only `query` now returns a clean `400`, distinct from the generic `500` for internal failures.
 
 ---
 
@@ -134,15 +134,16 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 
 ## 5. Error Handling & Resilience
 
-*Status: target design (partially implemented)*
+*Status: target design (mostly implemented, T0010.1)*
 
 The Spec's quality bar (`MVP_Spec.md` §3) requires that imperfect input or a backend hiccup yields a clean response, never a crash and never a leaked internal error. The target behavior:
 
 - **Tool/DB failures** are caught inside the tool and returned as a safe natural-language message (implemented for `query_clean_jobs`: validator refusals and `ExecutorError` both degrade gracefully).
 - **Tracing failures** never affect the request path — tracing is a no-op when unavailable (implemented).
-- **Unexpected runtime failures** are mapped by the service/route to a safe response without exposing internals.
+- **Client-input errors** are distinguished from server/provider errors (implemented, T0010.1): `src/api/routes/query.py` raises `InvalidQueryError` (`src/core/errors.py`) for a blank/whitespace-only `payload.query`, mapped to a `400 "Query must not be empty."`; genuine internal failures still map to the generic `500 "Failed to process query"` with no internals leaked.
+- **A `None`/empty runtime answer** is coerced to a safe fallback string (`FALLBACK_ANSWER` in `src/agents/service.py`) rather than failing Pydantic validation — implemented, T0010.1.
 
-*Deferred, documented:* the route currently collapses every failure into a generic `500`, so a bad request body, a model timeout, and an internal bug are indistinguishable to the client. A **typed error contract** (distinguishing client-input errors from server/provider errors, with a consistent response shape) is a recognized refinement, not part of this MVP. It is recorded here so the gap is intentional, not forgotten.
+*Deferred, documented:* the typed error contract above is intentionally minimal (a single `4xx`/`5xx` split, not a broader error taxonomy), matching the MVP scope. One known residual gap: `react_agent._extract_answer` currently *raises* on empty/unreadable final content rather than returning it, so the `FALLBACK_ANSWER` coercion in `service.py` is not yet reachable on that path — an empty agent answer still surfaces as a `500` today. Tracked in `Known_Issues.md` (API layer).
 
 ---
 

@@ -112,6 +112,32 @@ class RunIngestionTests(unittest.TestCase):
         mock_replace_clean.assert_called_once_with([])
         mock_normalize.assert_not_called()
 
+    @patch("src.services.ingestion.loader.replace_clean_jobs")
+    @patch("src.services.ingestion.loader.upsert_raw_postings")
+    def test_malformed_payload_is_skipped_not_fatal(
+        self,
+        mock_upsert_raw: MagicMock,
+        mock_replace_clean: MagicMock,
+    ) -> None:
+        from src.services.ingestion.loader import run_ingestion
+
+        good_a = _make_posting("job-001")
+        bad = _make_posting("job-002", payload={"jobTitle": "Missing jobId"})
+        good_b = _make_posting("job-003")
+        mock_upsert_raw.return_value = 3
+        mock_replace_clean.return_value = 2
+
+        result = run_ingestion(source=StubSource([good_a, bad, good_b]))
+
+        self.assertEqual(result["fetched"], 3)
+        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(result["clean_loaded"], 2)
+        loaded = mock_replace_clean.call_args[0][0]
+        self.assertEqual(len(loaded), 2)
+        self.assertTrue(all(isinstance(job, NormalizedJob) for job in loaded))
+        loaded_external_ids = {job.external_id for job in loaded}
+        self.assertEqual(loaded_external_ids, {"job-001", "job-003"})
+
     def test_import_has_no_side_effects(self) -> None:
         # Simply importing the module must not raise or trigger DB/network
         import importlib

@@ -438,3 +438,93 @@
 * Filter-based detail (detail is strictly id-driven; the agent chains `query_clean_jobs` → `get_job_details`).
 * Multi-row prose scans / semantic search (future RAG).
 * Any change to the ingestion pipeline or schema.
+
+### T0010: Milestone 10 - Pre-deploy Hardening
+Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the follow-on per-module logic review (see `docs/Known_Issues.md` and `docs/Code_Review_Notes.md`). These are the real *code* items standing between the current base and a clean deploy; deploy-time config (secret checklist, stale-config rebuild) and model-variance items (Evaluation milestone) are explicitly **not** in this milestone. Keep each fix MVP-minimal — do not build an error framework or a message-normalization layer. T0010.1/.2 are the audit fixes; T0010.3 (SQL single-table allowlist) and T0010.4 (blocking LLM call) are the two highest-severity items from the per-module review.
+
+#### T0010.1: Graceful answer + minimal typed error contract
+**Objective:** Stop two failure modes from collapsing into an opaque `500 "Failed to process query"`. (1) The runtime can yield `answer=None`; `service.py` types its return as `dict[str, str | None]` and `query.py` passes `response['answer']` straight into `QueryResponse(answer=...)`, which requires a non-null `str` — so a null answer raises Pydantic validation and is swallowed into a generic 500 (`Known_Issues.md`, API layer, C1). (2) Every exception, regardless of cause, becomes the same 500, giving the client no signal (C5). Fix both with the smallest change that keeps the API answer-only and leaks no internals (`Full_Design_Document.md` §4).
+**In Scope:**
+* In `src/agents/service.py`: guarantee `answer` is always a non-empty `str` — coerce a `None`/empty runtime result into a safe user-facing fallback (e.g. "I couldn't produce an answer for that — please try rephrasing.") so `QueryResponse` validation can never fail on `answer`. Tighten the return type accordingly.
+* In `src/api/routes/query.py`: distinguish, at minimum, a clean `4xx` for invalid client input from a `5xx` for genuine internal failure — MVP-minimal (a couple of exception cases, not a taxonomy). Preserve the answer-only response shape and the "no raw SQL / internals / stack traces to the client" rule; keep the existing full server-side error log.
+* Tests: a `None`/empty runtime answer returns `200` with the fallback message (not a 500); an internal failure returns a safe generic message with no leaked internals; the answer-only response shape (`answer`, `session_id`, `trace_id`, `trace_url`) is unchanged.
+* Manual check: `POST /api/v1/agent/chat` on a normal question still returns a natural-language answer; a forced failure path returns a clean error, not a stack trace.
+**Out of Scope:**
+* Retry/backoff, structured client-facing error codes, or a general error-handling framework.
+* Fixing `trace_url` always being `None` (C4) — separate low-priority follow-up.
+* Any model-behavior/honesty items (Evaluation milestone).
+
+#### T0010.2: Tolerate non-string model content in SQL generation
+**Objective:** Make `generate_sql` robust to the message-content type. `src/agents/tools/query_clean_jobs.py:41` calls `.strip()` on `model.invoke(...).content`, whose type is `str | list[...]`; a list-content reply (structured/tool blocks) would raise `AttributeError` (`Known_Issues.md`, Agent runtime, C2). It works with Groq text replies today, but the latent crash should be closed — and doing so also clears one of the three residual `mypy` errors.
+**In Scope:**
+* In `src/agents/tools/query_clean_jobs.py`: coerce the model response content to plain text before `.strip()` (handle both `str` and a list of content parts) via a tiny local helper; behavior for the normal `str` case is unchanged.
+* Tests: a mocked model returning list-style content is handled without error and yields the expected SQL string; the existing `str`-content path still passes.
+* Manual check: `uv run mypy` no longer reports the `query_clean_jobs.py` `union-attr` error (down to 2 residual, benign).
+**Out of Scope:**
+* Any broader message/content normalization elsewhere in the runtime.
+* Prompt or SQL-generation logic changes beyond the content coercion.
+
+#### T0010.3: Enforce a true single-table allowlist in the SQL validator
+**Objective:** Close the read-scope escape in `src/services/query/sql_validator.py` and restore the invariant the docs already promise. The validator only checks `"clean_jobs" in statement.lower()` — a *substring* presence test — so a query that also references another table passes, e.g. `SELECT * FROM clean_jobs JOIN raw_jobs USING (source, external_id)` or `SELECT ... FROM clean_jobs, raw_jobs ...`. `JOIN`/`,` are not denylisted, so the agent can read `raw_jobs` (verbatim JSONB payloads) or any other table alongside `clean_jobs` (`docs/Known_Issues.md`, Query tooling & SQL safety, bug 1). `SET TRANSACTION READ ONLY` still blocks writes, so this is a read-scope escape — but it defeats the curated-schema boundary and **contradicts the stated invariant** in `Full_Design_Document.md` §6 ("allowlists the *table* `clean_jobs`") and §3. Fix the code so the doc's guarantee holds; do not soften the doc.
+**In Scope:**
+* In `src/services/query/sql_validator.py`: after the existing SELECT-only / no-comments / single-statement / denylist checks, enforce that the statement references **only** `clean_jobs` — reject any query that names another table (any additional table reference, `JOIN`, or comma-separated `FROM` list). Keep it MVP-minimal and deterministic (the validator is the trust boundary); a rejection returns the same refusal path as other unsafe queries.
+* Guard against the string-literal false-positive class where practical: a table-name check must not trip on a table name appearing inside a string literal or column alias (coordinate with bug 4's tokenization if touched — but do **not** scope-creep bug 4's fix in here; a comment noting the interaction is enough).
+* Tests: `clean_jobs`-only `SELECT`s (including with `WHERE`/`ORDER BY`/`LIMIT`) still pass; a `JOIN raw_jobs`, a comma `FROM clean_jobs, raw_jobs`, and a bare `SELECT * FROM raw_jobs` are all rejected; existing validator tests still pass.
+* Manual check: ask the agent a question that would tempt a join to `raw_jobs`; confirm the tool refuses rather than returning raw payload columns.
+**Out of Scope:**
+* Fixing the denylist string-literal false-positives (bug 4) — its own follow-up.
+* Adding `statement_timeout` / executor hardening (backlog in `Code_Review_Notes.md`).
+* A full SQL-parser dependency — keep the check lightweight; do not add a parsing library unless the lightweight check proves unworkable (report back if so).
+
+#### T0010.4: Offload the blocking SQL-generation LLM call off the event loop
+**Objective:** Stop `query_clean_jobs` from blocking the async event loop during SQL generation. The tool is `async` and correctly offloads the DB call via `asyncio.to_thread(execute_validated_sql, …)`, but `generate_sql(question)` runs `model.invoke(...)` **synchronously on the event loop** (`docs/Known_Issues.md`, Query tooling & SQL safety, bug 2). That Groq round-trip (seconds) blocks *every* concurrent request and the health probe for its duration — a real concurrency regression under load.
+**In Scope:**
+* In `src/agents/tools/query_clean_jobs.py`: run the synchronous `generate_sql` off the event loop — `await asyncio.to_thread(generate_sql, question)` (or switch to `model.ainvoke` if cleaner). Behavior of the generated SQL is unchanged; only the scheduling changes.
+* Tests: the async tool still returns the expected result on the normal path (a mocked `generate_sql`/model is not called on the running loop thread) and existing `query_clean_jobs` tests pass.
+* Manual check: with the app running, fire two concurrent `POST /api/v1/agent/chat` requests and confirm `GET /api/v1/health` still responds promptly during them (does not stall for the LLM duration).
+**Out of Scope:**
+* Caching/reusing the `AgentProvider`/`ChatGroq` model instance (backlog cleanup in `Code_Review_Notes.md`).
+* The per-request Langfuse `flush()` on the event loop (bug 7) — separate low-priority follow-up.
+
+#### T0010.5: Honest match-count / truncation notice for `query_clean_jobs`
+**Objective:** Stop `query_clean_jobs` from implying a truncated result is the complete total. `table_formatter.format_rows` set `row_count = len(rows)`, but `rows` had already been capped by the **model's own** `LIMIT` in the generated SQL — so when the model wrote `LIMIT 20` and 50 rows really matched, the tool reported "Found 20 result(s)" and never showed a truncation notice, implying 20 was the total (`docs/Known_Issues.md`, Query tooling & SQL safety, bug 5).
+**In Scope:**
+* New `src/services/query/row_bound.py::enforce_fetch_limit(sql, fetch_limit)`: strips any trailing model-written `LIMIT`/`OFFSET` and appends a system-owned `LIMIT`, so the tool — not the model — controls how many rows are fetched.
+* In `src/agents/tools/query_clean_jobs.py`: after `validate_sql` succeeds, rewrite the validated SQL via `enforce_fetch_limit(validation.sql, max_rows + 1)` and execute that; the `+1` row is a sentinel for "more matches exist."
+* `TableArtifact` (`src/services/query/models.py`) gains `truncated: bool = False`.
+* `table_formatter.format_rows` now treats `row_count` as the **displayed** count (not a fabricated total) and sets `truncated = len(rows) > max_rows`.
+* `_build_answer` wording: truncated → "Showing the first N results — there are more matches. Narrow your search…"; otherwise → "Found N result(s)…", unchanged for scalar/`COUNT(*)` results.
+* Tests: `tests/services/query/test_row_bound.py` (new), `tests/services/query/test_table_formatter.py` and `tests/agents/tools/test_query_clean_jobs.py` updated to the new +1-sentinel semantics.
+* Docs: `MVP_Technical_Design.md` §2.3, `Known_Issues.md` bug 5, `Code_Review_Notes.md` bug 5 index + doc-insight §2 updated to reflect the fix.
+**Out of Scope:**
+* Computing an exact total via `COUNT(*)` (rejected Option B) — no exact total is available for list queries in this MVP.
+* Pagination/`OFFSET` support — stripping a model-written `OFFSET` is acceptable for MVP.
+* Wiring in `QueryToolResult`/`QueryRefusal` (separate backlog item, `Code_Review_Notes.md`).
+* Changes to `config/prompts.yaml`, the validator's table/denylist checks, the executor's transaction logic, or `get_job_details`.
+
+#### T0010.6: Word-boundary matching in `normalize_location`
+**Objective:** Make `normalize_location` (`src/services/ingestion/transform.py`) recognize a known city that appears *inside* a free-form address, not only when the whole string is exactly an alias key. It currently does `city_alias_map.get(lower)` on the whole source string, so a real address like `"12 Nguyen Hue, District 1, Ho Chi Minh City"` never canonicalizes and falls through to `"Other"` (`docs/Known_Issues.md`, Data & ingestion / database schema, bug 6).
+**In Scope:**
+* In `src/services/ingestion/transform.py`: for each address source, match every `city_alias_map` key against the source as a whole word / bounded phrase (case-insensitive, `\b`-anchored regex per key, precompiled or built per call) rather than a raw `in` substring check, so short aliases (`hn`, `hcm`) cannot match inside unrelated words (`john`, `technology`) and the punctuated key `tp. hcm` still matches correctly.
+* Preserve exact-token behavior (`"Hà Nội"` → `"Hanoi"`), dedup of canonical cities, empty/whitespace-source skipping, and the `"Other"` fallback when nothing matches.
+* Deterministic multi-city order when a source contains more than one city (documented in-code: leftmost match position within a source, `city_alias_map` YAML order as a tiebreak).
+* Tests: direct unit tests for `normalize_location` (free-form address → canonical city; a string where a short alias appears only inside a larger word → `"Other"`; two cities in one string → both present, deterministic order; exact clean token still works; empty/unknown → `"Other"`); keep the existing `test_normalize_vietnamworks.py` location tests green.
+* Manual check: `normalize_location("12 Nguyen Hue, District 1, Ho Chi Minh City")` → `"Ho Chi Minh City"`; `normalize_location("Some Street, Ba Dinh, HN")` → `"Hanoi"`; a false-positive probe (a word containing `hn`/`hcm` with no real city) → `"Other"`.
+**Out of Scope:**
+* Editing `config/ingestion.yaml` (no new cities/aliases).
+* Fuzzy/edit-distance matching or a new dependency.
+* District/ward normalization.
+* `normalize/vietnamworks.py` or the DN-1 `raw_jobs` redesign.
+
+#### T0010.7: Honor explicit user-requested result counts (LIMIT intent)
+**Objective:** Let `query_clean_jobs` return exactly N rows when the user explicitly asks for a count ("top 3", "show me 5"), instead of always applying the system cap. T0010.5 made the system strip any model-written `LIMIT` and own the row bound, which fixed the "Found 20" honesty bug but as a side effect also silently discarded a genuine user-requested count. This requires the prompt to stop emitting an arbitrary default `LIMIT` so that a `LIMIT`'s presence becomes a trustworthy signal of explicit user intent.
+**In Scope:**
+* `config/prompts.yaml` `sql_generation`: replace "Always include a LIMIT clause." with guidance to add `LIMIT` only for an explicit user-requested count; otherwise omit it and let the system apply its own cap.
+* `src/services/query/row_bound.py`: replace `enforce_fetch_limit` with `resolve_bounds(sql, max_rows) -> FetchBounds` (local `NamedTuple` with `sql` and `display_cap`). Parses the trailing `LIMIT` value; if present and `<= max_rows`, honors it exactly (fetch and display exactly that count); otherwise falls back to the existing `max_rows + 1` fetch sentinel with `display_cap = max_rows`. Always returns SQL ending in a `LIMIT`.
+* `src/agents/tools/query_clean_jobs.py`: call `resolve_bounds(validation.sql, max_rows)` and pass `bounds.sql` to the executor and `bounds.display_cap` to `format_rows`.
+* Tests: `tests/services/query/test_row_bound.py` rewritten for `resolve_bounds`; `tests/agents/tools/test_query_clean_jobs.py` gains a test asserting an honored explicit count answers "Found N result(s)" with no truncation notice, while the existing unbounded-truncation test is unchanged.
+* Docs: `MVP_Technical_Design.md` §2.3 updated to describe the honor-explicit-count behavior.
+**Out of Scope:**
+* Hinting that more results exist beyond an honored explicit count (e.g. "here are the 3 you asked for — more exist") — logged as a follow-up in `docs/Known_Issues.md`.
+* Changes to `_build_answer`, `TableArtifact`, `format_rows`'s signature, the validator, the executor, or `get_job_details`.
+* New config keys or model/provider caching.

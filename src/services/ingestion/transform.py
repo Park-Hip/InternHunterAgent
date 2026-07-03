@@ -74,10 +74,22 @@ def classify_role(title: str, job_function_children: list[dict] | None) -> str:
 def normalize_location(*address_sources: str) -> str:
     """Normalise one or more raw address strings to canonical city names.
 
-    Each source is lowercased and looked up in ingestion_yaml["city_alias_map"].
-    Multiple distinct canonical cities are returned comma-separated in stable
-    (encounter) order. Unknown or empty sources are skipped; returns "Other"
-    when no source maps to a known city.
+    Each alias key in ingestion_yaml["city_alias_map"] is matched against each
+    source as a whole word / bounded phrase (case-insensitive, via a
+    \\b-anchored regex per key), not merely as an exact full-string match or a
+    raw substring. This lets a known city be recognised inside a free-form
+    address (e.g. "12 Nguyen Hue, District 1, Ho Chi Minh City") while still
+    preventing short aliases like "hn" or "hcm" from matching inside unrelated
+    words (e.g. "john", "technology").
+
+    Multiple distinct canonical cities are returned comma-separated, ordered
+    by first appearance: sources are scanned in the order given, and within a
+    source, matches are ordered by the position they start at (leftmost
+    first), with city_alias_map's YAML declaration order used as a stable
+    tiebreak for two keys that start at the same position (e.g. "ho chi minh"
+    vs. "ho chi minh city" both starting at index 0).
+    Unknown or empty sources are skipped; returns "Other" when no source maps
+    to a known city.
     """
     city_alias_map: dict[str, str] = settings.ingestion_yaml["city_alias_map"]
     canonical_cities: list[str] = []
@@ -85,9 +97,14 @@ def normalize_location(*address_sources: str) -> str:
     for source in address_sources:
         if not source or not source.strip():
             continue
-        lower = source.lower().strip()
-        canonical = city_alias_map.get(lower)
-        if canonical and canonical not in seen:
-            seen.add(canonical)
-            canonical_cities.append(canonical)
+        matches: list[tuple[int, int, str]] = []
+        for key_order, (key, canonical) in enumerate(city_alias_map.items()):
+            pattern = r"\b" + re.escape(key) + r"\b"
+            match = re.search(pattern, source, re.IGNORECASE)
+            if match:
+                matches.append((match.start(), key_order, canonical))
+        for _, _, canonical in sorted(matches):
+            if canonical not in seen:
+                seen.add(canonical)
+                canonical_cities.append(canonical)
     return ", ".join(canonical_cities) if canonical_cities else "Other"

@@ -52,6 +52,25 @@ class ReplaceCleanJobsTests(unittest.TestCase):
         self.assertEqual(count, 3)
 
     @patch("src.services.ingestion.clean_store.session_factory")
+    def test_intra_batch_duplicate_key_is_deduped_last_wins(self, mock_session_factory: MagicMock) -> None:
+        # Same (source, external_id) twice would crash Postgres ON CONFLICT DO
+        # UPDATE ("cannot affect row a second time"); dedup keeps the last row.
+        session = _mock_session(mock_session_factory)
+        jobs = [
+            _make_job(external_id="dup", title="First"),
+            _make_job(external_id="dup", title="Second"),
+        ]
+        count = replace_clean_jobs(jobs)
+        self.assertEqual(count, 1)
+
+        insert_stmt = session.execute.call_args_list[1].args[0]
+        compiled = insert_stmt.compile(
+            dialect=__import__("sqlalchemy.dialects.postgresql", fromlist=["dialect"]).dialect()
+        )
+        titles = [v for k, v in compiled.params.items() if k.startswith("title")]
+        self.assertEqual(titles, ["Second"])
+
+    @patch("src.services.ingestion.clean_store.session_factory")
     def test_executes_truncate_then_insert_on_conflict(self, mock_session_factory: MagicMock) -> None:
         session = _mock_session(mock_session_factory)
         replace_clean_jobs([_make_job()])

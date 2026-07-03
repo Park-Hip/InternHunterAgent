@@ -8,6 +8,7 @@ from src.agents.runtime.provider import AgentProvider
 from src.core.config import settings
 from src.services.query.executor import ExecutorError, execute_validated_sql
 from src.services.query.models import TableArtifact
+from src.services.query.row_bound import resolve_bounds
 from src.services.query.sql_validator import validate_sql
 from src.services.query.table_formatter import format_rows
 
@@ -45,11 +46,10 @@ def _build_answer(table: TableArtifact) -> str:
     if table.row_count == 0:
         return "No matching internship job postings were found."
 
-    displayed = len(table.rows)
-    if displayed < table.row_count:
+    if table.truncated:
         header = (
-            f"Showing {displayed} of {table.row_count} matching result(s) "
-            f"(narrow your search to see the rest). Columns: {', '.join(table.columns)}."
+            f"Showing the first {table.row_count} results — there are more matches. "
+            f"Narrow your search to see the rest. Columns: {', '.join(table.columns)}."
         )
     else:
         header = f"Found {table.row_count} result(s) with columns: {', '.join(table.columns)}."
@@ -70,10 +70,13 @@ async def query_clean_jobs(question: str) -> str:
     if not validation.valid:
         return f"I can't run that query: {validation.reason}"
 
+    max_rows = load_max_rows()
+    bounds = resolve_bounds(validation.sql, max_rows)
+
     try:
-        rows = await asyncio.to_thread(execute_validated_sql, validation.sql)
+        rows = await asyncio.to_thread(execute_validated_sql, bounds.sql)
     except ExecutorError:
         return "I couldn't retrieve the requested data due to a database error. Please try again later."
 
-    table = format_rows(rows, load_max_rows())
+    table = format_rows(rows, bounds.display_cap)
     return _build_answer(table)

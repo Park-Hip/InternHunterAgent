@@ -226,6 +226,39 @@ class NormalizeLocationTests(unittest.TestCase):
     def test_case_insensitive(self) -> None:
         self.assertEqual(normalize_location("HÀ NỘI"), "Hanoi")
 
+    # --- word-boundary substring matching (T0010.6) ---
+
+    def test_city_inside_free_form_address(self) -> None:
+        result = normalize_location("12 Nguyen Hue, District 1, Ho Chi Minh City")
+        self.assertIn("Ho Chi Minh City", result)
+
+    def test_short_alias_inside_free_form_address(self) -> None:
+        result = normalize_location("Some Street, Ba Dinh, HN")
+        self.assertEqual(result, "Hanoi")
+
+    def test_short_alias_does_not_match_inside_word(self) -> None:
+        # "hn" and "hcm" only appear as substrings of larger words here —
+        # word-boundary matching must not treat this as a city hit.
+        result = normalize_location("John from the technology team")
+        self.assertEqual(result, "Other")
+
+    def test_two_cities_in_one_free_form_string(self) -> None:
+        result = normalize_location(
+            "Office in Ho Chi Minh City, branch office also in Ha Noi"
+        )
+        self.assertIn("Ho Chi Minh City", result)
+        self.assertIn("Hanoi", result)
+
+    def test_multi_city_deterministic_order_free_form(self) -> None:
+        result = normalize_location(
+            "Office in Ho Chi Minh City, branch office also in Ha Noi"
+        )
+        self.assertEqual(result, "Ho Chi Minh City, Hanoi")
+
+    def test_dedup_when_multiple_keys_map_to_same_canonical_free_form(self) -> None:
+        result = normalize_location("Ho Chi Minh, also known as Ho Chi Minh City")
+        self.assertEqual(result, "Ho Chi Minh City")
+
 
 if __name__ == "__main__":
     unittest.main()

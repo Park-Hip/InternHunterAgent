@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0010.4-async-sql-gen
+feature/t0011.1-judge-spike-harness-scaffold
 
 ## Completed tickets
 - T0000: Milestone 0 - Foundation (FastAPI, logging, health endpoint)
@@ -41,6 +41,7 @@ feature/t0010.4-async-sql-gen
 - T0010.4: Offload the blocking SQL-generation LLM call off the event loop — `query_clean_jobs` (async) already offloaded the DB call via `asyncio.to_thread`, but called `generate_sql(question)` synchronously on the event loop; that Groq round-trip (seconds) blocked every concurrent request and the `/health` probe for its duration. `src/agents/tools/query_clean_jobs.py` now runs `sql = await asyncio.to_thread(generate_sql, question)` — a single-call-site scheduling change; `generate_sql`'s internals, the generated SQL, and validation/execution/formatting/answer behavior are all unchanged. Added `test_generate_sql_runs_off_the_event_loop_thread` to `tests/agents/tools/test_query_clean_jobs.py` (captures `threading.get_ident()` inside the mocked `generate_sql` and asserts it differs from the test coroutine's thread — proves the call runs off the event-loop thread); existing 6 tests unchanged and pass. 211 tests total pass. `uv run ruff check src tests` clean; `uv run mypy` unchanged at 3 pre-existing residuals (no new errors, including the known `query_clean_jobs.py:41` `.content.strip()` union-attr error, which is T0010.2's scope, not touched here).
 - Bugfix (code review bug 4): Fixed the SQL validator's denylist false-positives on string literals — `src/services/query/sql_validator.py`'s `DENYLISTED_KEYWORDS` token scan previously ran against the raw statement, so a denylisted word appearing inside a string literal (e.g. `WHERE description ILIKE '%replace%'`, `company_name = 'Merge'`) was wrongly rejected. The existing `STRING_LITERAL_PATTERN` masking (already used for the table-allowlist check) now runs before the denylist scan and the token scan reads the masked statement; the comment-sequence check (`--`, `/*`, `*/`) still runs on the unmasked statement. A denylisted verb outside a literal is still rejected. Added 3 tests to `tests/services/query/test_sql_validator.py` (two valid-now literal cases, one verb-outside-literal still-rejected case) — 22 tests in that file, all pass; 214 tests total pass. `uv run ruff check src tests` clean; `uv run mypy` unchanged at 3 pre-existing residuals (no new errors).
 - Bugfix (code review bug 3): Fixed ingestion aborting inconsistently on one bad payload — `src/services/ingestion/loader.py::run_ingestion` previously normalized the whole fetch batch in one list comprehension, so a single malformed `raw_payload` (e.g. missing `jobId`) raised and skipped `replace_clean_jobs` entirely, leaving `clean_jobs` stale while `raw_jobs` was already refreshed. Normalization now runs per-record inside a `try/except`, skipping and logging (`ingestion.normalize_skipped`, with `source`/`external_id`) any bad payload; the returned summary dict gains a `skipped` count, and `main()` now logs the completed summary via `logger.info("ingestion.completed", **result)` instead of `print` (this is a scheduled job). Added `test_malformed_payload_is_skipped_not_fatal` to `tests/services/ingestion/test_loader.py` (3-posting batch, 1 malformed → 2 loaded into `clean_jobs`, `skipped == 1`). 215 tests total pass. `uv run ruff check src tests` clean; `uv run mypy` unchanged at 3 pre-existing residuals (no new errors). DN-1's broader "transform from `raw_jobs` instead of the fetch batch" redesign remains a separate, larger deploy-milestone item (unchanged, not in scope here).
+- T0011.1: Judge JSON-reliability spike + DeepEval harness scaffold — picks and wires the LLM judge the rest of Milestone 11 will build metrics on top of, before any golden/metric work exists. `scripts/eval_judge_spike.py` (throwaway, ruff-excluded) builds each Groq candidate named in `research/deepeval-sql-agent-eval-planning.md` §11.4 (`openai/gpt-oss-120b`, `qwen/qwen3.6-27b`) as a minimal `DeepEvalBaseLLM`, runs a real `GEval` metric against a hard-coded `LLMTestCase`, and prints a PASS/FAIL verdict per candidate plus a final recommendation; both candidates returned schema-valid JSON, so no Gemini fallback and no `instructor` coercion were needed. New `evals/` package (harness, isolated from `src/`): `evals/judge.py::DeepEvalJudge` (the `DeepEvalBaseLLM` wrapper, mirroring the spike's shape) and `build_judge()` (reads `eval.judge.provider`/`model`/`temperature` from `config/settings.yaml`, builds a `ChatGroq`, raises `ValueError` on a missing/empty key or unsupported provider — mirrors `provider.py`/`load_max_rows`'s defensive style); `evals/test_judge_scaffold.py` (one hard-coded `LLMTestCase` + low-threshold `GEval`, proven to pass via `build_judge()`). `config/settings.yaml` gained a new top-level `eval.judge` section (`provider: groq`, `model: openai/gpt-oss-120b`, `temperature: 0.0`) — the `agent:` block is untouched. Added `deepeval` to the dev dependency group only (`uv add --group dev deepeval`); prod `[project].dependencies` unchanged. `.gitignore` now excludes the `deepeval test run` local cache/telemetry (`.deepeval/`, `.deepeval-cache.json`). Verified: `uv run python scripts/eval_judge_spike.py` prints both PASS lines and the recommendation; `PYTHONUTF8=1 uv run deepeval test run evals/test_judge_scaffold.py` exits 0 (Windows needs `PYTHONUTF8=1` — the CLI's `rich` output otherwise crashes on a `⚠` glyph under `cp1252`, logged in `Known_Issues.md`); a deliberately bogus `eval.judge.model` reproducibly fails the same scaffold test (0/1 passed), then reverted. `uv run pytest` (231 passed — `evals/test_judge_scaffold.py` is incidentally also collected by plain pytest and makes one live Groq call, logged as a follow-up), `uv run mypy` (3 pre-existing residuals only, none in `evals/`), and `uv run ruff check` (clean) all stay green. `src/agents/**`, prompts/ingestion config, and existing tests untouched — the harness treats the agent as a black box. Judge choice, the `gpt-oss-120b` score/reason quirk observed in the spike, and the Windows console/CLI sharp edges logged in `Known_Issues.md` under "Evaluation harness (T0011.1)".
 
 ## In progress
 - Milestone 9 (T0009: data ingestion) closed; T0009.9, T0009.10, and T0009.11 follow-ups also closed. The structured-query-vs-detail split (`query_clean_jobs` → `get_job_details`) is now complete. Milestone 10 (T0010: pre-deploy hardening) in progress — T0010.1 (C1/C5), T0010.3 (SQL single-table allowlist), and T0010.4 (blocking LLM call) closed; code review bugs 3 (ingestion per-record guard) and 4 (denylist string-literal false positives) are also fixed; C4 (`trace_url`) remains open; T0010.2 (non-string model content) remains open. Remaining lower-priority items: the freshness-honesty and hidden-salary-phrasing determinism issues logged in `Known_Issues.md`, and the id-in-SQL nudge's best-effort nature (also logged there).
@@ -60,8 +61,13 @@ feature/t0010.4-async-sql-gen
 |   `-- langfuse/
 |       `-- README.md
 |-- scripts/
+|   |-- eval_judge_spike.py
 |   |-- init_db.sql
 |   `-- reset_db.sql
+|-- evals/
+|   |-- __init__.py
+|   |-- judge.py
+|   `-- test_judge_scaffold.py
 |-- docs/
 |-- src/
 |   |-- agents/
@@ -147,6 +153,7 @@ Dev/test dependencies declared in `pyproject.toml` under `[dependency-groups] de
 - `pytest-mock>=3.15.1`
 - `ruff>=0.15.20`
 - `mypy>=2.1.0`
+- `deepeval>=4.0.7` (T0011.1 — eval/judge tooling only, not in the prod runtime image)
 
 `anyio` and `langsmith` are transitive (pulled in by `fastapi`/`langchain`), not declared directly.
 
@@ -158,6 +165,8 @@ Practical commands from the repository layout:
 - `uv run pytest`
 - `uv run ruff check .` (lint; config in `pyproject.toml` `[tool.ruff]`, `scripts/` spikes excluded)
 - `uv run mypy` (type check `src`; config in `pyproject.toml` `[tool.mypy]`, pydantic plugin enabled)
+- `uv run python scripts/eval_judge_spike.py` (throwaway judge JSON-reliability spike, T0011.1)
+- `PYTHONUTF8=1 uv run deepeval test run evals/test_judge_scaffold.py` (harness scaffold; `PYTHONUTF8=1` needed on Windows — see `Known_Issues.md`)
 - `docker compose up -d` (root `docker-compose.yml`: Postgres + API, port `5433` host-side)
 - `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql` (routine, non-destructive schema init/no-op)
 - `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/reset_db.sql` (destructive — drops and recreates both tables; use only when the schema shape changes, then re-ingest)
@@ -166,11 +175,15 @@ Practical commands from the repository layout:
 ## Build/test status
 - Command run: `uv run pytest`
 - Result: passed
-- Summary: `215 passed, 4 subtests passed in 1.64s`
+- Summary: `231 passed` (includes `evals/test_judge_scaffold.py`, incidentally collected by plain pytest — see `Known_Issues.md`)
 - Command run: `uv run mypy`
-- Result: `Found 3 errors in 3 files (checked 40 source files)` — all 3 are pre-existing, documented residuals (`checkpointer.py:25`, `middleware.py:48`, `query_clean_jobs.py:41`); unchanged by the bug-3 fix (no new errors).
-- Command run: `uv run ruff check src tests`
+- Result: `Found 3 errors in 3 files (checked 41 source files)` — all 3 are pre-existing, documented residuals (`checkpointer.py:25`, `middleware.py:48`, `query_clean_jobs.py:41`); unchanged by T0011.1 (no new errors; `evals/` is outside `[tool.mypy] files = ["src"]`).
+- Command run: `uv run ruff check`
 - Result: `All checks passed!`
+- Command run: `uv run python scripts/eval_judge_spike.py`
+- Result: both Groq candidates PASS; recommended `provider=groq model=openai/gpt-oss-120b`.
+- Command run: `PYTHONUTF8=1 uv run deepeval test run evals/test_judge_scaffold.py`
+- Result: `1 passed` — `Pass Rate: 100.0%`.
 
 ## Known issues
 Known issues, risks, and out-of-scope follow-ups now live in their own living register:
@@ -180,6 +193,6 @@ is captured in [`Code_Review_Notes.md`](Code_Review_Notes.md); its bugs are also
 `Known_Issues.md`.
 
 ## Next recommended ticket
-Milestone 9 (data ingestion) is closed, and the structured-query-vs-detail split is now complete (T0009.10 bounded `query_clean_jobs`, T0009.11 `get_job_details`). T0010.1, T0010.3, and T0010.4 are closed; code review bugs 3 (ingestion per-record guard) and 4 (denylist string-literal false positives) are also fixed. T0010.2 (non-string model content in SQL generation) remains the last open T0010 sub-ticket. Recommended next: T0010.2, then author tickets for the next milestone against `Full_Design_Document.md` / `MVP_Spec.md` §6 (resume/embedding retrieval, charts, evaluation harness), or address the lower-priority prompt-tuning follow-ups (freshness-honesty, hidden-salary phrasing, id-in-SQL nudge best-effort) logged in `Known_Issues.md`.
+Milestone 9 (data ingestion) is closed, and the structured-query-vs-detail split is complete (T0009.10 bounded `query_clean_jobs`, T0009.11 `get_job_details`). Milestone 10 (pre-deploy hardening) is essentially complete through T0010.7. T0011.1 (judge spike + harness scaffold) is closed: the judge is picked (`groq openai/gpt-oss-120b`) and `evals/judge.py::build_judge()` proves it works end-to-end. **Recommended next: the following T0011 sub-ticket** (golden Q&A set + real metric stack wired to the agent, per `research/deepeval-sql-agent-eval-planning.md` §11.2/§11.3's seam-based attachment plan) — not yet ticketed. **Ingestion Deploy Readiness remains T0012 (deferred)**, its full design captured in `research/deployment-research-plan.md` §4.1–§4.2, to be ticketed once the evaluation baseline lands. **F1 (agent's own `llama-3.3-70b-versatile` retirement, shutdown 2026-08-16) remains urgent and independent of T0011** — see `Known_Issues.md`.
 
-Remaining future phases (resume/embedding retrieval, charts, typed error contract, evaluation harness) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.
+Other future phases (resume/embedding retrieval, charts, typed error contract) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.

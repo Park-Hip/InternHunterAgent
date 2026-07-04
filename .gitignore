@@ -4,3 +4,5 @@ __pycache__/
 .claude
 .pytest_cache
 .uv-cache
+.deepeval/
+.deepeval-cache.json

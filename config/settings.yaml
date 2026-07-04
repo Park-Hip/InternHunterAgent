@@ -12,3 +12,9 @@ agent:
   query:
     max_rows: 20
     max_detail_ids: 3
+
+eval:
+  judge:
+    provider: groq
+    model: openai/gpt-oss-120b
+    temperature: 0.0

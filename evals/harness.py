@@ -30,8 +30,10 @@ from deepeval.test_case.conversational_test_case import ConversationalTestCase
 from deepeval.tracing.trace_test_manager import trace_testing_manager
 
 from evals.judge import build_judge
+from evals.writeback import write_scores
 from src.agents.runtime.factory import agent_factory
 from src.agents.runtime.prompts import load_schema_context
+from src.agents.tracing.langfuse import get_langfuse_client, get_langfuse_handler
 
 QUERY_TOOL_NAME = "query_clean_jobs"
 GENERATE_SQL_SPAN_NAME = "generate_sql"
@@ -111,6 +113,7 @@ class SeamRun:
     tools_called: list[str] = field(default_factory=list)
     tool_output: str | None = None
     sql_text: str | None = None
+    trace_id: str | None = None
 
 
 def _find_span(spans: list[dict], **matches) -> dict | None:
@@ -158,15 +161,29 @@ def _llm_output_text(span: dict | None) -> str | None:
     return None
 
 
-async def _run_turn(agent, message: str, config: dict) -> SeamRun:
+async def _run_turn(agent, message: str, config: dict, span_name: str) -> SeamRun:
     trace_testing_manager.test_name = "three-seam-eval"
     trace_testing_manager.test_dict = None
+    lf_handler = get_langfuse_handler()
+    trace_id: str | None = None
     try:
-        response = await agent.ainvoke(
-            {"messages": [HumanMessage(content=message)]},
-            config=config,
-        )
-        trace_dict = await trace_testing_manager.wait_for_test_dict()
+        if lf_handler is not None:
+            lf = get_langfuse_client()
+            with lf.start_as_current_observation(name=span_name) as span:
+                trace_id = span.trace_id
+                run_config = {**config, "callbacks": [*config.get("callbacks", []), lf_handler]}
+                response = await agent.ainvoke(
+                    {"messages": [HumanMessage(content=message)]},
+                    config=run_config,
+                )
+                trace_dict = await trace_testing_manager.wait_for_test_dict()
+        else:
+            # unchanged existing path — DeepEval handler only, no Langfuse
+            response = await agent.ainvoke(
+                {"messages": [HumanMessage(content=message)]},
+                config=config,
+            )
+            trace_dict = await trace_testing_manager.wait_for_test_dict()
     finally:
         trace_testing_manager.test_name = None
         trace_testing_manager.test_dict = None
@@ -185,13 +202,16 @@ async def _run_turn(agent, message: str, config: dict) -> SeamRun:
         tools_called=[name for name in tools_called if name],
         tool_output=str(tool_output) if tool_output is not None else None,
         sql_text=_llm_output_text(sql_span),
+        trace_id=trace_id,
     )
 
 
 async def run_single_turn_case(case: dict) -> SeamRun:
     agent = agent_factory()
     handler = CallbackHandler(name=case["id"])
-    return await _run_turn(agent, case["input"], {"callbacks": [handler]})
+    return await _run_turn(
+        agent, case["input"], {"callbacks": [handler]}, span_name=f"eval-{case['id']}"
+    )
 
 
 async def run_conversational_case(case: dict) -> tuple[list[SeamRun], ConversationalTestCase]:
@@ -203,9 +223,14 @@ async def run_conversational_case(case: dict) -> tuple[list[SeamRun], Conversati
 
     runs: list[SeamRun] = []
     turns: list[Turn] = []
-    for message in case["turns"]:
+    for turn_index, message in enumerate(case["turns"]):
         handler = CallbackHandler(thread_id=thread_id)
-        seam_run = await _run_turn(agent, message, {**config, "callbacks": [handler]})
+        seam_run = await _run_turn(
+            agent,
+            message,
+            {**config, "callbacks": [handler]},
+            span_name=f"eval-{thread_id}-turn-{turn_index}",
+        )
         runs.append(seam_run)
         turns.append(Turn(role="user", content=message))
         turns.append(
@@ -288,6 +313,8 @@ async def run_case(case: dict) -> dict:
     seam3_case = build_seam3_case(case, final_run)
     results["seam3_synthesis"] = score(seam3_metrics(), seam3_case)
 
+    scores_written = write_scores(final_run.trace_id, results)
+
     return {
         "case_id": case["id"],
         "answer": final_run.answer,
@@ -295,4 +322,6 @@ async def run_case(case: dict) -> dict:
         "sql_text": final_run.sql_text,
         "conversation": conversation,
         "results": results,
+        "trace_id": final_run.trace_id,
+        "scores_written": scores_written,
     }

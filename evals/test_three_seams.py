@@ -30,6 +30,9 @@ async def test_three_seams(case: dict) -> None:
                 line += f" (error: {payload['error']})"
             print(line)
 
+    if result["trace_id"] is not None:
+        print(f"  scores written to trace {result['trace_id']}: {result['scores_written']}")
+
     # Report-only: T0011.5 owns threshold calibration and pass/fail gating.
     # A model producing a poor/empty answer is exactly what this harness is
     # here to measure, not something that should fail the pytest run.

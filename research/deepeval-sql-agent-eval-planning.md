@@ -430,8 +430,109 @@ The following decisions are not resolved by this research document. They require
 
 ---
 
+## 11. InternHunter-Specific Grounding & Version-Pinned Findings (recorded 2026-07-03)
+
+Sections 1–10 are a **generic** SQL-agent planner (written before the eval stage was
+deferred). This section grounds them in **our actual stack and code** and pins the
+2026 external facts that §§5, 7, 9 got wrong or left open. Read this section first when
+planning T0011 — where it conflicts with §§1–10, this section wins.
+
+### 11.1 Verified stack (as of this date)
+
+- `langchain>=1.3.1`, `langchain-groq` (**agent LLM = Groq `llama-3.3-70b-versatile`**,
+  `config/settings.yaml:4`), `langfuse>=4.6.1`. **DeepEval is not yet a dependency; there
+  is no `.github/workflows/`** — the CI gate is greenfield.
+- The agent exposes **three tools**, not the single `query_database` §§3/6 assume:
+  `query_clean_jobs(question: str)`, `get_job_details(ids: list[int])`, `time`.
+
+### 11.2 The two-LLM architecture — the SQL is hidden (reshapes metric attachment)
+
+`query_clean_jobs` does **not** take SQL. The ReAct agent passes a **natural-language
+question**; inside the tool, `generate_sql()` makes a **separate nested `model.invoke()`**
+(`src/agents/tools/query_clean_jobs.py:34-42`) that translates NL→SQL. The SQL is then
+handled by **deterministic** code (`validate_sql`, `resolve_bounds`, `format_rows`,
+`_build_answer`). Three seams, not one:
+
+| Seam | Decides | LLM? | Metric attaches to |
+|---|---|---|---|
+| 1. Routing | which tool + the NL question arg | ReAct agent LLM | agent tool-call span → `ToolCorrectness` + light `ArgumentCorrectness` on the **NL question** |
+| 2. NL→SQL | the SQL string | **nested `generate_sql` `model.invoke`** — invisible to the ReAct trace | the SQL is only reachable by **`@observe`-instrumenting `generate_sql`** → SQL `ArgumentCorrectness`/GEval-SQL live here |
+| 3. Synthesis | final user-facing text | ReAct agent LLM | final output → `TaskCompletion` + honesty (see 11.3) |
+
+**Instrumentation decision (grounded):** use DeepEval's **`CallbackHandler`** (passed into
+LangChain's `config`) for the agent trace + tool/LLM spans — no app rewrite. For seam 2,
+**do not** rely on `next_llm_span` — it is *one-shot on the first LLM span in the block*,
+which is the routing call, not the SQL call. Instead wrap `generate_sql` with **`@observe`**
+(confirmed to nest under the callback) and stage the SQL metric with
+`update_current_span()`. §3's premise that "the SQL argument is the most failure-prone
+component" is correct for us, but the argument lives at seam 2, not on the tool call.
+
+### 11.3 Honesty = Faithfulness + GEval (two halves)
+
+The MVP_Spec §3 honesty bar splits cleanly:
+- **`FaithfulnessMetric`** with `actual_output` = final answer and `retrieval_context` =
+  the tool's returned string catches **fabrication/contradiction** (invented freshness,
+  hidden-salary claims not in the data). This is a stronger, proven fit than the
+  hand-written GEval §3 assumed.
+- **`GEval`** is still required for **omission** — the truncation caveat is *code-emitted*
+  by `_build_answer` (`query_clean_jobs.py:49-55`); the risk is the agent **stripping** it
+  at seam 3. Faithfulness only catches contradictions, not dropped hedges.
+- Note: much honesty is already **code-guaranteed** (deterministic validator + truncation
+  header). The eval targets the model's *rewriting* at seam 3, not the guardrails.
+
+### 11.4 Judge model — §5's "Llama-3-70b" recommendation is DEAD
+
+- Groq **deprecated `llama-3.3-70b-versatile` on 2026-06-17; shutdown 2026-08-16**
+  (free/developer tier). Replacements Groq names: **`openai/gpt-oss-120b`** or
+  **`qwen/qwen3.6-27b`**.
+- **Risk:** `openai/gpt-oss-120b` has **reported structured-output regressions** on Groq
+  (`response_format: json_schema` / `strict:true` ignored, returns free-form text;
+  LangChain issue #34155). DeepEval metrics **hard-fail without reliable JSON**. Do **not**
+  assume it works — T0011 must run a **live JSON-reliability spike** before committing the
+  judge. Fallbacks in priority order: (a) wrap in `DeepEvalBaseLLM` + **`instructor`/LiteLLM**
+  to force schema by reparse; (b) `qwen/qwen3.6-27b` judge; (c) Gemini free-tier (§5 backup).
+- Judge wrapper path (confirmed): custom **`DeepEvalBaseLLM`**; smaller/non-OpenAI judges
+  need `instructor` on LiteLLM for valid JSON.
+
+### 11.5 Langfuse 4.x score writeback — pattern survives v4
+
+`langfuse.create_score(name=, value=, trace_id=, data_type=, comment=)` **still exists in
+v4** (OTEL-based). Use `data_type="BOOLEAN"` for honesty pass/fail, numeric for GEval.
+Idempotency for re-runs via `score_id = f"{trace_id}-{metric}"`. **Open seam:** getting the
+Langfuse `trace_id` onto the DeepEval test case — a known dataset-run gotcha (Langfuse
+discussion #8556); verify during implementation.
+
+### 11.6 CI recipe (greenfield) + the double-Groq-load problem
+
+`deepeval test run` drops into a GH Actions `.yml`; secret = **`GROQ_API_KEY`**; Confident
+AI is **optional** — skip it (no `CONFIDENT_API_KEY`). Flags: **`-c`** reads the local cache
+to skip unchanged cases (rate-limit relief); **`-n`** parallelizes but **raises concurrent
+Groq calls**. Critical for us: **both the agent *and* the judge run on Groq**, so one eval
+case = routing call + nested SQL call + judge calls, all against the same free-tier RPM.
+Keep `-n` small and confirm one full 15–25-case run clears the free tier before wiring the
+gate.
+
+### 11.7 Follow-ups surfaced (out of T0011 scope — report separately per CLAUDE.md §1)
+
+- **F1 — URGENT, product-breaking:** the **agent** is pinned to `llama-3.3-70b-versatile`
+  (`config/settings.yaml:4`), which **shuts down 2026-08-16 (~6 weeks out)**. Needs its own
+  migration ticket. Caution: migrating the agent to `gpt-oss-120b` may hit the **same
+  structured-output/tool-calling bug** (11.4) in the agent's own tool loop — validate on
+  migration. This is independent of eval and should not wait for T0011.
+- **F2:** No CI infrastructure exists; T0011 introduces the first `.github/workflows/`.
+
+---
+
 ## Sources
 
+- DeepEval component-level evals: https://deepeval.com/docs/evaluation-component-level-llm-evals
+- DeepEval LangChain integration: https://deepeval.com/integrations/frameworks/langchain
+- DeepEval custom LLM judges: https://deepeval.com/guides/guides-using-custom-llms
+- DeepEval Faithfulness / Hallucination: https://deepeval.com/docs/metrics-faithfulness , https://deepeval.com/docs/metrics-hallucination
+- DeepEval CI/CD: https://deepeval.com/docs/evaluation-unit-testing-in-ci-cd
+- Groq model deprecations (llama-3.3-70b-versatile → 2026-08-16): https://console.groq.com/docs/deprecations
+- Groq structured outputs + gpt-oss-120b caveat: https://console.groq.com/docs/structured-outputs , https://github.com/langchain-ai/langchain/issues/34155
+- Langfuse v4 scores via SDK: https://langfuse.com/docs/evaluation/evaluation-methods/scores-via-sdk
 - DeepEval documentation: https://deepeval.com/docs/introduction
 - DeepEval agent evaluation guide: https://deepeval.com/guides/guides-ai-agent-evaluation
 - DeepEval agent metrics reference: https://deepeval.com/guides/guides-ai-agent-evaluation-metrics

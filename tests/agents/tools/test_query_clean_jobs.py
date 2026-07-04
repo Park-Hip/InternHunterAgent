@@ -163,7 +163,7 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
         loop_thread_ident = threading.get_ident()
         observed_idents: list[int] = []
 
-        def fake_generate_sql(question: str) -> str:
+        def fake_generate_sql(question: str, config=None) -> str:
             observed_idents.append(threading.get_ident())
             return "SELECT title FROM clean_jobs"
 

@@ -1,7 +1,7 @@
 agent:
   provider: groq
   groq:
-    model: llama-3.3-70b-versatile
+    model: qwen/qwen3.6-27b
     temperature: 0.2
     max_tokens: 1024
     timeout: 30
@@ -18,3 +18,5 @@ eval:
     provider: groq
     model: openai/gpt-oss-120b
     temperature: 0.0
+  fixture:
+    database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval

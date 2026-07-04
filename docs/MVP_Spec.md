@@ -4,15 +4,15 @@
 
 ## 1. Purpose & Vision
 
-InternHunterAgent helps a job seeker find and understand internship opportunities by **talking to an agent** instead of scrolling listings. The user asks about internships in plain language, refines the question naturally, and gets answers they can trust because every answer is grounded in real posting data — not the model's imagination.
+InternHunterAgent helps a job seeker find and understand **AI/Data job opportunities — internships and full roles alike** — by **talking to an agent** instead of scrolling listings. The user asks about postings in plain language, refines the question naturally, and gets answers they can trust because every answer is grounded in real posting data — not the model's imagination.
 
-The MVP exists to prove one thing well: **a trustworthy, conversational front door to internship data.** Everything richer — resumes, recommendations, charts, live job feeds — builds on that foundation and comes later.
+The MVP exists to prove one thing well: **a trustworthy, conversational front door to real AI/Data job-posting data** (internships included). Everything richer — resumes, recommendations, charts, live job feeds — builds on that foundation and comes later.
 
 ## 2. What the MVP Must Be Able to Do
 
 These are the capabilities that define the MVP. They are written as things a user can observe, independent of how they are built.
 
-- **Answer real job questions.** The agent answers questions about internship postings (titles, companies, tech stacks, descriptions, counts, filters) using actual stored data. It never fabricates a posting or a detail.
+- **Answer real job questions.** The agent answers questions about AI/Data job postings (titles, companies, tech stacks, descriptions, counts, filters — including whether a posting is an internship) using actual stored data. It never fabricates a posting or a detail.
 - **Hold a conversation.** A user can ask an initial question and then refine it naturally — "only the Python ones," "which of those are remote," "who posted the first one" — without restating earlier context. The agent follows the thread.
 - **Remember within a session.** Each conversation is remembered while it is happening, and conversations persist across service restarts and continue working even when the service runs more than one instance. A user who returns to a session continues where they left off.
 - **Stay safe and read-only.** The agent only reads data. It never modifies anything, and it clearly refuses requests it cannot or should not fulfil rather than guessing or doing something unsafe.
@@ -61,7 +61,7 @@ The MVP is done when all of the following are observably true:
 Intent, not commitment — the direction the product grows once the MVP is solid. Ordered roughly by priority within each track.
 
 - **Product experience:** resume upload → retrieval of similar postings via embeddings → charting and visual answers from the underlying data.
-- **Data:** replace the sample dataset with a larger one → real-time ingestion of current internship postings.
+- **Data:** replace the sample dataset with a larger one → real-time ingestion of current AI/Data job postings.
 - **Platform & operations:** evaluation harness for answer quality → a user-facing UI → managed deployment environments → ongoing prompt refinement.
 
 ## 7. Where the Details Live

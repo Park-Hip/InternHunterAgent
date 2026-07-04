@@ -2,6 +2,7 @@ import asyncio
 
 from langchain.messages import HumanMessage
 from langchain.tools import tool
+from langchain_core.runnables import RunnableConfig
 
 from src.agents.runtime.prompts import load_schema_context, load_sql_generation_prompt
 from src.agents.runtime.provider import AgentProvider
@@ -31,13 +32,14 @@ def load_max_rows() -> int:
     return max_rows
 
 
-def generate_sql(question: str) -> str:
+def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
     schema_context = load_schema_context()
     sql_generation_prompt = load_sql_generation_prompt()
     model = AgentProvider().build_model()
 
     response = model.invoke(
-        [HumanMessage(content=f"{sql_generation_prompt}\n\n{schema_context}\n\nQuestion: {question}")]
+        [HumanMessage(content=f"{sql_generation_prompt}\n\n{schema_context}\n\nQuestion: {question}")],
+        config=config,
     )
     return response.content.strip()
 
@@ -62,9 +64,9 @@ def _build_answer(table: TableArtifact) -> str:
 
 
 @tool
-async def query_clean_jobs(question: str) -> str:
+async def query_clean_jobs(question: str, config: RunnableConfig) -> str:
     """Answer questions about internship job postings stored in the clean_jobs table."""
-    sql = await asyncio.to_thread(generate_sql, question)
+    sql = await asyncio.to_thread(generate_sql, question, config)
     validation = validate_sql(sql)
 
     if not validation.valid:

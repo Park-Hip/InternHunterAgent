@@ -3,10 +3,11 @@ agent:
   groq:
     model: qwen/qwen3.6-27b
     temperature: 0.2
-    max_tokens: 1024
+    max_tokens: 2048
     timeout: 30
     max_retries: 2
     streaming: False
+    reasoning_format: hidden
   memory:
     max_messages: 20
   query:

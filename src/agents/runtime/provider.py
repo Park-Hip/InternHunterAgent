@@ -36,4 +36,5 @@ class AgentProvider:
             max_retries=groq_cfg.get("max_retries", 2),
             streaming=groq_cfg.get("streaming", False),
             groq_api_key=settings.GROQ_API_KEY,
+            reasoning_format=groq_cfg.get("reasoning_format"),
         )

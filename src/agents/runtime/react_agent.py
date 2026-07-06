@@ -49,16 +49,16 @@ class AgentRuntime:
 
     def _extract_answer(self, response: Any) -> str:
         if not isinstance(response, dict):
-            raise ValueError(f"Unexpected agent response type: {type(response).__name__}")
+            return ""
 
         messages = response.get("messages")
         if not isinstance(messages, list) or not messages:
-            raise ValueError("Agent response did not contain any messages")
+            return ""
 
         last_message = messages[-1]
         content = getattr(last_message, "content", None)
 
         if not isinstance(content, str) or not content.strip():
-            raise ValueError("Agent response did not contain a readable final answer")
+            return ""
 
         return content.strip()

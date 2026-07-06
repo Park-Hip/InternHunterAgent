@@ -695,3 +695,19 @@ T0012.4: Populate trace_url in the agent response
 * Run `uv run pytest tests/agents/runtime/test_react_agent.py tests/agents/test_service.py tests/api/test_query.py -v` and confirm all pass — `AgentRuntime.ainvoke` now returns a `trace_url` key alongside `answer`/`trace_id`, and `service.py`/the API response shape (`{answer, session_id, trace_id, trace_url}`) is unchanged.
 * **With Langfuse creds set** (`docker compose up -d`, app restarted with `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` set): `POST /api/v1/agent/chat` with `{"query": "What companies use Python?"}`. Confirm `trace_url` in the JSON response is a real URL and opening it in a browser lands on the Langfuse UI trace whose id matches the response's `trace_id`.
 * **With Langfuse creds unset**: restart the app, repeat the same request. Confirm the response is still `200` and `trace_url` is `null` (tracing disabled degrades gracefully, no 500).
+
+T0012.5: Graceful fallback instead of a 500 on an empty agent answer
+
+1. Unit-level, no network:
+   ```
+   uv run python -c "import asyncio; from unittest.mock import AsyncMock, patch; \
+   import src.agents.runtime.react_agent as r; \
+   from src.agents.service import generate_agent_response, FALLBACK_ANSWER; \
+   fa=AsyncMock(); fa.ainvoke.return_value={'messages': []}; \
+   rt=r.AgentRuntime(agent=fa); \
+   [p.start() for p in (patch.object(r,'build_langfuse_config',return_value={}), patch.object(r,'get_langfuse_handler'), patch.object(r,'get_langfuse_client',return_value=None))]; \
+   print(asyncio.run(generate_agent_response(query='hi', runtime=rt))['answer'] == FALLBACK_ANSWER)"
+   ```
+   Confirm: prints `True` — an empty-messages runtime response now degrades to the fallback answer instead of raising.
+2. Run `uv run pytest tests/agents/runtime/test_react_agent.py tests/agents/test_service.py tests/api/test_query.py -v` and confirm all pass, including the three new `_extract_answer` "returns empty string" cases and the `generate_agent_response` fallback case.
+3. (Optional, live stack) With Docker + Groq creds available: `docker compose up -d`, `POST /api/v1/agent/chat` with a normal question and confirm a real answer still returns `200`. There is no reliable way to force a live empty answer post-T0012.2 (reasoning-leak fix raised `max_tokens` and hides `<think>` content), so the deterministic unit proof above is the primary evidence.

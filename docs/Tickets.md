@@ -691,5 +691,35 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * The underlying model behavior that produces an empty answer in the first place (T0012.2 addresses qwen's specific `<think>`-leak case; other causes are out of scope here).
 * Any broader error-contract redesign beyond this one path.
 
+#### T0012.6: Coerce non-str model content before `.strip()` in `generate_sql`
+**Objective:** Remove a latent `AttributeError` on the SQL-generation path. `src/agents/tools/query_clean_jobs.py:44` calls `.strip()` on `model.invoke(...).content`, whose LangChain type is `str | list[...]`; a list-content reply (structured/tool blocks) would raise `AttributeError` at runtime rather than degrade cleanly (`Known_Issues.md`, Agent runtime & prompts, mypy-flagged 2026-07-02). This is the only remaining flagged latent code bug in the register — the other open items are perf, cosmetic, or by-design.
+**In Scope:**
+* Coerce non-str `response.content` to text before `.strip()` (e.g. join/flatten list-content parts to a string), keeping the existing `str` fast path byte-identical.
+* Tests: a mocked model reply whose `.content` is a `list[...]` block no longer raises and yields the expected SQL string; the existing `str`-content path is unchanged.
+* Manual check: existing live SQL-generation path still returns clean bare SQL (no behavior change for Groq text replies).
+**Out of Scope:**
+* Any change to which model `generate_sql` uses or how the SQL is generated — this is a content-typing guard only.
+* The benign residual mypy type-variance items (`checkpointer.py`, `middleware.py`) logged alongside this one — they are correct at runtime and left visible by design.
+
+#### T0012.7: Keep live-API eval tests out of plain `pytest` collection
+**Objective:** Stop `uv run pytest` (the standard suite) from making live Groq/Gemini network calls. Two logged findings share one root cause: `evals/test_judge_scaffold.py` and `evals/test_three_seams.py` match pytest's default `test_*.py` discovery, so a plain suite run fires a live judge call and 17 live agent cases — a source of flakiness, API cost, and multi-minute runtimes that wasn't present before T0011 (`Known_Issues.md`, Evaluation harness (T0011.1) and (T0011.6)).
+**In Scope:**
+* Add a `deepeval`/`eval` (or `live`) pytest marker to the live eval tests and register + exclude it by default (`pytest.ini`/`pyproject.toml` `addopts`), so `uv run pytest` skips them and they run only when explicitly selected (or via `deepeval test run`).
+* Verify the standard suite no longer collects the live eval files, and that the eval files still run when the marker is selected.
+* Manual check: `uv run pytest` completes without any live Groq/Gemini call and without the multi-minute `test_three_seams` delay; selecting the marker still runs them.
+**Out of Scope:**
+* Any CI workflow that would provision/run the eval suite (still deferred per T0011's out-of-scope list).
+* The Windows `PYTHONUTF8=1` console-glyph workaround — a separate logged env-var note, not a collection issue.
+
+#### T0012.8: Convert `generate_sql` to native async
+**Objective:** Replace the thread-offloaded blocking `invoke` on the SQL-generation call site with native async I/O. `generate_sql` is a synchronous `model.invoke(...)` that `query_clean_jobs` runs via `await asyncio.to_thread(generate_sql, ...)` (T0010.4); the LangChain Groq model supports `ainvoke` natively, so this parks a thread-pool worker per SQL round-trip instead of yielding the loop (`Known_Issues.md`, Query tooling & SQL safety, LOW). Correctness-safe today; a low-risk, no-new-dependency scalability cleanup.
+**In Scope:**
+* Make `generate_sql` `async def` using `await model.ainvoke(...)`, and drop the `asyncio.to_thread(generate_sql, ...)` wrapper at its `query_clean_jobs` call site (call it directly with `await`).
+* Update the fake-model/unit tests that exercise `generate_sql` to the async signature.
+* Manual check: `query_clean_jobs` still returns the same SQL/results; no thread offload remains on this path.
+**Out of Scope:**
+* Any change to the generated SQL, the prompt, or the model — scheduling-only.
+* A broader async audit of other sync call sites.
+
 ### T0013: Milestone 13 - Ingestion Deploy Readiness (DEFERRED — sequenced after T0012)
 Previously drafted as T0011, then held at T0012; its placeholder sub-tickets were removed and the milestone **re-sequenced after the Model Evaluation milestone (T0011) and the Hardening milestone (T0012)**, because its central honesty guarantee — the agent staying truthful about soft-expired (`is_active = false`) postings — depends on model behavior that must be **measured first** (T0011) and on the eval-blocking/model-behavior bugs T0012 fixes before that measurement can be trusted. The full design decisions reached on 2026-07-03 are recorded in `research/deployment-research-plan.md` §4.1–§4.2: external GitHub Actions scheduler (ingestion-only; the web-API deploy is its own later milestone); **lifecycle load** — drop the `clean_jobs` `TRUNCATE` and switch to accumulate-upsert with **time-based** `is_active` soft-expiry (`expire_after_days`); `is_active` as the one new agent-visible column with an **include-all default + always-on honesty hedge** (prompt nudge, not a hide-inactive view); **Alembic** adoption (the T0009.9 "reset is enough" rationale breaks once a deployed `raw_jobs` accumulates non-re-fetchable history); per-page fetch resilience with retry/backoff. Design references: `Code_Review_Notes.md` → DN-1; `Full_Design_Document.md` §2/§3 (the external-scheduler-vs-"no schedulers" reconciliation is pending and lands with this milestone). Sub-tickets to be authored from that record once the T0011 baseline confirms the model's honesty behavior.

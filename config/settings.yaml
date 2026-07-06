@@ -1,7 +1,7 @@
 agent:
   provider: groq
   groq:
-    model: llama-3.3-70b-versatile
+    model: qwen/qwen3.6-27b
     temperature: 0.2
     max_tokens: 1024
     timeout: 30
@@ -12,3 +12,12 @@ agent:
   query:
     max_rows: 20
     max_detail_ids: 3
+
+eval:
+  judge:
+    provider: google        # was: groq
+    model: gemini-2.5-flash  # was: openai/gpt-oss-120b
+    temperature: 0.0
+    rpm: 8                  # throttle below Gemini free-tier's ~10 RPM cap (bump to ~25 if provider reverts to groq)
+  fixture:
+    database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval

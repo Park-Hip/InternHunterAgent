@@ -236,7 +236,117 @@ Sources:
 - [Keepalive Workflow action (github.com marketplace)](https://github.com/marketplace/actions/keepalive-workflow)
 - [Render cron job pricing (render.com)](https://render.com/docs/cronjobs)
 
-**Decision:** _____
+### 4.1 Ingestion-pipeline prerequisites for an *unattended* scheduled run (added 2026-07-03)
+
+The findings above answer *where* the cron runs. They do **not** answer whether the
+pipeline is safe to run *unattended*. The current pipeline (`src/services/ingestion/`)
+was built for a **human-supervised, manual** CLI run (`research/data-ingestion-stage.md §8`
+decision 4: "batch, re-runnable script; no scheduler in MVP"). Admitting a scheduler
+changes the **failure-cost calculus** — nobody is watching the run — and that forces
+pipeline changes that are *architectural, not tactical*. These are the gaps found by
+reading the current `sources/vietnamworks.py`, `loader.py`, `clean_store.py`, and
+`raw_store.py` against `docs/Code_Review_Notes.md` → DN-1:
+
+| # | Current behavior | Safe manually, unsafe unattended because… | Required change | Tracked |
+|---|---|---|---|---|
+| 1 | `_post`'s `raise_for_status()` aborts the whole run on one transient 429/5xx; `loader.run_ingestion` consumes the source via `list(source.fetch())`, so **nothing** persists | a human sees the error and re-runs; a silent cron just loses that day's run | per-page `try/continue` + light retry/backoff | §4.2 #5 (deferred → T0012) |
+| 2 | `replace_clean_jobs` does `TRUNCATE clean_jobs` then rebuilds from the **in-memory fetch batch** | once #1 lands, a *partial* run now **succeeds** and silently **shrinks** the served table to whatever came through — a human notices a 50→8 drop, a cron does not | **superseded by §4.2:** drop `TRUNCATE` → accumulate-upsert with time-based `is_active` soft-expiry, so a partial run cannot shrink the table | §4.2 #1–#2 / DN-1 |
+| 3 | `content_hash` is written to `raw_jobs` but **never read**; every run re-transforms the whole batch | wasteful-but-harmless when a human runs it occasionally; pure repeated waste at daily cadence | use `content_hash` as a delta to skip unchanged rows | DN-1 move 4 |
+| 4 | `raw_jobs` upsert and `clean_jobs` rebuild are **separate transactions** | a crash between them desyncs the two tables; a human re-runs, a cron leaves them desynced until the next day | folds into #2 (rebuild clean from raw atomically) | DN-1 move 1/5 |
+| 5 | robots.txt / ToS for `ms.vietnamworks.com` is **unverified** (§11, `data-ingestion-stage.md §0.1`) | a one-off manual fetch is low-exposure; a daily unattended job against a host whose ToS forbids automated access is a *standing, repeated* violation | resolve the §11 robots/ToS gate **before** the first scheduled run | §11 |
+
+**What is already safe (no change needed).** Idempotency is sound: upsert on
+`(source, external_id)` means a re-run refreshes rather than duplicates; and the
+empty-fetch guard (`replace_clean_jobs([])` returns 0 and *skips* `TRUNCATE`) already
+prevents a *fully-failed* run from wiping the table. The dangerous case is the
+**partial** success (#2) — total failure is already handled.
+
+**Reconciliation with the permanent exclusion (drives the `Full_Design_Document.md`
+edit in the design pass).** Full_Design §2 permanently excludes *"autonomous or
+background execution — no cron jobs, queues, or schedulers."* That law targets
+**in-request** background execution *inside the serving path* (a queue/scheduler that
+makes a request do work out-of-band). An **external** scheduler (GitHub Actions)
+invoking the **offline** ingestion CLI — which the serving path is forbidden from ever
+importing (Full_Design §3 ingestion-layer law) — puts *no* scheduler in the request
+pipeline. §3 already anticipates exactly this: *"turning ingestion into a scheduled job
+is a separate decision that must be reconciled against that exclusion, not assumed."*
+The (b) design pass should amend §2 to scope the exclusion explicitly to *in-request*
+background execution and permit an out-of-band scheduled ingestion trigger,
+cross-referencing §3 — **not** delete the exclusion.
+
+**Sequencing conclusion (superseded — see §4.2).** The original worry — that resilience
+must not ship before a "clean-from-raw" rebuild, or a partial run shrinks the table — is
+**dissolved** by the §4.2 decision to *accumulate* (drop `TRUNCATE`) with **time-based**
+`is_active` expiry: with nothing wiped and expiry measured in days, a partial or failed
+run is inherently harmless, so resilience becomes *completeness*, not *correctness*. The
+whole Ingestion Deploy stage is now sequenced **after** the Model Evaluation milestone
+(`docs/Tickets.md` T0011 → T0012). A healthchecks.io dead-man's switch (§9) plus the
+sharp-drop yield assertions in `job-site-comparison.md` remain the unattended-run safety
+net that alerts on a missed or suspiciously-small run.
+
+**Decision (2026-07-03):** **External scheduler admitted.** The daily ingestion cron
+runs on **GitHub Actions** (public repo → free/unlimited minutes; secrets via Actions
+secrets; UTC cron `0 2 * * *` = 09:00 ICT; add a keepalive action to defeat the 60-day
+auto-disable), invoking the offline ingestion CLI. Reconciled against Full_Design §2 as
+*external / out-of-band*, not *in-request* (see above). **Gated on** the pipeline-readiness
+changes #1–#4 landing first (the §4.2 accumulate/lifecycle decisions; sequenced after the T0011 Evaluation milestone) **and** the §11 robots.txt/ToS
+verification. Runs live behind a dead-man's switch + yield assertions (§9).
+
+### 4.2 Ingestion-pipeline redesign decisions (recorded 2026-07-03; pending the Model Evaluation milestone)
+
+These decisions were reached in design discussion on 2026-07-03 but are **deliberately not
+yet ticketed**: the Ingestion Deploy Readiness milestone is **sequenced after the Model
+Evaluation milestone** (`docs/Tickets.md` T0011 → T0012), because the pipeline's honesty
+guarantee (the agent staying truthful about stale postings) rests on model behavior that
+must be *measured* first. Recorded here so the reasoning survives the ticket removal.
+
+1. **Load semantics — accumulate, never wipe.** Drop the `TRUNCATE` in
+   `clean_store.replace_clean_jobs`; use the already-written
+   `ON CONFLICT (source, external_id) DO UPDATE` so `clean_jobs` accumulates and each
+   posting refreshes in place. (That upsert is currently *dead code* behind the TRUNCATE.)
+   This retires §4.1's row-2 shrink hazard at the root — nothing is wiped, so a partial
+   run cannot shrink the table.
+2. **Staleness — `is_active` soft-expiry, time-based (invariant).** Add `is_active` (bool),
+   `first_seen_at`, `last_seen_at`. A posting is expired (`is_active = false`, **never
+   deleted**) when `last_seen_at < now() - expire_after_days` (config) — **time-based,
+   never "not seen this run."** Time-based is the invariant that makes a partial/failed
+   scrape harmless: a missed posting simply isn't refreshed; only `expire_after_days`
+   *consecutive* misses expire it. `is_active` is the **only** new agent-visible column;
+   `first_seen_at`/`last_seen_at` stay internal bookkeeping (exposing a `last_seen_at`
+   "freshness" proxy would repeat the `posted_date` fabrication trap — `Known_Issues.md`).
+3. **`is_active` in agent queries — include-all default + always-on honesty (nudge, not a
+   view).** The agent queries **all** postings by default (no `WHERE is_active = true`),
+   which is correct for aggregates/counts ("how many AI-Engineer jobs need Python") that
+   want the whole corpus; it filters to active only when the user signals it ("still open",
+   "can I apply"). **Independently**, whenever a *list* result contains `is_active = false`
+   rows, the agent hedges ("N of these may no longer be open") — honesty is always-on,
+   keyed on the returned column, not gated on the user asking. Aggregate/scalar answers
+   have no per-row status to hedge, and including expired postings in a count is the desired
+   market view. This **rules out** a hide-inactive DB view (which would erase the corpus for
+   analytics and leave nothing to be honest about). Enforcement is a **prompt nudge** —
+   best-effort, like the existing role/salary/`id`-first nudges — **which is exactly why the
+   Evaluation milestone (T0011) must confirm the model honors it before this ships.**
+4. **Migrations — adopt Alembic.** The T0009.9 "`reset_db.sql` is enough because both tables
+   are reproducible" rationale **breaks on deploy**: a scheduled, accumulating `raw_jobs`
+   keeps postings that have since dropped out of search and are **no longer re-fetchable**,
+   so the data becomes irreplaceable — the exact "deployed data becomes irreplaceable"
+   trigger the docs pre-committed to. Adopt Alembic: baseline-migrate the current schema,
+   then migrate the lifecycle columns. `reset_db.sql` is retained for local dev only.
+5. **Resilience — per-page `try/continue` + light retry/backoff.** In
+   `VietnamWorksSource._collect`, guard each `_post` per page; retry with backoff, then
+   skip-and-log. With time-based expiry (#2) this is now *completeness* (salvage the good
+   pages), not *correctness* (a failed run is already harmless). Per-**source** isolation
+   (an orchestrator/registry) stays deferred — that is multi-source, which is future.
+6. **Scheduler & scope — external GitHub Actions, ingestion-only.** Per §4.1's decision.
+   This milestone is **ingestion-only**; the web-API deploy (§1/§2/§7) is a separate later
+   milestone. The `Full_Design_Document.md` §2/§3 external-scheduler reconciliation lands
+   with this milestone (see §4.1).
+7. **Deferred within the redesign (explicitly out of scope, MVP discipline):**
+   rebuild-clean-**from-`raw_jobs`** phase split — *not* required by `is_active`
+   (accumulate-upsert from the fetch batch already gives lifecycle); the source
+   **orchestrator/registry** (multi-source); the `content_hash` **delta** (nightly
+   re-transform of ~50–100 rows is cheap); and folding the `raw_jobs` + `clean_jobs` writes
+   into **one transaction** (an idempotent nightly re-run heals a rare desync for the MVP).
 
 ---
 

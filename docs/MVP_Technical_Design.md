@@ -160,6 +160,8 @@ Tests prove the Spec's capabilities, not implementation trivia. The strategy spa
 
 The bar: every capability in `MVP_Spec.md` §2 maps to at least one observable test here.
 
+These are **deterministic capability tests** — they prove a feature exists and behaves on fixed inputs. The distinct question of *behavioral quality under model non-determinism* — task correctness and the `MVP_Spec.md` §3 honesty rules, which no assert-equality test can pin — is measured separately by the offline **Evaluation Harness (§8)**, not here.
+
 ---
 
 ## 7. Data Ingestion Pipeline (offline)
@@ -200,3 +202,60 @@ JobSource (VietnamWorksSource) --RawPosting--> raw_jobs (verbatim landing, upser
 **Agent-layer impact.** Because the new `clean_jobs` columns are agent-visible, T0009 also updates `prompts.schema_context`, the SQL-generation prompt, and the T0008 honesty rules (notably: salary is numeric and currency-scoped — filter within a `salary_currency` — and may be NULL / `is_salary_negotiable = true` → "may be missing or negotiable for some postings", not "not in the data"). This is the column-cheap schema growth §4 describes, applied.
 
 **Deferred.** Other boards, anti-bot scrapers, a scheduler/cron, LLM extraction, parsing a salary *string* into numbers (not needed for VietnamWorks, which supplies the numbers directly), translating source text to a single language, and cross-board dedup are out of scope (see `Tickets.md` T0009 Out of Scope and `research/job-site-comparison.md`).
+
+---
+
+## 8. Evaluation Harness (offline)
+
+*Status: planned (T0011) — **Evaluation v1 (Phase 1)**.*
+
+This is the **first version** of the project's evaluation phase: a deliberately-scoped offline harness whose deliverable is the **v1 baseline** — the first measured snapshot of agent behavior against a pinned fixture and golden set. It is intentionally minimal (offline only, no CI gate, no online/production scoring, no chart/DAG metrics — those are later phases, §8.7). Everything downstream that cites "the baseline" means this v1 baseline, and the T0011.5 report records it as such (dated, tied to the fixture + golden version it was measured against). A later re-measure produces a v2 baseline; the two are only comparable because the fixture is version-pinned (§8.3).
+
+The evaluation harness is **offline quality tooling**, isolated from the request pipeline exactly like §7 ingestion — it is never imported by the API, service, runtime, tools, or tracing layers, and it runs on demand (`deepeval test run`), never on a schedule and (for now) never as a CI gate. Its job is to establish a **measurable baseline** of the agent's task-correctness and its `MVP_Spec.md` §3 honesty bar *before* any stage whose design depends on measured model behavior is built (the `is_active` honesty hedge in Ingestion Deploy, `Tickets.md` T0013). The full grounding — DeepEval mechanics, the 2026 version-pinned facts, and the InternHunter-specific findings — is `research/deepeval-sql-agent-eval-planning.md`; **read its §11 first.** Do not re-derive it here.
+
+### 8.1 What it measures — three seams
+
+The agent is not one LLM call. `query_clean_jobs` takes a **natural-language question**, and a *separate, nested* `generate_sql` model call (`src/agents/tools/query_clean_jobs.py`) turns it into SQL that deterministic code then validates and runs. So a single agent run has three distinct decision points, and the harness scores each:
+
+| Seam | What the model decides | Metric attaches to |
+|---|---|---|
+| 1. Routing | which tool + the NL question passed to it | the agent tool-call span |
+| 2. NL→SQL | the SQL string (**invisible** to the ReAct trace) | the nested `generate_sql` LLM span |
+| 3. Synthesis | the final user-facing answer | the final output |
+
+Seam 2 is the point the generic research (§3) calls "most failure-prone," and it is **not** on the tool call — it is inside the nested `generate_sql`. Capturing it is a tracing concern, so per the `Full_Design_Document.md` §2 tracing-boundary law it must **not** be met by hard-coding a DeepEval `@observe` inside the tools layer. Instead the harness threads its DeepEval `CallbackHandler` in through **runtime config** — the same injection seam Langfuse tracing already uses (§2.5) — so the nested call surfaces as its own span without eval concerns leaking into tool code. Whether `generate_sql` needs a small config-propagation parameter to receive that callback is the one **open implementation question** carried into T0011.
+
+### 8.2 Metric stack (Phase 1)
+
+Deterministic checks for everything exact; LLM-judge checks for everything semantic (research §3):
+
+- **Seam 1 — Routing.** `ToolCorrectnessMetric` (deterministic — was `query_clean_jobs` / `get_job_details` / `get_current_time` the right choice, in the right order?) plus a light referenceless `ArgumentCorrectnessMetric` on the **NL question** the agent passed.
+- **Seam 2 — NL→SQL.** `ArgumentCorrectnessMetric` plus a schema-aware `GEval` ("does this SQL respect the `clean_jobs` schema and answer the question?") on the `generate_sql` span. Referenceless — no expected SQL string is stored.
+- **Seam 3 — Synthesis.** `TaskCompletionMetric` (did the user get what they asked?) plus **`FaithfulnessMetric`** with the tool's returned string as `retrieval_context` — this catches *fabrication* (invented freshness, hidden-salary claims not in the data) — plus a **`GEval` honesty** criterion for *omission* (the truncation caveat is emitted deterministically by `_build_answer`; the risk is the agent stripping it when it rewrites the answer for the user).
+
+Thresholds are **calibrated after the first baseline run**, not pre-set (research §9): a threshold above the baseline blocks every build; below it, nothing signals.
+
+### 8.3 Golden dataset & the seeded eval database
+
+- **~17 versioned goldens** (inside the 15–25 band), stored in-repo alongside the harness, automating the `T0008.3` manual honesty checklist plus **explicit probes** for the recorded model-behavior risks — freshness fabrication and hidden-salary phrasing (`Known_Issues.md`, agent-runtime section). Each golden carries: NL input, `expected_tools`, an optional *semantic* `expected_output`, and metadata (category, difficulty, honesty-probe flag). The expected SQL is deliberately **not** stored — the seam-2 metrics are referenceless. They span five categories: **A grounded retrieval** (count/list/truncation, asserting the fixture's pinned totals), **B multi-turn refinement** (stored as `ConversationalTestCase`s so the agent's own context-carry is what gets scored, not a pre-flattened turn), **C honesty probes** (freshness, cross-currency "highest paid", absent-tech, out-of-schema "remote", hidden salary, hidden seniority), **D safety/refusal** (unsafe/off-topic/injection — asserting `expected_tools=[]` **and** a refusal, so a model that queries the DB before refusing still fails), and **E resilience** (vague input, dangling pronoun with no prior turn). **6 of the ~17 are flagged `honesty_probe`** — the subset the T0011.5 go/rethink verdict on the `is_active` design rests on.
+- **The harness runs against a small (~22-row), version-controlled seeded fixture database, not live `clean_jobs`.** This is what lets honesty goldens assert exact counts, truncation notices, and specific rows, and what makes before/after comparison valid (research §6: a golden's baseline is only meaningful against a fixed dataset version). The fixture is versioned with the goldens; changing it changes the baseline. Its free text (`title`/`company`/`description`) is drawn from the real captured postings in `research/experiments/vietnamworks_ai_data_sample.json` so answers read authentically, while the structured columns are *engineered* to a fixed distribution that pins every golden. The role split sums to exactly 22 — AI Engineer 5 and Data Scientist 4 (the two counts goldens assert), plus Data Engineer / ML Engineer / Data Analyst 4 each and 1 Other; overlaid pins are Python in 12 rows (7 of them Hanoi → the two-turn refinement), COBOL in 0, both USD and VND salaries present, and `posted_date`/`job_level` NULL on all 22. Internship-ness is one filterable attribute among many — the corpus (and the fixture, ~5 of 22 rows) is mostly non-internship AI/Data postings, matching the real live data (see `Known_Issues.md` scope-drift note).
+
+### 8.4 Judge LLM
+
+- The generic research (§5) recommended Llama-3-70b, which Groq **retired** (research §11.4). The primary judge for T0011 is its Groq replacement (`openai/gpt-oss-120b` or `qwen/qwen3.6-27b`), **pinned by a live JSON-reliability spike** — DeepEval hard-fails without schema-valid JSON, and `gpt-oss-120b` has reported structured-output regressions.
+- **Confirmed fallback: Google Gemini free-tier** (adds a `GEMINI`/`GOOGLE_API_KEY` and a second LLM provider). Beyond de-risking the JSON problem, a Gemini judge **decouples judge load from Groq** — today the agent *and* a Groq judge would share one free-tier limit — which makes Gemini the natural *primary* if/when the CI gate lands. The judge is wrapped in a `DeepEvalBaseLLM`; `instructor`/LiteLLM coercion is adopted only if a Groq judge is kept and needs it. Eval quality is bounded by judge quality (research §5) — 70B-class is the floor.
+
+### 8.5 Score writeback to Langfuse
+
+A post-run step calls `langfuse.create_score(name=metric, value=score, trace_id=…, data_type=…)` on the v4 (OTEL) client — `BOOLEAN` for honesty pass/fail, numeric for graded metrics — so eval scores land on the same trace as the raw run and Langfuse stays the single pane of glass (it does **not** replace Langfuse's role, per §2.5). Re-runs are idempotent via `score_id = f"{trace_id}-{metric}"`. The one integration seam to verify in implementation is threading the Langfuse `trace_id` onto the DeepEval test case (research §11.5).
+
+### 8.6 How it runs, and its boundaries
+
+- **On-demand, local-first.** T0011 delivers a runnable `deepeval test run` (pytest-integrated) plus the dataset, metrics, and writeback. It is **not** wired into CI — the first `.github/workflows/` PR gate is a deliberate **fast-follow ticket**, matching the deferred-deploy posture and avoiding standing up CI + Groq-in-CI rate-limit handling before it is needed.
+- **Layer isolation.** The harness treats the agent as a black box via its public entrypoint plus the injected `CallbackHandler`; the only touch inside the agent boundary is the config seam that lets the `generate_sql` span be observed (§8.1), which carries no eval logic and is inert in production.
+- **No online eval.** Production-trace scoring, `DAGMetric`, chart metrics, and production-sampled goldens are out of scope (research §§4, 8) — this milestone measures the offline baseline only.
+
+### 8.7 Prerequisite & deferred
+
+- **Prerequisite (not owned here):** the agent must run on a **non-retired model** for the baseline to mean anything — `config/settings.yaml` still pins the agent to `llama-3.3-70b-versatile`, which Groq shuts down 2026-08-16 (`Known_Issues.md`, F1). That migration is a **separate** follow-up, deliberately not folded into T0011.
+- **Deferred:** the CI gate, online/production eval, `DAGMetric`, Phase-2 chart metrics, production-sampled goldens, and any judge-matrix / Confident-AI cloud. And, by design, **fixing** a measured behavior — T0011 *measures*; remediation is separate work.

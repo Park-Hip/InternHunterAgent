@@ -17,7 +17,7 @@ so work is not re-derived or repeated.
 | [`data-ingestion-stage.md`](data-ingestion-stage.md) | Deep research on acquiring real Vietnamese AI/Data job postings into `clean_jobs`. Source-market decision, the VietnamWorks scraping experiment (✅ reliable & schedulable), and the corrected `tech_stack` definition. |
 | [`job-site-comparison.md`](job-site-comparison.md) | Running scorecard comparing candidate job boards (VietnamWorks, ITviec, TopDev, TopCV, LinkedIn) on the same axes. VietnamWorks fully written; others are stubs to fill in when spiked. |
 | [`deployment-research-plan.md`](deployment-research-plan.md) | **Skeleton** outline of what to research before deploying the app (hosting, Postgres, cron, secrets, Langfuse, CI/CD, cost ceiling). Sections list the web searches to run and the decision each drives — findings to be filled in. |
-| [`deepeval-sql-agent-eval-planning.md`](deepeval-sql-agent-eval-planning.md) | Planner research for evaluating the LangChain SQL agent with DeepEval. (Eval stage was deferred — see git history; kept as reference.) |
+| [`deepeval-sql-agent-eval-planning.md`](deepeval-sql-agent-eval-planning.md) | Planner research for evaluating the agent with DeepEval — the grounding for the **T0011 Model Evaluation milestone** (now next). §§1–10 are the generic framework; **§11 is the InternHunter-specific, version-pinned grounding (2026-07-03)** — read §11 first. |
 | [`experiments/`](experiments/) | Captured outputs from research spikes (e.g. `vietnamworks_ai_data_sample.json`) — evidence for the findings above. |
 
 ## Conventions

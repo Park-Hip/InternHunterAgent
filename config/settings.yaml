@@ -15,8 +15,9 @@ agent:
 
 eval:
   judge:
-    provider: groq
-    model: openai/gpt-oss-120b
+    provider: google        # was: groq
+    model: gemini-2.5-flash  # was: openai/gpt-oss-120b
     temperature: 0.0
+    rpm: 8                  # throttle below Gemini free-tier's ~10 RPM cap (bump to ~25 if provider reverts to groq)
   fixture:
     database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval

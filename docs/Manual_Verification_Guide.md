@@ -1,6 +1,8 @@
 Manual Verification Guide
 
-This document contains the required active verification steps for completed tickets. Do not assume a ticket works just because an automated build passes. Always execute manual checklists to catch obvious breakage before moving forward.
+This document is the **central, canonical home** for the manual-verification steps of every completed ticket. Do not assume a ticket works just because an automated build passes. Always execute the manual checklist here to catch obvious breakage before moving forward.
+
+Each ticket's own "Manual check" lines in `docs/Tickets.md` are the *planned* intent; this file is where those steps are collected as runnable checklists (and, for full live passes, where observed results are logged — see T0008.3 and T0009.8). When you complete a ticket, add its checklist here so the guide stays continuous. Paths and commands below are grounded against the repo as implemented.
 
 T0000: Milestone 0 - Foundation
 
@@ -598,3 +600,92 @@ T0009.9: Explicit schema reset path
   4. Re-ingest: `uv run python -m src.services.ingestion.loader` → counts non-zero again; the app answers a normal question.
   5. Confirm `init_db.sql` alone is still non-destructive: re-run `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql` against the populated DB and verify row counts are unchanged (`IF NOT EXISTS` skips recreation).
 * `uv run pytest -q` still passes (no code touched by this ticket).
+
+### T0010: Milestone 10 — Pre-deploy correctness fixes
+
+T0010.1: Graceful answer + minimal typed error contract
+
+* Run `uv run pytest tests/api/test_query.py -v` and confirm: a `None`/empty runtime answer returns `200` with the safe fallback message (not a 500); an internal failure returns a safe generic message with no leaked internals/stack trace; the answer-only response shape (`answer`, `session_id`, `trace_id`, `trace_url`) is unchanged.
+* With the stack up (`docker compose up -d`), `POST /api/v1/agent/chat` with a normal question (e.g. `{"query": "What companies use Python?"}`) and confirm a natural-language answer is returned.
+* Force an internal failure (e.g. stop Postgres with `docker compose stop postgres`, then `POST` a job-data question) and confirm the client receives a clean generic error message — no raw SQL, no internals, no stack trace — while the server-side log still records the full error. Restart Postgres afterward.
+
+T0010.2: Tolerate non-string model content in SQL generation
+
+* Run `uv run pytest tests/agents/tools/test_query_clean_jobs.py -v` and confirm the mocked list-style-content case yields the expected SQL string without error, and the existing `str`-content path still passes.
+* Run `uv run mypy` and confirm the `src/agents/tools/query_clean_jobs.py` `union-attr` error is gone (down to the 2 known benign residuals).
+
+T0010.3: Enforce a true single-table allowlist in the SQL validator
+
+* Run `uv run pytest tests/services/query/test_sql_validator.py -v` and confirm: `clean_jobs`-only `SELECT`s (including `WHERE`/`ORDER BY`/`LIMIT`) still pass; a `JOIN raw_jobs`, a comma `FROM clean_jobs, raw_jobs`, and a bare `SELECT * FROM raw_jobs` are all rejected.
+* In a Python REPL: `from src.services.query.sql_validator import validate_sql`, then check:
+  * `validate_sql("SELECT title FROM clean_jobs LIMIT 10")` → `valid=True`.
+  * `validate_sql("SELECT * FROM clean_jobs JOIN raw_jobs USING (source, external_id)")` → `valid=False` with a clear reason.
+  * `validate_sql("SELECT * FROM clean_jobs, raw_jobs")` → `valid=False`.
+  * `validate_sql("SELECT * FROM raw_jobs")` → `valid=False`.
+* With the stack up, ask the agent a question that would tempt a join to `raw_jobs` (e.g. "show me the raw payload for the AI Engineer job") and confirm the tool refuses rather than returning raw-payload columns.
+
+T0010.4: Offload the blocking SQL-generation LLM call off the event loop
+
+* Run `uv run pytest tests/agents/tools/test_query_clean_jobs.py -v` and confirm the async tool still returns the expected result on the normal path and existing tests pass.
+* With the app running (`docker compose up -d`), fire two concurrent `POST /api/v1/agent/chat` job-data requests (e.g. run two `curl`/HTTP calls in parallel) and, during them, hit `GET /api/v1/health` — confirm the health probe still responds promptly and does not stall for the LLM round-trip duration.
+
+T0010.5: Honest match-count / truncation notice for `query_clean_jobs`
+
+* Run `uv run pytest tests/services/query/test_row_bound.py tests/services/query/test_table_formatter.py tests/agents/tools/test_query_clean_jobs.py -v` and confirm all pass (the `+1`-sentinel truncation semantics and the `TableArtifact.truncated` flag).
+* With the stack up and `clean_jobs` holding more rows than `agent.query.max_rows` (default 20), ask a broad question that matches more than the cap (e.g. "show me every job") and confirm the answer says *"Showing the first N results — there are more matches. Narrow your search…"* rather than implying N is the total.
+* Ask a narrow question that matches fewer than the cap and confirm the answer reads *"Found N result(s)…"* with no truncation notice. A `COUNT(*)`/scalar question is unaffected.
+
+T0010.6: Word-boundary matching in `normalize_location`
+
+* Run `uv run pytest tests/services/ingestion/test_transform.py tests/services/ingestion/test_normalize_vietnamworks.py -v` and confirm the new `normalize_location` word-boundary cases and the existing location tests pass.
+* In a Python REPL: `from src.services.ingestion.transform import normalize_location`, then check:
+  * `normalize_location("12 Nguyen Hue, District 1, Ho Chi Minh City")` → `"Ho Chi Minh City"`.
+  * `normalize_location("Some Street, Ba Dinh, HN")` → `"Hanoi"`.
+  * A false-positive probe — a word containing `hn`/`hcm` but no real city (e.g. `normalize_location("john technology park")`) → `"Other"`.
+  * `normalize_location("Hà Nội")` → `"Hanoi"` (exact clean token still works); two cities in one string → both present, deterministic (leftmost-match) order.
+
+T0010.7: Honor explicit user-requested result counts (LIMIT intent)
+
+* Run `uv run pytest tests/services/query/test_row_bound.py tests/agents/tools/test_query_clean_jobs.py -v` and confirm: `resolve_bounds` honors an explicit `LIMIT <= max_rows` exactly; the honored-explicit-count tool test answers "Found N result(s)" with no truncation notice; the unbounded-truncation test is unchanged.
+* In a Python REPL: `from src.services.query.row_bound import resolve_bounds`, then confirm `resolve_bounds("SELECT title FROM clean_jobs LIMIT 3", 20)` returns SQL ending in `LIMIT 3` with `display_cap == 3`, while a query with no `LIMIT` falls back to a `max_rows + 1` fetch with `display_cap == max_rows`.
+* With the stack up, ask "show me the top 3 AI Engineer jobs" and confirm exactly 3 rows come back with a "Found 3 result(s)" wording (no truncation notice); ask an unbounded broad query and confirm the truncation notice still appears when matches exceed the cap.
+
+### T0011: Milestone 11 — Model Evaluation Harness
+
+**Note:** the eval harness scores against a **separate seeded fixture DB** (`internhunter_eval` on `localhost:5433`), never live `clean_jobs`. `evals/conftest.py` redirects `DATABASE_URL` to `eval.fixture.database_url` for the eval test session, so eval runs do not touch prod data.
+
+T0011.1: Judge JSON-reliability spike + DeepEval harness scaffold
+
+* Confirm the chosen judge is recorded in `config/settings.yaml` under `eval.judge.*` (`provider`, `model`) — currently `provider: groq`, `model: openai/gpt-oss-120b`.
+* Run `uv run deepeval test run evals/test_judge_scaffold.py` and confirm it exits 0 and prints one passing metric — i.e. the judge returns schema-valid JSON end-to-end on a trivial `LLMTestCase` without a `ValueError`.
+* (If the judge spike script under `scripts/` is retained) run it and confirm its output names the chosen judge and shows a valid JSON verdict.
+
+T0011.2: Seeded eval fixture DB + versioned golden dataset
+
+* With Postgres up (`docker compose up -d`), build the fixture DB from scratch: `uv run python -m evals.fixtures.loader` — confirm it prints `COUNT(*) = 22` and exits 0.
+* Run `uv run pytest evals/fixtures/test_fixture_counts.py evals/test_goldens_load.py -v` and confirm the pinned distribution holds: total = 22; `role='AI Engineer'` = 5; `role='Data Scientist'` = 4; `tech_stack ILIKE '%Python%'` = 12; `tech_stack ILIKE '%Python%' AND location ILIKE '%Hanoi%'` = 7; `COBOL` = 0; and the golden JSON parses/loads as a DeepEval dataset.
+* Confirm the reset path works: `uv run python -c "from evals.fixtures.loader import reset_fixture; reset_fixture()"` drops and rebuilds the fixture tables without error, and re-running the count check above still returns 22.
+
+T0011.3: Three-seam instrumentation + metric stack
+
+* Confirm the config-forward change is behavior-preserving: `uv run pytest tests/agents/tools/test_query_clean_jobs.py -v` stays green with the forwarded `config` optional and defaulting to a no-op (the tool imports no eval code).
+* With Postgres up and the fixture DB built (T0011.2), run `uv run deepeval test run evals/test_three_seams.py` and confirm: the full golden set executes, a score prints per metric per seam per case (report-only — the run does not fail on low scores, per T0011.5 owning gating), and the output shows a **distinct span/score for the nested `generate_sql` (seam 2) SQL generation** — i.e. `generate_sql (seam 2) span SQL: …` is printed for retrieval cases, proving the hidden NL→SQL call is observable via config forwarding, not `@observe`.
+* Spot-check one printed case: `tools_called` reflects the routed tool, the seam-2 SQL is a read-only `clean_jobs` statement, and seam-3 metrics (task completion / faithfulness / honesty) each produced a numeric score or a captured error string (never a silent blank).
+
+T0011.4: Langfuse score writeback
+
+* Run the no-network unit tests: `uv run pytest evals/test_writeback.py -v` and confirm all pass — every non-None score is written as `NUMERIC` with a seam-prefixed name (`{seam}/{metric}`); None-scored metrics are skipped; a `None` `trace_id` and a disabled-Langfuse (no creds) both no-op to `0` without raising; the same metric name across two seams gets **distinct** `score_id`s (`{trace_id}-{seam}-{metric}`); `flush()` is called exactly once when scores are written.
+* **Live (requires Langfuse creds + Postgres + the fixture DB):** run `uv run deepeval test run evals/test_three_seams.py`. Each case that produced a trace prints `scores written to trace <trace_id>: <n>` (n > 0). Open one of those `trace_id`s in the Langfuse UI and confirm the eval scores appear **on the same trace** as the raw tool-call spans, each named `{seam}/{metric}` (e.g. `seam2_nl_to_sql/Argument Correctness`).
+* **Idempotency:** re-run the same golden and confirm the scores on that trace are **updated in place, not duplicated** — the stable `score_id` (`{trace_id}-{seam}-{metric}`) means a re-run overwrites rather than appending a second copy.
+* **Graceful no-op:** with Langfuse creds absent from the environment, run the harness and confirm it still completes, `scores_written` is `0`, and nothing crashes (writeback silently skips when `get_langfuse_handler()` returns `None`).
+* Confirm the request path is untouched: `src/agents/tracing/langfuse.py` was not modified by this ticket — writeback reuses its accessors only (`get_langfuse_client` / `get_langfuse_handler`) and never runs on a live `POST /api/v1/agent/chat` request.
+
+T0011.6: Gemini judge provider (Groq-load relief)
+
+* `uv sync` resolves with `langchain-google-genai` added (`pyproject.toml`).
+* `uv run pytest evals/ -v` with **no** `GOOGLE_API_KEY` set: the harness still imports (the `google` branch's import is local to `build_judge()`), and every unit test that doesn't need a live judge stays green.
+* With `GOOGLE_API_KEY` in `.env` and `config/settings.yaml` `eval.judge.provider: google` (the shipped default): `uv run python -c "from evals.judge import build_judge; print(build_judge().get_model_name())"` prints `google/gemini-2.5-flash`.
+* JSON-reliability smoke (same bar T0011.1 held Groq to): `uv run pytest evals/test_judge_scaffold.py -v` exits 0 — the Gemini judge returns schema-valid JSON on the trivial `GEval` case without a `ValueError`. Note: `gemini-2.5-flash` is a "thinking" model that spends part of its token budget on internal reasoning before the visible JSON; `evals/judge.py`'s `google` branch sets `max_tokens=4096` (vs the Groq branch's `1024`) so the JSON is never truncated — confirmed by 3 consecutive live passes.
+* Flip `provider: groq` in `config/settings.yaml`, re-run the model-name check above → prints `groq/openai/gpt-oss-120b`, confirming the Groq path is byte-for-byte unchanged. Flip back to `provider: google` afterward (the shipped default).
+* **Judge-agreement gate:** see `docs/Known_Issues.md` → Evaluation harness (T0011.6) for the live comparison result and its caveats (Groq/Google free-tier availability at the time of the run).
+* **Judge RPM throttle (rate-limit relief follow-up, 2026-07-05):** `config/settings.yaml` `eval.judge.rpm: 8` paces judge calls under Gemini's ~10 RPM free-tier cap instead of firing all ~119 judge calls for the 17 goldens back-to-back. Verify: `python -c "from evals.judge import _RpmThrottle; import time; t=_RpmThrottle(2); s=time.monotonic(); [t.wait() for _ in range(3)]; print(time.monotonic()-s)"` prints `~60` (the 3rd call waits for the window to free up). Live: `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -k "A1 or A3"` should show a visible pause (~7.5s at `rpm=8`) between consecutive judge calls in the output instead of an immediate burst.

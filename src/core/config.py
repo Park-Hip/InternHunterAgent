@@ -8,6 +8,7 @@ import yaml
 
 class Settings(BaseSettings):
     GROQ_API_KEY: str = Field(..., min_length=1)
+    GOOGLE_API_KEY: str | None = None
     DATABASE_URL: str = Field(..., min_length=1)
 
     LANGFUSE_SECRET_KEY: str

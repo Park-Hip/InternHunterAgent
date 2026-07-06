@@ -724,3 +724,43 @@ T0012.6: Coerce non-str model content before `.strip()` in `generate_sql`
 2. Run `uv run pytest tests/agents/tools/test_query_clean_jobs.py -q` and confirm all pass (8 existing + 3 new `generate_sql` content-coercion tests).
 3. Run `uv run mypy` and confirm 2 residuals remain (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`) — the `query_clean_jobs.py` union-attr residual is gone.
 4. (Optional, live) With Groq creds + DB available: ask a normal job-data question end-to-end and confirm SQL generation still returns clean bare SQL — Groq returns `str` content today, so no behavior change is expected.
+
+T0012.7: Keep live-API eval tests out of plain pytest collection
+
+1. Plain suite skips live tests, no network:
+   ```
+   uv run pytest -q
+   ```
+   Confirm the summary shows `... deselected` and completes in seconds (no multi-minute hang, no Groq/Gemini call). Observed: `254 passed, 18 deselected, 4 subtests passed` (18 = 1 `test_judge_scaffold` + 17 `test_three_seams` parametrized cases).
+2. Live tests are still selectable:
+   ```
+   uv run pytest -m eval --collect-only -q
+   ```
+   Confirm it lists exactly `evals/test_judge_scaffold.py::test_judge_scaffold` and the 17 `evals/test_three_seams.py::test_three_seams[...]` node ids (A1–E2) — and nothing from `tests/`. Observed: `18/272 tests collected (254 deselected)`.
+3. Marker is registered (no "unknown marker" warning):
+   ```
+   uv run pytest -m eval --collect-only -q 2>&1 | grep -i "PytestUnknownMarkWarning" || echo "marker registered, no warning"
+   ```
+   Confirm: `marker registered, no warning`. (`pyproject.toml` also sets `--strict-markers`, which would hard-fail collection on any unregistered marker — the full suite stays green with it on.)
+4. deepeval path (if creds + fixture DB available): `deepeval test run` inherits `addopts` and deselects eval tests by default — pass `-m eval` to select them:
+   ```
+   PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval
+   ```
+   Without `-m eval`, this reports "No test cases found, please try again" (0 selected) — confirmed live. With `-m eval`, confirmed live against `evals/test_judge_scaffold.py -m eval` that the test is actually selected and run (it failed only on missing judge credentials in this sandbox, not on deselection — `1 total tests`, `0% pass rate` due to `error=None`/no judge response, not "no test cases found").
+
+T0012.8: Convert `generate_sql` to native async
+
+1. Run `uv run pytest tests/agents/tools/test_query_clean_jobs.py -v` and confirm all 10 pass — the thread-offload test is gone (removed, not skipped) and the three `GenerateSqlContentCoercionTests` cases now show as async (`IsolatedAsyncioTestCase`).
+2. Confirm no thread-offload remains for `generate_sql`:
+   ```
+   grep -n "to_thread" src/agents/tools/query_clean_jobs.py
+   ```
+   Confirm: exactly one hit, the `execute_validated_sql` line — none for `generate_sql`.
+3. Confirm the signature changed:
+   ```
+   grep -n "async def generate_sql" src/agents/tools/query_clean_jobs.py
+   ```
+   Confirm: one hit.
+4. Run `uv run pytest -q` (full suite) and confirm no regressions.
+5. Run `uv run mypy src` and confirm the same 2 pre-existing residuals as before this ticket (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`) — no new errors introduced.
+6. (Optional, live) With Groq creds + DB available: ask a normal job-data question end-to-end and confirm `query_clean_jobs` still returns the same SQL-backed answer and a `generate_sql` span still appears in Langfuse. Not exercised in this sandbox — state explicitly if skipped.

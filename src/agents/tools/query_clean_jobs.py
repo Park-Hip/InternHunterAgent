@@ -48,12 +48,12 @@ def _content_to_text(content: str | list[Any]) -> str:
     return "".join(parts)
 
 
-def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
+async def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
     schema_context = load_schema_context()
     sql_generation_prompt = load_sql_generation_prompt()
     model = AgentProvider().build_model()
 
-    response = model.invoke(
+    response = await model.ainvoke(
         [HumanMessage(content=f"{sql_generation_prompt}\n\n{schema_context}\n\nQuestion: {question}")],
         config=config,
     )
@@ -82,7 +82,7 @@ def _build_answer(table: TableArtifact) -> str:
 @tool
 async def query_clean_jobs(question: str, config: RunnableConfig) -> str:
     """Answer questions about internship job postings stored in the clean_jobs table."""
-    sql = await asyncio.to_thread(generate_sql, question, config)
+    sql = await generate_sql(question, config)
     validation = validate_sql(sql)
 
     if not validation.valid:

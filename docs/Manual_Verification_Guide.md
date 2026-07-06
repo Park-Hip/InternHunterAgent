@@ -711,3 +711,16 @@ T0012.5: Graceful fallback instead of a 500 on an empty agent answer
    Confirm: prints `True` — an empty-messages runtime response now degrades to the fallback answer instead of raising.
 2. Run `uv run pytest tests/agents/runtime/test_react_agent.py tests/agents/test_service.py tests/api/test_query.py -v` and confirm all pass, including the three new `_extract_answer` "returns empty string" cases and the `generate_agent_response` fallback case.
 3. (Optional, live stack) With Docker + Groq creds available: `docker compose up -d`, `POST /api/v1/agent/chat` with a normal question and confirm a real answer still returns `200`. There is no reliable way to force a live empty answer post-T0012.2 (reasoning-leak fix raised `max_tokens` and hides `<think>` content), so the deterministic unit proof above is the primary evidence.
+
+T0012.6: Coerce non-str model content before `.strip()` in `generate_sql`
+
+1. Coercion proof, no network:
+   ```
+   uv run python -c "from src.agents.tools.query_clean_jobs import _content_to_text; \
+   print(_content_to_text([{'type':'text','text':'SELECT '},{'type':'text','text':'1'}]).strip() == 'SELECT 1'); \
+   print(_content_to_text('  SELECT 1  ').strip() == 'SELECT 1')"
+   ```
+   Confirm: prints two `True` lines — list-content flattening and the unchanged `str` fast path.
+2. Run `uv run pytest tests/agents/tools/test_query_clean_jobs.py -q` and confirm all pass (8 existing + 3 new `generate_sql` content-coercion tests).
+3. Run `uv run mypy` and confirm 2 residuals remain (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`) — the `query_clean_jobs.py` union-attr residual is gone.
+4. (Optional, live) With Groq creds + DB available: ask a normal job-data question end-to-end and confirm SQL generation still returns clean bare SQL — Groq returns `str` content today, so no behavior change is expected.

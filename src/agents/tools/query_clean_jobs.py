@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any
 
 from langchain.messages import HumanMessage
 from langchain.tools import tool
@@ -32,6 +33,21 @@ def load_max_rows() -> int:
     return max_rows
 
 
+def _content_to_text(content: str | list[Any]) -> str:
+    if isinstance(content, str):
+        return content
+
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict):
+            text = block.get("text", "")
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)
+
+
 def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
     schema_context = load_schema_context()
     sql_generation_prompt = load_sql_generation_prompt()
@@ -41,7 +57,7 @@ def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
         [HumanMessage(content=f"{sql_generation_prompt}\n\n{schema_context}\n\nQuestion: {question}")],
         config=config,
     )
-    return response.content.strip()
+    return _content_to_text(response.content).strip()
 
 
 def _build_answer(table: TableArtifact) -> str:

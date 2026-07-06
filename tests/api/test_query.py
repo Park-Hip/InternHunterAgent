@@ -59,7 +59,7 @@ class QueryRouteTests(unittest.TestCase):
             "answer": "Acme uses Python, FastAPI, and Postgres.",
             "session_id": "session-123",
             "trace_id": "trace-456",
-            "trace_url": None,
+            "trace_url": "https://cloud.langfuse.com/project/p/traces/trace-456",
         }
 
         with patch(
@@ -84,7 +84,7 @@ class QueryRouteTests(unittest.TestCase):
                 "answer": "Acme uses Python, FastAPI, and Postgres.",
                 "session_id": "session-123",
                 "trace_id": "trace-456",
-                "trace_url": None,
+                "trace_url": "https://cloud.langfuse.com/project/p/traces/trace-456",
             },
         )
         self.assertNotIn("sql", body)
@@ -175,7 +175,7 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
     async def test_none_runtime_answer_coerces_to_fallback(self) -> None:
         runtime = AsyncMock()
         runtime.ainvoke = AsyncMock(
-            return_value={"answer": None, "trace_id": "trace-1"}
+            return_value={"answer": None, "trace_id": "trace-1", "trace_url": None}
         )
 
         result = await generate_agent_response(
@@ -192,7 +192,7 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
     async def test_blank_runtime_answer_coerces_to_fallback(self) -> None:
         runtime = AsyncMock()
         runtime.ainvoke = AsyncMock(
-            return_value={"answer": "   ", "trace_id": None}
+            return_value={"answer": "   ", "trace_id": None, "trace_url": None}
         )
 
         result = await generate_agent_response(
@@ -205,7 +205,7 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
     async def test_normal_runtime_answer_passes_through(self) -> None:
         runtime = AsyncMock()
         runtime.ainvoke = AsyncMock(
-            return_value={"answer": "The current time is 14:01:52.", "trace_id": None}
+            return_value={"answer": "The current time is 14:01:52.", "trace_id": None, "trace_url": None}
         )
 
         result = await generate_agent_response(

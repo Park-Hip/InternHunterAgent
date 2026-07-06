@@ -29,6 +29,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         mock_handler = mock_get_langfuse_handler.return_value
         mock_handler.last_trace_id = "trace-123"
         mock_client = mock_get_langfuse_client.return_value
+        mock_client.get_trace_url.return_value = "https://cloud.langfuse.com/project/p/traces/trace-123"
         runtime = AgentRuntime(agent=fake_agent)
 
         result = await runtime.ainvoke("what time is it?", session_id="session-1", user_id="user-1")
@@ -38,8 +39,10 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             {
                 "answer": "The current time is 14:01:52.",
                 "trace_id": "trace-123",
+                "trace_url": "https://cloud.langfuse.com/project/p/traces/trace-123",
             },
         )
+        mock_client.get_trace_url.assert_called_once_with(trace_id="trace-123")
         mock_build_langfuse_config.assert_called_once_with(session_id="session-1", user_id="user-1")
         fake_agent.ainvoke.assert_awaited_once_with(
             {"messages": [HumanMessage(content="what time is it?")]},
@@ -69,14 +72,17 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         }
         mock_build_langfuse_config.return_value = {"callbacks": ["handler"]}
         mock_get_langfuse_handler.return_value.last_trace_id = None
+        mock_client = mock_get_langfuse_client.return_value
         runtime = AgentRuntime(agent=fake_agent)
 
-        await runtime.ainvoke("what time is it?")
+        result = await runtime.ainvoke("what time is it?")
 
         fake_agent.ainvoke.assert_awaited_once_with(
             {"messages": [HumanMessage(content="what time is it?")]},
             config={"callbacks": ["handler"]},
         )
+        self.assertIsNone(result["trace_url"])
+        mock_client.get_trace_url.assert_not_called()
 
     def test_extract_answer_raises_on_empty_messages(self) -> None:
         runtime = AgentRuntime(agent=AsyncMock())

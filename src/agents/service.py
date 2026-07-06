@@ -35,5 +35,5 @@ async def generate_agent_response(
         "answer": answer,
         "session_id": session_id,
         "trace_id": response["trace_id"],
-        "trace_url": None,
+        "trace_url": response["trace_url"],
     }

@@ -12,6 +12,7 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         runtime.ainvoke.return_value = {
             "answer": "The current time is 14:01:52.",
             "trace_id": "trace-123",
+            "trace_url": "https://cloud.langfuse.com/project/p/traces/trace-123",
         }
 
         result = await generate_agent_response(
@@ -32,7 +33,7 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
                 "answer": "The current time is 14:01:52.",
                 "session_id": "session-1",
                 "trace_id": "trace-123",
-                "trace_url": None,
+                "trace_url": "https://cloud.langfuse.com/project/p/traces/trace-123",
             },
         )
 
@@ -41,6 +42,7 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         runtime.ainvoke.return_value = {
             "answer": "The current time is 14:01:52.",
             "trace_id": "trace-123",
+            "trace_url": None,
         }
 
         result = await generate_agent_response(
@@ -49,6 +51,7 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIsNotNone(result["session_id"])
+        self.assertIsNone(result["trace_url"])
         runtime.ainvoke.assert_awaited_once_with(
             query="what time is it?",
             session_id=result["session_id"],

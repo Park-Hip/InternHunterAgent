@@ -41,3 +41,9 @@ python_version = "3.12"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 files = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "eval: live-API eval tests (Groq/Gemini). Excluded from the default run; select with -m eval or run via `deepeval test run`.",
+]
+addopts = "-m 'not eval' --strict-markers"

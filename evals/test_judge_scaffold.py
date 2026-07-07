@@ -1,8 +1,11 @@
+import pytest
 from deepeval import assert_test
 from deepeval.metrics import GEval
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
 from evals.judge import build_judge
+
+pytestmark = pytest.mark.eval
 
 
 def test_judge_scaffold() -> None:

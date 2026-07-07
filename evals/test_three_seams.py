@@ -10,6 +10,8 @@ from evals.harness import run_case
 
 GOLDENS = load_goldens()
 
+pytestmark = pytest.mark.eval
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", GOLDENS, ids=[case["id"] for case in GOLDENS])

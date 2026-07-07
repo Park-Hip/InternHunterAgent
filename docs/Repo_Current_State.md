@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0012.8-generate-sql-async
+feature/t0012.9-cosmetic-cleanup
 
 ## Completed milestones
 One line per milestone. Per-ticket detail (files changed, test counts, follow-ups) lives in [`Completion_Reports.md`](Completion_Reports.md).
@@ -276,6 +276,12 @@ Practical commands from the repository layout:
 - Result: `Found 2 errors in 2 files` — same pre-existing residuals as before this ticket (`checkpointer.py:25`, `middleware.py:48`); confirmed identical via `git stash`/re-run. No new errors from the coroutine typing.
 - Command run: `grep -n "to_thread" src/agents/tools/query_clean_jobs.py` / `grep -n "async def generate_sql" src/agents/tools/query_clean_jobs.py` (T0012.8)
 - Result: one `to_thread` hit (`execute_validated_sql`, line 95, unchanged); one `async def generate_sql` hit.
+- Command run: `uv run pytest -q` (T0012.9, verification pass, Docker Desktop not running in this sandbox)
+- Result: `246 passed, 7 skipped, 18 deselected, 4 subtests passed` — the 7 skips are `evals/fixtures/test_fixture_counts.py`'s own reachability guard (`internhunter_eval` Postgres unreachable, port 5433), not a regression; standard suite otherwise green.
+- Command run: `uv run ruff check .` / `uv run mypy` (T0012.9)
+- Result: `ruff` all checks passed; `mypy` unchanged at the same 2 pre-existing residuals (`checkpointer.py:25`, `middleware.py:48`), no new errors.
+- Command run: `uv run python -c "from src.api.app import app; ..."` (T0012.9, confirms nothing imports the deleted `main.py`)
+- Result: imports cleanly, `FastAPI` app object returned.
 
 ## Known issues
 Open known issues, risks, and out-of-scope follow-ups live in their own living register:

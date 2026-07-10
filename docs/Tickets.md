@@ -542,7 +542,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * **The CI gate** — T0011 is **local-first** (a runnable `deepeval test run`); the first `.github/workflows/` PR gate is a deliberate fast-follow ticket (there is no CI infrastructure today).
 * Online/production eval, DAGMetric, and chart-tool metrics — Phase 2/3 in the research, deferred.
 * Any *fix* to the measured behaviors (prompt tuning, honesty rewrites) — this milestone quantifies; fixes are separate follow-ups.
-* Any ingestion-deploy pipeline change (that milestone is sequenced *after* this one — see T0013).
+* Any ingestion-deploy pipeline change (that milestone is sequenced *after* this one — see T0014).
 * Migrating the *agent* off the retired `llama-3.3-70b-versatile` (`Known_Issues.md` F1) — a **separate** follow-up; T0011 depends on a working agent model but does not own that migration.
 * A multi-provider judge matrix or Confident AI cloud.
 
@@ -628,11 +628,11 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Caching/reusing the judge model instance.
 
 ### T0012: Milestone 12 - Hardening & Known-Issue Fixes
-**Objective:** Close out a curated set of already-diagnosed, still-open items from `Known_Issues.md` before Ingestion Deploy Readiness (now T0013) builds on top of an unmeasured/uncleaned baseline — two of these tickets (T0012.2, T0012.3) are the specific T0011.3 findings that T0011.5's baseline run was already blocked on. This milestone does not re-open model-behavior questions that T0011 exists to *measure* (freshness fabrication, hidden-salary phrasing, the redundant double tool-call) — those stay data, not code, follow-ups. It only fixes concrete code-level defects and gaps that were found and logged but never given their own ticket.
+**Objective:** Close out a curated set of already-diagnosed, still-open items from `Known_Issues.md` before Ingestion Deploy Readiness (now T0014) builds on top of an unmeasured/uncleaned baseline — two of these tickets (T0012.2, T0012.3) are the specific T0011.3 findings that T0011.5's baseline run was already blocked on. This milestone does not re-open model-behavior questions that T0011 exists to *measure* (freshness fabrication, hidden-salary phrasing, the redundant double tool-call) — those stay data, not code, follow-ups. It only fixes concrete code-level defects and gaps that were found and logged but never given their own ticket.
 **In Scope:** see sub-tickets below.
 **Out of Scope:**
 * Any of the four model-*behavior* items the T0011 deploy-gating note explicitly scoped to measurement, not fixing.
-* Ingestion Deploy Readiness design/implementation (T0013).
+* Ingestion Deploy Readiness design/implementation (T0014).
 * A new CI gate or online eval (still deferred per T0011's own out-of-scope list).
 
 #### T0012.1: Judge RPM throttle (rate-limit hardening)
@@ -749,5 +749,95 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any agent-side (Groq) change or the agent's Groq-TPD budget constraint — a separate timing limit, not a code fix here.
 * Refining the *agent's own* behavior via prompts, and the matching eval prompt/metric redesign — that is the **v2 refinement** logged in `Known_Issues.md` (Evaluation harness — cost & rate-limit exposure), gated on designing the preferred per-scenario behaviors; not this ticket.
 
-### T0013: Milestone 13 - Ingestion Deploy Readiness (DEFERRED — sequenced after T0012)
+### T0013: Milestone 13 - Pre-Deploy Refinement
+**Objective:** House the disciplined pre-deploy refinement work researched in `research/pre-deploy-refinement-plan.md` (2026-07-07): the path from the current agent-only base to a deployable v1 — **freeze the schema + eval baseline → measure (v1) → scenario/manual-test → prompt-tune + metric-refine (v2) → deploy-harden**. Each phase rests on a frozen, measured predecessor. Phase 0's first step is to **freeze the schema** so all downstream prompt/eval work pins to a stable, deployed contract — that is T0013.1. Later sub-tickets (the eval **metric-set** freeze, the **scenario matrix**, the **prompt-v2 + metric-v2** refinement pass) are authored from the plan as each phase is reached — this milestone does **not** pre-build them (CLAUDE.md §1: implement one ticket only; no future-ticket features). Cross-refs: `research/pre-deploy-refinement-plan.md`, `research/deployment-research-plan.md`, `docs/Known_Issues.md`.
+**Schema-enrichment amendment (2026-07-09, user-approved):** a schema review before the freeze (recorded in `research/schema-enrichment-plan.md`) found the freeze would otherwise lock in *avoidably poor* data — a hardcoded-allowlist `tech_stack`, a hidden-but-populated `job_level`, and no usable time column — so the user approved **enriching the agent-visible schema from 13 → 16 columns before freezing it**. This adds four predecessor sub-tickets (T0013.1–T0013.4) that must land **before** the freeze (now T0013.5). Full evidence, audits, and the external-vocabulary source table are in `research/schema-enrichment-plan.md` §2–§5; read it before implementing any of these.
+**In Scope:** see sub-tickets below.
+**Sequencing (execution order):** T0013.1 (tech_stack) is standalone and may run anytime. T0013.2 → T0013.3 → T0013.4 each edit the same three schema surfaces, so run them in order to avoid conflicts, and **T0013.5 (the freeze) runs LAST** — it records and guards whatever the enrichments produced. Numbering matches this order; do **not** pick up T0013.5 first.
+**Out of Scope:**
+* The T0011.5 baseline **run** itself (already ticketed under T0011; this milestone's freeze is its *precondition*, not a replacement).
+* Any agent-behavior/prompt tuning **beyond** the schema-surface edits the four enrichment tickets require (few-shot rewrites, honesty-rule redesign — the deferred prompt-v2 pass).
+* Deploy topology, security posture, and the CI gate (plan Phase 4/5 — a separate later deploy milestone).
+* Ingestion / `is_active` and the ingestion-owned `first_seen_at`/`last_seen_at` recency timestamps (T0014, deferred; `created_on` in T0013.4 is the *source's* creation date, which needs no accumulate-upsert).
+
+#### T0013.1: Redesign `tech_stack` extraction against an external vocabulary
+**Objective:** Replace the ~70-term hardcoded `tech_dictionary` allowlist — the "hardcoding" the user wants removed — with **extraction against a large external vocabulary**, so `tech_stack` captures the technologies *and* AI/Data techniques that a 2026-07-09 field audit (`research/schema-enrichment-plan.md` §2.2, n=112) showed dominate real postings but are silently dropped today. This is a **production data-quality** change only: it does **not** touch the `clean_jobs` schema, the API, or the eval goldens (which pin to the hand-built fixture whose `tech_stack` is fixed by hand), so it floats free of the freeze and may ship independently. Read `research/schema-enrichment-plan.md` §2 (esp. §2.3 approach, §2.6 sources) before starting.
+**In Scope:**
+* **Vocabulary build (deterministic, no LLM)** — a build script (e.g. `scripts/build_tech_vocabulary.py`) that merges maintained open lists into **one canonical vocabulary + alias→canonical map**, vendored as a committed snapshot (never hand-typed inline):
+  * **GitHub Linguist** (`languages.yml`, MIT) filtered to `type: programming`/`markup` — languages + aliases.
+  * **Devicon** (`devicon.json`, MIT) — frameworks / tools / platforms.
+  * A **curated AI/Data technique seed** (~50 terms in a committed YAML) for the technique layer neither list covers (`Machine Learning`, `Deep Learning`, `NLP`, `Computer Vision`, `ETL`, `Big Data`, `Data Warehouse`/`Lake`, `LLM`, `RAG`, `MLOps`, `Data Visualization`, `A/B Testing`, `BI`, …) — this is the one intentionally-bounded, slow-moving hand list; the unbounded languages/frameworks come from upstream.
+  * Hand aliases for the drift the audit found (`PowerBI`→`Power BI`, `Sql`→`SQL`, `Node`→`Node.js`) and, optionally, a small VI→EN map (`Phân Tích Dữ Liệu`→`Data Analysis`).
+  * Keep the MIT license notices in the vendored snapshot (Simple Icons/CC0 needs none); Simple Icons is optional and, if used, only to *validate/normalize*, not as source-of-truth (it is noisy).
+* **Extraction rewrite** — replace `find_tech_stack` in `src/services/ingestion/transform.py` so it extracts vocabulary terms (word-boundary, case-insensitive) from **both** the source `skills[]` tags **and** the job description/requirement text, emits **canonical** forms, and dedups. This recovers techs buried in messy phrases the current exact-match drops.
+* **Config** — the assembled vocabulary + alias map live in `config/` (e.g. `config/tech_vocabulary.yaml`) per CLAUDE.md (params in config). The old `tech_dictionary` in `config/ingestion.yaml` is removed or demoted; a short **denylist** is optional and only resolves genuine tech-name-vs-common-word ambiguities.
+* **Record the widened definition** in `research/data-ingestion-stage.md` §5: `tech_stack` = technologies **and** core AI/Data techniques/skills (the audit forces this; the narrow languages/frameworks-only definition is superseded).
+* **Manual check** — add a `docs/Manual_Verification_Guide.md` → T0013.1 entry: run the vocabulary build script (it writes the committed snapshot); run `scripts/scrape_spike.py` or a small re-ingest against live data and show **per-posting tech coverage materially increases vs the old dictionary** (audit baseline: dict finds ≥1 tech for ~58% of postings — expect a clear rise); spot-check that `Machine Learning`/`ETL`/`Power BI`-in-a-phrase are now captured and roles/soft-skills (`Data Engineer`, `Communication`) are not.
+**Out of Scope:**
+* Any `clean_jobs` schema, API, or golden/fixture change — this is data-quality only.
+* An LLM-based extractor — extraction stays deterministic (CLAUDE.md: never over-engineer).
+* ESCO/O*NET canonical skill IDs or a full VI skills layer — logged as optional future breadth (§2.6), not MVP.
+
+#### T0013.2: Expose `job_level` to the agent (rewrite golden C6)
+**Objective:** Un-hide the already-populated `job_level` column so the agent can answer the top-tier "what seniority?" filter, and repoint golden **C6** — which currently tests honesty about `job_level` as if it were *absent* — onto an attribute that is genuinely absent. A 2026-07-09 audit (`research/schema-enrichment-plan.md` §3, n=112) confirmed `job_level` is **100% populated, clean English 5-value taxonomy, zero NULLs/Vietnamese** in the AI/Data corpus — hiding real data purely to pass a test inverts the honesty goal. This is a **prompt-only + goldens** change (the column and data already exist in DDL and fixture). Read `research/schema-enrichment-plan.md` §3 first.
+**In Scope:**
+* **Prompts** (`config/prompts.yaml`) — add `job_level` to all three enumeration surfaces that must stay consistent: `schema_context`, the `system_prompt` "Available fields" line, and the `sql_generation` real-columns list. Note the canonical 5 values (`Experienced (non-manager)`, `Manager`, `Fresher/Entry level`, `Intern/Student`, `Director and above`) and that they match with `ILIKE`.
+* **Rewrite golden C6** in `evals/goldens/golden_dataset.json` from an absent-field honesty probe ("…seniority… is not available") into a normal retrieval case (e.g. "Which Data Engineer roles are senior?" with an expected answer that reads `job_level`). Confirm the fixture (`evals/fixtures/seed_eval_db.sql`) carries `job_level` values that make the rewritten case answerable.
+* **Preserve honesty coverage** — move the "genuinely absent attribute" probe onto something *actually* absent (e.g. applicant/application count — `numOfApplications` reads 0 for all API results, per §4.3 — or application deadline; neither is a column). Add/repoint a golden so honesty-about-absence stays tested.
+* **Keep `is_internship`** — it is derived from the `Intern/Student` level and stays as a convenience boolean alongside the full `job_level` ladder.
+* **Manual check** — `docs/Manual_Verification_Guide.md` → T0013.2 entry: ask the live agent "which Data Engineer roles are senior?" and confirm it filters on `job_level` (not a refusal); ask the new absent-attribute question and confirm it still honestly declines; `uv run deepeval test run ... -m eval` (or the harness) shows C6 passing in its rewritten form.
+**Out of Scope:**
+* Any DDL/API change — `job_level` already exists in `scripts/init_db.sql`; this only un-hides it in the prompt layer.
+* The `tech_stack`, `listing_expires_on`, or `created_on` work (their own tickets).
+
+#### T0013.3: Add `listing_expires_on` column (from source `expiredOn`)
+**Objective:** Add a **new, truthful** agent-visible time column, `listing_expires_on`, mapped from the source's real `expiredOn`, so the agent can answer "is this still open / expiring soon?". **Verified 2026-07-09** (`research/schema-enrichment-plan.md` §4.2, live probe n=75): `expiredOn` is **100% present, clean ISO-8601 with tz, and 100% future-dated** — well-supported. This is a genuine schema addition (DDL + pipeline + prompts + fixture), heavier than T0013.2. It makes no claim to be a posting date. Read §4.1–§4.2 first.
+**In Scope:**
+* **DDL** (`scripts/init_db.sql`) — add `listing_expires_on DATE` (nullable) to `clean_jobs`. The eval fixture builds from this same file (`evals/fixtures/loader.py`), so it inherits the column.
+* **Model** — add the field to the ingestion model in `models.py`.
+* **Pipeline** — `src/services/ingestion/normalize/vietnamworks.py` parses `expiredOn` (ISO/epoch → `date`, tolerating null); `clean_store.py` includes it in the insert and the on-conflict set.
+* **Prompts** (`config/prompts.yaml`) — add to the three enumeration surfaces with an **honest** description ("the source's stated listing-expiry date; may be missing"), matched via normal date predicates.
+* **Fixture / goldens** — `evals/fixtures/seed_eval_db.sql` gains the column with a realistic mix (some future dates, some NULL); existing goldens are unaffected; optionally add a "which of these are still open?" golden.
+* **Manual check** — `docs/Manual_Verification_Guide.md` → T0013.3 entry: rebuild the DB from `init_db.sql`, run a small ingest, and confirm `listing_expires_on` is populated with future dates; ask the live agent "which of these jobs are still open?" and confirm it uses the column; `uv run pytest -q` green.
+**Out of Scope:**
+* Any recency/"recently added" answer — that is `created_on` (T0013.4) and the T0014 ingestion-owned timestamps, not this expiry column.
+* Dropping expired rows at ingest (`is_active` soft-expiry) — a T0014 lifecycle concern.
+
+#### T0013.4: Add `created_on` column (source creation date) — gated on a stability re-check
+**Objective:** Add a **truthful posting/creation date**, `created_on`, mapped from the source's `createdOn`, so freshness questions ("which was posted most recently?") become honestly answerable — **retiring golden C1** (which today forces a refusal because `posted_date` is permanently NULL). A 2026-07-09 live probe (`research/schema-enrichment-plan.md` §4.3) found `createdOn` behaves like a **stable** original-creation date (spread over ~2 months, older than the churny `onlineOn` for 75% of postings) — unlike `onlineOn`, it does not appear to churn on re-list. This is a schema addition of the same shape as T0013.3, but **user-approved gated on a mandatory stability re-check**: it must ship only if `createdOn` is confirmed not to reset on an employer edit/re-list. Read §4.1, §4.3 first.
+**In Scope:**
+* **Stability re-check (gate — do this FIRST)** — before any schema change, re-probe the live API across at least two fetches on different days (or re-fetch known `jobId`s) and confirm `createdOn` for a given posting **does not change** while `onlineOn` may. Record the result. **If `createdOn` proves unstable, STOP** — do not add the column; instead leave `posted_date` NULL, keep golden C1 as the refusal probe, and report the finding as a follow-up (the T0014 ingestion-owned `first_seen_at` path remains the fallback).
+* **DDL** — add `created_on DATE` (nullable) to `clean_jobs` in `scripts/init_db.sql` (`posted_date` stays as-is, NULL and unreferenced — do not repurpose it).
+* **Model / pipeline** — field in `models.py`; `normalize/vietnamworks.py` parses `createdOn` (ISO → `date`); `clean_store.py` insert + on-conflict set. Describe it honestly as VietnamWorks' record-creation date ("created on VietnamWorks", not "the role opened").
+* **Prompts** (`config/prompts.yaml`) — add `created_on` to the three enumeration surfaces with the honest description; enable freshness ordering/filtering.
+* **Retire golden C1** in `evals/goldens/golden_dataset.json` — convert "which was posted most recently?" from a must-refuse case into a normal retrieval case that orders by `created_on`; ensure the fixture carries a spread of `created_on` dates. Keep at least one honesty probe elsewhere for a genuinely-absent attribute.
+* **Fixture** — `evals/fixtures/seed_eval_db.sql` gains `created_on` with a realistic spread.
+* **Manual check** — `docs/Manual_Verification_Guide.md` → T0013.4 entry: record the stability re-check result; ask the live agent the C1 freshness question and confirm it now answers truthfully by `created_on` (no fabrication); `uv run pytest -q` green with C1 rewritten.
+**Out of Scope:**
+* Synthesizing a date from `onlineOn` or from title/description prose — explicitly forbidden (that is the fabrication C1 guarded against).
+* Ingestion-owned `first_seen_at`/`last_seen_at` recency — needs accumulate-upsert, deferred to T0014.
+
+#### T0013.5: Freeze the v1 schema contract (record + guard)
+**Objective:** Lock the **enriched 16-column** agent-visible schema and the public API contract as the **v1 deployed schema**, so downstream prompt-tuning and the eval baseline (T0011.5 and the deferred prompt-v2 pass) pin to a stable, reproducible contract — the "schemas fixed to the deployed version" precondition in `research/pre-deploy-refinement-plan.md` §1/§7 (Phase 0). **Runs LAST** in this milestone: it records and guards whatever T0013.2–T0013.4 produced. This is a **record-and-guard** ticket — it adds no columns of its own; it (a) writes the now-scattered contract (`config/prompts.yaml`, `scripts/init_db.sql`, `docs/Known_Issues.md`, the research plan) into one place of record, and (b) turns the informal freeze into an *enforced* one so a future prompt edit cannot silently surface a still-hidden column.
+**In Scope:**
+* **Decision record** — author `docs/Schema_Contract.md` capturing the frozen v1 contract:
+  * The **16 agent-visible columns** — the original 13 (`id, title, company, role, description, tech_stack, location, source_url, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable`) **plus `job_level`, `listing_expires_on`, `created_on`** (T0013.2–T0013.4) — as the frozen set the model reasons over (surface #1), enumerated in **three places that must stay consistent**: `prompts.yaml` `schema_context`, the `system_prompt` "Available fields" line, and the `sql_generation` real-columns line.
+  * The **`/api/v1` request/response contract** (`src/api/schemas.py` `QueryRequest`/`QueryResponse`, surface #4) as frozen and already versioned.
+  * The **DDL columns still hidden from the agent**, each with its reason: `source`/`external_id` = ingestion bookkeeping; **`posted_date` = deliberately `NULL`** (superseded by `created_on` for freshness — kept unreferenced, not repurposed). *(If T0013.4's gate failed and `created_on` was not added, the frozen set is 15 columns and `posted_date` remains the NULL freshness-refusal case — reconcile with the T0013.4 outcome.)*
+  * The **eval fixture DB** (`internhunter_eval`, `evals/fixtures/seed_eval_db.sql`) as the frozen *data* the goldens pin to — a frozen schema **and** frozen data are both required for reproducible before/after prompt comparison (§1d).
+  * **`is_active`** noted as the **single known future agent-visible column** — additive, gated behind T0014, a planned re-calibration delta, explicitly *not* a reason to delay the freeze.
+* **Enforcement guard** — extend `tests/agents/runtime/test_prompts.py` (the existing `test_yaml_schema_context_mentions_rich_schema`) so the freeze is enforced, not just documented, and **flip it to the enriched surface**:
+  * Assert the newly-exposed `job_level`, `listing_expires_on`, `created_on` are **present** in `schema_context` (the enrichments must not silently regress).
+  * Assert the still-hidden columns (`source`, `external_id`, `posted_date`) plus `remote` are **absent** from `schema_context`.
+  * Assert the **`system_prompt` "Available fields" line** contains the 16 agent-visible columns and none of the hidden ones (today untested).
+  * Assert the **`sql_generation` real-columns line** names none of the hidden columns.
+* **Docs:** link `docs/Schema_Contract.md` from `docs/Repo_Current_State.md` and note the freeze there; reconcile the `research/pre-deploy-refinement-plan.md` §1b `job_level` description (now exposed, not hidden).
+* **Manual check:** add a `docs/Manual_Verification_Guide.md` → T0013.5 entry — the doc exists and states the frozen 16 + the hidden-column reasons; `uv run pytest -q` is green with the flipped guard; a deliberate throwaway edit **removing** `job_level` from `schema_context` (or adding `posted_date`) makes the guard *fail* (proving it bites in both directions).
+**Out of Scope:**
+* **Any change to the schema itself** — no column added/removed/renamed here; the enrichments already landed in T0013.2–T0013.4, and this ticket records and guards that shape (`is_active` is explicitly **not** added now).
+* **The eval metric-set freeze** (the other half of plan Phase 0, §5) — a separate T0013 sub-ticket, authored when T0011.5's baseline is set up; the metric set is the eval *instrument*, not the schema.
+* **Prompt-behavior tuning** (few-shot examples, honesty-rule rewrites — plan Phase 3): the freeze pins the *column set*; the SQL-generation *rules* stay open for the deferred prompt-v2 pass.
+* A runtime/DDL-vs-doc drift assertion (reflecting the physical table and diffing it against the doc) — the prompt-layer guard is the MVP; a physical-schema check is over-engineering for a hand-maintained table.
+
+### T0014: Milestone 14 - Ingestion Deploy Readiness (DEFERRED — sequenced after T0012)
 Previously drafted as T0011, then held at T0012; its placeholder sub-tickets were removed and the milestone **re-sequenced after the Model Evaluation milestone (T0011) and the Hardening milestone (T0012)**, because its central honesty guarantee — the agent staying truthful about soft-expired (`is_active = false`) postings — depends on model behavior that must be **measured first** (T0011) and on the eval-blocking/model-behavior bugs T0012 fixes before that measurement can be trusted. The full design decisions reached on 2026-07-03 are recorded in `research/deployment-research-plan.md` §4.1–§4.2: external GitHub Actions scheduler (ingestion-only; the web-API deploy is its own later milestone); **lifecycle load** — drop the `clean_jobs` `TRUNCATE` and switch to accumulate-upsert with **time-based** `is_active` soft-expiry (`expire_after_days`); `is_active` as the one new agent-visible column with an **include-all default + always-on honesty hedge** (prompt nudge, not a hide-inactive view); **Alembic** adoption (the T0009.9 "reset is enough" rationale breaks once a deployed `raw_jobs` accumulates non-re-fetchable history); per-page fetch resilience with retry/backoff. Design references: `Code_Review_Notes.md` → DN-1; `Full_Design_Document.md` §2/§3 (the external-scheduler-vs-"no schedulers" reconciliation is pending and lands with this milestone). Sub-tickets to be authored from that record once the T0011 baseline confirms the model's honesty behavior.

@@ -102,7 +102,7 @@ def to_normalized_job(payload: dict) -> NormalizedJob:
     # onlineOn churns on every employer re-list, approvedOn is an admin approval time,
     # expiredOn is a future expiry — so none is a trustworthy posting date. The reliable
     # path is an ingestion-owned first_seen_at / an honestly-renamed listed_on column,
-    # both of which depend on the accumulate-upsert persistence planned for T0013 (today
+    # both of which depend on the accumulate-upsert persistence planned for T0014 (today
     # clean_jobs is TRUNCATE'd and rebuilt each run). See Known_Issues.md ("posted_date
     # intentionally absent from agent schema") and research/job-site-comparison.md §122.
     # The column is nullable so this is safe to leave until that work lands.

@@ -103,71 +103,33 @@ taxonomy used for precision), `industries`, and a structured **`skills`** array.
 
 ## 1. Headline finding
 
-The Vietnamese internship market is served by a small number of boards, none with a
-friendly API:
+*(Pre-testing analysis — see the update note immediately below for the current, live-tested
+picture.)* The Vietnamese internship market is served by a small number of boards, none with
+a friendly API. At the time of this section, IT-specialist boards (ITviec, TopDev) looked
+like the highest-value sources because they tag postings with real technology skills;
+general boards (TopCV, VietnamWorks) looked weaker on `tech_stack` but strong on internship
+volume; LinkedIn was deprioritized for its anti-bot/ToS exposure.
 
-- **IT-specialist boards — ITviec, TopDev** — the highest-value sources for this
-  project. Both are IT-only and tag each posting with explicit **technology skills**
-  (Python, Java, ReactJS, Node.js, AWS, …) that map almost directly onto a *correct*
-  `clean_jobs.tech_stack`. ITviec is bilingual (EN/VI), easing description handling.
-- **General boards — TopCV, VietnamWorks** — large volume and a first-class
-  internship filter (Vietnamese: *thực tập sinh*), but their tags are mostly **job
-  roles/categories** (frontend, tester, devops) rather than technologies, so
-  `tech_stack` must be derived from the description (§5).
-- **LinkedIn** — global board with Vietnam-localized internship postings; JS-heavy,
-  the strongest anti-bot, and the heaviest ToS/legal baggage (the board behind the
-  well-known scraping lawsuits). Keep as a **last-resort/optional** source.
-
-**Recommendation:** lead with **ITviec + TopDev** for clean technology tags, use
-**TopCV/VietnamWorks** for internship volume, treat **LinkedIn** as optional and
-defer it unless a product reason forces it.
+> **Update 2026-07 — source ranking superseded (see [`job-site-comparison.md`](job-site-comparison.md)).**
+> This recommendation predates live testing. The tested scorecard reaches a different verdict:
+> **VietnamWorks is the selected baseline** (zero anti-bot, structured `jobFunction` taxonomy for
+> precise scoping); **ITviec is co-lead**, and now the stronger source for clean `tech_stack` tags;
+> **TopDev is a supplementary third source**; and **TopCV was tested and found insufficient** — its
+> AI/Data-scoped search 403-walls after one request under free `cloudscraper` (only the generic,
+> non-AI/Data listing is reliably scrapeable). Treat `job-site-comparison.md` as the current source
+> of truth for board choice; this section is historical context for how the target market was
+> originally scoped.
 
 ---
 
 ## 2. Source landscape (Vietnamese boards)
 
-| Source | Domain | Focus | Internship filter | Tag quality for `tech_stack` | Anti-bot |
-|--------|--------|-------|-------------------|------------------------------|----------|
-| **ITviec** | itviec.com | IT only, bilingual EN/VI | keyword / level (intern, fresher) | **High — real technology skill tags** | Cloudflare |
-| **TopDev** | topdev.vn | IT/developer | keyword / level | **High — technology skill tags** | Cloudflare-style |
-| **TopCV** | topcv.vn | General (largest) | first-class (*thực tập sinh*) | Mixed — role tags, techs in description | Rate-limit + Cloudflare |
-| **VietnamWorks** | vietnamworks.com | General (Navigos) | category / keyword | Low — categories, techs in description | Rate-limit + anti-bot |
-| **LinkedIn** | linkedin.com | Global, VN-localized | internship filter | Low — skills are noisy/optional | Strongest; JS render required |
-
-**Implication:** the acquisition layer is a **scraper behind a provider-agnostic
-`JobSource` interface**, with one adapter per board. Start with the IT-specialist
-boards because their technology tags make the transform nearly trivial; add general
-boards for volume; gate LinkedIn behind an explicit decision.
-
-### 2.5. TopCV (topcv.vn) — detailed findings
-
-**Coverage & volume.** One of Vietnam's largest boards (~3M+ monthly views). Dedicated
-internship listing **`https://www.topcv.vn/tim-viec-lam-internship`** with thousands of
-postings (low thousands as of 06/2026 — verify live). Internship is a first-class
-filter.
-
-**URL structure (the crawl surface).**
-- **Internship listing:** `https://www.topcv.vn/tim-viec-lam-internship` (paginated).
-- **Location-filtered:** `…/tim-viec-lam-internship-tai-ha-noi-kl1` (location code
-  suffix `-klN`).
-- **Job detail page:** `https://www.topcv.vn/viec-lam/{title-slug}/{job-id}.html`
-  → the stable **`{job-id}`** is the natural `external_id` for dedup/upsert.
-- Crawl shape: paginate the listing → collect detail URLs/ids → fetch each detail
-  page. (Mirrors existing open-source TopCV crawlers.)
-
-**Fields available on a detail page.** Rich — more than today's `clean_jobs`: title,
-company, salary, location/address, experience level, deadline, description,
-requirements, benefits, **tags**, working hours, plus company info.
-
-**Tags ≠ tech_stack.** TopCV's tags are mostly **roles/categories** (devops, frontend,
-tester, game developer, .net developer, it intern). Only the genuinely
-*technology* terms among them (nodejs, .net, php, flutter, embedded) belong in
-`tech_stack`; the role labels must be dropped. So for TopCV, `tech_stack` is derived
-primarily from the **description** via the keyword dictionary (§5), with tags used only
-where they name a real technology.
-
-**Anti-bot.** TopCV rate-limits and presents Cloudflare-style challenges; naive
-`requests` is throttled/blocked. Use `cloudscraper` first, Scrapfly fallback (§3).
+> **Superseded by [`job-site-comparison.md`](job-site-comparison.md).** This section's
+> per-board table and the TopCV write-up below were pre-testing estimates. `job-site-comparison.md`
+> now has a live-tested scorecard for all five candidates (access method, measured anti-bot
+> behavior, reliability %, latency, AI/Data scoping, `tech_stack` quality) — treat it as the
+> current source of truth for board choice. The one durable finding from this section is the
+> **provider-agnostic `JobSource` adapter** shape (one adapter per board), which still holds.
 
 ### 2.6. Language consideration (applies to all VN boards)
 
@@ -258,6 +220,15 @@ future enhancement. Keeps ingestion deterministic and testable, aligned with the
 project's "don't over-engineer the MVP" rule. Make this an explicit decision in the
 design doc.
 
+> **Update 2026-07-09 — allowlist superseded (see [`schema-enrichment-plan.md`](schema-enrichment-plan.md) §2).**
+> The VietnamWorks live spike showed the source's own `skills[]` tags (present ~98%) are being
+> **discarded** because `find_tech_stack` keeps only terms already in the ~70-entry
+> `config/ingestion.yaml` dictionary. The decided direction inverts this: **trust source tags as
+> primary, denylist non-techs, normalize against an external vocabulary** (GitHub Linguist +
+> devicon, from a committed data file), and keep the keyword dictionary only as a *description
+> backfill*. Still deterministic and no-LLM — it removes the hardcoded-allowlist bottleneck, not
+> the "no LLM in ingestion" rule.
+
 ---
 
 ## 6. Schema implications (raw + clean)
@@ -311,7 +282,8 @@ table only as wide as the agent is prompted to use.
 
 1. **Source market = Vietnamese boards.** Lead with **ITviec + TopDev** (clean
    technology tags), add **TopCV/VietnamWorks** for internship volume, **LinkedIn
-   optional/deferred**.
+   optional/deferred**. *(Superseded by live testing — see the §1 update note:
+   VietnamWorks/ITviec are co-leads, TopDev is supplementary, TopCV is insufficient.)*
 2. **`tech_stack` = technology tags from ITviec/TopDev first, keyword-dictionary
    derivation/backfill from the description** (§5) — deterministic, no LLM. Role labels
    are filtered out.

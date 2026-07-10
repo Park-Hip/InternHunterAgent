@@ -469,6 +469,14 @@ component" is correct for us, but the argument lives at seam 2, not on the tool 
 
 ### 11.3 Honesty = Faithfulness + GEval (two halves)
 
+> **Update — `FaithfulnessMetric` dropped (T0012.10).** This section's plan was implemented,
+> then the metric was **removed** in T0012.10 as redundant with `GEval("Honesty")` (cost
+> reduction, per `eval-cost-and-rate-limits.md`; confirmed against `evals/harness.py`, which
+> imports `ToolCorrectnessMetric` + four `GEval`s only, no `FaithfulnessMetric`). Honesty today
+> is carried entirely by the single `GEval("Honesty")` metric described in
+> `pre-deploy-refinement-plan.md` §5a/§5f, not the two-halves split below. Kept for the
+> reasoning trail — read `pre-deploy-refinement-plan.md` §5a for the current stack.
+
 The MVP_Spec §3 honesty bar splits cleanly:
 - **`FaithfulnessMetric`** with `actual_output` = final answer and `retrieval_context` =
   the tool's returned string catches **fabrication/contradiction** (invented freshness,
@@ -481,6 +489,13 @@ The MVP_Spec §3 honesty bar splits cleanly:
   header). The eval targets the model's *rewriting* at seam 3, not the guardrails.
 
 ### 11.4 Judge model — §5's "Llama-3-70b" recommendation is DEAD
+
+> **Update — judge moved to Google Gemini, not a Groq fallback.** The options weighed below
+> are all Groq-hosted; the decision that actually shipped went a different direction:
+> `config/settings.yaml` has `eval.judge.provider: google`, `model: gemini-2.5-flash`
+> (`thinking_budget: 0` for cost). See `eval-cost-and-rate-limits.md` for the current
+> agent-Groq/judge-Google split and its cost/rate-limit analysis — that doc reflects what's
+> actually running; this section is the earlier decision trail.
 
 - Groq **deprecated `llama-3.3-70b-versatile` on 2026-06-17; shutdown 2026-08-16**
   (free/developer tier). Replacements Groq names: **`openai/gpt-oss-120b`** or
@@ -504,6 +519,13 @@ discussion #8556); verify during implementation.
 
 ### 11.6 CI recipe (greenfield) + the double-Groq-load problem
 
+> **Update — "both on Groq" is no longer true.** The judge moved to Google Gemini (§11.4
+> update); the "double-Groq-load" premise below is stale. The real constraint is now two
+> **separate** free-tier budgets (Groq for the agent, Google for the judge) — see
+> `eval-cost-and-rate-limits.md` §3 for the current, measured rate-limit analysis (RPD is the
+> binding constraint on the judge side, Groq TPD on the agent side). `GROQ_API_KEY` is still
+> needed for the agent; a Google API key is now also required for CI.
+
 `deepeval test run` drops into a GH Actions `.yml`; secret = **`GROQ_API_KEY`**; Confident
 AI is **optional** — skip it (no `CONFIDENT_API_KEY`). Flags: **`-c`** reads the local cache
 to skip unchanged cases (rate-limit relief); **`-n`** parallelizes but **raises concurrent
@@ -519,12 +541,17 @@ gate.
   migration ticket. Caution: migrating the agent to `gpt-oss-120b` may hit the **same
   structured-output/tool-calling bug** (11.4) in the agent's own tool loop — validate on
   migration. This is independent of eval and should not wait for T0011.
+  *(Update: this migration has since happened — `config/settings.yaml` now pins the agent to
+  `qwen/qwen3.6-27b` on Groq, not `llama-3.3-70b-versatile` or `gpt-oss-120b`. F1 is resolved;
+  kept here for the historical trail.)*
 - **F2:** No CI infrastructure exists; T0011 introduces the first `.github/workflows/`.
 
 ### 11.8 Other premade metrics surveyed (not adopted) — recorded 2026-07-07
 
 The harness (`evals/harness.py`) uses `ToolCorrectnessMetric`, `FaithfulnessMetric`, and
-three `GEval`s (§11.3, `Resolved_Issues.md` T0011.3). This subsection surveys the **rest**
+three `GEval`s (§11.3, `Resolved_Issues.md` T0011.3). *(Update: `FaithfulnessMetric` was
+dropped in T0012.10 — see the §11.3 update note. The harness now runs
+`ToolCorrectnessMetric` + four `GEval`s.)* This subsection surveys the **rest**
 of `deepeval==4.0.7`'s premade metric catalog (`.venv/Lib/site-packages/deepeval/metrics/`,
 inspected directly — 40 metric classes total) for candidates that fit this project's
 three-seam, mostly-referenceless, single-turn-plus-conversational goldens (§8.3

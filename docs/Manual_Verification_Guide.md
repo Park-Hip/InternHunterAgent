@@ -764,3 +764,27 @@ T0012.8: Convert `generate_sql` to native async
 4. Run `uv run pytest -q` (full suite) and confirm no regressions.
 5. Run `uv run mypy src` and confirm the same 2 pre-existing residuals as before this ticket (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`) — no new errors introduced.
 6. (Optional, live) With Groq creds + DB available: ask a normal job-data question end-to-end and confirm `query_clean_jobs` still returns the same SQL-backed answer and a `generate_sql` span still appears in Langfuse. Not exercised in this sandbox — state explicitly if skipped.
+
+T0012.10: Reduce eval judge cost & rate-limit exposure (thinking-budget cap + drop redundant metric)
+
+1. Plain suite stays green, no live judge/agent call:
+   ```
+   uv run pytest -q
+   ```
+   Confirm the summary shows the same pass count as before plus the one new test (`evals/test_judge.py::test_build_judge_forwards_thinking_budget_for_google`), with the eval-marked tests still deselected — completes in seconds, no Groq/Gemini call.
+2. Import sanity, no network:
+   ```
+   uv run python -c "from evals.judge import build_judge"
+   uv run python -c "from evals.harness import seam3_metrics"
+   ```
+   Confirm both import cleanly (`harness.py` still imports fine with the `FaithfulnessMetric` import removed).
+3. Confirm `FaithfulnessMetric` is gone from seam 3:
+   ```
+   grep -n "FaithfulnessMetric" evals/harness.py
+   ```
+   Confirm: no hits.
+4. (Creds present — `GOOGLE_API_KEY` + Groq creds + fixture DB) Live judge-agreement spot-check: run 2–3 goldens including at least one honesty probe (C1, C3, or C5) with the thinking cap in place:
+   ```
+   PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval
+   ```
+   Confirm it completes and the seam-3 result set no longer contains a `Faithfulness` key. Compare the `Honesty`/`Task Completion` verdicts against a pre-cap run (`thinking_budget` temporarily reverted to a nonzero value) and confirm no material divergence. If creds aren't available in the coder environment, mark this step BLOCKED and log it as a follow-up in `docs/Known_Issues.md` rather than skipping silently.

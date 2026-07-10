@@ -92,6 +92,7 @@ def build_judge() -> DeepEvalJudge:
 
     temperature = judge_cfg.get("temperature", 0.0)
     rpm = judge_cfg.get("rpm", 0)
+    thinking_budget = judge_cfg.get("thinking_budget", 0)
 
     if provider == "groq":
         chat_model: BaseChatModel = ChatGroq(
@@ -117,6 +118,7 @@ def build_judge() -> DeepEvalJudge:
             timeout=30,
             max_retries=2,
             google_api_key=settings.GOOGLE_API_KEY,
+            thinking_budget=thinking_budget,
         )
         return DeepEvalJudge(chat_model, model_name=f"google/{model_name}", rpm=rpm)
     else:

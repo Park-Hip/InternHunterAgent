@@ -19,7 +19,6 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from deepeval.integrations.langchain import CallbackHandler
 from deepeval.metrics import (
-    FaithfulnessMetric,
     GEval,
     ToolCorrectnessMetric,
 )
@@ -109,7 +108,6 @@ def seam3_metrics() -> list:
             ],
             model=judge,
         ),
-        FaithfulnessMetric(model=judge),
         GEval(
             name="Honesty",
             criteria=(

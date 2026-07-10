@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0012.9-cosmetic-cleanup
+feature/t0012.10-eval-cost-reduction
 
 ## Completed milestones
 One line per milestone. Per-ticket detail (files changed, test counts, follow-ups) lives in [`Completion_Reports.md`](Completion_Reports.md).
@@ -11,11 +11,12 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **M9** (T0009.1–.11) — VietnamWorks data ingestion: `raw_jobs` landing + enriched `clean_jobs`, source-agnostic transform, idempotent loader; plus reset path, bounded query output (Groq `413` fix), and the `get_job_details` detail split.
 - **M10** (T0010.1/.3/.4) — Pre-deploy hardening: typed error contract + graceful answer, true single-table SQL allowlist, off-event-loop LLM call; code-review bugs 3 & 4 fixed.
 - **M11** (T0011.1–.6) — Model evaluation harness: DeepEval judge (Groq→Gemini) + RPM throttle, seeded fixture DB + versioned goldens, three-seam metric stack, Langfuse score writeback.
-- **M12** (T0012.2–.9) — Hardening: qwen `<think>` leak fix, deepeval metric-template unblock, `trace_url` populated, graceful empty-answer fallback, non-str content coercion, eval-test marker hygiene, native-async `generate_sql`, cosmetic cleanup.
+- **M12** (T0012.2–.10) — Hardening: qwen `<think>` leak fix, deepeval metric-template unblock, `trace_url` populated, graceful empty-answer fallback, non-str content coercion, eval-test marker hygiene, native-async `generate_sql`, cosmetic cleanup, eval judge cost/rate-limit reduction (thinking-budget cap + dropped redundant `FaithfulnessMetric`).
 
 ## In progress / next
 - **Milestone 11 not fully closed:** T0011.5 (threshold calibration + baseline report) remains **open** — its two hard prerequisites (T0012.2 qwen `<think>` leak, T0012.3 deepeval metric-template bug) are now cleared, so it is unblocked.
 - **Milestone 12 complete.** Milestone 10 remaining lower-priority items (freshness-honesty determinism, hidden-salary phrasing, the best-effort id-in-SQL nudge) are tracked in [`Known_Issues.md`](Known_Issues.md), not as blocking tickets.
+- **T0012.10's live judge-agreement spot-check is BLOCKED** — no `GOOGLE_API_KEY`/Groq creds in the coder sandbox; logged as a follow-up in [`Known_Issues.md`](Known_Issues.md) for the maintainer to run.
 - **Next recommended ticket:** T0011.5.
 
 ## Current folder structure
@@ -43,6 +44,7 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |   |-- judge.py
 |   |-- writeback.py
 |   |-- test_judge_scaffold.py
+|   |-- test_judge.py
 |   |-- test_goldens_load.py
 |   |-- test_three_seams.py
 |   |-- test_writeback.py
@@ -282,6 +284,18 @@ Practical commands from the repository layout:
 - Result: `ruff` all checks passed; `mypy` unchanged at the same 2 pre-existing residuals (`checkpointer.py:25`, `middleware.py:48`), no new errors.
 - Command run: `uv run python -c "from src.api.app import app; ..."` (T0012.9, confirms nothing imports the deleted `main.py`)
 - Result: imports cleanly, `FastAPI` app object returned.
+- Command run: `uv run pytest evals/test_judge.py -v` (T0012.10, new offline unit test)
+- Result: `1 passed` — `build_judge()`'s google branch forwards `thinking_budget` onto `ChatGoogleGenerativeAI`.
+- Command run: `uv run pytest -q` (T0012.10, full standard suite, Docker Desktop not running in this sandbox)
+- Result: `247 passed, 7 skipped, 18 deselected` — the 7 skips are the fixture DB's own reachability guard (unrelated to this ticket); no regressions.
+- Command run: `uv run python -c "from evals.judge import build_judge"` / `uv run python -c "from evals.harness import seam3_metrics"` (T0012.10)
+- Result: both import cleanly with `FaithfulnessMetric` removed from `harness.py`.
+- Command run: `grep -n "FaithfulnessMetric" evals/harness.py` (T0012.10)
+- Result: no matches — confirmed removed from both the import block and `seam3_metrics()`.
+- Command run: `uv run ruff check .` / `uv run mypy` (T0012.10)
+- Result: `ruff` all checks passed; `mypy` unchanged at the same 2 pre-existing residuals (`checkpointer.py:25`, `middleware.py:48`), no new errors.
+- Command run: `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval` (T0012.10, acceptance-critical live judge-agreement spot-check)
+- Result: **BLOCKED** — no `GOOGLE_API_KEY`/Groq creds in this sandbox; logged as a follow-up in `Known_Issues.md` for the maintainer to run with real credentials.
 
 ## Known issues
 Open known issues, risks, and out-of-scope follow-ups live in their own living register:

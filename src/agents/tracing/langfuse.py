@@ -33,6 +33,7 @@ def get_langfuse_client():
 def build_langfuse_config(
     session_id: str | None = None,
     user_id: str | None = None,
+    prompt_version: str | None = None,
 ) -> dict[str, object]:
     config: dict[str, object] = {}
 
@@ -44,6 +45,8 @@ def build_langfuse_config(
         metadata["langfuse_session_id"] = session_id
     if user_id:
         metadata["langfuse_user_id"] = user_id
+    if prompt_version:
+        metadata["prompt_version"] = prompt_version
 
     if metadata:
         config["metadata"] = metadata

@@ -29,7 +29,7 @@ from deepeval.tracing.trace_test_manager import trace_testing_manager
 from evals.judge import build_judge
 from evals.writeback import write_scores
 from src.agents.runtime.factory import agent_factory
-from src.agents.runtime.prompts import load_schema_context
+from src.agents.runtime.prompts import load_prompt_version, load_schema_context
 from src.agents.tracing.langfuse import get_langfuse_client, get_langfuse_handler
 
 QUERY_TOOL_NAME = "query_clean_jobs"
@@ -339,6 +339,7 @@ async def run_case(case: dict) -> dict:
 
     return {
         "case_id": case["id"],
+        "prompt_version": load_prompt_version(),
         "answer": final_run.answer,
         "tools_called": final_run.tools_called,
         "sql_text": final_run.sql_text,

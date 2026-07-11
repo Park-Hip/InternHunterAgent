@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0012.10-eval-cost-reduction
+feature/t0015.3-prompt-versioning
 
 ## Completed milestones
 One line per milestone. Per-ticket detail (files changed, test counts, follow-ups) lives in [`Completion_Reports.md`](Completion_Reports.md).
@@ -12,12 +12,17 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **M10** (T0010.1/.3/.4) — Pre-deploy hardening: typed error contract + graceful answer, true single-table SQL allowlist, off-event-loop LLM call; code-review bugs 3 & 4 fixed.
 - **M11** (T0011.1–.6) — Model evaluation harness: DeepEval judge (Groq→Gemini) + RPM throttle, seeded fixture DB + versioned goldens, three-seam metric stack, Langfuse score writeback.
 - **M12** (T0012.2–.10) — Hardening: qwen `<think>` leak fix, deepeval metric-template unblock, `trace_url` populated, graceful empty-answer fallback, non-str content coercion, eval-test marker hygiene, native-async `generate_sql`, cosmetic cleanup, eval judge cost/rate-limit reduction (thinking-budget cap + dropped redundant `FaithfulnessMetric`).
+- **M13** (T0013.1-.5) — Schema Enrichment & v1 Freeze (ingestion data-quality + schema/prompt exposure): `tech_stack` extraction now uses a generated external vocabulary snapshot plus bounded AI/Data technique seed; coverage on the 112-record VietnamWorks audit sample rose from the old audit baseline `65/112 (58%)` to `100/112 (89.3%)`. `job_level` is now exposed to the agent and golden C6 reads the populated column, with C7 preserving absent-attribute honesty coverage. `listing_expires_on` is now a nullable DATE column sourced from VietnamWorks `expiredOn`, written through ingestion, exposed to the agent with date-predicate guidance, and represented in the eval fixture. `created_on` is now a nullable DATE column sourced from VietnamWorks `createdOn`, exposed as a record-creation date for freshness ordering, and golden C1 now retrieves by `created_on` instead of refusing. The enriched 16-column v1 schema contract is now recorded in [`Schema_Contract.md`](Schema_Contract.md) and enforced by prompt freeze guards.
+- **M15** (T0015.1) — Behavior-spec reconciliation to the frozen schema: the research behavior spec, glossary scope, coverage map, manual-review checklist, and repo-state docs now align with the frozen 16-column contract. `job_level` and `created_on` are treated as grounded retrievals, the absent-field honesty surface is re-pointed to application deadline / applicant count, C7 is reflected in the coverage map, and the preserved research notes explicitly mark the older 13-column assumptions as reconciled history rather than live guidance.
+- **M15** (T0015.3) — Prompt versioning mechanism: `config/prompts.yaml` now carries a top-level `prompt_version`, the runtime loads it explicitly, Langfuse trace metadata records it without the tracing layer importing prompt loaders, and eval runs surface the same version in `run_case` results and `test_three_seams` output so later v1↔v2 comparisons are attributable to one exact prompt snapshot.
 
 ## In progress / next
 - **Milestone 11 not fully closed:** T0011.5 (threshold calibration + baseline report) remains **open** — its two hard prerequisites (T0012.2 qwen `<think>` leak, T0012.3 deepeval metric-template bug) are now cleared, so it is unblocked.
 - **Milestone 12 complete.** Milestone 10 remaining lower-priority items (freshness-honesty determinism, hidden-salary phrasing, the best-effort id-in-SQL nudge) are tracked in [`Known_Issues.md`](Known_Issues.md), not as blocking tickets.
 - **T0012.10's live judge-agreement spot-check is BLOCKED** — no `GOOGLE_API_KEY`/Groq creds in the coder sandbox; logged as a follow-up in [`Known_Issues.md`](Known_Issues.md) for the maintainer to run.
-- **Next recommended ticket:** T0011.5.
+- **Schema-enrichment sequence complete:** the v1 schema contract is recorded and guarded. **Next recommended ticket:** T0011.5 (threshold calibration + baseline report) remains the eval-baseline calibration ticket on the broader roadmap.
+- **T0015.1 is complete; T0015.2 is next within Milestone 15.** The remaining work in this prompt-engineering sequence is the wording/policy sign-off ticket: finalize the §12 open decisions and the G47 canonical phrasing against the already-reconciled 16-column schema.
+- **T0015.3 is complete; T0015.4 can now consume the version stamp.** The prompt version is now available in runtime traces and eval outputs, so the manual matrix/eval-comparison work can stamp each row with an exact prompt label after T0015.2's wording sign-off.
 
 ## Current folder structure
 ```text
@@ -25,7 +30,14 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |-- config/
 |   |-- ingestion.yaml
 |   |-- prompts.yaml
-|   `-- settings.yaml
+|   |-- settings.yaml
+|   |-- tech_seed.yaml
+|   `-- tech_vocabulary.yaml
+|-- data/
+|   `-- vendor/
+|       |-- README.md
+|       |-- devicon.json
+|       `-- languages.yml
 |-- docker-compose.yml
 |-- docker/
 |   `-- Dockerfile
@@ -34,6 +46,7 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |   `-- langfuse/
 |       `-- README.md
 |-- scripts/
+|   |-- build_tech_vocabulary.py
 |   |-- eval_judge_spike.py
 |   |-- init_db.sql
 |   `-- reset_db.sql
@@ -57,6 +70,7 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |       |-- __init__.py
 |       `-- golden_dataset.json
 |-- docs/
+|   `-- Schema_Contract.md
 |-- src/
 |   |-- agents/
 |   |   |-- runtime/
@@ -156,6 +170,7 @@ Practical commands from the repository layout:
 - `uv run ruff check .` (lint; config in `pyproject.toml` `[tool.ruff]`, `scripts/` spikes excluded)
 - `uv run mypy` (type check `src`; config in `pyproject.toml` `[tool.mypy]`, pydantic plugin enabled)
 - `uv run python scripts/eval_judge_spike.py` (throwaway judge JSON-reliability spike, T0011.1)
+- `uv run python scripts/build_tech_vocabulary.py` (refreshes `data/vendor/{languages.yml,devicon.json}` and rebuilds `config/tech_vocabulary.yaml`, T0013.1)
 - `PYTHONUTF8=1 uv run deepeval test run evals/test_judge_scaffold.py -m eval` (harness scaffold; `PYTHONUTF8=1` needed on Windows — see `Known_Issues.md`; `-m eval` needed post-T0012.7)
 - `python -m evals.fixtures.loader` (builds/refreshes the `internhunter_eval` fixture DB from scratch, prints `COUNT(*)`, T0011.2)
 - `python -c "from evals.fixtures.loader import reset_fixture; reset_fixture()"` (drops + rebuilds the fixture tables)
@@ -165,6 +180,50 @@ Practical commands from the repository layout:
 - `docker compose -f infra/docker-compose.yaml up --build` (Langfuse observability stack)
 
 ## Build/test status
+- Command run: `uv run pytest tests/services/ingestion/test_transform.py tests/services/ingestion/test_normalize_vietnamworks.py -q` before implementation (T0013.3)
+- Result: expected RED
+- Summary: collection failed because `to_date` was not yet implemented
+- Command run: `uv run pytest tests/services/ingestion/test_transform.py tests/services/ingestion/test_normalize_vietnamworks.py -q` after implementation (T0013.3)
+- Result: passed
+- Summary: `91 passed, 4 subtests passed`
+- Command run: `uv run pytest tests/agents/runtime/test_prompts.py tests/services/ingestion/test_clean_store.py -q` (T0013.3)
+- Result: passed
+- Summary: `20 passed`
+- Command run: `uv run pytest evals/test_goldens_load.py evals/fixtures/test_fixture_counts.py -q` (T0013.3)
+- Result: golden-load passed; fixture-count tests skipped because eval Postgres was unreachable
+- Summary: `2 passed, 7 skipped`
+- Command run: `uv run pytest -q` (T0013.3)
+- Result: passed
+- Summary: `255 passed, 7 skipped (eval Postgres unreachable on localhost:5433), 19 deselected, 4 subtests passed`
+- Command run: `uv run ruff check .` (T0013.3)
+- Result: `All checks passed!`
+- Command run: `uv run mypy src` (T0013.3)
+- Result: `Found 2 errors in 2 files (checked 41 source files)` — both pre-existing residuals documented in `Known_Issues.md` (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`); no new ingestion/config errors.
+- Command run: `uv run pytest evals/test_goldens_load.py` (T0013.2)
+- Result: passed
+- Summary: `2 passed`
+- Command run: `uv run pytest -q` (T0013.2)
+- Result: passed
+- Summary: `257 passed, 19 deselected, 4 subtests passed`
+- Command run: `uv run python scripts/build_tech_vocabulary.py` (T0013.1)
+- Result: wrote `config/tech_vocabulary.yaml`, `data/vendor/languages.yml`, and `data/vendor/devicon.json`
+- Summary: `Canonical terms: 1204`, `Aliases: 580`
+- Command run: `uv run pytest tests/services/ingestion/test_transform.py -q`
+- Result: passed
+- Summary: `58 passed`
+- Command run: `uv run python scripts/audit_fields.py`
+- Result: old audit baseline reproduced
+- Summary: dictionary baseline `65/112 (58%)` records with >=1 tech in source tags
+- Command run: `uv run python -c "import json; from src.services.ingestion.transform import find_tech_stack; data=json.load(open('research/experiments/vietnamworks_ai_data_sample.json', encoding='utf-8')); new=sum(1 for row in data if find_tech_stack(*(row.get('tech_stack_candidate') or []))); print(f'new={new}/{len(data)} ({new/len(data):.1%})')"`
+- Result: new vocabulary coverage measured
+- Summary: `new=100/112 (89.3%)`
+- Command run: `uv run pytest -q`
+- Result: passed
+- Summary: `250 passed, 7 skipped (eval Postgres unreachable on localhost:5433), 18 deselected, 4 subtests passed`
+- Command run: `uv run ruff check .`
+- Result: `All checks passed!`
+- Command run: `uv run mypy src`
+- Result: `Found 2 errors in 2 files (checked 41 source files)` — both pre-existing residuals documented in `Known_Issues.md` (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`); no new ingestion/config errors.
 - Command run: `uv run pytest`
 - Result: passed
 - Summary: `231 passed` (includes `evals/test_judge_scaffold.py`, incidentally collected by plain pytest — see `Known_Issues.md`)
@@ -296,6 +355,59 @@ Practical commands from the repository layout:
 - Result: `ruff` all checks passed; `mypy` unchanged at the same 2 pre-existing residuals (`checkpointer.py:25`, `middleware.py:48`), no new errors.
 - Command run: `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval` (T0012.10, acceptance-critical live judge-agreement spot-check)
 - Result: **BLOCKED** — no `GOOGLE_API_KEY`/Groq creds in this sandbox; logged as a follow-up in `Known_Issues.md` for the maintainer to run with real credentials.
+- Command run: `uv run pytest tests/services/ingestion/test_normalize_vietnamworks.py evals/test_goldens_load.py -q` (T0013.4)
+- Result: passed
+- Summary: `34 passed, 4 subtests passed`
+- Command run: `uv run pytest -q` (T0013.4)
+- Result: passed with eval fixture skips because eval Postgres was unreachable
+- Summary: `257 passed, 7 skipped (eval Postgres unreachable on localhost:5433), 19 deselected, 4 subtests passed`
+- Command run: `uv run ruff check .` (T0013.4)
+- Result: `All checks passed!`
+- Command run: `docker compose exec -T postgres psql -U internhunter -d internhunter -c "\d clean_jobs"` (T0013.4 manual DB schema check)
+- Result: **BLOCKED** — Docker Desktop/daemon was not available in this sandbox even after approved Docker access.
+- Command run: PowerShell static fixture checks for date literals and latest row (T0013.4)
+- Result: passed
+- Summary: 40 fixture date literals (18 expiry + 22 `created_on`), insert column list includes `listing_expires_on, created_on`, and the unique latest `DATE '2026-07-10'` is on the Home Credit Data Analyst row.
+- Command run: `uv run pytest tests/agents/runtime/test_prompts.py -q` (T0013.5)
+- Result: passed
+- Summary: `12 passed`
+- Command run: deliberate throwaway removal of `job_level` from `schema_context`, then `uv run pytest tests/agents/runtime/test_prompts.py -q` (T0013.5 manual guard proof)
+- Result: expected failure; edit reverted
+- Summary: failed on missing visible `job_level`
+- Command run: deliberate throwaway addition of `posted_date` to the system available-fields line, then `uv run pytest tests/agents/runtime/test_prompts.py -q` (T0013.5 manual guard proof)
+- Result: expected failure; edit reverted
+- Summary: failed on hidden `posted_date` leak
+- Command run: `uv run pytest tests/agents/runtime/test_prompts.py -q` after reverting throwaway edits (T0013.5)
+- Result: passed
+- Summary: `12 passed`
+- Command run: `uv run pytest tests/agents/runtime/test_prompts.py -q` (T0015.1)
+- Result: passed
+- Summary: `12 passed` — docs-only reconciliation kept the prompt/schema guard green.
+- Command run: `uv run python -c "from src.agents.runtime.prompts import load_prompt_version; print(load_prompt_version())"` (T0015.3)
+- Result: passed
+- Summary: printed `v1`
+- Command run: temporary `prompt_version: v2-test` edit in `config/prompts.yaml`, then `uv run python -c "from src.agents.runtime.prompts import load_prompt_version; print(load_prompt_version())"` (T0015.3)
+- Result: passed; edit reverted
+- Summary: printed `v2-test`, then restored `prompt_version: v1`
+- Command run: `uv run pytest tests/agents/runtime/test_prompts.py tests/agents/runtime/test_react_agent.py -q` (T0015.3)
+- Result: passed
+- Summary: `23 passed`
+- Command run: `uv run pytest tests/agents/runtime/test_prompts.py -q` (T0015.3)
+- Result: passed
+- Summary: `16 passed`
+- Command run: first `uv run pytest -q` (T0013.5)
+- Result: failed because a reachable local `internhunter_eval` DB had stale schema
+- Summary: 7 fixture-count errors: `clean_jobs` lacked `listing_expires_on`
+- Command run: `uv run python -m evals.fixtures.loader` (T0013.5)
+- Result: failed for the same stale existing eval table
+- Command run: `uv run python -c "from evals.fixtures.loader import reset_fixture; reset_fixture(); print('fixture reset complete')"` (T0013.5)
+- Result: passed
+- Summary: fixture DB dropped/rebuilt with current schema
+- Command run: `uv run pytest -q` (T0013.5)
+- Result: passed
+- Summary: `266 passed, 19 deselected, 4 subtests passed`
+- Command run: `uv run ruff check .` (T0013.5)
+- Result: `All checks passed!`
 
 ## Known issues
 Open known issues, risks, and out-of-scope follow-ups live in their own living register:
@@ -307,6 +419,6 @@ register so it stays focused on what is still open). A full per-module logic rev
 (open) / `Resolved_Issues.md` (closed).
 
 ## Next recommended ticket
-Milestone 9 (data ingestion) is closed, and the structured-query-vs-detail split is complete (T0009.10 bounded `query_clean_jobs`, T0009.11 `get_job_details`). Milestone 10 (pre-deploy hardening) is essentially complete through T0010.7. T0011.1 (judge spike + harness scaffold), T0011.2 (eval fixture DB + golden dataset), T0011.3 (three-seam instrumentation + metric stack), and T0011.4 (Langfuse score writeback) are all closed: the judge is picked, `internhunter_eval` is seeded and pinned, the 17-case golden dataset loads, `evals/harness.py` + `evals/test_three_seams.py` run the agent end-to-end and score every seam, and `evals/writeback.py` attaches every score onto the same Langfuse trace as the raw agent run. T0011.6 (Gemini judge provider) is also closed, plus its rate-limit follow-up (judge RPM throttle, now formally T0012.1). T0012.2 (qwen `<think>` leak fix), T0012.3 (`deepeval` `ArgumentCorrectnessMetric`/`TaskCompletionMetric` template-bug fix), T0012.4 (populate `trace_url`, closing C4), T0012.5 (graceful empty-answer fallback, closing the remaining [MED] item), T0012.6 (coerce non-str model content in `generate_sql`, closing the last pre-existing mypy residual on `query_clean_jobs.py`), T0012.7 (`eval` pytest marker, closing the T0011.1/T0011.6 plain-suite live-network findings), and T0012.8 (native-async `generate_sql`, closing the last "Query tooling & SQL safety" finding) are all now closed — Milestone 12 (Hardening) is complete. Seam-1/seam-3 scores are no longer blanked by the deepeval bug, both hard prerequisites for T0011.5 are cleared, the API response's `trace_url` field is a real Langfuse URL when tracing is enabled, an empty/unreadable agent answer now returns `200` + `FALLBACK_ANSWER` instead of a `500`, `generate_sql` no longer risks an `AttributeError` on a list-content model reply, `uv run pytest` no longer makes a live Groq/Gemini call or takes several minutes, and `generate_sql` awaits the Groq model natively instead of parking a thread-pool worker per SQL-gen round-trip. Two follow-ups remain open from T0012.2/T0012.3 (see `Known_Issues.md`): the full live A3/C3 data-answer re-check from T0012.2 (Docker wasn't running in that sandbox), and a one-golden live spot-check of the new "Argument Correctness"/"Task Completion" GEval scores from T0012.3 (deliberately skipped this session to avoid API spend). Two low-priority follow-ups from T0012.7 are also logged: `evals/conftest.py`'s `DATABASE_URL` redirect still fires at collection time regardless of the marker, and `deepeval test run` requires an explicit `-m eval` passthrough to select the live tests. **Recommended next: T0011.5** (threshold calibration + baseline report) — both hard prerequisites are now cleared, so this can proceed. **Ingestion Deploy Readiness is renumbered T0013 (deferred, sequenced after T0012)**, its full design captured in `research/deployment-research-plan.md` §4.1–§4.2, to be ticketed once the evaluation baseline lands.
+Milestone 15 now has both the reconciled behavior spec (T0015.1) and the prompt-version stamp (T0015.3) in place. **Recommended next: T0015.2** to settle the remaining §12 open decisions and finalize the G47 canonical wording sign-off before T0015.4 builds the manual matrix on top of this versioning mechanism.
 
 Other future phases (resume/embedding retrieval, charts, typed error contract) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.

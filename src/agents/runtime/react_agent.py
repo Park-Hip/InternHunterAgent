@@ -4,6 +4,7 @@ from typing import Any
 from langchain.messages import HumanMessage
 
 from src.agents.runtime.factory import agent_factory
+from src.agents.runtime.prompts import load_prompt_version
 from src.agents.tracing.langfuse import build_langfuse_config, get_langfuse_client, get_langfuse_handler
 
 
@@ -17,7 +18,11 @@ class AgentRuntime:
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> dict[str, str | None]:
-        config = build_langfuse_config(session_id=session_id, user_id=user_id)
+        config = build_langfuse_config(
+            session_id=session_id,
+            user_id=user_id,
+            prompt_version=load_prompt_version(),
+        )
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)

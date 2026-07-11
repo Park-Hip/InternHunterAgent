@@ -690,6 +690,26 @@ T0011.6: Gemini judge provider (Groq-load relief)
 * **Judge-agreement gate:** see `docs/Known_Issues.md` → Evaluation harness (T0011.6) for the live comparison result and its caveats (Groq/Google free-tier availability at the time of the run).
 * **Judge RPM throttle (rate-limit relief follow-up, 2026-07-05):** `config/settings.yaml` `eval.judge.rpm: 8` paces judge calls under Gemini's ~10 RPM free-tier cap instead of firing all ~119 judge calls for the 17 goldens back-to-back. Verify: `python -c "from evals.judge import _RpmThrottle; import time; t=_RpmThrottle(2); s=time.monotonic(); [t.wait() for _ in range(3)]; print(time.monotonic()-s)"` prints `~60` (the 3rd call waits for the window to free up). Live: `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -k "A1 or A3"` should show a visible pause (~7.5s at `rpm=8`) between consecutive judge calls in the output instead of an immediate burst.
 
+### T0015: Milestone 15 — Prompt Engineering v2
+
+T0015.1: Reconcile the behavior spec to the frozen 16-column schema
+
+* Run `git diff --stat` and confirm the kept changes are limited to `research/agent-behavior-question-bank.md`, `research/pre-deploy-refinement-plan.md`, `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, and `docs/Completion_Reports.md` — no `.py`, `.json`, `.yaml`, `src/`, `evals/`, or SQL files changed for this ticket.
+* Run `rg -n "SENIORITY-REFUSAL|CREATED-ON-CAVEAT|FRESHNESS-REFUSAL|ABSENT-FIELD" research/agent-behavior-question-bank.md` and confirm `SENIORITY-REFUSAL` appears only in a dated retirement note, `CREATED-ON-CAVEAT` exists as a live glossary row, `FRESHNESS-REFUSAL` is narrowed to the still-open / `listing_expires_on IS NULL` case, and `ABSENT-FIELD` now cites application deadline / applicant count as the absent examples.
+* Run `rg -n "⚠|Reconciled 2026-07-11" research/agent-behavior-question-bank.md` and confirm every remaining supersede marker is preserved as a dated resolved note — no dangling "superseded, apply later" warnings remain in §0, G17, or G18.
+* Read G05, G07, G17, G18, G47, and §11 in `research/agent-behavior-question-bank.md` end-to-end and confirm there is no surviving instruction that treats `job_level` or `created_on` as absent/unqueryable. Confirm C1 is framed as `created_on` retrieval with a caveat, C6 is framed as `job_level` retrieval, and C7 is present as the absent-deadline probe.
+* Read `research/pre-deploy-refinement-plan.md` §3 and confirm the dated T0015.1 note preserves the original lever table while re-pointing the highest-value few-shot targets away from C1/C6 and onto C2/C5/C7/A4/C4.
+* Run `uv run pytest tests/agents/runtime/test_prompts.py -q` and confirm it stays green — this ticket is docs-only and must not disturb the prompt/schema guardrail.
+
+T0015.3: Prompt versioning mechanism
+
+* Run `uv run python -c "from src.agents.runtime.prompts import load_prompt_version; print(load_prompt_version())"` and confirm it prints `v1`.
+* Temporarily change the top-level `prompt_version:` in `config/prompts.yaml` to `v2-test`, re-run the one-liner above, and confirm it prints `v2-test`; then revert the file back to `v1`.
+* Run `uv run pytest tests/agents/runtime/test_prompts.py tests/agents/runtime/test_react_agent.py -q` and confirm the loader tests and the runtime/tracing call-argument assertions are all green.
+* Run `uv run pytest tests/agents/runtime/test_prompts.py -q` and confirm the existing prompt/schema guard still passes — the top-level `prompt_version` key must not leak into the scanned `prompts.*` surfaces.
+* With Groq + Langfuse creds + Postgres available, send one `POST /api/v1/agent/chat` request, open the Langfuse trace, and confirm trace metadata includes `prompt_version: v1`. If creds are absent, confirm tracing-disabled mode still no-ops cleanly.
+* With judge creds + the eval fixture DB available, run `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval -k "A1"` and confirm the per-case block prints `prompt_version: v1`.
+
 T0012.4: Populate trace_url in the agent response
 
 * Run `uv run pytest tests/agents/runtime/test_react_agent.py tests/agents/test_service.py tests/api/test_query.py -v` and confirm all pass — `AgentRuntime.ainvoke` now returns a `trace_url` key alongside `answer`/`trace_id`, and `service.py`/the API response shape (`{answer, session_id, trace_id, trace_url}`) is unchanged.
@@ -788,3 +808,141 @@ T0012.10: Reduce eval judge cost & rate-limit exposure (thinking-budget cap + dr
    PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval
    ```
    Confirm it completes and the seam-3 result set no longer contains a `Faithfulness` key. Compare the `Honesty`/`Task Completion` verdicts against a pre-cap run (`thinking_budget` temporarily reverted to a nonzero value) and confirm no material divergence. If creds aren't available in the coder environment, mark this step BLOCKED and log it as a follow-up in `docs/Known_Issues.md` rather than skipping silently.
+
+T0013.1: Redesign `tech_stack` extraction against an external vocabulary
+
+1. Refresh the committed vocabulary snapshot:
+   ```
+   uv run python scripts/build_tech_vocabulary.py
+   ```
+   Confirm it writes `config/tech_vocabulary.yaml`, `data/vendor/languages.yml`, and `data/vendor/devicon.json`, and prints a canonical count in the hundreds. Observed during implementation: `Canonical terms: 1204`, `Aliases: 580`.
+2. Run the automated suite:
+   ```
+   uv run pytest -q
+   ```
+   Confirm the suite is green, especially `tests/services/ingestion/test_transform.py` and `tests/services/ingestion/test_normalize_vietnamworks.py`.
+3. Confirm source-tag coverage rises on the 112-record audit sample:
+   ```
+   uv run python scripts/audit_fields.py
+   uv run python -c "import json; from src.services.ingestion.transform import find_tech_stack; data=json.load(open('research/experiments/vietnamworks_ai_data_sample.json', encoding='utf-8')); new=sum(1 for row in data if find_tech_stack(*(row.get('tech_stack_candidate') or []))); print(f'new={new}/{len(data)} ({new/len(data):.1%})')"
+   ```
+   Confirm `scripts/audit_fields.py` still reports the old audit baseline `65/112 (58%)`, and the new vocabulary extractor materially improves it. Observed during implementation: `100/112 (89.3%)`.
+4. Run spot-checks in a REPL or one-liner:
+   ```
+   uv run python -c "from src.services.ingestion.transform import find_tech_stack; checks=[('Data Visualization & Analysis (Power BI; SQL - basic; Python - basic)',), ('Machine Learning','ETL'), ('Data Engineer','Communication')]; [print(args, '=>', find_tech_stack(*args)) for args in checks]"
+   ```
+   Confirm the phrase returns `Data Visualization`, `Power BI`, `SQL`, and `Python`; `Machine Learning`/`ETL` are included; and `Data Engineer`/`Communication` returns `None`.
+
+T0013.2: Expose `job_level` to the agent and rewrite golden C6
+
+1. Run the golden-load check:
+   ```
+   uv run pytest evals/test_goldens_load.py
+   ```
+   Confirm the golden set now loads 18 cases with 6 honesty probes.
+2. Boot the agent and ask:
+   ```
+   What seniority level are the Data Engineer roles?
+   ```
+   Confirm it reads `job_level` and reports the levels (3 `Experienced (non-manager)` + 1 `Manager`) rather than refusing with "not available".
+3. Ask:
+   ```
+   What's the application deadline for the Data Engineer roles?
+   ```
+   Confirm it preserves the honesty behavior: deadlines are not in the data, and no date is fabricated.
+4. If live eval credentials and the fixture DB are available, run:
+   ```
+   PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval
+   ```
+   Confirm C6 passes in its rewritten retrieval form and C7 passes as the honesty probe.
+
+T0013.3: Add `listing_expires_on` column from VietnamWorks `expiredOn`
+
+1. Apply/confirm the DB schema:
+   ```
+   docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "\d clean_jobs"
+   ```
+   Confirm `clean_jobs` includes `listing_expires_on date`.
+2. Run a small live VietnamWorks ingest using the existing entrypoint:
+   ```
+   uv run python -m src.services.ingestion.loader
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT external_id, listing_expires_on FROM clean_jobs WHERE listing_expires_on IS NOT NULL ORDER BY listing_expires_on LIMIT 5;"
+   ```
+   Confirm `listing_expires_on` is populated with future dates from source `expiredOn`.
+3. Rebuild the eval fixture:
+   ```
+   uv run python -m evals.fixtures.loader
+   ```
+   Confirm it still loads 22 rows and includes the new nullable expiry column.
+4. Ask the live agent:
+   ```
+   Which of these jobs are still open?
+   ```
+   Confirm it uses `listing_expires_on` with a date predicate such as `listing_expires_on >= CURRENT_DATE`, does not use `ILIKE` for the date, does not refuse, and hedges honestly that `NULL` expiry means unknown.
+5. Run:
+   ```
+   uv run pytest -q
+   ```
+   Confirm the non-eval suite is green.
+
+T0013.4: Add `created_on` column from VietnamWorks `createdOn`
+
+1. Record the stability re-check result: Gate satisfied by the 2026-07-09 live probe (`research/schema-enrichment-plan.md` §4.3): `createdOn` is a stable original-creation date, older than `onlineOn` for 75% of postings, does not reset on re-list. No new column added under an unstable field.
+2. Rebuild/confirm the DB schema:
+   ```
+   docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "\d clean_jobs"
+   ```
+   Confirm `clean_jobs` includes `created_on date`.
+3. Run a small live VietnamWorks ingest using the existing entrypoint:
+   ```
+   uv run python -m src.services.ingestion.loader
+   docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT external_id, created_on FROM clean_jobs WHERE created_on IS NOT NULL ORDER BY created_on DESC LIMIT 5;"
+   ```
+   Confirm `created_on` is populated from source `createdOn`.
+4. Rebuild the eval fixture:
+   ```
+   uv run python -m evals.fixtures.loader
+   ```
+   Confirm it loads 22 rows and all 22 have populated `created_on`.
+5. Ask the live agent:
+   ```
+   Which job was posted most recently?
+   ```
+   Confirm it orders by `created_on`, does not refuse, does not fabricate a date, names a real posting, and honestly frames `created_on` as a record-creation date on VietnamWorks rather than a guaranteed role-open date.
+6. Run:
+   ```
+   uv run pytest -q
+   ```
+   Confirm the suite is green with C1 rewritten as a retrieval golden.
+
+T0013.5: Freeze the v1 schema contract
+
+1. Confirm `docs/Schema_Contract.md` exists and states the frozen 16 agent-visible columns, the three prompt surfaces, the `/api/v1` request/response fields, and the hidden-column reasons for `source`, `external_id`, and `posted_date`.
+2. Run:
+   ```
+   uv run pytest -q
+   ```
+   Confirm the suite is green with the extended prompt freeze guard.
+3. Prove the guard fails when a visible column disappears:
+   - Temporarily delete the `job_level` line from `config/prompts.yaml` under `prompts.schema_context`.
+   - Run:
+     ```
+     uv run pytest tests/agents/runtime/test_prompts.py -q
+     ```
+   - Confirm the test fails.
+   - Revert the throwaway edit by restoring the deleted `job_level` line.
+4. Prove the guard fails when a hidden column leaks:
+   - Temporarily add `posted_date` to the `The database exposes these columns:` line in `config/prompts.yaml`.
+   - Run:
+     ```
+     uv run pytest tests/agents/runtime/test_prompts.py -q
+     ```
+   - Confirm the test fails.
+   - Revert the throwaway edit by removing `posted_date` from that line.
+5. Run:
+   ```
+   uv run pytest tests/agents/runtime/test_prompts.py -q
+   ```
+   Confirm the prompt guard is green again after both throwaway edits are reverted.

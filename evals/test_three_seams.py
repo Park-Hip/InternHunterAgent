@@ -19,6 +19,7 @@ async def test_three_seams(case: dict) -> None:
     result = await run_case(case)
 
     print(f"\n=== {result['case_id']} ===")
+    print(f"prompt_version: {result['prompt_version']}")
     print(f"question/last-turn: {case.get('input') or case.get('turns', [None])[-1]}")
     print(f"answer: {result['answer']}")
     print(f"tools_called: {result['tools_called']}")

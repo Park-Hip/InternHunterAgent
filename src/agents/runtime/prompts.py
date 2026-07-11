@@ -3,6 +3,14 @@ from langchain.messages import SystemMessage
 from src.core.config import settings
 
 
+def load_prompt_version() -> str:
+    prompt_version = settings.prompts_yaml.get("prompt_version")
+    if not isinstance(prompt_version, str) or not prompt_version.strip():
+        raise ValueError("Missing or empty top-level 'prompt_version' in config/prompts.yaml")
+
+    return prompt_version.strip()
+
+
 def load_system_prompt() -> SystemMessage:
     prompts_root = settings.prompts_yaml.get("prompts")
     if not isinstance(prompts_root, dict):

@@ -841,3 +841,74 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 
 ### T0014: Milestone 14 - Ingestion Deploy Readiness (DEFERRED — sequenced after T0012)
 Previously drafted as T0011, then held at T0012; its placeholder sub-tickets were removed and the milestone **re-sequenced after the Model Evaluation milestone (T0011) and the Hardening milestone (T0012)**, because its central honesty guarantee — the agent staying truthful about soft-expired (`is_active = false`) postings — depends on model behavior that must be **measured first** (T0011) and on the eval-blocking/model-behavior bugs T0012 fixes before that measurement can be trusted. The full design decisions reached on 2026-07-03 are recorded in `research/deployment-research-plan.md` §4.1–§4.2: external GitHub Actions scheduler (ingestion-only; the web-API deploy is its own later milestone); **lifecycle load** — drop the `clean_jobs` `TRUNCATE` and switch to accumulate-upsert with **time-based** `is_active` soft-expiry (`expire_after_days`); `is_active` as the one new agent-visible column with an **include-all default + always-on honesty hedge** (prompt nudge, not a hide-inactive view); **Alembic** adoption (the T0009.9 "reset is enough" rationale breaks once a deployed `raw_jobs` accumulates non-re-fetchable history); per-page fetch resilience with retry/backoff. Design references: `Code_Review_Notes.md` → DN-1; `Full_Design_Document.md` §2/§3 (the external-scheduler-vs-"no schedulers" reconciliation is pending and lands with this milestone). Sub-tickets to be authored from that record once the T0011 baseline confirms the model's honesty behavior.
+
+### T0015: Milestone 15 - Prompt Engineering v2 (scenario-driven behavior tuning)
+**Objective:** Execute the **scenario-driven prompt-optimization pass** that `research/pre-deploy-refinement-plan.md` §2–§4 designs and that T0013 deliberately deferred ("this milestone does not pre-build [the scenario matrix / prompt-v2 pass]"). Now that the v1 schema is frozen (T0013.5), tune the agent's behavior against a **fixed, deployed contract**: finalize the scenario set + the intended behavior per scenario → run a **manual scenario matrix** against the frozen fixture DB → optimize `config/prompts.yaml` (zero-shot → few-shot) → re-run and diff. The loop is **manual-first by design** (user decision, 2026-07-11): finish the scenarios and get manual results **before** the automated harness re-run, because the manual pass needs only Groq + the fixture DB, while the automated baseline additionally needs the judge creds and the §5i judge-thinking decision. A **prompt-versioning** mechanism threads through so every result is attributable to an exact prompt. Grounded in `research/agent-behavior-question-bank.md` (the populated `[Core]`/`[High]` scenario catalog + the G47 canonical-phrasing glossary), `evals/goldens/golden_dataset.json`, `evals/fixtures/seed_eval_db.sql`, and `docs/Known_Issues.md`. Read `research/pre-deploy-refinement-plan.md` §2–§5 and `research/agent-behavior-question-bank.md` before starting.
+**Schema-reconciliation note (2026-07-11):** the plan §3 lever table and parts of the question bank predate the T0013 enrichment and are now **partly stale** — the two headline "fabrication" levers (freshness C1, seniority C6) are no longer refusals but grounded retrievals (`created_on`, `job_level`), and the honesty-probe surface has moved to the genuinely-absent fields (application deadline C7, applicant count), cross-currency (C2), negotiable/NULL salary (C5), and free-text remote (C4). Reconciling that spec to the frozen 16-column schema is the **first** sub-ticket; nothing downstream may optimize toward a behavior the frozen schema no longer wants.
+**In Scope:** see sub-tickets below.
+**Sequencing (execution order):** T0015.1 (reconcile the spec) and T0015.2 (settle decisions + finalize scenarios) are docs/config and run first; T0015.3 (prompt versioning) is small and may run in parallel but **must land before** T0015.4 so the matrix records are stamped; T0015.4 (run the v1 manual matrix) needs the finalized scenarios (.2) + versioning (.3) and **live Groq + fixture DB** (blocked in the coder sandbox — the user runs it); T0015.5 (prompt v2 + re-run + diff) needs the .4 results. Do not pick up .4/.5 before their predecessors.
+**Out of Scope:**
+* **The automated harness / T0011.5 baseline run** — a separate track, blocked on judge (Google) creds + the §5i judge-thinking spot-check; this milestone is the *manual* scenario pass that precedes it (plan §7 Phase 2 vs Phase 1). The manual matrix must not depend on the judge.
+* **Eval metric-set v2 refinement** — pre-supplied `evaluation_steps`, calibrated thresholds, sharpened/split Honesty (plan §5c–§5f). That is the metric half of Phase 3 and is done *with* the harness track, not here; this milestone only tunes prompts + defines the behavior targets the metrics will later encode.
+* **Editing the frozen `golden_dataset.json`** — adding coverage-gap goldens (G03/G10/G26-data/G29/G44, question-bank §11) changes the golden set the T0011.5 baseline pins to; those are logged as a follow-up feeding the harness track. The manual matrix may exercise extra scenarios **without** touching the golden JSON.
+* **Any schema/DDL/API change** (frozen at T0013.5), new tools, runtime wiring, deploy hardening (plan Phase 4), and `is_active`/ingestion (T0014).
+* **Dropping agent `temperature` to 0.0** unless T0015.5 shows honesty probes stay flaky after few-shot (config knob, decided on evidence — plan §3a).
+
+#### T0015.1: Reconcile the behavior spec to the frozen 16-column schema
+**Objective:** Bring the scenario spec into line with the T0013 freeze **before** any prompt tuning, so the loop optimizes toward the schema the agent actually has. This is a **docs-only** reconciliation of the three places that describe intended behavior against the old 13-column world.
+**In Scope:**
+* **Question bank** (`research/agent-behavior-question-bank.md`) — resolve the `⚠ superseded` callouts now that enrichment landed: flip **G17** (freshness) so "most recent" is a `created_on` retrieval with the "record-creation date, not publish date" caveat and only "still open?" hedges on a NULL `listing_expires_on`; flip **G18** (seniority) to a `job_level` retrieval; repoint **G07**'s never-invent list and **G05** bucket 2 off "seniority/posted_date" onto the genuinely-absent fields (application deadline, applicant count). Update the coverage map (§11) to the current 18-golden set (incl. the new C7).
+* **Plan lever table** (`research/pre-deploy-refinement-plan.md` §3) — carry a dated update note that the C1/C6 rows are retrievals now, not fabrication levers, and re-point the "highest-value few-shot" list to C2/C5/C7/A4/C4 (per the reconciliation note above). Keep the "why we used to think X" trail per the research-doc rule (README §"The rule that keeps these separate").
+* **G47 glossary** (question bank §10) — **retire `SENIORITY-REFUSAL`**, **narrow `FRESHNESS-REFUSAL`** to the still-open/NULL-expiry case only, and add the two new canonical lines the freeze introduces: the `created_on` framing caveat and the absent-deadline/applicant-count `ABSENT-FIELD` phrasing.
+* **Manual check** — `docs/Manual_Verification_Guide.md` → T0015.1 entry: a reviewer can read the reconciled question bank + §3 note + G47 and find **no** instruction that treats `job_level`/`created_on` as absent, and every `⚠ superseded` callout resolved.
+**Out of Scope:**
+* Any `config/prompts.yaml` edit (that is T0015.5) or scenario-decision sign-off (T0015.2).
+* Touching `golden_dataset.json` (already reconciled during T0013.2/T0013.4).
+
+#### T0015.2: Settle open behavior decisions + finalize the scenario set & canonical phrasings
+**Objective:** Turn the catalogued-but-open behavior choices into a **frozen target**, so the few-shots in T0015.5 encode a fixed spec rather than a moving one (plan §4: a prompt is only optimizable against a defined target). This is the user-facing decision ticket + the finalized scenario/answer-key artifact.
+**In Scope:**
+* **Resolve the 10 open decisions** in question-bank §12 (E1 "jobs?" clarify-vs-default; "senior roles" title-match hedge; compound destructive+read; "show me the SQL" description-vs-decline; Saigon→HCMC synonym; ML/abstraction mapping; role→title fallback for non-canonical terms; persona internship-bias rebalance; the safety > honesty > helpfulness > style priority ladder G46). Record each pick + wording in the question bank.
+* **Finalize the G47 canonical phrasings** (post-reconciliation from T0015.1) as the single source of truth quoted verbatim by every future few-shot and, later, the GEval answer key.
+* **Freeze the scenario list for the manual matrix** — the `[Core]`+`[High]` groups' scenarios against the `internhunter_eval` fixture, cited by `#id`; decide which coverage-gap scenarios (G03 compound, G10 from-memory, G26 data-injection, G29 discriminatory, G44 false-premise) are **in** the v1 manual pass vs deferred (they need no golden — they run in the matrix only).
+* **Behavior-spec home** — put the finalized canonical strings in `config/prompts.yaml` (a small glossary block) as the machine source of truth; capture the per-scenario intended behavior in a human-readable spec doc. **Do not clobber** the existing ticket-template `docs/Prompt_Playbook.md` (plan §3a notes it is a different artifact) — use a new doc (e.g. `docs/Agent_Behavior_Spec.md`) or extend the question bank as the spec of record; pick one and note it.
+* **Manual check** — `docs/Manual_Verification_Guide.md` → T0015.2 entry: every §12 decision has a recorded pick; the G47 table has no unresolved draft wording; the frozen scenario list names its fixture `#id`s and its pass/fail expectation per row.
+**Out of Scope:**
+* Running scenarios or editing prompts (T0015.4/.5).
+* Adding goldens to `golden_dataset.json` (follow-up, feeds the harness track).
+
+#### T0015.3: Prompt versioning mechanism
+**Objective:** Make every behavior result **attributable to an exact prompt**, so the v1↔v2 comparison (and later the eval baseline) is reproducible — the discipline plan §5h requires. MVP-appropriate: a version label + git history, **not** a runtime prompt-store.
+**In Scope:**
+* Add a `prompt_version` field at the top of `config/prompts.yaml` (e.g. `v1`, `v2-few-shot`), loaded through `src/agents/runtime/prompts.py` alongside the existing prompt loaders.
+* Surface the loaded `prompt_version` where results are recorded: the manual-matrix report/template (T0015.4), the eval-harness output (`evals/harness.py`), and the Langfuse trace metadata (via the existing tracing layer — keep the read localized, do not leak versioning across layers per CLAUDE.md §2).
+* A tiny unit test asserting the loader exposes `prompt_version` and it round-trips from `config/prompts.yaml`.
+* **Manual check** — `docs/Manual_Verification_Guide.md` → T0015.3 entry: bump the field, run one request, and confirm the version appears in the response/trace metadata; a matrix row records the version it was produced under.
+**Out of Scope:**
+* Separate `prompts_v1.yaml`/`prompts_v2.yaml` files + a runtime selector (only worth it for same-session A/B — over-engineering now), and Langfuse-hosted prompt management (crosses the tracing-boundary rule; revisit only if git+field proves insufficient).
+* Any prompt-content change (T0015.5).
+
+#### T0015.4: Run the v1 manual scenario matrix (baseline observed behavior)
+**Objective:** Produce the **manual observed-behavior baseline** — the artifact that turns "it felt right" into "it passed N/N" (plan §2a) — against the **frozen fixture DB**, stamped `prompt_version: v1`. This is the "get the result first before running [the harness]" step. **Requires live Groq + the fixture DB; blocked in the coder sandbox — the user runs it.**
+**In Scope:**
+* Build the §2a matrix (`ID | Category | Input/turns | Expected behavior | Observed | Pass? | Prompt lever if fail`) from the T0015.2 frozen scenario list; store it under `docs/` or `evals/` as the v1 report.
+* Run each scenario **2–3×** against the fixture DB (agent `temperature: 0.2` is non-deterministic — a single green run hides intermittent fabrication; T0009.8 saw freshness fabricate 1-in-3); record observed behavior + pass/fail per run.
+* Confirm the shipping model ID (`agent.groq.model`) resolves against live Groq during the run (plan §6e — a wrong ID is a runtime error, catch it here).
+* Summarize the failures + the prompt lever each implicates (few-shot target, SG rule, phrasing) so T0015.5 has a ranked worklist.
+* **Manual check** — this ticket *is* the manual pass; its deliverable is the completed, `prompt_version`-stamped matrix with per-scenario N/N pass counts and a failures→levers summary.
+**Out of Scope:**
+* Any prompt edit (T0015.5) — this ticket only **measures** current behavior.
+* The automated harness / judge scoring (separate track).
+
+#### T0015.5: Prompt v2 — few-shot examples, re-run, and diff
+**Objective:** Optimize `config/prompts.yaml` against the T0015.4 failures — the single highest-value change being **zero-shot → few-shot** (plan §3a: examples beat prose for the honesty failures a prose rule already forbids) — then re-run the matrix and diff v1↔v2.
+**In Scope:**
+* Add targeted **few-shot examples** in `config/prompts.yaml` for the failure modes the matrix actually surfaced (candidates from the reconciliation: C2 cross-currency answer-layer hedge, C5 negotiable/NULL salary, C7/applicant-count absent-field, A4 truncation-caveat preservation, C4 remote free-text hedge, B1/B2 multi-turn accumulation, compound G03), each quoting the finalized G47 phrasings verbatim. Keep examples in config (no prompt text in `.py`). Bump `prompt_version` to `v2-few-shot`.
+* Apply any SG/SP rule edits the matrix flagged (e.g. the Saigon synonym or role→title fallback decided in T0015.2), staying within the frozen **column set** (rules are tunable; columns are not — T0013.5).
+* Re-run the manual matrix (T0015.4 method, 2–3× each) under `v2`; produce the **v1↔v2 diff** showing which scenarios moved to N/N.
+* If honesty probes stay flaky after few-shot, record the evidence and the temperature-0.0 recommendation as a decision (do not flip it silently).
+* Update `docs/Repo_Current_State.md` and log residual gaps in `docs/Known_Issues.md` (incl. the deferred harness re-run + the coverage-gap goldens).
+* **Manual check** — `docs/Manual_Verification_Guide.md` → T0015.5 entry: the v2 matrix shows the previously-failing honesty scenarios now passing N/N (or the flakiness + temperature recommendation recorded); a reviewer can diff `config/prompts.yaml` v1→v2 and see only few-shot/rule additions within the frozen columns.
+**Out of Scope:**
+* Metric-set v2 refinement and the automated baseline (harness track).
+* Golden JSON edits, schema/DDL changes, deploy hardening, `is_active`.

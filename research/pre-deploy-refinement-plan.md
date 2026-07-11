@@ -77,13 +77,15 @@ must pin to**, because it is literally the contract the model reasons over.
 
 ### 1b. Latent DDL columns deliberately hidden from the agent
 
-The physical `clean_jobs` table (`init_db.sql`) has **four columns the agent is never told
-about**: `source`, `external_id` (bookkeeping), and — importantly — **`job_level`** and
-**`posted_date`**. Both are in the DDL but **unpopulated**, and both are *intentionally*
-kept out of `schema_context` (documented in `Known_Issues.md`: "`posted_date`
-intentionally absent"). This is why golden **C6** (seniority) and **C1** (freshness) expect
-"not available in the data." **Decision to record before freeze:** keep hiding them (status
-quo, recommended) — do *not* let a future edit accidentally surface an unpopulated column.
+The physical `clean_jobs` table (`init_db.sql`) still has columns the agent is never told
+about: `source` and `external_id` (ingestion bookkeeping), and **`posted_date`**. Since
+this plan was drafted, T0013.2 exposed `job_level`, T0013.3 exposed
+`listing_expires_on`, and T0013.4 exposed `created_on`; golden C6 now reads `job_level`,
+and golden C1 now answers freshness by ordering on `created_on`. `posted_date` remains
+deliberately `NULL`, superseded by `created_on` for freshness, and intentionally hidden
+from `schema_context` rather than repurposed. **Decision recorded by T0013.5:** freeze
+the enriched visible contract and keep hidden bookkeeping/NULL columns out of prompt
+surfaces.
 
 ### 1c. The one known future change: `is_active` (T0014, deferred)
 
@@ -156,6 +158,17 @@ saw freshness fabricate 1-in-3). This matrix is the artifact that turns "it felt
 The repo has **already observed and documented** the specific ways the model misbehaves.
 These are the edge cases worth encoding as scenarios, each with a known prompt lever. All are
 in `Known_Issues.md` and map to existing goldens.
+
+> **Update — reconciled to the T0013.5 freeze (2026-07-11, T0015.1):** this lever table is
+> preserved as the historical pre-reconciliation view, so the rows below still show why we used to
+> treat **C1** (freshness) and **C6** (seniority) as refusal/fabrication problems. Post-freeze,
+> those two are no longer the highest-value refusal targets: `created_on` and `job_level` are now
+> visible, so C1 and C6 are grounded retrievals instead (with the `created_on` caveat preserved in
+> the answer). The few-shot/refinement attention should now concentrate on the genuinely hard
+> honesty cases: **C2** (cross-currency), **C5** (negotiable/NULL salary), **C7** (absent
+> deadline), **A4** (truncation), and **C4** (free-text remote). Exact prompt wording is still the
+> T0015.2 sign-off step; this note only reconciles the target behavior to the frozen 16-column
+> schema while keeping the original table intact.
 
 | Behavior gap (observed) | Golden | Prompt lever |
 |---|---|---|

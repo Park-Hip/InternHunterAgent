@@ -1,0 +1,147 @@
+# Bounded AI/Data technique seed for tech_stack extraction.
+# Languages/frameworks/tools come from vendored upstream lists via scripts/build_tech_vocabulary.py.
+techniques:
+  Machine Learning:
+    aliases:
+      - ML
+      - Học Máy
+      - Hoc May
+  Deep Learning:
+    aliases:
+      - DL
+      - Học Sâu
+      - Hoc Sau
+  Data Analysis:
+    aliases:
+      - Data Analytics
+      - Phân Tích Dữ Liệu
+      - Phan Tich Du Lieu
+  Data Visualization:
+    aliases:
+      - Data Visualisation
+      - Data Viz
+      - Trực Quan Hóa Dữ Liệu
+      - Truc Quan Hoa Du Lieu
+  Business Intelligence:
+    aliases: []
+  Natural Language Processing:
+    aliases:
+      - NLP
+  Computer Vision:
+    aliases:
+      - CV
+  Large Language Models:
+    aliases:
+      - LLM
+      - LLMs
+  Retrieval-Augmented Generation:
+    aliases:
+      - RAG
+  ETL:
+    aliases:
+      - Extract, Transform, Load
+  Big Data:
+    aliases: []
+  Data Warehouse:
+    aliases:
+      - Data Warehousing
+  Data Lake:
+    aliases: []
+  Data Mining:
+    aliases: []
+  Data Modeling:
+    aliases:
+      - Data Modelling
+  MLOps:
+    aliases:
+      - ML Ops
+  A/B Testing:
+    aliases:
+      - AB Testing
+      - A B Testing
+  Recommendation Systems:
+    aliases:
+      - Recommender Systems
+  Time Series:
+    aliases:
+      - Time-Series
+      - Time Series Forecasting
+  Forecasting:
+    aliases: []
+  Predictive Analytics:
+    aliases: []
+  Statistical Modeling:
+    aliases:
+      - Statistical Modelling
+  Feature Engineering:
+    aliases: []
+  Model Deployment:
+    aliases: []
+  Model Monitoring:
+    aliases: []
+  Model Evaluation:
+    aliases: []
+  Experiment Tracking:
+    aliases: []
+  Prompt Engineering:
+    aliases: []
+  Generative AI:
+    aliases:
+      - GenAI
+      - Gen AI
+  AI Agents:
+    aliases:
+      - Agentic AI
+  Reinforcement Learning:
+    aliases:
+      - RL
+  Supervised Learning:
+    aliases: []
+  Unsupervised Learning:
+    aliases: []
+  Classification:
+    aliases: []
+  Regression:
+    aliases: []
+  Clustering:
+    aliases: []
+  Anomaly Detection:
+    aliases: []
+  Data Engineering:
+    aliases: []
+  Data Pipelines:
+    aliases:
+      - Data Pipeline
+  Data Cleaning:
+    aliases: []
+  Data Governance:
+    aliases: []
+  Data Quality:
+    aliases: []
+  Data Science:
+    aliases: []
+  Artificial Intelligence:
+    aliases:
+      - AI
+
+aliases:
+  PowerBI: Power BI
+  Sql: SQL
+  node: Node.js
+  Node: Node.js
+  nodejs: Node.js
+  js: JavaScript
+  ts: TypeScript
+  sklearn: Scikit-learn
+  scikit learn: Scikit-learn
+  huggingface: Hugging Face
+
+denylist:
+  - Communication
+  - Leadership
+  - Teamwork
+  - Problem-solving
+  - Problem Solving
+  - Data Engineer
+  - Data Analyst
+  - BASIC

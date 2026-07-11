@@ -12,6 +12,7 @@ from src.services.ingestion.transform import (
     find_tech_stack,
     html_to_text,
     normalize_location,
+    to_date,
 )
 
 
@@ -95,6 +96,8 @@ def to_normalized_job(payload: dict) -> NormalizedJob:
         payload.get("jobLevel"), payload.get("jobLevelVI")
     )
     job_level: str | None = payload.get("jobLevel") or payload.get("jobLevelVI")
+    listing_expires_on = to_date(payload.get("expiredOn"))
+    created_on = to_date(payload.get("createdOn"))
 
     # posted_date = None by decision, not because a parse step is merely pending:
     # VietnamWorks surfaces no *reliable* published date. The timestamps it does expose
@@ -119,6 +122,8 @@ def to_normalized_job(payload: dict) -> NormalizedJob:
         job_level=job_level,
         location=location,
         posted_date=None,
+        listing_expires_on=listing_expires_on,
+        created_on=created_on,
         is_internship=is_internship,
         salary_min=salary_min,
         salary_max=salary_max,

@@ -220,14 +220,16 @@ future enhancement. Keeps ingestion deterministic and testable, aligned with the
 project's "don't over-engineer the MVP" rule. Make this an explicit decision in the
 design doc.
 
-> **Update 2026-07-09 — allowlist superseded (see [`schema-enrichment-plan.md`](schema-enrichment-plan.md) §2).**
-> The VietnamWorks live spike showed the source's own `skills[]` tags (present ~98%) are being
-> **discarded** because `find_tech_stack` keeps only terms already in the ~70-entry
-> `config/ingestion.yaml` dictionary. The decided direction inverts this: **trust source tags as
-> primary, denylist non-techs, normalize against an external vocabulary** (GitHub Linguist +
-> devicon, from a committed data file), and keep the keyword dictionary only as a *description
-> backfill*. Still deterministic and no-LLM — it removes the hardcoded-allowlist bottleneck, not
-> the "no LLM in ingestion" rule.
+> **Update 2026-07-09 — allowlist superseded and definition widened (see
+> [`schema-enrichment-plan.md`](schema-enrichment-plan.md) §2).** The VietnamWorks live spike
+> showed the source's own `skills[]` tags (present ~98%) are being **discarded** because
+> `find_tech_stack` keeps only terms already in the ~70-entry `config/ingestion.yaml`
+> dictionary. It also showed the most valuable real tags are techniques (`Machine Learning`,
+> `Data Analysis`, `ETL`, `Data Visualization`), not only languages/frameworks. The decided
+> direction is therefore: `tech_stack` = technologies **and core AI/Data techniques/skills**,
+> extracted from source tags and description text against an external vocabulary (GitHub
+> Linguist + Devicon snapshots plus a bounded AI/Data seed). Still deterministic and no-LLM — it
+> removes the hardcoded-allowlist bottleneck, not the "no LLM in ingestion" rule.
 
 ---
 

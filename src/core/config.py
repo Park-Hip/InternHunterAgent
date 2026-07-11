@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     config_yaml: Dict[str, Any] = {}
     prompts_yaml: Dict[str, Any] = {}
     ingestion_yaml: Dict[str, Any] = {}
+    tech_vocabulary_yaml: Dict[str, Any] = {}
 
 
 def _load_yaml_file(path: Path) -> dict[str, Any]:
@@ -45,6 +46,7 @@ def load_settings() -> Settings:
     settings.config_yaml = _load_yaml_file(Path("config/settings.yaml"))
     settings.prompts_yaml = _load_yaml_file(Path("config/prompts.yaml"))
     settings.ingestion_yaml = _load_yaml_file(Path("config/ingestion.yaml"))
+    settings.tech_vocabulary_yaml = _load_yaml_file(Path("config/tech_vocabulary.yaml"))
 
     return settings
 

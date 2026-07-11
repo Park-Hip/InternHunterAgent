@@ -3,6 +3,7 @@
 All functions are pure; no DB, no network. Config is loaded from ingestion.yaml
 via settings — the same mechanism used in production.
 """
+from datetime import date
 import unittest
 
 from src.services.ingestion.transform import (
@@ -11,6 +12,7 @@ from src.services.ingestion.transform import (
     find_tech_stack,
     html_to_text,
     normalize_location,
+    to_date,
 )
 
 
@@ -59,6 +61,17 @@ class DeriveIsInternshipTests(unittest.TestCase):
         self.assertTrue(derive_is_internship(None, "Thực Tập Sinh"))
 
 
+class ToDateTests(unittest.TestCase):
+    def test_parses_iso_datetime_with_timezone(self) -> None:
+        self.assertEqual(to_date("2026-07-30T23:59:59+07:00"), date(2026, 7, 30))
+
+    def test_none_returns_none(self) -> None:
+        self.assertIsNone(to_date(None))
+
+    def test_garbage_returns_none(self) -> None:
+        self.assertIsNone(to_date("not-a-date"))
+
+
 class FindTechStackTests(unittest.TestCase):
     def test_finds_tech_in_skill_names(self) -> None:
         result = find_tech_stack("Python", "SQL")
@@ -84,6 +97,30 @@ class FindTechStackTests(unittest.TestCase):
         techs = result.split(", ")  # type: ignore[union-attr]
         self.assertIn("Python", techs)
         self.assertIn("Airflow", techs)
+
+    def test_extracts_techniques_from_source_tags(self) -> None:
+        result = find_tech_stack("Machine Learning", "ETL", "Data Analysis")
+        self.assertIsNotNone(result)
+        techs = result.split(", ")  # type: ignore[union-attr]
+        self.assertIn("Machine Learning", techs)
+        self.assertIn("ETL", techs)
+        self.assertIn("Data Analysis", techs)
+
+    def test_normalizes_aliases_and_buried_phrase_terms(self) -> None:
+        result = find_tech_stack(
+            "Data Visualization & Analysis (Power BI; SQL - basic; Python - basic)",
+            "PowerBI",
+            "Sql",
+        )
+        self.assertIsNotNone(result)
+        techs = result.split(", ")  # type: ignore[union-attr]
+        self.assertIn("Data Visualization", techs)
+        self.assertIn("Power BI", techs)
+        self.assertIn("SQL", techs)
+        self.assertIn("Python", techs)
+
+    def test_excludes_roles_and_soft_skills_by_omission(self) -> None:
+        self.assertIsNone(find_tech_stack("Data Engineer", "Communication"))
 
     def test_preserves_dictionary_casing(self) -> None:
         # Even if text is lowercase, the output uses dictionary casing

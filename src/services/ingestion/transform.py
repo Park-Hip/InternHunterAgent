@@ -1,12 +1,13 @@
 """Shared, source-agnostic transform functions for the ingestion pipeline.
 
-All functions are pure (no DB, no network) and read dictionaries from
-settings.ingestion_yaml at call time. Safe to import without side effects.
+All functions are pure (no DB, no network) and read deterministic config from
+settings at call time. Safe to import without side effects.
 """
 from __future__ import annotations
 
 import html
 import re
+from datetime import date, datetime
 
 from src.core.config import settings
 
@@ -22,6 +23,16 @@ def html_to_text(value: str | None) -> str:
     return re.sub(r"\s+", " ", html.unescape(text)).strip()
 
 
+def to_date(value: str | None) -> date | None:
+    """Parse an ISO-8601 datetime/date string to a date; None on missing/unparseable."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value).date()
+    except (TypeError, ValueError):
+        return None
+
+
 def derive_is_internship(job_level: str | None, job_level_vi: str | None) -> bool:
     """Return True if either level string indicates an internship.
 
@@ -33,24 +44,40 @@ def derive_is_internship(job_level: str | None, job_level_vi: str | None) -> boo
 
 
 def find_tech_stack(*text_sources: str) -> str | None:
-    """Scan combined text for technologies listed in ingestion_yaml["tech_dictionary"].
-
-    Matching is case-insensitive with word-boundary guards to prevent
-    false positives (e.g. "R" inside "Keras", "Go" inside "MongoDB").
-    Returns dictionary-cased, deduped, YAML-order terms joined with ", ",
-    or None when nothing matches.
-    """
+    """Extract canonical technologies from source tags and description text."""
     combined = " ".join(text_sources)
-    tech_dict: list[str] = settings.ingestion_yaml["tech_dictionary"]
+    vocabulary = settings.tech_vocabulary_yaml
+    canonical_terms = vocabulary.get("canonical_terms", [])
+    aliases = vocabulary.get("aliases", {})
+    denylist = {str(term).casefold() for term in vocabulary.get("denylist", [])}
+
+    alias_to_canonical: dict[str, str] = {}
+    for term in canonical_terms:
+        if isinstance(term, str) and term.casefold() not in denylist:
+            alias_to_canonical[term] = term
+
+    if isinstance(aliases, dict):
+        for alias, canonical in aliases.items():
+            if not isinstance(alias, str) or not isinstance(canonical, str):
+                continue
+            if alias.casefold() in denylist or canonical.casefold() in denylist:
+                continue
+            alias_to_canonical[alias] = canonical
+
     found: list[str] = []
     seen: set[str] = set()
-    for tech in tech_dict:
+    for alias, canonical in sorted(
+        alias_to_canonical.items(),
+        key=lambda item: (len(item[0]), item[0].casefold()),
+        reverse=True,
+    ):
         # Use negative lookbehind/lookahead instead of \b so that non-word
         # characters in tech names (e.g. C#, C++, Node.js) are handled correctly.
-        pattern = r"(?<!\w)" + re.escape(tech) + r"(?!\w)"
-        if re.search(pattern, combined, re.IGNORECASE) and tech.lower() not in seen:
-            found.append(tech)
-            seen.add(tech.lower())
+        pattern = r"(?<!\w)" + re.escape(alias) + r"(?!\w)"
+        canonical_key = canonical.casefold()
+        if canonical_key not in seen and re.search(pattern, combined, re.IGNORECASE):
+            found.append(canonical)
+            seen.add(canonical_key)
     return ", ".join(found) if found else None
 
 

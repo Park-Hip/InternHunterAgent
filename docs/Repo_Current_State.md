@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0015.3-prompt-versioning
+feature/t0015.2-settle-decisions-scenarios
 
 ## Completed milestones
 One line per milestone. Per-ticket detail (files changed, test counts, follow-ups) lives in [`Completion_Reports.md`](Completion_Reports.md).
@@ -15,14 +15,14 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **M13** (T0013.1-.5) — Schema Enrichment & v1 Freeze (ingestion data-quality + schema/prompt exposure): `tech_stack` extraction now uses a generated external vocabulary snapshot plus bounded AI/Data technique seed; coverage on the 112-record VietnamWorks audit sample rose from the old audit baseline `65/112 (58%)` to `100/112 (89.3%)`. `job_level` is now exposed to the agent and golden C6 reads the populated column, with C7 preserving absent-attribute honesty coverage. `listing_expires_on` is now a nullable DATE column sourced from VietnamWorks `expiredOn`, written through ingestion, exposed to the agent with date-predicate guidance, and represented in the eval fixture. `created_on` is now a nullable DATE column sourced from VietnamWorks `createdOn`, exposed as a record-creation date for freshness ordering, and golden C1 now retrieves by `created_on` instead of refusing. The enriched 16-column v1 schema contract is now recorded in [`Schema_Contract.md`](Schema_Contract.md) and enforced by prompt freeze guards.
 - **M15** (T0015.1) — Behavior-spec reconciliation to the frozen schema: the research behavior spec, glossary scope, coverage map, manual-review checklist, and repo-state docs now align with the frozen 16-column contract. `job_level` and `created_on` are treated as grounded retrievals, the absent-field honesty surface is re-pointed to application deadline / applicant count, C7 is reflected in the coverage map, and the preserved research notes explicitly mark the older 13-column assumptions as reconciled history rather than live guidance.
 - **M15** (T0015.3) — Prompt versioning mechanism: `config/prompts.yaml` now carries a top-level `prompt_version`, the runtime loads it explicitly, Langfuse trace metadata records it without the tracing layer importing prompt loaders, and eval runs surface the same version in `run_case` results and `test_three_seams` output so later v1↔v2 comparisons are attributable to one exact prompt snapshot.
+- **M15** (T0015.2) — Settled behavior decisions + frozen scenario set & canonical phrasings: all 10 open §12 decisions in `research/agent-behavior-question-bank.md` are resolved and recorded (priority ladder frozen as Safety > Honesty > Helpfulness > Style), G47 canonical phrasings are FINAL, an 18-entry `behavior_glossary` machine source-of-truth is added to `config/prompts.yaml` (reference-only, not yet wired into prompts), and the human spec of record [`Agent_Behavior_Spec.md`](Agent_Behavior_Spec.md) carries the frozen scenario matrix (18 golden-anchored + 5 coverage-gap + 6 decision-probe rows with fixture ids and pass/fail). No prompt text, golden, or code changed; prompt-text edits that quote the glossary are deferred to T0015.5.
 
 ## In progress / next
 - **Milestone 11 not fully closed:** T0011.5 (threshold calibration + baseline report) remains **open** — its two hard prerequisites (T0012.2 qwen `<think>` leak, T0012.3 deepeval metric-template bug) are now cleared, so it is unblocked.
 - **Milestone 12 complete.** Milestone 10 remaining lower-priority items (freshness-honesty determinism, hidden-salary phrasing, the best-effort id-in-SQL nudge) are tracked in [`Known_Issues.md`](Known_Issues.md), not as blocking tickets.
 - **T0012.10's live judge-agreement spot-check is BLOCKED** — no `GOOGLE_API_KEY`/Groq creds in the coder sandbox; logged as a follow-up in [`Known_Issues.md`](Known_Issues.md) for the maintainer to run.
 - **Schema-enrichment sequence complete:** the v1 schema contract is recorded and guarded. **Next recommended ticket:** T0011.5 (threshold calibration + baseline report) remains the eval-baseline calibration ticket on the broader roadmap.
-- **T0015.1 is complete; T0015.2 is next within Milestone 15.** The remaining work in this prompt-engineering sequence is the wording/policy sign-off ticket: finalize the §12 open decisions and the G47 canonical phrasing against the already-reconciled 16-column schema.
-- **T0015.3 is complete; T0015.4 can now consume the version stamp.** The prompt version is now available in runtime traces and eval outputs, so the manual matrix/eval-comparison work can stamp each row with an exact prompt label after T0015.2's wording sign-off.
+- **T0015.2 is complete; T0015.4 is next within Milestone 15.** The behavior target is frozen (decisions signed off, G47 FINAL, glossary + spec of record in place), so the manual verification matrix / eval-comparison work can now run against `Agent_Behavior_Spec.md` §4 and stamp each row with the T0015.3 prompt version. T0015.5 then wires the `behavior_glossary` strings into the prompt few-shots.
 
 ## Current folder structure
 ```text
@@ -70,6 +70,7 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |       |-- __init__.py
 |       `-- golden_dataset.json
 |-- docs/
+|   |-- Agent_Behavior_Spec.md
 |   `-- Schema_Contract.md
 |-- src/
 |   |-- agents/
@@ -395,6 +396,12 @@ Practical commands from the repository layout:
 - Command run: `uv run pytest tests/agents/runtime/test_prompts.py -q` (T0015.3)
 - Result: passed
 - Summary: `16 passed`
+- Command run: `python -c "import yaml; d=yaml.safe_load(open('config/prompts.yaml',encoding='utf-8')); print(len(d['behavior_glossary']))"` (T0015.2)
+- Result: passed
+- Summary: printed `18` — the new `behavior_glossary` block parses to 18 canonical-phrasing entries
+- Command run: `uv run pytest tests/agents/runtime/test_prompts.py -q` (T0015.2)
+- Result: passed
+- Summary: `16 passed` — the prompt/schema freeze guard stayed green, confirming the new top-level `behavior_glossary` key did not leak into any scanned prompt surface
 - Command run: first `uv run pytest -q` (T0013.5)
 - Result: failed because a reachable local `internhunter_eval` DB had stale schema
 - Summary: 7 fixture-count errors: `clean_jobs` lacked `listing_expires_on`
@@ -419,6 +426,6 @@ register so it stays focused on what is still open). A full per-module logic rev
 (open) / `Resolved_Issues.md` (closed).
 
 ## Next recommended ticket
-Milestone 15 now has both the reconciled behavior spec (T0015.1) and the prompt-version stamp (T0015.3) in place. **Recommended next: T0015.2** to settle the remaining §12 open decisions and finalize the G47 canonical wording sign-off before T0015.4 builds the manual matrix on top of this versioning mechanism.
+Milestone 15 now has the reconciled behavior spec (T0015.1), the prompt-version stamp (T0015.3), and the frozen behavior target — settled decisions, FINAL canonical phrasings, and the `Agent_Behavior_Spec.md` scenario matrix (T0015.2) — all in place. **Recommended next: T0015.4** to build the manual verification matrix / eval-comparison run against `Agent_Behavior_Spec.md` §4, stamping each row with the T0015.3 prompt version. T0015.5 then wires the `behavior_glossary` canonical strings into the prompt few-shots.
 
 Other future phases (resume/embedding retrieval, charts, typed error contract) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.

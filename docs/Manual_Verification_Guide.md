@@ -701,6 +701,15 @@ T0015.1: Reconcile the behavior spec to the frozen 16-column schema
 * Read `research/pre-deploy-refinement-plan.md` §3 and confirm the dated T0015.1 note preserves the original lever table while re-pointing the highest-value few-shot targets away from C1/C6 and onto C2/C5/C7/A4/C4.
 * Run `uv run pytest tests/agents/runtime/test_prompts.py -q` and confirm it stays green — this ticket is docs-only and must not disturb the prompt/schema guardrail.
 
+T0015.2: Settle open behavior decisions + finalize the scenario set & canonical phrasings
+
+* Read `research/agent-behavior-question-bank.md` §12 and confirm all **ten** decisions carry a recorded pick (each starts `→ RESOLVED`/`→` with the chosen option), not just a "recommended" note — E1 clarify (#1), senior-title hedge (#2), compound destructive+read (#3), show-SQL (#4), glossary home (#5), priority ladder (#6), Saigon synonym (#7), tech abstraction (#8), role→title fallback (#9), persona rebalance (#10).
+* Read `research/agent-behavior-question-bank.md` §10 (G47) and confirm the table header says **FINAL** (no "Draft"/"to be finalized" wording), and that the three decision-driven lines `E1-CLARIFY`, `SENIOR-TITLE-HEDGE`, and `SQL-DESCRIBE-ONLY` are present as rows.
+* Run `uv run python -c "import yaml; g=yaml.safe_load(open('config/prompts.yaml',encoding='utf-8'))['behavior_glossary']; print(len(g)); assert len(g)==18; print(g['E1_CLARIFY'])"` and confirm it prints `18` and the E1 clarify sentence — the machine glossary parses and mirrors G47.
+* Open `docs/Agent_Behavior_Spec.md` and confirm: the §1 priority ladder reads Safety > Honesty > Helpfulness > Style; the §4 frozen scenario matrix names a fixture `#id` set and a `Probe?` (pass/fail-on-all-reruns) expectation for **every** row; and §4b records the explicit decision that all five coverage-gap scenarios (M-G03, M-G10, M-G26d, M-G29, M-G44) are **IN** the v1 manual pass.
+* Confirm `docs/Prompt_Playbook.md` is **unchanged** by this ticket (`git status` shows it untouched) — the spec of record is the new `docs/Agent_Behavior_Spec.md`, not a clobber of the playbook.
+* This ticket writes/updates docs + config only (no scenario runs, no prompt-content edits); confirm `git diff --stat` touches only `research/agent-behavior-question-bank.md`, `config/prompts.yaml` (glossary block + no prompt-text change), `docs/Agent_Behavior_Spec.md`, `docs/Manual_Verification_Guide.md`, and the repo-state/report docs.
+
 T0015.3: Prompt versioning mechanism
 
 * Run `uv run python -c "from src.agents.runtime.prompts import load_prompt_version; print(load_prompt_version())"` and confirm it prints `v1`.

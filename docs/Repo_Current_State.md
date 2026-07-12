@@ -28,7 +28,7 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 
 **Status update (2026-07-12):** T0014 is complete on this branch. T0014.1 fixed startup/config-load robustness; T0014.2 reconciled the living register/archive without code or product-behavior changes. Remaining open issues live in [`Known_Issues.md`](Known_Issues.md), and resolved/background items live in [`Resolved_Issues.md`](Resolved_Issues.md).
 
-**Milestone map (post-2026-07-12 renumber — see `Tickets.md`):** T0013 freeze → **T0014 known-issue fixes (this branch)** → T0015 behavior track (parallel, `feature/t0015.x` branches) → T0016 **Demo UI** (placeholder, user-requested — the visible product; scope TBD) → T0017 Deploy Hardening (deferred, plan §6) → T0018 Ingestion Deploy Readiness (deferred, **last**).
+**Milestone map (post-2026-07-12 renumber — see `Tickets.md`):** T0013 freeze → **T0014 known-issue fixes (this branch)** → T0015 behavior track (parallel, `feature/t0015.x` branches) → T0017 Deploy Hardening (deferred, plan §6) → T0016 **Demo UI** (placeholder, user-requested — the visible product; scope TBD) → T0018 Ingestion Deploy Readiness (deferred, **last**). *(T0017 re-sequenced 2026-07-12 to run before T0016, at the user's request.)*
 
 **Open elsewhere (not this branch's concern):** T0011.5 eval baseline (still open, needs live Groq/Google creds; T0012.10 judge-agreement spot-check still BLOCKED on creds — both under M11); the M15 behavior track (T0015.4 paused on the Groq daily quota, T0015.5 pending).
 

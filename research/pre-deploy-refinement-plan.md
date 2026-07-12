@@ -436,6 +436,80 @@ doc isn't misleading.
 No CI pipeline runs `pytest` as a merge gate yet (`deployment-research-plan.md §8`), and no
 hard cost ceiling is fixed (§10 suggests $10/mo). Both are deploy-milestone items, not blockers now.
 
+> **Update — resume-MVP lens (2026-07-12).** §6a–6i above rank aspects for a *production*
+> deploy. The subsections below (6j–6m) were added after settling that the v1 target is a
+> **portfolio/resume MVP**, which optimizes for three things a reviewer actually judges:
+> (1) the demo works when clicked, (2) there is a visible product to look at, and (3) the repo
+> shows judgment — *documented deferral counts as much as implementation*. Aspects that serve
+> none of those (connection-pool tuning, ops alerting, TTL cleanup) are intentionally pushed to
+> the deferred list in 6m rather than built (CLAUDE.md: never over-engineer the MVP).
+
+### 6j. The demo surface & access model (the visible product — decide first)
+There is **no UI in the repo** — no `frontend/`/`static/`/`templates/`/HTML, only the JSON API
+at `POST /api/v1/agent/chat` (`src/api/routes/query.py`; confirmed absent 2026-07-12). For a
+resume project this is the highest-leverage gap in all of §6: a reviewer is far more moved by a
+clickable chat box than by a `curl` snippet. **Decide the demo surface** — minimally a one-page
+chat UI (static HTML/JS served via FastAPI `StaticFiles`, or a small separate frontend) with
+3–5 canned prompts that show off the honesty behavior (the freshness caveat, the
+negotiable-salary phrasing, a clean refusal). This interacts with streaming (6k) and should be
+decided together.
+
+**Access model — reconsider the gate.** An earlier note leaned "gated demo (key/allowlist)," but
+a key gate adds friction exactly where a resume demo wants none: a recruiter will not email for a
+key, they close the tab. Since the agent runs on **Groq's free tier** (8k TPM / 200k TPD), the
+worst case of an *open* endpoint is a `429` — which costs **$0** and is already handled by 6k.
+**Recommended posture: open endpoint + per-IP rate limit (`slowapi`, $0) + a friendly quota
+message**, not a key. This keeps the demo one click away while capping abuse. (No rate limiting
+exists today — confirmed absent from `src/`.)
+
+### 6k. Live-demo reliability — scoped to single-user survival, not throughput
+Two failures would make the demo read as "candidate's project is broken." Both are cheap; the
+heavier concurrency/pool work is deliberately *not* here (see 6m).
+
+- **Graceful 429 / quota degradation.** A multi-turn session on the 8k-TPM free tier will
+  occasionally hit the ceiling. Today every failure collapses to a generic
+  `500 "Failed to process query"` (`src/api/routes/query.py:46`), indistinguishable from a real
+  bug. Add a distinct, friendly "the demo is busy — try again in a moment" path for provider
+  rate-limit/timeout errors (`agent.groq.timeout: 30`, `max_retries: 2` already exist in
+  `config/settings.yaml`).
+- **Streaming.** `agent.groq.streaming: False` (`config/settings.yaml:9`). Enabling it is a
+  double win — it makes a multi-step agent *feel* fast (perceived latency) and is a legitimate
+  resume talking point ("streamed token responses"). It also lowers the risk of a long blocking
+  request tripping a platform proxy timeout. This is an API-contract change (the response becomes
+  a token stream), so decide it *with* the UI in 6j.
+
+### 6l. Cheap correctness hygiene (do quickly, don't oversell)
+Small, visible-in-code signals of defensive engineering — ~an hour total, framed as correctness,
+not security theater:
+
+- **Server-issued session IDs.** `session_id` is client-supplied and optional
+  (`src/api/schemas.py:3-6`; `routes/query.py:11`) and is used directly as the LangGraph
+  checkpointer thread key (`src/core/checkpointer.py`; `src/api/app.py:17`). Issuing the id
+  server-side on first turn prevents two demo users from colliding into one conversation.
+- **Input length cap.** `routes/query.py` validates only empty/whitespace — no maximum. A cap
+  keeps a curious tester from running a huge prompt into your Groq quota.
+- **Data disclaimer.** The corpus is scraped from named public sources
+  (`src/services/ingestion/sources/vietnamworks.py`, plus the topdev/topcv/itviec spikes) and
+  includes real company names and salaries. A one-line visible note — "demo data, snapshot from
+  {date}, from public listings, may be inaccurate" — costs nothing, reads as maturity, and
+  settles the provenance/licensing question for a publicly reachable demo.
+
+### 6m. Deliberately deferred (post-MVP) — documented, not built
+Recording *what you are not doing and why* is itself a judgment signal in a portfolio repo.
+These are real for a sustained production service but over-engineering for a low-traffic resume
+demo (CLAUDE.md: never over-engineer the MVP):
+
+- **Checkpointer-row growth / session TTL.** Conversations persist in Postgres forever with no
+  eviction (`AsyncPostgresSaver`, no cleanup). Fine at demo volume.
+- **DB connection-pool tuning under concurrency.** Two independent pools exist — SQLAlchemy sync
+  (`src/core/db.py`) and the psycopg async checkpointer pool (`src/core/checkpointer.py`) —
+  neither sized. A low-traffic demo never exercises this.
+- **Ops alerting / uptime monitoring** beyond Langfuse traces.
+- **Log & trace PII retention policy.** Langfuse stores full prompt+answer content; low-stakes at
+  demo scale, revisit if the audience widens.
+- **DB migration tooling** (e.g. alembic). `init_db.sql` + `TRUNCATE` is adequate until the
+  schema evolves (the planned `is_active` at T0014 is the trigger to revisit).
+
 ---
 
 ## 7. Recommended sequencing
@@ -467,9 +541,12 @@ short-circuit guidance (§3). **In the same pass**, refine the metrics: pre-supp
 (§5d). Iterate prompts in `config/prompts.yaml`; version the metric set. Re-run the harness →
 produce the **v2 baseline** and diff against v1.
 
-**Phase 4 — Deploy hardening.**
+**Phase 4 — Deploy hardening + demo surface.**
 Security posture (§6b), readiness probe (§6c), config robustness (§6d), topology decisions
-(§6a), Langfuse Cloud choice (§6f), CI gate (§6i).
+(§6a), Langfuse Cloud choice (§6f), CI gate (§6i). **For the resume MVP, also:** the demo UI +
+open/rate-limited access model (§6j), live-demo reliability — 429 handling + streaming (§6k),
+and the cheap hygiene pass — server-issued sessions, input cap, data disclaimer (§6l). Defer
+everything in §6m.
 
 **Phase 5 — Ship the API MVP.**
 Deploy agent + short-term memory (the current MVP scope). **Ingestion (T0014) and its
@@ -497,7 +574,15 @@ first deploy.
 6. **Deploy topology (§6a):** confirm Render/Cloud Run + Neon + Langfuse Cloud + GitHub
    Actions, and the **$10/mo** hard cost ceiling.
 7. **Public exposure:** expose `/docs` publicly or hide it; is the endpoint public (needs
-   rate limiting) or gated behind a demo key?
+   rate limiting) or gated behind a demo key? *(Refined by #9 below for the resume-MVP target.)*
+8. **Demo surface (§6j):** ship a one-page chat UI with 3–5 canned example prompts (recommended
+   for the resume goal) or stay API-only? And where does it live — FastAPI `StaticFiles` or a
+   separate frontend?
+9. **Access model (§6j):** confirm switching from a key-gate to **open endpoint + per-IP rate
+   limit + friendly quota message** (recommended) — the free tier makes abuse a $0 availability
+   issue, not a cost one. Supersedes the "gated behind a demo key" half of #7.
+10. **Streaming (§6k):** enable streamed responses for the demo (recommended — perceived speed +
+    resume signal), accepting the API-contract change from a single JSON answer to a token stream?
 
 ---
 

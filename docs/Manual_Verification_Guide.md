@@ -788,3 +788,22 @@ T0012.10: Reduce eval judge cost & rate-limit exposure (thinking-budget cap + dr
    PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval
    ```
    Confirm it completes and the seam-3 result set no longer contains a `Faithfulness` key. Compare the `Honesty`/`Task Completion` verdicts against a pre-cap run (`thinking_budget` temporarily reverted to a nonzero value) and confirm no material divergence. If creds aren't available in the coder environment, mark this step BLOCKED and log it as a follow-up in `docs/Known_Issues.md` rather than skipping silently.
+
+T0014.1: Graceful startup & config-load robustness
+
+* Run `uv run pytest tests/core/test_config.py -v` and confirm the non-project-CWD load, clear missing-env error, and import-safety tests all pass.
+* Run `uv run pytest tests/api/test_startup_config.py tests/api/test_query.py -v` and confirm startup config failures surface during FastAPI lifespan while the query route tests still pass.
+* Run `uv run pytest -q` and confirm the broader suite still passes with the repo's existing eval-marker behavior unchanged.
+* Manual non-project-CWD check:
+  * `cd C:\tmp`
+  * `uv run --directory D:\Data_Science_Project\InternHunterAgent python -c "from src.core.config import load_settings; s = load_settings(); print(sorted(s.config_yaml.keys()))"`
+  * Confirm it prints the repo config keys instead of failing on the current working directory.
+* Missing-env startup check in a subprocess only (do not unset anything permanently in your shell):
+  * `uv run python -c "import os; os.environ.pop('GROQ_API_KEY', None); os.environ['DATABASE_URL']='postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter'; os.environ['LANGFUSE_SECRET_KEY']='x'; os.environ['LANGFUSE_PUBLIC_KEY']='y'; import src.core.config as c; c.Settings.model_config['env_file']=None; c.load_settings(force_reload=True)"`
+  * Confirm it raises `ConfigLoadError` with a message naming the missing required env var, not an `ImportError` traceback.
+
+T0014.2: Known-Issues register housekeeping
+
+* Run `git diff -- docs/Known_Issues.md docs/Resolved_Issues.md docs/Repo_Current_State.md docs/Completion_Reports.md docs/Manual_Verification_Guide.md` and confirm only documentation/register files changed for this ticket.
+* Run `rg -n "13-column|job_level hidden|qwen agent-model|T0014.2|T0016|Deploy Hardening" docs` and confirm the old 13-column/`job_level` drift item is not reintroduced as open, T0014.2 is recorded as complete, and T0016/T0017 deploy-hardening items remain deferred.
+* Run `uv run pytest -q tests/core/test_config.py tests/api/test_startup_config.py` and confirm the T0014.1 config/startup smoke tests still pass after the docs-only sweep.

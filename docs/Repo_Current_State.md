@@ -1,5 +1,10 @@
 ## Current branch
-feature/t0012.10-eval-cost-reduction
+`fix/known-issues-hardening` — the **Milestone 14 (Pre-Deploy Known-Issue Fixes)** branch.
+
+**Branch topology — read this before any git work.** This branch was forked from `51913f6` (the **T0013.5 schema-freeze** commit), **not** from `main`. `main`/`origin/main` is stale at **T0011.6** — M12, M13, and the M15 behavior track are **not merged there**; they exist only as feature branches. This branch is a **parallel sibling of the M15 behavior/scenario track** (`feature/t0015.4-v1-scenario-matrix`): both forked at T0013.5 and run independently, neither blocking the other.
+- **Do not rebase this branch onto `main`** — you would drop M12 + M13 (schema freeze, the current `config.py`). The correct base is `51913f6`.
+- The **M15 behavior work (T0015.1–.5) is NOT present here** — it lives on the `feature/t0015.x-*` branches. Anything about behavior specs, the scenario matrix, `Agent_Behavior_Spec.md`, or `behavior_glossary` belongs to that track, not this one.
+- Everything for this branch's work is in [`Tickets.md`](Tickets.md) → **T0014** (objective + sub-tickets) and [`Known_Issues.md`](Known_Issues.md) § "Config, startup & deployment".
 
 ## Completed milestones
 One line per milestone. Per-ticket detail (files changed, test counts, follow-ups) lives in [`Completion_Reports.md`](Completion_Reports.md).
@@ -12,12 +17,18 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **M10** (T0010.1/.3/.4) — Pre-deploy hardening: typed error contract + graceful answer, true single-table SQL allowlist, off-event-loop LLM call; code-review bugs 3 & 4 fixed.
 - **M11** (T0011.1–.6) — Model evaluation harness: DeepEval judge (Groq→Gemini) + RPM throttle, seeded fixture DB + versioned goldens, three-seam metric stack, Langfuse score writeback.
 - **M12** (T0012.2–.10) — Hardening: qwen `<think>` leak fix, deepeval metric-template unblock, `trace_url` populated, graceful empty-answer fallback, non-str content coercion, eval-test marker hygiene, native-async `generate_sql`, cosmetic cleanup, eval judge cost/rate-limit reduction (thinking-budget cap + dropped redundant `FaithfulnessMetric`).
+- **M13** (T0013.1–.5) — Schema Enrichment & v1 Freeze: `tech_stack` rebuilt against an external vocabulary (audit coverage 58% → 89%); `job_level`, `listing_expires_on`, and `created_on` exposed to the agent; the enriched **16-column** v1 contract recorded in [`Schema_Contract.md`](Schema_Contract.md) and enforced by prompt-freeze guards. **This is this branch's base (`51913f6`).**
 
 ## In progress / next
-- **Milestone 11 not fully closed:** T0011.5 (threshold calibration + baseline report) remains **open** — its two hard prerequisites (T0012.2 qwen `<think>` leak, T0012.3 deepeval metric-template bug) are now cleared, so it is unblocked.
-- **Milestone 12 complete.** Milestone 10 remaining lower-priority items (freshness-honesty determinism, hidden-salary phrasing, the best-effort id-in-SQL nudge) are tracked in [`Known_Issues.md`](Known_Issues.md), not as blocking tickets.
-- **T0012.10's live judge-agreement spot-check is BLOCKED** — no `GOOGLE_API_KEY`/Groq creds in the coder sandbox; logged as a follow-up in [`Known_Issues.md`](Known_Issues.md) for the maintainer to run.
-- **Next recommended ticket:** T0011.5.
+**This branch = Milestone 14 — Pre-Deploy Known-Issue Fixes** ([`Tickets.md`](Tickets.md) → T0014). Scope is **only** the deploy-facing items in [`Known_Issues.md`](Known_Issues.md) § "Config, startup & deployment" — deliberately **kept separate** from the broader §6 deploy-hardening body (that is **T0016 — Deploy Hardening**, deferred). Two sub-tickets:
+- **T0014.1 — Graceful startup & config-load robustness** (the one code change): `src/core/config.py` runs `settings = load_settings()` at import and resolves `config/*.yaml` relative to CWD, so a non-`/app` CWD or a missing env var crashes at import. Fix: resolve config from a known project root, and turn a missing/invalid setting into a clear, catchable startup error (coordinate with the FastAPI `lifespan`). Tests: loads from a non-project CWD; a missing setting raises a clear error, not an `ImportError`.
+- **T0014.2 — Known-Issues register housekeeping:** archive the resolved "13-column drift in `pre-deploy-refinement-plan.md`" entry to `Resolved_Issues.md`; sweep other stale entries (e.g. downgrade the `[LOW] qwen model-ID` note now the live matrix has exercised the tool loop).
+
+**Next recommended ticket:** **T0014.1**.
+
+**Milestone map (post-2026-07-12 renumber — see `Tickets.md`):** T0013 freeze → **T0014 known-issue fixes (this branch)** → T0015 behavior track (parallel, `feature/t0015.x` branches) → T0016 Deploy Hardening (deferred, plan §6) → T0017 Ingestion Deploy Readiness (deferred, **last**).
+
+**Open elsewhere (not this branch's concern):** T0011.5 eval baseline (still open, needs live Groq/Google creds; T0012.10 judge-agreement spot-check still BLOCKED on creds — both under M11); the M15 behavior track (T0015.4 paused on the Groq daily quota, T0015.5 pending).
 
 ## Current folder structure
 ```text

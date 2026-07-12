@@ -807,3 +807,18 @@ T0014.2: Known-Issues register housekeeping
 * Run `git diff -- docs/Known_Issues.md docs/Resolved_Issues.md docs/Repo_Current_State.md docs/Completion_Reports.md docs/Manual_Verification_Guide.md` and confirm only documentation/register files changed for this ticket.
 * Run `rg -n "13-column|job_level hidden|qwen agent-model|T0014.2|T0016|Deploy Hardening" docs` and confirm the old 13-column/`job_level` drift item is not reintroduced as open, T0014.2 is recorded as complete, and T0016/T0017 deploy-hardening items remain deferred.
 * Run `uv run pytest -q tests/core/test_config.py tests/api/test_startup_config.py` and confirm the T0014.1 config/startup smoke tests still pass after the docs-only sweep.
+
+T0016.1: CORS middleware (config-driven, credential-less)
+
+* Run the focused API tests:
+  * `uv run pytest -q tests/api/test_cors.py tests/api/test_query.py tests/api/test_startup_config.py`
+  * Confirm all tests pass.
+* Confirm `config/settings.yaml` keeps `api.cors.allow_credentials: false`.
+* Set a local allowed origin in `config/settings.yaml`, for example `http://localhost:5173`, then start the app:
+  * `uv run uvicorn src.api.app:app --reload`
+* In another terminal, send an allowed-origin preflight request:
+  * `curl -i -X OPTIONS "http://127.0.0.1:8000/api/v1/agent/chat" -H "Origin: http://localhost:5173" -H "Access-Control-Request-Method: POST"`
+  * Confirm the response includes `access-control-allow-origin: http://localhost:5173`.
+* Send the same preflight request from a disallowed origin:
+  * `curl -i -X OPTIONS "http://127.0.0.1:8000/api/v1/agent/chat" -H "Origin: http://evil.example" -H "Access-Control-Request-Method: POST"`
+  * Confirm the response does not include `access-control-allow-origin`.

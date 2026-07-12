@@ -1,3 +1,10 @@
+api:
+  cors:
+    allowed_origins: []  # Set deployed/demo UI origin(s) here later; keep empty for same-origin or no-browser use.
+    allow_credentials: false
+    allowed_methods: ["GET", "POST", "OPTIONS"]
+    allowed_headers: ["*"]
+
 agent:
   provider: groq
   groq:

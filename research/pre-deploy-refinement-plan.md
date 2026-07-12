@@ -25,7 +25,7 @@
   `docs/Known_Issues.md` already anticipates ("PLANNED — v2 refinement").
 
 - **Can the schema be frozen now? Yes — for the v1 (agent-only) deploy.** The
-  agent-visible schema (13 columns in `config/prompts.yaml → schema_context`) is real,
+  agent-visible schema (16 columns in `config/prompts.yaml → schema_context`) is real,
   populated, and stable today. There is exactly **one** known pending change — the additive
   `is_active` column planned for the deferred ingestion milestone (T0014) — and it is
   already gated *behind* this eval baseline by design. So: **freeze the current schema, do
@@ -62,7 +62,7 @@ the ones the model can see and the ones the client depends on.
 
 | # | Surface | Where it lives | Finalized for v1 deploy? |
 |---|---|---|---|
-| 1 | **Agent-visible schema** (what the model is told exists) | `config/prompts.yaml → schema_context` (13 columns) | **Yes — freeze this.** This is the one that governs behavior. |
+| 1 | **Agent-visible schema** (what the model is told exists) | `config/prompts.yaml → schema_context` (16 columns) | **Yes — freeze this.** This is the one that governs behavior. |
 | 2 | **SQL-generation contract** (rules the model must follow when writing SQL) | `config/prompts.yaml → sql_generation` | Yes, but this is exactly what prompt-tuning will edit — freeze the *column set*, iterate the *rules*. |
 | 3 | **DB DDL** (physical table) | `scripts/init_db.sql → clean_jobs` (17 columns) | Mostly. Has **latent hidden columns**; **will gain `is_active` at T0014** (see below). |
 | 4 | **Public API request/response** | `src/api/schemas.py` (`QueryRequest`/`QueryResponse`), mounted at `/api/v1` | **Yes — freeze this.** Already versioned. |
@@ -70,10 +70,14 @@ the ones the model can see and the ones the client depends on.
 
 ### 1a. The agent-visible schema (surface #1) — freeze this now
 
-`schema_context` exposes these 13 columns: `id, title, complepany, role, description,
-tech_stack, location, source_url, is_internship, salary_min, salary_max, salary_currency,
-is_salary_negotiable`. Every one is real and populated. **This is the schema your scenarios
-must pin to**, because it is literally the contract the model reasons over.
+`schema_context` exposes these **16 columns** (frozen at T0013.5, recorded in
+[`docs/Schema_Contract.md`](../docs/Schema_Contract.md)): `id, title, company, role,
+description, tech_stack, location, source_url, job_level, listing_expires_on, created_on,
+is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable`. Every one is
+real and populated. **This is the schema your scenarios must pin to**, because it is literally
+the contract the model reasons over. *(Reconciled: this section originally listed the
+pre-enrichment 13-column set — `job_level`, `listing_expires_on`, and `created_on` were
+exposed by T0013.2–.4.)*
 
 ### 1b. Latent DDL columns deliberately hidden from the agent
 
@@ -96,7 +100,7 @@ these may no longer be open"). That milestone is **sequenced *after* this eval b
 purpose** — the honesty behavior must be *measured* before ingestion is built on it.
 
 **Implication for your plan:** the `is_active` addition is *additive and planned*, not a
-reason to wait. Freeze the 13-column schema now, optimize prompts against it, and when
+reason to wait. Freeze the 16-column schema now, optimize prompts against it, and when
 T0014 adds `is_active`, run a **targeted re-calibration** (a v3 delta: a handful of new
 `is_active`/staleness goldens), not a from-scratch redo.
 
@@ -456,10 +460,12 @@ hard cost ceiling is fixed (§10 suggests $10/mo). Both are deploy-milestone ite
 A phased path that puts your idea in the right order and unblocks it:
 
 **Phase 0 — Freeze (fast, do first).**
-Record a one-page decision note: the 13-column agent schema, the `/api/v1` API contract, the
+Record a one-page decision note: the 16-column agent schema, the `/api/v1` API contract, the
 `internhunter_eval` fixture as the frozen data, **and the v1 metric set (§5a) + its
-thresholds**. Confirm `job_level`/`posted_date` stay hidden. This is the "schemas fixed to
-the deployed version" precondition your plan needs.
+thresholds**. Confirm `posted_date` and the `source`/`external_id` bookkeeping columns stay
+hidden; `job_level`, `listing_expires_on`, and `created_on` are now **visible** (exposed by
+T0013.2–.4). This is the "schemas fixed to the deployed version" precondition your plan needs.
+*(Done: the freeze is recorded in [`docs/Schema_Contract.md`](../docs/Schema_Contract.md).)*
 
 **Phase 1 — v1 baseline (unblock the keystone).**
 Close **T0011.5**: run the full 17-golden harness with the **frozen v1 metric set**,
@@ -496,8 +502,10 @@ first deploy.
 1. **Scope of first deploy:** ship the **agent-only API MVP** with a static corpus snapshot
    now (recommended — matches MVP scope, unblocks the demo), or wait for T0014 ingestion so
    the deployed data self-refreshes? This decides whether `is_active` is in-scope for v1.
-2. **Schema freeze sign-off:** OK to lock the 13-column agent schema + `/api/v1` contract as
-   "v1," keep `job_level`/`posted_date` hidden, and treat `is_active` as a planned v3 delta?
+2. **Schema freeze sign-off:** OK to lock the 16-column agent schema + `/api/v1` contract as
+   "v1," keep `posted_date` + `source`/`external_id` hidden (`job_level`, `listing_expires_on`,
+   and `created_on` are now visible), and treat `is_active` as a planned v3 delta? *(Signed
+   off at T0013.5 — see `docs/Schema_Contract.md`.)*
 3. **Behavior targets (§4):** confirm "honesty over helpfulness" is the priority when data
    can't answer — this is what the prompt tuning optimizes *toward* and the metrics grade.
 4. **Prompt strategy:** approve moving from zero-shot to **few-shot** examples in

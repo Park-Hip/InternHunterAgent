@@ -955,3 +955,51 @@ T0013.5: Freeze the v1 schema contract
    uv run pytest tests/agents/runtime/test_prompts.py -q
    ```
    Confirm the prompt guard is green again after both throwaway edits are reverted.
+
+T0015.4: Run the v1 manual scenario matrix (baseline observed behavior)
+
+1. Seed the frozen fixture DB:
+   ```
+   python -m evals.fixtures.loader
+   ```
+   Confirm it prints `COUNT(*) = 22`.
+2. Boot the API against the fixture DB, not the default app DB:
+   ```
+   $env:DATABASE_URL = "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval"
+   uv run uvicorn src.api.app:app --reload
+   ```
+   Confirm the env var is set before the process starts so `src/core/db.py` builds its engine against the fixture DSN at import time.
+   **Windows note (observed 2026-07-12):** `uvicorn src.api.app:app` fails at startup on Windows with `Psycopg cannot use the 'ProactorEventLoop'` — the app's async Postgres checkpointer needs a `SelectorEventLoop`. Launch instead via a tiny script that forces it:
+   ```python
+   import asyncio; asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+   import uvicorn
+   config = uvicorn.Config("src.api.app:app", host="127.0.0.1", port=8000, loop="none")
+   asyncio.run(uvicorn.Server(config).serve())
+   ```
+   (Not needed under Docker/Linux, where the app normally runs.) Use `127.0.0.1`, not `localhost`, in `DATABASE_URL`.
+3. Run the sandbox-safe checks:
+   ```
+   uv run pytest evals/test_scenarios_v1_load.py
+   uv run python scripts/run_scenario_matrix.py --template
+   uv run python -c "import yaml; s=yaml.safe_load(open('evals/scenarios_v1.yaml', encoding='utf-8')); print(len(s), sum(1 for x in s if x['probe']))"
+   uv run python -c "from src.agents.runtime.prompts import load_prompt_version; print(load_prompt_version())"
+   ```
+   Confirm the test passes, the template command exits 0 with no HTTP calls, the count check prints `29 15`, and the prompt-version check prints `v1`.
+4. Run the live collect-only pass:
+   ```
+   uv run python scripts/run_scenario_matrix.py
+   ```
+   Confirm preflight passes (`prompt_version=v1`, a throwaway query returns a non-empty answer) and the script writes `evals/v1_scenario_matrix.md`.
+   **Groq free-tier reality (observed 2026-07-12):** `qwen/qwen3.6-27b` free tier caps at **8,000 tokens/min (TPM)** and **200,000 tokens/day (TPD)**; each turn burns ~5–7k tokens. So:
+   - Space turns to respect TPM: `--sleep 55` (default is `1.5`, which throttles hard).
+   - Run the 15 probes first: `--probes-only --sleep 55`, then the full pass to fill non-probes.
+   - The full matrix (~78 turns ≈ ~470k tokens) needs **~3 daily windows** on free tier. The run **checkpoints after every scenario** to `evals/v1_scenario_matrix.observed.json` and **resumes** — after the daily cap 429s (`tokens per day (TPD)`), a failed scenario is left *pending* (never aborts the pass), and re-running the same command after the next reset skips completed scenarios and continues. Don't burn daily budget on repeated relaunches/retries.
+5. Open `evals/v1_scenario_matrix.md` and grade it manually:
+   - Fill `Pass? (N/N)` per row against the `Expected behavior` column.
+   - Treat every probe row as pass-only-if-correct-on-all-reruns (`3/3`); `2/3` is a FAIL.
+   - Fill the `Failures -> prompt levers (fill after grading)` footer for the rows that miss.
+6. Run:
+   ```
+   git diff --stat
+   ```
+   Confirm the ticket only touched the allowed T0015.4 files and the required repo/report docs, and that `config/prompts.yaml`, `config/settings.yaml`, `src/`, `evals/harness.py`, `evals/judge.py`, `evals/goldens/golden_dataset.json`, and `evals/fixtures/seed_eval_db.sql` remain unchanged.

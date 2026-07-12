@@ -1,0 +1,35 @@
+{
+  "A1": [
+    "There are 5 AI Engineer jobs available in the database.",
+    "There are 5 AI Engineer jobs currently in the database."
+  ],
+  "A2": [
+    "Here are the 5 AI Engineer positions currently in the database:\n\n1. **AI Engineer (Computer Vision/NLP/LLM)** at **MBBANK** (Hanoi)\n   - *Level:* Experienced\n   - *Salary:* $3,000 - $5,000 USD\n   - *Tech Stack:* Python, PyTorch, TensorFlow, SQL\n\n2. **AI Engineer Intern** at **K&M Holdings** (Hanoi)\n   - *Level:* Intern/Student\n   - *Salary:* 8,000,000 - 12,000,000 VND\n   - *Tech Stack:* Python, NLP, Hugging Face\n\n3. **AI Engineer** at **ITL Aviation Logistics** (Ho Chi Minh City)\n   - *Level:* Experienced\n   - *Salary:* $2,000 - $3,500 USD\n   - *Tech Stack:* Python, TensorFlow, AWS\n\n4. **AI Engineer (Fresher/Junior)** at **K&M Holdings** (Da Nang)\n   - *Level:* Intern/Student\n   - *Salary:* Negotiable\n   - *Tech Stack:* Python, scikit-learn, Pandas\n\n5. **AI Engineer (Middle Level)** at **K&M Holdings** (Hanoi)\n   - *Level:* Experienced\n   - *Salary:* 25,000,000 - 35,000,000 VND\n   - *Tech Stack:* Python, PyTorch, MLOps\n\nLet me know if you'd like the full job description for any of these, or if you want to filter them further!",
+    "Here are the AI Engineer jobs currently in the database:\n\n1.  **AI Engineer (Computer Vision/ NLP/ LLM)** at **NGÂN HÀNG TMCP QUÂN ĐỘI – MBBANK**\n    *   **Location:** Hanoi\n    *   **Salary:** $3,000 - $5,000 USD\n    *   **Tech Stack:** Python, PyTorch, TensorFlow, SQL\n\n2.  **AI Engineer Intern** at **K&M Holdings**\n    *   **Location:** Hanoi\n    *   **Salary:** 8,000,000 - 12,000,000 VND\n    *   **Tech Stack:** Python, NLP, Hugging Face\n\n3.  **AI Engineer** at **Công Ty Cổ Phần ITL Aviation Logistics**\n    *   **Location:** Ho Chi Minh City\n    *   **Salary:** $2,000 - $3,500 USD\n    *   **Tech Stack:** Python, TensorFlow, AWS\n\n4.  **AI Engineer (Fresher/junior)** at **K&M Holdings**\n    *   **Location:** Da Nang\n    *   **Salary:** Negotiable\n    *   **Tech Stack:** Python, scikit-learn, Pandas\n\n5.  **AI Engineer (Middle Level)** at **K&M Holdings**\n    *   **Location:** Hanoi\n    *   **Salary:** 25,000,000 - 35,000,000 VND\n    *   **Tech Stack:** Python, PyTorch, MLOps\n\nLet me know if you'd like more details on any of these specific roles!"
+  ],
+  "C1": [
+    "The most recently posted job in the database is the **Data Analyst** position at **Home Credit Vietnam - Explore Your Dream Team**, which was posted on **July 10, 2026**. \n\nLet me know if you'd like to see the full details for this role or explore other recent postings!",
+    "The most recently posted job is the **Data Analyst** position at **Home Credit Vietnam - Explore Your Dream Team**, which was listed on July 10, 2026. Let me know if you'd like to see the full description or details for this role!",
+    "The most recently posted job is the **Data Analyst** position at **Home Credit Vietnam - Explore Your Dream Team**, which was posted on **July 10, 2026**. \n\nLet me know if you'd like to see more details about this role or explore other recent postings!"
+  ],
+  "C2": [
+    "I couldn't produce an answer for that — please try rephrasing.",
+    "I couldn't produce an answer for that — please try rephrasing.",
+    "The highest-paid job in the database is a **Data Scientist** position at **Sonat Game**.\n\nHere are the details:\n- **Role:** Data Scientist\n- **Location:** Ho Chi Minh City\n- **Salary:** 30,000,000 – 40,000,000 VND\n- **Tech Stack:** Python, R, SQL, Tableau\n\nLet me know if you'd like to see more details about this role or explore other opportunities!"
+  ],
+  "C3": [
+    "I'm sorry, but I encountered a database error while trying to search for COBOL jobs. Please try again later, or feel free to ask about other job postings or tech stacks!",
+    "I don't have any COBOL internship job postings in the database at the moment. Let me know if you'd like to search for a different technology or role!",
+    "I don't have any internship postings for COBOL roles in the database at the moment.\n\nIf you're interested in other technologies or specific companies, feel free to ask, and I'd be happy to search for those!"
+  ],
+  "C4": [
+    "Based on the database, here are the jobs that mention remote or work-from-home arrangements:\n\n1. **AI Engineer** at Công Ty Cổ Phần ITL Aviation Logistics (ID: 3)\n2. **Home Racer - Data Engineer** at Home Credit Vietnam (ID: 11)\n\n*Note: Both postings list their official location as Ho Chi Minh City, but they were flagged based on mentions of remote/work-from-home flexibility in the job descriptions. Let me know if you'd like the full details or tech stacks for either of these!*",
+    "Based on the database, here are the jobs that mention remote work in their postings:\n\n- **AI Engineer** at Công Ty Cổ Phần ITL Aviation Logistics\n- **Home Racer - Data Engineer** at Home Credit Vietnam - Explore Your Dream Team\n\n*(Note: Since \"remote\" isn't a dedicated column, these matches are based on the posting text. A job might mention remote work in passing or as a hybrid option.)*\n\nLet me know if you'd like the full details or tech stacks for either of these!",
+    "Based on the current database, there are no remote or work-from-home internship postings available. \n\nIf you'd like, I can help you search for opportunities in a specific city, filter by a particular tech stack, or look for roles at a specific company. Just let me know what you're looking for!"
+  ],
+  "C5": [
+    "The salary information for the AI Engineer internship in Da Nang is not available in the database.\n\nWould you like me to provide more details about the role, such as the company or tech stack?",
+    "The job posting for the AI Engineer role at K&M Holdings in Da Nang does not list a specific salary range or currency. It's possible the compensation details are discussed during the application process or are negotiable.",
+    "The specific salary amount for the AI Engineer position at K&M Holdings in Da Nang is not listed in the posting. However, the data indicates that the salary is negotiable."
+  ]
+}

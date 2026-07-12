@@ -1,5 +1,5 @@
 ## Current branch
-feature/t0015.2-settle-decisions-scenarios
+feature/t0015.4-v1-scenario-matrix
 
 ## Completed milestones
 One line per milestone. Per-ticket detail (files changed, test counts, follow-ups) lives in [`Completion_Reports.md`](Completion_Reports.md).
@@ -429,3 +429,15 @@ register so it stays focused on what is still open). A full per-module logic rev
 Milestone 15 now has the reconciled behavior spec (T0015.1), the prompt-version stamp (T0015.3), and the frozen behavior target — settled decisions, FINAL canonical phrasings, and the `Agent_Behavior_Spec.md` scenario matrix (T0015.2) — all in place. **Recommended next: T0015.4** to build the manual verification matrix / eval-comparison run against `Agent_Behavior_Spec.md` §4, stamping each row with the T0015.3 prompt version. T0015.5 then wires the `behavior_glossary` canonical strings into the prompt few-shots.
 
 Other future phases (resume/embedding retrieval, charts, typed error contract) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.
+## T0015.4 supplement
+- In-progress ticket: T0015.4 on branch `feature/t0015.4-v1-scenario-matrix` — offline artifacts + hardened runner done; **live matrix paused at 7/29 (see "Live run status" below).**
+- Added `evals/scenarios_v1.yaml`, `scripts/run_scenario_matrix.py`, `evals/test_scenarios_v1_load.py`, and the committed template `evals/v1_scenario_matrix.md`.
+- Added offline verification commands: `uv run pytest evals/test_scenarios_v1_load.py`, `uv run python scripts/run_scenario_matrix.py --template`, and `uv run python -c "import yaml; s=yaml.safe_load(open('evals/scenarios_v1.yaml', encoding='utf-8')); print(len(s), sum(1 for x in s if x['probe']))"`.
+- Live collect-only run remains a developer step because it requires Groq credentials plus the fixture DB served through the API with `DATABASE_URL=postgresql+psycopg://internhunter:internhunter@127.0.0.1:5433/internhunter_eval`.
+- Updated next-ticket recommendation: T0015.5 after the developer records the live matrix results.
+
+### Live run status — IN PROGRESS, PAUSED (2026-07-12)
+- The live collect-only pass **has been started** on a credentialed machine and is **paused mid-run at 7/29 scenarios**, not yet complete. Collected so far (checkpointed in `evals/v1_scenario_matrix.observed.json`): **A1, A2** (non-probes) and **C1, C2, C3, C4, C5** (probes, 3× each). The 22 remaining scenarios (incl. probes C7, D1, D2, D3, M-G10, M-G26d, M-G29, M-G44, M-D4, M-D3c) are still `_pending live run_` in `evals/v1_scenario_matrix.md`.
+- **Why paused:** Groq free-tier **daily** token cap (TPD 200,000) for `qwen/qwen3.6-27b` was exhausted (`tokens per day (TPD)` 429). The full matrix ≈ 470k tokens ≈ **~3 daily windows** on free tier — see [[groq-free-tier-quota-eval-runs]] and `Known_Issues.md`.
+- **To RESUME after the daily reset:** re-seed + re-boot the API against the fixture DB (Windows: use the `SelectorEventLoop` launcher — see the T0015.4 entry in `Manual_Verification_Guide.md`), then re-run `uv run python scripts/run_scenario_matrix.py --probes-only --sleep 55` (finishes the 10 remaining probes) followed by `uv run python scripts/run_scenario_matrix.py --sleep 55` (fills the non-probes). The checkpoint makes it skip the 7 already done and continue. `run_scenario_matrix.py` was hardened during this run with `--sleep`, per-scenario checkpoint/resume, `--probes-only`/`--ids`, and a 240s turn timeout.
+- Early signal (ungraded, indicative): every probe collected so far missed its spec caveat/hedge (C1 no `CREATED-ON-CAVEAT`; C2 crowned the 40M VND row + empty-answer fallback; C3 a DB-error/zero-result inconsistency; C4 inconsistent remote hedge; C5 one run used the forbidden "not in the data"), plus the `<think>`-leak empty answers and internship-bias persona leak — all feeding T0015.5's few-shot worklist.

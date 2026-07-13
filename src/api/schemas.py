@@ -1,7 +1,9 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+DEFAULT_MAX_QUERY_CHARS = 2000
 
 class QueryRequest(BaseModel):
-    query: str
+    query: str = Field(..., max_length=DEFAULT_MAX_QUERY_CHARS)
     user_id: str | None = None
     session_id: str | None = None
 

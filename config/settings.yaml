@@ -1,4 +1,7 @@
 api:
+  docs_enabled: true
+  rate_limit: "15/minute"
+  max_query_chars: 2000
   cors:
     allowed_origins: []  # Set deployed/demo UI origin(s) here later; keep empty for same-origin or no-browser use.
     allow_credentials: false

@@ -822,3 +822,57 @@ T0016.1: CORS middleware (config-driven, credential-less)
 * Send the same preflight request from a disallowed origin:
   * `curl -i -X OPTIONS "http://127.0.0.1:8000/api/v1/agent/chat" -H "Origin: http://evil.example" -H "Access-Control-Request-Method: POST"`
   * Confirm the response does not include `access-control-allow-origin`.
+
+T0016.2: Per-IP rate limiting + graceful 429/quota degradation
+
+* Run the focused API tests:
+  * `uv run pytest -q tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_cors.py tests/api/test_startup_config.py`
+  * Confirm the chat limit, friendly provider-busy response, generic 500 path, health route, CORS, and startup-config tests all pass.
+* Start the API locally:
+  * `uv run uvicorn src.api.app:app --reload`
+* Send more than 15 chat requests from the same machine within one minute:
+  * `POST http://127.0.0.1:8000/api/v1/agent/chat`
+  * Confirm the excess request returns HTTP 429 with `{"detail": "The demo is busy right now. Please try again in a moment."}`.
+* Call health repeatedly:
+  * `GET http://127.0.0.1:8000/api/v1/health`
+  * Confirm it remains HTTP 200 and is not rate-limited.
+* If provider credentials are available, simulate or trigger provider timeout/rate-limit pressure and confirm provider-busy failures return friendly HTTP 429/503 while unrelated bugs still return `{"detail": "Failed to process query"}` with HTTP 500.
+
+T0016.3: Request input hardening (length cap)
+
+* Run the focused API tests:
+  * `uv run pytest -q tests/api/test_query.py tests/api/test_rate_limit.py tests/api/test_cors.py tests/api/test_startup_config.py`
+  * Confirm normal, blank, over-limit, rate-limit, CORS, and startup-config API paths all pass.
+* Start the API locally:
+  * `uv run uvicorn src.api.app:app --reload`
+* Send a normal request:
+  * `curl -X POST http://127.0.0.1:8000/api/v1/agent/chat -H "Content-Type: application/json" -d "{\"query\":\"What companies use Python?\"}"`
+  * Confirm the request is accepted and returns the usual `answer` / `session_id` / `trace_id` / `trace_url` response shape.
+* Send a whitespace-only request:
+  * `curl -X POST http://127.0.0.1:8000/api/v1/agent/chat -H "Content-Type: application/json" -d "{\"query\":\"   \"}"`
+  * Confirm it still returns HTTP 400 with `{"detail": "Query must not be empty."}`.
+* Send a request with more than 2000 characters in `query`.
+  * Confirm it is rejected with HTTP 422 and a `string_too_long` validation detail for `body.query`.
+  * Confirm no agent/runtime work is performed for the rejected request.
+
+T0016.4: `/docs` exposure decision + minimal security headers
+
+* Run the focused API tests:
+  * `uv run pytest -q tests/api/test_docs_exposure.py tests/api/test_cors.py tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_startup_config.py`
+  * Confirm the docs-on/docs-off checks and the existing CORS, rate-limit, query, and startup-config paths all pass.
+* Confirm the default shipping config in `config/settings.yaml` keeps:
+  * `api.docs_enabled: true`
+* Start the API locally:
+  * `uv run uvicorn src.api.app:app --reload`
+* Open these URLs and confirm they are reachable with the default config:
+  * `http://127.0.0.1:8000/docs`
+  * `http://127.0.0.1:8000/redoc`
+  * `http://127.0.0.1:8000/openapi.json`
+* Temporarily set the locked-down alternative in `config/settings.yaml`:
+  * `api.docs_enabled: false`
+* Restart the API and confirm these now return HTTP 404:
+  * `http://127.0.0.1:8000/docs`
+  * `http://127.0.0.1:8000/redoc`
+  * `http://127.0.0.1:8000/openapi.json`
+* Restore `api.docs_enabled: true`.
+* Confirm this ticket does not add `X-Frame-Options`, CSP, or any other security-header middleware because FastAPI still serves API responses only and no same-origin HTML UI in this repo state.

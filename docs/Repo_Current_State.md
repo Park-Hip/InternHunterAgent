@@ -146,6 +146,7 @@ Runtime dependencies declared in `pyproject.toml`:
 - `beautifulsoup4>=4.15.0`
 - `lxml>=6.1.1`
 - `httpx>=0.27`
+- `slowapi>=0.1.10` (T0016.2 - in-process per-IP rate limiting for the public chat endpoint)
 - `langchain-google-genai>=4.2.6` (T0011.6 — eval judge only; the request path never uses it)
 
 Dev/test dependencies declared in `pyproject.toml` under `[dependency-groups] dev`:
@@ -178,6 +179,12 @@ Practical commands from the repository layout:
 - `docker compose -f infra/docker-compose.yaml up --build` (Langfuse observability stack)
 
 ## Build/test status
+- Command run: `uv run pytest -q tests/api/test_query.py tests/api/test_rate_limit.py tests/api/test_cors.py tests/api/test_startup_config.py`
+- Result: `18 passed`.
+- Command run: `uv run ruff check src/api/schemas.py tests/api/test_query.py`
+- Result: `All checks passed!`.
+- Command run: `uv run pytest -q tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_cors.py tests/api/test_startup_config.py`
+- Result: `16 passed`.
 - Command run: `uv run pytest -q tests/core/test_config.py tests/api/test_startup_config.py` (T0014.2 smoke check after docs-only register sweep)
 - Result: `4 passed`.
 - Command run: `uv run pytest tests/core/test_config.py -v`
@@ -335,3 +342,8 @@ Milestone 9 (data ingestion) is closed, and the structured-query-vs-detail split
 
 Other future phases (resume/embedding retrieval, charts, typed error contract) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.
 > **2026-07-12 T0016.1 update:** Current working branch is `feature/t0016.1-cors-middleware`, cut from `fix/known-issues-hardening` after T0014.1/T0014.2. T0016.1 is complete here: `config/settings.yaml` now carries the credential-less `api.cors` block, [src/api/app.py](D:/Data_Science_Project/InternHunterAgent/src/api/app.py) registers `CORSMiddleware` before router includes, and [tests/api/test_cors.py](D:/Data_Science_Project/InternHunterAgent/tests/api/test_cors.py) proves allowed/disallowed preflight behavior without lifespan startup. Focused build/test status for this ticket: `uv run pytest -q tests/api/test_cors.py tests/api/test_query.py tests/api/test_startup_config.py` passed. Next recommended ticket: **T0016.2** per-IP rate limiting + graceful 429 handling. The older branch snapshot below remains as historical context for the base branch.
+
+> **2026-07-12 T0016.2 update:** Current working branch is `feature/t0016.2-rate-limit-429`, cut after the completed T0016.1 CORS work. T0016.2 is complete here: `slowapi` is installed, `config/settings.yaml` sets `api.rate_limit: "15/minute"`, [src/api/app.py](D:/Data_Science_Project/InternHunterAgent/src/api/app.py) registers a per-app limiter and friendly 429 handler, [src/api/routes/query.py](D:/Data_Science_Project/InternHunterAgent/src/api/routes/query.py) applies the limit only to `POST /api/v1/agent/chat`, and [src/agents/service.py](D:/Data_Science_Project/InternHunterAgent/src/agents/service.py) maps provider rate-limit/quota/timeout pressure to a friendly busy response while preserving generic 500 failures. Focused build/test status for this ticket: `uv run pytest -q tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_cors.py tests/api/test_startup_config.py` passed (`16 passed`). Next recommended ticket: **T0016.3** input length cap. Open issues remain centralized in [Known_Issues.md](D:/Data_Science_Project/InternHunterAgent/docs/Known_Issues.md).
+
+> **2026-07-12 T0016.3 update:** Current working branch is `feature/t0016.3-input-length-cap`, cut after the completed T0016.2 rate-limit work. T0016.3 is complete here: `config/settings.yaml` sets `api.max_query_chars: 2000`, [src/api/schemas.py](D:/Data_Science_Project/InternHunterAgent/src/api/schemas.py) constrains `QueryRequest.query` with the matching `DEFAULT_MAX_QUERY_CHARS = 2000` Pydantic `max_length`, and [tests/api/test_query.py](D:/Data_Science_Project/InternHunterAgent/tests/api/test_query.py) proves normal/exactly-at-cap queries reach the service while over-limit requests return HTTP 422 before the agent service is awaited. Focused build/test status for this ticket: `uv run pytest -q tests/api/test_query.py tests/api/test_rate_limit.py tests/api/test_cors.py tests/api/test_startup_config.py` passed (`18 passed`). Next recommended ticket: **T0016.4** `/docs` exposure and minimal security headers. Open issues remain centralized in [Known_Issues.md](D:/Data_Science_Project/InternHunterAgent/docs/Known_Issues.md).
+> **2026-07-13 T0016.4 update:** Current working branch is `feature/t0016.4-docs-headers`, cut after the completed T0016.3 input-length-cap work. T0016.4 is complete here: `config/settings.yaml` now makes the public-docs choice explicit with `api.docs_enabled: true`, [src/api/app.py](D:/Data_Science_Project/InternHunterAgent/src/api/app.py) loads that flag and wires `docs_url`, `redoc_url`, and `openapi_url` together so tests can flip them through `create_app(docs_enabled=...)`, and [tests/api/test_docs_exposure.py](D:/Data_Science_Project/InternHunterAgent/tests/api/test_docs_exposure.py) proves the enabled paths return 200 while the locked-down option returns 404 for all three endpoints. No security-header middleware was added by design because this repo still serves API responses only and not a same-origin HTML UI from FastAPI. Focused build/test status for this ticket: `uv run pytest -q tests/api/test_docs_exposure.py tests/api/test_cors.py tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_startup_config.py` passed. The documented locked-down alternative is `api.docs_enabled: false`. Next recommended ticket: none recorded yet within T0016; any later HTML UI ticket should decide whether to add `X-Frame-Options` or CSP `frame-ancestors` then. Open issues remain centralized in [Known_Issues.md](D:/Data_Science_Project/InternHunterAgent/docs/Known_Issues.md).

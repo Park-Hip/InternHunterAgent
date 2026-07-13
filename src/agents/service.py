@@ -2,6 +2,7 @@ import uuid
 from typing import TypedDict
 
 from src.agents.runtime.react_agent import AgentRuntime
+from src.core.errors import classify_provider_busy_error
 
 FALLBACK_ANSWER = "I couldn't produce an answer for that — please try rephrasing."
 
@@ -21,11 +22,17 @@ async def generate_agent_response(
 ) -> AgentResponse:
     session_id = session_id or str(uuid.uuid4())
 
-    response = await runtime.ainvoke(
-        query=query,
-        session_id=session_id,
-        user_id=user_id,
-    )
+    try:
+        response = await runtime.ainvoke(
+            query=query,
+            session_id=session_id,
+            user_id=user_id,
+        )
+    except Exception as exc:
+        provider_busy = classify_provider_busy_error(exc)
+        if provider_busy is not None:
+            raise provider_busy from exc
+        raise
 
     answer = response["answer"]
     if answer is None or not answer.strip():

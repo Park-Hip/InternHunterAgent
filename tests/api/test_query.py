@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 
 from src.agents.service import FALLBACK_ANSWER, generate_agent_response
 from src.api.app import app
+from src.api.schemas import DEFAULT_MAX_QUERY_CHARS
+from src.core.errors import BUSY_MESSAGE, ProviderBusyError
 
 
 class QueryRouteTests(unittest.TestCase):
@@ -136,6 +138,19 @@ class QueryRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json(), {"detail": "Failed to process query"})
 
+    def test_query_route_returns_friendly_429_when_provider_is_rate_limited(self) -> None:
+        with patch(
+            "src.api.routes.query.generate_agent_response",
+            new=AsyncMock(side_effect=ProviderBusyError(status_code=429)),
+        ):
+            response = self.client.post(
+                "/api/v1/agent/chat",
+                json={"query": "what time is it?"},
+            )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json(), {"detail": BUSY_MESSAGE})
+
     def test_query_route_returns_400_for_blank_query(self) -> None:
         with patch(
             "src.api.routes.query.generate_agent_response",
@@ -148,6 +163,52 @@ class QueryRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"detail": "Query must not be empty."})
+        mock_generate.assert_not_awaited()
+
+    def test_query_route_accepts_query_at_length_cap(self) -> None:
+        fake_response = {
+            "answer": "ok",
+            "session_id": "session-123",
+            "trace_id": None,
+            "trace_url": None,
+        }
+        capped_query = "x" * DEFAULT_MAX_QUERY_CHARS
+
+        with patch(
+            "src.api.routes.query.generate_agent_response",
+            new=AsyncMock(return_value=fake_response),
+        ) as mock_generate:
+            response = self.client.post(
+                "/api/v1/agent/chat",
+                json={"query": capped_query, "session_id": "session-123"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), fake_response)
+        mock_generate.assert_awaited_once_with(
+            query=capped_query,
+            session_id="session-123",
+            user_id=None,
+            runtime=ANY,
+        )
+
+    def test_query_route_rejects_over_limit_query_before_service_call(self) -> None:
+        over_limit_query = "x" * (DEFAULT_MAX_QUERY_CHARS + 1)
+
+        with patch(
+            "src.api.routes.query.generate_agent_response",
+            new=AsyncMock(),
+        ) as mock_generate:
+            response = self.client.post(
+                "/api/v1/agent/chat",
+                json={"query": over_limit_query},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        body = response.json()
+        self.assertEqual(body["detail"][0]["type"], "string_too_long")
+        self.assertEqual(body["detail"][0]["loc"], ["body", "query"])
+        self.assertEqual(body["detail"][0]["ctx"]["max_length"], DEFAULT_MAX_QUERY_CHARS)
         mock_generate.assert_not_awaited()
 
     def test_query_route_returns_fallback_answer_when_runtime_answer_is_none(self) -> None:
@@ -214,3 +275,15 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result["answer"], "The current time is 14:01:52.")
+
+    async def test_provider_timeout_maps_to_provider_busy_error(self) -> None:
+        runtime = AsyncMock()
+        runtime.ainvoke = AsyncMock(side_effect=TimeoutError("request timed out"))
+
+        with self.assertRaises(ProviderBusyError) as ctx:
+            await generate_agent_response(
+                query="what time is it?",
+                runtime=runtime,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 503)

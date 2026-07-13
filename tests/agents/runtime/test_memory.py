@@ -97,7 +97,7 @@ class SessionIsolationTests(unittest.IsolatedAsyncioTestCase):
 class GeneratedSessionIdTests(unittest.IsolatedAsyncioTestCase):
     async def test_generated_session_id_returned_when_client_omits_it(self) -> None:
         runtime = AsyncMock()
-        runtime.ainvoke.return_value = {"answer": "ok", "trace_id": None}
+        runtime.ainvoke.return_value = {"answer": "ok", "trace_id": None, "trace_url": None}
 
         result = await generate_agent_response(query="hi", runtime=runtime)
 

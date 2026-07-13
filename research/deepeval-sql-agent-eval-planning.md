@@ -469,6 +469,14 @@ component" is correct for us, but the argument lives at seam 2, not on the tool 
 
 ### 11.3 Honesty = Faithfulness + GEval (two halves)
 
+> **Update — `FaithfulnessMetric` dropped (T0012.10).** This section's plan was implemented,
+> then the metric was **removed** in T0012.10 as redundant with `GEval("Honesty")` (cost
+> reduction, per `eval-cost-and-rate-limits.md`; confirmed against `evals/harness.py`, which
+> imports `ToolCorrectnessMetric` + four `GEval`s only, no `FaithfulnessMetric`). Honesty today
+> is carried entirely by the single `GEval("Honesty")` metric described in
+> `pre-deploy-refinement-plan.md` §5a/§5f, not the two-halves split below. Kept for the
+> reasoning trail — read `pre-deploy-refinement-plan.md` §5a for the current stack.
+
 The MVP_Spec §3 honesty bar splits cleanly:
 - **`FaithfulnessMetric`** with `actual_output` = final answer and `retrieval_context` =
   the tool's returned string catches **fabrication/contradiction** (invented freshness,
@@ -481,6 +489,13 @@ The MVP_Spec §3 honesty bar splits cleanly:
   header). The eval targets the model's *rewriting* at seam 3, not the guardrails.
 
 ### 11.4 Judge model — §5's "Llama-3-70b" recommendation is DEAD
+
+> **Update — judge moved to Google Gemini, not a Groq fallback.** The options weighed below
+> are all Groq-hosted; the decision that actually shipped went a different direction:
+> `config/settings.yaml` has `eval.judge.provider: google`, `model: gemini-2.5-flash`
+> (`thinking_budget: 0` for cost). See `eval-cost-and-rate-limits.md` for the current
+> agent-Groq/judge-Google split and its cost/rate-limit analysis — that doc reflects what's
+> actually running; this section is the earlier decision trail.
 
 - Groq **deprecated `llama-3.3-70b-versatile` on 2026-06-17; shutdown 2026-08-16**
   (free/developer tier). Replacements Groq names: **`openai/gpt-oss-120b`** or
@@ -504,6 +519,13 @@ discussion #8556); verify during implementation.
 
 ### 11.6 CI recipe (greenfield) + the double-Groq-load problem
 
+> **Update — "both on Groq" is no longer true.** The judge moved to Google Gemini (§11.4
+> update); the "double-Groq-load" premise below is stale. The real constraint is now two
+> **separate** free-tier budgets (Groq for the agent, Google for the judge) — see
+> `eval-cost-and-rate-limits.md` §3 for the current, measured rate-limit analysis (RPD is the
+> binding constraint on the judge side, Groq TPD on the agent side). `GROQ_API_KEY` is still
+> needed for the agent; a Google API key is now also required for CI.
+
 `deepeval test run` drops into a GH Actions `.yml`; secret = **`GROQ_API_KEY`**; Confident
 AI is **optional** — skip it (no `CONFIDENT_API_KEY`). Flags: **`-c`** reads the local cache
 to skip unchanged cases (rate-limit relief); **`-n`** parallelizes but **raises concurrent
@@ -519,7 +541,89 @@ gate.
   migration ticket. Caution: migrating the agent to `gpt-oss-120b` may hit the **same
   structured-output/tool-calling bug** (11.4) in the agent's own tool loop — validate on
   migration. This is independent of eval and should not wait for T0011.
+  *(Update: this migration has since happened — `config/settings.yaml` now pins the agent to
+  `qwen/qwen3.6-27b` on Groq, not `llama-3.3-70b-versatile` or `gpt-oss-120b`. F1 is resolved;
+  kept here for the historical trail.)*
 - **F2:** No CI infrastructure exists; T0011 introduces the first `.github/workflows/`.
+
+### 11.8 Other premade metrics surveyed (not adopted) — recorded 2026-07-07
+
+The harness (`evals/harness.py`) uses `ToolCorrectnessMetric`, `FaithfulnessMetric`, and
+three `GEval`s (§11.3, `Resolved_Issues.md` T0011.3). *(Update: `FaithfulnessMetric` was
+dropped in T0012.10 — see the §11.3 update note. The harness now runs
+`ToolCorrectnessMetric` + four `GEval`s.)* This subsection surveys the **rest**
+of `deepeval==4.0.7`'s premade metric catalog (`.venv/Lib/site-packages/deepeval/metrics/`,
+inspected directly — 40 metric classes total) for candidates that fit this project's
+three-seam, mostly-referenceless, single-turn-plus-conversational goldens (§8.3
+`MVP_Technical_Design.md`). **Nothing here is adopted — this is a candidate list only**,
+per CLAUDE.md §1 (implementation is its own ticket).
+
+**Plausible fits, not currently used:**
+
+- **`AnswerRelevancyMetric`** — single-turn, needs only `INPUT`+`ACTUAL_OUTPUT` (cheapest
+  possible addition). Judges whether the final answer is on-topic for the question, distinct
+  from `GEval("Task Completion")`'s "did it actually complete the task" framing. Could sit in
+  `seam3_metrics()` to catch a relevant-but-unhelpful answer that Task Completion might still
+  pass.
+- **`NonAdviceMetric`** / **`MisuseMetric`** / **`RoleViolationMetric`** — single-turn safety
+  metrics, each requiring a project-specific constructor arg (`advice_types: List[str]`,
+  `domain: str`, `role: str` respectively — all required, no defaults). Category D
+  (safety/refusal) goldens currently only get `GEval("Task Completion")`/`GEval("Honesty")`
+  in seam 3 — no dedicated safety metric exists yet. These would need e.g.
+  `domain="job search / HR"`, `role="job search assistant"`, `advice_types=["financial",
+  "legal", "career"]` tuned to what D1–D3 actually probe.
+- **`PromptAlignmentMetric`** — single-turn, takes a required `prompt_instructions:
+  List[str]`. Scores whether `actual_output` follows an explicit instruction list, which
+  could formalize the honesty rules currently enforced only via `GEval("Honesty")`'s
+  free-text criteria (e.g., "preserve the truncation caveat," "flag NULL salary as
+  negotiable, not missing").
+- **`ToolUseMetric`** / **`GoalAccuracyMetric`** / **`TopicAdherenceMetric`** — these are
+  `BaseConversationalMetric` subclasses requiring `MultiTurnParams.ROLE`/`CONTENT` (i.e. a
+  `Turn`-based `ConversationalTestCase`, not a single-turn `LLMTestCase`). The harness already
+  builds `ConversationalTestCase`s for category B (multi-turn refinement) goldens
+  (`evals/harness.py` imports), so these attach there without new test-case plumbing.
+  `ToolUseMetric` additionally requires `available_tools: List[ToolCall]`; `TopicAdherenceMetric`
+  requires `relevant_topics: List[str]`.
+- **`StepEfficiencyMetric`** / **`PlanAdherenceMetric`** / **`PlanQualityMetric`** — all set
+  `self.requires_trace = True` in `__init__`, the same full-trace requirement the real
+  `TaskCompletionMetric` has (the reason it was swapped for a `GEval` substitute in T0012.3 —
+  see `Resolved_Issues.md` "Behavior caveat" note: the substitute only sees
+  `input`+`actual_output`+`retrieval_context`, not the full trace). These would need the same
+  trace-level plumbing `TaskCompletionMetric` needed and currently doesn't have. Relevant to
+  seam 1 if redundant/looping tool calls (e.g. calling `query_clean_jobs` twice for one
+  question) become a real failure mode worth measuring — not yet observed as one.
+
+**Checked and not a fit:**
+
+- **`HallucinationMetric`** — requires `SingleTurnParams.CONTEXT` (an *expected/ideal*
+  background context supplied per golden), not `RETRIEVAL_CONTEXT` (what the tool actually
+  returned, which `FaithfulnessMetric` already uses). Adopting it would mean storing an
+  expected-context field per golden, which conflicts with the deliberately **referenceless**
+  golden design (§8.3 `MVP_Technical_Design.md`: "no expected SQL string is stored"; same
+  principle applies to context). `FaithfulnessMetric` already covers the
+  fabrication-vs-tool-output angle this project needs.
+- **`BiasMetric`**, **`ToxicityMetric`**, **`PIILeakageMetric`** — generic content-safety
+  metrics (offensive language, demographic bias, PII leakage in output). No grounding in any
+  observed or hypothesized failure mode for a job-search SQL agent; the project's actual
+  safety surface (category D: unsafe/off-topic/injection, asserting `expected_tools=[]` +
+  refusal) is a routing/refusal problem, not a content-generation-safety problem. Low
+  candidate priority.
+- **`ExactMatchMetric`**, **`PatternMatchMetric`**, **`JsonCorrectnessMetric`** — deterministic
+  string/pattern/schema checks. No current golden has a fixed expected-output string or JSON
+  schema to check against (referenceless by design), so nothing to attach them to today.
+- **`ArenaGEval`**, **`ConversationalGEval`**, **`ConversationalDAGMetric`**,
+  **`KnowledgeRetentionMetric`**, **`ConversationCompletenessMetric`**,
+  **`RoleAdherenceMetric`**, turn-level variants (`TurnFaithfulnessMetric`,
+  `TurnRelevancyMetric`, etc.), MCP-specific metrics (`MCPTaskCompletionMetric`,
+  `MCPUseMetric`, `MultiTurnMCPUseMetric`) — either require infrastructure this project
+  doesn't have (MCP tool protocol, model-vs-model arena comparison) or overlap with metrics
+  already covering category B's multi-turn goldens without an obvious gap they'd close. Not
+  investigated in depth; flagged for a closer look only if multi-turn coverage is found
+  wanting.
+- **`DAGMetric`** — already explicitly deferred by design (§8.7
+  `MVP_Technical_Design.md`: "Deferred: ... `DAGMetric` ... Phase-2"; §3 above, "best
+  introduced in Phase 2 after GEval has established baseline criteria"). Not re-surveyed
+  here.
 
 ---
 

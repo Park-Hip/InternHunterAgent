@@ -689,3 +689,190 @@ T0011.6: Gemini judge provider (Groq-load relief)
 * Flip `provider: groq` in `config/settings.yaml`, re-run the model-name check above → prints `groq/openai/gpt-oss-120b`, confirming the Groq path is byte-for-byte unchanged. Flip back to `provider: google` afterward (the shipped default).
 * **Judge-agreement gate:** see `docs/Known_Issues.md` → Evaluation harness (T0011.6) for the live comparison result and its caveats (Groq/Google free-tier availability at the time of the run).
 * **Judge RPM throttle (rate-limit relief follow-up, 2026-07-05):** `config/settings.yaml` `eval.judge.rpm: 8` paces judge calls under Gemini's ~10 RPM free-tier cap instead of firing all ~119 judge calls for the 17 goldens back-to-back. Verify: `python -c "from evals.judge import _RpmThrottle; import time; t=_RpmThrottle(2); s=time.monotonic(); [t.wait() for _ in range(3)]; print(time.monotonic()-s)"` prints `~60` (the 3rd call waits for the window to free up). Live: `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -k "A1 or A3"` should show a visible pause (~7.5s at `rpm=8`) between consecutive judge calls in the output instead of an immediate burst.
+
+T0012.4: Populate trace_url in the agent response
+
+* Run `uv run pytest tests/agents/runtime/test_react_agent.py tests/agents/test_service.py tests/api/test_query.py -v` and confirm all pass — `AgentRuntime.ainvoke` now returns a `trace_url` key alongside `answer`/`trace_id`, and `service.py`/the API response shape (`{answer, session_id, trace_id, trace_url}`) is unchanged.
+* **With Langfuse creds set** (`docker compose up -d`, app restarted with `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` set): `POST /api/v1/agent/chat` with `{"query": "What companies use Python?"}`. Confirm `trace_url` in the JSON response is a real URL and opening it in a browser lands on the Langfuse UI trace whose id matches the response's `trace_id`.
+* **With Langfuse creds unset**: restart the app, repeat the same request. Confirm the response is still `200` and `trace_url` is `null` (tracing disabled degrades gracefully, no 500).
+
+T0012.5: Graceful fallback instead of a 500 on an empty agent answer
+
+1. Unit-level, no network:
+   ```
+   uv run python -c "import asyncio; from unittest.mock import AsyncMock, patch; \
+   import src.agents.runtime.react_agent as r; \
+   from src.agents.service import generate_agent_response, FALLBACK_ANSWER; \
+   fa=AsyncMock(); fa.ainvoke.return_value={'messages': []}; \
+   rt=r.AgentRuntime(agent=fa); \
+   [p.start() for p in (patch.object(r,'build_langfuse_config',return_value={}), patch.object(r,'get_langfuse_handler'), patch.object(r,'get_langfuse_client',return_value=None))]; \
+   print(asyncio.run(generate_agent_response(query='hi', runtime=rt))['answer'] == FALLBACK_ANSWER)"
+   ```
+   Confirm: prints `True` — an empty-messages runtime response now degrades to the fallback answer instead of raising.
+2. Run `uv run pytest tests/agents/runtime/test_react_agent.py tests/agents/test_service.py tests/api/test_query.py -v` and confirm all pass, including the three new `_extract_answer` "returns empty string" cases and the `generate_agent_response` fallback case.
+3. (Optional, live stack) With Docker + Groq creds available: `docker compose up -d`, `POST /api/v1/agent/chat` with a normal question and confirm a real answer still returns `200`. There is no reliable way to force a live empty answer post-T0012.2 (reasoning-leak fix raised `max_tokens` and hides `<think>` content), so the deterministic unit proof above is the primary evidence.
+
+T0012.6: Coerce non-str model content before `.strip()` in `generate_sql`
+
+1. Coercion proof, no network:
+   ```
+   uv run python -c "from src.agents.tools.query_clean_jobs import _content_to_text; \
+   print(_content_to_text([{'type':'text','text':'SELECT '},{'type':'text','text':'1'}]).strip() == 'SELECT 1'); \
+   print(_content_to_text('  SELECT 1  ').strip() == 'SELECT 1')"
+   ```
+   Confirm: prints two `True` lines — list-content flattening and the unchanged `str` fast path.
+2. Run `uv run pytest tests/agents/tools/test_query_clean_jobs.py -q` and confirm all pass (8 existing + 3 new `generate_sql` content-coercion tests).
+3. Run `uv run mypy` and confirm 2 residuals remain (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`) — the `query_clean_jobs.py` union-attr residual is gone.
+4. (Optional, live) With Groq creds + DB available: ask a normal job-data question end-to-end and confirm SQL generation still returns clean bare SQL — Groq returns `str` content today, so no behavior change is expected.
+
+T0012.7: Keep live-API eval tests out of plain pytest collection
+
+1. Plain suite skips live tests, no network:
+   ```
+   uv run pytest -q
+   ```
+   Confirm the summary shows `... deselected` and completes in seconds (no multi-minute hang, no Groq/Gemini call). Observed: `254 passed, 18 deselected, 4 subtests passed` (18 = 1 `test_judge_scaffold` + 17 `test_three_seams` parametrized cases).
+2. Live tests are still selectable:
+   ```
+   uv run pytest -m eval --collect-only -q
+   ```
+   Confirm it lists exactly `evals/test_judge_scaffold.py::test_judge_scaffold` and the 17 `evals/test_three_seams.py::test_three_seams[...]` node ids (A1–E2) — and nothing from `tests/`. Observed: `18/272 tests collected (254 deselected)`.
+3. Marker is registered (no "unknown marker" warning):
+   ```
+   uv run pytest -m eval --collect-only -q 2>&1 | grep -i "PytestUnknownMarkWarning" || echo "marker registered, no warning"
+   ```
+   Confirm: `marker registered, no warning`. (`pyproject.toml` also sets `--strict-markers`, which would hard-fail collection on any unregistered marker — the full suite stays green with it on.)
+4. deepeval path (if creds + fixture DB available): `deepeval test run` inherits `addopts` and deselects eval tests by default — pass `-m eval` to select them:
+   ```
+   PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval
+   ```
+   Without `-m eval`, this reports "No test cases found, please try again" (0 selected) — confirmed live. With `-m eval`, confirmed live against `evals/test_judge_scaffold.py -m eval` that the test is actually selected and run (it failed only on missing judge credentials in this sandbox, not on deselection — `1 total tests`, `0% pass rate` due to `error=None`/no judge response, not "no test cases found").
+
+T0012.8: Convert `generate_sql` to native async
+
+1. Run `uv run pytest tests/agents/tools/test_query_clean_jobs.py -v` and confirm all 10 pass — the thread-offload test is gone (removed, not skipped) and the three `GenerateSqlContentCoercionTests` cases now show as async (`IsolatedAsyncioTestCase`).
+2. Confirm no thread-offload remains for `generate_sql`:
+   ```
+   grep -n "to_thread" src/agents/tools/query_clean_jobs.py
+   ```
+   Confirm: exactly one hit, the `execute_validated_sql` line — none for `generate_sql`.
+3. Confirm the signature changed:
+   ```
+   grep -n "async def generate_sql" src/agents/tools/query_clean_jobs.py
+   ```
+   Confirm: one hit.
+4. Run `uv run pytest -q` (full suite) and confirm no regressions.
+5. Run `uv run mypy src` and confirm the same 2 pre-existing residuals as before this ticket (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`) — no new errors introduced.
+6. (Optional, live) With Groq creds + DB available: ask a normal job-data question end-to-end and confirm `query_clean_jobs` still returns the same SQL-backed answer and a `generate_sql` span still appears in Langfuse. Not exercised in this sandbox — state explicitly if skipped.
+
+T0012.10: Reduce eval judge cost & rate-limit exposure (thinking-budget cap + drop redundant metric)
+
+1. Plain suite stays green, no live judge/agent call:
+   ```
+   uv run pytest -q
+   ```
+   Confirm the summary shows the same pass count as before plus the one new test (`evals/test_judge.py::test_build_judge_forwards_thinking_budget_for_google`), with the eval-marked tests still deselected — completes in seconds, no Groq/Gemini call.
+2. Import sanity, no network:
+   ```
+   uv run python -c "from evals.judge import build_judge"
+   uv run python -c "from evals.harness import seam3_metrics"
+   ```
+   Confirm both import cleanly (`harness.py` still imports fine with the `FaithfulnessMetric` import removed).
+3. Confirm `FaithfulnessMetric` is gone from seam 3:
+   ```
+   grep -n "FaithfulnessMetric" evals/harness.py
+   ```
+   Confirm: no hits.
+4. (Creds present — `GOOGLE_API_KEY` + Groq creds + fixture DB) Live judge-agreement spot-check: run 2–3 goldens including at least one honesty probe (C1, C3, or C5) with the thinking cap in place:
+   ```
+   PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval
+   ```
+   Confirm it completes and the seam-3 result set no longer contains a `Faithfulness` key. Compare the `Honesty`/`Task Completion` verdicts against a pre-cap run (`thinking_budget` temporarily reverted to a nonzero value) and confirm no material divergence. If creds aren't available in the coder environment, mark this step BLOCKED and log it as a follow-up in `docs/Known_Issues.md` rather than skipping silently.
+
+T0014.1: Graceful startup & config-load robustness
+
+* Run `uv run pytest tests/core/test_config.py -v` and confirm the non-project-CWD load, clear missing-env error, and import-safety tests all pass.
+* Run `uv run pytest tests/api/test_startup_config.py tests/api/test_query.py -v` and confirm startup config failures surface during FastAPI lifespan while the query route tests still pass.
+* Run `uv run pytest -q` and confirm the broader suite still passes with the repo's existing eval-marker behavior unchanged.
+* Manual non-project-CWD check:
+  * `cd C:\tmp`
+  * `uv run --directory D:\Data_Science_Project\InternHunterAgent python -c "from src.core.config import load_settings; s = load_settings(); print(sorted(s.config_yaml.keys()))"`
+  * Confirm it prints the repo config keys instead of failing on the current working directory.
+* Missing-env startup check in a subprocess only (do not unset anything permanently in your shell):
+  * `uv run python -c "import os; os.environ.pop('GROQ_API_KEY', None); os.environ['DATABASE_URL']='postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter'; os.environ['LANGFUSE_SECRET_KEY']='x'; os.environ['LANGFUSE_PUBLIC_KEY']='y'; import src.core.config as c; c.Settings.model_config['env_file']=None; c.load_settings(force_reload=True)"`
+  * Confirm it raises `ConfigLoadError` with a message naming the missing required env var, not an `ImportError` traceback.
+
+T0014.2: Known-Issues register housekeeping
+
+* Run `git diff -- docs/Known_Issues.md docs/Resolved_Issues.md docs/Repo_Current_State.md docs/Completion_Reports.md docs/Manual_Verification_Guide.md` and confirm only documentation/register files changed for this ticket.
+* Run `rg -n "13-column|job_level hidden|qwen agent-model|T0014.2|T0016|Deploy Hardening" docs` and confirm the old 13-column/`job_level` drift item is not reintroduced as open, T0014.2 is recorded as complete, and T0016/T0017 deploy-hardening items remain deferred.
+* Run `uv run pytest -q tests/core/test_config.py tests/api/test_startup_config.py` and confirm the T0014.1 config/startup smoke tests still pass after the docs-only sweep.
+
+T0016.1: CORS middleware (config-driven, credential-less)
+
+* Run the focused API tests:
+  * `uv run pytest -q tests/api/test_cors.py tests/api/test_query.py tests/api/test_startup_config.py`
+  * Confirm all tests pass.
+* Confirm `config/settings.yaml` keeps `api.cors.allow_credentials: false`.
+* Set a local allowed origin in `config/settings.yaml`, for example `http://localhost:5173`, then start the app:
+  * `uv run uvicorn src.api.app:app --reload`
+* In another terminal, send an allowed-origin preflight request:
+  * `curl -i -X OPTIONS "http://127.0.0.1:8000/api/v1/agent/chat" -H "Origin: http://localhost:5173" -H "Access-Control-Request-Method: POST"`
+  * Confirm the response includes `access-control-allow-origin: http://localhost:5173`.
+* Send the same preflight request from a disallowed origin:
+  * `curl -i -X OPTIONS "http://127.0.0.1:8000/api/v1/agent/chat" -H "Origin: http://evil.example" -H "Access-Control-Request-Method: POST"`
+  * Confirm the response does not include `access-control-allow-origin`.
+
+T0016.2: Per-IP rate limiting + graceful 429/quota degradation
+
+* Run the focused API tests:
+  * `uv run pytest -q tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_cors.py tests/api/test_startup_config.py`
+  * Confirm the chat limit, friendly provider-busy response, generic 500 path, health route, CORS, and startup-config tests all pass.
+* Start the API locally:
+  * `uv run uvicorn src.api.app:app --reload`
+* Send more than 15 chat requests from the same machine within one minute:
+  * `POST http://127.0.0.1:8000/api/v1/agent/chat`
+  * Confirm the excess request returns HTTP 429 with `{"detail": "The demo is busy right now. Please try again in a moment."}`.
+* Call health repeatedly:
+  * `GET http://127.0.0.1:8000/api/v1/health`
+  * Confirm it remains HTTP 200 and is not rate-limited.
+* If provider credentials are available, simulate or trigger provider timeout/rate-limit pressure and confirm provider-busy failures return friendly HTTP 429/503 while unrelated bugs still return `{"detail": "Failed to process query"}` with HTTP 500.
+
+T0016.3: Request input hardening (length cap)
+
+* Run the focused API tests:
+  * `uv run pytest -q tests/api/test_query.py tests/api/test_rate_limit.py tests/api/test_cors.py tests/api/test_startup_config.py`
+  * Confirm normal, blank, over-limit, rate-limit, CORS, and startup-config API paths all pass.
+* Start the API locally:
+  * `uv run uvicorn src.api.app:app --reload`
+* Send a normal request:
+  * `curl -X POST http://127.0.0.1:8000/api/v1/agent/chat -H "Content-Type: application/json" -d "{\"query\":\"What companies use Python?\"}"`
+  * Confirm the request is accepted and returns the usual `answer` / `session_id` / `trace_id` / `trace_url` response shape.
+* Send a whitespace-only request:
+  * `curl -X POST http://127.0.0.1:8000/api/v1/agent/chat -H "Content-Type: application/json" -d "{\"query\":\"   \"}"`
+  * Confirm it still returns HTTP 400 with `{"detail": "Query must not be empty."}`.
+* Send a request with more than 2000 characters in `query`.
+  * Confirm it is rejected with HTTP 422 and a `string_too_long` validation detail for `body.query`.
+  * Confirm no agent/runtime work is performed for the rejected request.
+
+T0016.4: `/docs` exposure decision + minimal security headers
+
+* Run the focused API tests:
+  * `uv run pytest -q tests/api/test_docs_exposure.py tests/api/test_cors.py tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_startup_config.py`
+  * Confirm the docs-on/docs-off checks and the existing CORS, rate-limit, query, and startup-config paths all pass.
+* Confirm the default shipping config in `config/settings.yaml` keeps:
+  * `api.docs_enabled: true`
+* Start the API locally:
+  * `uv run uvicorn src.api.app:app --reload`
+* Open these URLs and confirm they are reachable with the default config:
+  * `http://127.0.0.1:8000/docs`
+  * `http://127.0.0.1:8000/redoc`
+  * `http://127.0.0.1:8000/openapi.json`
+* Temporarily set the locked-down alternative in `config/settings.yaml`:
+  * `api.docs_enabled: false`
+* Restart the API and confirm these now return HTTP 404:
+  * `http://127.0.0.1:8000/docs`
+  * `http://127.0.0.1:8000/redoc`
+  * `http://127.0.0.1:8000/openapi.json`
+* Restore `api.docs_enabled: true`.
+* Confirm this ticket does not add `X-Frame-Options`, CSP, or any other security-header middleware because FastAPI still serves API responses only and no same-origin HTML UI in this repo state.

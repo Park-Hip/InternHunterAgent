@@ -5,6 +5,7 @@ No DB, no network — the normalizer is a pure dict → NormalizedJob transform.
 """
 import json
 import unittest
+from datetime import date
 from pathlib import Path
 
 from src.services.ingestion.models import NormalizedJob
@@ -56,6 +57,32 @@ class ToNormalizedJobTests(unittest.TestCase):
         for job_id in (1001, 1002, 1003, 1004):
             with self.subTest(job_id=job_id):
                 self.assertIsNone(to_normalized_job(self.jobs[job_id]).posted_date)
+
+    def test_listing_expires_on_from_expired_on(self) -> None:
+        payload = dict(self.jobs[1001])
+        payload["expiredOn"] = "2026-07-30T23:59:59+07:00"
+
+        result = to_normalized_job(payload)
+
+        self.assertEqual(result.listing_expires_on, date(2026, 7, 30))
+
+    def test_listing_expires_on_missing_is_none(self) -> None:
+        result = to_normalized_job(self.jobs[1001])
+
+        self.assertIsNone(result.listing_expires_on)
+
+    def test_created_on_from_created_on(self) -> None:
+        payload = dict(self.jobs[1001])
+        payload["createdOn"] = "2026-05-14T08:30:00+07:00"
+
+        result = to_normalized_job(payload)
+
+        self.assertEqual(result.created_on, date(2026, 5, 14))
+
+    def test_created_on_missing_is_none(self) -> None:
+        result = to_normalized_job(self.jobs[1001])
+
+        self.assertIsNone(result.created_on)
 
     # ------------------------------------------------------------------
     # Salary — visible vs hidden

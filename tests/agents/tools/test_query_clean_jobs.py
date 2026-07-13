@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import threading
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.services.query.executor import ExecutorError
 from src.services.query.models import ValidationResult
@@ -152,29 +152,47 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("42", result)
         self.assertNotIn("Showing", result)
 
-    @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
-    @patch("src.agents.tools.query_clean_jobs.validate_sql")
-    @patch("src.agents.tools.query_clean_jobs.generate_sql")
-    async def test_generate_sql_runs_off_the_event_loop_thread(
-        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql
-    ) -> None:
-        from src.agents.tools.query_clean_jobs import query_clean_jobs
 
-        loop_thread_ident = threading.get_ident()
-        observed_idents: list[int] = []
+class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
+    @patch("src.agents.tools.query_clean_jobs.load_sql_generation_prompt", return_value="PROMPT")
+    @patch("src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA")
+    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
+    async def test_generate_sql_flattens_list_content(self, mock_provider, *_) -> None:
+        from src.agents.tools.query_clean_jobs import generate_sql
 
-        def fake_generate_sql(question: str, config=None) -> str:
-            observed_idents.append(threading.get_ident())
-            return "SELECT title FROM clean_jobs"
+        fake_model = MagicMock()
+        fake_model.ainvoke = AsyncMock(
+            return_value=SimpleNamespace(
+                content=[{"type": "text", "text": "SELECT title "}, {"type": "text", "text": "FROM clean_jobs"}]
+            )
+        )
+        mock_provider.return_value.build_model.return_value = fake_model
 
-        mock_generate_sql.side_effect = fake_generate_sql
-        mock_validate_sql.return_value = ValidationResult(valid=True, sql="SELECT title FROM clean_jobs")
-        mock_execute_validated_sql.return_value = []
+        self.assertEqual(await generate_sql("any question"), "SELECT title FROM clean_jobs")
 
-        await query_clean_jobs.ainvoke({"question": "jobs in Hanoi"})
+    @patch("src.agents.tools.query_clean_jobs.load_sql_generation_prompt", return_value="PROMPT")
+    @patch("src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA")
+    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
+    async def test_generate_sql_str_content_unchanged(self, mock_provider, *_) -> None:
+        from src.agents.tools.query_clean_jobs import generate_sql
 
-        self.assertEqual(len(observed_idents), 1)
-        self.assertNotEqual(observed_idents[0], loop_thread_ident)
+        fake_model = MagicMock()
+        fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="  SELECT 1  "))
+        mock_provider.return_value.build_model.return_value = fake_model
+
+        self.assertEqual(await generate_sql("any question"), "SELECT 1")
+
+    @patch("src.agents.tools.query_clean_jobs.load_sql_generation_prompt", return_value="PROMPT")
+    @patch("src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA")
+    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
+    async def test_generate_sql_unrecognized_block_list_yields_empty_string(self, mock_provider, *_) -> None:
+        from src.agents.tools.query_clean_jobs import generate_sql
+
+        fake_model = MagicMock()
+        fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content=[{"type": "reasoning"}, 42]))
+        mock_provider.return_value.build_model.return_value = fake_model
+
+        self.assertEqual(await generate_sql("any question"), "")
 
 
 if __name__ == "__main__":

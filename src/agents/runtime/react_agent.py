@@ -34,9 +34,14 @@ class AgentRuntime:
         if client is not None:
             await asyncio.to_thread(client.flush)
 
+        trace_url = None
+        if trace_id is not None and client is not None:
+            trace_url = client.get_trace_url(trace_id=trace_id)
+
         return {
             "answer": answer,
             "trace_id": trace_id,
+            "trace_url": trace_url,
         }
 
     def _build_messages(self, query: str) -> dict[str, list[HumanMessage]]:
@@ -44,16 +49,16 @@ class AgentRuntime:
 
     def _extract_answer(self, response: Any) -> str:
         if not isinstance(response, dict):
-            raise ValueError(f"Unexpected agent response type: {type(response).__name__}")
+            return ""
 
         messages = response.get("messages")
         if not isinstance(messages, list) or not messages:
-            raise ValueError("Agent response did not contain any messages")
+            return ""
 
         last_message = messages[-1]
         content = getattr(last_message, "content", None)
 
         if not isinstance(content, str) or not content.strip():
-            raise ValueError("Agent response did not contain a readable final answer")
+            return ""
 
         return content.strip()

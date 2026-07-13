@@ -1,13 +1,19 @@
 from fastapi import APIRouter, HTTPException, Request
 from src.api.schemas import QueryRequest, QueryResponse
-from src.core.errors import InvalidQueryError
+from src.core.errors import BUSY_MESSAGE, InvalidQueryError, ProviderBusyError
 from src.core.logger import logger
 from src.agents.service import generate_agent_response
 
-router = APIRouter()
+
+def create_router(*, limiter=None, rate_limit: str | None = None) -> APIRouter:
+    router = APIRouter()
+    endpoint = query_agent
+    if limiter is not None and rate_limit:
+        endpoint = limiter.limit(rate_limit)(endpoint)
+    router.post("/agent/chat", response_model=QueryResponse)(endpoint)
+    return router
 
 
-@router.post("/agent/chat", response_model=QueryResponse)
 async def query_agent(payload: QueryRequest, request: Request):
     try:
         if not payload.query or not payload.query.strip():
@@ -43,6 +49,13 @@ async def query_agent(payload: QueryRequest, request: Request):
         raise
     except InvalidQueryError:
         raise HTTPException(status_code=400, detail="Query must not be empty.")
+    except ProviderBusyError as e:
+        logger.warning(
+            "query.provider_busy",
+            session_id=payload.session_id,
+            status_code=e.status_code,
+        )
+        raise HTTPException(status_code=e.status_code, detail=BUSY_MESSAGE) from e
     except Exception as e:
         logger.error(
             "query.failed",
@@ -50,3 +63,6 @@ async def query_agent(payload: QueryRequest, request: Request):
             error=str(e),
         )
         raise HTTPException(status_code=500, detail="Failed to process query")
+
+
+router = create_router()

@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any
 
 from langchain.messages import HumanMessage
 from langchain.tools import tool
@@ -32,16 +33,31 @@ def load_max_rows() -> int:
     return max_rows
 
 
-def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
+def _content_to_text(content: str | list[Any]) -> str:
+    if isinstance(content, str):
+        return content
+
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict):
+            text = block.get("text", "")
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)
+
+
+async def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
     schema_context = load_schema_context()
     sql_generation_prompt = load_sql_generation_prompt()
     model = AgentProvider().build_model()
 
-    response = model.invoke(
+    response = await model.ainvoke(
         [HumanMessage(content=f"{sql_generation_prompt}\n\n{schema_context}\n\nQuestion: {question}")],
         config=config,
     )
-    return response.content.strip()
+    return _content_to_text(response.content).strip()
 
 
 def _build_answer(table: TableArtifact) -> str:
@@ -66,7 +82,7 @@ def _build_answer(table: TableArtifact) -> str:
 @tool
 async def query_clean_jobs(question: str, config: RunnableConfig) -> str:
     """Answer questions about internship job postings stored in the clean_jobs table."""
-    sql = await asyncio.to_thread(generate_sql, question, config)
+    sql = await generate_sql(question, config)
     validation = validate_sql(sql)
 
     if not validation.valid:

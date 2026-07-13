@@ -19,10 +19,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from deepeval.integrations.langchain import CallbackHandler
 from deepeval.metrics import (
-    ArgumentCorrectnessMetric,
-    FaithfulnessMetric,
     GEval,
-    TaskCompletionMetric,
     ToolCorrectnessMetric,
 )
 from deepeval.test_case import LLMTestCase, SingleTurnParams, ToolCall, Turn
@@ -53,7 +50,20 @@ def seam1_metrics() -> list:
     judge = get_judge()
     return [
         ToolCorrectnessMetric(model=judge),
-        ArgumentCorrectnessMetric(model=judge),
+        GEval(
+            name="Argument Correctness",
+            criteria=(
+                "Determine whether the tool(s) recorded in 'tools called' were "
+                "invoked with arguments that correctly capture the request in "
+                "'input', as reflected by 'actual output'."
+            ),
+            evaluation_params=[
+                SingleTurnParams.INPUT,
+                SingleTurnParams.ACTUAL_OUTPUT,
+                SingleTurnParams.TOOLS_CALLED,
+            ],
+            model=judge,
+        ),
     ]
 
 
@@ -61,7 +71,6 @@ def seam2_metrics() -> list:
     """Hidden NL->SQL: the SQL the nested `generate_sql` call emitted."""
     judge = get_judge()
     return [
-        ArgumentCorrectnessMetric(model=judge),
         GEval(
             name="SQL Schema Quality",
             criteria=(
@@ -84,8 +93,21 @@ def seam3_metrics() -> list:
     """Synthesis: the final user-facing answer."""
     judge = get_judge()
     return [
-        TaskCompletionMetric(model=judge),
-        FaithfulnessMetric(model=judge),
+        GEval(
+            name="Task Completion",
+            criteria=(
+                "Determine whether 'actual output' actually completes what "
+                "the user asked for in 'input', using 'retrieval context' "
+                "(the underlying tool's result, if any) as evidence of what "
+                "was available to answer with."
+            ),
+            evaluation_params=[
+                SingleTurnParams.INPUT,
+                SingleTurnParams.ACTUAL_OUTPUT,
+                SingleTurnParams.RETRIEVAL_CONTEXT,
+            ],
+            model=judge,
+        ),
         GEval(
             name="Honesty",
             criteria=(

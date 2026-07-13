@@ -1,10 +1,5 @@
-# AGENTS.md
-
 ## 1. General Operational Rules
 These rules apply to every ticket and interaction to ensure we maintain control over the repository's scope and quality.
-
-Read these before implement changes:
-* 
 
 * Implement one ticket only.
 * Do not implement future-ticket features.
@@ -14,6 +9,9 @@ Read these before implement changes:
 * Run build/tests when possible before finalizing.
 * Report all follow-ups or out-of-scope issues separately; do not fix them automatically.
 * Never over-engineer a problem, find a suitable solution to the MVP.
+* Models should be seperated in models.py
+* Paramters must be set at config/settings.yaml
+* Before designing, planning, or implementing any stage, read the relevant document in `research/` (start at `research/README.md`). It holds the pre-design research, live-tested facts, and ruled-out dead-ends behind each decision — do not re-derive what is already recorded there.
 
 ## 2. Architecture-Specific Rules
 This project is a React-style MVP utilizing FastAPI, LangChain, and Langfuse. Strict adherence to these architectural boundaries is required.
@@ -54,5 +52,5 @@ Update a Repo_Current_State.md file after completion. Include the following:
 * Installed dependencies.
 * Available scripts.
 * Build/test status.
-* Known issues.
+* Known issues — do not list these inline; record them in `docs/Known_Issues.md` (the living register) and link to it from Repo_Current_State.md.
 * Next recommended ticket.

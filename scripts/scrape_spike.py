@@ -146,6 +146,12 @@ def normalize(job: dict) -> dict:
         "location": job.get("address"),
         "salary": job.get("prettySalary"),
         "url": job.get("jobUrl"),
+        # Raw source timestamps — captured to audit a possible `listing_expires_on` column
+        # (research/schema-enrichment-plan.md §4). None reliably means "first posted":
+        # onlineOn churns on re-list, approvedOn is admin approval, expiredOn is a future expiry.
+        "online_on": job.get("onlineOn"),
+        "approved_on": job.get("approvedOn"),
+        "expired_on": job.get("expiredOn"),
         "tech_stack_candidate": dedup_skills(job),
         "description": strip_html(job.get("jobDescription")),
         "requirement": strip_html(job.get("jobRequirement")),

@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS clean_jobs (
     job_level             TEXT,
     location              TEXT,
     posted_date           DATE,
+    listing_expires_on    DATE,
+    created_on            DATE,
     is_internship         BOOLEAN NOT NULL DEFAULT false,
     salary_min            NUMERIC,
     salary_max            NUMERIC,

@@ -45,6 +45,8 @@ class NormalizedJob(BaseModel):
     job_level: str | None = None
     location: str | None = None
     posted_date: date | None = None
+    listing_expires_on: date | None = None
+    created_on: date | None = None
     is_internship: bool
     salary_min: float | None = None
     salary_max: float | None = None
@@ -92,6 +94,8 @@ class CleanJob(Base):
     job_level: Mapped[str | None] = mapped_column(Text, nullable=True)
     location: Mapped[str | None] = mapped_column(Text, nullable=True)
     posted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    listing_expires_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_internship: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )

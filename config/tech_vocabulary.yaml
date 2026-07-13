@@ -1,0 +1,1802 @@
+metadata:
+  sources:
+  - GitHub Linguist languages.yml
+  - Devicon devicon.json
+  - config/ingestion.yaml tech_dictionary seed
+  - config/tech_seed.yaml AI/Data technique seed
+  generated_by: scripts/build_tech_vocabulary.py
+canonical_terms:
+- 1C Enterprise
+- 4D
+- A/B Testing
+- aarch64
+- ABAP
+- ABAP CDS
+- ActionScript
+- Ada
+- adonisjs
+- aerospike
+- aframe
+- aftereffects
+- Agda
+- AGS Script
+- AI Agents
+- AIDL
+- Aiken
+- Airflow
+- akka
+- AL
+- ALGOL
+- algolia
+- Alloy
+- almalinux
+- Alpine Abuild
+- alpinejs
+- amazonwebservices
+- AMPL
+- anaconda
+- android
+- androidstudio
+- AngelScript
+- angular
+- angularjs
+- angularmaterial
+- Anomaly Detection
+- ansible
+- Answer Set Programming
+- ansys
+- antdesign
+- Antlers
+- ANTLR
+- apache
+- apacheairflow
+- apachekafka
+- apachespark
+- apex
+- API Blueprint
+- apl
+- Apollo Guidance Computer
+- apollographql
+- appcelerator
+- apple
+- AppleScript
+- appwrite
+- Arc
+- archlinux
+- arduino
+- argocd
+- Artificial Intelligence
+- artixlinux
+- ASL
+- ASP.NET
+- AspectJ
+- Assembly
+- astro
+- Asymptote
+- atom
+- ATS
+- Augeas
+- AutoHotkey
+- AutoIt
+- awk
+- AWS
+- axios
+- Azure
+- azuredevops
+- azuresqldatabase
+- B (Formal Method)
+- B4X
+- babel
+- babylonjs
+- backbonejs
+- ballerina
+- bamboo
+- BAML
+- Bash
+- BASIC
+- Batchfile
+- bazel
+- beats
+- Beef
+- Befunge
+- behance
+- Berry
+- BERT
+- bevyengine
+- BibTeX
+- BibTeX Style
+- Bicep
+- Big Data
+- BigQuery
+- Bikeshed
+- biome
+- Bison
+- BitBake
+- bitbucket
+- Blade
+- blazor
+- blender
+- BlitzBasic
+- BlitzMax
+- Blueprint
+- Bluespec
+- Bluespec BH
+- Boo
+- Boogie
+- bootstrap
+- bower
+- BQN
+- Brainfuck
+- BrighterScript
+- Brightscript
+- browserstack
+- Bru
+- bulma
+- bun
+- Business Intelligence
+- c
+- C#
+- C++
+- C2hs Haskell
+- C3
+- Cadence
+- cairo
+- Cairo Zero
+- cakephp
+- CameLIGO
+- Cangjie
+- canva
+- CAP CDS
+- Cap'n Proto
+- capacitor
+- carbon
+- CartoCSS
+- Cassandra
+- CatBoost
+- centos
+- ceylon
+- chakraui
+- Chapel
+- Charity
+- chartjs
+- chrome
+- ChucK
+- circleci
+- Circom
+- Cirru
+- Clarion
+- clarity
+- Classic ASP
+- Classification
+- Clean
+- Click
+- ClickHouse
+- clion
+- CLIPS
+- clojure
+- clojurescript
+- Closure Templates
+- cloudflare
+- cloudflareworkers
+- cloudrun
+- Clue
+- Clustering
+- cmake
+- cobol
+- codeac
+- codecov
+- codeigniter
+- codepen
+- CodeQL
+- coffeescript
+- ColdFusion
+- ColdFusion CFC
+- Common Lisp
+- Common Workflow Language
+- Component Pascal
+- composer
+- Computer Vision
+- confluence
+- consul
+- contao
+- Cooklang
+- Cool
+- corejs
+- cosmosdb
+- couchbase
+- couchdb
+- cpanel
+- cplusplus
+- CQL
+- crystal
+- csharp
+- Csound
+- Csound Document
+- Csound Score
+- CSS
+- css3
+- cucumber
+- Cuda
+- CUE
+- Curry
+- CWeb
+- Cycript
+- Cypher
+- cypressio
+- Cython
+- D
+- D2
+- d3js
+- Dafny
+- dart
+- Daslang
+- Data Analysis
+- Data Cleaning
+- Data Engineering
+- Data Governance
+- Data Lake
+- Data Mining
+- Data Modeling
+- Data Pipelines
+- Data Quality
+- Data Science
+- Data Visualization
+- Data Warehouse
+- Databricks
+- datadog
+- datagrip
+- dataspell
+- datatables
+- DataWeave
+- dbeaver
+- dbt
+- debian
+- Deep Learning
+- delphi
+- DenizenScript
+- denojs
+- detaspace
+- devicon
+- Dhall
+- DIGITAL Command Language
+- digitalocean
+- discloud
+- discordjs
+- Django
+- djangorest
+- DM
+- Docker
+- Dockerfile
+- doctrine
+- Dogescript
+- dot-net
+- dotnetcore
+- dovecot
+- dreamweaver
+- dropwizard
+- drupal
+- DTrace
+- duckdb
+- Dune
+- dyalog
+- Dylan
+- dynamodb
+- dynatrace
+- E
+- Earthly
+- eC
+- ECL
+- eclipse
+- Ecmarkup
+- ecto
+- Edge
+- EdgeQL
+- Eiffel
+- EJS
+- Elasticsearch
+- electron
+- eleventy
+- elixir
+- elm
+- Elvish
+- Elvish Transcript
+- emacs
+- Emacs Lisp
+- embeddedc
+- ember
+- EmberScript
+- entityframeworkcore
+- envoy
+- EQ
+- erlang
+- eslint
+- ETL
+- Euphoria
+- Experiment Tracking
+- expo
+- express
+- F#
+- F*
+- facebook
+- Factor
+- Fancy
+- Fantom
+- FastAPI
+- fastify
+- faunadb
+- Faust
+- feathersjs
+- Feature Engineering
+- fedora
+- Fennel
+- fiber
+- figma
+- filamentphp
+- Filebench WML
+- filezilla
+- Filterscript
+- firebase
+- firebird
+- firefox
+- FIRRTL
+- fish
+- Flask
+- Flink
+- Flix
+- Fluent
+- flutter
+- FLUX
+- Forecasting
+- forgejo
+- Forth
+- fortran
+- Fortran Free Form
+- foundation
+- framermotion
+- framework7
+- FreeBASIC
+- FreeMarker
+- Frege
+- fsharp
+- fusion
+- Futhark
+- G-code
+- Game Maker Language
+- GAML
+- GAMS
+- GAP
+- gardener
+- gatling
+- gatsby
+- gazebo
+- gcc
+- GCC Machine Description
+- GCP
+- GDB
+- GDScript
+- GDShader
+- Generative AI
+- Genero 4gl
+- Genero per
+- Genie
+- Genshi
+- gentoo
+- Gentoo Ebuild
+- Gentoo Eclass
+- Gherkin
+- ghost
+- gimp
+- Git
+- gitbook
+- github
+- githubactions
+- githubcodespaces
+- gitkraken
+- gitlab
+- gitpod
+- gitter
+- gleam
+- Glimmer JS
+- Glimmer TS
+- glitch
+- GLSL
+- Glyph
+- Gnuplot
+- Go
+- Go Template
+- godot
+- goland
+- Golo
+- google
+- googlecloud
+- googlecolab
+- Gosu
+- Grace
+- gradle
+- grafana
+- grails
+- Grammatical Framework
+- graphql
+- Great Expectations
+- groovy
+- Groovy Server Pages
+- grpc
+- grunt
+- GSC
+- gulp
+- Hack
+- hadoop
+- Haml
+- handlebars
+- harbor
+- Harbour
+- hardhat
+- Hare
+- harvester
+- haskell
+- haxe
+- HCL
+- Helm
+- heroku
+- hibernate
+- HIP
+- HiveQL
+- HLSL
+- HolyC
+- homebrew
+- hoon
+- hoppscotch
+- HTML
+- HTML+ECR
+- HTML+EEX
+- HTML+ERB
+- HTML+PHP
+- HTML+Razor
+- html5
+- htmx
+- Hugging Face
+- hugo
+- Hurl
+- Hy
+- hyperv
+- HyPhy
+- IDL
+- Idris
+- ie10
+- ifttt
+- IGOR Pro
+- IL Assembly
+- illustrator
+- ImageJ Macro
+- Imba
+- inertiajs
+- influxdb
+- Inform 7
+- Ink
+- inkscape
+- Inno Setup
+- insomnia
+- intellij
+- Io
+- Ioke
+- ionic
+- Isabelle
+- Isabelle ROOT
+- ISPC
+- J
+- Jac
+- jaegertracing
+- Jai
+- jamstack
+- Janet
+- Jasmin
+- jasmine
+- Java
+- Java Server Pages
+- Java Template Engine
+- JavaScript
+- JavaScript+ERB
+- JCL
+- jeet
+- jekyll
+- jenkins
+- jest
+- jetbrains
+- JetBrains MPS
+- jetpackcompose
+- JFlex
+- jhipster
+- Jinja
+- jira
+- jiraalign
+- Jison
+- Jison Lex
+- Jolie
+- jq
+- jquery
+- json
+- JSONiq
+- Jsonnet
+- jule
+- julia
+- Julia REPL
+- junit
+- Jupyter
+- Jupyter Notebook
+- Just
+- k3os
+- k3s
+- k6
+- Kafka
+- kaggle
+- Kaitai Struct
+- KakouneScript
+- kaldi
+- kalilinux
+- karatelabs
+- karma
+- KCL
+- kdeneon
+- Keras
+- KerboScript
+- KFramework
+- kibana
+- Kit
+- knexjs
+- knockout
+- Koka
+- KoLmafia ASH
+- kotlin
+- krakenjs
+- KRL
+- ktor
+- Kubeflow
+- Kubernetes
+- kvlang
+- labview
+- Lambdapi
+- laminas
+- LangChain
+- Langium
+- laravel
+- laraveljetstream
+- Large Language Models
+- Lasso
+- latex
+- Latte
+- Lean
+- Lean 4
+- leetcode
+- Leo
+- less
+- Lex
+- LFE
+- libgdx
+- LightGBM
+- LigoLANG
+- LilyPond
+- Limbo
+- Linear Programming
+- linkedin
+- Linker Script
+- Linux
+- linuxmint
+- liquibase
+- Liquid
+- Liquidsoap
+- Literate Agda
+- Literate CoffeeScript
+- Literate Haskell
+- LiveCode Script
+- LiveScript
+- livewire
+- llvm
+- lodash
+- Logos
+- logstash
+- Logtalk
+- LOLCODE
+- Looker
+- LookML
+- LoomScript
+- love2d
+- LSL
+- lua
+- Luau
+- Luigi
+- lumen
+- M
+- M4
+- M4Sugar
+- Macaulay2
+- Machine Learning
+- magento
+- Makefile
+- Mako
+- mapbox
+- mariadb
+- markdown
+- Marko
+- Mask
+- materializecss
+- materialui
+- Mathematical Programming System
+- MATLAB
+- matplotlib
+- mattermost
+- maven
+- Max
+- MAXScript
+- maya
+- mcfunction
+- mdsvex
+- MDX
+- memcached
+- mercurial
+- Mercury
+- Mermaid
+- Meson
+- Metabase
+- Metal
+- meteor
+- MeTTa
+- microsoftsqlserver
+- MiniD
+- minitab
+- MiniZinc
+- Mint
+- Mirah
+- mIRC Script
+- mithril
+- MLflow
+- MLIR
+- MLOps
+- mobx
+- mocha
+- Model Deployment
+- Model Evaluation
+- Model Monitoring
+- Modelica
+- Modula-2
+- Modula-3
+- Module Management System
+- modx
+- Mojo
+- moleculer
+- MongoDB
+- mongoose
+- Monkey
+- Monkey C
+- monogame
+- Moocode
+- moodle
+- MoonBit
+- MoonScript
+- Motoko
+- Motorola 68K Assembly
+- Move
+- MQL4
+- MQL5
+- msdos
+- MTML
+- MUF
+- mupad
+- Mustache
+- Myghty
+- MySQL
+- nano
+- Nasal
+- NASL
+- nats
+- Natural Language Processing
+- NCL
+- Nearley
+- Nemerle
+- neo4j
+- neovim
+- nesC
+- nestjs
+- netbeans
+- netbox
+- netlify
+- NetLinx
+- NetLinx+ERB
+- NetLogo
+- networkx
+- NewLisp
+- newrelic
+- Nextflow
+- nextjs
+- nginx
+- ngrok
+- ngrx
+- nhibernate
+- Nickel
+- nim
+- nimble
+- Nit
+- Nix
+- nixos
+- NMODL
+- Node.js
+- nodejs
+- nodemon
+- nodered
+- nodewebkit
+- Noir
+- nomad
+- norg
+- notion
+- npm
+- npss
+- NSIS
+- Nu
+- nuget
+- NumPy
+- Nunjucks
+- Nushell
+- nuxt
+- nuxtjs
+- NWScript
+- oauth
+- Oberon
+- Objective-C
+- Objective-C++
+- Objective-J
+- objectivec
+- ObjectScript
+- ocaml
+- Odin
+- ohmyzsh
+- okta
+- Omgrofl
+- OMNeT++ MSG
+- OMNeT++ NED
+- ooc
+- Opa
+- Opal
+- Open Policy Agent
+- openal
+- openapi
+- opencl
+- OpenCV
+- OpenEdge ABL
+- opengl
+- OpenQASM
+- OpenRC runscript
+- OpenSCAD
+- openstack
+- opensuse
+- opentelemetry
+- opera
+- oracle
+- ory
+- OverpassQL
+- OverPy
+- Ox
+- Oxygene
+- Oz
+- P4
+- p5js
+- packer
+- Pact
+- Pan
+- Pandas
+- Papyrus
+- Parrot
+- Parrot Assembly
+- Parrot Internal Representation
+- Pascal
+- passport
+- Pawn
+- PDDL
+- PEG.js
+- Pep8
+- perl
+- pfsense
+- phalcon
+- phoenix
+- photonengine
+- photoshop
+- php
+- phpstorm
+- Pic
+- PicoLisp
+- PigLatin
+- Pike
+- pixijs
+- Pkl
+- playwright
+- plotly
+- PLpgSQL
+- PLSQL
+- pm2
+- pnpm
+- podman
+- poetry
+- PogoScript
+- Polar
+- polygon
+- Pony
+- portainer
+- Portugol
+- postcss
+- PostgreSQL
+- postman
+- PostScript
+- POV-Ray SDL
+- Power BI
+- Power Query
+- PowerBuilder
+- powershell
+- Praat
+- Predictive Analytics
+- Prefect
+- premierepro
+- primeng
+- prisma
+- Pro*C
+- processing
+- processwire
+- Procfile
+- prolog
+- Promela
+- prometheus
+- Prompt Engineering
+- Propeller Spin
+- protractor
+- proxmox
+- pug
+- pulsar
+- pulumi
+- Puppet
+- puppeteer
+- PureBasic
+- purescript
+- putty
+- pycharm
+- pypi
+- Pyret
+- pyscript
+- PySpark
+- pytest
+- Python
+- Python console
+- PyTorch
+- q
+- Q#
+- QMake
+- QML
+- qodana
+- qt
+- Qt Script
+- qtest
+- Quake
+- QuakeC
+- quarkus
+- quasar
+- QuickBASIC
+- Quint
+- qwik
+- R
+- rabbitmq
+- racket
+- radstudio
+- Ragel
+- rails
+- railway
+- Raku
+- RAML
+- rancher
+- Rascal
+- RAScript
+- raspberrypi
+- reach
+- React
+- reactbootstrap
+- reactnative
+- reactnavigation
+- reactrouter
+- readthedocs
+- REALbasic
+- realm
+- Reason
+- ReasonLIGO
+- Rebol
+- Recommendation Systems
+- rect
+- Red
+- Redcode
+- redhat
+- Redis
+- Redscript
+- Redshift
+- redux
+- reflex
+- Regression
+- Reinforcement Learning
+- remix
+- Ren'Py
+- RenderScript
+- renpy
+- replit
+- ReScript
+- Retrieval-Augmented Generation
+- rexx
+- Rez
+- Rich Text Format
+- rider
+- Ring
+- Riot
+- RobotFramework
+- Roc
+- rocksdb
+- rockylinux
+- Rocq Prover
+- Roff
+- Roff Manpage
+- rollup
+- ros
+- Rouge
+- RouterOS Script
+- RPC
+- RPGLE
+- rspec
+- rstudio
+- ruby
+- rubymine
+- RUNOFF
+- rust
+- rxjs
+- safari
+- Sage
+- Sail
+- salesforce
+- SaltStack
+- sanity
+- SAS
+- sass
+- Scala
+- scalingo
+- Scaml
+- Scenic
+- Scheme
+- Scikit-learn
+- scikitlearn
+- Scilab
+- SCSS
+- sdl
+- sed
+- selenium
+- Self
+- sema
+- sentry
+- sequelize
+- ShaderLab
+- Shell
+- ShellSession
+- Shen
+- shopware
+- shotgrid
+- Sieve
+- Singularity
+- sketch
+- slack
+- Slang
+- Slash
+- Slice
+- Slim
+- Slint
+- Smali
+- Smalltalk
+- Smarty
+- Smithy
+- SmPL
+- SMT
+- Snakemake
+- Snowflake
+- socketio
+- solidity
+- solidjs
+- sonarqube
+- sourceengine
+- SourcePawn
+- sourcetree
+- spack
+- Spark
+- spicedb
+- splunk
+- spring
+- spss
+- spyder
+- SQF
+- SQL
+- sqlalchemy
+- sqldeveloper
+- sqlite
+- SQLPL
+- Squirrel
+- SRecode Template
+- ssh
+- stackblitz
+- stackoverflow
+- Stan
+- Standard ML
+- Starlark
+- stata
+- Statistical Modeling
+- stenciljs
+- storybook
+- streamlit
+- StringTemplate
+- styledcomponents
+- stylus
+- subversion
+- SugarSS
+- sulu
+- supabase
+- SuperCollider
+- Superset
+- Supervised Learning
+- surrealdb
+- SurrealQL
+- svelte
+- svgo
+- swagger
+- Sway
+- swift
+- SWIG
+- swiper
+- symfony
+- SystemVerilog
+- Tableau
+- Tact
+- tailwindcss
+- Talon
+- talos
+- tauri
+- Tcl
+- Tcsh
+- Tea
+- Teal
+- teleport
+- templ
+- TensorFlow
+- Terra
+- Terraform
+- Terraform Template
+- terramate
+- tex
+- thealgorithms
+- threedsmax
+- threejs
+- Thrift
+- thymeleaf
+- TI Program
+- Time Series
+- titaniumsdk
+- TL-Verilog
+- TLA
+- tmux
+- Toit
+- tomcat
+- tortoisegit
+- towergit
+- traefikmesh
+- traefikproxy
+- Transformers
+- travis
+- Tree-sitter Query
+- trello
+- trpc
+- TSQL
+- TSX
+- turbo
+- Turing
+- Twig
+- twilio
+- twitter
+- TXL
+- TypeScript
+- TypeSpec
+- typo3
+- Typst
+- ubuntu
+- Unified Parallel C
+- unifiedmodelinglanguage
+- unity
+- unix
+- Unix Assembly
+- Uno
+- unrealengine
+- UnrealScript
+- Unsupervised Learning
+- Untyped Plutus Core
+- UrWeb
+- uwsgi
+- V
+- v8
+- vaadin
+- vagrant
+- vala
+- vault
+- VBA
+- VBScript
+- VCL
+- veevalidate
+- Velocity Template Language
+- Vento
+- vercel
+- Verilog
+- vertx
+- VHDL
+- vim
+- Vim Script
+- Vim Snippet
+- Visual Basic .NET
+- Visual Basic 6.0
+- visualbasic
+- visualstudio
+- vite
+- vitejs
+- vitess
+- vitest
+- Volt
+- vscode
+- vscodium
+- vsphere
+- Vue
+- vuejs
+- vuestorefront
+- vuetify
+- vulkan
+- vyper
+- waku
+- wasm
+- WDL
+- web3js
+- WebAssembly
+- webflow
+- webgpu
+- WebIDL
+- weblate
+- webpack
+- webstorm
+- WGSL
+- Whiley
+- windows11
+- windows8
+- wisp
+- Witcher Script
+- wolfram
+- Wolfram Language
+- Wollok
+- woocommerce
+- wordpress
+- Wren
+- X10
+- xamarin
+- xBase
+- XC
+- xcode
+- xd
+- XGBoost
+- Xmake
+- xml
+- Xojo
+- Xonsh
+- XProc
+- XQuery
+- XS
+- XSLT
+- Xtend
+- Yacc
+- yaml
+- YARA
+- yarn
+- YASnippet
+- yii
+- YOLO
+- yugabytedb
+- Yul
+- yunohost
+- ZAP
+- Zeek
+- zend
+- ZenScript
+- Zephir
+- zig
+- ZIL
+- Zimpl
+- zsh
+- zustand
+aliases:
+  .net: dot-net
+  .netcore: dotnetcore
+  11ty: eleventy
+  3dsmax: threedsmax
+  A B Testing: A/B Testing
+  A Programming Language: apl
+  a-frame: aframe
+  AB Testing: A/B Testing
+  abl: OpenEdge ABL
+  abuild: Alpine Abuild
+  actionscript 3: ActionScript
+  actionscript3: ActionScript
+  ada2005: Ada
+  ada95: Ada
+  Adobe Dreamweaver: dreamweaver
+  adobeaftereffects: aftereffects
+  adobeillustrator: illustrator
+  adobephotoshop: photoshop
+  adobepremierepro: premierepro
+  adobexd: xd
+  adonis: adonisjs
+  advpl: xBase
+  ae: aftereffects
+  Agentic AI: AI Agents
+  ags: AGS Script
+  ahk: AutoHotkey
+  AI: Artificial Intelligence
+  akka-framework: akka
+  AlmaLinux OS: almalinux
+  Alpine: alpinejs
+  Apache Cassandra: Cassandra
+  Apache Hadoop: hadoop
+  apachecouchdb: couchdb
+  apachegradle: gradle
+  apachegroovy: groovy
+  apachemaven: maven
+  apachesubversion: subversion
+  apkbuild: Alpine Abuild
+  Apollo: apollographql
+  apples: AppleScript
+  applesafari: safari
+  arexx: rexx
+  arm64: aarch64
+  artix: artixlinux
+  as3: ActionScript
+  asm: Assembly
+  asp: Classic ASP
+  aspx: ASP.NET
+  aspx-vb: ASP.NET
+  atlassianbamboo: bamboo
+  atlassianbitbucket: bitbucket
+  atlassianconfluence: confluence
+  atlassianjira: jira
+  atlassiantrello: trello
+  ats2: ATS
+  au3: AutoIt
+  autoconf: M4Sugar
+  Autodesk 3ds Max: threedsmax
+  Autodesk Fusion: fusion
+  Autodesk Fusion 360: fusion
+  AutoIt3: AutoIt
+  AutoItScript: AutoIt
+  azure-devops: azuredevops
+  azure-sql-database: azuresqldatabase
+  azurecosmosdb: cosmosdb
+  b3d: BlitzBasic
+  babeljs: babel
+  babylon.js: babylonjs
+  bal: ballerina
+  bash session: ShellSession
+  basic for android: B4X
+  bat: Batchfile
+  batch: Batchfile
+  be: Berry
+  bevy: bevyengine
+  bevy engine: bevyengine
+  bh: Bluespec BH
+  biomejs: biome
+  blitz3d: BlitzBasic
+  blitzplus: BlitzBasic
+  blp: Blueprint
+  bluespec bsv: Bluespec
+  bluespec classic: Bluespec BH
+  bmax: BlitzMax
+  bourneagainshell: Bash
+  bplus: BlitzBasic
+  bro: Zeek
+  bsdmake: Makefile
+  bsv: Bluespec
+  buildtoolbazel: bazel
+  bulmacss: bulma
+  byond: DM
+  bzl: Starlark
+  c2hs: C2hs Haskell
+  cairographics: cairo
+  cake: C#
+  cakescript: C#
+  capacitorjs: capacitor
+  Carbon Language: carbon
+  Carto: CartoCSS
+  cascadingstylesheets3: css3
+  cask: Emacs Lisp
+  cds: CAP CDS
+  ceylonlang: ceylon
+  cfc: ColdFusion CFC
+  cfm: ColdFusion
+  cfml: ColdFusion
+  chakra ui: chakraui
+  chart.js: chartjs
+  chpl: Chapel
+  clarity-lang: clarity
+  classic qbasic: QuickBASIC
+  classic quickbasic: QuickBASIC
+  classic visual basic: Visual Basic 6.0
+  clipper: xBase
+  Cloud Run: cloudrun
+  Cloudflare Workers: cloudflareworkers
+  coccinelle: SmPL
+  codeacio: codeac
+  coffee: coffeescript
+  coffee-script: coffeescript
+  coldfusion html: ColdFusion
+  console: ShellSession
+  Containerfile: Dockerfile
+  coq: Rocq Prover
+  core-js: corejs
+  core.js: corejs
+  cperl: perl
+  cpp: cplusplus
+  crystallang: crystal
+  csound-csd: Csound Document
+  csound-orc: Csound
+  csound-sco: Csound Score
+  cucumberjs: cucumber
+  CV: Computer Vision
+  cwl: Common Workflow Language
+  cypress: cypressio
+  d2lang: D2
+  Data Analytics: Data Analysis
+  Data Modelling: Data Modeling
+  Data Pipeline: Data Pipelines
+  Data Visualisation: Data Visualization
+  Data Viz: Data Visualization
+  Data Warehousing: Data Warehouse
+  dcl: DIGITAL Command Language
+  Deta: detaspace
+  Deta Space: detaspace
+  Django REST framework: djangorest
+  DL: Deep Learning
+  Dlang: D
+  dosbatch: Batchfile
+  dotnet: dot-net
+  dtrace-script: DTrace
+  Earthfile: Earthly
+  eask: Emacs Lisp
+  Eclipse IDE: eclipse
+  eclipseceylon: ceylon
+  eclipsevertx: vertx
+  ecmarkdown: Ecmarkup
+  ecmascript: JavaScript
+  ecr: HTML+ECR
+  editingmacros: emacs
+  eex: HTML+EEX
+  ef core: entityframeworkcore
+  electronjs: electron
+  elexirlang: elixir
+  elisp: Emacs Lisp
+  elmlang: elm
+  embarcadero: delphi
+  ember.js: ember
+  emberjs: ember
+  entity framework core: entityframeworkcore
+  envoyproxy: envoy
+  envrc: Shell
+  erb: HTML+ERB
+  esdl: EdgeQL
+  expressjs: express
+  extensiblemarkuplanguage: xml
+  Extract, Transform, Load: ETL
+  f#: fsharp
+  fauna: faunadb
+  fb: FreeBASIC
+  flex: Lex
+  foxpro: xBase
+  framer: framermotion
+  framer-motion: framermotion
+  fstar: F*
+  ftl: FreeMarker
+  gas: Unix Assembly
+  gatsbyjs: gatsby
+  Gen AI: Generative AI
+  GenAI: Generative AI
+  gf: Grammatical Framework
+  GitHub Actions: githubactions
+  GitHub Codespaces: githubcodespaces
+  gitpod-io: gitpod
+  gjs: Glimmer JS
+  gnu asm: Unix Assembly
+  GNU nano: nano
+  gnu-nano: nano
+  gnucompilercollection: gcc
+  GoFiber: fiber
+  gohugo: hugo
+  golang: Go
+  Google Remote Procedure Call: grpc
+  googlechrome: chrome
+  googlecolaboratory: googlecolab
+  googledart: dart
+  gotmpl: Go Template
+  gradlebuildtool: gradle
+  Grails Framework: grails
+  groff: Roff
+  groovylang: groovy
+  grpcio: grpc
+  gruntjs: grunt
+  gsp: Groovy Server Pages
+  gts: Glimmer TS
+  gulpjs: gulp
+  handlebarsjs: handlebars
+  harvesterhci: harvester
+  HashiCorp Configuration Language: HCL
+  HashiCorp Consul: consul
+  HashiCorp Nomad: nomad
+  HashiCorp Vault: vault
+  hbs: handlebars
+  heex: HTML+EEX
+  Hoc May: Machine Learning
+  Hoc Sau: Deep Learning
+  html ui framework: htmx
+  html+django: Jinja
+  html+jinja: Jinja
+  html+ruby: HTML+ERB
+  htmlbars: handlebars
+  htmldjango: Jinja
+  hudson: jenkins
+  huggingface: Hugging Face
+  hylang: Hy
+  hyper-v: hyperv
+  hypertextmarkdownlanguage5: html5
+  Học Máy: Machine Learning
+  Học Sâu: Deep Learning
+  i7: Inform 7
+  ibmspss: spss
+  ifthisthenthat: ifttt
+  igor: IGOR Pro
+  igorpro: IGOR Pro
+  ijm: ImageJ Macro
+  ilasm: IL Assembly
+  ile rpg: RPGLE
+  inc: php
+  inertia.js: inertiajs
+  inform7: Inform 7
+  Insomnia Rest Client: insomnia
+  intellijidea: intellij
+  intellijsoftware: jetbrains
+  internetexplorer10: ie10
+  IPython Notebook: Jupyter Notebook
+  jaeger: jaegertracing
+  jasminejs: jasmine
+  java server page: Groovy Server Pages
+  JavaScript Object Notation: json
+  jestjs: jest
+  jetstream: laraveljetstream
+  Jira Align: jiraalign
+  jqueryjs: jquery
+  jruby: ruby
+  js: JavaScript
+  jsp: Java Server Pages
+  jte: Java Template Engine
+  julelang: jule
+  julialang: julia
+  jupyternotebook: Jupyter
+  Justfile: Just
+  kak: KakouneScript
+  kakscript: KakouneScript
+  kali: kalilinux
+  karate: karatelabs
+  karmajs: karma
+  karmarunner: karma
+  knockoutjs: knockout
+  kotlinlang: kotlin
+  kraken: krakenjs
+  ksy: Kaitai Struct
+  Laminas Project: laminas
+  Laravel Jetstream: laraveljetstream
+  Laravel Lumen: lumen
+  Laravel Lumen Framework: lumen
+  laravel-livewire: livewire
+  laravel.lumen: lumen
+  lassoscript: Lasso
+  lean4: Lean 4
+  leex: HTML+EEX
+  less-css: less
+  lesscss: less
+  lhaskell: Literate Haskell
+  lhs: Literate Haskell
+  lisp: Common Lisp
+  litcoffee: Literate CoffeeScript
+  live-script: LiveScript
+  LLM: Large Language Models
+  LLMs: Large Language Models
+  Low Level Virtual Machine: llvm
+  ls: LiveScript
+  lualang: lua
+  Lumen Laravel: lumen
+  löve: love2d
+  m2: Macaulay2
+  m68k: Motorola 68K Assembly
+  macruby: ruby
+  make: Makefile
+  man: Roff
+  man page: Roff
+  man-page: Roff
+  manpage: Roff
+  markojs: Marko
+  materialize: materializecss
+  materialize css: materializecss
+  materialize-css: materializecss
+  mathematica: Wolfram Language
+  max/msp: Max
+  maxmsp: Max
+  md: markdown
+  mdoc: Roff
+  mermaid example: Mermaid
+  meteorjs: meteor
+  mf: Makefile
+  Microsoft SQL Server: microsoftsqlserver
+  microsoftazure: Azure
+  microsoftdiskoperatingsystem: msdos
+  mithril.js: mithril
+  ML: Machine Learning
+  ML Ops: MLOps
+  mma: Wolfram Language
+  mobxjs: mobx
+  moleculer.js: moleculer
+  moleculerjs: moleculer
+  mongoosejs: mongoose
+  mozillafirefox: firefox
+  mps: JetBrains MPS
+  msil: IL Assembly
+  msql: microsoftsqlserver
+  mssql: microsoftsqlserver
+  mui: materialui
+  mumps: M
+  mvn: maven
+  mystructuredquerylanguage: MySQL
+  nargo: Noir
+  nasm: Assembly
+  nats-io: nats
+  NATS-io: nats
+  nats.io: nats
+  NATS.io: nats
+  neorg: norg
+  NeoSnippet: Vim Snippet
+  nimlang: nim
+  njk: Nunjucks
+  NLP: Natural Language Processing
+  node: Node.js
+  Node: Node.js
+  node-red: nodered
+  nodejs: Node.js
+  nodemonjs: nodemon
+  nodepackagemanager: npm
+  npmjs: npm
+  nroff: Roff
+  nu-script: Nushell
+  nush: Nu
+  nushell-script: Nushell
+  nvim: Vim Script
+  nwjs: nodewebkit
+  obj-c: Objective-C
+  obj-c++: Objective-C++
+  obj-j: Objective-J
+  objc: Objective-C
+  objc++: Objective-C++
+  objectivec++: Objective-C++
+  objectivej: Objective-J
+  objectpascal: Pascal
+  objj: Objective-J
+  octave: MATLAB
+  odin-lang: Odin
+  odinlang: Odin
+  Oh My Zsh: ohmyzsh
+  ohmyz.sh: ohmyzsh
+  okta developer: okta
+  omnetpp-msg: OMNeT++ MSG
+  omnetpp-ned: OMNeT++ NED
+  omz: ohmyzsh
+  oncrpc: RPC
+  openedge: OpenEdge ABL
+  opengraphicslibrary: opengl
+  openrc: OpenRC runscript
+  opentofu: HCL
+  opy: OverPy
+  oracledatabase: oracle
+  osascript: AppleScript
+  p5.js: p5js
+  pasm: Parrot Assembly
+  passportjs: passport
+  performant npm: pnpm
+  perl-6: Raku
+  perl6: Raku
+  Personal Home Page: php
+  Phan Tich Du Lieu: Data Analysis
+  Phoenix Framework: phoenix
+  photon: photonengine
+  PHP Hypertext Preprocessor: php
+  Phân Tích Dữ Liệu: Data Analysis
+  pikchr: Pic
+  pir: Parrot Internal Representation
+  posh: powershell
+  postscr: PostScript
+  pov-ray: POV-Ray SDL
+  povray: POV-Ray SDL
+  PowerBI: Power BI
+  powerquery: Power Query
+  processingpy: processing
+  progress: OpenEdge ABL
+  protractorjs: protractor
+  protractortest: protractor
+  ps: powershell
+  pugjs: pug
+  Pulsar Edit: pulsar
+  pwsh: powershell
+  py: Python
+  py3: Python
+  pycon: Python console
+  pyrex: Cython
+  Python Package Index: pypi
+  python-poetry: poetry
+  python3: Python
+  qb: QuickBASIC
+  qb64: QuickBASIC
+  qbasic: QuickBASIC
+  ql: CodeQL
+  qsharp: Q#
+  RAD Studio: radstudio
+  RAG: Retrieval-Augmented Generation
+  ragel-rb: Ragel
+  ragel-ruby: Ragel
+  rake: ruby
+  razor: HTML+Razor
+  rb: ruby
+  rbx: ruby
+  Reach Lang: reach
+  react bootstrap: reactbootstrap
+  React-Bootstrap: reactbootstrap
+  react-native: reactnative
+  Reactive Extensions for JavaScript: rxjs
+  reactjs: React
+  Read The Docs: readthedocs
+  Recommender Systems: Recommendation Systems
+  rectlang: rect
+  red/system: Red
+  reduxjs: redux
+  remix.run: remix
+  remotedictionaryserver: Redis
+  Ren'Py: renpy
+  rhtml: HTML+ERB
+  RL: Reinforcement Learning
+  rlang: R
+  robotoperatingsystem: ros
+  rocky: rockylinux
+  rocq: Rocq Prover
+  rollup.js: rollup
+  rollupjs: rollup
+  rpcgen: RPC
+  rpi: raspberrypi
+  rs: rust
+  Rscript: R
+  rubylang: ruby
+  rubyonrails: rails
+  rusthon: Python
+  rustlang: rust
+  salt: SaltStack
+  saltstate: SaltStack
+  scalalang: Scala
+  scikit: scikitlearn
+  scikit learn: Scikit-learn
+  scss: sass
+  sdc: Tcl
+  secureshell: ssh
+  Sema Software: sema
+  sequelizejs: sequelize
+  sh: Shell
+  shell-script: Shell
+  simpledirectmedialayer: sdl
+  sklearn: Scikit-learn
+  sml: Standard ML
+  snakefile: Snakemake
+  SnipMate: Vim Snippet
+  snippet: YASnippet
+  soliditylang: solidity
+  sonar: sonarqube
+  source engine: sourceengine
+  sourcemod: SourcePawn
+  soy: Closure Templates
+  splus: R
+  springframework: spring
+  sqlrpgle: RPGLE
+  squeak: Smalltalk
+  Stack Overflow: stackoverflow
+  Statistical Modelling: Statistical Modeling
+  stencil: stenciljs
+  storybookjs: storybook
+  Styled Components: styledcomponents
+  styled-components: styledcomponents
+  styluslang: stylus
+  surql: SurrealQL
+  sveltejs: svelte
+  swi-prolog: prolog
+  The Apache Software Foundation: apache
+  the awk programming language: awk
+  Time Series Forecasting: Time Series
+  Time-Series: Time Series
+  towergitclient: towergit
+  travisci: travis
+  troff: Roff
+  Truc Quan Hoa Du Lieu: Data Visualization
+  Trực Quan Hóa Dữ Liệu: Data Visualization
+  ts: TypeScript
+  tsp: TypeSpec
+  tsq: Tree-sitter Query
+  typ: Typst
+  Typescript Remote Procedure Call: trpc
+  typescriptreact: TSX
+  UltiSnip: Vim Snippet
+  UltiSnips: Vim Snippet
+  uml: unifiedmodelinglanguage
+  unified modeling language: unifiedmodelinglanguage
+  unix asm: Unix Assembly
+  Ur: UrWeb
+  Ur/Web: UrWeb
+  uwebservergatewayinterface: uwsgi
+  v8 engine: v8
+  vb: visualbasic
+  vb .net: Visual Basic .NET
+  vb 6: Visual Basic 6.0
+  vb.net: Visual Basic .NET
+  vb6: Visual Basic 6.0
+  vbnet: Visual Basic .NET
+  velocity: Velocity Template Language
+  viimproved: vim
+  viml: Vim Script
+  vimscript: Vim Script
+  visual basic: Visual Basic .NET
+  visual basic 6: Visual Basic 6.0
+  visual basic classic: Visual Basic 6.0
+  visual basic for applications: VBA
+  visualstudiocode: vscode
+  Vite: vitejs
+  vite.js: vitejs
+  vlang: V
+  vmwarevsphere: vsphere
+  vs: visualstudio
+  vtl: Velocity Template Language
+  vyperlang: vyper
+  wast: WebAssembly
+  web3.js: web3js
+  WebAssembly: wasm
+  webpackjs: webpack
+  winbatch: Batchfile
+  wl: Wolfram Language
+  wolfram lang: Wolfram Language
+  wolframlanguage: wolfram
+  Workflow Description Language: WDL
+  wrenlang: Wren
+  x: twitter
+  xdc: Tcl
+  xdr: RPC
+  xhtml: HTML
+  xml+genshi: Genshi
+  xml+kid: Genshi
+  xsl: XSLT
+  xten: X10
+  YAML Ain't Markup Language: yaml
+  yas: YASnippet
+  yesitis: yii
+  Zend Framework: laminas
+  ziglang: zig
+denylist:
+- BASIC
+- Communication
+- Data Analyst
+- Data Engineer
+- Leadership
+- Problem Solving
+- Problem-solving
+- Teamwork

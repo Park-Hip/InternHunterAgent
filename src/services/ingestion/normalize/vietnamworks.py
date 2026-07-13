@@ -12,6 +12,7 @@ from src.services.ingestion.transform import (
     find_tech_stack,
     html_to_text,
     normalize_location,
+    to_date,
 )
 
 
@@ -95,9 +96,19 @@ def to_normalized_job(payload: dict) -> NormalizedJob:
         payload.get("jobLevel"), payload.get("jobLevelVI")
     )
     job_level: str | None = payload.get("jobLevel") or payload.get("jobLevelVI")
+    listing_expires_on = to_date(payload.get("expiredOn"))
+    created_on = to_date(payload.get("createdOn"))
 
-    # posted_date = None — real extraction from onlineOn/approvedOn is deferred to T0009.8.
-    # The column is nullable so this is safe to leave until the follow-up.
+    # posted_date = None by decision, not because a parse step is merely pending:
+    # VietnamWorks surfaces no *reliable* published date. The timestamps it does expose
+    # (onlineOn/approvedOn/expiredOn) each mean something other than "first posted" —
+    # onlineOn churns on every employer re-list, approvedOn is an admin approval time,
+    # expiredOn is a future expiry — so none is a trustworthy posting date. The reliable
+    # path is an ingestion-owned first_seen_at / an honestly-renamed listed_on column,
+    # both of which depend on the accumulate-upsert persistence planned for T0014 (today
+    # clean_jobs is TRUNCATE'd and rebuilt each run). See Known_Issues.md ("posted_date
+    # intentionally absent from agent schema") and research/job-site-comparison.md §122.
+    # The column is nullable so this is safe to leave until that work lands.
 
     return NormalizedJob(
         source="vietnamworks",
@@ -111,6 +122,8 @@ def to_normalized_job(payload: dict) -> NormalizedJob:
         job_level=job_level,
         location=location,
         posted_date=None,
+        listing_expires_on=listing_expires_on,
+        created_on=created_on,
         is_internship=is_internship,
         salary_min=salary_min,
         salary_max=salary_max,

@@ -900,3 +900,29 @@ T0014.2: Known-Issues register housekeeping
   ```
   Confirm the stream contains `{"type": "token", ...}` events forming a natural-language final answer, with no `SELECT`, `clean_jobs`, tool names, tool args, or raw rows, followed by exactly one `{"type": "metadata", ...}` event.
 * Confirm `git diff -- src/agents/runtime/react_agent.py` shows `ainvoke`, `_build_messages`, and `_extract_answer` unchanged except for the new sibling `astream` method.
+
+## T0017.2: Streaming service + SSE endpoint
+
+* Run the focused streaming API tests:
+  * `uv run pytest tests/api/test_stream.py -q`
+  * Confirm the happy path yields `session`, one or more `token` events, `metadata`, and `done`; the empty-answer fallback emits a fallback `token` before `metadata`; mid-stream failures return HTTP 200 with `error` then `done`; and blank queries return HTTP 400 before the runtime stream starts.
+* Run the broader API route suite:
+  * `uv run pytest tests/api -q`
+  * Confirm the existing one-shot `/api/v1/agent/chat` tests still pass.
+* Start the API locally with Groq credentials and a seeded Postgres:
+  * `uv run uvicorn src.api.app:app --reload`
+* Stream a live tool-using query:
+  ```bash
+  curl -N -X POST http://127.0.0.1:8000/api/v1/agent/chat/stream \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":\"list 3 data engineer jobs\"}"
+  ```
+  Confirm the first event is `session`, token events render the natural-language answer incrementally, the trailing `metadata` event carries the trace URL when Langfuse is configured, and the terminal event is `done`. Confirm no `SELECT`, `clean_jobs`, tool names, tool args, or raw rows appear in token events.
+* Confirm blank-query validation stays pre-stream:
+  ```bash
+  curl -i -N -X POST http://127.0.0.1:8000/api/v1/agent/chat/stream \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":\"  \"}"
+  ```
+  Expect HTTP 400 with `{"detail":"Query must not be empty."}`.
+* Confirm response headers on the streaming endpoint include `content-type: text/event-stream`, `cache-control: no-cache`, and `x-accel-buffering: no`.

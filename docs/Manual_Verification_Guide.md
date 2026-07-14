@@ -808,7 +808,7 @@ T0014.2: Known-Issues register housekeeping
 * Run `rg -n "13-column|job_level hidden|qwen agent-model|T0014.2|T0016|Deploy Hardening" docs` and confirm the old 13-column/`job_level` drift item is not reintroduced as open, T0014.2 is recorded as complete, and T0016/T0017 deploy-hardening items remain deferred.
 * Run `uv run pytest -q tests/core/test_config.py tests/api/test_startup_config.py` and confirm the T0014.1 config/startup smoke tests still pass after the docs-only sweep.
 
-T0016.1: CORS middleware (config-driven, credential-less)
+## T0016.1: CORS middleware (config-driven, credential-less)
 
 * Run the focused API tests:
   * `uv run pytest -q tests/api/test_cors.py tests/api/test_query.py tests/api/test_startup_config.py`
@@ -823,7 +823,7 @@ T0016.1: CORS middleware (config-driven, credential-less)
   * `curl -i -X OPTIONS "http://127.0.0.1:8000/api/v1/agent/chat" -H "Origin: http://evil.example" -H "Access-Control-Request-Method: POST"`
   * Confirm the response does not include `access-control-allow-origin`.
 
-T0016.2: Per-IP rate limiting + graceful 429/quota degradation
+## T0016.2: Per-IP rate limiting + graceful 429/quota degradation
 
 * Run the focused API tests:
   * `uv run pytest -q tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_cors.py tests/api/test_startup_config.py`
@@ -838,7 +838,7 @@ T0016.2: Per-IP rate limiting + graceful 429/quota degradation
   * Confirm it remains HTTP 200 and is not rate-limited.
 * If provider credentials are available, simulate or trigger provider timeout/rate-limit pressure and confirm provider-busy failures return friendly HTTP 429/503 while unrelated bugs still return `{"detail": "Failed to process query"}` with HTTP 500.
 
-T0016.3: Request input hardening (length cap)
+## T0016.3: Request input hardening (length cap)
 
 * Run the focused API tests:
   * `uv run pytest -q tests/api/test_query.py tests/api/test_rate_limit.py tests/api/test_cors.py tests/api/test_startup_config.py`
@@ -854,8 +854,9 @@ T0016.3: Request input hardening (length cap)
 * Send a request with more than 2000 characters in `query`.
   * Confirm it is rejected with HTTP 422 and a `string_too_long` validation detail for `body.query`.
   * Confirm no agent/runtime work is performed for the rejected request.
+* Confirm `api.max_query_chars: 2000` in `config/settings.yaml` still matches `DEFAULT_MAX_QUERY_CHARS = 2000` in `src/api/schemas.py`; this ticket uses a static schema constant mirrored in config, not a dynamically loaded schema value.
 
-T0016.4: `/docs` exposure decision + minimal security headers
+## T0016.4: `/docs` exposure decision + minimal security headers
 
 * Run the focused API tests:
   * `uv run pytest -q tests/api/test_docs_exposure.py tests/api/test_cors.py tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_startup_config.py`
@@ -876,3 +877,26 @@ T0016.4: `/docs` exposure decision + minimal security headers
   * `http://127.0.0.1:8000/openapi.json`
 * Restore `api.docs_enabled: true`.
 * Confirm this ticket does not add `X-Frame-Options`, CSP, or any other security-header middleware because FastAPI still serves API responses only and no same-origin HTML UI in this repo state.
+
+## T0017.1: Runtime streaming + no-leak filter
+
+* Run the focused runtime tests:
+  * `uv run pytest tests/agents/runtime/test_react_agent.py -q`
+  * Confirm all runtime tests pass, including the streaming token-order test and the no-leak test.
+* Run the full standard suite:
+  * `uv run pytest -q`
+  * Confirm the non-eval suite stays green.
+* Live REPL probe (requires `GROQ_API_KEY` and local Postgres with `clean_jobs` reachable):
+  ```python
+  import asyncio
+  from src.agents.runtime.react_agent import AgentRuntime
+
+  async def main():
+      rt = AgentRuntime()
+      async for ev in rt.astream("list 3 data engineer jobs", session_id="demo"):
+          print(ev)
+
+  asyncio.run(main())
+  ```
+  Confirm the stream contains `{"type": "token", ...}` events forming a natural-language final answer, with no `SELECT`, `clean_jobs`, tool names, tool args, or raw rows, followed by exactly one `{"type": "metadata", ...}` event.
+* Confirm `git diff -- src/agents/runtime/react_agent.py` shows `ainvoke`, `_build_messages`, and `_extract_answer` unchanged except for the new sibling `astream` method.

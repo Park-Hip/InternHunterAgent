@@ -88,16 +88,18 @@ do **not** maintain fix-history here; strike through / update the entry in `Know
   `flush()` is a genuine no-op when there's no configured client.
 
 ### API & core
-- **No CORS middleware** (`app.py`). The upcoming browser UI will need
-  `CORSMiddleware` if it's served from a different origin — flag for the UI/Deploy
-  milestone.
+- ~~**No CORS middleware** (`app.py`).~~ **Resolved by T0016.1.** `src/api/app.py`
+  now registers credential-less `CORSMiddleware` from `api.cors`; the eventual demo UI
+  still needs its deployed origin filled into config once the UI location is chosen.
 - **Health check is shallow** (`routes/health.py` returns a static `{"api": "online"}` and
   a redundant in-body `status_code`). A deploy readiness probe should optionally verify DB
   connectivity. Also `async  def` / `basicConfig(...) ` have stray double-spaces/trailing
   whitespace (cosmetic; ruff excludes none of this — consider enabling formatting).
-- **Request validation:** `schemas.QueryRequest.query` has no `min_length`/`max_length`.
-  Empty is now caught in the route (good), but a length cap belongs on the schema (and
-  guards against oversized inputs).
+- ~~**Request validation:** `schemas.QueryRequest.query` has no `max_length`.~~
+  **Resolved by T0016.3.** `QueryRequest.query` now has a Pydantic max-length cap.
+  Follow-up nuance: `api.max_query_chars` is currently mirrored by the static
+  `DEFAULT_MAX_QUERY_CHARS` constant, so changing the cap later requires updating both
+  or deliberately wiring schema validation to config.
 - `checkpointer._checkpointer_dsn()` derives the psycopg DSN via
   `DATABASE_URL.replace("+psycopg", "")` — works, but a brittle string transform; a parsed
   URL would be safer.

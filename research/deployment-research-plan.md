@@ -111,7 +111,7 @@ COPY --from=builder /app /app
 ENV PATH="/app/.venv/bin:$PATH"
 RUN adduser --disabled-password worker && chown -R worker /app
 USER worker
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 Key points:
@@ -723,6 +723,8 @@ scraping-from-prod-IP ToS/robots question raised in `job-site-comparison.md`.
 
 **Findings:**
 
+> **2026-07-13 T0016 decision delta:** The generic security checklist below has been narrowed for the current API-only, no-auth, read-only portfolio demo. T0016 keeps Swagger/ReDoc/OpenAPI public by default via `api.docs_enabled: true`, with `api.docs_enabled: false` as the locked-down switch for `/docs`, `/redoc`, and `/openapi.json`. CORS and in-process rate limiting are implemented; frame-protection headers remain deferred until FastAPI serves same-origin HTML.
+
 **A. FastAPI production security checklist (minimum for a public demo):**
 
 | Control | Implementation | Cost |
@@ -732,9 +734,9 @@ scraping-from-prod-IP ToS/robots question raised in `job-site-comparison.md`.
 | Rate limiting per IP | `slowapi` library (in-process, Redis optional) | $0 |
 | CORS restricted | `CORSMiddleware` with specific origins (§7) | $0 |
 | Input validation | Pydantic models on all request bodies (already enforced by FastAPI) | $0 |
-| No exposed `/docs` in prod | `app = FastAPI(docs_url=None, redoc_url=None)` if public | $0 |
-| Security headers | `starlette-securecookies` or a custom middleware adding `X-Content-Type-Options`, `X-Frame-Options` | $0 |
-| Health endpoints not rate-limited | Exclude `/health` from `slowapi` limiter | $0 |
+| `/docs` exposure is deliberate | T0016 keeps `/docs`, `/redoc`, and `/openapi.json` public for the portfolio demo by default; set `api.docs_enabled: false` to hide all three | $0 |
+| UI-specific security headers | Add frame-protection headers only if FastAPI later serves same-origin HTML | $0 |
+| Health endpoints not rate-limited | Exclude `/api/v1/health` from `slowapi` limiter | $0 |
 
 **B. Rate limiting for the public API endpoint:**
 
@@ -744,7 +746,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 limiter = Limiter(key_func=get_remote_address)
 
-@app.get("/query")
+@app.post("/api/v1/agent/chat")
 @limiter.limit("10/minute")
 async def query_agent(request: Request, ...):
     ...

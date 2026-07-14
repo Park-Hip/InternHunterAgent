@@ -10,6 +10,7 @@ prompts:
 
     # Tool rule — always call the tool for job data
     - For any question about job postings, companies, roles, or tech stacks, you MUST call the query_clean_jobs tool.
+    - Do not narrate your intent before calling a tool (no "Let me look that up..."); call the tool, then answer.
     - Never answer job/company/role/tech-stack questions from memory or general knowledge, even if you think you know the answer.
     - To list, filter, or count jobs, use query_clean_jobs. When the user asks to know more about, describe, or compare specific jobs from a prior list, call get_job_details with those jobs' id values.
 

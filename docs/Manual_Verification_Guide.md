@@ -953,3 +953,20 @@ Each ticket's own "Manual check" lines in [`Tickets.md`](Tickets.md) are the *pl
 * Confirm the frame header is intact:
   * `curl -sI http://127.0.0.1:8000/ | grep -i x-frame-options` → `x-frame-options: DENY`.
 * Mid-stream `error`-event bubble (**manual-only / code-inspection**): forcing a genuine mid-stream `error` event locally is impractical (it requires the provider to fail *after* the 200 opens). Verify by inspection that `app.js` routes an `error` event to `showErrorBubble` and stops without reconnecting; logged as a manual-only path in `docs/Known_Issues.md`.
+
+## Backend hotfix — Split ReAct-agent and SQL-generation LLM configs
+
+* Confirm `config/settings.yaml` has independent `agent.react` and `agent.sql_generation` blocks, each with `model`, `temperature`, `max_tokens`, `timeout`, `max_retries`, `streaming`, `reasoning_format`, and `reasoning_effort`.
+* Confirm `agent.query` still contains `max_rows` and `max_detail_ids`, and no longer contains `sql_generation_reasoning_effort`.
+* Confirm `src/agents/runtime/factory.py` builds the conversational agent with `AgentProvider().build_model("react")`.
+* Confirm `src/agents/tools/query_clean_jobs.py::generate_sql()` builds the nested SQL-generation model with `AgentProvider().build_model("sql_generation")`.
+* Run `uv run pytest tests/agents/runtime/test_provider.py tests/agents/tools/test_query_clean_jobs.py -q` and confirm the focused provider/tool tests pass.
+* With maintainer Groq credentials and a seeded `clean_jobs` database, run a live SQL-generation probe:
+  ```python
+  import asyncio
+  from src.agents.tools.query_clean_jobs import generate_sql
+
+  print(asyncio.run(generate_sql("List the AI Engineer jobs that require Python, sorted by salary descending.")))
+  ```
+  Confirm it returns a bare `SELECT` query and does not expose reasoning text.
+* Confirm no prompt, schema, eval fixture, API route, service-layer, streaming transport, or static UI changes were made as part of this config split.

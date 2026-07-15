@@ -8,7 +8,7 @@ from src.agents.runtime.prompts import load_system_prompt
 
 def agent_factory(checkpointer=None):
     return create_agent(
-        model=AgentProvider().build_model(),
+        model=AgentProvider().build_model("react"),
         tools=[get_current_time, query_clean_jobs, get_job_details],
         system_prompt=load_system_prompt(),
         checkpointer=checkpointer,

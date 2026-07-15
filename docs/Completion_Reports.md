@@ -84,3 +84,12 @@ Follow-ups / Docs).
 - **Manual verification:** live Groq SQL probe, streaming curl, and DeepEval regression BLOCKED (no `GROQ_API_KEY`/`GOOGLE_API_KEY` in sandbox; local Postgres `127.0.0.1:5433` was reachable) → `Known_Issues.md`.
 - **Risks:** covered offline at the construction boundary; live provider behavior still needs maintainer credentials.
 - **Follow-ups:** salary-sort SQL may need single-currency prompt tuning if it appears in evals; maintainer live verification remains blocked on credentials.
+
+## Backend hotfix — Split ReAct-agent and SQL-generation LLM configs
+- **Summary:** replaced the shared `agent.groq` model profile plus per-call `reasoning_effort` override with two explicit profiles: `agent.react` for the outer ReAct agent and `agent.sql_generation` for the nested SQL-generation LLM call. Both profiles expose the same fields; only `agent.sql_generation.reasoning_effort: none` is forwarded for SQL generation.
+- **Files:** `config/settings.yaml`, `src/agents/runtime/provider.py`, `src/agents/runtime/factory.py`, `src/agents/tools/query_clean_jobs.py`, `tests/agents/runtime/test_provider.py`, `tests/agents/tools/test_query_clean_jobs.py`, plus `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, `docs/MVP_Technical_Design.md`, `docs/Completion_Reports.md`, `docs/Manual_Verification_Guide.md`.
+- **Commands:** `uv run pytest tests/agents/runtime/test_provider.py tests/agents/tools/test_query_clean_jobs.py -q`; `uv run pytest -q`.
+- **Build & test:** focused provider/tool suite `16 passed`; full standard suite `297 passed, 19 deselected, 4 subtests passed`.
+- **Manual verification:** confirm config has independent `agent.react` and `agent.sql_generation` blocks; confirm `agent_factory()` uses `build_model("react")`; confirm `query_clean_jobs.generate_sql()` uses `build_model("sql_generation")`; with maintainer credentials and seeded DB, run `generate_sql("List the AI Engineer jobs that require Python, sorted by salary descending.")`.
+- **Risks:** live Groq behavior still requires maintainer credentials; no prompt, schema, eval fixture, API, or UI changes were made for this split.
+- **Follow-ups:** none from the config split itself; existing salary-sort prompt-adherence and maintainer live-verification notes remain tracked in `Known_Issues.md`.

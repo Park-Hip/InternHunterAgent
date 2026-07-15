@@ -51,7 +51,7 @@ def _content_to_text(content: str | list[Any]) -> str:
 async def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
     schema_context = load_schema_context()
     sql_generation_prompt = load_sql_generation_prompt()
-    model = AgentProvider().build_model()
+    model = AgentProvider().build_model("sql_generation")
 
     response = await model.ainvoke(
         [HumanMessage(content=f"{sql_generation_prompt}\n\n{schema_context}\n\nQuestion: {question}")],

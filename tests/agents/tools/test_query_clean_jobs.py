@@ -194,6 +194,21 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(await generate_sql("any question"), "")
 
+    @patch("src.agents.tools.query_clean_jobs.load_sql_generation_prompt", return_value="PROMPT")
+    @patch("src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA")
+    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
+    async def test_generate_sql_uses_sql_generation_profile(
+        self, mock_provider, _mock_schema_context, _mock_sql_prompt
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import generate_sql
+
+        fake_model = MagicMock()
+        fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 1"))
+        mock_provider.return_value.build_model.return_value = fake_model
+
+        self.assertEqual(await generate_sql("any question"), "SELECT 1")
+        mock_provider.return_value.build_model.assert_called_once_with("sql_generation")
+
 
 if __name__ == "__main__":
     unittest.main()

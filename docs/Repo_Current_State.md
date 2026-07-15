@@ -1,7 +1,7 @@
 ## Current branch
-`fix/sql-generation-reasoning-effort` - a narrow backend fix stacked on the **T0018.3 Editorial streaming chat UI** branch.
+`fix/split-react-sql-llm-config` - a narrow backend config split stacked on the **SQL-generation reasoning-effort hotfix** and the T0018.3 Editorial streaming chat UI branch.
 
-This branch is stacked on T0018.3 and keeps that UI work intact. It adds the surgical SQL-generation fix for the 2026-07-15 `[HIGH]` known issue: `generate_sql()` now builds only the hidden SQL-generation model with `reasoning_effort: "none"` from `agent.query.sql_generation_reasoning_effort`, while the main ReAct agent's default `build_model()` path remains unchanged.
+This branch is stacked on T0018.3 and keeps that UI work intact. It migrates the prior SQL-generation reasoning-effort hotfix from a per-call override to two explicit model profiles: `agent.react` for the outer conversational ReAct agent and `agent.sql_generation` for the nested SQL-generation call. The SQL-generation profile now owns `reasoning_effort: "none"` directly; `agent.query.sql_generation_reasoning_effort` is removed.
 
 - Do not rebase this branch onto `main` without an explicit maintainer decision. `main` has historically lagged the M12/M13/T0016 work; use the ticket branch topology recorded here and in `Tickets.md`.
 - The M15 behavior work is not part of this branch unless explicitly merged later. Anything about `Agent_Behavior_Spec.md`, the scenario matrix, or `behavior_glossary` belongs to that parallel track.
@@ -24,7 +24,7 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **M17** (T0017.1–.2) — Streaming response delivery: runtime `astream` + no-leak filter, streaming service + `POST /api/v1/agent/chat/stream` SSE endpoint.
 
 ## In progress / next
-**This branch = SQL-generation reasoning-effort fix complete, stacked on T0018.3.** T0016, T0017, T0018.1, T0018.2, and T0018.3 are complete underneath it:
+**This branch = ReAct/SQL-generation LLM config split, stacked on the SQL-generation reasoning-effort hotfix and T0018.3.** T0016, T0017, T0018.1, T0018.2, and T0018.3 are complete underneath it:
 
 - **T0016.1 - CORS middleware:** `config/settings.yaml` carries `api.cors`, and `src/api/app.py` registers credential-less `CORSMiddleware`.
 - **T0016.2 - Rate limiting and friendly busy path:** `slowapi` is installed, `api.rate_limit` defaults to `"15/minute"`, chat is limited, health is not, and provider pressure maps to a public-safe busy response.
@@ -35,9 +35,9 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **T0018.1 - Go-live glue:** `generate_agent_response(...)` and `stream_agent_response(...)` mint UUID4 session ids when omitted; `config/settings.yaml` records `api.demo.data_snapshot_date`; `GET /api/v1/ready` runs `SELECT 1` outside the chat limiter and returns readiness plus the snapshot date.
 - **T0018.2 - Same-origin static serving + frame protection:** `src/api/app.py` mounts `src/api/static/` at `/` after API/docs routes and injects `X-Frame-Options: DENY` with a pure-ASGI middleware.
 - **T0018.3 - Editorial streaming chat UI:** `src/api/static/index.html` + `styles.css` + `app.js` replace the placeholder with the vanilla, Editorial-styled demo page (system serif stack, hairline rules, restrained vermilion accent, light theme only). It consumes `POST /api/v1/agent/chat/stream` via `fetch()` + a `ReadableStream` reader, renders tokens one-by-one, reads the disclaimer snapshot date from `GET /api/v1/ready`, ships 4 send-on-click honesty chips, pins the server session id and reuses it on later turns, shows a `view-trace` link only when `trace_url` is non-null, and degrades mid-stream `error` events to a friendly bubble and pre-stream 400/429 to a toast. No backend change.
-- **SQL-generation reasoning-effort fix - Backend hotfix:** `AgentProvider.build_model()` has an optional per-call `reasoning_effort` override. `query_clean_jobs.generate_sql()` reads `agent.query.sql_generation_reasoning_effort: "none"` and applies it only to the mechanical SQL-generation call, preventing qwen hidden-reasoning token exhaustion without disabling the main agent's reasoning.
+- **Split ReAct/SQL-generation LLM config - Backend hotfix:** `AgentProvider.build_model("react")` builds the outer ReAct model from `agent.react`; `AgentProvider.build_model("sql_generation")` builds the nested SQL-generation model from `agent.sql_generation`. Both profiles expose the same model fields, and only the SQL-generation profile sets `reasoning_effort: "none"`.
 
-**Status (2026-07-15):** T0016.1–T0016.4, T0017.1–T0017.2, T0018.1, T0018.2, T0018.3, and the SQL-generation reasoning-effort hotfix are complete on this stack. Open issues live in [`Known_Issues.md`](Known_Issues.md); resolved/background items in [`Resolved_Issues.md`](Resolved_Issues.md).
+**Status (2026-07-15):** T0016.1–T0016.4, T0017.1–T0017.2, T0018.1, T0018.2, T0018.3, the SQL-generation reasoning-effort hotfix, and the ReAct/SQL-generation config split are complete on this stack. Open issues live in [`Known_Issues.md`](Known_Issues.md); resolved/background items in [`Resolved_Issues.md`](Resolved_Issues.md).
 
 **Milestone map (see `Tickets.md`):** T0013 freeze → T0016 security posture → T0017 streaming response delivery → T0018 clickable demo UI + go-live.
 
@@ -193,9 +193,10 @@ Practical commands from the repository layout:
 - `docker compose -f infra/docker-compose.yaml up --build` (Langfuse observability stack)
 
 ## Build/test status
-Current-branch (T0018.3 + SQL-generation reasoning-effort hotfix) results only. Earlier per-ticket logs (T0011–T0018.2) are archived in [`archive/Repo_State_History.md`](archive/Repo_State_History.md).
+Current-branch (T0018.3 + SQL-generation reasoning-effort hotfix + ReAct/SQL-generation config split) results only. Earlier per-ticket logs (T0011–T0018.2) are archived in [`archive/Repo_State_History.md`](archive/Repo_State_History.md).
 
-- `uv run pytest tests/agents/runtime/test_provider.py tests/agents/tools/test_query_clean_jobs.py -q` (SQL-generation reasoning-effort hotfix) → `15 passed`.
+- `uv run pytest tests/agents/runtime/test_provider.py tests/agents/tools/test_query_clean_jobs.py -q` (ReAct/SQL-generation config split) -> `16 passed`.
+- `uv run pytest -q` (full standard suite after ReAct/SQL-generation config split) -> `297 passed, 19 deselected, 4 subtests passed`.
 - `uv run pytest tests/api/test_static_serving.py -q` (static-serving regression — the UI keeps the `InternHunter` string this test asserts on `GET /`) → `4 passed`.
 - `uv run pytest tests/api -q` (API route suite — the UI is static assets only; backend untouched) → `33 passed`.
 - `uv run pytest -q` (full standard suite) → `296 passed, 19 deselected, 4 subtests passed` in ~7s.

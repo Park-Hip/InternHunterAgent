@@ -1,11 +1,11 @@
 ## Current branch
-`feature/t0017.2-sse-endpoint` - the **T0017.2 Streaming service + SSE endpoint** branch.
+`feature/t0018.2-static-serving` - the **T0018.2 Same-origin static serving + frame protection** branch.
 
-This branch is stacked on T0017.1 (`34f2363`). T0017.2 exposes the runtime-only stream over a new SSE endpoint; UI work, browser consumption, session-ID hardening, disclaimers, readiness probes, and deploy plumbing remain out of scope for this branch.
+This branch is stacked on T0018.1. T0018.2 lands the wiring the clickable demo UI needs before any real UI content: a same-origin FastAPI static mount, a placeholder `index.html`, and a pure-ASGI `X-Frame-Options: DENY` frame guard that does not wrap or buffer SSE responses.
 
 - Do not rebase this branch onto `main` without an explicit maintainer decision. `main` has historically lagged the M12/M13/T0016 work; use the ticket branch topology recorded here and in `Tickets.md`.
 - The M15 behavior work is not part of this branch unless explicitly merged later. Anything about `Agent_Behavior_Spec.md`, the scenario matrix, or `behavior_glossary` belongs to that parallel track.
-- Everything for this branch's current work is in [`Tickets.md`](Tickets.md) -> **T0017** and the T0017 completion entries in [`Completion_Reports.md`](Completion_Reports.md).
+- Everything for this branch's current work is in [`Tickets.md`](Tickets.md) -> **T0018.2** and the T0018.2 manual checklist in [`Manual_Verification_Guide.md`](Manual_Verification_Guide.md).
 
 ### Historical branch snapshot (T0014)
 `fix/known-issues-hardening` — the **Milestone 14 (Pre-Deploy Known-Issue Fixes)** branch.
@@ -29,22 +29,30 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **M13** (T0013.1–.5) — Schema Enrichment & v1 Freeze: `tech_stack` rebuilt against an external vocabulary (audit coverage 58% → 89%); `job_level`, `listing_expires_on`, and `created_on` exposed to the agent; the enriched **16-column** v1 contract recorded in [`Schema_Contract.md`](Schema_Contract.md) and enforced by prompt-freeze guards. **This is this branch's base (`51913f6`).**
 
 ## In progress / next
-**This branch = T0017.2 complete.** T0016 and T0017.1 are complete underneath it:
+**This branch = T0018.2 complete.** T0016, T0017, and T0018.1 are complete underneath it:
 
 - **T0016.1 - CORS middleware:** `config/settings.yaml` carries `api.cors`, and `src/api/app.py` registers credential-less `CORSMiddleware`.
 - **T0016.2 - Rate limiting and friendly busy path:** `slowapi` is installed, `api.rate_limit` defaults to `"15/minute"`, chat is limited, health is not, and provider pressure maps to a public-safe busy response.
 - **T0016.3 - Request input hardening:** `api.max_query_chars: 2000` is recorded in config, while `src/api/schemas.py` currently enforces the matching static `DEFAULT_MAX_QUERY_CHARS = 2000` Pydantic cap. If this value changes later, update both or introduce a deliberate config-backed schema loader.
 - **T0016.4 - `/docs` exposure and headers decision:** `api.docs_enabled: true` keeps `/docs`, `/redoc`, and `/openapi.json` public for the portfolio demo; `api.docs_enabled: false` disables all three. No security-header middleware is added until FastAPI serves a same-origin HTML UI.
+- **T0017.1 - Runtime streaming + no-leak filter:** `AgentRuntime.astream(...)` emits filtered token events plus trailing metadata without exposing tool internals.
+- **T0017.2 - Streaming service + SSE endpoint:** `POST /api/v1/agent/chat/stream` emits the public `session` -> `token`* -> `metadata`/`error` -> `done` contract.
+- **T0018.1 - Go-live glue:** `generate_agent_response(...)` and `stream_agent_response(...)` mint UUID4 session ids when omitted; `config/settings.yaml` records `api.demo.data_snapshot_date`; `GET /api/v1/ready` runs `SELECT 1` outside the chat limiter and returns readiness plus the snapshot date.
+- **T0018.2 - Same-origin static serving + frame protection:** `src/api/app.py` mounts `src/api/static/` at `/` after API/docs routes and injects `X-Frame-Options: DENY` with a pure-ASGI middleware; `src/api/static/index.html` is only a placeholder for T0018.3.
 
-**Status update (2026-07-14):** T0016.1-T0016.4 and T0017.1 are complete underneath this branch, and T0017.2 is complete on top. Remaining open issues live in [`Known_Issues.md`](Known_Issues.md), resolved/background items live in [`Resolved_Issues.md`](Resolved_Issues.md), and documentation hygiene findings from the T0016 review live in [`Documentation_Hygiene_Review_T0016.md`](Documentation_Hygiene_Review_T0016.md).
+**Status update (2026-07-15):** T0016.1-T0016.4, T0017.1, T0017.2, T0018.1, and T0018.2 are complete on this stack. Remaining open issues live in [`Known_Issues.md`](Known_Issues.md), resolved/background items live in [`Resolved_Issues.md`](Resolved_Issues.md), and documentation hygiene findings from the T0016 review live in [`Documentation_Hygiene_Review_T0016.md`](Documentation_Hygiene_Review_T0016.md).
 
-**Milestone map (see `Tickets.md`):** T0013 freeze -> T0014 known-issue fixes -> T0016 security posture -> T0017 streaming response delivery (this branch) -> T0018 clickable demo UI + go-live placeholder.
+**Milestone map (see `Tickets.md`):** T0013 freeze -> T0014 known-issue fixes -> T0016 security posture -> T0017 streaming response delivery -> T0018 clickable demo UI + go-live.
 
 **T0017.1 status (2026-07-13):** complete on `feature/t0017.1-runtime-streaming`. `AgentRuntime.astream(...)` now yields transport-agnostic token events from the stable `agent.astream(..., stream_mode="messages")` path, filters to non-empty model-node chunks without `tool_call_chunks`, and emits one trailing metadata event after Langfuse flush. `agent.groq.streaming` is enabled, and the system prompt now tells the model not to narrate before tool calls. The live Groq/Postgres probe is blocked in this sandbox and tracked in [`Known_Issues.md`](Known_Issues.md).
 
 **T0017.2 status (2026-07-14):** complete on `feature/t0017.2-sse-endpoint`. `stream_agent_response(...)` emits the semantic `session` -> `token`* -> `metadata`/`error` -> `done` sequence, and `POST /api/v1/agent/chat/stream` exposes it as SSE while preserving the existing one-shot endpoint.
 
-**Next recommended ticket:** **T0018** clickable demo UI + go-live scoping, including browser stream consumption, session-ID hardening, disclaimer, readiness probe, CORS origin/deploy decisions, and topology.
+**T0018.1 status (2026-07-14):** complete on `feature/t0018.1-go-live-glue`. Server-generated session ids are UUID4s in both one-shot and streaming paths when clients omit `session_id`; the demo snapshot date lives in `api.demo.data_snapshot_date`; `GET /api/v1/ready` mirrors the query executor's `session_factory()` + `text("SELECT 1")` DB check and is included outside `slowapi` route decoration.
+
+**T0018.2 status (2026-07-15):** complete on `feature/t0018.2-static-serving`. `create_app()` registers a pure-ASGI frame guard, includes API/docs routes first, then mounts `StaticFiles(directory=src/api/static, html=True)` at `/`; the placeholder root page is deliberately minimal and carries no CSS/JS/UI behavior.
+
+**Next recommended ticket:** **T0018.3** Editorial streaming chat UI.
 
 ### Historical in-progress snapshot (T0014)
 **Historical T0014 snapshot — Pre-Deploy Known-Issue Fixes** ([`Tickets.md`](Tickets.md) -> T0014). Scope was **only** the deploy-facing items in [`Known_Issues.md`](Known_Issues.md) section "Config, startup & deployment", deliberately kept separate from the broader deploy-hardening body. Both sub-tickets are complete:
@@ -112,7 +120,9 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |   |   |-- tracing/
 |   |   `-- service.py
 |   |-- api/
-|   |   `-- routes/
+|   |   |-- routes/
+|   |   `-- static/
+|   |       `-- index.html
 |   |-- core/
 |   |   |-- checkpointer.py
 |   |   |-- config.py
@@ -146,6 +156,7 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |   |   |-- runtime/
 |   |   `-- tools/
 |   |-- api/
+|   |   `-- test_static_serving.py
 |   `-- services/
 |       `-- query/
 |-- pyproject.toml
@@ -206,6 +217,16 @@ Practical commands from the repository layout:
 - `docker compose -f infra/docker-compose.yaml up --build` (Langfuse observability stack)
 
 ## Build/test status
+- Command run: `uv run pytest tests/api/test_static_serving.py -q` (T0018.2 focused static-serving tests)
+- Result: `4 passed`.
+- Command run: `uv run pytest tests/api/test_stream.py -q` (T0018.2 SSE regression check)
+- Result: `5 passed`.
+- Command run: `uv run pytest tests/api -q` (T0018.2 API route suite)
+- Result: `33 passed`.
+- Command run: `uv run pytest -q` (T0018.2 full standard suite)
+- Result: `286 passed, 7 skipped, 19 deselected, 4 subtests passed`; the 7 skips are the existing eval fixture DB reachability skips because Postgres on `localhost:5433` is not running in this sandbox.
+- Command run: `uv run ruff check src/api/app.py tests/api/test_static_serving.py`
+- Result: `All checks passed!`.
 - Command run: `pytest tests/agents/runtime/test_react_agent.py -q`
 - Result: failed because `pytest` is not on PATH in this shell; rerun through `uv run`.
 - Command run: `uv run pytest tests/agents/runtime/test_react_agent.py -q` (T0017.1 focused runtime stream tests)
@@ -228,6 +249,14 @@ Practical commands from the repository layout:
 - Result: `18 passed`.
 - Command run: `uv run ruff check src/api/schemas.py tests/api/test_query.py`
 - Result: `All checks passed!`.
+- Command run: `uv run pytest -q tests/agents/test_service.py tests/api/test_ready.py tests/api/test_stream.py` (T0018.1 focused go-live glue tests)
+- Result: `11 passed`.
+- Command run: `uv run ruff check src/agents/service.py src/api/routes/health.py src/api/schemas.py tests/agents/test_service.py tests/api/test_ready.py tests/api/test_stream.py`
+- Result: `All checks passed!`.
+- Command run: `uv run pytest -q tests/api` (T0018.1 API route suite)
+- Result: `29 passed`.
+- Command run: `uv run pytest -q` (T0018.1 full standard suite)
+- Result: `282 passed, 7 skipped, 19 deselected, 4 subtests passed`; the 7 skips are the existing eval fixture DB reachability skips because Postgres on `localhost:5433` is not running in this sandbox.
 - Command run: `uv run pytest -q tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_cors.py tests/api/test_startup_config.py`
 - Result: `16 passed`.
 - Command run: `uv run pytest -q tests/core/test_config.py tests/api/test_startup_config.py` (T0014.2 smoke check after docs-only register sweep)
@@ -382,7 +411,7 @@ register so it stays focused on what is still open). A full per-module logic rev
 (open) / `Resolved_Issues.md` (closed).
 
 ## Next recommended ticket
-Current recommendation from this branch: no further T0016 ticket is recorded. The next roadmap item in `docs/Tickets.md` is the T0017 Clickable Demo placeholder; T0011.5 baseline calibration remains open separately when maintainer credentials are available.
+Current recommendation from this branch: **T0018.3 Editorial streaming chat UI**. T0011.5 baseline calibration remains open separately when maintainer credentials are available.
 
 ### Historical roadmap note
 T0014 is now closed on `fix/known-issues-hardening`: T0014.1 removed import-time config validation fragility, and T0014.2 reconciled the known-issues register/archive. The qwen item remains open only as a final pre-baseline confirmation, so the next recommended ticket is **T0011.5 â€” threshold calibration + baseline report** once maintainer credentials are available.

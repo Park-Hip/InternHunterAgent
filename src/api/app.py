@@ -1,12 +1,15 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from starlette.datastructures import MutableHeaders
 
 from src.api.routes import query, health
 from src.agents.runtime.factory import agent_factory
@@ -14,6 +17,26 @@ from src.agents.runtime.react_agent import AgentRuntime
 from src.core.checkpointer import build_checkpointer, build_checkpointer_pool
 from src.core.config import load_settings, settings
 from src.core.errors import BUSY_MESSAGE
+
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+class FrameGuardMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_header(message):
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message)["X-Frame-Options"] = "DENY"
+            await send(message)
+
+        await self.app(scope, receive, send_with_header)
 
 
 @asynccontextmanager
@@ -99,6 +122,7 @@ def create_app(
         allow_methods=resolved_cors["allowed_methods"],
         allow_headers=resolved_cors["allowed_headers"],
     )
+    app.add_middleware(FrameGuardMiddleware)
 
     limiter = Limiter(key_func=get_remote_address)
     app.state.limiter = limiter
@@ -110,6 +134,7 @@ def create_app(
         prefix="/api/v1",
     )
     app.include_router(health.router, prefix="/api/v1")
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
     return app
 
 

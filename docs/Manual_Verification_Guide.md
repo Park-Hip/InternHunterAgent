@@ -926,3 +926,59 @@ T0014.2: Known-Issues register housekeeping
   ```
   Expect HTTP 400 with `{"detail":"Query must not be empty."}`.
 * Confirm response headers on the streaming endpoint include `content-type: text/event-stream`, `cache-control: no-cache`, and `x-accel-buffering: no`.
+
+## T0018.1: Go-live glue - server session IDs, data disclaimer, DB readiness probe
+
+* Run the focused go-live glue tests:
+  * `uv run pytest -q tests/agents/test_service.py tests/api/test_ready.py tests/api/test_stream.py`
+  * Confirm one-shot and streaming requests without `session_id` return a valid UUID4, `/api/v1/ready` surfaces the configured snapshot date, readiness failure maps to HTTP 503, and readiness is not rate-limited.
+* Run the broader API route suite:
+  * `uv run pytest -q tests/api`
+  * Confirm existing chat, stream, rate-limit, CORS, docs, and readiness routes pass together.
+* Start the API with local Postgres running:
+  * `docker compose up -d postgres`
+  * `uv run uvicorn src.api.app:app --reload`
+* Check liveness remains unchanged:
+  * `curl -i http://127.0.0.1:8000/api/v1/health`
+  * Confirm HTTP 200 with the existing health JSON shape.
+* Check readiness:
+  * `curl -i http://127.0.0.1:8000/api/v1/ready`
+  * Confirm HTTP 200 with `{"status":"ok","data_snapshot_date":"2026-07-14"}` or the current configured date in `config/settings.yaml`.
+* Stop Postgres or point `DATABASE_URL` at an unreachable database, restart the API, and call `/api/v1/ready` again.
+  * Confirm it returns HTTP 503 with `{"status":"error"}`.
+* Call `/api/v1/ready` repeatedly faster than `api.rate_limit`.
+  * Confirm readiness remains unthrottled; only chat routes should be limited.
+* For demo session behavior, send a first chat or stream request without `session_id`, note the returned server-issued UUID4, then reuse that value on the next turn.
+  * Confirm the server accepts the reused id and preserves the normal response/stream shape.
+
+## T0018.2: Same-origin static serving + frame protection
+
+* Run the focused static-serving tests:
+  * `uv run pytest tests/api/test_static_serving.py -q`
+  * Confirm `/` serves the placeholder page, `/docs` is not shadowed, `/api/v1/ready` is not shadowed, and `/` includes `X-Frame-Options: DENY`.
+* Run the streaming regression test:
+  * `uv run pytest tests/api/test_stream.py -q`
+  * Confirm the SSE endpoint still returns the expected event sequence, proving the frame-guard middleware does not buffer or break streaming.
+* Run the broader API route suite:
+  * `uv run pytest tests/api -q`
+  * Confirm existing chat, stream, rate-limit, CORS, docs, readiness, and static routes pass together.
+* Start the API with local Postgres running:
+  * `docker compose up -d postgres`
+  * `uv run uvicorn src.api.app:app --reload`
+* Open `http://127.0.0.1:8000/`.
+  * Confirm the page shows the `InternHunter` placeholder and says the streaming chat interface ships in T0018.3.
+* Inspect the frame-protection header:
+  * `curl -sI http://127.0.0.1:8000/ | grep -i x-frame-options`
+  * Confirm it shows `x-frame-options: DENY`.
+* Open `http://127.0.0.1:8000/docs`.
+  * Confirm Swagger UI still loads and is not shadowed by the static mount.
+* Check readiness still resolves under `/api/v1`:
+  * `curl -s http://127.0.0.1:8000/api/v1/ready`
+  * Confirm it still returns the readiness JSON.
+* Stream a live tool-using query:
+  ```bash
+  curl -N -X POST http://127.0.0.1:8000/api/v1/agent/chat/stream \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":\"How many AI Engineer jobs need Python?\"}"
+  ```
+  Confirm tokens still stream, proving the pure-ASGI frame guard did not regress SSE.

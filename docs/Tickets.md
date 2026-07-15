@@ -1,5 +1,36 @@
-### T0000: Milestone 0 - Foundation
-**Objective:** Establish the stable local base for the MVP by wiring FastAPI, config loading, logging, and a health check. This ticket proves the application can boot locally with a minimal, inspectable foundation.
+# InternHunter — Tickets & Roadmap
+
+Ticket specs and delivery sequence for the MVP. Each entry is the **plan** for one ticket
+(Objective / In Scope / Out of Scope); what a ticket *actually did* lives in
+[`Completion_Reports.md`](Completion_Reports.md), and the current snapshot lives in
+[`Repo_Current_State.md`](Repo_Current_State.md).
+
+**Legend:** ✅ Done · 🔨 In progress · ▶ Next · ⏸ Parallel / paused · 📋 Backlog
+
+| M | Ticket | Milestone | Status | Goal |
+|---|--------|-----------|:--:|------|
+| 0–5 | T0000–05 | Foundation → Hardening | ✅ | FastAPI boot, request flow, ReAct runtime, Langfuse, tracing, hardening |
+| 6 | T0006 | First Real SQL Tool | ✅ | Read-only `query_clean_jobs`; answer-only API |
+| 7 | T0007 | Conversation Memory | ✅ | Postgres checkpointer, session→thread, trim cap |
+| 8 | T0008 | System Prompt & Persona | ✅ | Resumi persona, honesty rules, schema → config |
+| 9 | T0009 | Data Ingestion (VietnamWorks) | ✅ | `raw_jobs` + `clean_jobs`, idempotent loader |
+| 10 | T0010 | Pre-deploy Hardening | ✅ | Typed errors, single-table allowlist, off-loop LLM |
+| 11 | T0011 | Model Evaluation Harness | ✅ ⚠ | DeepEval judge, fixture DB, 3-seam metrics, writeback |
+| 12 | T0012 | Hardening & Known-Issue Fixes | ✅ | qwen leak fix, metric unblock, `trace_url`, fallbacks |
+| 13 | T0013 | Pre-Deploy Refinement | ✅ | `tech_stack` rebuild, 16-col v1 schema freeze |
+| 14 | T0014 | Pre-Deploy Known-Issue Fixes | ✅ | Config-load robustness, register housekeeping |
+| 15 | T0015 | Agent Behavior Spec & Scenario Matrix | ⏸ | Parallel track — not on this branch |
+| 16 | T0016 | Security Posture | ✅ | CORS, rate limit, input cap, `/docs` decision |
+| 17 | T0017 | Streaming Response Delivery | ✅ | `astream` + no-leak filter, SSE endpoint |
+| 18 | T0018 | Clickable Demo (UI + go-live) | 🔨 | .1–.3 done · **▶ .4 next** (deploy) |
+| — | Backlog | Deploy hardening, ingestion cron | 📋 | Unscheduled — seeds future tickets |
+
+> ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on maintainer credentials — see [`Known_Issues.md`](Known_Issues.md).
+
+---
+
+## T0000: Milestone 0 - Foundation — ✅ Done
+**Objective:** Establish the stable local base for the MVP by wiring FastAPI, config loading, logging, and a health check.
 **In Scope:** 
 * Update `pyproject.toml` with the minimum runtime and test dependencies needed for FastAPI, Uvicorn, config loading, logging, and tests.
 * Write `src/api/app.py` to create the FastAPI app and include the API routers.
@@ -14,8 +45,8 @@
 * Any Langfuse Docker stack or tracing callbacks
 * Auth, background jobs, and frontend work
 
-### T0001: Milestone 1 - Runnable Request Flow
-**Objective:** Prove one end-to-end request path from FastAPI into an application service and back to the API. This ticket should return a structured answer payload without introducing tools or additional agent complexity.
+## T0001: Milestone 1 - Runnable Request Flow — ✅ Done
+**Objective:** Prove one end-to-end request path from FastAPI into an application service and back to the API.
 **In Scope:** 
 * Update `src/api/schemas.py` to define the request and response models for the chat endpoint.
 * Update `src/api/routes/query.py` to expose `POST /api/v1/agent/chat`.
@@ -29,8 +60,8 @@
 * Langfuse tracing integration beyond returning placeholder metadata
 * Memory, retrieval, auth, or multi-agent behavior
 
-### T0002: Milestone 2 - ReAct Agent Runtime
-**Objective:** Add the ReAct-shaped agent runtime behind the request flow so the model execution lives outside the API layer. This ticket should make prompt and provider wiring easy to inspect without adding real tools yet.
+## T0002: Milestone 2 - ReAct Agent Runtime — ✅ Done
+**Objective:** Add the ReAct-shaped agent runtime behind the request flow so the model execution lives outside the API layer.
 **In Scope:** 
 * Write or update `src/agents/runtime/factory.py` to build the LangChain agent.
 * Write or update `src/agents/runtime/react_agent.py` to execute the agent runtime.
@@ -44,8 +75,8 @@
 * Langfuse deployment or tracing callbacks
 * Route-layer agent logic or prompt construction
 
-### T0003: Milestone 3 - Self-Hosted Langfuse
-**Objective:** Stand up a local Langfuse stack so tracing can be added without depending on external infrastructure. This ticket establishes the self-hosted observability baseline for local development.
+## T0003: Milestone 3 - Self-Hosted Langfuse — ✅ Done
+**Objective:** Stand up a local Langfuse stack so tracing can be added without depending on external infrastructure.
 **In Scope:** 
 * Write `docker/docker-compose.yaml` for Langfuse web, worker, Postgres, ClickHouse, Redis, and object storage.
 * Add `.env.example` entries for Langfuse host URLs and API keys.
@@ -57,7 +88,7 @@
 * Memory, retrieval, auth, or UI work
 * Production deployment hardening or scaling
 
-### T0004: Milestone 4 - Tracing Integration
+## T0004: Milestone 4 - Tracing Integration — ✅ Done
 **Objective:** Attach Langfuse tracing to the agent execution path so each request can produce a visible trace. The tracing layer should stay isolated from the API route layer as much as possible.
 **In Scope:** 
 * Update `src/agents/tracing/langfuse.py` to build the Langfuse callback handler and trace metadata helper.
@@ -71,8 +102,8 @@
 * Additional tracing providers or custom analytics
 * Multi-agent routing or background jobs
 
-### T0005: Milestone 5 - Hardening
-**Objective:** Make the MVP predictable by tightening error handling, timeouts, configuration checks, and test coverage. This ticket should improve developer feedback without changing the app's overall shape.
+## T0005: Milestone 5 - Hardening — ✅ Done
+**Objective:** Make the MVP predictable by tightening error handling, timeouts, configuration checks, and test coverage.
 **In Scope:** 
 * Update `src/core/config.py` and related runtime code to fail clearly on invalid configuration.
 * Update `src/api/routes/query.py` and `src/agents/service.py` to produce consistent error handling and response behavior.
@@ -85,7 +116,7 @@
 * New agent capabilities or extra tools
 * Auth, frontend work, or deployment pipelines
 
-### T0006: Milestone 6 - First Real SQL Tool
+## T0006: Milestone 6 - First Real SQL Tool — ✅ Done
 **Objective:** Give the ReAct agent its first production tool: a read-only `query_clean_jobs` tool that answers real questions against a Postgres `clean_jobs` table. SQL execution must stay isolated under `src/agents/tools/`, the LLM must never get raw SQL execution, and the public API must remain answer-only. This milestone is broken into ten independently mergeable sub-tickets (T0006.1-T0006.10), ordered by dependency.
 **In Scope:**
 * Standing up local Postgres (docker-compose) plus a SQLAlchemy session factory and `DATABASE_URL` config.
@@ -103,7 +134,7 @@
 * Memory, retrieval, auth, or multi-agent routing.
 * Schema columns beyond `title`, `company`, `description`, `tech_stack`.
 
-#### T0006.1: DB Foundation - Postgres, dependencies, settings, session factory
+### T0006.1: DB Foundation - Postgres, dependencies, settings, session factory
 **Objective:** Stand up the missing database foundation that later sub-tickets assume exists: a local Postgres instance, SQLAlchemy/psycopg dependencies, `DATABASE_URL` config, a session factory, and a seeded `clean_jobs` table.
 **In Scope:**
 * Add `sqlalchemy>=2.0` and `psycopg[binary]>=3.2` to `pyproject.toml`.
@@ -116,7 +147,7 @@
 * Query DTOs, validator, executor, or tool adapter (later sub-tickets).
 * Any agent runtime or prompt changes.
 
-#### T0006.2: Query result models
+### T0006.2: Query result models
 **Objective:** Verify and lock down the internal query result DTOs that the formatter, executor, and tool adapter will share.
 **In Scope:**
 * Review `src/services/query/models.py` (`TableArtifact`, `QueryRefusal`, `QueryToolResult`) against the design doc; trim whitespace/cleanup only.
@@ -125,7 +156,7 @@
 * New fields or models beyond what the design doc already specifies.
 * Formatter, validator, or executor logic.
 
-#### T0006.3: Deterministic table formatter
+### T0006.3: Deterministic table formatter
 **Objective:** Finish the deterministic row-to-table format
 
 * Implement/finish `format_rows(rows: list[dict]) -> TableArtifact` in `src/services/query/table_formatter.py`.
@@ -135,7 +166,7 @@
 * Schema context, validator, or executor work.
 * Any LLM-facing prompt changes.
 
-#### T0006.4: Schema context + SQL-generation prompt
+### T0006.4: Schema context + SQL-generation prompt
 **Objective:** Give the LLM a fixed, hardcoded description of the `clean_jobs` schema and a dedicated prompt for generating SQL from it, so SQL generation stays scoped to the four advertised columns.
 **In Scope:**
 * Create `src/services/query/schema_context.py` with `build_clean_jobs_schema_context()` describing `title`, `company`, `description`, `tech_stack` only.
@@ -145,7 +176,7 @@
 * The validator, executor, or tool adapter.
 * Changes to the main agent system prompt (T0006.8).
 
-#### T0006.5: SQL validator (deterministic, read-only)
+### T0006.5: SQL validator (deterministic, read-only)
 **Objective:** Add a deterministic safety gate that rejects unsafe or out-of-scope SQL before it ever reaches the database.
 **In Scope:**
 * Create `src/services/query/sql_validator.py` exposing `validate_sql(sql: str) -> ValidationResult` (`valid`, `sql`, `reason`).
@@ -155,7 +186,7 @@
 * Actual SQL execution.
 * Schema/prompt work from T0006.4.
 
-#### T0006.6: SQL executor (sync, threadpool-friendly)
+### T0006.6: SQL executor (sync, threadpool-friendly)
 **Objective:** Execute validator-approved SQL against Postgres in a read-only transaction and translate database failures into a tool-friendly error instead of a process crash.
 **In Scope:**
 * Create `src/services/query/executor.py` with `execute_validated_sql(sql: str) -> list[dict]`, using `session_factory` and a read-only transaction.
@@ -165,7 +196,7 @@
 * The LangChain tool adapter itself (T0006.7).
 * Async wrapping (handled inside the tool, not the executor).
 
-#### T0006.7: `query_clean_jobs` LangChain tool adapter
+### T0006.7: `query_clean_jobs` LangChain tool adapter
 **Objective:** Wire schema context, SQL generation, validation, execution, and formatting into a single `@tool`-decorated adapter that returns a plain-string answer to the agent.
 **In Scope:**
 * Create `src/agents/tools/query_clean_jobs.py` following the `@tool` pattern in `src/agents/tools/time.py`; input `question: str`, output a natural-language answer string.
@@ -176,7 +207,7 @@
 * Registering the tool in the agent factory (T0006.8).
 * A second LLM call to narrate the answer.
 
-#### T0006.8: Register tool in agent runtime + strengthen system prompt
+### T0006.8: Register tool in agent runtime + strengthen system prompt
 **Objective:** Make `query_clean_jobs` available to the agent and force its use for job-data questions, while leaving the clock tool path untouched.
 **In Scope:**
 * Add `query_clean_jobs` to the `tools=[...]` list in `src/agents/runtime/factory.py`.
@@ -185,7 +216,7 @@
 * Any change to the tool's internal pipeline (T0006.7).
 * New tools beyond `query_clean_jobs` and the existing clock tool.
 
-#### T0006.9: Keep public API answer-only
+### T0006.9: Keep public API answer-only
 **Objective:** Gate-check that the public API still returns only `answer`, `trace_id`, and `trace_url` with no SQL or table leakage, now that a real data tool exists.
 **In Scope:**
 * Audit `src/agents/service.py` and `tests/api/test_query.py` for response shape.
@@ -194,7 +225,7 @@
 * Any new endpoint or response field.
 * Tool, validator, or executor changes.
 
-#### T0006.10: End-to-end manual verification
+### T0006.10: End-to-end manual verification
 **Objective:** Prove the full milestone works end-to-end on a running stack; no code changes expected.
 **In Scope:**
 * Verify `docker compose up -d` brings up healthy Postgres and the API starts cleanly.
@@ -203,7 +234,7 @@
 **Out of Scope:**
 * Any fix beyond what's needed to make the checklist pass; larger issues become follow-up tickets.
 
-### T0007: Milestone 7 - Conversation Memory (short-term, session-scoped, Postgres-backed)
+## T0007: Milestone 7 - Conversation Memory (short-term, session-scoped, Postgres-backed) — ✅ Done
 **Objective:** Give the agent short-term, session-scoped memory so a user can refine questions across turns within one conversation, with the conversation persisted in the application Postgres so it survives a restart and stays coherent across multiple instances. Memory must use LangChain/LangGraph's **native** checkpointer and **native** message trimming — no bespoke storage or trimming logic. Memory stays strictly within-conversation; cross-session recall, user profiles, and embedding retrieval remain out of scope (permanent exclusion, see `Full_Design_Document.md` §2). This milestone is broken into four dependency-ordered sub-tickets (T0007.1-T0007.4).
 **In Scope:**
 * Adding the native Postgres checkpointer dependency and an async psycopg connection pool, separate from the existing sync SQLAlchemy engine but on the same `DATABASE_URL` app database.
@@ -217,7 +248,7 @@
 * A typed error contract or auth (separate concerns).
 * Streaming responses or any change to the answer-only public contract.
 
-#### T0007.1: Startup lifecycle + async checkpointer foundation
+### T0007.1: Startup lifecycle + async checkpointer foundation
 **Objective:** Stand up the missing async foundation that memory needs: the native Postgres checkpointer dependency, an async connection pool on the app database, and a FastAPI lifespan that assembles the agent at startup instead of at import time. No memory behavior changes yet — this ticket only relocates agent assembly and proves the checkpointer's tables can be created cleanly.
 **In Scope:**
 * Add `langgraph-checkpoint-postgres>=2.0` and the async psycopg extra to `pyproject.toml`.
@@ -230,7 +261,7 @@
 * Message trimming (T0007.3).
 * Any change to the request/response schema.
 
-#### T0007.2: Wire checkpointer + `session_id -> thread_id` lifecycle
+### T0007.2: Wire checkpointer + `session_id -> thread_id` lifecycle
 **Objective:** Make memory observable: address each conversation by `thread_id`, generate a `session_id` when the client omits one, and return the id actually used so the client can continue the thread.
 **In Scope:**
 * Pass the injected `checkpointer` into `create_agent(...)` in `src/agents/runtime/factory.py`.
@@ -242,7 +273,7 @@
 * Trimming (T0007.3).
 * Multi-turn / isolation / persistence assertions (T0007.4).
 
-#### T0007.3: Native context trimming (count cap)
+### T0007.3: Native context trimming (count cap)
 **Objective:** Bound how much conversation history is sent to the model each turn using LangChain's native `trim_messages`, so latency and token cost stay predictable as a thread grows. Trimming affects only what the model sees per turn; the full thread remains persisted in the checkpointer.
 **In Scope:**
 * Add `agent.memory.max_messages` to `config/settings.yaml` (read through `src/core/config.py`).
@@ -252,7 +283,7 @@
 * Summarization or token-based budgeting (count cap only this MVP).
 * Mutating/pruning the stored checkpoint state (trim the model input only).
 
-#### T0007.4: Tests, manual verification, and doc status flips
+### T0007.4: Tests, manual verification, and doc status flips
 **Objective:** Prove every memory capability in `MVP_Spec.md` §2/§4 holds end-to-end and record the milestone as built.
 **In Scope:**
 * Tests: multi-turn refinement within one `session_id`; isolation between two different sessions; a generated `session_id` returned when none is supplied; persistence of a conversation across a fresh runtime/pool (restart simulation); the trimming cap holds on a long session.
@@ -262,7 +293,7 @@
 * Any new capability beyond what §2 already promises.
 * Long-term/cross-session memory tests (permanently excluded).
 
-### T0008: Milestone 8 - System Prompt & Persona Refinement
+## T0008: Milestone 8 - System Prompt & Persona Refinement — ✅ Done
 **Objective:** Refine the agent's prompts so it behaves like a trustworthy, on-topic assistant named **Resumi**, holds the Spec §3 honesty bar, follows multi-turn refinements, and generates correct SQL against the real `clean_jobs` shape. Also resolve a config-placement inconsistency by moving the hardcoded schema context into `config/prompts.yaml` so the entire SQL-generation input is tunable without a code change. This is prompt/config tuning only — no new runtime capability, no new tool, no eval harness. Depends on T0007 (refinement rules assume short-term memory exists). Broken into three independently mergeable sub-tickets (T0008.1-T0008.3).
 **In Scope:**
 * Give the agent a defined persona (Resumi) and an explicit on-topic policy: answer greetings and "what can you do" style questions, politely decline everything else and steer back to internship postings.
@@ -276,7 +307,7 @@
 * Few-shot example libraries, chain-of-thought scaffolding, or self-critique loops (over-engineering for a 7-row dataset).
 * Any change to the answer-only public contract or runtime wiring.
 
-#### T0008.1: Resumi persona + on-topic policy + honesty rules
+### T0008.1: Resumi persona + on-topic policy + honesty rules
 **Objective:** Rewrite `prompts.system_prompt` so the agent is Resumi — friendly, on-topic, honest about what the data does and does not contain, and able to follow a conversation.
 **In Scope:**
 * Rewrite `prompts.system_prompt` in `config/prompts.yaml` to: introduce the Resumi persona; answer greetings and capability ("what can you do") questions; politely decline off-topic requests and steer back (resume help explicitly deferred as a future phase); keep the existing rule to always use `query_clean_jobs` for job/company/role/tech questions and never answer them from memory.
@@ -285,7 +316,7 @@
 * SQL-generation prompt or schema context changes (T0008.2).
 * Any code change (this sub-ticket is `config/prompts.yaml` only).
 
-#### T0008.2: SQL-generation prompt hardening + schema context to YAML
+### T0008.2: SQL-generation prompt hardening + schema context to YAML
 **Objective:** Make generated SQL correct for the real `clean_jobs` shape, and remove the config-placement inconsistency where the schema context is hardcoded in Python while its prompt lives in YAML.
 **In Scope:**
 * Strengthen `prompts.sql_generation` with: case-insensitive `ILIKE '%term%'` for all text matching (never `=`); `tech_stack` is a comma-separated string so match a technology with `tech_stack ILIKE '%Python%'`; reference only the real columns, never invent one.
@@ -296,7 +327,7 @@
 * Validator/executor logic (unchanged; the validator stays the trust boundary).
 * The system prompt / persona (T0008.1).
 
-#### T0008.3: Manual verification checklist
+### T0008.3: Manual verification checklist
 **Objective:** Prove the refined prompts hold the Spec §3 bar across the real range of user questions; no code change expected.
 **In Scope:**
 * Run a fixed ~12-question checklist covering one example per intent: greeting, "what can you do", tech filter, role filter, count, field lookup, a two-turn refinement ("only the Python ones" / "the first one"), an empty result ("any Rust jobs"), an out-of-schema field ("what's the salary"), an off-topic request ("write my resume"), and an unsafe request ("drop the table").
@@ -306,7 +337,7 @@
 * Any fix beyond what's needed to pass; larger issues become follow-up tickets.
 **Status: completed (2026-06-26). All 12 checklist items passed after rebuilding the API image with `docker compose build --no-cache api`. No defect follow-up tickets required.**
 
-### T0009: Milestone 9 - Data Ingestion (VietnamWorks, real AI/Data postings)
+## T0009: Milestone 9 - Data Ingestion (VietnamWorks, real AI/Data postings) — ✅ Done
 **Objective:** Replace the hand-written `clean_jobs` fixtures with **real** Vietnamese IT / AI-Data job postings fetched from the VietnamWorks public JSON search API, through a deterministic raw→clean pipeline that is built **source-agnostic** so future job boards drop in as new adapters without reshaping the schema or the cleaning core. The pipeline is offline batch tooling under `src/services/ingestion/`, fully isolated from the API / service / runtime / tracing layers (it is never imported by the request path). v1 source is **VietnamWorks only**; all research behind these decisions lives in `research/data-ingestion-stage.md` (§0.1, ✅ reliable & schedulable) and `research/job-site-comparison.md`. This milestone is broken into eight dependency-ordered sub-tickets (T0009.1-T0009.8).
 **In Scope:**
 * A new `raw_jobs` landing table (verbatim source payload + provenance) and an enriched, source-neutral `clean_jobs` (Rich agent-visible schema: adds `role`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary `salary_min`/`salary_max`/`salary_currency`/`is_salary_negotiable` to the existing four columns; `description` stays a single merged blob — no `requirement`/`benefits` columns).
@@ -323,7 +354,7 @@
 * Cross-board duplicate detection beyond `(source, external_id)` + `content_hash`.
 * Parsing a salary *string* into numbers (unneeded for VietnamWorks, which supplies `salaryMin`/`salaryMax` directly; only a future string-only board would need it), structured multi-field location, and translating source text to a single language (descriptions are stored in their original VI/EN — retrieval is language-independent because role/location/tech are normalized; single-language standardization is a future RAG-milestone concern).
 
-#### T0009.1: Schema & migration - `raw_jobs` + enriched `clean_jobs`
+### T0009.1: Schema & migration - `raw_jobs` + enriched `clean_jobs`
 **Objective:** Stand up the source-agnostic storage both halves of the pipeline assume: a verbatim `raw_jobs` landing table and the enriched `clean_jobs`, keyed for idempotent multi-source upserts.
 **In Scope:**
 * Add `raw_jobs` (`id`, `source`, `external_id`, `source_url`, `raw_payload` JSONB, `content_hash`, `fetched_at`; unique `(source, external_id)`).
@@ -334,7 +365,7 @@
 * The adapter, transform, or loader (later sub-tickets).
 * A migration tool (Alembic) — seeding stays SQL-script based for this milestone.
 
-#### T0009.2: Config & ingestion models
+### T0009.2: Config & ingestion models
 **Objective:** Centralize every ingestion parameter in `config/settings.yaml` and define the internal record models the pipeline passes around.
 **In Scope:**
 * `config/settings.yaml` `ingestion.*`: API URL, AI/Data keyword queries, `jobFunction` ids (parent 5 / child 27), `max_jobs` cap, page count, polite delay, User-Agent, the **technology keyword dictionary**, the **role taxonomy** (canonical role → match rules), and the **city alias map** (alias → canonical city/province).
@@ -342,7 +373,7 @@
 **Out of Scope:**
 * Reading these values in the adapter/transform (later sub-tickets wire them).
 
-#### T0009.3: `JobSource` interface + `VietnamWorksSource` adapter
+### T0009.3: `JobSource` interface + `VietnamWorksSource` adapter
 **Objective:** Graduate the throwaway spike into a provider-agnostic source interface with the single v1 adapter, so a second board later is just another implementation.
 **In Scope:**
 * `src/services/ingestion/sources/base.py` — a `JobSource` interface yielding `RawPosting`.
@@ -351,7 +382,7 @@
 **Out of Scope:**
 * Persisting to `raw_jobs` (T0009.4); any transform/normalize (T0009.5).
 
-#### T0009.4: Raw landing - upsert into `raw_jobs`
+### T0009.4: Raw landing - upsert into `raw_jobs`
 **Objective:** Persist fetched postings verbatim before any transform, idempotently.
 **In Scope:**
 * `src/services/ingestion/raw_store.py` upserting `RawPosting` into `raw_jobs` on `(source, external_id)` with `content_hash`; re-runs refresh, never duplicate.
@@ -359,7 +390,7 @@
 **Out of Scope:**
 * The transform and `clean_jobs` load (T0009.5-T0009.6).
 
-#### T0009.5: Normalize + transform (role, location, tech_stack, salary, description)
+### T0009.5: Normalize + transform (role, location, tech_stack, salary, description)
 **Objective:** Turn a raw payload into a clean, canonical `NormalizedJob` using only deterministic, unit-testable pure functions.
 **In Scope:**
 * `src/services/ingestion/normalize/vietnamworks.py` — map the VietnamWorks payload to `NormalizedJob` (the only source-specific transform code): **merge `jobDescription` + `jobRequirement` + benefit values into one `description`**, and map `salaryMin`/`salaryMax`/`salaryCurrency`/`not isSalaryVisible` into the structured salary fields.
@@ -369,7 +400,7 @@
 * The DB upsert into `clean_jobs` (T0009.6).
 * Any LLM call (forbidden in the transform).
 
-#### T0009.6: Loader - idempotent upsert into `clean_jobs`
+### T0009.6: Loader - idempotent upsert into `clean_jobs`
 **Objective:** Provide the runnable batch entrypoint that drives the whole pipeline and lands clean rows without duplicating on re-run.
 **In Scope:**
 * `src/services/ingestion/loader.py` (or a `scripts/` CLI wrapper) chaining source → `raw_jobs` → normalize/transform → upsert `clean_jobs` on `(source, external_id)`.
@@ -379,7 +410,7 @@
 * FastAPI startup wiring (the loader is manual batch tooling, never in the request path).
 * Scheduling/cron.
 
-#### T0009.7: Agent-layer follow-through (Rich schema)
+### T0009.7: Agent-layer follow-through (Rich schema)
 **Objective:** Teach the agent about the new agent-visible columns so it can use them and stays honest about sparse ones.
 **In Scope:**
 * Update `prompts.schema_context` to describe `role`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary (`salary_min`, `salary_max`, `salary_currency`, `is_salary_negotiable`) — and that `role`/`location` are **canonical** values, `tech_stack` a comma-separated string, `description` a single merged blob.
@@ -390,7 +421,7 @@
 * Any change to the ingestion pipeline internals (T0009.1-T0009.6).
 * New tools or runtime wiring.
 
-#### T0009.8: End-to-end manual verification
+### T0009.8: End-to-end manual verification
 **Objective:** Prove the milestone works end-to-end on a running stack; no code changes expected.
 **In Scope:**
 * `docker compose up -d` healthy; run the ingestion CLI; confirm fetched/landed/upserted counts.
@@ -400,7 +431,7 @@
 **Out of Scope:**
 * Any fix beyond what's needed to pass; larger issues become follow-up tickets.
 
-#### T0009.9: Explicit schema reset path
+### T0009.9: Explicit schema reset path
 **Objective:** Fix the gap observed during T0009.8 where `scripts/init_db.sql` (`CREATE TABLE IF NOT EXISTS`) silently skips a table that already exists with the wrong shape, so a schema change cannot be applied without a manual `DROP TABLE`. Because both tables are **fully reproducible** — `clean_jobs` is rebuilt by the loader on every ingestion run and `raw_jobs` is re-fetchable by re-running the adapter — the MVP-appropriate fix is an explicit, repeatable **reset** path, **not** a migration framework. A full migration tool (Alembic) is deliberately deferred until there is deployed data that is genuinely irreplaceable; see `docs/Known_Issues.md`.
 **In Scope:**
 * Add a destructive, explicit reset path — `scripts/reset_db.sql` doing `DROP TABLE IF EXISTS clean_jobs, raw_jobs CASCADE;` followed by the existing `CREATE` statements (reuse the DDL from `init_db.sql`; no duplication of truth beyond the drop lines).
@@ -412,7 +443,7 @@
 * Auto-running the reset on FastAPI startup or in an entrypoint — it stays a manual, explicit step.
 * Any **new** schema change (this only adds the reset mechanism; the schema stays the T0009.1 shape).
 
-#### T0009.10: Bounded query output (fix the Groq TPM `413`)
+### T0009.10: Bounded query output (fix the Groq TPM `413`)
 **Objective:** Stop `query_clean_jobs` from overflowing the model's token budget on broad queries. Since T0009 landed ~50 verbose rows, a query that returns every column of every matched row (each with the large merged `description` blob) reproducibly triggers a Groq `413` (see `docs/Known_Issues.md`, Capacity & performance). Enforce the `Full_Design_Document.md` §4 bounded-output law **deterministically at the tool boundary** — the model's SQL must not be trusted to keep the payload small. This is the standalone, urgent bug fix; it does **not** depend on T0009.11.
 **In Scope:**
 * In the tool/formatter path (`src/agents/tools/query_clean_jobs.py`, `src/services/query/table_formatter.py`): **drop the `description` column from the returned result** regardless of what the SQL selected (deterministic projection filter — a stray `SELECT *` must not leak it), and **cap the returned rows** at `agent.query.max_rows`.
@@ -425,7 +456,7 @@
 * Pagination / `OFFSET` ("show me more") — deferred; the "showing N of M, narrow your search" behavior is the MVP answer.
 * Semantic/embedding search over descriptions (future RAG milestone).
 
-#### T0009.11: Job detail tool (`get_job_details`)
+### T0009.11: Job detail tool (`get_job_details`)
 **Objective:** Give the agent the *only* path to full `description` prose — a bounded, deterministic fetch by id — so "tell me about that job / compare these" works without ever dumping prose in bulk. Completes the structured-query-vs-detail split described in `MVP_Technical_Design.md` §2.3. Depends on T0009.10 (which makes `query_clean_jobs` return `id`s and stop emitting description).
 **In Scope:**
 * A deterministic, **parameterized** fetch-by-id in `src/services/query/` (no LLM, no SQL generation — ids carry no natural-language ambiguity; parameterization is the safety boundary). Accepts a list of ids, caps at `agent.query.max_detail_ids` (e.g. `3`), returns the full row incl. `description` for those ids.
@@ -439,10 +470,10 @@
 * Multi-row prose scans / semantic search (future RAG).
 * Any change to the ingestion pipeline or schema.
 
-### T0010: Milestone 10 - Pre-deploy Hardening
+## T0010: Milestone 10 - Pre-deploy Hardening — ✅ Done
 Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the follow-on per-module logic review (see `docs/Known_Issues.md` and `docs/Code_Review_Notes.md`). These are the real *code* items standing between the current base and a clean deploy; deploy-time config (secret checklist, stale-config rebuild) and model-variance items (Evaluation milestone) are explicitly **not** in this milestone. Keep each fix MVP-minimal — do not build an error framework or a message-normalization layer. T0010.1/.2 are the audit fixes; T0010.3 (SQL single-table allowlist) and T0010.4 (blocking LLM call) are the two highest-severity items from the per-module review.
 
-#### T0010.1: Graceful answer + minimal typed error contract
+### T0010.1: Graceful answer + minimal typed error contract
 **Objective:** Stop two failure modes from collapsing into an opaque `500 "Failed to process query"`. (1) The runtime can yield `answer=None`; `service.py` types its return as `dict[str, str | None]` and `query.py` passes `response['answer']` straight into `QueryResponse(answer=...)`, which requires a non-null `str` — so a null answer raises Pydantic validation and is swallowed into a generic 500 (`Known_Issues.md`, API layer, C1). (2) Every exception, regardless of cause, becomes the same 500, giving the client no signal (C5). Fix both with the smallest change that keeps the API answer-only and leaks no internals (`Full_Design_Document.md` §4).
 **In Scope:**
 * In `src/agents/service.py`: guarantee `answer` is always a non-empty `str` — coerce a `None`/empty runtime result into a safe user-facing fallback (e.g. "I couldn't produce an answer for that — please try rephrasing.") so `QueryResponse` validation can never fail on `answer`. Tighten the return type accordingly.
@@ -454,7 +485,7 @@ Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the foll
 * Fixing `trace_url` always being `None` (C4) — separate low-priority follow-up.
 * Any model-behavior/honesty items (Evaluation milestone).
 
-#### T0010.2: Tolerate non-string model content in SQL generation
+### T0010.2: Tolerate non-string model content in SQL generation
 **Objective:** Make `generate_sql` robust to the message-content type. `src/agents/tools/query_clean_jobs.py:41` calls `.strip()` on `model.invoke(...).content`, whose type is `str | list[...]`; a list-content reply (structured/tool blocks) would raise `AttributeError` (`Known_Issues.md`, Agent runtime, C2). It works with Groq text replies today, but the latent crash should be closed — and doing so also clears one of the three residual `mypy` errors.
 **In Scope:**
 * In `src/agents/tools/query_clean_jobs.py`: coerce the model response content to plain text before `.strip()` (handle both `str` and a list of content parts) via a tiny local helper; behavior for the normal `str` case is unchanged.
@@ -464,7 +495,7 @@ Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the foll
 * Any broader message/content normalization elsewhere in the runtime.
 * Prompt or SQL-generation logic changes beyond the content coercion.
 
-#### T0010.3: Enforce a true single-table allowlist in the SQL validator
+### T0010.3: Enforce a true single-table allowlist in the SQL validator
 **Objective:** Close the read-scope escape in `src/services/query/sql_validator.py` and restore the invariant the docs already promise. The validator only checks `"clean_jobs" in statement.lower()` — a *substring* presence test — so a query that also references another table passes, e.g. `SELECT * FROM clean_jobs JOIN raw_jobs USING (source, external_id)` or `SELECT ... FROM clean_jobs, raw_jobs ...`. `JOIN`/`,` are not denylisted, so the agent can read `raw_jobs` (verbatim JSONB payloads) or any other table alongside `clean_jobs` (`docs/Known_Issues.md`, Query tooling & SQL safety, bug 1). `SET TRANSACTION READ ONLY` still blocks writes, so this is a read-scope escape — but it defeats the curated-schema boundary and **contradicts the stated invariant** in `Full_Design_Document.md` §6 ("allowlists the *table* `clean_jobs`") and §3. Fix the code so the doc's guarantee holds; do not soften the doc.
 **In Scope:**
 * In `src/services/query/sql_validator.py`: after the existing SELECT-only / no-comments / single-statement / denylist checks, enforce that the statement references **only** `clean_jobs` — reject any query that names another table (any additional table reference, `JOIN`, or comma-separated `FROM` list). Keep it MVP-minimal and deterministic (the validator is the trust boundary); a rejection returns the same refusal path as other unsafe queries.
@@ -476,7 +507,7 @@ Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the foll
 * Adding `statement_timeout` / executor hardening (backlog in `Code_Review_Notes.md`).
 * A full SQL-parser dependency — keep the check lightweight; do not add a parsing library unless the lightweight check proves unworkable (report back if so).
 
-#### T0010.4: Offload the blocking SQL-generation LLM call off the event loop
+### T0010.4: Offload the blocking SQL-generation LLM call off the event loop
 **Objective:** Stop `query_clean_jobs` from blocking the async event loop during SQL generation. The tool is `async` and correctly offloads the DB call via `asyncio.to_thread(execute_validated_sql, …)`, but `generate_sql(question)` runs `model.invoke(...)` **synchronously on the event loop** (`docs/Known_Issues.md`, Query tooling & SQL safety, bug 2). That Groq round-trip (seconds) blocks *every* concurrent request and the health probe for its duration — a real concurrency regression under load.
 **In Scope:**
 * In `src/agents/tools/query_clean_jobs.py`: run the synchronous `generate_sql` off the event loop — `await asyncio.to_thread(generate_sql, question)` (or switch to `model.ainvoke` if cleaner). Behavior of the generated SQL is unchanged; only the scheduling changes.
@@ -486,7 +517,7 @@ Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the foll
 * Caching/reusing the `AgentProvider`/`ChatGroq` model instance (backlog cleanup in `Code_Review_Notes.md`).
 * The per-request Langfuse `flush()` on the event loop (bug 7) — separate low-priority follow-up.
 
-#### T0010.5: Honest match-count / truncation notice for `query_clean_jobs`
+### T0010.5: Honest match-count / truncation notice for `query_clean_jobs`
 **Objective:** Stop `query_clean_jobs` from implying a truncated result is the complete total. `table_formatter.format_rows` set `row_count = len(rows)`, but `rows` had already been capped by the **model's own** `LIMIT` in the generated SQL — so when the model wrote `LIMIT 20` and 50 rows really matched, the tool reported "Found 20 result(s)" and never showed a truncation notice, implying 20 was the total (`docs/Known_Issues.md`, Query tooling & SQL safety, bug 5).
 **In Scope:**
 * New `src/services/query/row_bound.py::enforce_fetch_limit(sql, fetch_limit)`: strips any trailing model-written `LIMIT`/`OFFSET` and appends a system-owned `LIMIT`, so the tool — not the model — controls how many rows are fetched.
@@ -502,7 +533,7 @@ Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the foll
 * Wiring in `QueryToolResult`/`QueryRefusal` (separate backlog item, `Code_Review_Notes.md`).
 * Changes to `config/prompts.yaml`, the validator's table/denylist checks, the executor's transaction logic, or `get_job_details`.
 
-#### T0010.6: Word-boundary matching in `normalize_location`
+### T0010.6: Word-boundary matching in `normalize_location`
 **Objective:** Make `normalize_location` (`src/services/ingestion/transform.py`) recognize a known city that appears *inside* a free-form address, not only when the whole string is exactly an alias key. It currently does `city_alias_map.get(lower)` on the whole source string, so a real address like `"12 Nguyen Hue, District 1, Ho Chi Minh City"` never canonicalizes and falls through to `"Other"` (`docs/Known_Issues.md`, Data & ingestion / database schema, bug 6).
 **In Scope:**
 * In `src/services/ingestion/transform.py`: for each address source, match every `city_alias_map` key against the source as a whole word / bounded phrase (case-insensitive, `\b`-anchored regex per key, precompiled or built per call) rather than a raw `in` substring check, so short aliases (`hn`, `hcm`) cannot match inside unrelated words (`john`, `technology`) and the punctuated key `tp. hcm` still matches correctly.
@@ -516,7 +547,7 @@ Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the foll
 * District/ward normalization.
 * `normalize/vietnamworks.py` or the DN-1 `raw_jobs` redesign.
 
-#### T0010.7: Honor explicit user-requested result counts (LIMIT intent)
+### T0010.7: Honor explicit user-requested result counts (LIMIT intent)
 **Objective:** Let `query_clean_jobs` return exactly N rows when the user explicitly asks for a count ("top 3", "show me 5"), instead of always applying the system cap. T0010.5 made the system strip any model-written `LIMIT` and own the row bound, which fixed the "Found 20" honesty bug but as a side effect also silently discarded a genuine user-requested count. This requires the prompt to stop emitting an arbitrary default `LIMIT` so that a `LIMIT`'s presence becomes a trustworthy signal of explicit user intent.
 **In Scope:**
 * `config/prompts.yaml` `sql_generation`: replace "Always include a LIMIT clause." with guidance to add `LIMIT` only for an explicit user-requested count; otherwise omit it and let the system apply its own cap.
@@ -529,7 +560,7 @@ Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the foll
 * Changes to `_build_answer`, `TableArtifact`, `format_rows`'s signature, the validator, the executor, or `get_job_details`.
 * New config keys or model/provider caching.
 
-### T0011: Milestone 11 - Model Evaluation Harness
+## T0011: Milestone 11 - Model Evaluation Harness — ✅ Done
 **Objective:** Establish a **measurable baseline** of the agent's behavior — task correctness and the `MVP_Spec.md` §3 honesty bar — *before* building any stage whose design depends on how the model actually behaves. The trigger is concrete: designing the Ingestion Deploy stage (now deferred, below) surfaced too many **un-measured** model-behavior uncertainties to design on top of — the freshness-fabrication and hidden-salary-phrasing items in `Known_Issues.md`, the redundant double tool-call, the out-of-schema stall, and the planned `is_active` honesty hedge (whose whole correctness rests on the model reliably telling the truth about returned data via a best-effort prompt nudge). This milestone measures those behaviors so later design rests on data, not hope. Approach and rationale are researched in `research/deepeval-sql-agent-eval-planning.md` (DeepEval, offline golden-dataset, pytest-style, Groq judge, scores written back to Langfuse — keeping Langfuse the single pane of glass). This is a measurement harness only — it does **not** fix the behaviors it measures (fixes become follow-ups gated on the findings).
 Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research/deepeval-sql-agent-eval-planning.md` §11 (read §11 first).
 **In Scope:**
@@ -546,7 +577,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Migrating the *agent* off the retired `llama-3.3-70b-versatile` (`Known_Issues.md` F1) — a **separate** follow-up; T0011 depends on a working agent model but does not own that migration.
 * A multi-provider judge matrix or Confident AI cloud.
 
-#### T0011.1: Judge JSON-reliability spike + DeepEval harness scaffold
+### T0011.1: Judge JSON-reliability spike + DeepEval harness scaffold
 **Objective:** De-risk the whole milestone by proving a judge LLM that reliably emits the JSON DeepEval requires, and stand up a minimal runnable harness. The research-recommended Llama-3-70b judge was retired by Groq (`research/deepeval-sql-agent-eval-planning.md` §11.4), and its replacement `openai/gpt-oss-120b` has reported structured-output regressions — so the judge cannot be assumed; it must be spiked before any golden/metric work depends on it.
 **In Scope:**
 * Add `deepeval` to `pyproject.toml`.
@@ -559,7 +590,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Migrating the *agent* model off `llama-3.3-70b-versatile` (`Known_Issues.md` F1) — separate follow-up.
 * The `instructor`/LiteLLM coercion path unless the spike proves it necessary to keep a Groq judge.
 
-#### T0011.2: Seeded eval fixture DB + versioned golden dataset
+### T0011.2: Seeded eval fixture DB + versioned golden dataset
 **Objective:** Provide the two stable inputs the harness scores against — a small, version-controlled fixture database (so goldens can assert exact counts, truncation, and specific rows without drifting on re-ingest) and the golden Q&A set itself.
 **In Scope:**
 * A reproducible **seed** for a fixture `clean_jobs` — **~22 rows whose `title`/`company`/`description` are sourced (trimmed) from the real captured postings in `research/experiments/vietnamworks_ai_data_sample.json`**, with the structured columns (`role`, `tech_stack`, `location`, salary, `is_internship`) engineered to a fixed distribution so every golden's assertion is deterministic: a role split summing to exactly 22 — **AI Engineer 5, Data Scientist 4** (the two counts goldens assert), **Data Engineer 4, ML Engineer 4, Data Analyst 4, Other 1** — Python in 12 rows (7 of them Hanoi → the two-turn refinement), **COBOL in 0** (empty-result probe), a broad match of 22 > `max_rows` (20) for the truncation notice, **both USD and VND salaries present** (the cross-currency "highest paid" honesty trap — VND millions dwarf USD numerically), plus NULL-undisclosed and `is_salary_negotiable = true` rows, "remote" planted in a couple descriptions (out-of-schema hedge), and `posted_date`/`job_level` left NULL (unreachable by the agent → freshness-fabrication probe). All `NOT NULL` columns populated (`source="fixture"`, unique `external_id`, `title`, `company`, `role`, `is_internship`, `is_salary_negotiable`); `title` is the raw messy title, `role` the canonical bucket. `is_internship` is a normal filter (~5 internships / 17 non — internship-ness is one attribute, **not** the dataset's spine; see the scope drift note in `Known_Issues.md`). Lives at e.g. `evals/fixtures/seed_eval_db.sql` + a loader/reset helper, kept entirely separate from the live ingestion path.
@@ -575,7 +606,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any change to the real ingestion pipeline or the live `clean_jobs` table.
 * Production-trace-sampled or synthetic goldens (Phase 3).
 
-#### T0011.3: Three-seam instrumentation + metric stack
+### T0011.3: Three-seam instrumentation + metric stack
 **Objective:** Run the agent against the goldens and score all three decision seams (`MVP_Technical_Design.md` §8.1–§8.2), *including* the hidden NL→SQL call, without leaking eval code into the tools layer.
 **In Scope:**
 * Inject DeepEval's `CallbackHandler` into the agent invocation from the harness — seams 1 (routing) and 3 (synthesis) are captured automatically.
@@ -588,7 +619,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Langfuse writeback (T0011.4).
 * Any `@observe` decorator inside a tool; DAG/chart metrics.
 
-#### T0011.4: Langfuse score writeback
+### T0011.4: Langfuse score writeback
 **Objective:** Put eval scores on the same Langfuse trace as the raw run so Langfuse stays the single pane of glass (`MVP_Technical_Design.md` §8.5), without eval code disturbing the tracing layer's request-path role.
 **In Scope:**
 * A post-run, harness-owned step that calls `langfuse.create_score(name, value, trace_id, data_type)` on the v4 client for each metric/case — all scores written as `NUMERIC` (honesty is a graded `GEval` 0–1 criterion, so it is numeric too, not a boolean pass/fail); idempotent via a seam-prefixed `score_id = f"{trace_id}-{seam}-{metric}"` so a metric reused across seams (e.g. `ArgumentCorrectnessMetric` in seams 1 and 2) does not collide. Pass/fail *gating* on any metric — including any honesty threshold — belongs to T0011.5, not here.
@@ -598,7 +629,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Online/production scoring or alerting (Phase 3).
 * Any change to `src/agents/tracing/langfuse.py`'s per-request handler — writeback is a separate eval-time path.
 
-#### T0011.5: Baseline run, threshold calibration & report
+### T0011.5: Baseline run, threshold calibration & report
 **Objective:** Produce the milestone's actual deliverable — a *measured* baseline of agent behavior — and calibrate thresholds from it, feeding the deferred T0012 decisions.
 **In Scope:**
 * Run the full harness on the golden set and record the baseline score per metric per seam.
@@ -610,7 +641,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Acting on the findings — any prompt/honesty fix is a separate follow-up gated on this report.
 * Standing up the CI gate (fast-follow ticket) or online eval.
 
-#### T0011.6: Gemini judge provider (Groq-load relief)
+### T0011.6: Gemini judge provider (Groq-load relief)
 **Objective:** Let the eval judge run on Google Gemini instead of Groq, so the baseline run no longer puts both the *agent* (qwen on Groq) and the *judge* on one Groq free-tier budget — the double-Groq-load that triggers the `429`s (`Known_Issues.md`, Evaluation harness). The judge is the heavier consumer (~120 calls with long rubrics vs the agent's ~100k tokens), so moving *only the judge* off Groq removes most of the load. The Gemini fallback was contemplated in the T0011 milestone scope and conditionally in T0011.1, but was never wired because `openai/gpt-oss-120b` passed the JSON spike; this ticket wires it for load relief, not JSON reliability.
 **Sequencing:** authored after T0011.5 for numbering, but **executes before T0011.5's baseline run** — T0011.5 depends on it to complete without hitting the rate limit.
 **Human prerequisite (cannot be automated):** a free `GOOGLE_API_KEY` from Google AI Studio, added to `.env`. Unit tests must still pass without it; the live judge checks require it.
@@ -627,7 +658,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * A judge factory/abstraction framework — a simple `if/elif/else` on provider is the MVP.
 * Caching/reusing the judge model instance.
 
-### T0012: Milestone 12 - Hardening & Known-Issue Fixes
+## T0012: Milestone 12 - Hardening & Known-Issue Fixes — ✅ Done
 **Objective:** Close out a curated set of already-diagnosed, still-open items from `Known_Issues.md` before Ingestion Deploy Readiness (now T0014) builds on top of an unmeasured/uncleaned baseline — two of these tickets (T0012.2, T0012.3) are the specific T0011.3 findings that T0011.5's baseline run was already blocked on. This milestone does not re-open model-behavior questions that T0011 exists to *measure* (freshness fabrication, hidden-salary phrasing, the redundant double tool-call) — those stay data, not code, follow-ups. It only fixes concrete code-level defects and gaps that were found and logged but never given their own ticket.
 **In Scope:** see sub-tickets below.
 **Out of Scope:**
@@ -635,7 +666,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Ingestion Deploy Readiness design/implementation (T0014).
 * A new CI gate or online eval (still deferred per T0011's own out-of-scope list).
 
-#### T0012.1: Judge RPM throttle (rate-limit hardening)
+### T0012.1: Judge RPM throttle (rate-limit hardening)
 **Objective:** Prevent the eval judge from 429-storming Gemini's free-tier RPM budget by pacing calls proactively instead of relying on reactive retries. Moving the judge to Gemini (T0011.6) removed the double-Groq-load, but the harness still fires ~119 sequential judge calls (`evals/harness.py::score()`, ~7 metrics × 17 goldens) with zero delay against Gemini's own free-tier ceiling (reported ~10 RPM — Google no longer publishes a static table; see `Known_Issues.md`, Evaluation harness (T0011.6)).
 **Status:** implemented and verified 2026-07-05, ahead of this ticket being formally opened — this entry retroactively gives that work a ticket number per the branching/tracking convention; no further code change is needed to close it.
 **In Scope:**
@@ -646,7 +677,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Daily-quota (RPD) handling — current volume (~119 judge + ~20 agent calls per run) is comfortably under both providers' reported daily caps; not a code problem at this scale.
 * Any agent-side (Groq) throttle, or a generic rate-limiter abstraction reusable outside `evals/`.
 
-#### T0012.2: Fix qwen `<think>` reasoning leakage into agent/judge-visible content
+### T0012.2: Fix qwen `<think>` reasoning leakage into agent/judge-visible content
 **Objective:** Stop the agent model (`qwen/qwen3.6-27b`) from leaking raw chain-of-thought `<think>...</think>` text into `.content` — observed corrupting the `generate_sql` span's output and, on two live goldens (A3, C3), producing an empty final answer (`Known_Issues.md`, Evaluation harness (T0011.3), HIGH).
 **Sequencing:** numbered under T0012 but **must land before T0011.5's baseline run** — a reasoning-polluted or empty answer would tank every seam-3 metric regardless of true agent quality, corrupting the very baseline T0011.5 exists to produce (same pattern as T0011.6 being sequenced ahead of T0011.5 despite the higher number).
 **In Scope:**
@@ -659,7 +690,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Switching the agent off qwen/Groq — it is the fixed subject-under-test for the T0011.5 baseline.
 * Any other model-behavior/honesty finding logged in `Known_Issues.md` (freshness fabrication, hidden-salary phrasing) — those remain measured, not fixed, per the milestone's original deploy-gating note.
 
-#### T0012.3: Unblock `ArgumentCorrectnessMetric`/`TaskCompletionMetric` (deepeval template bug)
+### T0012.3: Unblock `ArgumentCorrectnessMetric`/`TaskCompletionMetric` (deepeval template bug)
 **Objective:** Both metrics currently hard-fail with `MetricTemplateInterpolationError` on this project's pinned `deepeval==4.0.7` (`Known_Issues.md`, Evaluation harness (T0011.3), MED) — blanking seam-1/seam-3 scores for essentially every golden.
 **Sequencing:** must land before T0011.5's baseline run, same reasoning as T0012.2 — a baseline with two metrics permanently `None` isn't a real baseline for those seams.
 **In Scope:**
@@ -670,7 +701,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any other deepeval metric or the harness's overall structure (`evals/harness.py`).
 * Upgrading `deepeval` beyond what's needed to fix this specific bug.
 
-#### T0012.4: Populate `trace_url` in the agent response
+### T0012.4: Populate `trace_url` in the agent response
 **Objective:** `src/agents/service.py` hardcodes `"trace_url": None` (`Known_Issues.md`, API layer, C4 — open since T0010.1 explicitly left it out of scope) so tracing metadata returned to the caller is incomplete.
 **In Scope:**
 * Build the real Langfuse trace URL from the trace id captured by `get_langfuse_handler()`/`get_langfuse_client()` (the same accessors `evals/writeback.py` already reuses — no new Langfuse client).
@@ -681,7 +712,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any change to `src/agents/tracing/langfuse.py`'s tracing boundary or the eval-side writeback path.
 * Redesigning the response DTO beyond filling in the existing field.
 
-#### T0012.5: Return a graceful fallback instead of a 500 on an empty agent answer
+### T0012.5: Return a graceful fallback instead of a 500 on an empty agent answer
 **Objective:** Finish the "graceful answer" half of T0010.1: `service.py`'s `FALLBACK_ANSWER` coercion never runs because `react_agent._extract_answer` raises `ValueError` on empty/unreadable final content, so the exception falls through to the generic `500` in `query.py` instead (`Known_Issues.md`, API layer, MED — "the fallback guard is effectively dead").
 **In Scope:**
 * Have `_extract_answer` return an empty/sentinel value instead of raising, or catch the `ValueError` in `service.py`, so a blank agent answer becomes the existing `FALLBACK_ANSWER` (200), not a 500.
@@ -691,7 +722,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * The underlying model behavior that produces an empty answer in the first place (T0012.2 addresses qwen's specific `<think>`-leak case; other causes are out of scope here).
 * Any broader error-contract redesign beyond this one path.
 
-#### T0012.6: Coerce non-str model content before `.strip()` in `generate_sql`
+### T0012.6: Coerce non-str model content before `.strip()` in `generate_sql`
 **Objective:** Remove a latent `AttributeError` on the SQL-generation path. `src/agents/tools/query_clean_jobs.py:44` calls `.strip()` on `model.invoke(...).content`, whose LangChain type is `str | list[...]`; a list-content reply (structured/tool blocks) would raise `AttributeError` at runtime rather than degrade cleanly (`Known_Issues.md`, Agent runtime & prompts, mypy-flagged 2026-07-02). This is the only remaining flagged latent code bug in the register — the other open items are perf, cosmetic, or by-design.
 **In Scope:**
 * Coerce non-str `response.content` to text before `.strip()` (e.g. join/flatten list-content parts to a string), keeping the existing `str` fast path byte-identical.
@@ -701,7 +732,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any change to which model `generate_sql` uses or how the SQL is generated — this is a content-typing guard only.
 * The benign residual mypy type-variance items (`checkpointer.py`, `middleware.py`) logged alongside this one — they are correct at runtime and left visible by design.
 
-#### T0012.7: Keep live-API eval tests out of plain `pytest` collection
+### T0012.7: Keep live-API eval tests out of plain `pytest` collection
 **Objective:** Stop `uv run pytest` (the standard suite) from making live Groq/Gemini network calls. Two logged findings share one root cause: `evals/test_judge_scaffold.py` and `evals/test_three_seams.py` match pytest's default `test_*.py` discovery, so a plain suite run fires a live judge call and 17 live agent cases — a source of flakiness, API cost, and multi-minute runtimes that wasn't present before T0011 (`Known_Issues.md`, Evaluation harness (T0011.1) and (T0011.6)).
 **In Scope:**
 * Add a `deepeval`/`eval` (or `live`) pytest marker to the live eval tests and register + exclude it by default (`pytest.ini`/`pyproject.toml` `addopts`), so `uv run pytest` skips them and they run only when explicitly selected (or via `deepeval test run`).
@@ -711,7 +742,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any CI workflow that would provision/run the eval suite (still deferred per T0011's out-of-scope list).
 * The Windows `PYTHONUTF8=1` console-glyph workaround — a separate logged env-var note, not a collection issue.
 
-#### T0012.8: Convert `generate_sql` to native async
+### T0012.8: Convert `generate_sql` to native async
 **Objective:** Replace the thread-offloaded blocking `invoke` on the SQL-generation call site with native async I/O. `generate_sql` is a synchronous `model.invoke(...)` that `query_clean_jobs` runs via `await asyncio.to_thread(generate_sql, ...)` (T0010.4); the LangChain Groq model supports `ainvoke` natively, so this parks a thread-pool worker per SQL round-trip instead of yielding the loop (`Known_Issues.md`, Query tooling & SQL safety, LOW). Correctness-safe today; a low-risk, no-new-dependency scalability cleanup.
 **In Scope:**
 * Make `generate_sql` `async def` using `await model.ainvoke(...)`, and drop the `asyncio.to_thread(generate_sql, ...)` wrapper at its `query_clean_jobs` call site (call it directly with `await`).
@@ -721,7 +752,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any change to the generated SQL, the prompt, or the model — scheduling-only.
 * A broader async audit of other sync call sites.
 
-#### T0012.9: Cosmetic cleanup — clear zero-impact items off the register
+### T0012.9: Cosmetic cleanup — clear zero-impact items off the register
 **Objective:** Retire a batch of logged-but-inert `Known_Issues.md` items in a single low-risk pass, so the register reflects only issues with real functional or measurement impact. Each item below is cosmetic (no behavior change, no golden affected) — grouped into one ticket precisely because none warrants its own.
 **In Scope:**
 * **Fixture faithfulness** (`evals/fixtures/seed_eval_db.sql`): populate `job_level` with the real five-value taxonomy (5 internship rows → `Intern/Student`, rest mirroring the corpus distribution); set `source='vietnamworks'` + `external_id='vnw-eval-NNN'` instead of `source='fixture'`/`fixture-NNN`. No golden's pin depends on these values, so all 22 goldens must still hold after the change (`Known_Issues.md`, Evaluation harness (T0011.2), two LOW items).
@@ -734,7 +765,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * The "more may match" hint on an honored explicit count — that is a small *feature*, not cosmetics; leave it as a logged follow-up, not part of this pass.
 * Any functional/model-behavior item — this ticket only touches things with zero runtime effect.
 
-#### T0012.10: Reduce eval judge cost & rate-limit exposure (thinking-budget cap + drop redundant metric)
+### T0012.10: Reduce eval judge cost & rate-limit exposure (thinking-budget cap + drop redundant metric)
 **Objective:** Cut the eval judge's per-run token cost and RPD/wall-clock exposure so the T0011.5 baseline can be re-run without exhausting Gemini's free-tier daily ceiling — **without** weakening the metrics that answer T0011's honesty question. Two levers from `research/eval-cost-and-rate-limits.md` §4: cap the Gemini judge's thinking budget (the dominant, ~90%-of-output cost) and drop the one redundant seam-3 metric (`Known_Issues.md`, Evaluation harness — cost & rate-limit exposure, MED).
 **Sequencing:** numbered under T0012 but **must land before T0011.5's baseline run** — it changes the instrument the baseline is measured with (same pattern as T0012.2/.6 and T0011.6 sequenced ahead of T0011.5 despite higher numbers). Dropping `FaithfulnessMetric` is safe to do *now* precisely because **no baseline has been captured yet**; doing it after v1 would strand the before/after comparison.
 **In Scope:**
@@ -749,7 +780,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any agent-side (Groq) change or the agent's Groq-TPD budget constraint — a separate timing limit, not a code fix here.
 * Refining the *agent's own* behavior via prompts, and the matching eval prompt/metric redesign — that is the **v2 refinement** logged in `Known_Issues.md` (Evaluation harness — cost & rate-limit exposure), gated on designing the preferred per-scenario behaviors; not this ticket.
 
-### T0013: Milestone 13 - Pre-Deploy Refinement
+## T0013: Milestone 13 - Pre-Deploy Refinement — ✅ Done
 **Objective:** House the disciplined pre-deploy refinement work researched in `research/pre-deploy-refinement-plan.md` (2026-07-07): the path from the current agent-only base to a deployable v1 — **freeze the schema + eval baseline → measure (v1) → scenario/manual-test → prompt-tune + metric-refine (v2) → deploy-harden**. Each phase rests on a frozen, measured predecessor. Phase 0's first step is to **freeze the schema** so all downstream prompt/eval work pins to a stable, deployed contract — that is T0013.1. Later sub-tickets (the eval **metric-set** freeze, the **scenario matrix**, the **prompt-v2 + metric-v2** refinement pass) are authored from the plan as each phase is reached — this milestone does **not** pre-build them (CLAUDE.md §1: implement one ticket only; no future-ticket features). Cross-refs: `research/pre-deploy-refinement-plan.md`, `research/deployment-research-plan.md`, `docs/Known_Issues.md`.
 **Schema-enrichment amendment (2026-07-09, user-approved):** a schema review before the freeze (recorded in `research/schema-enrichment-plan.md`) found the freeze would otherwise lock in *avoidably poor* data — a hardcoded-allowlist `tech_stack`, a hidden-but-populated `job_level`, and no usable time column — so the user approved **enriching the agent-visible schema from 13 → 16 columns before freezing it**. This adds four predecessor sub-tickets (T0013.1–T0013.4) that must land **before** the freeze (now T0013.5). Full evidence, audits, and the external-vocabulary source table are in `research/schema-enrichment-plan.md` §2–§5; read it before implementing any of these.
 **In Scope:** see sub-tickets below.
@@ -760,7 +791,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Deploy topology, security posture, and the CI gate (plan Phase 4/5 — a separate later deploy milestone).
 * Ingestion / `is_active` and the ingestion-owned `first_seen_at`/`last_seen_at` recency timestamps (T0014, deferred; `created_on` in T0013.4 is the *source's* creation date, which needs no accumulate-upsert).
 
-#### T0013.1: Redesign `tech_stack` extraction against an external vocabulary
+### T0013.1: Redesign `tech_stack` extraction against an external vocabulary
 **Objective:** Replace the ~70-term hardcoded `tech_dictionary` allowlist — the "hardcoding" the user wants removed — with **extraction against a large external vocabulary**, so `tech_stack` captures the technologies *and* AI/Data techniques that a 2026-07-09 field audit (`research/schema-enrichment-plan.md` §2.2, n=112) showed dominate real postings but are silently dropped today. This is a **production data-quality** change only: it does **not** touch the `clean_jobs` schema, the API, or the eval goldens (which pin to the hand-built fixture whose `tech_stack` is fixed by hand), so it floats free of the freeze and may ship independently. Read `research/schema-enrichment-plan.md` §2 (esp. §2.3 approach, §2.6 sources) before starting.
 **In Scope:**
 * **Vocabulary build (deterministic, no LLM)** — a build script (e.g. `scripts/build_tech_vocabulary.py`) that merges maintained open lists into **one canonical vocabulary + alias→canonical map**, vendored as a committed snapshot (never hand-typed inline):
@@ -778,7 +809,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * An LLM-based extractor — extraction stays deterministic (CLAUDE.md: never over-engineer).
 * ESCO/O*NET canonical skill IDs or a full VI skills layer — logged as optional future breadth (§2.6), not MVP.
 
-#### T0013.2: Expose `job_level` to the agent (rewrite golden C6)
+### T0013.2: Expose `job_level` to the agent (rewrite golden C6)
 **Objective:** Un-hide the already-populated `job_level` column so the agent can answer the top-tier "what seniority?" filter, and repoint golden **C6** — which currently tests honesty about `job_level` as if it were *absent* — onto an attribute that is genuinely absent. A 2026-07-09 audit (`research/schema-enrichment-plan.md` §3, n=112) confirmed `job_level` is **100% populated, clean English 5-value taxonomy, zero NULLs/Vietnamese** in the AI/Data corpus — hiding real data purely to pass a test inverts the honesty goal. This is a **prompt-only + goldens** change (the column and data already exist in DDL and fixture). Read `research/schema-enrichment-plan.md` §3 first.
 **In Scope:**
 * **Prompts** (`config/prompts.yaml`) — add `job_level` to all three enumeration surfaces that must stay consistent: `schema_context`, the `system_prompt` "Available fields" line, and the `sql_generation` real-columns list. Note the canonical 5 values (`Experienced (non-manager)`, `Manager`, `Fresher/Entry level`, `Intern/Student`, `Director and above`) and that they match with `ILIKE`.
@@ -790,7 +821,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any DDL/API change — `job_level` already exists in `scripts/init_db.sql`; this only un-hides it in the prompt layer.
 * The `tech_stack`, `listing_expires_on`, or `created_on` work (their own tickets).
 
-#### T0013.3: Add `listing_expires_on` column (from source `expiredOn`)
+### T0013.3: Add `listing_expires_on` column (from source `expiredOn`)
 **Objective:** Add a **new, truthful** agent-visible time column, `listing_expires_on`, mapped from the source's real `expiredOn`, so the agent can answer "is this still open / expiring soon?". **Verified 2026-07-09** (`research/schema-enrichment-plan.md` §4.2, live probe n=75): `expiredOn` is **100% present, clean ISO-8601 with tz, and 100% future-dated** — well-supported. This is a genuine schema addition (DDL + pipeline + prompts + fixture), heavier than T0013.2. It makes no claim to be a posting date. Read §4.1–§4.2 first.
 **In Scope:**
 * **DDL** (`scripts/init_db.sql`) — add `listing_expires_on DATE` (nullable) to `clean_jobs`. The eval fixture builds from this same file (`evals/fixtures/loader.py`), so it inherits the column.
@@ -803,7 +834,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any recency/"recently added" answer — that is `created_on` (T0013.4) and the T0014 ingestion-owned timestamps, not this expiry column.
 * Dropping expired rows at ingest (`is_active` soft-expiry) — a T0014 lifecycle concern.
 
-#### T0013.4: Add `created_on` column (source creation date) — gated on a stability re-check
+### T0013.4: Add `created_on` column (source creation date) — gated on a stability re-check
 **Objective:** Add a **truthful posting/creation date**, `created_on`, mapped from the source's `createdOn`, so freshness questions ("which was posted most recently?") become honestly answerable — **retiring golden C1** (which today forces a refusal because `posted_date` is permanently NULL). A 2026-07-09 live probe (`research/schema-enrichment-plan.md` §4.3) found `createdOn` behaves like a **stable** original-creation date (spread over ~2 months, older than the churny `onlineOn` for 75% of postings) — unlike `onlineOn`, it does not appear to churn on re-list. This is a schema addition of the same shape as T0013.3, but **user-approved gated on a mandatory stability re-check**: it must ship only if `createdOn` is confirmed not to reset on an employer edit/re-list. Read §4.1, §4.3 first.
 **In Scope:**
 * **Stability re-check (gate — do this FIRST)** — before any schema change, re-probe the live API across at least two fetches on different days (or re-fetch known `jobId`s) and confirm `createdOn` for a given posting **does not change** while `onlineOn` may. Record the result. **If `createdOn` proves unstable, STOP** — do not add the column; instead leave `posted_date` NULL, keep golden C1 as the refusal probe, and report the finding as a follow-up (the T0014 ingestion-owned `first_seen_at` path remains the fallback).
@@ -817,7 +848,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Synthesizing a date from `onlineOn` or from title/description prose — explicitly forbidden (that is the fabrication C1 guarded against).
 * Ingestion-owned `first_seen_at`/`last_seen_at` recency — needs accumulate-upsert, deferred to T0014.
 
-#### T0013.5: Freeze the v1 schema contract (record + guard)
+### T0013.5: Freeze the v1 schema contract (record + guard)
 **Objective:** Lock the **enriched 16-column** agent-visible schema and the public API contract as the **v1 deployed schema**, so downstream prompt-tuning and the eval baseline (T0011.5 and the deferred prompt-v2 pass) pin to a stable, reproducible contract — the "schemas fixed to the deployed version" precondition in `research/pre-deploy-refinement-plan.md` §1/§7 (Phase 0). **Runs LAST** in this milestone: it records and guards whatever T0013.2–T0013.4 produced. This is a **record-and-guard** ticket — it adds no columns of its own; it (a) writes the now-scattered contract (`config/prompts.yaml`, `scripts/init_db.sql`, `docs/Known_Issues.md`, the research plan) into one place of record, and (b) turns the informal freeze into an *enforced* one so a future prompt edit cannot silently surface a still-hidden column.
 **In Scope:**
 * **Decision record** — author `docs/Schema_Contract.md` capturing the frozen v1 contract:
@@ -839,7 +870,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * **Prompt-behavior tuning** (few-shot examples, honesty-rule rewrites — plan Phase 3): the freeze pins the *column set*; the SQL-generation *rules* stay open for the deferred prompt-v2 pass.
 * A runtime/DDL-vs-doc drift assertion (reflecting the physical table and diffing it against the doc) — the prompt-layer guard is the MVP; a physical-schema check is over-engineering for a hand-maintained table.
 
-### T0014: Milestone 14 - Pre-Deploy Known-Issue Fixes
+## T0014: Milestone 14 - Pre-Deploy Known-Issue Fixes — ✅ Done
 **Objective:** Fix the deploy-facing open items recorded in `docs/Known_Issues.md` (§ "Config, startup & deployment") — discovered fragilities that should be closed before any deploy — kept **deliberately separate** from the broader deploy-hardening body (security posture, readiness probe, topology, CI), which grew large enough to warrant its own (currently **unscheduled**) milestone — the deploy-hardening body in `research/pre-deploy-refinement-plan.md` §6 (see Backlog). This milestone and that deploy-hardening work must **not overlap**: T0014 = fixes to logged register bugs; the §6 body = greenfield deploy-readiness work. This milestone is a **sibling of the M15 behavior/scenario track** (both forked from the T0013.5 schema freeze; neither blocks the other) and is **code + register hygiene only** — no schema, prompt-behavior, ingestion, security-middleware, or topology work. Cross-refs: `docs/Known_Issues.md` (§ Config, startup & deployment); the deploy-hardening counterpart is the unscheduled **§6 milestone** (Backlog).
 **In Scope:** see sub-tickets below — config-load robustness, and Known-Issues register housekeeping.
 **Out of Scope:**
@@ -848,7 +879,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Prompt-behavior tuning, few-shots, or metric refinement (the M15 behavior track and the deferred prompt-v2 pass).
 * Any schema/DDL/API change (frozen at T0013.5).
 
-#### T0014.1: Graceful startup & config-load robustness
+### T0014.1: Graceful startup & config-load robustness
 **Objective:** Remove the import-time startup fragility flagged in `docs/Known_Issues.md` (§ Config, startup & deployment) and `research/pre-deploy-refinement-plan.md` §6d: `src/core/config.py` runs `settings = load_settings()` at module import, resolving `config/*.yaml` relative to the process CWD, so any non-`/app` CWD or a missing env var crashes at import rather than producing a clear startup error.
 **In Scope:**
 * Resolve `config/*.yaml` relative to a known project root (not the process CWD), so invocation from any directory works.
@@ -858,7 +889,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Reworking the settings schema or adding new settings.
 * The readiness probe (T0014.2).
 
-#### T0014.2: Known-Issues register housekeeping
+### T0014.2: Known-Issues register housekeeping
 **Objective:** Reconcile the living register so it reflects reality — archive entries already resolved by sibling work and sweep for stale ones — per the register's own upkeep rule (`docs/Known_Issues.md` "How to update"). No deploy-hardening or product code here.
 **In Scope:**
 * Move the now-resolved **"[LOW] `pre-deploy-refinement-plan.md` still has older 13-column / `job_level` hidden references"** entry from `docs/Known_Issues.md` to `docs/Resolved_Issues.md` (reconciled in the M15 scenario-matrix session), with its resolution note.
@@ -868,7 +899,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Fixing any deploy-hardening item (the unscheduled §6 milestone; see Backlog) or behavior item (M15).
 * The deploy-doc drift in `research/deployment-research-plan.md` §11 — that is deploy-doc work for the unscheduled deploy-hardening milestone, not register hygiene.
 
-### T0015: Milestone 15 - Agent Behavior Spec & Scenario Matrix
+## T0015: Milestone 15 - Agent Behavior Spec & Scenario Matrix — ⏸ Parallel track
 **Objective:** Define, freeze, and measure Resumi's intended per-scenario behavior against the frozen 16-column schema — the "act the way we want" target that prompt-tuning optimizes toward and the eval metrics grade. This is the **prompt-behavior track**, a **parallel sibling of T0014** (both forked from the T0013.5 freeze; neither blocks the other). It lives on its own `feature/t0015.x-*` branches and is **not present on the T0014 branch**. **Sub-tickets are indexed here, not fully specified** (per request) — the per-ticket In/Out-of-Scope + verification live in the sub-ticket commits and `docs/Completion_Reports.md` on the M15 branches:
 * **T0015.1** — reconcile the behavior spec to the frozen 16-column schema. *(done)*
 * **T0015.2** — settle the 10 open behavior decisions; freeze the scenario set + canonical phrasings (the `behavior_glossary`) and author `docs/Agent_Behavior_Spec.md`. *(done)*
@@ -876,7 +907,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * **T0015.4** — run the v1 scenario matrix against the `internhunter_eval` fixture DB and grade it. *(in progress — paused on the Groq daily token quota; 7/29 scenarios collected + graded, all 5 collected probes FAIL — see [[groq-free-tier-quota-eval-runs]])*
 * **T0015.5** — wire the `behavior_glossary` canonical strings into the prompt few-shots (few-shot honesty fixes for the C1–C5 probe failures). *(pending T0015.4)*
 
-### T0016: Milestone 16 - Security Posture (Public-Endpoint Hardening)
+## T0016: Milestone 16 - Security Posture (Public-Endpoint Hardening) — ✅ Done
 **Objective:** Implement the minimum responsible security posture for a *public* portfolio-demo deploy — the `research/pre-deploy-refinement-plan.md` §6b body plus its tightly-coupled §6k (graceful 429) and §6l (input cap) siblings — carved out of the (unscheduled) §6 deploy-hardening milestone into its own named track at the user's request (the Backlog note anticipated this: "to be named & scoped"). Scope is calibrated to the real threat model of a **$0-quota, read-only demo**: with no accounts, no PII, no write path, and Groq free-tier billing, "security" here collapses almost entirely into **availability** — keep the demo clickable and stop a script from draining the token quota (8k TPM / 200k TPD). Confidentiality/integrity controls that guard nothing here, and over-engineering (API keys, WAF, full header suites, distributed limiting), are explicitly excluded per CLAUDE.md §1. The §6f Langfuse-secrets item is **moot** — the deploy uses **Langfuse Cloud Hobby**, not the self-hosted stack (user decision 2026-07-12). Cross-refs: `research/pre-deploy-refinement-plan.md` §6b/§6k/§6l, `research/deployment-research-plan.md` §11, `docs/Known_Issues.md`.
 **In Scope:** see sub-tickets below — CORS, per-IP rate limiting + friendly 429 degradation, input length cap, and the `/docs` + minimal-headers decision.
 **Out of Scope:**
@@ -887,7 +918,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any schema/DDL/API-contract change (frozen at T0013.5) and any prompt-behavior change (M15).
 **Sequencing (execution order):** T0016.1 (CORS), T0016.2 (rate limit + 429), and T0016.4 (`/docs`/headers) all edit `src/api/app.py`, so run them in that order to avoid merge conflicts. T0016.3 (input cap) touches `src/api/schemas.py` / `src/api/routes/query.py` and is independent. None blocks another functionally.
 
-#### T0016.1: CORS middleware (config-driven, credential-less)
+### T0016.1: CORS middleware (config-driven, credential-less)
 **Objective:** Add `CORSMiddleware` so a browser-based demo UI on a known origin can call `POST /api/v1/agent/chat`, with the allowed origin(s) set in config (not hardcoded, per CLAUDE.md §1 params-in-config). Credential-less by design so a permissive origin can never combine with credentials — the CORS-spec footgun flagged in `deployment-research-plan.md` §11 (never `allow_origins=["*"]` with `allow_credentials=True`).
 **In Scope:**
 * Add an `api.cors` block to `config/settings.yaml`: `allowed_origins` (default `[]` — or dev `http://localhost` origins with a "set the deployed UI origin here" comment), `allow_credentials: false`, `allowed_methods: ["GET", "POST", "OPTIONS"]`, `allowed_headers: ["*"]`.
@@ -898,7 +929,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * The actual production origin value — filled at deploy once the demo-UI location (§6j) is decided; if the UI is served same-origin via FastAPI `StaticFiles`, CORS is never exercised and `allowed_origins` stays `[]`.
 * Rate limiting, headers, `/docs` (other sub-tickets).
 
-#### T0016.2: Per-IP rate limiting + graceful 429/quota degradation
+### T0016.2: Per-IP rate limiting + graceful 429/quota degradation
 **Objective:** Protect the Groq free-tier quota so an abuse script cannot `429` the public demo blank, and stop provider rate-limit/timeout errors from collapsing into the generic `500 "Failed to process query"` (`src/api/routes/query.py:52`) that is indistinguishable from a real bug. Bundles §6b (rate limit) with §6k-first-half (friendly 429) because both live on the same request-entry error surface, and adding `slowapi` introduces a *second* 429 source that must share one clean "busy, try again" path.
 **In Scope:**
 * Add `slowapi` to `pyproject.toml`; construct a `Limiter(key_func=get_remote_address)` and register its `RateLimitExceeded` handler on the app in `src/api/app.py`.
@@ -911,7 +942,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * **Streaming** responses (§6k second half — a UX/API-contract change owned by the Demo UI track).
 * API-key gating (rejected — see milestone Out of Scope).
 
-#### T0016.3: Request input hardening (length cap)
+### T0016.3: Request input hardening (length cap)
 **Objective:** Cap request input so a single oversized prompt cannot drain the TPM budget or wedge the agent loop. Today `src/api/routes/query.py:13` rejects only empty/whitespace and `src/api/schemas.py` sets no maximum on `query`.
 **In Scope:**
 * Add a maximum-length constraint to `QueryRequest.query` (Pydantic `Field(..., max_length=N)`, e.g. `N=2000`); surface the cap value from `config/settings.yaml` (`api.max_query_chars`) via a validator where practical, otherwise a single documented module constant.
@@ -922,7 +953,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Rate limiting / 429 (T0016.2).
 * Content moderation or prompt-injection filtering — the grounding rules + D-category refusal/injection goldens already cover misuse; no new filter (CLAUDE.md §1: don't over-engineer).
 
-#### T0016.4: `/docs` exposure decision + minimal security headers
+### T0016.4: `/docs` exposure decision + minimal security headers
 **Objective:** Make Swagger/OpenAPI exposure a deliberate choice and add the *one* cheap header that matters if an HTML demo UI is served — while explicitly declining a full header suite (near-zero value for a cookieless, auth-less JSON API).
 **In Scope:**
 * Decide and record `/docs` + `/redoc` exposure. **Default recommendation: keep them** (portfolio signal — shows a clean versioned API; the only abuse vector, the "Try it out" console, is already capped by T0016.2). Document `api.docs_enabled: false` as the locked-down alternative; it disables `/docs`, `/redoc`, and `/openapi.json` together.
@@ -932,7 +963,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * A full security-headers suite (`X-Content-Type-Options`, HSTS, etc.) — HSTS is handled by the platform's auto-TLS; the rest are negligible for this API. Explicitly skipped per the brainstorm.
 * CORS, rate limit, input cap (other sub-tickets).
 
-### T0017: Milestone 17 - Streaming Response Delivery
+## T0017: Milestone 17 - Streaming Response Delivery — ✅ Done
 **Objective:** Turn the agent's one-shot answer into a **token-by-token stream** over the public API, so the first words appear in ~1 s instead of after a 5–15 s blank wait — the single largest perceived-latency win for the clickable demo, and a genuine resume talking point ("streamed an LLM through a layered FastAPI backend without leaking agent internals"). This milestone is the **backend contract change only**; it ships and is fully verifiable with `curl` against the new endpoint, with **no UI and no deploy** — those are T0018. The full target design is `docs/MVP_Technical_Design.md` §9; this milestone implements it. It was split out of the former "Clickable Demo" placeholder (2026-07-13) because streaming is independently shippable and — unlike the UI — has **no open decisions blocking it**, so it proceeds now while the UI-location fork matures in T0018.
 **Decisions already fixed (do not re-litigate at scoping):**
 * **Streaming: YES**, and it is delivered as a **new parallel endpoint** (`POST /api/v1/agent/chat/stream`), *not* a replacement of `POST /api/v1/agent/chat`. The one-shot path and all its existing tests stay green (`MVP_Technical_Design.md` §9.6). `agent.groq.streaming` (currently `False`) flips to `True`.
@@ -946,7 +977,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any prompt-behavior or schema/DDL change; any fix to a measured honesty gap (separate work — streaming only makes existing behavior *more* visible, it adds no bypass of the tool/prompt path the eval scores, §9.6).
 **Sequencing (execution order):** T0017.1 (runtime + filter) **must** precede T0017.2 (service + endpoint) — the endpoint streams what the filtered runtime yields, and the leak test in 2.1 is the safety net the endpoint relies on. T0017.1 also front-loads the milestone's only real risk (the filter), so it is proven before any HTTP wiring.
 
-#### T0017.1: Runtime streaming + no-leak filter
+### T0017.1: Runtime streaming + no-leak filter
 **Objective:** Give `AgentRuntime` an `astream` method that yields the agent's **final-answer tokens only**, dropping the ReAct loop's tool-call chatter and raw tool output before anything can leave the runtime — the load-bearing piece that keeps the answer-only law intact under streaming (`MVP_Technical_Design.md` §9.2). No HTTP; provable by async-iterating the runtime directly.
 **In Scope:**
 * **First — the streaming probe (de-risks the filter).** The answer node name is **already verified**: `agent_factory().get_graph()` nodes are `['__start__', 'model', 'tools', '__end__']`, answer node `model` (recorded 2026-07-13 in `research/streaming-implementation-plan.md` §3) — so do **not** re-derive it. Do run a live tool-using query through the chosen mechanism to (a) confirm it still holds and (b) capture the two behaviors static graph inspection can't: whether tool-calling turns carry empty content, and whether any reasoning-before-tool text leaks as content. Use this same probe to make the v3-vs-fallback call in the next bullet.
@@ -960,7 +991,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * The SSE wire format, the endpoint, and the service generator (T0017.2).
 * The heavier "buffer a whole turn to be 100% certain" leak defense — rejected in §9.2 (it would defeat streaming on the one turn that most needs it); prompt line + leak test is the chosen MVP coverage.
 
-#### T0017.2: Streaming service + SSE endpoint
+### T0017.2: Streaming service + SSE endpoint
 **Status note (2026-07-14):** implemented on `feature/t0017.2-sse-endpoint`. The installed FastAPI 0.136.3 `ServerSentEvent` encoder only applies to route-level SSE producer functions, while this route needs pre-stream validation before returning the response. The endpoint therefore uses `ServerSentEvent` as the event vocabulary object and explicitly JSON-frames each `event:`/`data:` block before yielding it through `EventSourceResponse`; anti-buffering headers are set on the response and verified by tests.
 **Objective:** Expose T0017.1's runtime stream over HTTP as Server-Sent Events on a new `POST /api/v1/agent/chat/stream`, with the session-first / metadata-trailing ordering and in-band error delivery the one-shot status-code model can't provide once the response has started (`MVP_Technical_Design.md` §9.4–9.5).
 **In Scope:**
@@ -976,7 +1007,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Browser consumption / `EventSource`-vs-`fetch` — T0018.
 * Server-issued session-ID hardening and the data disclaimer (T0018); this ticket emits whatever `session_id` the service mints today.
 
-### T0018: Milestone 18 - Clickable Demo (UI + go-live)
+## T0018: Milestone 18 - Clickable Demo (UI + go-live) — 🔨 In progress
 **Status: scoped 2026-07-14** (was a placeholder from 2026-07-13). The UI-location fork and every open decision are now settled — the full pre-scoping, the rendered style options, and the locked decision table live in [`research/demo-ui-and-golive-plan.md`](../research/demo-ui-and-golive-plan.md) §0a. Takes the streamed API from T0017 and puts a clickable, deployed face on it, folding in the *small* go-live blockers so the project moves from "the API streams" to "here's a link, click it."
 **Objective:** Ship the visible product — a polished streaming chat UI consuming the T0017 SSE endpoint, deployed somewhere a reviewer can click, showcasing the honesty behavior (freshness caveat, negotiable-salary phrasing, a clean refusal). `research/pre-deploy-refinement-plan.md` §6j calls this "the highest-leverage gap in all of §6."
 **Decisions already fixed (do not re-litigate at scoping — settled 2026-07-14, `research/demo-ui-and-golive-plan.md` §0a):**
@@ -994,7 +1025,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * The streaming backend itself (done in T0017); rejecting client-supplied session IDs / any auth gate (`pre-deploy-refinement-plan.md` §6j: open endpoint + rate limit, not a key).
 **Sequencing (execution order):** **T0018.1 → T0018.2 → T0018.3 → T0018.4.** The serving wiring (.2) establishes the same-origin mount + frame-protection header the UI needs to run in a browser; the UI (.3) renders the disclaimer date, relies on the session-ID behavior .1 establishes, and is built with the `frontend-design` plugin; the deploy (.4) needs a built UI to ship. Each is small; none carries the no-leak risk T0017 already retired.
 
-#### T0018.1: Go-live glue — server session IDs, data disclaimer, DB readiness probe
+### T0018.1: Go-live glue — server session IDs, data disclaimer, DB readiness probe
 **Objective:** Land the three small backend blockers a trustworthy public demo needs, independent of any UI (`pre-deploy-refinement-plan.md` §6c/§6l; `demo-ui-and-golive-plan.md` §5). Backend-only, unit-testable now.
 **In Scope:**
 * **Server-issued session IDs.** `session_id` is client-supplied + optional (`src/api/schemas.py`), used directly as the LangGraph checkpointer thread key (`src/core/checkpointer.py`); the service already mints one when it is absent and returns it (`src/agents/service.py`). Harden that mint to an **unguessable `uuid4`**, and document the contract the UI follows: **omit `session_id` on the first turn, then reuse the server-issued one**. Client-supplied ids stay accepted (advisory) so the one-shot path and existing tests are unchanged — collision avoidance is achieved by the omit-first-turn UI behavior, not by rejecting ids.
@@ -1006,7 +1037,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * The UI (T0018.2); CORS origins (moot under same-origin); deploy (T0018.3).
 * Rejecting/validating client-supplied session IDs, any auth, session TTL/eviction (`pre-deploy-refinement-plan.md` §6m).
 
-#### T0018.2: Same-origin static serving + frame protection (wiring)
+### T0018.2: Same-origin static serving + frame protection (wiring)
 **Objective:** Establish the serving mechanism the UI needs — mount a static directory same-origin from FastAPI and add the frame-protection header T0016.4 deferred — independent of the UI's visual content. Backend/wiring-only, route-precedence testable now (`demo-ui-and-golive-plan.md` §2, §5.3).
 **In Scope:**
 * **Static mount** — create `src/api/static/` and mount it in `src/api/app.py` via `StaticFiles(directory="src/api/static", html=True)` at `/`, added *after* the routers so `/api/v1/*` and `/docs` match first (FastAPI 0.136.3; a `/`-mount is last-resort in match order). Ship a **minimal placeholder `index.html`** so the mount is real and testable; the Editorial page fills it in T0018.3.
@@ -1016,7 +1047,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 **Out of Scope:**
 * The Editorial UI, its CSS/JS, and SSE consumption (T0018.3); CORS origins (moot under same-origin); deploy (T0018.4); a fuller CSP.
 
-#### T0018.3: Editorial streaming chat UI (vanilla, front-end plugin)
+### T0018.3: Editorial streaming chat UI (vanilla, front-end plugin)
 **Objective:** Ship the clickable product — the vanilla, Editorial-styled page (served by the T0018.2 mount) that consumes the T0017 SSE stream and makes every backend capability (streaming, honesty, memory, tracing) visible (`demo-ui-and-golive-plan.md` §2–§4).
 **Tooling requirement:** the implementing agent **must use the `frontend-design` plugin/skill** to drive the visual design (Editorial direction, typography, layout, spacing). This is a design-led ticket; do not hand-wave the CSS.
 **In Scope:**
@@ -1028,7 +1059,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 **Out of Scope:**
 * The static mount + frame-protection header (done in T0018.2); the polish tier (light/dark toggle, token fade-in, typing-cursor beyond a simple one, copy-answer button); any JS build step / framework; deploy (T0018.4); filling CORS origins (unused under same-origin).
 
-#### T0018.4: Deploy topology + first public deploy
+### T0018.4: Deploy topology + first public deploy
 **Objective:** Put the demo behind a clickable public URL — confirm the researched topology, inject secrets safely, and deploy the same-origin app + DB + tracing (`deployment-research-plan.md`; `demo-ui-and-golive-plan.md` §5.5).
 **In Scope:**
 * **Confirm + record topology** — fill the blank "Decision:" lines in `deployment-research-plan.md`: API on **Render** (Dockerfile, `docker/Dockerfile`), Postgres on **Neon** (pooler DSN), tracing on **Langfuse Cloud Hobby**; **$10/mo** hard ceiling (§10).
@@ -1040,7 +1071,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 **Out of Scope:**
 * The ingestion cron / GitHub Actions (separate milestone); a CI merge gate (`§6i`) and custom domain (cosmetic) unless separately pulled in; connection-pool tuning and other §6m deferrals.
 
-### Backlog — unscheduled milestones (removed 2026-07-12; to be named & scoped)
+## Backlog — unscheduled milestones (removed 2026-07-12; to be named & scoped) — 📋 Backlog
 Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Ingestion Deploy Readiness** (briefly numbered T0016–T0018) on 2026-07-12 at the user's request — they need more specific milestone names and scoping before they re-enter the numbered roadmap. Their substance is preserved in research and will seed the future tickets:
 * **Deploy hardening** — `research/pre-deploy-refinement-plan.md` §6, **minus the security posture (§6b) now carved into T0016 (Milestone 16)**. §6f (Langfuse secrets) is moot — the deploy uses **Langfuse Cloud Hobby**, not self-host (user decision 2026-07-12). Remaining unscheduled: topology (§6a), DB readiness probe (§6c), what-data-ships (§6g), deploy-doc drift (§6h), CI gate (§6i).
 * **Demo UI** — **promoted to the numbered roadmap on 2026-07-13, then split:** the streaming backend became **T0017 (Milestone 17, fully scoped)** and the UI + go-live became **T0018 (Milestone 18, fully scoped 2026-07-14; re-split 2026-07-15 into T0018.1–.4)**. See both above. `research/pre-deploy-refinement-plan.md` §6j; `research/demo-ui-and-golive-plan.md`.

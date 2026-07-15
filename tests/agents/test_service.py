@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 import unittest
 from unittest.mock import AsyncMock
 
@@ -51,6 +52,7 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIsNotNone(result["session_id"])
+        self.assertEqual(uuid.UUID(result["session_id"]).version, 4)
         self.assertIsNone(result["trace_url"])
         runtime.ainvoke.assert_awaited_once_with(
             query="what time is it?",

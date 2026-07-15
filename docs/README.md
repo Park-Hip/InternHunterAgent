@@ -30,7 +30,10 @@ drifts) across files.
 |---|---|
 | Prompt design and conventions | `Prompt_Playbook.md` |
 | The frozen v1 `clean_jobs` column contract | `Schema_Contract.md` |
-| How streaming / SSE works in this repo (explainer) | `Streaming_And_SSE_Explained.md` |
+
+> Teaching walkthroughs (e.g. the SSE/streaming beginner's guide) live outside `docs/`
+> in the top-level [`guides/`](../guides/) folder — they explain concepts rather than
+> record project state.
 
 ## Review artifacts (archived — findings already migrated into the registers)
 

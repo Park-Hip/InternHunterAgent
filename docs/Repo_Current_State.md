@@ -17,12 +17,14 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **M15** (T0015.3) — Prompt versioning mechanism: `config/prompts.yaml` now carries a top-level `prompt_version`, the runtime loads it explicitly, Langfuse trace metadata records it without the tracing layer importing prompt loaders, and eval runs surface the same version in `run_case` results and `test_three_seams` output so later v1↔v2 comparisons are attributable to one exact prompt snapshot.
 - **M15** (T0015.2) — Settled behavior decisions + frozen scenario set & canonical phrasings: all 10 open §12 decisions in `research/agent-behavior-question-bank.md` are resolved and recorded (priority ladder frozen as Safety > Honesty > Helpfulness > Style), G47 canonical phrasings are FINAL, an 18-entry `behavior_glossary` machine source-of-truth is added to `config/prompts.yaml` (reference-only, not yet wired into prompts), and the human spec of record [`Agent_Behavior_Spec.md`](Agent_Behavior_Spec.md) carries the frozen scenario matrix (18 golden-anchored + 5 coverage-gap + 6 decision-probe rows with fixture ids and pass/fail). No prompt text, golden, or code changed; prompt-text edits that quote the glossary are deferred to T0015.5.
 
+- **M15** (T0015.4) - V1 manual scenario matrix complete: 29/29 scenario IDs collected against the fixture DB with `prompt_version: v1`, row-level pass/fail grading recorded in `evals/v1_scenario_matrix.md`, and the failures footer distilled into the T0015.5 prompt-tuning worklist.
+
 ## In progress / next
 - **Milestone 11 not fully closed:** T0011.5 (threshold calibration + baseline report) remains **open** — its two hard prerequisites (T0012.2 qwen `<think>` leak, T0012.3 deepeval metric-template bug) are now cleared, so it is unblocked.
 - **Milestone 12 complete.** Milestone 10 remaining lower-priority items (freshness-honesty determinism, hidden-salary phrasing, the best-effort id-in-SQL nudge) are tracked in [`Known_Issues.md`](Known_Issues.md), not as blocking tickets.
 - **T0012.10's live judge-agreement spot-check is BLOCKED** — no `GOOGLE_API_KEY`/Groq creds in the coder sandbox; logged as a follow-up in [`Known_Issues.md`](Known_Issues.md) for the maintainer to run.
 - **Schema-enrichment sequence complete:** the v1 schema contract is recorded and guarded. **Next recommended ticket:** T0011.5 (threshold calibration + baseline report) remains the eval-baseline calibration ticket on the broader roadmap.
-- **T0015.2 is complete; T0015.4 is next within Milestone 15.** The behavior target is frozen (decisions signed off, G47 FINAL, glossary + spec of record in place), so the manual verification matrix / eval-comparison work can now run against `Agent_Behavior_Spec.md` §4 and stamp each row with the T0015.3 prompt version. T0015.5 then wires the `behavior_glossary` strings into the prompt few-shots.
+- **T0015.4 is complete; T0015.5 is next within Milestone 15.** The v1 manual matrix now gives T0015.5 a concrete failure list: glossary-backed few-shots, internship-bias rebalance, multi-part/multi-turn handling, and synonym/abstraction/fallback guidance.
 
 ## Current folder structure
 ```text
@@ -426,18 +428,13 @@ register so it stays focused on what is still open). A full per-module logic rev
 (open) / `Resolved_Issues.md` (closed).
 
 ## Next recommended ticket
-Milestone 15 now has the reconciled behavior spec (T0015.1), the prompt-version stamp (T0015.3), and the frozen behavior target — settled decisions, FINAL canonical phrasings, and the `Agent_Behavior_Spec.md` scenario matrix (T0015.2) — all in place. **Recommended next: T0015.4** to build the manual verification matrix / eval-comparison run against `Agent_Behavior_Spec.md` §4, stamping each row with the T0015.3 prompt version. T0015.5 then wires the `behavior_glossary` canonical strings into the prompt few-shots.
+Milestone 15 now has the reconciled behavior spec (T0015.1), the frozen behavior target (T0015.2), the prompt-version stamp (T0015.3), and the completed v1 manual scenario matrix (T0015.4). **Recommended next: T0015.5** to wire the `behavior_glossary` canonical strings into prompt few-shots and address the 16 failing rows recorded in `evals/v1_scenario_matrix.md`.
 
-Other future phases (resume/embedding retrieval, charts, typed error contract) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.
+Other future phases (resume/embedding retrieval, charts, typed error contract) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` section 6 before implementation.
+
 ## T0015.4 supplement
-- In-progress ticket: T0015.4 on branch `feature/t0015.4-v1-scenario-matrix` — offline artifacts + hardened runner done; **live matrix paused at 7/29 (see "Live run status" below).**
-- Added `evals/scenarios_v1.yaml`, `scripts/run_scenario_matrix.py`, `evals/test_scenarios_v1_load.py`, and the committed template `evals/v1_scenario_matrix.md`.
-- Added offline verification commands: `uv run pytest evals/test_scenarios_v1_load.py`, `uv run python scripts/run_scenario_matrix.py --template`, and `uv run python -c "import yaml; s=yaml.safe_load(open('evals/scenarios_v1.yaml', encoding='utf-8')); print(len(s), sum(1 for x in s if x['probe']))"`.
-- Live collect-only run remains a developer step because it requires Groq credentials plus the fixture DB served through the API with `DATABASE_URL=postgresql+psycopg://internhunter:internhunter@127.0.0.1:5433/internhunter_eval`.
-- Updated next-ticket recommendation: T0015.5 after the developer records the live matrix results.
-
-### Live run status — IN PROGRESS, PAUSED (2026-07-12)
-- The live collect-only pass **has been started** on a credentialed machine and is **paused mid-run at 7/29 scenarios**, not yet complete. Collected so far (checkpointed in `evals/v1_scenario_matrix.observed.json`): **A1, A2** (non-probes) and **C1, C2, C3, C4, C5** (probes, 3× each). The 22 remaining scenarios (incl. probes C7, D1, D2, D3, M-G10, M-G26d, M-G29, M-G44, M-D4, M-D3c) are still `_pending live run_` in `evals/v1_scenario_matrix.md`.
-- **Why paused:** Groq free-tier **daily** token cap (TPD 200,000) for `qwen/qwen3.6-27b` was exhausted (`tokens per day (TPD)` 429). The full matrix ≈ 470k tokens ≈ **~3 daily windows** on free tier — see [[groq-free-tier-quota-eval-runs]] and `Known_Issues.md`.
-- **To RESUME after the daily reset:** re-seed + re-boot the API against the fixture DB (Windows: use the `SelectorEventLoop` launcher — see the T0015.4 entry in `Manual_Verification_Guide.md`), then re-run `uv run python scripts/run_scenario_matrix.py --probes-only --sleep 55` (finishes the 10 remaining probes) followed by `uv run python scripts/run_scenario_matrix.py --sleep 55` (fills the non-probes). The checkpoint makes it skip the 7 already done and continue. `run_scenario_matrix.py` was hardened during this run with `--sleep`, per-scenario checkpoint/resume, `--probes-only`/`--ids`, and a 240s turn timeout.
-- Early signal (ungraded, indicative): every probe collected so far missed its spec caveat/hedge (C1 no `CREATED-ON-CAVEAT`; C2 crowned the 40M VND row + empty-answer fallback; C3 a DB-error/zero-result inconsistency; C4 inconsistent remote hedge; C5 one run used the forbidden "not in the data"), plus the `<think>`-leak empty answers and internship-bias persona leak — all feeding T0015.5's few-shot worklist.
+- Completed ticket: T0015.4 on branch `feature/t0015.4-v1-scenario-matrix` - the v1 manual scenario matrix is now fully collected and graded.
+- Live matrix status: 29/29 scenario IDs observed in `evals/v1_scenario_matrix.observed.json`; no pending IDs remain. Probe rows have 3 runs each and non-probe rows have 2 runs each.
+- Final grading: 13 passing scenarios and 16 failing scenarios. Passing: A1, A2, A3, A4, B2, D1, D2, D3, E1, E2, M-G26d, M-G44, M-D3c. Failing: B1, C1, C2, C3, C4, C5, C6, C7, M-G03, M-G10, M-G29, M-D2, M-D4, M-D7, M-D8, M-D9.
+- The failures footer in `evals/v1_scenario_matrix.md` is the ranked T0015.5 prompt-tuning worklist: glossary-backed few-shots, internship-bias rebalance, multi-part/multi-turn handling, and synonym/abstraction/fallback guidance.
+- The prior Groq free-tier pause at 7/29 is resolved and archived in `docs/Resolved_Issues.md`; remaining behavior misses are expected input to T0015.5, not fixes made in T0015.4.

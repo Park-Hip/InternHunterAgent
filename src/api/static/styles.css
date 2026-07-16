@@ -1,0 +1,341 @@
+/* ===========================================================================
+   InternHunter — Editorial demo UI (T0018.3)
+   Light theme only. System serif stack only (no font files, CSP-clean).
+   One accent: vermilion, spent on the "verified column" rule beside answers.
+   =========================================================================== */
+
+:root {
+  --paper:      #FBFAF7;   /* warm near-white ground */
+  --ink:        #1B1A17;   /* body / display ink */
+  --ink-soft:   #423E38;   /* secondary reading ink */
+  --muted:      #6E6A62;   /* captions, dateline, labels */
+  --faint:      #928D83;   /* least-emphasis text */
+  --hairline:   #E4DFD5;   /* rules and dividers */
+  --hairline-2: #EFEBE2;   /* faintest fills */
+  --accent:     #CB4322;   /* vermilion — used sparingly */
+  --accent-ink: #A5341A;   /* accent on light fills, AA text */
+  --user-fill:  #F3EFE6;   /* the reader's own words */
+
+  --serif: Charter, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+
+  --measure: 34rem;        /* reading column width */
+  --space:   1.5rem;
+}
+
+/* ---- reset-ish -------------------------------------------------------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input { font: inherit; color: inherit; }
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.5rem 0.9rem;
+  z-index: 10;
+}
+.skip-link:focus { left: 0.75rem; top: 0.75rem; }
+
+/* ---- page frame ------------------------------------------------------- */
+.sheet {
+  max-width: 43rem;
+  margin: 0 auto;
+  padding: clamp(1.75rem, 5vw, 4rem) clamp(1.25rem, 5vw, 2.5rem) 3rem;
+}
+
+/* ---- masthead --------------------------------------------------------- */
+.masthead {
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 1.25rem;
+}
+
+.masthead__eyebrow {
+  margin: 0 0 0.9rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.masthead__title {
+  margin: 0;
+  font-size: clamp(2.75rem, 11vw, 4.75rem);
+  font-weight: 700;
+  line-height: 0.94;
+  letter-spacing: -0.02em;
+}
+
+.masthead__standfirst {
+  margin: 1.1rem 0 0;
+  max-width: var(--measure);
+  font-size: 1.15rem;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+/* dateline: a hairline-boxed edition line, doubling as the data disclaimer */
+.dateline {
+  margin: 1.25rem 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--hairline);
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+/* ---- conversation column --------------------------------------------- */
+.column {
+  margin: 0;
+  padding: 2.25rem 0 0.5rem;
+}
+
+.lede {
+  max-width: var(--measure);
+}
+.lede__kicker,
+.leads__kicker {
+  margin: 0 0 0.4rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.lede__text {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--ink-soft);
+}
+
+/* a turn = one exchange stack */
+.turn {
+  margin: 0 0 2rem;
+  max-width: var(--measure);
+}
+
+/* the reader's question */
+.turn__you {
+  margin: 0 0 0.85rem;
+}
+.turn__label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.turn__you-text {
+  margin: 0;
+  padding: 0.55rem 0.9rem;
+  background: var(--user-fill);
+  border-radius: 2px;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+/* the agent's answer — marked by the vermilion editor's rule (signature) */
+.turn__agent {
+  padding-left: 1.1rem;
+  border-left: 2px solid var(--accent);
+}
+.turn__agent .turn__label { color: var(--accent-ink); }
+.turn__answer {
+  margin: 0;
+  white-space: pre-wrap;   /* preserve the agent's own line breaks */
+  word-break: break-word;
+}
+
+/* streaming cursor: a thin vermilion tick while tokens arrive */
+.turn__agent.is-streaming .turn__answer::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 1px;
+  vertical-align: -0.15em;
+  background: var(--accent);
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* pending state before the first token lands */
+.turn__answer--pending {
+  color: var(--faint);
+  font-style: italic;
+}
+
+/* an error answer reads plainly, no alarm colour */
+.turn__agent.is-error {
+  border-left-color: var(--faint);
+}
+.turn__agent.is-error .turn__label { color: var(--muted); }
+
+/* trailing "view trace" link, appears after metadata when trace_url is set */
+.turn__trace {
+  margin: 0.7rem 0 0;
+  font-size: 0.8rem;
+}
+.turn__trace a {
+  color: var(--accent-ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent);
+  padding-bottom: 1px;
+}
+.turn__trace a:hover { color: var(--accent); }
+
+/* ---- suggested questions (leads) ------------------------------------- */
+.leads {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--hairline);
+}
+.leads__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: left;
+  padding: 0.9rem 1rem;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.chip:hover {
+  border-color: var(--ink);
+  background: var(--hairline-2);
+}
+.chip__tag {
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+.chip__text {
+  font-size: 0.98rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+/* ---- composer --------------------------------------------------------- */
+.composer {
+  margin-top: 1.75rem;
+}
+.composer__label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.composer__row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.6rem;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 0.4rem;
+}
+.composer__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0.5rem 0.1rem;
+  font-size: 1.15rem;
+}
+.composer__input::placeholder { color: var(--faint); font-style: italic; }
+.composer__input:focus { outline: none; }
+.composer__send {
+  flex: 0 0 auto;
+  padding: 0.5rem 1.4rem;
+  background: var(--ink);
+  color: var(--paper);
+  border: 0;
+  border-radius: 2px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.composer__send:hover { background: var(--accent); }
+
+/* disabled (in-flight) state for the whole input surface */
+.chip:disabled,
+.composer__input:disabled,
+.composer__send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.composer__send:disabled:hover { background: var(--ink); }
+.chip:disabled:hover { border-color: var(--hairline); background: transparent; }
+
+/* ---- colophon --------------------------------------------------------- */
+.colophon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 2.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hairline);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+}
+
+/* ---- toast (pre-stream failure) -------------------------------------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  max-width: min(90vw, 26rem);
+  padding: 0.8rem 1.1rem;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 2px;
+  font-size: 0.9rem;
+  box-shadow: 0 6px 24px rgba(27, 26, 23, 0.22);
+  z-index: 20;
+}
+.toast[hidden] { display: none; }
+
+/* ---- focus + motion floor -------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn__agent.is-streaming .turn__answer::after { animation: none; }
+  * { scroll-behavior: auto; }
+}
+
+/* ---- phone ------------------------------------------------------------ */
+@media (max-width: 32rem) {
+  .leads__grid { grid-template-columns: 1fr; }
+  .composer__send { padding: 0.5rem 1.1rem; }
+}

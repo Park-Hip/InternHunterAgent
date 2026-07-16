@@ -1,4 +1,13 @@
 ## Current branch
+`feature/t0017.1-runtime-streaming` - the **T0017.1 Runtime streaming + no-leak filter** branch.
+
+This branch is stacked on the T0016 security-posture sequence after `feature/t0016.4-docs-headers` (`3f66c51`). T0017.1 adds the runtime-only streaming method; HTTP/SSE transport, service generator changes, UI work, and deploy plumbing remain out of scope for this branch.
+
+- Do not rebase this branch onto `main` without an explicit maintainer decision. `main` has historically lagged the M12/M13/T0016 work; use the ticket branch topology recorded here and in `Tickets.md`.
+- The M15 behavior work is not part of this branch unless explicitly merged later. Anything about `Agent_Behavior_Spec.md`, the scenario matrix, or `behavior_glossary` belongs to that parallel track.
+- Everything for this branch's current work is in [`Tickets.md`](Tickets.md) -> **T0017** and the T0017 completion entries in [`Completion_Reports.md`](Completion_Reports.md).
+
+### Historical branch snapshot (T0014)
 `fix/known-issues-hardening` — the **Milestone 14 (Pre-Deploy Known-Issue Fixes)** branch.
 
 **Branch topology — read this before any git work.** This branch was forked from `51913f6` (the **T0013.5 schema-freeze** commit), **not** from `main`. `main`/`origin/main` is stale at **T0011.6** — M12, M13, and the M15 behavior track are **not merged there**; they exist only as feature branches. This branch is a **parallel sibling of the M15 behavior/scenario track** (`feature/t0015.4-v1-scenario-matrix`): both forked at T0013.5 and run independently, neither blocking the other.
@@ -20,7 +29,23 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **M13** (T0013.1–.5) — Schema Enrichment & v1 Freeze: `tech_stack` rebuilt against an external vocabulary (audit coverage 58% → 89%); `job_level`, `listing_expires_on`, and `created_on` exposed to the agent; the enriched **16-column** v1 contract recorded in [`Schema_Contract.md`](Schema_Contract.md) and enforced by prompt-freeze guards. **This is this branch's base (`51913f6`).**
 
 ## In progress / next
-**This branch = Milestone 14 — Pre-Deploy Known-Issue Fixes** ([`Tickets.md`](Tickets.md) → T0014). Scope is **only** the deploy-facing items in [`Known_Issues.md`](Known_Issues.md) § "Config, startup & deployment" — deliberately **kept separate** from the broader §6 deploy-hardening body (an **unscheduled** milestone — see `Tickets.md` Backlog). Both sub-tickets are complete:
+**This branch = T0017.1 complete.** T0016 is also complete underneath it:
+
+- **T0016.1 - CORS middleware:** `config/settings.yaml` carries `api.cors`, and `src/api/app.py` registers credential-less `CORSMiddleware`.
+- **T0016.2 - Rate limiting and friendly busy path:** `slowapi` is installed, `api.rate_limit` defaults to `"15/minute"`, chat is limited, health is not, and provider pressure maps to a public-safe busy response.
+- **T0016.3 - Request input hardening:** `api.max_query_chars: 2000` is recorded in config, while `src/api/schemas.py` currently enforces the matching static `DEFAULT_MAX_QUERY_CHARS = 2000` Pydantic cap. If this value changes later, update both or introduce a deliberate config-backed schema loader.
+- **T0016.4 - `/docs` exposure and headers decision:** `api.docs_enabled: true` keeps `/docs`, `/redoc`, and `/openapi.json` public for the portfolio demo; `api.docs_enabled: false` disables all three. No security-header middleware is added until FastAPI serves a same-origin HTML UI.
+
+**Status update (2026-07-13):** T0016.1-T0016.4 are complete underneath this branch, and T0017.1 is complete on top. Remaining open issues live in [`Known_Issues.md`](Known_Issues.md), resolved/background items live in [`Resolved_Issues.md`](Resolved_Issues.md), and documentation hygiene findings from the T0016 review live in [`Documentation_Hygiene_Review_T0016.md`](Documentation_Hygiene_Review_T0016.md).
+
+**Milestone map (see `Tickets.md`):** T0013 freeze -> T0014 known-issue fixes -> T0016 security posture -> T0017 clickable demo/runtime streaming (this branch) -> unscheduled deploy-hardening and ingestion-deploy-readiness backlog.
+
+**T0017.1 status (2026-07-13):** complete on `feature/t0017.1-runtime-streaming`. `AgentRuntime.astream(...)` now yields transport-agnostic token events from the stable `agent.astream(..., stream_mode="messages")` path, filters to non-empty model-node chunks without `tool_call_chunks`, and emits one trailing metadata event after Langfuse flush. `agent.groq.streaming` is enabled, and the system prompt now tells the model not to narrate before tool calls. The live Groq/Postgres probe is blocked in this sandbox and tracked in [`Known_Issues.md`](Known_Issues.md).
+
+**Next recommended ticket:** **T0017.2** streaming service generator + HTTP/SSE endpoint, using the runtime event dicts from T0017.1.
+
+### Historical in-progress snapshot (T0014)
+**Historical T0014 snapshot — Pre-Deploy Known-Issue Fixes** ([`Tickets.md`](Tickets.md) -> T0014). Scope was **only** the deploy-facing items in [`Known_Issues.md`](Known_Issues.md) section "Config, startup & deployment", deliberately kept separate from the broader deploy-hardening body. Both sub-tickets are complete:
 - **T0014.1 — Graceful startup & config-load robustness** is complete on this branch: `src/core/config.py` now resolves YAML and `.env` from the repo root and raises `ConfigLoadError` during startup instead of validating at import time; `src/core.db.py` is lazy for the same reason; FastAPI `lifespan` now fails fast on bad config.
 - **T0014.2 — Known-Issues register housekeeping** is complete: the named 13-column/`job_level` drift bullet was already absent from `Known_Issues.md` on this branch, so the sweep is recorded as a no-op archive note in `Resolved_Issues.md`; the qwen note remains open but clarified as a final pre-T0011.5 confirmation rather than an untested-tool-loop concern.
 
@@ -179,6 +204,15 @@ Practical commands from the repository layout:
 - `docker compose -f infra/docker-compose.yaml up --build` (Langfuse observability stack)
 
 ## Build/test status
+- Command run: `pytest tests/agents/runtime/test_react_agent.py -q`
+- Result: failed because `pytest` is not on PATH in this shell; rerun through `uv run`.
+- Command run: `uv run pytest tests/agents/runtime/test_react_agent.py -q` (T0017.1 focused runtime stream tests)
+- Result: `9 passed`.
+- Command run: `uv run pytest -q` (T0017.1 full standard suite)
+- Result: `273 passed, 7 skipped, 19 deselected, 4 subtests passed`; the 7 skips are the existing eval fixture DB reachability skips because Postgres on `localhost:5433` is not running in this sandbox.
+- Command run: `uv run ruff check src/agents/runtime/react_agent.py tests/agents/runtime/test_react_agent.py`
+- Result: `All checks passed!`.
+- Live probe prerequisites checked for T0017.1: `GROQ_API_KEY` missing and Postgres `127.0.0.1:5433` closed in this sandbox, so the live streaming REPL probe is blocked and tracked in [`Known_Issues.md`](Known_Issues.md).
 - Command run: `uv run pytest -q tests/api/test_query.py tests/api/test_rate_limit.py tests/api/test_cors.py tests/api/test_startup_config.py`
 - Result: `18 passed`.
 - Command run: `uv run ruff check src/api/schemas.py tests/api/test_query.py`
@@ -337,6 +371,9 @@ register so it stays focused on what is still open). A full per-module logic rev
 (open) / `Resolved_Issues.md` (closed).
 
 ## Next recommended ticket
+Current recommendation from this branch: no further T0016 ticket is recorded. The next roadmap item in `docs/Tickets.md` is the T0017 Clickable Demo placeholder; T0011.5 baseline calibration remains open separately when maintainer credentials are available.
+
+### Historical roadmap note
 T0014 is now closed on `fix/known-issues-hardening`: T0014.1 removed import-time config validation fragility, and T0014.2 reconciled the known-issues register/archive. The qwen item remains open only as a final pre-baseline confirmation, so the next recommended ticket is **T0011.5 â€” threshold calibration + baseline report** once maintainer credentials are available.
 Milestone 9 (data ingestion) is closed, and the structured-query-vs-detail split is complete (T0009.10 bounded `query_clean_jobs`, T0009.11 `get_job_details`). Milestone 10 (pre-deploy hardening) is essentially complete through T0010.7. T0011.1 (judge spike + harness scaffold), T0011.2 (eval fixture DB + golden dataset), T0011.3 (three-seam instrumentation + metric stack), and T0011.4 (Langfuse score writeback) are all closed: the judge is picked, `internhunter_eval` is seeded and pinned, the 17-case golden dataset loads, `evals/harness.py` + `evals/test_three_seams.py` run the agent end-to-end and score every seam, and `evals/writeback.py` attaches every score onto the same Langfuse trace as the raw agent run. T0011.6 (Gemini judge provider) is also closed, plus its rate-limit follow-up (judge RPM throttle, now formally T0012.1). T0012.2 (qwen `<think>` leak fix), T0012.3 (`deepeval` `ArgumentCorrectnessMetric`/`TaskCompletionMetric` template-bug fix), T0012.4 (populate `trace_url`, closing C4), T0012.5 (graceful empty-answer fallback, closing the remaining [MED] item), T0012.6 (coerce non-str model content in `generate_sql`, closing the last pre-existing mypy residual on `query_clean_jobs.py`), T0012.7 (`eval` pytest marker, closing the T0011.1/T0011.6 plain-suite live-network findings), and T0012.8 (native-async `generate_sql`, closing the last "Query tooling & SQL safety" finding) are all now closed — Milestone 12 (Hardening) is complete. Seam-1/seam-3 scores are no longer blanked by the deepeval bug, both hard prerequisites for T0011.5 are cleared, the API response's `trace_url` field is a real Langfuse URL when tracing is enabled, an empty/unreadable agent answer now returns `200` + `FALLBACK_ANSWER` instead of a `500`, `generate_sql` no longer risks an `AttributeError` on a list-content model reply, `uv run pytest` no longer makes a live Groq/Gemini call or takes several minutes, and `generate_sql` awaits the Groq model natively instead of parking a thread-pool worker per SQL-gen round-trip. Two follow-ups remain open from T0012.2/T0012.3 (see `Known_Issues.md`): the full live A3/C3 data-answer re-check from T0012.2 (Docker wasn't running in that sandbox), and a one-golden live spot-check of the new "Argument Correctness"/"Task Completion" GEval scores from T0012.3 (deliberately skipped this session to avoid API spend). Two low-priority follow-ups from T0012.7 are also logged: `evals/conftest.py`'s `DATABASE_URL` redirect still fires at collection time regardless of the marker, and `deepeval test run` requires an explicit `-m eval` passthrough to select the live tests. **Recommended next: T0011.5** (threshold calibration + baseline report) — both hard prerequisites are now cleared, so this can proceed. **Ingestion Deploy Readiness is renumbered T0013 (deferred, sequenced after T0012)**, its full design captured in `research/deployment-research-plan.md` §4.1–§4.2, to be ticketed once the evaluation baseline lands.
 

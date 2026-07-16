@@ -14,6 +14,9 @@ agent:
   provider: groq
 
   react:
+    # Set provider: google and model: gemini-2.5-flash for the T0015.6 arm.
+    # Keep this Groq/qwen default until the live comparison is complete.
+    provider: groq
     model: qwen/qwen3.6-27b
     temperature: 0.2
     max_tokens: 2048
@@ -21,9 +24,11 @@ agent:
     max_retries: 2
     streaming: true
     reasoning_format: hidden
-    reasoning_effort: null
+    reasoning_effort: none
+    thinking_budget: 0
 
   sql_generation:
+    provider: groq
     model: qwen/qwen3.6-27b
     temperature: 0.0
     max_tokens: 1024
@@ -48,3 +53,9 @@ eval:
     thinking_budget: 0      # gemini-2.5-flash: 0 disables thinking (kills ~90% of judge output cost); ignored by the groq branch
   fixture:
     database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval
+  reasoning_ab:
+    # The live A/B run changes only agent.react.reasoning_effort between arms.
+    # qwen3 models on Groq only support "none" or "default" for reasoning_effort
+    # (verified live: "low" returns a 400 BadRequestError) — no "low" arm exists.
+    baseline: default
+    none: none

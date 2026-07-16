@@ -93,3 +93,25 @@ Follow-ups / Docs).
 - **Manual verification:** confirm config has independent `agent.react` and `agent.sql_generation` blocks; confirm `agent_factory()` uses `build_model("react")`; confirm `query_clean_jobs.generate_sql()` uses `build_model("sql_generation")`; with maintainer credentials and seeded DB, run `generate_sql("List the AI Engineer jobs that require Python, sorted by salary descending.")`.
 - **Risks:** live Groq behavior still requires maintainer credentials; no prompt, schema, eval fixture, API, or UI changes were made for this split.
 - **Follow-ups:** none from the config split itself; existing salary-sort prompt-adherence and maintainer live-verification notes remain tracked in `Known_Issues.md`.
+
+## T0015.5 — ReAct reasoning-effort A/B runner
+- **Summary:** added config-declared `baseline`, `low`, and `none` ReAct arms; extended the scenario runner with explicit arm validation and independent output/checkpoint paths; preserved scenario ordering, resume behavior, and the SQL-generation profile.
+- **Files:** `config/settings.yaml`, `scripts/run_scenario_matrix.py`, `evals/test_reasoning_ab_runner.py`, `evals/reasoning_ab_results.md`, `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, `docs/Completion_Reports.md`.
+- **Commands:** `uv run pytest evals/test_reasoning_ab_runner.py evals/test_scenarios_v1_load.py -q`; `uv run pytest tests/agents/runtime/test_provider.py tests/agents/runtime/test_prompts.py -q`; `uv run python scripts/run_scenario_matrix.py --template`.
+- **Build & test:** focused runner/scenario tests `5 passed`; provider/prompt tests `15 passed`; template generation passed after the frozen-v1 compatibility fallback. Live correction and resume: `.env` credentials resolved, project Postgres was healthy on port `5433`, fixture loader confirmed `COUNT(*) = 22`, then baseline preflight returned HTTP 503 `provider_busy` twice; low and none were not started. No manual export was required.
+- **Manual verification:** run the three 16-ID commands in `Manual_Verification_Guide.md` with `--out` paths, verify exact IDs/repeat counts and frozen baseline immutability, then grade and populate `evals/reasoning_ab_results.md`.
+- **Risks:** live arm winner and token/turn observations are blocked by Groq provider pressure; `M-G44` is a required regression-watch spot-check outside the 16-ID rerun set. See `Known_Issues.md`.
+- **Follow-ups:** T0015.6 provider A/B and T0015.7 prompt/few-shot tuning must use the measured recommendation; do not infer a winner from offline tests.
+- **Docs:** `Repo_Current_State.md`, `Manual_Verification_Guide.md`, `Known_Issues.md`, and `evals/reasoning_ab_results.md` contain the current status and runbook.
+
+## T0015.6 — Provider A/B: qwen/Groq vs Gemini/Google
+- **Summary:** Added a narrow profile-level provider switch in `AgentProvider`; Gemini construction uses `ChatGoogleGenerativeAI`, `GOOGLE_API_KEY`, configured model settings, and `thinking_budget: 0`. Groq behavior and the isolated SQL-generation profile remain available.
+- **Files:** `src/agents/runtime/provider.py`, `config/settings.yaml`, `tests/agents/runtime/test_provider.py`, `evals/provider_ab_results.md`, `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, `docs/Completion_Reports.md`.
+- **Commands:** `uv run pytest tests/agents/runtime/test_provider.py evals/test_judge.py -q`; prerequisite checks for environment variables, fixture loader, and `localhost:5433`.
+- **Build & test:** focused provider/judge tests passed: `8 passed`. Full suite and live matrix remain pending until the project Postgres service is started.
+- **Gemini live smoke / 29-scenario comparison:** not run; blocked because the project `postgres` service from `docker-compose.yml` was not started and `localhost:5433` was unavailable. The repo `.env` contains `GROQ_API_KEY` and `DATABASE_URL`, loaded automatically by `src/core/config.py`; no manual export is required. No observed Gemini artifact or fabricated result was added.
+- **Manual verification:** use the T0015.6 checklist in `Manual_Verification_Guide.md`, including readiness, one clean Gemini turn, judge isolation, separate checkpoint, and frozen qwen artifact immutability.
+- **Token, latency, quota:** unavailable. Current Google limits are account-specific; record AI Studio values before the live run.
+- **Provider recommendation:** no lock recommendation yet; complete T0015.5 live arms and T0015.6 live comparison before T0015.7.
+- **Risks / follow-ups:** live provider winner, quota headroom, and answer-quality comparison are blocked. Follow-up is T0015.7 prompt/few-shot tuning after the winner is measured.
+- **Docs needing updates:** replace the pending sections in `evals/provider_ab_results.md`, `docs/Known_Issues.md`, and `docs/Repo_Current_State.md` after live verification.

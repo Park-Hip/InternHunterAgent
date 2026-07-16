@@ -206,3 +206,12 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 
 ## Repo state & version control
 - _(none currently open)_
+
+## T0015.6 provider A/B
+
+- **`[MED · OPEN]` Live provider comparison (Gemini smoke + 29-scenario matrix) still needs a run.** The Windows startup blocker that previously prevented this — the `ProactorEventLoop`/psycopg incompatibility — was **fixed** on 2026-07-16 (see `Resolved_Issues.md` → Config, startup & deployment; run with `--loop src.core.event_loop:selector_event_loop`), and `GET /api/v1/ready` now responds. The comparison itself has not yet been executed and may still be gated by Groq provider pressure (503 `provider_busy`), same as the [T0015.5 reasoning-effort entry](#t00155-reasoning-effort-ab) below.
+  - **Follow-up:** with the server booted via the `--loop` flag, run the Gemini smoke check and the 29-scenario matrix once Groq pressure clears; record the arm results.
+
+## T0015.5 reasoning-effort A/B
+
+- **`[MED · BLOCKED]` Live three-arm reasoning-effort measurement is blocked by Groq provider pressure.** The earlier shell-environment check was incorrect: `.env` credentials resolve through `src.core.config.settings`. On 2026-07-16, the project's `postgres` service was started and healthy on port `5433`, and the fixture loader confirmed `COUNT(*) = 22`; baseline preflight then returned HTTP 503 `provider_busy` twice before any scenario ran. No arm winner, token observation, or empty-answer comparison is claimed. Retry the three arms after Groq provider pressure clears.

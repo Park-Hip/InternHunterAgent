@@ -1,5 +1,7 @@
 ## Current branch
-`fix/split-react-sql-llm-config` - a narrow backend config split stacked on the **SQL-generation reasoning-effort hotfix** and the T0018.3 Editorial streaming chat UI branch.
+`feature/t0015.6-provider-ab` - T0015.6 provider comparison implementation on the split ReAct/SQL-generation configuration. Unrelated static UI edits remain preserved in the worktree.
+
+The T0015.4 scenario artifacts are present for the targeted rerun. T0015.5 live prerequisites now pass (`.env` settings, healthy project Postgres on 5433, fixture count 22), but the baseline preflight is blocked by an HTTP 503 Groq provider-busy response; T0015.6 live comparison remains pending.
 
 This branch is stacked on T0018.3 and keeps that UI work intact. It migrates the prior SQL-generation reasoning-effort hotfix from a per-call override to two explicit model profiles: `agent.react` for the outer conversational ReAct agent and `agent.sql_generation` for the nested SQL-generation call. The SQL-generation profile now owns `reasoning_effort: "none"` directly; `agent.query.sql_generation_reasoning_effort` is removed.
 
@@ -22,9 +24,11 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **M13** (T0013.1–.5) — Schema Enrichment & v1 Freeze: `tech_stack` rebuilt against an external vocabulary (audit coverage 58% → 89%); `job_level`, `listing_expires_on`, and `created_on` exposed to the agent; the enriched **16-column** v1 contract recorded in [`Schema_Contract.md`](Schema_Contract.md) and enforced by prompt-freeze guards. **This is this branch's base (`51913f6`).**
 - **M16** (T0016.1–.4) — Public-endpoint hardening: credential-less CORS, per-IP rate limit + friendly busy path, request length cap, explicit `/docs` exposure decision.
 - **M17** (T0017.1–.2) — Streaming response delivery: runtime `astream` + no-leak filter, streaming service + `POST /api/v1/agent/chat/stream` SSE endpoint.
+- **T0015.5** — ReAct reasoning-effort A/B runner/config and result template added; live measurement is pending and tracked in `Known_Issues.md`.
+- **T0015.6** — Profile-level Gemini/Google construction added; Groq/qwen remains the default and live comparison is pending. See [`evals/provider_ab_results.md`](../evals/provider_ab_results.md).
 
 ## In progress / next
-**This branch = ReAct/SQL-generation LLM config split, stacked on the SQL-generation reasoning-effort hotfix and T0018.3.** T0016, T0017, T0018.1, T0018.2, and T0018.3 are complete underneath it:
+**This branch = T0015.6 provider A/B implementation, on top of the T0015.5 ReAct reasoning-effort runner and split ReAct/SQL-generation configuration.** T0016, T0017, T0018.1, T0018.2, and T0018.3 remain underneath it:
 
 - **T0016.1 - CORS middleware:** `config/settings.yaml` carries `api.cors`, and `src/api/app.py` registers credential-less `CORSMiddleware`.
 - **T0016.2 - Rate limiting and friendly busy path:** `slowapi` is installed, `api.rate_limit` defaults to `"15/minute"`, chat is limited, health is not, and provider pressure maps to a public-safe busy response.
@@ -36,12 +40,13 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **T0018.2 - Same-origin static serving + frame protection:** `src/api/app.py` mounts `src/api/static/` at `/` after API/docs routes and injects `X-Frame-Options: DENY` with a pure-ASGI middleware.
 - **T0018.3 - Editorial streaming chat UI:** `src/api/static/index.html` + `styles.css` + `app.js` replace the placeholder with the vanilla, Editorial-styled demo page (system serif stack, hairline rules, restrained vermilion accent, light theme only). It consumes `POST /api/v1/agent/chat/stream` via `fetch()` + a `ReadableStream` reader, renders tokens one-by-one, reads the disclaimer snapshot date from `GET /api/v1/ready`, ships 4 send-on-click honesty chips, pins the server session id and reuses it on later turns, shows a `view-trace` link only when `trace_url` is non-null, and degrades mid-stream `error` events to a friendly bubble and pre-stream 400/429 to a toast. No backend change.
 - **Split ReAct/SQL-generation LLM config - Backend hotfix:** `AgentProvider.build_model("react")` builds the outer ReAct model from `agent.react`; `AgentProvider.build_model("sql_generation")` builds the nested SQL-generation model from `agent.sql_generation`. Both profiles expose the same model fields, and only the SQL-generation profile sets `reasoning_effort: "none"`.
+- **T0015.6 provider seam:** `agent.react.provider` may be switched to `google` with `gemini-2.5-flash` and `thinking_budget: 0`; `agent.sql_generation.provider: groq` pins nested SQL generation to qwen/Groq.
 
-**Status (2026-07-15):** T0016.1–T0016.4, T0017.1–T0017.2, T0018.1, T0018.2, T0018.3, the SQL-generation reasoning-effort hotfix, and the ReAct/SQL-generation config split are complete on this stack. Open issues live in [`Known_Issues.md`](Known_Issues.md); resolved/background items in [`Resolved_Issues.md`](Resolved_Issues.md).
+**Status (2026-07-16):** T0015.6 offline implementation and focused provider/judge checks are complete; T0015.5 live measurement reached the seeded API but baseline preflight returned HTTP 503 `provider_busy` from Groq, and T0015.6 live comparison remains pending. The default provider remains Groq/qwen and the judge remains Google Gemini. Open issues live in [`Known_Issues.md`](Known_Issues.md); resolved/background items in [`Resolved_Issues.md`](Resolved_Issues.md).
 
 **Milestone map (see `Tickets.md`):** T0013 freeze → T0016 security posture → T0017 streaming response delivery → T0018 clickable demo UI + go-live.
 
-**Next recommended ticket:** **T0018.4** Deploy topology + first public deploy.
+**Next recommended ticket:** Supply live prerequisites, complete T0015.5 reasoning arms and T0015.6 provider A/B, then sequence **T0015.7** prompt/few-shot tuning from the measured winner.
 
 ## Current folder structure
 ```text
@@ -59,10 +64,14 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |       `-- README.md
 |-- scripts/
 |   |-- eval_judge_spike.py
+|   |-- run_scenario_matrix.py
 |   |-- init_db.sql
 |   `-- reset_db.sql
 |-- evals/
 |   |-- __init__.py
+|   |-- scenarios_v1.yaml
+|   |-- reasoning_ab_results.md
+|   |-- test_reasoning_ab_runner.py
 |   |-- conftest.py
 |   |-- harness.py
 |   |-- judge.py
@@ -179,7 +188,7 @@ Dev/test dependencies declared in `pyproject.toml` under `[dependency-groups] de
 No package scripts or `tool.*.scripts` entries are defined in `pyproject.toml`.
 
 Practical commands from the repository layout:
-- `uv run uvicorn src.api.app:app --reload`
+- `uv run uvicorn src.api.app:app --reload` (on Windows add `--loop src.core.event_loop:selector_event_loop`; uvicorn's default `ProactorEventLoop` cannot drive the async psycopg checkpointer pool — see `Known_Issues.md`)
 - `uv run pytest` (T0012.7: the standard suite excludes the `eval`-marked live tests by default — `addopts = "-m 'not eval' --strict-markers"` in `pyproject.toml`)
 - `uv run pytest -m eval` (runs only the two live-API eval files, `evals/test_judge_scaffold.py` + `evals/test_three_seams.py`, 18 tests total; needs Groq/judge creds + fixture DB)
 - `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval` (the verified working `deepeval` invocation — `-m eval` must be passed through explicitly or 0 tests are selected; see `Known_Issues.md`)

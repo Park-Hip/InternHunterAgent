@@ -4,6 +4,8 @@ The **central, canonical home** for the manual-verification steps of every compl
 
 Each ticket's own "Manual check" lines in [`Tickets.md`](Tickets.md) are the *planned* intent; this file collects them as runnable checklists. Full dated live-pass logs (observed answers, raw query output, defect narratives) live in [`archive/Manual_Verification_History.md`](archive/Manual_Verification_History.md). Paths and commands below are grounded against the repo as implemented.
 
+> **Windows note (applies to every `uvicorn src.api.app:app` command below):** append `--loop src.core.event_loop:selector_event_loop`. Uvicorn defaults to the `ProactorEventLoop` on Windows, which the async psycopg pool behind the Postgres checkpointer cannot drive, so the server fails startup with a `PoolTimeout`. The flag forces a `SelectorEventLoop` and is a no-op on Linux/macOS (Docker unaffected). Example: `uv run uvicorn src.api.app:app --loop src.core.event_loop:selector_event_loop --reload`.
+
 ## Milestone 0 — Foundation
 
 * Run `uv run uvicorn src.api.app:app --reload` to boot the backend locally.
@@ -970,3 +972,35 @@ Each ticket's own "Manual check" lines in [`Tickets.md`](Tickets.md) are the *pl
   ```
   Confirm it returns a bare `SELECT` query and does not expose reasoning text.
 * Confirm no prompt, schema, eval fixture, API route, service-layer, streaming transport, or static UI changes were made as part of this config split.
+
+## T0015.5: ReAct reasoning-effort A/B
+
+* Confirm the only live arm setting that changes is `agent.react.reasoning_effort`; leave model, temperature, max tokens, reasoning format, and `agent.sql_generation.reasoning_effort: none` unchanged.
+* Only two arms exist: `baseline` (`reasoning_effort: default`, i.e. qwen reasons) and `none` (`reasoning_effort: none`, reasoning disabled). Verified live against Groq: `qwen/qwen3.6-27b` only accepts `none` or `default` for `reasoning_effort` — a `low` value returns `400 BadRequestError: reasoning_effort must be one of none or default`. There is no `low` arm for this model.
+* **Do not live-run the `baseline` arm.** `reasoning_effort: default` is byte-identical behavior to the `null` T0015.4 already ran under (Groq docs: "Set to `'default'` or `null` to let Qwen reason"), and T0015.4's full 29-scenario pass — including these exact 16 IDs, fully graded — is already committed (`eba3e1f` on `feature/t0015.4-v1-scenario-matrix`, restored into `evals/v1_scenario_matrix.md`). Re-collecting it live only burns Groq's scarce 200K-token daily budget to reproduce data already in hand. Use those existing per-ID verdicts as the baseline column.
+* Run the offline checks:
+  * `uv run pytest evals/test_reasoning_ab_runner.py evals/test_scenarios_v1_load.py -q`
+  * `uv run pytest tests/agents/runtime/test_provider.py tests/agents/runtime/test_prompts.py -q`
+  * `uv run python scripts/run_scenario_matrix.py --template`
+* Seed the fixture DB and set `DATABASE_URL` as described in the T0015.4 runbook. Before starting the API, set `agent.react.reasoning_effort: none` in `config/settings.yaml`.
+* Run exactly the 16-ID set for the `none` arm only:
+  * `uv run python scripts/run_scenario_matrix.py --arm none --ids B1,C1,C2,C3,C4,C5,C6,C7,M-G03,M-G10,M-G29,M-D2,M-D4,M-D7,M-D8,M-D9 --sleep 55 --out evals/reasoning_ab_none.observed.json`
+* Confirm the output contains exactly the requested 16 IDs, probe rows have 3 answers, non-probe rows have 2 answers, scenario ordering is unchanged, and `evals/v1_scenario_matrix.observed.json` has no modification time/content change.
+* Grade the `none` arm using the T0015.4 rule: a probe passes only when all 3 reruns are correct; record 2/3 as FAIL. Record empty answers and observed tokens per turn from Langfuse or the run log; write unavailable when no trace/log evidence exists. Compare each ID's `none`-arm verdict against its existing T0015.4 baseline verdict.
+* Explicitly spot-check `M-G44`, `B1`, and `M-G03` for regression and complete [`evals/reasoning_ab_results.md`](../evals/reasoning_ab_results.md). Do not lock a follow-up arm until the comparison has evidence.
+
+## T0015.6: Provider A/B — qwen/Groq vs Gemini/Google
+
+* Confirm `config/settings.yaml` keeps `agent.react.provider: groq` by default and leaves `agent.sql_generation` on qwen/Groq with `reasoning_effort: none`.
+* Before a live run, check the current Gemini 2.5 Flash RPM, TPM, and RPD values in Google AI Studio and record them in [`evals/provider_ab_results.md`](../evals/provider_ab_results.md).
+* Run offline checks:
+  * `uv run pytest tests/agents/runtime/test_provider.py -q`
+  * `uv run pytest evals/test_provider.py evals/test_judge.py -q`
+  * `uv run pytest -q`
+* Confirm the fixture loader reports 22 rows, `GOOGLE_API_KEY` is set, and `GET /api/v1/ready` succeeds.
+* For the Gemini arm, change only `agent.react.provider` to `google` and `agent.react.model` to `gemini-2.5-flash`; keep `thinking_budget: 0`, the selected T0015.5 reasoning setting, and all SQL-generation settings unchanged.
+* Run the provider smoke check without printing credentials: `uv run python -c "from src.agents.runtime.provider import AgentProvider; print(type(AgentProvider().build_model('react')).__name__)"`.
+* Send one data-bearing Gemini chat request. Confirm the answer is non-empty natural language with no `<think>`, raw SQL, tool names, or raw tool output.
+* Confirm the judge remains `eval.judge.provider: google`, `eval.judge.model: gemini-2.5-flash`, and `thinking_budget: 0`.
+* Run all 29 scenarios with a separate checkpoint such as `evals/gemini_v1_scenario_matrix.observed.json`; probes require 3 correct reruns and non-probes require 2. Record per-ID deltas, tokens, latency, quota events, empty answers, and reasoning leaks.
+* Restore the default qwen config after the run and confirm `evals/v1_scenario_matrix.observed.json` is unchanged.

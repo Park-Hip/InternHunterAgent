@@ -38,7 +38,38 @@ def _agent_config(
     }
 
 
+def _gemini_agent_config() -> dict:
+    config = _agent_config()
+    config["agent"]["react"].update(
+        provider="google", model="gemini-2.5-flash", thinking_budget=0
+    )
+    return config
+
+
 class AgentProviderTests(unittest.TestCase):
+    @patch("langchain_google_genai.ChatGoogleGenerativeAI")
+    @patch("src.agents.runtime.provider.settings")
+    def test_build_model_constructs_gemini_react_profile(
+        self, mock_settings, mock_chat_google
+    ) -> None:
+        mock_settings.config_yaml = _gemini_agent_config()
+        mock_settings.GOOGLE_API_KEY = "google-key"
+
+        AgentProvider().build_model("react")
+
+        _, kwargs = mock_chat_google.call_args
+        self.assertEqual(kwargs["model"], "gemini-2.5-flash")
+        self.assertEqual(kwargs["google_api_key"], "google-key")
+        self.assertEqual(kwargs["thinking_budget"], 0)
+        self.assertEqual(kwargs["temperature"], 0.2)
+
+    @patch("src.agents.runtime.provider.settings")
+    def test_gemini_requires_google_api_key_without_network_call(self, mock_settings) -> None:
+        mock_settings.config_yaml = _gemini_agent_config()
+        mock_settings.GOOGLE_API_KEY = None
+
+        with self.assertRaisesRegex(ValueError, "GOOGLE_API_KEY is unset"):
+            AgentProvider().build_model("react")
     @patch("src.agents.runtime.provider.ChatGroq")
     @patch("src.agents.runtime.provider.settings")
     def test_build_model_loads_react_profile_fields(

@@ -14,7 +14,7 @@ original register entry (omitted where none was assigned).
 
 ## Categories
 - [Documentation drift](#documentation-drift) — 2
-- [Config, startup & deployment](#config-startup--deployment) — 3
+- [Config, startup & deployment](#config-startup--deployment) — 4
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 5
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 3
@@ -35,6 +35,11 @@ original register entry (omitted where none was assigned).
 ## Config, startup & deployment
 - **`[RESOLVED · T0014.1, 2026-07-12]` Import-time config loading made startup fragile.**
   - `src/core/config.py` no longer runs `settings = load_settings()` at import; it resolves `.env` and all four YAMLs from the repo root, wraps missing/invalid env or YAML in a clear `ConfigLoadError`, and exposes a lazy `settings` proxy so existing `settings.*` call sites still work after startup. `src/core.db` made lazy for the same reason (avoids an import-time `DATABASE_URL` crash via SQLAlchemy engine construction). FastAPI `lifespan` calls `load_settings()` first, so startup fails fast with an actionable config error instead of an opaque `ImportError`.
+
+- **`[MED · RESOLVED · T0015.6, 2026-07-16]` Windows `ProactorEventLoop`/psycopg incompatibility prevented the API server from starting.**
+  - Since 2026-06-25 (commit `1e0dcc7`, which moved the async psycopg checkpointer pool into app startup) the lifespan opens a real pool and runs `checkpointer.setup()`. On Windows, uvicorn's default `auto`/`asyncio` loop is the `ProactorEventLoop` (`uvicorn/loops/asyncio.py`), which the async psycopg pool cannot drive — startup logged "Psycopg cannot use the 'ProactorEventLoop'" then `PoolTimeout` and `Application startup failed`. Latent for ~3 weeks because every prior Windows live attempt was gated earlier by a closed DB port / missing creds, the test suite mocks the pool, and Docker/Linux boots use a selector loop by default.
+  - **Fix:** added `src/core/event_loop.py::selector_event_loop`, a zero-arg factory returning `asyncio.SelectorEventLoop()`, wired via uvicorn's `--loop src.core.event_loop:selector_event_loop` flag. This is the only reliable hook: uvicorn passes an explicit `loop_factory` into `asyncio.Runner`, so `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())` (the register's earlier proposed remedy) is bypassed and does **not** work; `--loop none` also falls back to the default Proactor policy. The custom `--loop` string is re-imported inside `--reload` subprocesses, so hot-reload is preserved. No-op off Windows (this repo ships no `uvloop`; Docker `CMD` unaffected).
+  - **Verified:** 2026-07-16 — `uv run uvicorn src.api.app:app --loop src.core.event_loop:selector_event_loop` reached `Application startup complete.` with no psycopg error, and `GET /api/v1/ready` returned `{"status":"ok","data_snapshot_date":"2026-07-14"}`. Documented in `Manual_Verification_Guide.md` (Windows note) and `Repo_Current_State.md`.
 
 - **`[RESOLVED · T0012.9, 2026-07-06]` `main.py` placeholder removed.**
   - `main.py` was only a `print("Hello…")` placeholder — dead code, not the entrypoint. Deleted, and `COPY main.py ./` removed from `docker/Dockerfile`; confirmed nothing imports it and `CMD` still runs `uvicorn src.api.app:app`. No behavior change.

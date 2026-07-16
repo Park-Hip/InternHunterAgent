@@ -16,7 +16,7 @@ agent:
     max_tokens: 2048
     timeout: 30
     max_retries: 2
-    streaming: False
+    streaming: True
     reasoning_format: hidden
   memory:
     max_messages: 20

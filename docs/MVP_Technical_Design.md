@@ -24,6 +24,8 @@ QueryRequest
 
 There are no branch points or alternate paths. The route knows nothing about LangChain; the service owns request-level orchestration; the runtime is the only place the agent is constructed and executed. (Layer-isolation rationale: see `Full_Design_Document.md` §2.)
 
+*Status note (T0017, planned):* a second, parallel path — streaming token-by-token delivery — is designed in §9. It reuses the same route → service → runtime layering (the runtime driving `agent.astream` instead of `ainvoke`) and does not replace the one-shot path above.
+
 ---
 
 ## 2. The Agent — Technical Anatomy
@@ -107,7 +109,7 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 
 **`session_id` lifecycle.** `session_id` is the conversation key: when a request omits it, the system **generates one and returns it** (`src/agents/service.py`) so the client can continue the thread, and the response carries the id actually used — not a blind echo.
 
-*Provisional:* the answer-only shape is an MVP choice, not a permanent law. The future charting capability (a chart is not a string) will revisit it.
+*Provisional:* the answer-only shape is an MVP choice, not a permanent law. The future charting capability (a chart is not a string) will revisit it, as does **streaming delivery (T0017, §9)** — which keeps the same answer-only *content* but delivers it as a sequence of typed SSE events rather than a single JSON body.
 
 *Deferred, documented:* `trace_url` is currently always `null` (see §5). A minimal typed error contract landed in T0010.1 (see §5) — a blank/whitespace-only `query` now returns a clean `400`, distinct from the generic `500` for internal failures.
 
@@ -142,6 +144,8 @@ The Spec's quality bar (`MVP_Spec.md` §3) requires that imperfect input or a ba
 - **Tracing failures** never affect the request path — tracing is a no-op when unavailable (implemented).
 - **Client-input errors** are distinguished from server/provider errors (implemented, T0010.1): `src/api/routes/query.py` raises `InvalidQueryError` (`src/core/errors.py`) for a blank/whitespace-only `payload.query`, mapped to a `400 "Query must not be empty."`; genuine internal failures still map to the generic `500 "Failed to process query"` with no internals leaked.
 - **A `None`/empty runtime answer** is coerced to a safe fallback string (`FALLBACK_ANSWER` in `src/agents/service.py`) rather than failing Pydantic validation — implemented, T0010.1.
+
+*Status note (T0017, planned):* the status-code mapping above holds only for the one-shot path. Under streaming, once the first byte is sent the response is already `200` and mid-run failures are delivered as in-band SSE `error` events instead of status codes — see §9.5. Pre-stream failures (empty query, provider-busy before the first token) keep the status-code behavior described here.
 
 *Deferred, documented:* the typed error contract above is intentionally minimal (a single `4xx`/`5xx` split, not a broader error taxonomy), matching the MVP scope. One known residual gap: `react_agent._extract_answer` currently *raises* on empty/unreadable final content rather than returning it, so the `FALLBACK_ANSWER` coercion in `service.py` is not yet reachable on that path — an empty agent answer still surfaces as a `500` today. Tracked in `Known_Issues.md` (API layer).
 
@@ -259,3 +263,73 @@ A post-run step calls `langfuse.create_score(name=metric, value=score, trace_id=
 
 - **Prerequisite (not owned here):** the agent must run on a **non-retired model** for the baseline to mean anything — `config/settings.yaml` still pins the agent to `llama-3.3-70b-versatile`, which Groq shuts down 2026-08-16 (`Known_Issues.md`, F1). That migration is a **separate** follow-up, deliberately not folded into T0011.
 - **Deferred:** the CI gate, online/production eval, `DAGMetric`, Phase-2 chart metrics, production-sampled goldens, and any judge-matrix / Confident-AI cloud. And, by design, **fixing** a measured behavior — T0011 *measures*; remediation is separate work.
+
+---
+
+## 9. Streaming Response Delivery
+
+*Status: planned (T0017).*
+
+The MVP as built answers in one shot: the runtime runs the agent to completion (`react_agent.py::AgentRuntime.ainvoke`), and the route returns a single finished `QueryResponse`. The user waits on a spinner for the whole 5–15 s run, then the entire answer appears at once. Streaming changes the **delivery contract** — from "return one finished value" to "yield the answer token-by-token as the model produces it" — so the first words appear in ~1 s and the answer grows live. This is the clickable-demo's single largest perceived-latency win, and it is the reason T0017 exists. It does **not** change *what* the agent computes, only *how the result is delivered*.
+
+This section is the target design. It revises three earlier sections that describe the one-shot system as built: §1 (adds the branch point that section says does not exist), §3 (the response is no longer a single JSON body), and §5 (mid-run errors are delivered differently). Those sections carry forward-reference notes; this section is the source of truth for the streaming path. Grounded mechanics — pinned versions, the empirically verified node names, and the SSE API surface (all live-checked 2026-07-13) — live in `research/streaming-implementation-plan.md` and are not restated here.
+
+### 9.1 The contract shift — return-once to yield-many
+
+A one-shot function `return`s a value once; a streaming function `yield`s pieces over time (a Python `async` generator). The defining constraint is that **this shape must hold through every layer**: route → service → runtime. A single layer that collects the whole stream into a value before passing it on collapses streaming back into one-shot — silently, while still "working" in a naive test. So streaming is not a runtime-local change; it is a new end-to-end path that runs *alongside* the one-shot path, which is retained (§9.6).
+
+Each layer keeps its existing responsibility (the `Full_Design_Document.md` §2 layer-isolation law is unchanged):
+
+- **Runtime** gains a streaming method beside `ainvoke`. It drives the agent's streamed extraction — **`astream_events(version="v3")` typed message projections preferred, falling back to `astream(stream_mode="messages")` + the §9.2 filter** — and yields small transport-agnostic event dicts (`{"type": "token", ...}`), not HTTP or SSE constructs, so the runtime still knows nothing about the wire. On the pinned `langchain 1.3.1`, `v3` emits a beta warning (verified 2026-07-13), so the v3-vs-fallback choice is an implementation finding made *in the ticket*, not fixed here; both mechanisms owe the same §9.2 no-leak guarantee. (See `research/streaming-implementation-plan.md` §2.)
+- **Service** gains a streaming sibling of `generate_agent_response` that mints the `session_id` up front (still known before the run), passes runtime events through, and owns fallback/error *policy* — but now delivers that policy as yielded events, not exceptions.
+- **Route** gains a streaming endpoint that is the **only** layer aware of the wire format; it adapts the service's event dicts into SSE bytes.
+
+### 9.2 The no-leak filter — the one hard problem
+
+One-shot delivery enforces the answer-only law (§3, `Full_Design_Document.md` §4) for free: `_extract_answer` takes only the final message, so the ReAct loop's intermediate reasoning, tool calls, and raw rows are discarded before anything crosses the API boundary. Streaming forfeits that freebie — `agent.astream(stream_mode="messages")` emits **every** token from every node, including the tools node's raw `query_clean_jobs` / `get_job_details` output and any model reasoning that precedes a tool call. Streaming therefore has to **re-earn** the no-leak guarantee with an explicit filter.
+
+The agent (`factory.py::agent_factory`) is a standard two-node ReAct graph: a **model node** (the LLM) and a **tools node** (executes tools, returns raw data). Each streamed chunk carries `metadata["langgraph_node"]`. The filter is **two gates**:
+
+1. **Node gate** — emit only chunks from the model node; drop the tools node entirely. This kills the worst leaks: the tools node's raw rows, **and the raw SQL emitted by the nested `generate_sql` LLM call that runs *inside* `query_clean_jobs`** (it executes under the tools node, so the node gate excludes it automatically). This is exactly why a naive "stream only text deltas" filter — including v3's `.text` projection consumed globally — is *insufficient* here: `generate_sql` produces text too, so scoping to the model node, not "any text," is the actual guarantee.
+2. **Tool-call gate** — within the model node, drop chunks that carry `tool_call_chunks` (the tool-invocation plumbing, which normally rides an empty-content chunk).
+
+What survives both gates is model-authored answer text. **Residual risk:** if the model narrates reasoning *as content* on the same turn it calls a tool ("Let me look that up…"), that text streams before the tool-call gate can fire. This is model- and prompt-dependent. It is handled at MVP scope by (a) a system-prompt instruction not to narrate before tool calls, and (b) — load-bearing — a **leak test** that runs a tool-invoking query and asserts no SQL, tool name, or row data ever appears in the streamed tokens. Heavier machinery (buffering a whole turn to be certain) is rejected: it would defeat streaming on the final turn, the one turn that most needs to stream.
+
+**The model-node name is verified, not assumed.** `create_agent` and the older `create_react_agent` differ (`"model"` vs `"agent"`), and node names can change across versions. Verified 2026-07-13 against the compiled agent: `agent_factory().get_graph()` has nodes `['__start__', 'model', 'tools', '__end__']`, so the answer streams from the **`model`** node (`research/streaming-implementation-plan.md` §3). Re-confirm with a `(langgraph_node, content, has_tool_call)` probe if the langchain version or the factory changes.
+
+### 9.3 Metadata timing — trace data trails the answer
+
+`trace_id` / `trace_url` only exist **after** the run completes and Langfuse flushes (`react_agent.py` resolves them post-`ainvoke`). They cannot lead the stream. So the event order is fixed: **tokens first, then a single trailing `metadata` event** once the trace link is resolvable, then a terminal `done`. The UI shows the answer immediately and the "view trace" link appears a beat later. `session_id`, by contrast, is known before the run and is emitted as the **first** event so the client can pin the conversation key immediately.
+
+### 9.4 Transport — SSE
+
+Server-Sent Events (SSE): a long-lived `text/event-stream` HTTP response of typed `event:`/`data:` blocks. Chosen over the two alternatives: plain chunked text has no structure (nowhere clean to put the trailing trace metadata or an in-band error, so it grows an ad-hoc protocol anyway); WebSocket is a bidirectional persistent connection and is overkill for a one-directional server→client token stream. SSE's typed events map exactly onto this section's two problems — the trailing-metadata ordering (§9.3) and in-band errors (§9.5) — and are natively consumable in the browser.
+
+The event vocabulary:
+
+| Event | Payload | When |
+|---|---|---|
+| `session`  | `{session_id}` | first, before any token |
+| `token`    | `{text}` | each surviving chunk (§9.2), many |
+| `metadata` | `{trace_id, trace_url}` | once, after the token stream ends |
+| `error`    | `{message}` | in place of further tokens on mid-run failure (§9.5) |
+| `done`     | `{}` | terminal, always closes the stream |
+
+Each token is **JSON-wrapped** (`data: {"text": "…"}`), not raw, because SSE is newline-framed and LLM tokens contain newlines; JSON escaping keeps one token to one safe `data:` line. **No new dependency is needed: FastAPI 0.136.3 (the pinned version, verified 2026-07-13) ships a native `fastapi.sse.EventSourceResponse`** — `ServerSentEvent(data=…, event=…)` carries the event vocabulary above — that frames the `event:`/`data:` blocks, JSON-encodes payloads, sends periodic keep-alive pings, and **auto-sets the anti-buffering headers** (`Cache-Control: no-cache`, `X-Accel-Buffering: no`) that stop buffering reverse proxies (nginx, some PaaS routers) from holding the stream and defeating it. This **supersedes** the earlier plan to hand-roll a `~3-line` framing helper or add `sse-starlette` for heartbeats — the native helper covers both. (`research/streaming-implementation-plan.md` §4; `sse-starlette` is not installed and not required.)
+
+*Browser-consumption note (for the T0017 UI phase, not this doc's scope):* the native `EventSource` API is GET-only, but the endpoint is `POST` with a JSON body — so the UI either consumes the stream via `fetch()` + a reader, or the endpoint offers a GET variant. This is a UI-layer decision recorded in §9's follow-on UI design, not a backend constraint.
+
+### 9.5 Error handling under a stream
+
+One-shot error handling (§5) maps failures to HTTP status codes (`400` empty query, `429` provider busy, `500` internal). Streaming splits this at a hard line: **the moment the first byte is sent, the response status is already `200`** and can no longer carry an error.
+
+- **Pre-stream failures still use status codes.** Empty-query validation happens before the generator starts, so it still returns a clean `400`. A provider-busy signal (`ProviderBusyError` → `429`) raised before the first token likewise remains a status code.
+- **Mid-run failures are in-band `error` events.** Once tokens are flowing, a provider hiccup or internal failure is delivered as an `event: error` with a safe message (reusing the existing `classify_provider_busy_error` / `BUSY_MESSAGE` policy — only the *delivery* changes from raised exception to yielded event), followed by `done`. The UI renders it as a chat bubble.
+- **Empty-answer fallback moves to stream end.** The one-shot path coerces an empty answer to `FALLBACK_ANSWER` after the run. In the stream, emptiness is only known when the token stream closes with nothing emitted, so the fallback is decided at end-of-stream and sent as a single `token`.
+
+### 9.6 What is retained, and scope boundaries
+
+- **The one-shot path stays.** `ainvoke` / `generate_agent_response` / `POST /api/v1/agent/chat` remain as the non-streaming fallback and keep the existing integration tests (§6) green. The streaming method wraps the same agent, so the two paths share all agent internals; only delivery differs.
+- **In scope (T0017):** the `astream` runtime method + two-gate filter + leak test, the streaming service generator, the SSE route and event vocabulary, and the anti-buffering headers.
+- **Out of scope (over-engineering for a demo):** resumable/replayable streams, retry-from-last-token, multi-node progress indicators ("searching… reading…"), and per-tool streamed status. These are explicitly excluded; the demo streams the final answer only.
+- **Sequencing note:** the demo is intended to showcase honesty behavior, which the evaluation baseline (§8) measures and which has recorded gaps; streaming makes any honesty regression *more* visible, not less, so the streamed answer must still route through the same tool/prompt path the eval scores — streaming adds no bypass.

@@ -840,11 +840,11 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * A runtime/DDL-vs-doc drift assertion (reflecting the physical table and diffing it against the doc) — the prompt-layer guard is the MVP; a physical-schema check is over-engineering for a hand-maintained table.
 
 ### T0014: Milestone 14 - Pre-Deploy Known-Issue Fixes
-**Objective:** Fix the deploy-facing open items recorded in `docs/Known_Issues.md` (§ "Config, startup & deployment") — discovered fragilities that should be closed before any deploy — kept **deliberately separate** from the broader deploy-hardening body (security posture, readiness probe, topology, CI), which grew large enough to be its own milestone: **T0017 — Deploy Hardening** (from `research/pre-deploy-refinement-plan.md` §6). This milestone and T0017 must **not overlap**: T0014 = fixes to logged register bugs; T0017 = the §6 greenfield deploy-readiness work. This milestone is a **sibling of the M15 behavior/scenario track** (both forked from the T0013.5 schema freeze; neither blocks the other) and is **code + register hygiene only** — no schema, prompt-behavior, ingestion, security-middleware, or topology work. Cross-refs: `docs/Known_Issues.md` (§ Config, startup & deployment); the deploy-hardening counterpart is **T0017**.
+**Objective:** Fix the deploy-facing open items recorded in `docs/Known_Issues.md` (§ "Config, startup & deployment") — discovered fragilities that should be closed before any deploy — kept **deliberately separate** from the broader deploy-hardening body (security posture, readiness probe, topology, CI), which grew large enough to warrant its own (currently **unscheduled**) milestone — the deploy-hardening body in `research/pre-deploy-refinement-plan.md` §6 (see Backlog). This milestone and that deploy-hardening work must **not overlap**: T0014 = fixes to logged register bugs; the §6 body = greenfield deploy-readiness work. This milestone is a **sibling of the M15 behavior/scenario track** (both forked from the T0013.5 schema freeze; neither blocks the other) and is **code + register hygiene only** — no schema, prompt-behavior, ingestion, security-middleware, or topology work. Cross-refs: `docs/Known_Issues.md` (§ Config, startup & deployment); the deploy-hardening counterpart is the unscheduled **§6 milestone** (Backlog).
 **In Scope:** see sub-tickets below — config-load robustness, and Known-Issues register housekeeping.
 **Out of Scope:**
-* **The entire `research/pre-deploy-refinement-plan.md` §6 deploy-hardening body** — security posture (CORS/rate-limit/`/docs`/headers), the DB readiness probe, deployment topology, Langfuse Cloud vs self-host secrets, what-data-ships, deploy-doc drift, and the CI gate — all live in **T0017 (Deploy Hardening)** so the two milestones stay separate.
-* Ingestion / `is_active` / accumulate-upsert (T0018, deferred — the final milestone).
+* **The entire `research/pre-deploy-refinement-plan.md` §6 deploy-hardening body** — security posture (CORS/rate-limit/`/docs`/headers), the DB readiness probe, deployment topology, Langfuse Cloud vs self-host secrets, what-data-ships, deploy-doc drift, and the CI gate — all live in the unscheduled **deploy-hardening milestone** (`research/pre-deploy-refinement-plan.md` §6; see Backlog) so the two stay separate.
+* Ingestion / `is_active` / accumulate-upsert (unscheduled — see Backlog / `research/deployment-research-plan.md` §4).
 * Prompt-behavior tuning, few-shots, or metric refinement (the M15 behavior track and the deferred prompt-v2 pass).
 * Any schema/DDL/API change (frozen at T0013.5).
 
@@ -865,8 +865,8 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Sweep the register for other entries closed by already-merged work — e.g. downgrade/close the `[LOW] qwen model-ID` note now that the T0015.4 live matrix exercised the tool loop on `qwen/qwen3.6-27b` (confirm once more before the T0011.5 baseline, tracked under T0011).
 * Keep `docs/Repo_Current_State.md`'s Known-Issues pointer accurate.
 **Out of Scope:**
-* Fixing any deploy-hardening item (T0017) or behavior item (M15).
-* The deploy-doc drift in `research/deployment-research-plan.md` §11 — that is deploy-doc work under **T0017**, not register hygiene.
+* Fixing any deploy-hardening item (the unscheduled §6 milestone; see Backlog) or behavior item (M15).
+* The deploy-doc drift in `research/deployment-research-plan.md` §11 — that is deploy-doc work for the unscheduled deploy-hardening milestone, not register hygiene.
 
 ### T0015: Milestone 15 - Agent Behavior Spec & Scenario Matrix
 **Objective:** Define, freeze, and measure Resumi's intended per-scenario behavior against the frozen 16-column schema — the "act the way we want" target that prompt-tuning optimizes toward and the eval metrics grade. This is the **prompt-behavior track**, a **parallel sibling of T0014** (both forked from the T0013.5 freeze; neither blocks the other). It lives on its own `feature/t0015.x-*` branches and is **not present on the T0014 branch**. **Sub-tickets are indexed here, not fully specified** (per request) — the per-ticket In/Out-of-Scope + verification live in the sub-ticket commits and `docs/Completion_Reports.md` on the M15 branches:
@@ -876,30 +876,120 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * **T0015.4** — run the v1 scenario matrix against the `internhunter_eval` fixture DB and grade it. *(in progress — paused on the Groq daily token quota; 7/29 scenarios collected + graded, all 5 collected probes FAIL — see [[groq-free-tier-quota-eval-runs]])*
 * **T0015.5** — wire the `behavior_glossary` canonical strings into the prompt few-shots (few-shot honesty fixes for the C1–C5 probe failures). *(pending T0015.4)*
 
-### T0016: Milestone 16 - Demo UI (PLACEHOLDER — scope TBD)
-**Objective:** Give the repo a **visible product** — a browser UI for the agent — recorded 2026-07-12 at the user's request ("I want UI in the repo"). Per `research/pre-deploy-refinement-plan.md` §6j, a demo surface is the **single highest-leverage gap** for a portfolio/resume MVP: today the repo is API-only (`POST /api/v1/agent/chat`; no `frontend/`/`static/`/`templates/`). Sequenced **after** Deploy Hardening (T0017) and **before** Ingestion (T0018) — harden the deploy path first, then build the visible product (**re-sequenced 2026-07-12 at the user's request:** deploy hardening runs before the UI). **This is a placeholder** — full scope is deferred to a dedicated scoping pass ("we'll go deeper later"); the sub-tickets, exact stack, and design are **not** settled here (CLAUDE.md §1: don't pre-build future-ticket features).
-**Direction so far (not final):**
-* **Approach:** a **Vite SPA (React/Preact)** built to static assets served by the existing FastAPI app — the user's current lean (2026-07-12). Alternatives considered and set aside for now: a single self-contained static HTML page (zero-dep), or a Streamlit/Gradio app. Revisit at scoping time.
-* **Open scope questions (settle at the deeper pass):** chat-only vs a fuller product (job cards/table, filters, session history, Langfuse trace links); React vs Preact and the dependency/tooling budget (the repo has been strict about avoiding deps); how FastAPI serves the build vs a separate dev server; styling/branding for the Resumi persona.
-**Out of Scope (until scoped):**
-* Any build on this pass — no `frontend/` created, no JS deps added yet.
-* Changing the `/api/v1` contract (frozen at T0013.5); the UI consumes it as-is.
-* Auth / user accounts.
-
-### T0017: Milestone 17 - Deploy Hardening (DEFERRED — pre-deploy; runs before the Demo UI and ingestion)
-**Objective:** House the full **Phase 4 "deploy hardening"** body from `research/pre-deploy-refinement-plan.md` §6 — the deploy-readiness work that is *not* a logged register bug and is large enough to warrant its own milestone, kept **separate from T0014 (Known-Issue Fixes)** so the two do not overlap. **Deferred:** several sub-areas are gated on **topology/exposure decisions** that are still open (`research/pre-deploy-refinement-plan.md` §8, and the blank "Decision:" lines in `research/deployment-research-plan.md`). Per CLAUDE.md §1, sub-tickets are authored **when the deploy phase is reached and those decisions are made** — this milestone records the scope, it does not pre-build sub-tickets. Runs **after** T0014 and the M15 behavior track, and **before** the Demo UI (T0016) and ingestion (T0018) — **re-sequenced 2026-07-12** so deploy hardening precedes the UI build (user request). Cross-refs: `research/pre-deploy-refinement-plan.md` §6, `research/deployment-research-plan.md` §9/§11.
-**Scope (from plan §6 — sub-tickets authored later):**
-* **Deployment topology decisions** (§6a) — API host (Render/Cloud Run), Postgres (Neon), tracing (Langfuse Cloud Hobby), ingestion cron (GitHub Actions), and the $0–$10/mo ceiling. *These are the gating user decisions.*
-* **Public-endpoint security posture** (§6b) — rate limiting (`slowapi`), CORS, `/docs` exposure, security headers.
-* **Real DB readiness probe** (§6c) — `SELECT 1` against Postgres; fix the thin `src/api/routes/health.py` shape and the `async  def` double-space typo.
-* **Langfuse stack secrets** (§6f) — the `CHANGEME` secret checklist if self-hosting, **or** the Langfuse Cloud Hobby decision that sidesteps it.
-* **What data ships in v1** (§6g) — static corpus snapshot vs a deferred refresh story.
-* **Deploy-doc drift** (§6h) — fix the stale `/query`, `/health`, and `src.main:app` references in `research/deployment-research-plan.md` §11.
-* **CI merge-gate + hard cost ceiling** (§6i).
+### T0016: Milestone 16 - Security Posture (Public-Endpoint Hardening)
+**Objective:** Implement the minimum responsible security posture for a *public* portfolio-demo deploy — the `research/pre-deploy-refinement-plan.md` §6b body plus its tightly-coupled §6k (graceful 429) and §6l (input cap) siblings — carved out of the (unscheduled) §6 deploy-hardening milestone into its own named track at the user's request (the Backlog note anticipated this: "to be named & scoped"). Scope is calibrated to the real threat model of a **$0-quota, read-only demo**: with no accounts, no PII, no write path, and Groq free-tier billing, "security" here collapses almost entirely into **availability** — keep the demo clickable and stop a script from draining the token quota (8k TPM / 200k TPD). Confidentiality/integrity controls that guard nothing here, and over-engineering (API keys, WAF, full header suites, distributed limiting), are explicitly excluded per CLAUDE.md §1. The §6f Langfuse-secrets item is **moot** — the deploy uses **Langfuse Cloud Hobby**, not the self-hosted stack (user decision 2026-07-12). Cross-refs: `research/pre-deploy-refinement-plan.md` §6b/§6k/§6l, `research/deployment-research-plan.md` §11, `docs/Known_Issues.md`.
+**In Scope:** see sub-tickets below — CORS, per-IP rate limiting + friendly 429 degradation, input length cap, and the `/docs` + minimal-headers decision.
 **Out of Scope:**
-* **Config-load robustness** (§6d) — the code fix is done in **T0014.1**; not re-done here.
-* Ingestion / `is_active` (T0018).
-* Standing up the actual hosted deploy (its own later milestone, once these are green).
+* **API-key / allowlist gating** — rejected in §6j: a key gate adds friction exactly where a resume demo wants none, and the free tier makes abuse a **$0 availability** issue, not a cost one. The chosen posture is **open endpoint + per-IP rate limit + friendly quota message**.
+* **Streaming responses and the demo UI itself** — the Demo UI track (§6j / §6k second half is a UX/API-contract change), not security.
+* **Distributed/Redis-backed rate limiting, a full security-headers framework, WAF, secret-rotation tooling** — over-engineering for a single-instance low-traffic demo.
+* **The rest of the §6 deploy-hardening body** — deploy topology (§6a), DB readiness probe (§6c), what-data-ships (§6g), deploy-doc drift (§6h), CI gate (§6i) — stays in the unscheduled deploy-hardening milestone (see Backlog); this milestone owns **only** the security posture.
+* Any schema/DDL/API-contract change (frozen at T0013.5) and any prompt-behavior change (M15).
+**Sequencing (execution order):** T0016.1 (CORS), T0016.2 (rate limit + 429), and T0016.4 (`/docs`/headers) all edit `src/api/app.py`, so run them in that order to avoid merge conflicts. T0016.3 (input cap) touches `src/api/schemas.py` / `src/api/routes/query.py` and is independent. None blocks another functionally.
 
-### T0018: Milestone 18 - Ingestion Deploy Readiness (DEFERRED — the final milestone)
-**Renumbered 2026-07-12 (now the final milestone, T0018):** ingestion's original T0014 slot was reassigned to **Milestone 14 - Pre-Deploy Known-Issue Fixes**; the deploy-hardening body (plan §6) became **Milestone 17 - Deploy Hardening**; a new **Milestone 16 - Demo UI** (placeholder, user-requested 2026-07-12) was added and **re-sequenced 2026-07-12 to run *after* Deploy Hardening (T0017)** at the user's request; and ingestion is pushed to **T0018** — last. It stays deferred and now sequences after **all** pre-deploy work — known-issue fixes (T0014), the M15 behavior/scenario track (T0015.x, tracked in commits + `docs/Repo_Current_State.md`), deploy hardening (T0017), the demo UI (T0016), and the eval baseline (T0011.5) — because its honesty guarantee depends on model behavior that must be measured and hardened first. Previously drafted as T0011, then held at T0012; its placeholder sub-tickets were removed and the milestone **re-sequenced after the Model Evaluation milestone (T0011) and the Hardening milestone (T0012)**, because its central honesty guarantee — the agent staying truthful about soft-expired (`is_active = false`) postings — depends on model behavior that must be **measured first** (T0011) and on the eval-blocking/model-behavior bugs T0012 fixes before that measurement can be trusted. The full design decisions reached on 2026-07-03 are recorded in `research/deployment-research-plan.md` §4.1–§4.2: external GitHub Actions scheduler (ingestion-only; the web-API deploy is its own later milestone); **lifecycle load** — drop the `clean_jobs` `TRUNCATE` and switch to accumulate-upsert with **time-based** `is_active` soft-expiry (`expire_after_days`); `is_active` as the one new agent-visible column with an **include-all default + always-on honesty hedge** (prompt nudge, not a hide-inactive view); **Alembic** adoption (the T0009.9 "reset is enough" rationale breaks once a deployed `raw_jobs` accumulates non-re-fetchable history); per-page fetch resilience with retry/backoff. Design references: `Code_Review_Notes.md` → DN-1; `Full_Design_Document.md` §2/§3 (the external-scheduler-vs-"no schedulers" reconciliation is pending and lands with this milestone). Sub-tickets to be authored from that record once the T0011 baseline confirms the model's honesty behavior.
+#### T0016.1: CORS middleware (config-driven, credential-less)
+**Objective:** Add `CORSMiddleware` so a browser-based demo UI on a known origin can call `POST /api/v1/agent/chat`, with the allowed origin(s) set in config (not hardcoded, per CLAUDE.md §1 params-in-config). Credential-less by design so a permissive origin can never combine with credentials — the CORS-spec footgun flagged in `deployment-research-plan.md` §11 (never `allow_origins=["*"]` with `allow_credentials=True`).
+**In Scope:**
+* Add an `api.cors` block to `config/settings.yaml`: `allowed_origins` (default `[]` — or dev `http://localhost` origins with a "set the deployed UI origin here" comment), `allow_credentials: false`, `allowed_methods: ["GET", "POST", "OPTIONS"]`, `allowed_headers: ["*"]`.
+* Add `CORSMiddleware` in `src/api/app.py` immediately after `app = FastAPI(lifespan=lifespan)` (before the router includes), reading the block via `settings.config_yaml.get("api")` — the existing idiom used for `agent` (`src/agents/runtime/provider.py:8`).
+* Test: a preflight `OPTIONS` from an allowed origin returns the CORS response headers; a disallowed origin does not receive `access-control-allow-origin`.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0016.1 entry.
+**Out of Scope:**
+* The actual production origin value — filled at deploy once the demo-UI location (§6j) is decided; if the UI is served same-origin via FastAPI `StaticFiles`, CORS is never exercised and `allowed_origins` stays `[]`.
+* Rate limiting, headers, `/docs` (other sub-tickets).
+
+#### T0016.2: Per-IP rate limiting + graceful 429/quota degradation
+**Objective:** Protect the Groq free-tier quota so an abuse script cannot `429` the public demo blank, and stop provider rate-limit/timeout errors from collapsing into the generic `500 "Failed to process query"` (`src/api/routes/query.py:52`) that is indistinguishable from a real bug. Bundles §6b (rate limit) with §6k-first-half (friendly 429) because both live on the same request-entry error surface, and adding `slowapi` introduces a *second* 429 source that must share one clean "busy, try again" path.
+**In Scope:**
+* Add `slowapi` to `pyproject.toml`; construct a `Limiter(key_func=get_remote_address)` and register its `RateLimitExceeded` handler on the app in `src/api/app.py`.
+* Apply a per-IP limit (default `api.rate_limit: "15/minute"` in `config/settings.yaml`) to `POST /agent/chat`; **exclude** `GET /api/v1/health` from limiting.
+* In `src/api/routes/query.py`, distinguish provider rate-limit/timeout failures (Groq 429 / timeout — `agent.groq.timeout: 30` and `max_retries: 2` already exist) from genuine errors, returning a distinct friendly **429/503 "the demo is busy — try again in a moment"** instead of the blanket 500.
+* Tests: exceeding the limit returns 429 with the friendly body; `/health` stays unlimited; a simulated provider-429 maps to the friendly path while a generic exception still maps to 500.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0016.2 entry (hammer the endpoint past the limit; confirm friendly 429; confirm `/health` unaffected).
+**Out of Scope:**
+* Redis / multi-instance distributed limiting — single-instance in-process only (`deployment-research-plan.md` §11).
+* **Streaming** responses (§6k second half — a UX/API-contract change owned by the Demo UI track).
+* API-key gating (rejected — see milestone Out of Scope).
+
+#### T0016.3: Request input hardening (length cap)
+**Objective:** Cap request input so a single oversized prompt cannot drain the TPM budget or wedge the agent loop. Today `src/api/routes/query.py:13` rejects only empty/whitespace and `src/api/schemas.py` sets no maximum on `query`.
+**In Scope:**
+* Add a maximum-length constraint to `QueryRequest.query` (Pydantic `Field(..., max_length=N)`, e.g. `N=2000`); surface the cap value from `config/settings.yaml` (`api.max_query_chars`) via a validator where practical, otherwise a single documented module constant.
+* Preserve the existing empty/whitespace `400`; an over-limit body returns a clear `422`/`400`.
+* Test: an over-limit body is rejected with a clear error; a normal-length query passes unchanged.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0016.3 entry.
+**Out of Scope:**
+* Rate limiting / 429 (T0016.2).
+* Content moderation or prompt-injection filtering — the grounding rules + D-category refusal/injection goldens already cover misuse; no new filter (CLAUDE.md §1: don't over-engineer).
+
+#### T0016.4: `/docs` exposure decision + minimal security headers
+**Objective:** Make Swagger/OpenAPI exposure a deliberate choice and add the *one* cheap header that matters if an HTML demo UI is served — while explicitly declining a full header suite (near-zero value for a cookieless, auth-less JSON API).
+**In Scope:**
+* Decide and record `/docs` + `/redoc` exposure. **Default recommendation: keep them** (portfolio signal — shows a clean versioned API; the only abuse vector, the "Try it out" console, is already capped by T0016.2). Document `api.docs_enabled: false` as the locked-down alternative; it disables `/docs`, `/redoc`, and `/openapi.json` together.
+* **Only if** an HTML UI is served (same-origin `StaticFiles`): add `X-Frame-Options: DENY` (or CSP `frame-ancestors 'none'`) via a small middleware to prevent clickjacking of the demo. Otherwise add no headers.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0016.4 entry — `/docs` reachability matches the chosen setting.
+**Out of Scope:**
+* A full security-headers suite (`X-Content-Type-Options`, HSTS, etc.) — HSTS is handled by the platform's auto-TLS; the rest are negligible for this API. Explicitly skipped per the brainstorm.
+* CORS, rate limit, input cap (other sub-tickets).
+
+### T0017: Milestone 17 - Streaming Response Delivery
+**Objective:** Turn the agent's one-shot answer into a **token-by-token stream** over the public API, so the first words appear in ~1 s instead of after a 5–15 s blank wait — the single largest perceived-latency win for the clickable demo, and a genuine resume talking point ("streamed an LLM through a layered FastAPI backend without leaking agent internals"). This milestone is the **backend contract change only**; it ships and is fully verifiable with `curl` against the new endpoint, with **no UI and no deploy** — those are T0018. The full target design is `docs/MVP_Technical_Design.md` §9; this milestone implements it. It was split out of the former "Clickable Demo" placeholder (2026-07-13) because streaming is independently shippable and — unlike the UI — has **no open decisions blocking it**, so it proceeds now while the UI-location fork matures in T0018.
+**Decisions already fixed (do not re-litigate at scoping):**
+* **Streaming: YES**, and it is delivered as a **new parallel endpoint** (`POST /api/v1/agent/chat/stream`), *not* a replacement of `POST /api/v1/agent/chat`. The one-shot path and all its existing tests stay green (`MVP_Technical_Design.md` §9.6). `agent.groq.streaming` (currently `False`) flips to `True`.
+* **Transport: SSE** (Server-Sent Events, `text/event-stream`) — decided in `MVP_Technical_Design.md` §9.4 over plain-chunked (no structure for trailing trace metadata or in-band errors) and WebSocket (overkill for one-directional streaming). Event vocabulary is fixed there: `session` → `token`* → `metadata` → `done`, with `error` in place of further tokens on mid-run failure.
+* **No-leak law is re-earned by an explicit filter, not by luck** — streaming forfeits the freebie that `_extract_answer` gave the one-shot path (§9.2). The two-gate node/tool-call filter is *required* by the `Full_Design_Document.md` §4 answer-only law, not gold-plating.
+**In Scope:** see sub-tickets below — the runtime streaming method (v3-preferred, `astream` fallback) + two-gate no-leak filter, and the streaming service generator + native-SSE endpoint.
+**Out of Scope:**
+* **The demo UI, canned prompts, and anything a browser renders** — T0018. This milestone streams to `curl`; consuming the stream in a browser (including the `EventSource` GET-only vs. `fetch()`-POST wrinkle noted in §9.4) is a UI-layer concern.
+* **Go-live plumbing** — server-issued session-ID hardening, the data disclaimer, the DB readiness probe (§6c), filling CORS `allowed_origins`, and deploy topology (§6a) all move to **T0018**. Streaming needs none of them to be complete: emitting the session as the first SSE event just uses whatever id the service already mints today.
+* **Resumable/replayable streams, retry-from-last-token, multi-node progress indicators ("searching… reading…"), per-tool streamed status** — explicitly excluded as over-engineering for a demo (§9.6, CLAUDE.md §1). The demo streams the final answer only.
+* Any prompt-behavior or schema/DDL change; any fix to a measured honesty gap (separate work — streaming only makes existing behavior *more* visible, it adds no bypass of the tool/prompt path the eval scores, §9.6).
+**Sequencing (execution order):** T0017.1 (runtime + filter) **must** precede T0017.2 (service + endpoint) — the endpoint streams what the filtered runtime yields, and the leak test in 2.1 is the safety net the endpoint relies on. T0017.1 also front-loads the milestone's only real risk (the filter), so it is proven before any HTTP wiring.
+
+#### T0017.1: Runtime streaming + no-leak filter
+**Objective:** Give `AgentRuntime` an `astream` method that yields the agent's **final-answer tokens only**, dropping the ReAct loop's tool-call chatter and raw tool output before anything can leave the runtime — the load-bearing piece that keeps the answer-only law intact under streaming (`MVP_Technical_Design.md` §9.2). No HTTP; provable by async-iterating the runtime directly.
+**In Scope:**
+* **First — the streaming probe (de-risks the filter).** The answer node name is **already verified**: `agent_factory().get_graph()` nodes are `['__start__', 'model', 'tools', '__end__']`, answer node `model` (recorded 2026-07-13 in `research/streaming-implementation-plan.md` §3) — so do **not** re-derive it. Do run a live tool-using query through the chosen mechanism to (a) confirm it still holds and (b) capture the two behaviors static graph inspection can't: whether tool-calling turns carry empty content, and whether any reasoning-before-tool text leaks as content. Use this same probe to make the v3-vs-fallback call in the next bullet.
+* Add `AgentRuntime.astream(query, user_id, session_id)` beside the existing `ainvoke` (do not modify `ainvoke`), driving the agent's streamed extraction — **`astream_events(version="v3")` typed message projections preferred, falling back to `agent.astream(stream_mode="messages")` + the two-gate filter** (§9.1). On the pinned `langchain 1.3.1`, `v3` emits a beta warning, so make this choice from the probe, not from assumption. It yields small transport-agnostic event dicts (`{"type": "token", "text": ...}` then a trailing `{"type": "metadata", "trace_id", "trace_url"}`), never HTTP/SSE constructs.
+* The **two-gate filter** (§9.2): gate 1 emits only model-node chunks (drops the tools node entirely — the worst leak); gate 2 drops chunks carrying `tool_call_chunks`. Trace metadata (`trace_id`/`trace_url`) resolves **after** the token loop and Langfuse flush (§9.3), reusing the exact resolution logic in `ainvoke`.
+* Flip `agent.groq.streaming` to `True` in `config/settings.yaml`.
+* Add the system-prompt line discouraging pre-tool narration (`config/prompts.yaml`) as the cheap half of the residual-leak mitigation.
+* Tests: (a) a token-stream test that async-iterates `astream` and asserts answer tokens arrive incrementally then a trailing metadata event; (b) **the load-bearing leak test** — run a query that forces a `query_clean_jobs` call and assert no SQL, tool name, or raw row value ever appears in the streamed tokens.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0017.1 entry (run the probe script; run a tool-using query through `astream` in a REPL and eyeball that only the final answer streams).
+**Out of Scope:**
+* The SSE wire format, the endpoint, and the service generator (T0017.2).
+* The heavier "buffer a whole turn to be 100% certain" leak defense — rejected in §9.2 (it would defeat streaming on the one turn that most needs it); prompt line + leak test is the chosen MVP coverage.
+
+#### T0017.2: Streaming service + SSE endpoint
+**Objective:** Expose T0017.1's runtime stream over HTTP as Server-Sent Events on a new `POST /api/v1/agent/chat/stream`, with the session-first / metadata-trailing ordering and in-band error delivery the one-shot status-code model can't provide once the response has started (`MVP_Technical_Design.md` §9.4–9.5).
+**In Scope:**
+* A streaming sibling of `generate_agent_response` in `src/agents/service.py` that mints the `session_id` up front (known before the run), emits it first, passes runtime token/metadata events through, and owns fallback/error **policy as yielded events** — reusing the existing `classify_provider_busy_error` / `BUSY_MESSAGE` logic, only changing its *delivery* from a raised exception to an `error` event (§9.5).
+* A new streaming route in `src/api/routes/query.py` returning the **native `fastapi.sse.EventSourceResponse`** (FastAPI 0.136.3, already installed — no new dependency; this supersedes the earlier hand-rolled `event:`/`data:` helper and the `sse-starlette` fallback, §9.4). Yield `ServerSentEvent(data=…, event=…)` in the fixed vocabulary `session`/`token`/`metadata`/`error`/`done`; each token's `data` is JSON (`{"text": ...}`) for newline safety.
+* Pre-stream vs mid-run error split (§9.5): empty-query validation still returns a clean `400` **before** the generator starts; a provider-busy signal raised before the first token stays a `429`; once tokens flow, failures become in-band `error` events. Empty-answer fallback decided at end-of-stream and sent as a single `token`.
+* **Verify** the two anti-buffering headers (`Cache-Control: no-cache`, `X-Accel-Buffering: no`) reach the client — `EventSourceResponse` sets them automatically (§9.4), so this is a confirmation in the T0017.2 manual check, not a manual header add.
+* Schemas: document the event shapes (`src/api/schemas.py` or a short doc block); `QueryResponse` stays for the one-shot path.
+* Tests: integration over the **event sequence** — a happy path asserting `session` first, ≥1 `token`, a trailing `metadata`, then `done`; a mid-stream failure asserting an in-band `error` event (not a 500); and the pre-stream empty-query `400` still holding on the streaming route.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0017.2 entry (`curl -N` the stream endpoint and watch tokens arrive live; confirm the trace link lands in the trailing `metadata` event; confirm an empty-query body still `400`s).
+**Out of Scope:**
+* Rate-limit wiring beyond reusing the existing limiter/handler — no new limit policy (T0016.2 owns that).
+* Browser consumption / `EventSource`-vs-`fetch` — T0018.
+* Server-issued session-ID hardening and the data disclaimer (T0018); this ticket emits whatever `session_id` the service mints today.
+
+### T0018: Milestone 18 - Clickable Demo (UI + go-live) — PLACEHOLDER
+**Status: placeholder (2026-07-13). Not yet scoped into sub-tickets — holds the milestone slot and the decisions already made; deep scoping deferred until the UI-location fork is settled.** Takes the streamed API from T0017 and puts a clickable, deployed face on it. Promotes the remaining **Demo UI** substance out of the Backlog and folds in the *small* go-live blockers, so the project moves from "the API streams" to "here's a link, click it."
+**Objective (draft):** Ship the visible product — a polished streaming chat UI consuming the T0017 SSE endpoint, deployed somewhere a reviewer can click, showcasing the honesty behavior (freshness caveat, negotiable-salary phrasing, a clean refusal). `research/pre-deploy-refinement-plan.md` §6j calls this "the highest-leverage gap in all of §6."
+**Decisions already fixed (do not re-litigate at scoping):**
+* **UI ambition: "not too boring."** A deliberately richer, more polished chat UI — *not* a bare Streamlit-style layout. Stack TBD at scoping.
+* **The UI consumes the T0017 SSE contract** (`MVP_Technical_Design.md` §9.4) — it talks only to the public `/api/v1` endpoint and never sees agent internals.
+**Likely in scope (to be split into sub-tickets):**
+* **Server-issued session IDs + data disclaimer + DB readiness probe** (the former §6l orphans + §6c): harden session-ID issuance so two demo users can't collide into one conversation; surface the disclaimer ("demo data, snapshot from {date}, from public listings, may be inaccurate"); add the `SELECT 1` readiness probe.
+* **The streaming chat UI** — token-by-token render, 3–5 canned honesty-showcase prompts, disclaimer line, graceful mid-stream `error`-event bubble. Includes the `EventSource` (GET-only) vs. `fetch()`-POST consumption choice (§9.4).
+* **Go-live:** fill the CORS `allowed_origins` T0016.1 left `[]` (or serve same-origin via FastAPI `StaticFiles` so CORS is never exercised — depends on the UI-location fork); topology decision (§6a — Render/Cloud Run + Neon + Langfuse Cloud Hobby); deploy. Larger deploy-hardening (§6g/§6h/§6i) stays in the Backlog unless pulled in.
+**Open fork to settle before writing sub-tickets:**
+* **UI location:** FastAPI `StaticFiles` same-origin vs. a separate Vite SPA. Determines whether CORS is exercised, the serving model, and the UI sub-ticket shape. (Standing lean: framework SPA built-to-static, served same-origin — polish + no CORS + one deploy; not yet locked.)
+**Out of scope:** ingestion / `is_active` (separate backlog milestone); anything in `research/pre-deploy-refinement-plan.md` §6m (deferred, documented-not-built); the streaming backend itself (done in T0017).
+
+### Backlog — unscheduled milestones (removed 2026-07-12; to be named & scoped)
+Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Ingestion Deploy Readiness** (briefly numbered T0016–T0018) on 2026-07-12 at the user's request — they need more specific milestone names and scoping before they re-enter the numbered roadmap. Their substance is preserved in research and will seed the future tickets:
+* **Deploy hardening** — `research/pre-deploy-refinement-plan.md` §6, **minus the security posture (§6b) now carved into T0016 (Milestone 16)**. §6f (Langfuse secrets) is moot — the deploy uses **Langfuse Cloud Hobby**, not self-host (user decision 2026-07-12). Remaining unscheduled: topology (§6a), DB readiness probe (§6c), what-data-ships (§6g), deploy-doc drift (§6h), CI gate (§6i).
+* **Demo UI** — **promoted to the numbered roadmap on 2026-07-13, then split:** the streaming backend became **T0017 (Milestone 17, fully scoped)** and the UI + go-live became **T0018 (Milestone 18, placeholder)**. See both above. `research/pre-deploy-refinement-plan.md` §6j.

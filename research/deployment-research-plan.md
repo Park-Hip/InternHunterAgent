@@ -70,7 +70,7 @@ Sources:
 - [Google Cloud Run free tier 2026 (lalatenduswain.medium.com)](https://lalatenduswain.medium.com/building-cloud-native-apps-for-free-in-2026-the-complete-developers-guide-to-google-cloud-s-3d93b77c4adb)
 - [Cloud Run pricing (cloud.google.com)](https://cloud.google.com/run/pricing)
 
-**Decision:** _____
+**Decision (2026-07-16):** **Render** free tier — Dockerfile deploy from GitHub, Singapore region, `*.onrender.com` + auto-TLS. Chosen over Cloud Run for zero-config simplicity (no billing account, no `gcloud`/Artifact Registry). 15-min idle spin-down + ~1 min cold start accepted for a portfolio demo. **Live: https://internhunteragent.onrender.com** (Free instance, `WEB_CONCURRENCY=1`).
 
 ---
 
@@ -148,7 +148,7 @@ Sources:
 - [Distroless Python with uv 2026 (nerdleveltech.com)](https://nerdleveltech.com/distroless-python-containers-with-uv-tutorial)
 - [Docker image size comparison (chainguard.dev)](https://www.chainguard.dev/supply-chain-security-101/best-python-docker-image-top-options-compared)
 
-**Decision:** _____
+**Decision (2026-07-16):** **`python:3.12-slim` Dockerfile at `docker/Dockerfile`**, built with `uv sync --frozen --no-dev`, non-root `app` user. The `CMD` binds a fixed `--port 8000`; Render routes to it via a **`PORT=8000` env var** (tells Render's proxy which port the container listens on). Distroless deferred. Render built + pushed the image in ~1 min on its own builder.
 
 ---
 
@@ -194,7 +194,7 @@ Sources:
 - [Neon cold-start latency benchmarks (neon.com)](https://neon.com/docs/guides/benchmarking-latency)
 - [Render Postgres free tier (kuberns.com)](https://kuberns.com/blogs/render-postgres-pricing-setup-limits/)
 
-**Decision (local vs deploy DSN strategy):** _____
+**Decision (local vs deploy DSN strategy, 2026-07-16):** `DATABASE_URL` in SQLAlchemy `postgresql+psycopg://…` form everywhere; the checkpointer strips `+psycopg` itself (`src/core/checkpointer.py`). Local = Docker Postgres on `:5433`. Prod = **Neon direct (non-pooled) endpoint** (PG17, Singapore) — for a single low-QPS instance the pooler's PgBouncer prepared-statement subtlety isn't worth it, and direct sits well within Neon's connection cap. Snapshot loaded via the direct **plain** `postgresql://…` DSN (no `+psycopg`, which is a SQLAlchemy-only prefix). Neon Auth left OFF (no end-user auth in this app).
 
 ---
 
@@ -399,7 +399,7 @@ Sources:
 - [pydantic-settings docs (pydantic.dev)](https://pydantic.dev/docs/validation/latest/concepts/pydantic_settings/)
 - [GitHub Actions secrets docs (docs.github.com)](https://docs.github.com/billing/managing-billing-for-github-actions/about-billing-for-github-actions)
 
-**Decision:** _____
+**Decision (2026-07-16):** All secrets injected as **Render dashboard env vars** at runtime — never in the image (`.dockerignore` excludes `.env`) or the repo. Five required, read by `src/core/config.py`: `GROQ_API_KEY`, `DATABASE_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` — **note the code reads `LANGFUSE_BASE_URL`, not `LANGFUSE_HOST`** (§6's earlier draft was wrong). `GOOGLE_API_KEY` omitted (eval-judge only, never on the request path). Plus the non-secret `PORT=8000`. Enter raw values in Render (no surrounding quotes — unlike a `.env` file, Render does not strip them).
 
 ---
 
@@ -459,7 +459,7 @@ Sources:
 - [Langfuse v3 self-hosting discussion (github.com/orgs/langfuse)](https://github.com/orgs/langfuse/discussions/5669)
 - [Langfuse pricing breakdown (cekura.ai)](https://www.cekura.ai/blogs/langfuse-pricing)
 
-**Decision:** _____
+**Decision (2026-07-16):** **Langfuse Cloud Hobby, JP region** (`LANGFUSE_BASE_URL=https://jp.cloud.langfuse.com`). Zero infra, 50k units/month — ample for a demo. Self-host ruled out (adds a paid 4th workload with ClickHouse). Verified live: `trace_url` resolves from the streamed `metadata` event to the JP project.
 
 ---
 
@@ -514,7 +514,7 @@ Sources:
 - [FastAPI CORS middleware docs (fastapi.tiangolo.com)](https://fastapi.tiangolo.com/deployment/docker/)
 - [Koyeb free tier + Mistral acquisition (srvrlss.io)](https://www.srvrlss.io/provider/koyeb/)
 
-**Decision:** _____
+**Decision (2026-07-16):** Default **`internhunteragent.onrender.com`** subdomain + Render auto-TLS; no custom domain (cosmetic, deferred). **CORS stays unused** — the UI is served same-origin from the same FastAPI container, so `api.cors.allowed_origins` stays `[]` and the CORS middleware is never exercised. Recorded here as the deploy rationale for the empty origins list.
 
 ---
 
@@ -578,7 +578,7 @@ Sources:
 - [Fly.io continuous deployment with GitHub Actions (fly.io)](https://fly.io/docs/launch/continuous-deployment-with-github-actions/)
 - [Railway vs Render 2026 (thesoftwarescout.com)](https://thesoftwarescout.com/railway-vs-render-2026-best-platform-for-deploying-apps/)
 
-**Decision:** _____
+**Decision (2026-07-16):** **Render native auto-deploy on push** to `feature/t0018.4-deploy`. A `pytest` merge-gate on `main` is **deferred (out of T0018.4 scope)** — noted for a later CI ticket (`pre-deploy-refinement-plan.md §6i`). Rollback = redeploy a previous deploy from the Render dashboard. No preview environments (free tier).
 
 ---
 
@@ -657,7 +657,7 @@ Sources:
 - [Structured logging with structlog + FastAPI (ouassim.tech)](https://ouassim.tech/notes/setting-up-structured-logging-in-fastapi-with-structlog/)
 - [Best cron monitoring tools 2026 (apistatuscheck.com)](https://apistatuscheck.com/blog/best-cron-job-monitoring-tools-2026)
 
-**Decision:** _____
+**Decision (2026-07-16):** In-app **`GET /api/v1/health`** (liveness — Render health-check target) + **`GET /api/v1/ready`** (`SELECT 1`, DB-gated, returns 503 on failure, excluded from the `slowapi` limiter). Health check pointed at `/health` (not `/ready`) so Render probes don't keep Neon awake. External **UptimeRobot ping + healthchecks.io dead-man's-switch deferred** to the ingestion milestone (no cron ships here). structlog stdout + Render's 7-day log stream suffice for the demo.
 
 ---
 
@@ -705,7 +705,7 @@ Sources:
 - [Langfuse pricing (langfuse.com)](https://langfuse.com/pricing)
 - [Egress bandwidth comparison 2026 (gpuperhour.com)](https://gpuperhour.com/reference/data-egress)
 
-**Decision (cost ceiling):** _____
+**Decision (cost ceiling, 2026-07-16):** **$10/month hard ceiling; actual expected $0.** Render Free + Neon Free (PG17) + Langfuse Hobby + Groq free tier all sit within limits at demo QPS. First likely paid step if ever needed: Render Starter ($7/mo, kills the 15-min cold start) or Groq pay-as-you-go (per-token, tiny at demo scale).
 
 ---
 
@@ -780,7 +780,7 @@ Sources:
 - [Web scraping ethics + robots.txt (medium.com/@ridhopujiono)](https://medium.com/@ridhopujiono.work/web-scraping-2-ethics-legality-robots-txt-how-to-stay-out-of-trouble-39052f7dc63f)
 - [Scraping job postings 2026 (cavuno.com)](https://cavuno.com/blog/job-scraping)
 
-**Decision:** _____
+**Decision (2026-07-16):** Posture per **T0016** — credential-less CORS (moot same-origin), per-IP rate limit (`15/minute`, `/health` + `/ready` excluded), 2000-char input cap, `/docs` deliberately public. Frame protection now active: **`X-Frame-Options: DENY`** on all responses (T0018.2, verified live). Scraping ToS/robots is **N/A for this deploy** — it ships a static corpus snapshot with no cron; that question re-enters at the ingestion milestone.
 
 ---
 
@@ -790,6 +790,7 @@ _Fill last._ One diagram + one paragraph: chosen host for the API, the DB, the c
 secret flow; the deploy trigger; and the total monthly cost (target: **$0 → minimal**).
 Then hand off to a deployment **design doc** + deploy tickets.
 
-**Candidate topology (to confirm):** API on _____ · Postgres on _____ · cron on _____ ·
-Langfuse on _____ · CI via _____.
-**Total expected cost:** _____
+**Confirmed topology (2026-07-16, T0018.4 first deploy):** API on **Render** (Docker `docker/Dockerfile`, Singapore, Free instance) · Postgres on **Neon** (PG17, direct DSN, Singapore, 50+50 rows loaded) · cron **none — ships a static corpus snapshot** (ingestion is a separate later milestone) · Langfuse on **Cloud Hobby (JP)** · CI via **Render auto-deploy on push** (pytest merge-gate deferred).
+**Secret flow:** five env vars set in the Render dashboard (never in image/repo) + `PORT=8000`; `DATABASE_URL` in `postgresql+psycopg://…` form.
+**Live URL:** https://internhunteragent.onrender.com — verified end-to-end (SSE streaming, Neon query, Groq answer, Langfuse `trace_url`, `/docs`, `X-Frame-Options: DENY`) on 2026-07-16.
+**Total expected cost:** **$0/month** (hard ceiling $10).

@@ -1,11 +1,11 @@
 ## Current branch
-`fix/split-react-sql-llm-config` - a narrow backend config split stacked on the **SQL-generation reasoning-effort hotfix** and the T0018.3 Editorial streaming chat UI branch.
+`feature/t0018.4-deploy` — **T0018.4 first public deploy. LIVE: https://internhunteragent.onrender.com** (verified end-to-end 2026-07-16).
 
-This branch is stacked on T0018.3 and keeps that UI work intact. It migrates the prior SQL-generation reasoning-effort hotfix from a per-call override to two explicit model profiles: `agent.react` for the outer conversational ReAct agent and `agent.sql_generation` for the nested SQL-generation call. The SQL-generation profile now owns `reasoning_effort: "none"` directly; `agent.query.sql_generation_reasoning_effort` is removed.
+Built clean off `e4076b2` (the kept ReAct/SQL-generation config split) with the T0018.3 Editorial UI committed as `7d4cfef`, then deployed: API on **Render** (Docker, Singapore, Free), Postgres on **Neon** (PG17, static 50-row snapshot), tracing on **Langfuse Cloud Hobby (JP)**. Secrets are Render env vars; `api.cors.allowed_origins` stays `[]` (same-origin). Full record in [`Completion_Reports.md`](Completion_Reports.md) → T0018.4, and the confirmed topology in `research/deployment-research-plan.md` §12. The dumped T0015.6/.7 provider-A/B phase is parked recoverably at `45d333c` on `feature/t0015.6-provider-ab`.
 
 - Do not rebase this branch onto `main` without an explicit maintainer decision. `main` has historically lagged the M12/M13/T0016 work; use the ticket branch topology recorded here and in `Tickets.md`.
 - The M15 behavior work is not part of this branch unless explicitly merged later. Anything about `Agent_Behavior_Spec.md`, the scenario matrix, or `behavior_glossary` belongs to that parallel track.
-- Everything for this branch's current work is in [`Tickets.md`](Tickets.md) → **T0018.3** and the T0018.3 manual checklist in [`Manual_Verification_Guide.md`](Manual_Verification_Guide.md).
+- Everything for this branch's current work is in [`Tickets.md`](Tickets.md) → **T0018.4** and the T0018.4 manual checklist in [`Manual_Verification_Guide.md`](Manual_Verification_Guide.md).
 - Older branch/roadmap snapshots (T0014 and earlier) are archived in [`archive/Repo_State_History.md`](archive/Repo_State_History.md).
 
 ## Completed milestones

@@ -970,3 +970,18 @@ Each ticket's own "Manual check" lines in [`Tickets.md`](Tickets.md) are the *pl
   ```
   Confirm it returns a bare `SELECT` query and does not expose reasoning text.
 * Confirm no prompt, schema, eval fixture, API route, service-layer, streaming transport, or static UI changes were made as part of this config split.
+
+## T0018.4 — Deploy topology + first public deploy
+
+Verify against the live public URL: **https://internhunteragent.onrender.com**
+
+* **Cold hit:** open the URL after it's been idle. Expect a ~1–2 min first load (Render + Neon both waking); the Editorial page then renders.
+* **UI serves:** the masthead, honesty prompt chips, and composer render; `curl -s -o /dev/null -w "%{http_code}" https://internhunteragent.onrender.com/` → `200`.
+* **Streaming works:** click a canned prompt (or `curl -N -X POST .../api/v1/agent/chat/stream -H 'Content-Type: application/json' -d '{"query":"How many AI Engineer jobs need Python?"}'`). Confirm SSE events arrive in order `session` → `token`* → `metadata` → `done`, and the answer streams token-by-token.
+* **Neon query works:** the answer reflects the loaded corpus (e.g. a real count, not an error/empty).
+* **Trace link resolves:** the `metadata` event carries a non-null `trace_url` (`https://jp.cloud.langfuse.com/...`); the UI's "view trace" link opens the Langfuse trace.
+* **Disclaimer:** the disclaimer line shows the snapshot date read from `GET /api/v1/ready` (`{"status":"ok","data_snapshot_date":"2026-07-14"}`). On a cold first load it may briefly degrade to the dateless sentence — refresh once.
+* **Multi-turn memory:** ask a follow-up in the same session; confirm it remembers context (the UI omits `session_id` on turn 1, then reuses the server-issued uuid4).
+* **API surface intact:** `https://internhunteragent.onrender.com/docs` loads; `curl .../api/v1/health` → `200`.
+* **Frame protection:** `curl -sI https://internhunteragent.onrender.com/ | grep -i x-frame-options` → `x-frame-options: DENY`.
+* **Deploy hygiene:** Render env vars hold all five secrets + `PORT=8000` (none baked into the image); Render is deploying branch `feature/t0018.4-deploy`.

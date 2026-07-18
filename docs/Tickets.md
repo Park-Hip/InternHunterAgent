@@ -22,8 +22,9 @@ Ticket specs and delivery sequence for the MVP. Each entry is the **plan** for o
 | 15 | T0015 | Agent Behavior Spec & Scenario Matrix | ⏸ | Parallel track — not on this branch |
 | 16 | T0016 | Security Posture | ✅ | CORS, rate limit, input cap, `/docs` decision |
 | 17 | T0017 | Streaming Response Delivery | ✅ | `astream` + no-leak filter, SSE endpoint |
-| 18 | T0018 | Clickable Demo (UI + go-live) | 🔨 | .1–.3 done · **▶ .4 next** (deploy) |
-| — | Backlog | Deploy hardening, ingestion cron | 📋 | Unscheduled — seeds future tickets |
+| 18 | T0018 | Clickable Demo (UI + go-live) | ✅ | .1–.4 done · **live: https://internhunteragent.onrender.com** |
+| 19 | T0019 | Ingestion Deploy Readiness (live-DB) | ▶ | **▶ next** — .1–.8 scoped · nightly cron into Neon, hidden lifecycle columns, ops hardening |
+| — | Backlog | CI merge gate, `main` reconciliation | 📋 | unscheduled; seeds future tickets |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on maintainer credentials — see [`Known_Issues.md`](Known_Issues.md).
 
@@ -1007,8 +1008,9 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Browser consumption / `EventSource`-vs-`fetch` — T0018.
 * Server-issued session-ID hardening and the data disclaimer (T0018); this ticket emits whatever `session_id` the service mints today.
 
-## T0018: Milestone 18 - Clickable Demo (UI + go-live) — 🔨 In progress
-**Status: scoped 2026-07-14** (was a placeholder from 2026-07-13). The UI-location fork and every open decision are now settled — the full pre-scoping, the rendered style options, and the locked decision table live in [`research/demo-ui-and-golive-plan.md`](../research/demo-ui-and-golive-plan.md) §0a. Takes the streamed API from T0017 and puts a clickable, deployed face on it, folding in the *small* go-live blockers so the project moves from "the API streams" to "here's a link, click it."
+## T0018: Milestone 18 - Clickable Demo (UI + go-live) — ✅ Done
+**Status: closed 2026-07-16.** All four sub-tickets shipped; the demo is live at **https://internhunteragent.onrender.com** (T0018.4 verified end-to-end 2026-07-16). Per-ticket detail in [`Completion_Reports.md`](Completion_Reports.md) → Milestone 18; confirmed topology in [`research/deployment-research-plan.md`](../research/deployment-research-plan.md) §12. Open operational items from the deploy (free-tier cold start, the 750-instance-hour cliff) are registered in [`Known_Issues.md`](Known_Issues.md) → Config, startup & deployment — they are demo-UX/ops items, not milestone blockers.
+**Originally scoped 2026-07-14** (was a placeholder from 2026-07-13). The UI-location fork and every open decision are now settled — the full pre-scoping, the rendered style options, and the locked decision table live in [`research/demo-ui-and-golive-plan.md`](../research/demo-ui-and-golive-plan.md) §0a. Takes the streamed API from T0017 and puts a clickable, deployed face on it, folding in the *small* go-live blockers so the project moves from "the API streams" to "here's a link, click it."
 **Objective:** Ship the visible product — a polished streaming chat UI consuming the T0017 SSE endpoint, deployed somewhere a reviewer can click, showcasing the honesty behavior (freshness caveat, negotiable-salary phrasing, a clean refusal). `research/pre-deploy-refinement-plan.md` §6j calls this "the highest-leverage gap in all of §6."
 **Decisions already fixed (do not re-litigate at scoping — settled 2026-07-14, `research/demo-ui-and-golive-plan.md` §0a):**
 * **Visual direction: Editorial** — serif display, hairline rules, generous whitespace, a restrained ink/vermilion accent. A deliberately polished chat UI, *not* a bare Streamlit layout. Fine visual specifics (exact serif, spacing scale, accent value, motion) are deferred to build time inside T0018.2.
@@ -1071,8 +1073,135 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 **Out of Scope:**
 * The ingestion cron / GitHub Actions (separate milestone); a CI merge gate (`§6i`) and custom domain (cosmetic) unless separately pulled in; connection-pool tuning and other §6m deferrals.
 
+## T0019: Milestone 19 - Ingestion Deploy Readiness (live-DB) — ▶ Next
+**Scoped 2026-07-16.** Graduates the ticket breakdown in [`research/ingestion-milestone-plan.md`](../research/ingestion-milestone-plan.md) §3, which validated the seven ingestion-redesign decisions locked 2026-07-03 in [`research/deployment-research-plan.md`](../research/deployment-research-plan.md) §4.2 against four assumptions that inverted since (deploy ordering, the unmet honesty gate, Neon's cost model, two hard gates). Read `ingestion-milestone-plan.md` §1 before scoping any sub-ticket — it disposes each inversion and names the rejected alternatives, so do not re-derive them.
+**Objective:** Turn the manual, offline ingestion pipeline (T0009) into one that can run **unattended, nightly, against the live Neon database** behind https://internhunteragent.onrender.com — replacing the static 50-row snapshot the demo ships today with a refreshing corpus, and folding in the three ops items every doc re-pointed here (keep-alive ping, dead-man's switch, schema-drift assertion/migration).
+**Decisions already fixed (do not re-litigate at scoping — `ingestion-milestone-plan.md` §1, §4):**
+* **Accumulate, never wipe** (§4.2 #1) and **time-based `is_active` expiry** (§4.2 #2) **hold verbatim** under the live-DB flip. They are what make a partial or failed run harmless, which is exactly what makes writing to production tolerable. With the `TRUNCATE` gone the whole `clean_jobs` refresh is one statement-atomic upsert — a visitor mid-run sees old rows or new rows, never a half-applied batch.
+* **Safety rule, not a preference: no ingestion run against the production DSN until T0019.3 lands.** Today's `clean_store.replace_clean_jobs` still runs `TRUNCATE clean_jobs` first — running the *current* pipeline against Neon even once "just to test" rebuilds the live table from whatever came through. Local Docker Postgres runs stay fine.
+* **The honesty decision (§4.2 #3) is split.** The lifecycle *mechanics* ship now as **hidden DDL columns** (the pattern `Schema_Contract.md` § Hidden DDL Columns already documents for `source`/`external_id`/`posted_date`). The *agent exposure* — `is_active` in `schema_context` + the hedge — is **deferred behind its own unmet gate**: T0011.5 baseline → prompt-v2 few-shot pass → targeted recalibration delta. **The 16-column frozen contract is untouched this milestone: no prompt, golden, or eval changes at all.**
+* **Interim honesty posture, stated plainly:** until exposure lands, the agent serves the accumulated corpus with expired postings present and **unqualified** — the same epistemic state as today's demo, which serves a 100%-stale snapshot behind the UI disclaimer. Nightly refresh strictly *improves* data honesty even before the hedge exists.
+* **Two hard gates block, in sequence:** robots.txt/ToS (T0019.1, do-first, hard-blocks T0019.6 **only**) and schema drift, which needs **both** Alembic (the forward path) **and** a pre-flight contract assertion (the detection path — Alembic does not detect out-of-band drift, which is exactly what bit on 2026-07-15).
+* **GitHub Actions at $0 is verified, not assumed** — the repo is `PUBLIC` (`gh repo view --json visibility`, 2026-07-16), so scheduled minutes are unlimited. The 60-day scheduled-workflow auto-disable still applies; the cron ticket carries the keepalive action.
+**In Scope:** see sub-tickets below — .1 robots/ToS gate, .2 Alembic baseline, .3 accumulate semantics + hidden lifecycle columns, .4 source resilience, .5 unattended-run safety, .6 the nightly cron, .7 keep-alive ping + Neon idle-pool verification, .8 truthful disclaimer date.
+**Config additions (all in `config/settings.yaml` per CLAUDE.md; illustrative):**
+```yaml
+ingestion:
+  lifecycle:
+    expire_after_days: 7      # consecutive missed days before is_active=false; never deleted
+  safety:
+    min_yield: 20             # abort the run (and withhold the dead-man ping) below this fetch count
+```
+*(At daily cadence, 7 consecutive misses is a full week of absence from search — comfortably beyond the transient flakiness T0019.4's retries smooth; `min_yield: 20` sits far below the measured ~50-per-run steady state but far above a broken run's near-zero. Both are config, tunable without a ticket.)*
+**Out of Scope:**
+* **`is_active` agent exposure + the honesty hedge** — its ship-gate (T0011.5) is unmet and the measured nudge-adherence evidence is adverse (hidden-salary violated 2/2, freshness fabricates 1/3 — `Known_Issues.md` § Agent runtime & prompts). This is the milestone's single biggest scope cut and it removes *all* prompt/golden/eval work.
+* Deterministic hedge enforcement (a hide-inactive view, `WHERE is_active` injection, answer post-processing) — the view is ruled out by §4.2 #3 itself; injection crosses the tool boundary the repo already defended on the id-first nudge (`Known_Issues.md` T0009.11).
+* Exposing `first_seen_at`/`last_seen_at` to the agent in any form — repeats the `posted_date` fabrication trap.
+* **Everything in §4.2 #7, unchanged:** rebuild-clean-from-`raw_jobs` phase split, source orchestrator/registry (multi-source), `content_hash` delta, single-transaction `raw_jobs`+`clean_jobs` write. No inversion moved any of them.
+* **A staging DB / Neon branch + verify + promote flow** — a second environment and a promotion mechanism to protect ~50–100 rows already covered by the yield floor + the raw-rebuild runbook; over-engineering under CLAUDE.md §1. (If the corpus or blast radius grows 10×, a Neon branch is the natural first upgrade — noted, not built.)
+* Writing ingestion to a separate DB and swapping — either two DBs leak into the serving path or the rejected promotion step returns; #1/#2 exist to make in-place writes safe.
+* A **second board** (ITviec/TopDev/TopCV/LinkedIn) — the recorded fallback direction if T0019.1 comes back unfavorable, not this milestone's work.
+* CI merge gate + `main` reconciliation (adjacent, separately tracked — `pre-deploy-refinement-plan.md` §6i, `Repo_Current_State.md`); observability beyond the dead-man's switch + yield assertions (§9's sanctioned set is the ceiling); an API-side startup schema assertion (read-path; register follow-up).
+**Sequencing (execution order):** **T0019.1 first** (doc-only gate); **.2 → .3 → .5 → .6** is the dependency spine; **.4, .7, .8** float (.8 needs .3's columns, .5 wants .4's `pages_failed`). Blocked-on markers are explicit per ticket.
+**Rollback runbook (documented with T0019.3, not a ticket of its own):** rebuild `clean_jobs` from `raw_jobs` via `to_normalized_job` + the upsert — the exact recovery already performed live on 2026-07-15 during the schema-drift fix. Accumulating `raw_jobs` is what makes this possible; it is the milestone's rollback path.
+**If T0019.1 comes back unfavorable** (robots disallows `/job-search/`, or the ToS prohibits automated access): **T0019.6 is parked, not adapted.** The milestone degrades to "lifecycle-ready pipeline + ops hardening" — .2/.3/.5/.7/.8 still land and are independently valuable — the demo stays on the manually-loaded corpus, and the source question re-opens as a new research item. A daily unattended job against a forbidding host is a standing violation and is not shipped quietly.
+
+### T0019.1: robots.txt / ToS verification for `ms.vietnamworks.com` — **do first; gates T0019.6**
+**Objective:** Resolve the `deployment-research-plan.md` §11 hard gate before any scheduled run exists: verify whether the undocumented `ms.vietnamworks.com/job-search` API host permits automated access (`data-ingestion-stage.md` §0.1/§4). Doc-only; no code.
+**In Scope:**
+* Fetch `https://ms.vietnamworks.com/robots.txt` (and `www.vietnamworks.com/robots.txt` for context); determine whether the `/job-search/` path is disallowed; archive the fetched files under `research/experiments/` with the fetch date.
+* Read the VietnamWorks Terms of Service for clauses on automated access / scraping / API use; quote the relevant clauses (or record their absence) in the decision record.
+* Record a dated **Decision** in `deployment-research-plan.md` §11: *favorable* (schedule permitted; note any crawl-delay to honor) or *unfavorable* (T0019.6 parked; milestone degrades per `research/ingestion-milestone-plan.md` §1D; source fallback re-opens as a new research item).
+* Manual check: the robots.txt copy exists in `research/experiments/`; §11 carries the dated decision and quotes; T0019.6's blocked-on status is updated to match.
+**Out of Scope:**
+* Any code change; any alternative-source spike (ITviec/cloudscraper stays a recorded fallback direction only); re-litigating the §11 legal-posture research.
+
+### T0019.2: Alembic adoption — baseline migration + env wiring
+**Objective:** Adopt Alembic per §4.2 #4. An accumulating `raw_jobs` holds postings that have dropped out of search and are no longer re-fetchable, so the deployed data is irreplaceable and `reset_db.sql` stops being a migration strategy.
+**In Scope:**
+* Add `alembic` as a dependency (sanctioned by §4.2 #4); `alembic init` with `env.py` reading `DATABASE_URL` (SQLAlchemy `postgresql+psycopg://` form, **direct non-pooled endpoint** for migrations per `deployment-research-plan.md` §3) and targeting the existing `models.py` metadata.
+* Baseline migration capturing the current deployed schema (the frozen 16-column contract + hidden columns + `raw_jobs`), stamped against both the local Docker DB and Neon so `alembic upgrade head` is a no-op on a current DB.
+* Demote `scripts/reset_db.sql` to local-dev-only: a header comment + a note in `Repo_Current_State.md` § Available scripts ("destructive, local dev only — prod schema changes go through Alembic").
+* Tests: migration round-trip against a scratch local DB (upgrade from empty → schema matches `models.py` metadata).
+* Manual check: `docs/Manual_Verification_Guide.md` → T0019.2 entry (`uv run alembic upgrade head` is a clean no-op on an already-initialised local DB and builds the full schema on an empty one; `alembic current` shows the baseline revision; the app boots and answers a query against the migrated DB).
+**Out of Scope:**
+* The lifecycle columns themselves (T0019.3); running anything against Neon before the maintainer applies it deliberately; autogenerate-driven workflows beyond the baseline (hand-written migrations are fine at this scale).
+
+### T0019.3: Accumulate load semantics + hidden lifecycle columns — **blocked on T0019.2**
+**Objective:** Land §4.2 #1/#2 — drop the `TRUNCATE` so the already-written `ON CONFLICT (source, external_id) DO UPDATE` upsert becomes live code, and add time-based `is_active` soft-expiry — as **hidden** columns, with no prompt-surface change (`ingestion-milestone-plan.md` §1B).
+**In Scope:**
+* Alembic migration adding `is_active BOOLEAN NOT NULL DEFAULT TRUE`, `first_seen_at TIMESTAMPTZ NOT NULL`, `last_seen_at TIMESTAMPTZ NOT NULL` to `clean_jobs` (+ the ORM fields in `models.py`); **backfill** existing rows' `first_seen_at`/`last_seen_at` from their `raw_jobs.fetched_at` (truthful, and available for all 50 snapshot rows — confirm the join is total before relying on it).
+* `clean_store.py`: remove the `TRUNCATE`; the upsert sets `last_seen_at = now()` and `is_active = true` on conflict and leaves `first_seen_at` untouched (insert-only value). Rename `replace_clean_jobs` → `upsert_clean_jobs` (the old name states the retired semantics).
+* Expiry pass in the loader after the upsert: `UPDATE clean_jobs SET is_active = false WHERE last_seen_at < now() - make_interval(days => :expire_after_days)` — time-based only, **never** "not seen this run", never `DELETE`. `expire_after_days` from `config/settings.yaml` (`ingestion.lifecycle.expire_after_days`, default 7).
+* Document the **rollback runbook** (rebuild `clean_jobs` from `raw_jobs` via `to_normalized_job` + the upsert) alongside the loader.
+* Guard tests: prompt surfaces (`schema_context`, `system_prompt`, `sql_generation`) do **not** mention `is_active`/`first_seen_at`/`last_seen_at` (extend the existing hidden-column enforcement in `tests/agents/runtime/test_prompts.py`); the upsert refreshes `last_seen_at` and preserves `first_seen_at`; a row older than the window flips to `is_active = false` and is never deleted; a re-seen expired row flips back to active.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0019.3 entry (local DB: run ingestion twice — row count never shrinks; `SELECT COUNT(*) FROM clean_jobs WHERE is_active = false` is 0 after a fresh double-run; manually age one row's `last_seen_at` by 8 days, re-run, confirm it expires and its data still selects; confirm the agent's answers are unchanged — the columns are invisible).
+**Out of Scope:**
+* Agent exposure of `is_active` / the hedge, and exposing `first_seen_at`/`last_seen_at` in any form (milestone Out of Scope); rebuild-from-`raw_jobs` phase split, `content_hash` delta, single-transaction write (§4.2 #7); any `Schema_Contract.md` change — the frozen surface is untouched.
+
+### T0019.4: Source resilience — per-page try/continue + retry/backoff
+**Objective:** Land §4.2 #5: one transient 429/5xx currently aborts the whole run via `_post`'s `raise_for_status()` (`deployment-research-plan.md` §4.1 row 1). With time-based expiry this is a *completeness* problem, not a correctness one — so salvage the good pages.
+**In Scope:**
+* In `VietnamWorksSource._collect`: wrap each page `_post` in try/except; retry with backoff (attempts + base delay from config, e.g. `ingestion.api.retry_attempts: 2`, `retry_backoff_seconds: 2.0`), then skip-and-log (`structlog` warning with query/page) and continue to the next page/query.
+* Run summary gains `pages_failed` (feeds T0019.5's assertions).
+* Tests with a canned `httpx.Client`: a mid-run 500 skips that page and keeps later pages' postings; exhausted retries don't raise out of `fetch()`; the politeness delay still applies between attempts.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0019.4 entry (inject a failing page via the test-client pattern — no live fetch needed — and confirm the run completes with the remaining postings loaded and a `pages_failed` count in the summary log line).
+**Out of Scope:**
+* Per-source isolation / orchestrator (multi-source, deferred §4.2 #7); changing keywords, pagination, or the politeness delay; any live scraping (T0019.1 gates production fetches; local tests use canned responses).
+
+### T0019.5: Unattended-run safety — pre-flight assertion, yield floor, dead-man ping — **blocked on T0019.3 (+ .4 for `pages_failed`)**
+**Objective:** Make the pipeline safe to run with nobody watching a live DB: fail loudly *before* writing when the world looks wrong, and alert when a run is missed or suspicious (`deployment-research-plan.md` §4.1/§9C; `Known_Issues.md` schema-drift `[HIGH · OPEN]`).
+**In Scope:**
+* **Pre-flight schema assertion** at CLI start: query `information_schema.columns` for `clean_jobs` and compare against the expected column set (frozen 16 + hidden bookkeeping + lifecycle); on mismatch, log the diff and **exit non-zero before any write** — the detection half of the drift gate (Alembic is the correction half). This is what protects the unattended writer from the 2026-07-15 class of bug striking silently at 02:00 UTC.
+* **Pre-write yield floor:** if the fetched count < `ingestion.safety.min_yield` (config, default 20), abort before the `clean_jobs` write and exit non-zero (raw landing of what *was* fetched is harmless and may proceed). This moves §4.1's sanctioned yield assertion from "after, alert" to "before, abort" — the mitigation for the one hazard the live-DB flip newly creates: upserting garbage over good rows.
+* **Dead-man ping:** at successful end (all assertions passed), POST to a healthchecks.io check URL read from env (`HEALTHCHECKS_URL`; absent → skipped with a log line, so local runs don't need it). A failed/aborted run *withholds* the ping → the `period=24h, grace=2h` window alerts (§9C).
+* **Structured run summary** as the final log line: fetched / raw_upserted / clean_upserted / expired_count / pages_failed / skipped — the §9C health-check numbers in one greppable line.
+* Tests: assertion failure exits non-zero before any write (mock session asserts no execute); under-floor yield skips the clean write; the ping fires only on the all-green path.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0019.5 entry (run against a correct local DB → green + summary line; rename a column in a scratch DB → run exits non-zero naming the diff, table untouched; set `min_yield` above the fixture yield → clean write skipped, non-zero exit).
+**Out of Scope:**
+* An API-side startup assertion (read-path; follow-up register item); UptimeRobot-style uptime monitoring (T0019.7 owns external-scheduler machinery; §9's ceiling holds); alerting channels beyond healthchecks.io's built-in email.
+
+### T0019.6: GitHub Actions nightly ingestion cron — **T0019.1 recommended favorable 2026-07-16, pending maintainer confirmation; blocked on T0019.2–.5**
+**Objective:** Land §4.2 #6 / §4.1's decision: an external, out-of-band scheduler invoking the offline ingestion CLI against Neon — reconciled against `Full_Design_Document.md` §2 by *amending* the no-schedulers exclusion to in-request background execution (the documented §4.1 reconciliation), not deleting it.
+**In Scope:**
+* Workflow: `on: schedule: cron: '0 2 * * *'` (02:00 UTC = 09:00 ICT) + `workflow_dispatch` for manual runs; checkout + `uv sync --frozen`; run the ingestion CLI (`uv run python -m src.services.ingestion.loader`); a `concurrency` group so overlapping runs never double-write; a job timeout well under the expected <10-min runtime.
+* Secrets (GitHub Actions secrets, per `deployment-research-plan.md` §5): `DATABASE_URL` (Neon **direct** DSN) and `HEALTHCHECKS_URL`. **No `GROQ_API_KEY`** — ingestion is deterministic, no LLM (a live-tested §8 decision that stays).
+* Keepalive action (marketplace `keepalive-workflow`) against the 60-day scheduled-workflow auto-disable (applies despite the repo being public).
+* The `Full_Design_Document.md` §2 amendment: scope the "no schedulers" exclusion explicitly to *in-request* background execution and permit the out-of-band scheduled ingestion trigger, cross-referencing §3's ingestion-layer law (the serving path never imports ingestion — which this preserves: the cron runs on GitHub's runner, not in the API process).
+* Manual check: `docs/Manual_Verification_Guide.md` → T0019.6 entry (trigger `workflow_dispatch` once, watch the Actions log show the run-summary line; confirm healthchecks.io received the ping; `SELECT COUNT(*)` on Neon grew or held — **never shrank**; the live demo still answers; next morning, confirm the scheduled run fired — GitHub's documented schedule drift under load is tolerable at daily cadence).
+**Out of Scope:**
+* Any CI/pytest merge gate (separate backlog item §6i — this workflow is ingestion-only); Render Cron ($1/mo floor, not free); running the workflow before T0019.1's favorable answer is recorded — **if §11 comes back unfavorable this ticket is parked, not adapted**.
+
+### T0019.7: Windowed keep-alive ping + Neon idle-pool verification — ops/config; independent
+**Objective:** Apply the `deployment-research-plan.md` §1a decision (2026-07-16, decided-not-applied): an external scheduler pinging `GET /api/v1/health` every 10–14 min on a ~07:00–23:00 ICT window — and resolve the open question that decides whether the scheme is free-tier-viable at all.
+**Why the verification is load-bearing:** the cron itself is a rounding error (≲1.3 CU-h/month against Neon's 100 CU-h cap) and the `/health`-not-`/ready` rule protects the direct path. But **if the LangGraph checkpointer's idle psycopg pool connections alone keep Neon from suspending**, Neon stays awake whenever Render is — 16 h/day × ~30 d × 0.25 CU ≈ **122 CU-h/month, over the cap**. A ping designed to protect Render's 750 instance-hours would break Neon's free tier instead, regardless of endpoint. This cannot be resolved from a desk (`ingestion-milestone-plan.md` §1C/§5).
+**In Scope:**
+* Configure cron-job.org (or UptimeRobot) per §1a: `GET /api/v1/health`, 10–14-min interval, 07:00–23:00 ICT window. **Never `/ready`** (it runs `SELECT 1` → holds Neon awake).
+* **Verification (the load-bearing step):** watch Neon's compute-hours for ~24 h after enabling; determine whether idle pool connections alone prevent the 5-minute suspend.
+* **Pre-written decision rule** if they do, in preference order: **(a)** configure the checkpointer's psycopg pool to shed idle connections (`min_size=0` / idle-lifetime — a settings-level change to `src/core/checkpointer.py` construction, params in `config/settings.yaml`; Neon resumes in ~300–500 ms, acceptable per §3), re-verify; **(b)** shrink the ping window; **(c)** Render Starter $7/mo and drop the ping (inside the $10 ceiling). Record the outcome in `deployment-research-plan.md` §1a and close the `Known_Issues.md` open question either way.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0019.7 entry (during the window the demo loads without the ~60 s blank-tab cold start; after 23:00 ICT + 15 min idle Render spins down as today; Render instance-hours track ≈16 h/day; Neon CU-hours consistent with suspension between pings — or the decision rule applied and its outcome recorded).
+**Out of Scope:**
+* 24/7 pinging (the 750-h cliff, `Known_Issues.md` `[HIGH]`); pinging `/ready`; GitHub Actions as the ping scheduler (UTC-only, 60-day auto-disable, 10+-min drift vs a 15-min idle window — cron ≠ ping); paid monitoring.
+
+### T0019.8: Truthful refresh date on `/ready` — **blocked on T0019.3**
+**Objective:** Keep the UI disclaimer honest once data refreshes nightly — the static `api.demo.data_snapshot_date` becomes false the first time the cron runs.
+**In Scope:**
+* `/api/v1/ready` derives the disclaimer date from data state — `SELECT MAX(last_seen_at)::date FROM clean_jobs` — falling back to the existing config value when NULL/unavailable. Plain SQL in the existing readiness path; **no ingestion-layer import** (layer isolation holds — it reads a table, not the ingestion package).
+* Response shape unchanged (the same field the UI already reads); UI untouched.
+* Tests: the date reflects the max `last_seen_at`; the fallback fires on an empty table; `/ready` still 503s on DB failure and stays outside the rate limiter.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0019.8 entry (hit `/ready`, see the current data date; run a local ingestion, hit it again, see the date advance; the UI disclaimer line renders the new date).
+**Out of Scope:**
+* Exposing any freshness value to the *agent* — the `posted_date` fabrication trap stands, and this is a UI/`/ready`-level value the model still cannot see; changing the disclaimer wording or the UI; removing the config fallback.
+
 ## Backlog — unscheduled milestones (removed 2026-07-12; to be named & scoped) — 📋 Backlog
 Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Ingestion Deploy Readiness** (briefly numbered T0016–T0018) on 2026-07-12 at the user's request — they need more specific milestone names and scoping before they re-enter the numbered roadmap. Their substance is preserved in research and will seed the future tickets:
 * **Deploy hardening** — `research/pre-deploy-refinement-plan.md` §6, **minus the security posture (§6b) now carved into T0016 (Milestone 16)**. §6f (Langfuse secrets) is moot — the deploy uses **Langfuse Cloud Hobby**, not self-host (user decision 2026-07-12). Remaining unscheduled: topology (§6a), DB readiness probe (§6c), what-data-ships (§6g), deploy-doc drift (§6h), CI gate (§6i).
 * **Demo UI** — **promoted to the numbered roadmap on 2026-07-13, then split:** the streaming backend became **T0017 (Milestone 17, fully scoped)** and the UI + go-live became **T0018 (Milestone 18, fully scoped 2026-07-14; re-split 2026-07-15 into T0018.1–.4)**. See both above. `research/pre-deploy-refinement-plan.md` §6j; `research/demo-ui-and-golive-plan.md`.
+* **Ingestion Deploy Readiness** — **promoted to the numbered roadmap on 2026-07-16 as T0019 (Milestone 19, scoped .1–.8)**. See above. It absorbed the three ops items previously parked here: the keep-alive ping (`deployment-research-plan.md` §1a), the dead-man's switch (§9A), and the schema-drift assertion/migration (`Known_Issues.md` `[HIGH · OPEN]`). Validation of its decisions: `research/ingestion-milestone-plan.md`.
+
+**Still unscheduled after T0019:**
+* **CI merge gate** — `research/pre-deploy-refinement-plan.md` §6i; no automated gate today, and Render auto-deploys straight off the active branch. Explicitly *not* part of T0019.6 (that workflow is ingestion-only).
+* **`main` reconciliation** — `main` is stuck at T0009; M10–M19 live on ticket branches. Needs an explicit maintainer decision; **do not branch a deploy from `main`**.
+* **`is_active` agent exposure + honesty hedge** — cut from T0019 (gate unmet); re-enters only after T0011.5 baseline → prompt-v2 few-shot pass → the targeted recalibration delta.
+* **Deploy-doc drift** (`pre-deploy-refinement-plan.md` §6h) and a custom domain (cosmetic).
 

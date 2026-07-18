@@ -22,6 +22,11 @@ job_function:
 
 max_jobs: 50
 
+# Lifecycle: time-based soft expiry. A posting absent from search for this many
+# consecutive days flips is_active=false. Rows are NEVER deleted.
+lifecycle:
+  expire_after_days: 7
+
 # Legacy technology seed for scripts/build_tech_vocabulary.py.
 # Runtime extraction reads config/tech_vocabulary.yaml, not this list directly.
 tech_dictionary:

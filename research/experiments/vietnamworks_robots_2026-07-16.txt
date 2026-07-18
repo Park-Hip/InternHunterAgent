@@ -1,0 +1,15 @@
+# ARCHIVED EVIDENCE — T0019.1 robots.txt / ToS gate
+# Source URL:   https://ms.vietnamworks.com/robots.txt
+# Fetched:      2026-07-16 15:26:34 GMT
+# Method:       curl -sS -D - https://ms.vietnamworks.com/robots.txt
+# HTTP status:  404 Not Found
+# Server:       nginx   Content-Type: text/plain   Content-Length: 48
+# OUTCOME:      NO robots.txt EXISTS ON THIS HOST. The 404 body below is a JSON
+#               gateway error ("no route matched with those values"), not a robots
+#               file, despite the text/plain content-type. There are therefore NO
+#               crawl directives of any kind for ms.vietnamworks.com.
+#               This is SILENCE — neither permission nor refusal. See
+#               research/deployment-research-plan.md section 11.
+# Body below this line is verbatim, unmodified.
+# ---------------------------------------------------------------------------
+{"message":"no route matched with those values"}

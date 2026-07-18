@@ -5,6 +5,16 @@
 > commit an implementation. It feeds `Full_Design_Document.md` / a future
 > `Tickets.md` entry.
 >
+> **Update 2026-07-16 — this research has shipped tickets twice.** The pipeline itself became
+> **T0009** (Milestone 9, ✅ done: `raw_jobs` + enriched `clean_jobs`, `VietnamWorksSource`,
+> deterministic transform, idempotent loader). The remaining "§8 still needs a decision" items
+> about **scheduling and live-DB operation** are now **T0019** (Milestone 19, T0019.1–.8) in
+> [`docs/Tickets.md`](../docs/Tickets.md) — including the §4 `robots.txt`/ToS pre-build gate,
+> which is **T0019.1** and hard-blocks the nightly cron. The design rationale behind T0019 is
+> [`ingestion-milestone-plan.md`](ingestion-milestone-plan.md); the locked decisions are
+> [`deployment-research-plan.md`](deployment-research-plan.md) §4.2. Treat this document as the
+> **source research** — for current scope, read `docs/Tickets.md`.
+>
 > **Scope:** how InternHunterAgent should acquire *real* internship-posting data from
 > **Vietnamese job boards** and transform it into the `clean_jobs` table the existing
 > SQL skill already queries. Current state: `clean_jobs` holds **7 hand-written rows**
@@ -185,6 +195,11 @@ pursued — without touching the transform/load layers.
   `https://<board>/robots.txt` directly to confirm the listing/detail paths are
   allowed and note any crawl-delay. Treat the VietJobs citation as encouraging, not as
   a substitute for checking the live `robots.txt` at build time.
+- **Status 2026-07-16 — still unverified for `ms.vietnamworks.com`, and now a hard gate.**
+  T0009 shipped manual runs without resolving it; a *scheduled* unattended job cannot.
+  This is **T0019.1** (do-first, doc-only): fetch and archive the robots.txt, read the ToS for
+  automated-access clauses, and record a dated decision in `deployment-research-plan.md` §11.
+  If unfavorable, the cron (**T0019.6**) is parked, not adapted.
 
 ---
 
@@ -290,7 +305,10 @@ table only as wide as the agent is prompted to use.
    derivation/backfill from the description** (§5) — deterministic, no LLM. Role labels
    are filtered out.
 3. **Store source text as-is** (no translation at ingest).
-4. **Batch, re-runnable script**; no scheduler in MVP.
+4. **Batch, re-runnable script**; no scheduler in MVP. *(Shipped in T0009. Superseded
+   2026-07-16: a nightly GitHub Actions cron against the live Neon DB is now scoped as
+   **T0019.6**, hard-blocked on the §4 robots/ToS gate — **T0019.1** — and on the accumulate
+   load semantics that make an unattended run safe, **T0019.3**.)*
 5. **Acquisition path = provider-agnostic adapter**, start with free `cloudscraper`,
    Scrapfly as drop-in fallback where protections defeat it.
 6. **Dedup/identity key = `(source, external_id)` + `content_hash`.**

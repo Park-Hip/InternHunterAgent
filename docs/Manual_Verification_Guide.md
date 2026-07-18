@@ -985,3 +985,102 @@ Verify against the live public URL: **https://internhunteragent.onrender.com**
 * **API surface intact:** `https://internhunteragent.onrender.com/docs` loads; `curl .../api/v1/health` → `200`.
 * **Frame protection:** `curl -sI https://internhunteragent.onrender.com/ | grep -i x-frame-options` → `x-frame-options: DENY`.
 * **Deploy hygiene:** Render env vars hold all five secrets + `PORT=8000` (none baked into the image); Render is deploying branch `feature/t0018.4-deploy`.
+
+### T0019.2: Alembic adoption
+
+**A — build the schema from empty (scratch DB)**
+```
+docker compose exec -T postgres psql -U internhunter -d postgres -c "CREATE DATABASE internhunter_scratch;"
+ALEMBIC_DATABASE_URL="postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_scratch" uv run alembic upgrade head
+docker compose exec -T postgres psql -U internhunter -d internhunter_scratch -c "\d clean_jobs"
+```
+Expect: 19 columns in the documented order, `id` as `generated always as identity`, unique constraint on `(source, external_id)`.
+
+**B — round-trip test**
+```
+SCRATCH_DATABASE_URL="postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_scratch" uv run pytest tests/migrations -v
+```
+Expect: passes. Then re-run `uv run pytest tests/migrations -v` with the var unset → skipped, not failed.
+
+**C — no-op on the real local DB**
+```
+uv run alembic stamp head          # one-time adoption of the existing local DB
+uv run alembic current             # shows the baseline revision, "(head)"
+uv run alembic upgrade head        # clean no-op, no DDL
+docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT COUNT(*) FROM clean_jobs;"
+```
+Expect: row count unchanged from before the stamp.
+
+**D — app still works**
+```
+uv run uvicorn src.api.app:app --reload
+```
+Hit `/api/v1/ready`, then ask the UI a question that returns rows ("how many jobs are there?"). Expect a normal answer — this ticket changed no read path.
+
+**E — full suite**
+```
+uv run pytest && uv run ruff check . && uv run mypy
+```
+
+**F — Neon adoption (document only; maintainer runs this deliberately, not the coder)**
+```
+ALEMBIC_DATABASE_URL="postgresql+psycopg://<user>:<pw>@<neon-DIRECT-non-pooled-host>/<db>?sslmode=require" uv run alembic stamp head
+```
+Use the direct, non-pooled Neon endpoint (per `research/deployment-research-plan.md`) — migrations must never run through the `-pooler` hostname. `stamp` (not `upgrade`) is correct here since it adopts an already-populated Neon DB into Alembic's version tracking without touching its schema. Run once, deliberately, by the maintainer.
+
+**Cleanup:** `DROP DATABASE internhunter_scratch;` when done.
+
+### T0019.3: Accumulate load semantics + hidden lifecycle columns
+
+**A — migrate + inspect schema**
+```
+uv run alembic upgrade head
+docker compose exec -T postgres psql -U internhunter -d internhunter -c "\d clean_jobs"
+```
+Expect: `is_active boolean not null default true`, `first_seen_at`/`last_seen_at timestamp with time zone not null default now()` appended after `is_salary_negotiable`.
+
+**B — backfill used real fetched_at, not migration run time**
+```
+docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT COUNT(*) FROM clean_jobs WHERE first_seen_at > now() - interval '1 minute';"
+```
+Expect: `0`.
+
+**C — row count never shrinks across repeated loads**
+Run the loader twice against the local Docker DB (a live VietnamWorks fetch, or two direct `upsert_clean_jobs` calls with the same batch), then:
+```
+docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT COUNT(*) FROM clean_jobs;"
+```
+Expect: count unchanged/growing, never smaller than before the second run.
+
+**D — no false expiry on a fresh double-run**
+```
+docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT COUNT(*) FROM clean_jobs WHERE is_active = false;"
+```
+Expect: `0`.
+
+**E — time-based expiry, then re-seen flips back active**
+```
+docker compose exec -T postgres psql -U internhunter -d internhunter -c "UPDATE clean_jobs SET last_seen_at = now() - interval '8 days' WHERE source='vietnamworks' AND external_id='<pick one>';"
+```
+Re-run the ingestion loader (or call `expire_stale_clean_jobs(7)` directly) → that row now has `is_active = false`, still exists, and its data still selects normally. Re-seed the same posting (re-run ingestion, or `upsert_clean_jobs` with that row again) → `is_active` flips back to `true`.
+
+**F — hidden-column guard**
+```
+uv run pytest tests/agents/runtime/test_prompts.py -q
+```
+Expect: green — `schema_context` never mentions `is_active`, `first_seen_at`, or `last_seen_at`.
+
+**G — agent answers unchanged (Docker `api` service — native Windows `uv run uvicorn` hangs on the pre-existing `ProactorEventLoop`/async-psycopg issue, see `Known_Issues.md`)**
+```
+docker compose up -d --build api
+curl -s http://127.0.0.1:8000/api/v1/ready
+curl -s -X POST http://127.0.0.1:8000/api/v1/agent/chat -H "Content-Type: application/json" -d "{\"query\":\"How many AI Engineer jobs are there?\"}"
+```
+Expect: a normal answer with a plain count, no mention of `is_active`/`first_seen_at`/`last_seen_at` in the answer text or (via the Langfuse trace link) the generated SQL.
+
+**H — full suite**
+```
+uv run pytest -q
+uv run ruff check .
+uv run mypy
+```

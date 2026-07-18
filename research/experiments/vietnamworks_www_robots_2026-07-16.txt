@@ -1,0 +1,58 @@
+# ARCHIVED EVIDENCE — T0019.1 robots.txt / ToS gate
+# Source URL:    https://www.vietnamworks.com/robots.txt
+# Fetched:       2026-07-16 15:26:34 GMT
+# Method:        curl -sS -D - https://www.vietnamworks.com/robots.txt
+# HTTP status:   200 OK
+# Server:        nginx   Content-Type: text/plain   Content-Length: 1080
+# Last-Modified: Mon, 11 May 2026 03:19:23 GMT   ETag: "6a014abb-438"
+# CONTEXT ONLY:  this is the www content host. The ingestion pipeline fetches from
+#                ms.vietnamworks.com (a different host), which is the host whose
+#                directives govern. Archived because the ticket asks for it as context.
+# OUTCOME:       Single "User-agent: *" group. No "Disallow: /". No rule matching
+#                "/job-search/". No Crawl-delay directive. Disallowed paths are
+#                profile / login / apply / print / AJAX / ad / hrinsider-pagination
+#                paths — none of which the pipeline touches.
+# NOTE:          the served body begins with a UTF-8 BOM (bytes EF BB BF) before
+#                "User-agent". Preserved verbatim below.
+# Body below this line is verbatim, unmodified.
+# ---------------------------------------------------------------------------
+﻿User-agent: *
+
+Disallow: /my-profile
+Disallow: /my-profile/
+Disallow: /ho-so/
+
+Disallow: /my-career-center
+Disallow: /my-career-center/
+Disallow: /quan-ly-nghe-nghiep
+Disallow: /quan-ly-nghe-nghiep/
+
+Disallow: /dang-nhap/?*
+Disallow: /login/?*
+
+# Block all robots from restricted areas
+Disallow: /jobseekers/apply_online.php?*
+Disallow: /viec-lam/nop-ho-so-truc-tuyen/
+Disallow: /jobs/apply-job-online/
+Disallow: /jobseekers/apply_on_oneclick.php
+
+# Block all robots from internal actions
+Disallow: /jobseekers/jobdetail_print.php?*
+Disallow: /jobseekers/open_authenticate.php?*
+Disallow: /jobseekers/checkAuthenticate.php*
+Disallow: /company/preview/*
+
+# Block all robots from AJAX actions
+Disallow: /jobseekers/ajax.php?*
+
+# Block all robots from advertisement
+Disallow: /vclick/index.php?*
+Disallow: /wow-cv/render/
+
+# Block all robots from hrinsider author
+Disallow: /hrinsider/author/*
+Disallow: /hrinsider/category/*/page/*
+Disallow: /hrinsider/podcast-categories/*/page/*
+
+Sitemap: https://www.vietnamworks.com/sitemap/sitemap.xml
+

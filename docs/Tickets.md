@@ -472,7 +472,7 @@ Ticket specs and delivery sequence for the MVP. Each entry is the **plan** for o
 * Any change to the ingestion pipeline or schema.
 
 ## T0010: Milestone 10 - Pre-deploy Hardening — ✅ Done
-Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the follow-on per-module logic review (see `docs/Known_Issues.md` and `docs/Code_Review_Notes.md`). These are the real *code* items standing between the current base and a clean deploy; deploy-time config (secret checklist, stale-config rebuild) and model-variance items (Evaluation milestone) are explicitly **not** in this milestone. Keep each fix MVP-minimal — do not build an error framework or a message-normalization layer. T0010.1/.2 are the audit fixes; T0010.3 (SQL single-table allowlist) and T0010.4 (blocking LLM call) are the two highest-severity items from the per-module review.
+Small correctness fixes surfaced by the 2026-07-02 pre-deploy audit and the follow-on per-module logic review (see `docs/Known_Issues.md` and `docs/archive/Code_Review_Notes.md`). These are the real *code* items standing between the current base and a clean deploy; deploy-time config (secret checklist, stale-config rebuild) and model-variance items (Evaluation milestone) are explicitly **not** in this milestone. Keep each fix MVP-minimal — do not build an error framework or a message-normalization layer. T0010.1/.2 are the audit fixes; T0010.3 (SQL single-table allowlist) and T0010.4 (blocking LLM call) are the two highest-severity items from the per-module review.
 
 ### T0010.1: Graceful answer + minimal typed error contract
 **Objective:** Stop two failure modes from collapsing into an opaque `500 "Failed to process query"`. (1) The runtime can yield `answer=None`; `service.py` types its return as `dict[str, str | None]` and `query.py` passes `response['answer']` straight into `QueryResponse(answer=...)`, which requires a non-null `str` — so a null answer raises Pydantic validation and is swallowed into a generic 500 (`Known_Issues.md`, API layer, C1). (2) Every exception, regardless of cause, becomes the same 500, giving the client no signal (C5). Fix both with the smallest change that keeps the API answer-only and leaks no internals (`Full_Design_Document.md` §4).
@@ -1083,7 +1083,7 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * **Interim honesty posture, stated plainly:** until exposure lands, the agent serves the accumulated corpus with expired postings present and **unqualified** — the same epistemic state as today's demo, which serves a 100%-stale snapshot behind the UI disclaimer. Nightly refresh strictly *improves* data honesty even before the hedge exists.
 * **Two hard gates block, in sequence:** robots.txt/ToS (T0019.1, do-first, hard-blocks T0019.6 **only**) and schema drift, which needs **both** Alembic (the forward path) **and** a pre-flight contract assertion (the detection path — Alembic does not detect out-of-band drift, which is exactly what bit on 2026-07-15).
 * **GitHub Actions at $0 is verified, not assumed** — the repo is `PUBLIC` (`gh repo view --json visibility`, 2026-07-16), so scheduled minutes are unlimited. The 60-day scheduled-workflow auto-disable still applies; the cron ticket carries the keepalive action.
-**In Scope:** see sub-tickets below — .1 robots/ToS gate, .2 Alembic baseline, .3 accumulate semantics + hidden lifecycle columns, .4 source resilience, .5 unattended-run safety, .6 the nightly cron, .7 keep-alive ping + Neon idle-pool verification, .8 truthful disclaimer date.
+**In Scope:** see sub-tickets below — .1 robots/ToS gate, .2 Alembic baseline, .3 accumulate semantics + hidden lifecycle columns, .4 source resilience, .5 unattended-run safety, .6 the nightly cron, .7 keep-alive ping + Neon idle-pool verification, .8 truthful disclaimer date, .9 ingestion coverage + query fairness, and .10 detail-tool visibility enforcement.
 **Config additions (all in `config/settings.yaml` per CLAUDE.md; illustrative):**
 ```yaml
 ingestion:
@@ -1102,7 +1102,7 @@ ingestion:
 * Writing ingestion to a separate DB and swapping — either two DBs leak into the serving path or the rejected promotion step returns; #1/#2 exist to make in-place writes safe.
 * A **second board** (ITviec/TopDev/TopCV/LinkedIn) — the recorded fallback direction if T0019.1 comes back unfavorable, not this milestone's work.
 * CI merge gate + `main` reconciliation (adjacent, separately tracked — `pre-deploy-refinement-plan.md` §6i, `Repo_Current_State.md`); observability beyond the dead-man's switch + yield assertions (§9's sanctioned set is the ceiling); an API-side startup schema assertion (read-path; register follow-up).
-**Sequencing (execution order):** **T0019.1 first** (doc-only gate); **.2 → .3 → .5 → .6** is the dependency spine; **.4, .7, .8** float (.8 needs .3's columns, .5 wants .4's `pages_failed`). Blocked-on markers are explicit per ticket.
+**Sequencing (execution order):** **T0019.1 first** (doc-only gate); **.2 → .3 → .5 → .6** is the original dependency spine; **.4, .7, .8** float (.8 needs .3's columns, .5 wants .4's `pages_failed`). **T0019.9 and T0019.10 are corrective release gates:** the T0019.6 workflow may be prepared and manually dispatched on its feature branch, but neither it nor the T0019 chain may merge to `main` until .9 (coverage) and .10 (hidden-column visibility) land. This keeps the first automatic production run from locking in a biased corpus or exposing lifecycle bookkeeping.
 **Rollback runbook (documented with T0019.3, not a ticket of its own):** rebuild `clean_jobs` from `raw_jobs` via `to_normalized_job` + the upsert — the exact recovery already performed live on 2026-07-15 during the schema-drift fix. Accumulating `raw_jobs` is what makes this possible; it is the milestone's rollback path.
 **If T0019.1 comes back unfavorable** (robots disallows `/job-search/`, or the ToS prohibits automated access): **T0019.6 is parked, not adapted.** The milestone degrades to "lifecycle-ready pipeline + ops hardening" — .2/.3/.5/.7/.8 still land and are independently valuable — the demo stays on the manually-loaded corpus, and the source question re-opens as a new research item. A daily unattended job against a forbidding host is a standing violation and is not shipped quietly.
 
@@ -1161,7 +1161,7 @@ ingestion:
 **Out of Scope:**
 * An API-side startup assertion (read-path; follow-up register item); UptimeRobot-style uptime monitoring (T0019.7 owns external-scheduler machinery; §9's ceiling holds); alerting channels beyond healthchecks.io's built-in email.
 
-### T0019.6: GitHub Actions nightly ingestion cron — **T0019.1 recommended favorable 2026-07-16, pending maintainer confirmation; blocked on T0019.2–.5**
+### T0019.6: GitHub Actions nightly ingestion cron — **T0019.1 favorable verdict confirmed 2026-07-19; T0019.2–.5 complete; release-gated on T0019.9–.10 before merge to `main`**
 **Objective:** Land §4.2 #6 / §4.1's decision: an external, out-of-band scheduler invoking the offline ingestion CLI against Neon — reconciled against `Full_Design_Document.md` §2 by *amending* the no-schedulers exclusion to in-request background execution (the documented §4.1 reconciliation), not deleting it.
 **In Scope:**
 * Workflow: `on: schedule: cron: '0 2 * * *'` (02:00 UTC = 09:00 ICT) + `workflow_dispatch` for manual runs; checkout + `uv sync --frozen`; run the ingestion CLI (`uv run python -m src.services.ingestion.loader`); a `concurrency` group so overlapping runs never double-write; a job timeout well under the expected <10-min runtime.
@@ -1193,6 +1193,26 @@ ingestion:
 **Out of Scope:**
 * Exposing any freshness value to the *agent* — the `posted_date` fabrication trap stands, and this is a UI/`/ready`-level value the model still cannot see; changing the disclaimer wording or the UI; removing the config fallback.
 
+### T0019.9: Ingestion coverage cap + fair query scheduling — **release gate before T0019.6 merges to `main`**
+**Objective:** Prevent the first unattended runs from repeatedly collecting a biased subset of VietnamWorks postings. The current global `max_jobs: 50` is below the measured ~112-posting ceiling, and the query-outer loop can exhaust the entire budget before later role queries run (`Known_Issues.md` → ingestion coverage issue).
+**In Scope:**
+* Raise the existing ingestion `max_jobs` configuration to **120** — above the measured ceiling with a small margin, rather than an unbounded increase — and document the measured basis beside the value.
+* Change `VietnamWorksSource._collect` to schedule pages fairly: page outer, query inner (or an equivalent deterministic round-robin), while retaining the existing global cap, per-query pagination limit, source-side dedupe, retry/backoff, and politeness delay.
+* Tests with the canned HTTP client proving that, while the global cap has not been reached, every configured query gets its first-page request; later queries are not starved by an early high-yield query; and the global cap still stops collection exactly at the configured maximum.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0019.9 entry (run the focused canned-client tests; inspect the request sequence; confirm the configured ceiling and cap behavior). Do not run a speculative live crawl solely for this ticket.
+**Out of Scope:**
+* Skipping already-seen IDs through database lookups, multi-source orchestration, changing query terms, raising `pages_per_query`, or automated action on `pages_failed`; each is a distinct policy/complexity decision. Do not raise the cap beyond 120 without fresh source-volume evidence or a renewed robots/ToS review.
+
+### T0019.10: Detail-tool agent-visible column allowlist — **release gate before T0019.6 merges to `main`**
+**Objective:** Restore the T0019.3 hidden-column guarantee on the detail path. `get_job_details` currently uses `SELECT *`, which can expose internal identifiers and lifecycle bookkeeping that the agent-visible schema deliberately withholds (`Known_Issues.md` → query tooling & SQL safety).
+**In Scope:**
+* Replace `fetch_job_details`'s `SELECT *` with an explicit, ordered projection containing only columns approved for the agent-visible detail response. The projection must exclude `source`, `external_id`, `posted_date`, `is_active`, `first_seen_at`, and `last_seen_at`; retain `description` only if the established detail-response contract explicitly permits it.
+* Keep the id-based lookup, bound parameters, no-result behavior, and public response shape unchanged.
+* Add regression tests that seed sentinel values in every hidden column and prove no detail-tool result or formatted answer contains them; add a positive assertion for every approved detail field.
+* Manual check: `docs/Manual_Verification_Guide.md` → T0019.10 entry (request details for a seeded posting and confirm the response contains the approved fields only, with no lifecycle/internal values).
+**Out of Scope:**
+* Prompt changes, exposing lifecycle/freshness data to the agent, changes to `query_clean_jobs` SQL validation, a general schema-policy framework, or UI changes.
+
 ## Backlog — unscheduled milestones (removed 2026-07-12; to be named & scoped) — 📋 Backlog
 Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Ingestion Deploy Readiness** (briefly numbered T0016–T0018) on 2026-07-12 at the user's request — they need more specific milestone names and scoping before they re-enter the numbered roadmap. Their substance is preserved in research and will seed the future tickets:
 * **Deploy hardening** — `research/pre-deploy-refinement-plan.md` §6, **minus the security posture (§6b) now carved into T0016 (Milestone 16)**. §6f (Langfuse secrets) is moot — the deploy uses **Langfuse Cloud Hobby**, not self-host (user decision 2026-07-12). Remaining unscheduled: topology (§6a), DB readiness probe (§6c), what-data-ships (§6g), deploy-doc drift (§6h), CI gate (§6i).
@@ -1201,7 +1221,7 @@ Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Inge
 
 **Still unscheduled after T0019:**
 * **CI merge gate** — `research/pre-deploy-refinement-plan.md` §6i; no automated gate today, and Render auto-deploys straight off the active branch. Explicitly *not* part of T0019.6 (that workflow is ingestion-only).
-* **`main` reconciliation** — `main` is stuck at T0009; M10–M19 live on ticket branches. Needs an explicit maintainer decision; **do not branch a deploy from `main`**.
+* **`main` reconciliation** — `main` sits at **T0017.2** (`e3e65ae`), not T0009 (corrected 2026-07-19). It carries through M17; T0018.x (deploy + demo UI) and T0019.x live only on ticket branches — 12 commits. Needs an explicit maintainer decision; **do not branch a deploy from `main`**, which lacks the deployed T0018.4 topology.
 * **`is_active` agent exposure + honesty hedge** — cut from T0019 (gate unmet); re-enters only after T0011.5 baseline → prompt-v2 few-shot pass → the targeted recalibration delta.
 * **Deploy-doc drift** (`pre-deploy-refinement-plan.md` §6h) and a custom domain (cosmetic).
 

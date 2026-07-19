@@ -1166,3 +1166,78 @@ HEALTHCHECKS_URL="https://httpbin.org/status/200" uv run python -m src.services.
 Expect `ingestion.ping_sent` after the summary line. Then point it at a URL that fails (`https://httpbin.org/status/500` or an unroutable host) and confirm `ingestion.ping_failed` is logged as a warning while the process still exits `0`.
 
 Do not run any of these against Neon. Local Docker only.
+
+### T0019.6: Nightly ingestion cron
+
+Steps A and B are runnable now, with no external dependencies. **Steps C, D, and E require a maintainer to have configured the GitHub Actions secrets listed below**, and the schedule portion of E additionally requires the T0019 branch chain to be merged to `main` — GitHub only fires `schedule:` triggers from the default branch. None of that merge is part of this ticket.
+
+**A — the YAML is valid and the repo is unchanged**
+```
+uv run python -c "import yaml,sys; yaml.safe_load(open('.github/workflows/ingestion.yml')); print('YAML OK')"
+git status --short
+uv run pytest && uv run ruff check . && uv run mypy
+```
+Expect: `YAML OK`; `git status --short` shows only the files this ticket touched; the full suite still passes (the two pre-existing `mypy` errors in `checkpointer.py`/`middleware.py` are unrelated — see `Known_Issues.md`).
+
+**B — resolve the required-secrets question empirically**
+With `.env` moved aside (`mv .env .env.bak`) so no local file backfills the variables:
+```
+env -u GROQ_API_KEY uv run python -m src.services.ingestion.loader; echo "exit=$?"
+env -u LANGFUSE_SECRET_KEY uv run python -m src.services.ingestion.loader; echo "exit=$?"
+env -u LANGFUSE_PUBLIC_KEY uv run python -m src.services.ingestion.loader; echo "exit=$?"
+```
+Expect all three to fail fast with `src.core.config.ConfigLoadError: Failed to load runtime settings. Missing required environment variables: <NAME>` and `exit=1`, before any database connection is attempted — confirmed live 2026-07-19. Restore `.env` afterwards (`mv .env.bak .env`).
+
+**C — dispatch a real run from the feature branch**
+Requires maintainer-configured secrets: `DATABASE_URL` (Neon direct, non-pooled), `HEALTHCHECKS_URL`, `GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`.
+**Prerequisite:** `feature/t0019.6-nightly-cron` does not exist yet — T0019.6's workflow is still uncommitted in the working tree on `feature/t0019.5-unattended-safety` (see `Repo_Current_State.md` → Current branch). Cut and commit that branch off `bb75d10` first; `workflow_dispatch` cannot see a workflow file that was never pushed.
+
+Then push the branch, and Actions → "Nightly ingestion" → Run workflow → select `feature/t0019.6-nightly-cron`. Confirm:
+- the job completes green, well inside the 15-minute timeout;
+- the log contains the `ingestion.completed` line with all six numbers (`fetched`, `raw_upserted`, `clean_loaded`, `skipped`, `expired_count`, `pages_failed`) — paste it;
+- healthchecks.io shows the check received a ping;
+- on Neon: `SELECT COUNT(*) FROM clean_jobs;` grew or held — never shrank (record before/after);
+- `SELECT COUNT(*) FROM clean_jobs WHERE is_active = false;` is a sane number, not the whole table;
+- the live demo at https://internhunteragent.onrender.com still answers a question correctly.
+
+If this fails partway, do not retry blindly against Neon — report the failure with its log output. A half-written production table is worth a human look.
+
+**D — concurrency actually holds**
+Dispatch two runs back to back (same manual trigger as C). Confirm the second queues behind the first in the Actions run list rather than running alongside it.
+
+**E — the schedule is dormant, and that's expected**
+While this workflow lives only on the feature branch, confirm no scheduled run fires — `schedule:` only triggers from the default branch (`main`), and `main` does not yet contain this workflow. The nightly cron activates the same day the T0019 branch chain is merged to `main`; check the first scheduled run the following morning. A run landing a few minutes after 02:00 UTC is documented GitHub schedule drift under load, not a failure.
+
+### T0019.9: Ingestion coverage cap + fair query scheduling
+
+**A — focused tests**
+```
+uv run pytest tests/services/ingestion/test_vietnamworks.py -q
+```
+Expect the new fair-scheduling/cap cases to pass alongside the existing source-resilience coverage.
+
+**B — inspect deterministic request order**
+Run the canned-client test case that gives the first configured query more than 120 matching postings and records every request. Confirm that every configured query receives its page-1 request before any query receives page 2, and that later queries are not skipped merely because the first query is high-yield.
+
+**C — cap remains a true global maximum**
+With the same canned client, set the configured cap to a small test value. Confirm the returned posting count stops exactly at that value, duplicates are still ignored, and no extra request is made once the cap is reached. Restore the committed `max_jobs: 120` value after the test.
+
+Do not perform a live VietnamWorks crawl solely for this ticket. The T0019.6 maintainer-run checklist is the first deliberate production-fetch verification after the source gate.
+
+### T0019.10: Detail-tool agent-visible column allowlist
+
+**A — focused tests**
+```
+uv run pytest tests/agents/tools -q
+```
+Expect the detail-tool tests to verify both the approved detail fields and omission of every hidden column.
+
+**B — seeded detail response**
+Using the existing test fixture or local Docker database, assign unmistakable sentinel values to `source`, `external_id`, `posted_date`, `is_active`, `first_seen_at`, and `last_seen_at` for one known row. Request its details through the `get_job_details` tool path. Confirm the formatted response contains only the approved projection and none of those sentinel values.
+
+**C — preserve normal behavior**
+Request a non-existent id and a valid id. Confirm the no-result response is unchanged, the valid response still has its approved fields in the documented order, and the full suite remains green:
+```
+uv run pytest -q
+uv run ruff check .
+```

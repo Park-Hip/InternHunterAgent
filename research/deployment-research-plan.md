@@ -78,7 +78,9 @@ Sources:
 
 **The cold start is ~all Render, not Neon.** Render: 15-min idle spin-down, ~1 min restart (§1). Neon: 5-min suspend, ~300–500 ms resume, p95 ~2.6 s (§3). Neon is a rounding error; **swapping the DB or the stack would buy nothing** — the question was raised and closed on these numbers.
 
-**Decision:** external scheduler (cron-job.org or UptimeRobot free) pinging **`GET /api/v1/health`** every 10–14 min on a **~07:00–23:00 ICT window**. Not yet applied — it is dashboard config, deliberately **not** its own ticket (2026-07-16); it folds into the ingestion milestone, which already defers external ping + dead-man's-switch (§9A) and needs the same machinery.
+**Decision:** external scheduler (cron-job.org or UptimeRobot free) pinging **`GET /api/v1/health`** every 10–14 min on a **~07:00–23:00 ICT window**. Not yet applied as of 2026-07-16 — it is dashboard config, deliberately **not** folded silently into the ingestion milestone, because the "to verify once applied" question below needed a structured verification step, not fire-and-forget config.
+
+**Status (2026-07-19, T0019.7):** the application of this decision is now scoped as its own doc-only ticket, **T0019.7**, structured as *enable → verify → decide*. It supplies the full cron-job.org setup runbook, a 24-hour measurement template with the arithmetic worked out, and the pre-written decision rule referenced below — see `docs/Manual_Verification_Guide.md` → `### T0019.7`. T0019.7 is documentation only: enabling the cron-job.org job, taking the before/after readings, and applying the decision rule are maintainer actions, not yet executed as of this update. The "Not yet applied" status above stays accurate until the maintainer runs Part A of that runbook.
 
 **Three constraints that shape it:**
 1. **`/health`, never `/ready`.** `/ready` runs `SELECT 1` → holds Neon awake → 0.25 CU × 730 h ≈ **182 CU-h vs the 100 CU-h/month free cap** (§3). Pinging the wrong endpoint would break Neon's free tier to fix Render's. Same reasoning as the §9A decision to point Render's own health check at `/health`. *(Render's internal health checks do not prevent spin-down — only inbound external traffic does.)*
@@ -93,9 +95,19 @@ Sources:
 - **No documented bans for it.** The most-cited public suspension case (`SunsetMkt/Stop-Using-Render.com`) was an AUP block over two Bing-proxy projects — unrelated to pinging or free-tier usage patterns.
 - **Verdict: low-risk and unsupported, not prohibited.** Recorded here as a deliberate decision rather than done quietly. The windowed (not 24/7) shape also keeps us clear of the "avoid payment" reading, since it demonstrably does not replicate an always-on paid instance. **Escape hatch if Render ever tightens: Starter $7/mo**, inside the §10 ceiling.
 
-**To verify once applied:** whether the checkpointer's idle pool connections alone keep Neon from suspending. If they do, Neon stays awake whenever Render is awake and the CU-hour math bites regardless of endpoint. Watch Neon compute-hours for ~24 h after enabling.
+**To verify once applied:** whether the checkpointer's idle pool connections alone keep Neon from suspending. If they do, Neon stays awake whenever Render is awake and the CU-hour math bites regardless of endpoint. Watch Neon compute-hours for ~24 h after enabling — full measurement template with derived "expected if healthy" values in `docs/Manual_Verification_Guide.md` → `### T0019.7` Part B.
 
 Sources (policy check): [Render — Deploy for Free](https://render.com/docs/free) · [Render — Acceptable Use Policy](https://render.com/acceptable-use) · [Render — Terms of Service](https://render.com/terms) · [Stop-Using-Render.com suspension writeup](https://github.com/SunsetMkt/Stop-Using-Render.com)
+
+**Verification outcome (T0019.7, date): _TBD — fill after the 24 h observation_**
+- Enable date/time (start of the 24 h window): _TBD_
+- Neon compute, CU-hours over the ~24 h window: _TBD_
+- Suspension gaps observed in Neon's compute graph: _TBD (yes / no)_
+- Trigger fired (≈4 CU-h/day, no gaps → ≈122 CU-h/month projected)?: _TBD (yes / no)_
+- Decision-rule branch taken, if the trigger fired: _TBD (none / (a) shed idle pool connections / (b) shrink window / (c) Render Starter $7/mo)_
+- Notes: _TBD_
+
+This record is intentionally empty. Do not infer or backfill an outcome — an unfilled `_TBD_` here means the 24-hour observation has not happened yet, not that the ping is safe.
 
 ---
 

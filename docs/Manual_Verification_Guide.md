@@ -1166,3 +1166,60 @@ HEALTHCHECKS_URL="https://httpbin.org/status/200" uv run python -m src.services.
 Expect `ingestion.ping_sent` after the summary line. Then point it at a URL that fails (`https://httpbin.org/status/500` or an unroutable host) and confirm `ingestion.ping_failed` is logged as a warning while the process still exits `0`.
 
 Do not run any of these against Neon. Local Docker only.
+
+### T0019.7: Windowed keep-alive ping + Neon idle-pool verification
+
+**Doc-only ticket — no code changed.** This section is a runbook for the maintainer to execute by hand on cron-job.org and to observe over ~24 h. Nothing here is run by a coder session. It closes the open question left in `docs/Known_Issues.md` (cold-start entry, `[HIGH · OPEN]` 750-hour entry) and `research/deployment-research-plan.md` §1a: **does the LangGraph checkpointer's idle Postgres pool alone keep Neon awake, regardless of which endpoint is pinged?** `src/core/checkpointer.py::build_checkpointer_pool` opens an `AsyncConnectionPool` with no `min_size`/`max_idle` override, so `psycopg_pool`'s default `min_size=4` holds four connections open at all times once the app starts — whether that idle-but-open state reads as active Neon compute is exactly what Part B measures.
+
+#### Part A — Setup runbook (cron-job.org)
+
+Follow once, in order:
+
+1. Create a free account at [cron-job.org](https://cron-job.org) (or sign in if one already exists).
+2. **Before entering any schedule**, open Account Settings and check the account's configured timezone.
+   - If it is already `Asia/Ho_Chi_Minh` (UTC+7), enter the schedule in Step 5 using the **ICT** hours (`07:00`–`23:00`).
+   - If it is anything else (commonly UTC by default), either change it to `Asia/Ho_Chi_Minh`, **or** leave it and enter the schedule using the **UTC** hours instead (`00:00`–`16:00`). Do not mix the two — entering ICT-intended hours into a UTC-configured account silently shifts the whole window 7 hours, which would ping straight through the Vietnamese night and burn instance-hours for no visitor benefit. This is the single easiest mistake in this ticket.
+3. Click **Create cronjob**.
+4. **Title:** `InternHunterAgent keep-alive` (or similar — cosmetic only).
+5. **URL:** `https://internhunteragent.onrender.com/api/v1/health`
+   - **Never** `https://internhunteragent.onrender.com/api/v1/ready` — `/ready` runs `SELECT 1` against Postgres (`src/api/routes/health.py:40-46`) and would hold Neon awake on every ping, defeating the entire point. `/health` (`health.py:13-21`) returns a static `{"api": "online"}` and touches no database — confirmed by reading the route, not assumed.
+6. **Schedule:** use the custom/advanced schedule editor (not the simple "every N minutes" preset — that preset has no hour restriction and would run 24/7, triggering the 750-hour cliff below). Set:
+   - **Minutes:** every 12 minutes (`*/12`) — inside the required 10–14 min range.
+   - **Hours:** `7-22` if the account timezone is `Asia/Ho_Chi_Minh`, or `0-15` if entering UTC directly (both cover `07:00`–`22:59` ICT, i.e. the intended ~16 h window; the schedule naturally stops before `23:00`).
+   - **Days:** every day.
+   - **A 15-minute interval is not safe.** Render's idle timer is exactly 15 minutes. Any scheduler jitter — cron-job.org's own queueing delay, network latency, a slightly-late trigger — can push a single ping past the 15-minute mark, and the instance spins down anyway, defeating the ping that was supposed to prevent it. The 10–14 min range (12 used above) exists specifically to absorb that jitter.
+7. Save the job. **Record the enable date/time** (e.g. in this file's Part B "Before enabling" column, or a note wherever the maintainer tracks it) — the 24-hour observation in Part B starts from this moment.
+8. **Expected request volume**, for sanity-checking cron-job.org's own execution history afterwards: ~12 min interval × 16 h window ≈ 5 requests/hour × 16 h ≈ **~80 requests/day**.
+9. **One honest caveat, carried forward from `research/deployment-research-plan.md` §1a's policy check:** Render's Acceptable Use Policy has no written rule against keep-alive pings, but one clause has a foothold — *"intentionally misuse the Service to avoid payment or financial responsibility"* — since a keep-alive obtains behavior Render sells at $7/mo (Starter). The §1a policy check reads this as low-risk and unsupported rather than prohibited (the windowed, non-24/7 shape is part of that argument). If the maintainer would rather not sit in that tension at all, decision-rule branch (c) below (Render Starter, $7/mo) removes it outright by making the ping unnecessary.
+
+#### Part B — Measurement template
+
+Fill in after enabling. Read Neon numbers from **Neon Console → project → Monitoring** (or **Usage**); read Render numbers from **Render Dashboard → service → Metrics** (or **Billing** for workspace-wide instance-hours). Neon's usage meter can lag — take the "after ~24 h" reading with a little slack (e.g. at +24–26 h) rather than at exactly +24 h.
+
+| Metric | Before enabling | After ~24 h | Expected if healthy |
+|---|---|---|---|
+| Neon compute (CU-hours, last 24 h) | | | well under ~4 CU-h/day — see arithmetic below |
+| Neon — does the compute show suspension gaps? | | | yes, gaps between pings |
+| Render instance-hours (month to date) | | | tracking ≈16 h/day |
+| Demo cold start during window | | | loads immediately, no blank tab |
+| Demo after 23:00 ICT + 15 min | | | spins down as before |
+
+**The arithmetic that makes this unambiguous:**
+- The ping window is ~16 h/day (07:00–23:00 ICT). `/health` itself touches no database, so the *only* way pinging could keep Neon awake is the checkpointer's idle pool (4 connections, opened once at app startup and never touched by the ping request itself).
+- **If Neon suspends properly** between pings (its own idle timer is 5 min — see §3 of `deployment-research-plan.md`), 24-hour compute should be a **small fraction** of the 16-hour window — the pool's presence doesn't matter if Neon still suspends on inactivity. This is the "well under ~4 CU-h/day" row.
+- **If the idle pool holds Neon awake** for the full time Render is up, compute becomes **16 h × 0.25 CU = 4 CU-h/day**, which annualizes to **≈122 CU-h/month** — over the 100 CU-h/month free cap (see Part C's trigger below).
+- A reading that lands clearly in one bucket or the other (near-zero vs. ≈4 CU-h/day) is the whole point of this measurement — it should not require judgment calls.
+
+#### Part C — Decision rule (pre-written; apply in this order)
+
+▎ **Trigger:** if the 24-hour reading shows Neon compute consistent with staying awake through the window (**≈4 CU-h/day, no suspension gaps**) → projected **≈122 CU-h/month against the 100 CU-h cap** → apply the rule below, in order.
+
+1. **(a) Shed idle pool connections first.** Configure the checkpointer's psycopg pool with `min_size=0` and/or an idle-connection lifetime, with the new params added to `config/settings.yaml` (per this project's "parameters live in config" rule) — **this is a code change and is its own ticket**, not part of T0019.7. Neon resumes in ~300–500 ms (p95 ~2.6 s per §3), so the added per-request latency on a cold Neon connection is acceptable. **Re-run Part B for another 24 h after applying (a)** to confirm the fix actually reduced compute — do not assume it worked.
+2. **(b) If (a) is insufficient:** shrink the ping window. Example: a 12 h/day window ≈ 3 CU-h/day ≈ **91 CU-h/month** — back under the 100 CU-h cap — at the cost of a cold start returning during the trimmed hours.
+3. **(c) If neither works:** move to **Render Starter, $7/mo**, and drop the ping entirely. This sits inside the project's documented $10/month ceiling (`deployment-research-plan.md` §10) and removes the problem at the root — no spin-down means no keep-alive is needed, means no Neon pressure from this mechanism at all. This is also the clean way to sidestep the Render AUP tension noted in Part A step 9, if the maintainer would rather not carry it.
+
+If the trigger does **not** fire (compute stays low, suspension gaps are visible), no action is needed — the ping is safe to leave running as configured.
+
+#### Part D — Rollback
+
+To disable: open the job on cron-job.org and **pause** it (no need to delete). Expect the status quo to return — Render spins down after 15 min idle again, and the next cold visitor after an idle gap waits ~60 s for the page itself, same as before T0019.7 was enabled.

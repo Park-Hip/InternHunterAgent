@@ -6,6 +6,7 @@ from collections.abc import Iterator
 import httpx
 
 from src.core.config import settings
+from src.core.logger import logger
 from src.services.ingestion.models import RawPosting
 from src.services.ingestion.sources.base import JobSource
 
@@ -35,6 +36,8 @@ class VietnamWorksSource(JobSource):
         self._timeout: int = cfg["api"]["timeout_seconds"]
         self._delay: float = cfg["api"]["delay_seconds"]
         self._user_agent: str = cfg["api"]["user_agent"]
+        self._retry_attempts: int = cfg["api"]["retry_attempts"]
+        self._retry_backoff: float = cfg["api"]["retry_backoff_seconds"]
         self._queries: list[str] = cfg["queries"]
         self._parent_id: int = cfg["job_function"]["parent_id"]
         self._child_ids: set[int] = set(cfg["job_function"]["child_ids"])
@@ -74,6 +77,47 @@ class VietnamWorksSource(JobSource):
         resp.raise_for_status()
         return resp.json().get("data") or []
 
+    def _post_with_retry(
+        self, client: httpx.Client, query: str, page: int
+    ) -> list[dict] | None:
+        """Return the page's jobs, or None if the page was given up on.
+
+        Retries transient failures (429, 5xx, timeouts, transport errors) with
+        exponential backoff. Permanent failures (other 4xx) are not retried — a
+        retry cannot fix them, and burning delays on a 403 would mask a block.
+        """
+        attempts = 0
+        while True:
+            attempts += 1
+            try:
+                return self._post(client, query, page)
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                transient = status == 429 or status >= 500
+                reason = f"http_{status}"
+            except httpx.TimeoutException:
+                transient = True
+                reason = "timeout"
+            except httpx.TransportError:
+                transient = True
+                reason = "transport_error"
+
+            if transient and attempts <= self._retry_attempts:
+                backoff = self._retry_backoff * (2 ** (attempts - 1))
+                time.sleep(backoff)
+                continue
+
+            self.pages_failed += 1
+            logger.warning(
+                "ingestion.page_failed",
+                source=self.source,
+                query=query,
+                page=page,
+                attempts=attempts,
+                reason=reason,
+            )
+            return None
+
     def _is_ai_data(self, job: dict) -> bool:
         fn = job.get("jobFunction") or {}
         child_ids = {
@@ -96,31 +140,38 @@ class VietnamWorksSource(JobSource):
             for page in range(self._pages_per_query):
                 if kept >= self._max_jobs:
                     break
-                jobs = self._post(client, query, page)
-                for job in jobs:
-                    job_id = job.get("jobId")
-                    if job_id is None or job_id in seen_ids:
-                        continue
-                    seen_ids.add(job_id)
-                    if not self._is_ai_data(job):
-                        continue
-                    if kept >= self._max_jobs:
-                        break
-                    yield RawPosting(
-                        source=self.source,
-                        external_id=str(job_id),
-                        source_url=job.get("jobUrl"),
-                        raw_payload=job,
-                        content_hash=self._content_hash(job),
-                    )
-                    kept += 1
-                time.sleep(self._delay)
+                try:
+                    jobs = self._post_with_retry(client, query, page)
+                    if jobs is None:
+                        continue  # skipped page; politeness delay below still applies
+                    for job in jobs:
+                        job_id = job.get("jobId")
+                        if job_id is None or job_id in seen_ids:
+                            continue
+                        seen_ids.add(job_id)
+                        if not self._is_ai_data(job):
+                            continue
+                        if kept >= self._max_jobs:
+                            break
+                        yield RawPosting(
+                            source=self.source,
+                            external_id=str(job_id),
+                            source_url=job.get("jobUrl"),
+                            raw_payload=job,
+                            content_hash=self._content_hash(job),
+                        )
+                        kept += 1
+                finally:
+                    # Runs even on a skipped page — the politeness delay must not be
+                    # bypassed exactly when the server is signalling distress.
+                    time.sleep(self._delay)
 
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
 
     def fetch(self) -> Iterator[RawPosting]:
+        self.pages_failed = 0
         if self._client is not None:
             yield from self._collect(self._client)
         else:

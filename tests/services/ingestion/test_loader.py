@@ -195,6 +195,31 @@ class RunIngestionTests(unittest.TestCase):
         mock_expire.assert_called_once_with(14)
         self.assertEqual(result["expired_count"], 3)
 
+    @patch("src.services.ingestion.loader.settings")
+    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
+    @patch("src.services.ingestion.loader.upsert_clean_jobs")
+    @patch("src.services.ingestion.loader.upsert_raw_postings")
+    def test_pages_failed_surfaced_in_summary(
+        self,
+        mock_upsert_raw: MagicMock,
+        mock_upsert_clean: MagicMock,
+        mock_expire: MagicMock,
+        mock_settings: MagicMock,
+    ) -> None:
+        from src.services.ingestion.loader import run_ingestion
+
+        mock_settings.ingestion_yaml = {"lifecycle": {"expire_after_days": 7}}
+        mock_upsert_raw.return_value = 0
+        mock_upsert_clean.return_value = 0
+        mock_expire.return_value = 0
+
+        stub = StubSource([])
+        stub.pages_failed = 3
+
+        result = run_ingestion(source=stub)
+
+        self.assertEqual(result["pages_failed"], 3)
+
     def test_import_has_no_side_effects(self) -> None:
         # Simply importing the module must not raise or trigger DB/network
         import importlib

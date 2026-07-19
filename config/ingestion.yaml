@@ -5,6 +5,8 @@ api:
   timeout_seconds: 30
   delay_seconds: 0.6
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+  retry_attempts: 2          # retries after the initial attempt (so 3 tries max per page)
+  retry_backoff_seconds: 2.0 # base delay; doubles per retry (2s, then 4s)
 
 queries:
   - "data scientist"

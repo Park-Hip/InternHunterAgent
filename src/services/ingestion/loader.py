@@ -42,12 +42,15 @@ def run_ingestion(source: JobSource | None = None) -> dict:
     expire_after_days = settings.ingestion_yaml["lifecycle"]["expire_after_days"]
     expired_count = expire_stale_clean_jobs(expire_after_days)
 
+    pages_failed = getattr(source, "pages_failed", 0)
+
     return {
         "fetched": len(postings),
         "raw_upserted": raw_count,
         "clean_loaded": clean_count,
         "skipped": skipped,
         "expired_count": expired_count,
+        "pages_failed": pages_failed,
     }
 
 

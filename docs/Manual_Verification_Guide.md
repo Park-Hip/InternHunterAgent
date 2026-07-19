@@ -1084,3 +1084,42 @@ uv run pytest -q
 uv run ruff check .
 uv run mypy
 ```
+
+### T0019.4: Source resilience — per-page try/continue + retry/backoff
+
+**A — full suite green**
+```
+uv run pytest && uv run ruff check . && uv run mypy
+```
+Expect: all pass; the two `mypy` errors in `checkpointer.py`/`middleware.py` are pre-existing and unrelated (see `Known_Issues.md`).
+
+**B — resilience tests specifically**
+```
+uv run pytest tests/services/ingestion/test_vietnamworks.py -v
+```
+Expect the seven new `VietnamWorksResilienceTests` cases, all passing, finishing in well under a second (if a run takes several seconds, `time.sleep` isn't patched and real backoff delays are firing).
+
+**C — the summary line carries `pages_failed` (no network)**
+Write a throwaway script (do not commit it) that builds a `VietnamWorksSource` with a mock client where one page raises a 500 three times then a later page succeeds, run `list(src.fetch())`, and print `src.pages_failed` plus the posting count. Expect surviving pages present, `pages_failed == 1`, and an `ingestion.page_failed` JSON warning line on stderr showing the query and page number.
+
+**D — end-to-end summary shape**
+```
+uv run python -c "
+from unittest.mock import patch
+from src.services.ingestion.loader import run_ingestion
+from src.services.ingestion.sources.base import JobSource
+class S(JobSource):
+    source = 'vietnamworks'
+    pages_failed = 2
+    def fetch(self):
+        return iter([])
+with patch('src.services.ingestion.loader.upsert_raw_postings', return_value=0), \
+     patch('src.services.ingestion.loader.upsert_clean_jobs', return_value=0), \
+     patch('src.services.ingestion.loader.expire_stale_clean_jobs', return_value=0):
+    print(run_ingestion(source=S()))
+"
+```
+Expect a dict containing `'pages_failed': 2` alongside `fetched`, `raw_upserted`, `clean_loaded`, `skipped`, `expired_count`.
+
+**E — real ingestion against the local DB is unaffected**
+If you have a local Docker Postgres with data, run the ingestion loader end to end and confirm nothing regresses: it completes, `pages_failed` is `0` under normal conditions, and `SELECT COUNT(*) FROM clean_jobs;` does not shrink. Only against local Docker — never Neon.

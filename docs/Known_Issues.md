@@ -28,7 +28,7 @@ report. If an open item still cross-references the resolved one, leave a short p
 the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.md` (closed).
 
 ## Categories
-- [Config, startup & deployment](#config-startup--deployment) — 12
+- [Config, startup & deployment](#config-startup--deployment) — 14
 - [Agent runtime & prompts](#agent-runtime--prompts) — 13
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
@@ -104,6 +104,14 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 - **`[LOW · NOTE]` T0019.3's "run ingestion twice, row count never shrinks" manual check was verified against synthetic rows via `upsert_clean_jobs`/`expire_stale_clean_jobs` called directly, not a live double-fetch of VietnamWorks.**
   - **Found:** 2026-07-18, T0019.3 manual verification. A live double-fetch was avoidable (and undesirable to run twice back-to-back against a real external site during dev) — the upsert/expiry SQL is source-agnostic, so exercising it directly against the local Docker DB with a synthetic `NormalizedJob` proves the same accumulate/expire/re-activate semantics without an extra live crawl. The synthetic-row expiry pass was run with `expire_after_days=7` against the *real* 50-row local snapshot (whose `last_seen_at` had been backfilled from the original, weeks-old `raw_jobs.fetched_at`), which correctly flipped all 50 real rows to `is_active=false` — a true demonstration of the time-based logic, immediately reverted by re-running the backfill UPDATE (`is_active=true`, `last_seen_at=fetched_at`) so local dev state was left as found.
   - **Follow-up:** none — recorded so a future reader of the local DB's `last_seen_at`/`is_active` values understands they were reset by hand once, on 2026-07-18, not by a real ingestion run.
+
+- **`[LOW · NOTE]` T0019.4's `pages_failed` counter is produced but not yet acted on.**
+  - **Found:** 2026-07-18, T0019.4. `run_ingestion` now returns `pages_failed` in its summary dict, and `VietnamWorksSource` increments it on any page given up on after retries — but nothing reads it to decide exit status, alerting, or a re-run. This is intentional: the ticket's explicit non-goals exclude any pre-flight assertion, `min_yield` floor, healthchecks.io ping, or non-zero exit logic.
+  - **Follow-up:** T0019.5 (unattended-run safety) is the ticket that consumes `pages_failed` for its assertions; no action needed here.
+
+- **`[LOW · NOTE]` A failed page is skipped for that run only — there is no query-level retry or end-of-run re-queue of failed pages.**
+  - **Found:** 2026-07-18, T0019.4, per the ticket's explicit non-goal ("Retrying at the query level or re-queueing failed pages at the end of a run"). A page that exhausts its 3 attempts (1 initial + `retry_attempts: 2`) is permanently skipped for that ingestion run; the missing postings are simply re-seen on the next scheduled run, which the T0019.3 accumulate/soft-expiry semantics (7-day window) tolerate.
+  - **Follow-up:** none planned — re-queueing within a run adds complexity the MVP's daily cadence doesn't need; revisit only if `pages_failed` is observed to be non-zero on a recurring basis once T0019.5/T0019.6 are live.
 
 ## Agent runtime & prompts
 

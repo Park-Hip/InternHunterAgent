@@ -209,6 +209,18 @@ JobSource (VietnamWorksSource) --RawPosting--> raw_jobs (verbatim landing, upser
 
 **Agent-layer impact.** Because the new `clean_jobs` columns are agent-visible, T0009 also updates `prompts.schema_context`, the SQL-generation prompt, and the T0008 honesty rules (notably: salary is numeric and currency-scoped — filter within a `salary_currency` — and may be NULL / `is_salary_negotiable = true` → "may be missing or negotiable for some postings", not "not in the data"). This is the column-cheap schema growth §4 describes, applied.
 
+### 7.1 Unattended-run safety
+
+*Status: implemented (T0019.5).*
+
+Once the CLI runs unattended on a schedule (T0019.6) against the live DB, "it failed and someone noticed" stops being a reliable control. `src/services/ingestion/safety.py` supplies three checks, and `loader.py::run_ingestion` orders them so that **every abort happens before the write it protects**:
+
+- **`assert_clean_jobs_schema()` — pre-flight, before anything is fetched.** Queries live `information_schema.columns` for `clean_jobs` and compares against `{c.name for c in CleanJob.__table__.columns}`. The expected set is **derived from the ORM, never hand-maintained** — that is the whole point, since a hand-copied column list is exactly the artifact that drifts. It reports both directions (missing *and* unexpected) and treats an empty column set as "table absent" with its own message rather than listing every column as missing. It runs **first in `run_ingestion`** — before the source is constructed — so a drifted schema costs zero fetches and zero writes. This is the *detection* half of the schema-drift problem; Alembic (§4) is the *correction* half. Migrations cannot detect a database altered out-of-band, which is the incident that motivated both (`Known_Issues.md`, schema-drift entry).
+- **`assert_min_yield(fetched, min_yield)` — after the raw upsert, before the clean upsert.** Raises when a run returns implausibly few postings (`ingestion.safety.min_yield`). The placement is deliberate and load-bearing in two ways: `raw_jobs` is written *first*, so a bad run still preserves its evidence for diagnosis; and the abort lands *before both* the clean upsert **and** the expiry pass — which matters, because `expire_stale_clean_jobs` ages rows on `last_seen_at`. Aborting after a skipped clean write but before expiry would let a single bad fetch mark the entire healthy corpus inactive.
+- **`send_dead_man_ping(url)` — last, and only on a fully green run.** POSTs to a healthchecks.io URL (`HEALTHCHECKS_URL`, optional). It never raises: an unset URL logs `ingestion.ping_skipped` and returns `False` (the normal local path, not an error), and any HTTP failure logs `ingestion.ping_failed` and returns `False`. **The signal is the withheld ping, not a sent alert** — the monitor alerts on *silence*, which is what makes it a dead man's switch rather than one more thing that can fail quietly.
+
+The library/process split is kept clean: `run_ingestion` stays library code and lets `IngestionSafetyError` propagate; `main()` owns the process contract, catching it, logging `ingestion.aborted`, and exiting non-zero. Nothing in this module imports or is imported by the request path.
+
 **Deferred.** Other boards, anti-bot scrapers, ~~a scheduler/cron~~ (*scoped 2026-07-16 as T0019.6 — see the status note at the top of §7*), LLM extraction, parsing a salary *string* into numbers (not needed for VietnamWorks, which supplies the numbers directly), translating source text to a single language, and cross-board dedup are out of scope (see `Tickets.md` T0009 Out of Scope and `research/job-site-comparison.md`).
 
 ---

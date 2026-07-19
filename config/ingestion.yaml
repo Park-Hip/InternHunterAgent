@@ -29,6 +29,12 @@ max_jobs: 50
 lifecycle:
   expire_after_days: 7
 
+# Unattended-run safety. min_yield is a pre-write floor: a run that fetches
+# fewer than this many postings aborts before touching clean_jobs, so a broken
+# fetch can never overwrite good rows. Measured steady state is ~50/run.
+safety:
+  min_yield: 20
+
 # Legacy technology seed for scripts/build_tech_vocabulary.py.
 # Runtime extraction reads config/tech_vocabulary.yaml, not this list directly.
 tech_dictionary:

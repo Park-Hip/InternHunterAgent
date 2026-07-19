@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import sys
+
 from src.core.config import settings
 from src.core.logger import logger
 from src.services.ingestion.clean_store import expire_stale_clean_jobs, upsert_clean_jobs
 from src.services.ingestion.models import NormalizedJob
 from src.services.ingestion.normalize.vietnamworks import to_normalized_job
 from src.services.ingestion.raw_store import upsert_raw_postings
+from src.services.ingestion.safety import (
+    IngestionSafetyError,
+    assert_clean_jobs_schema,
+    assert_min_yield,
+    send_dead_man_ping,
+)
 from src.services.ingestion.sources.base import JobSource
 
 # Rollback runbook: if clean_jobs needs to be rebuilt (e.g. a bad load), it can
@@ -16,6 +24,8 @@ from src.services.ingestion.sources.base import JobSource
 
 
 def run_ingestion(source: JobSource | None = None) -> dict:
+    assert_clean_jobs_schema()
+
     if source is None:
         from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
 
@@ -23,6 +33,8 @@ def run_ingestion(source: JobSource | None = None) -> dict:
 
     postings = list(source.fetch())
     raw_count = upsert_raw_postings(postings)
+
+    assert_min_yield(len(postings), settings.ingestion_yaml["safety"]["min_yield"])
 
     normalized: list[NormalizedJob] = []
     skipped = 0
@@ -55,8 +67,14 @@ def run_ingestion(source: JobSource | None = None) -> dict:
 
 
 def main() -> None:
-    result = run_ingestion()
+    try:
+        result = run_ingestion()
+    except IngestionSafetyError as exc:
+        logger.error("ingestion.aborted", error=str(exc))
+        sys.exit(1)
+
     logger.info("ingestion.completed", **result)
+    send_dead_man_ping(settings.HEALTHCHECKS_URL)
 
 
 if __name__ == "__main__":

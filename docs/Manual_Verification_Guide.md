@@ -1123,3 +1123,46 @@ Expect a dict containing `'pages_failed': 2` alongside `fetched`, `raw_upserted`
 
 **E — real ingestion against the local DB is unaffected**
 If you have a local Docker Postgres with data, run the ingestion loader end to end and confirm nothing regresses: it completes, `pages_failed` is `0` under normal conditions, and `SELECT COUNT(*) FROM clean_jobs;` does not shrink. Only against local Docker — never Neon.
+
+### T0019.5: Unattended-run safety
+
+**A — suite green**
+```
+uv run pytest && uv run ruff check . && uv run mypy
+```
+Expect: all pass; the two pre-existing `mypy` errors in `checkpointer.py`/`middleware.py` are unrelated (see `Known_Issues.md`).
+
+**B — green run against a correct local DB**
+With Docker Postgres up and `HEALTHCHECKS_URL` unset:
+```
+uv run python -m src.services.ingestion.loader
+```
+Expect: an `ingestion.schema_ok` line, then `ingestion.completed` carrying all six numbers (`fetched`, `raw_upserted`, `clean_loaded`, `skipped`, `expired_count`, `pages_failed`), then `ingestion.ping_skipped`. Exit code `0` (`echo $?`). Paste the summary line.
+
+**C — drift is caught, and nothing is written**
+Against a scratch database only (never the real local DB, never Neon):
+```
+docker compose exec -T postgres psql -U internhunter -d postgres -c "CREATE DATABASE internhunter_drift TEMPLATE internhunter;"
+docker compose exec -T postgres psql -U internhunter -d internhunter_drift -c "ALTER TABLE clean_jobs RENAME COLUMN location TO location_old;"
+DATABASE_URL="postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_drift" uv run python -m src.services.ingestion.loader; echo "exit=$?"
+```
+Expect: `ingestion.schema_drift` naming `location` as missing and `location_old` as unexpected, then `ingestion.aborted`, `exit=1` — no fetch happened at all (no page-level log lines, and it returns fast). Then confirm the table was untouched:
+```
+docker compose exec -T postgres psql -U internhunter -d internhunter_drift -c "SELECT COUNT(*) FROM clean_jobs;"
+```
+Cleanup: `docker compose exec -T postgres psql -U internhunter -d postgres -c "DROP DATABASE internhunter_drift;"`
+
+**D — yield floor blocks the clean write**
+Temporarily set `safety.min_yield` in `config/ingestion.yaml` above the run's actual yield, against the local DB:
+```
+uv run python -m src.services.ingestion.loader; echo "exit=$?"
+```
+Expect: `ingestion.yield_floor_breached` with both numbers, `exit=1`, no `ingestion.completed` line. `SELECT COUNT(*) FROM clean_jobs;` is unchanged from before, and `SELECT COUNT(*) FROM raw_jobs;` grew or held (raw landing is allowed to proceed). Revert `min_yield` to `20` afterwards — confirm you did.
+
+**E — the ping path, without a real healthchecks.io account**
+```
+HEALTHCHECKS_URL="https://httpbin.org/status/200" uv run python -m src.services.ingestion.loader
+```
+Expect `ingestion.ping_sent` after the summary line. Then point it at a URL that fails (`https://httpbin.org/status/500` or an unroutable host) and confirm `ingestion.ping_failed` is logged as a warning while the process still exits `0`.
+
+Do not run any of these against Neon. Local Docker only.

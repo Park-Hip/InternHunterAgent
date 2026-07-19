@@ -1,7 +1,7 @@
 from datetime import date, datetime
 
 from pydantic import BaseModel
-from sqlalchemy import BigInteger, Boolean, Date, Numeric, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, Identity, Numeric, Text, UniqueConstraint
 from sqlalchemy import TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -67,7 +67,7 @@ class RawJob(Base):
     __tablename__ = "raw_jobs"
     __table_args__ = (UniqueConstraint("source", "external_id"),)
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     source: Mapped[str] = mapped_column(Text, nullable=False)
     external_id: Mapped[str] = mapped_column(Text, nullable=False)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -82,7 +82,7 @@ class CleanJob(Base):
     __tablename__ = "clean_jobs"
     __table_args__ = (UniqueConstraint("source", "external_id"),)
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     source: Mapped[str] = mapped_column(Text, nullable=False)
     external_id: Mapped[str] = mapped_column(Text, nullable=False)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -104,4 +104,13 @@ class CleanJob(Base):
     salary_currency: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_salary_negotiable: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    first_seen_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default="now()"
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default="now()"
     )

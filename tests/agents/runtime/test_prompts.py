@@ -81,7 +81,7 @@ class LoadSchemaContextTests(unittest.TestCase):
         ):
             self.assertIn(column, result)
 
-        for column in ("remote", "posted_date"):
+        for column in ("remote", "posted_date", "is_active", "first_seen_at", "last_seen_at"):
             self.assertNotIn(column, result)
 
     def test_yaml_schema_context_mentions_clean_jobs_table(self) -> None:

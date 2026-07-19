@@ -24,7 +24,7 @@ QueryRequest
 
 There are no branch points or alternate paths. The route knows nothing about LangChain; the service owns request-level orchestration; the runtime is the only place the agent is constructed and executed. (Layer-isolation rationale: see `Full_Design_Document.md` §2.)
 
-*Status note (T0017, planned):* a second, parallel path — streaming token-by-token delivery — is designed in §9. It reuses the same route → service → runtime layering (the runtime driving `agent.astream` instead of `ainvoke`) and does not replace the one-shot path above.
+*Status note (T0017, implemented):* a second, parallel path — streaming token-by-token delivery — is built and specified in §9. It reuses the same route → service → runtime layering (the runtime driving `agent.astream` instead of `ainvoke`) and does not replace the one-shot path above.
 
 ---
 
@@ -36,7 +36,7 @@ The agent is the assembled whole built in `src/agents/runtime/factory.py::agent_
 
 *Status: implemented*
 
-A single Groq chat model, wrapped by `src/agents/runtime/provider.py::AgentProvider`. This is the one place model configuration lives; no other layer constructs a model. Configuration is read from `config/settings.yaml` under `agent.groq.*` — `model`, `temperature`, `max_tokens`, `timeout`, `max_retries`, `streaming` — with the API key from `settings.GROQ_API_KEY`. There is deliberately no multi-provider abstraction; `build_model()` raises on any provider other than `groq`.
+Groq chat models are wrapped by `src/agents/runtime/provider.py::AgentProvider`. This is the one place model construction lives; no other layer constructs a model. Configuration is read from `config/settings.yaml` under two explicit profiles with the same fields: `agent.react.*` for the outer conversational ReAct agent, and `agent.sql_generation.*` for the nested SQL-generation call inside `query_clean_jobs`. Each profile carries `model`, `temperature`, `max_tokens`, `timeout`, `max_retries`, `streaming`, `reasoning_format`, and optional `reasoning_effort`; the API key still comes from `settings.GROQ_API_KEY`. There is deliberately no multi-provider abstraction; `build_model(...)` raises on any provider other than `groq`.
 
 ### 2.2 System prompt & reasoning
 
@@ -50,7 +50,7 @@ The agent runs a ReAct-style loop: the model reasons about the user's question, 
 
 Tools are how the agent acts on the world. Every tool obeys one contract: **natural language in, natural language out.** The model never receives a raw execution primitive — no SQL string, no DB session, no internal data structure. A tool may use rich internal services and DTOs freely, but its only public surface to the model is text. Tools are registered exclusively in the factory.
 
-The MVP ships two tools:
+The MVP ships three tools — `get_current_time` and `query_clean_jobs` (below), plus `get_job_details`, the detail-fetch tool described under *Bounded retrieval*:
 
 - **`get_current_time`** (`src/agents/tools/time.py`) — returns the current time. Trivial; exists to prove the multi-tool path.
 - **`query_clean_jobs`** (`src/agents/tools/query_clean_jobs.py`) — answers questions about internship postings. It runs a fixed, deterministic pipeline rather than handing SQL power to the model:
@@ -65,12 +65,12 @@ The MVP ships two tools:
 
   > Design note: an earlier draft specified parameterized tools exposing typed arguments (`title`, `tech_stack`). The shipped design uses NL → validated-SQL because the validator, not the tool signature, is the trust boundary.
 
-  **Bounded retrieval: structured query vs. detail fetch.** *Status: planned (T0009.10–T0009.11).* Real ingestion (T0009) turned `clean_jobs` into ~50 verbose rows, each carrying a large merged `description` blob. A single tool that returned every column of every matched row then overflowed the model's token budget on broad queries (the Groq TPM `413` recorded in `Known_Issues.md`). The fix is architectural, not a bigger model — it splits retrieval along the **intent** the user actually has:
+  **Bounded retrieval: structured query vs. detail fetch.** *Status: implemented (T0009.10–T0009.11).* Real ingestion (T0009) turned `clean_jobs` into ~50 verbose rows, each carrying a large merged `description` blob. A single tool that returned every column of every matched row then overflowed the model's token budget on broad queries (the Groq TPM `413` recorded in `Known_Issues.md`). The fix is architectural, not a bigger model — it splits retrieval along the **intent** the user actually has:
 
   - **`query_clean_jobs`** (structured query — list, count, aggregate). Runs the LLM→validated-SQL pipeline above, but the tool boundary enforces two deterministic guarantees the model cannot override (the `Full_Design_Document.md` §4 bounded-output law): it **never projects the `description` blob** into its result, and it **caps result rows** at `agent.query.max_rows` (config). The fetch bound is system-owned, not model-owned: `src/services/query/row_bound.py::resolve_bounds(sql, max_rows)` inspects any trailing `LIMIT` the model wrote and treats it as a signal of *explicit user intent* — the prompt (`config/prompts.yaml` `sql_generation`) only asks the model to emit a `LIMIT` when the user explicitly requested a specific count (e.g. "top 5"). If that `LIMIT` is within the safety cap (`<= max_rows`), it is honored exactly: the tool fetches and displays exactly that many rows, with no truncation notice. Otherwise (no `LIMIT`, or one above the cap) the tool falls back to fetching `max_rows + 1` rows as a truncation sentinel and displays `max_rows`, so unbounded/broad queries still get an honest "there are more matches — narrow your search" notice. It deliberately does **not** compute an exact total for list queries (a precise count would require a separate `COUNT(*)` — rejected as unnecessary MVP complexity). It serves scalar/aggregate results (`COUNT`, `AVG`, `MIN/MAX`, small `GROUP BY`) as naturally as row lists, passing those through untouched (no truncation notice applies to scalar results).
   - **`get_job_details(ids)`** (detail — full prose). A **deterministic, parameterized** fetch by id (no LLM, no SQL generation — ids carry no natural-language ambiguity), returning the full `description` for a **few** jobs (`agent.query.max_detail_ids`). This is the *only* path that surfaces description prose to the model.
 
-  This makes the **`description` field three-moded**: *filter-only* inside `query_clean_jobs` (Postgres reads it via `ILIKE` server-side; the text never reaches the model), *full-text* only via `get_job_details`, and *never listed* in bulk. The bridge between the two tools is the row `id` that `query_clean_jobs` returns, which the agent passes back into `get_job_details` for "tell me about that one" follow-ups. (Surrogate ids are stable within a conversation; they are not stable across an ingestion reload — the durable handle, if ever needed, is `(source, external_id)`.)
+  This makes the **`description` field three-moded**: *filter-only* inside `query_clean_jobs` (Postgres reads it via `ILIKE` server-side; the text never reaches the model), *full-text* only via `get_job_details`, and *never listed* in bulk. The bridge between the two tools is the row `id` that `query_clean_jobs` returns, which the agent passes back into `get_job_details` for "tell me about that one" follow-ups. (Surrogate ids are stable within a conversation; they are not stable across an ingestion reload — the durable handle, if ever needed, is `(source, external_id)`. *Status note: **T0019.3** drops the `TRUNCATE`-and-reinsert that causes that instability, so ids become stable across runs for any row that persists. Treat this as a **consequence, not a guarantee** — nothing should start depending on cross-run id stability, because `(source, external_id)` remains the durable handle and a re-seeded local DB still renumbers.*)
 
   **Question coverage & the one deferred gap.** Every question resolves on two axes — *does it need the description's prose?* and *does it want a scalar, a list, or a few full records?* Structured filters/counts/rankings (including literal keyword hits inside `description` via `ILIKE`) are served by `query_clean_jobs`; "tell me about / compare these" is served by `get_job_details`. The single uncovered cell is **semantic search over the whole corpus** ("which postings are beginner-friendly?" by *meaning*, not keyword) — that needs embeddings and is the future RAG milestone, not this design. The honest MVP behavior there is to answer literal keywords and say plainly that it cannot yet search postings by meaning.
 
@@ -111,7 +111,7 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 
 *Provisional:* the answer-only shape is an MVP choice, not a permanent law. The future charting capability (a chart is not a string) will revisit it, as does **streaming delivery (T0017, §9)** — which keeps the same answer-only *content* but delivers it as a sequence of typed SSE events rather than a single JSON body.
 
-*Deferred, documented:* `trace_url` is currently always `null` (see §5). A minimal typed error contract landed in T0010.1 (see §5) — a blank/whitespace-only `query` now returns a clean `400`, distinct from the generic `500` for internal failures.
+*Implemented:* `trace_url` is populated from the Langfuse trace when tracing is configured (T0012.4); it is `null` only when tracing is disabled. A minimal typed error contract landed in T0010.1 (see §5) — a blank/whitespace-only `query` returns a clean `400`, distinct from the generic `500` for internal failures.
 
 ---
 
@@ -122,21 +122,21 @@ The response is **answer-only**: no SQL, table rows, or tool internals ever appe
 - **Dataset.** The MVP began on a small fixed sample of internship postings in the original 4-column `clean_jobs` table. *Status: real ingestion implemented (T0009)* — `clean_jobs` now lands live VietnamWorks AI/Data postings (via `scripts/init_db.sql` + `src/services/ingestion/`) with the enriched schema described in §7; the old fixture seed script and its 4-column shape are retired.
 - **Database.** PostgreSQL via SQLAlchemy; the engine and session factory live in `src/core/db.py` (`pool_pre_ping=True`). This app database is entirely separate from Langfuse's internal Postgres — different owners, lifecycles, and schemas.
 - **Required environment.** `DATABASE_URL`, `GROQ_API_KEY`, and the `LANGFUSE_*` keys (tracing degrades gracefully if the Langfuse keys are absent).
-- **Tunable parameters** live in `config/settings.yaml` (read through `src/core/config.py`): `agent.groq.*` for the model, and `agent.memory.*` (`max_messages`) for memory. Per project convention, parameters are configured here, not hard-coded.
+- **Tunable parameters** live in `config/settings.yaml` (read through `src/core/config.py`): `agent.react.*` for the outer ReAct model, `agent.sql_generation.*` for the nested SQL-generation model, and `agent.memory.*` (`max_messages`) for memory. Per project convention, parameters are configured here, not hard-coded.
 
-**Schema evolution.** *Status: implemented (T0009 enriched `clean_jobs` to its current 12 agent-visible columns).* The schema grew from the original four-column sample into the real job-posting shape exactly along the cheap-growth path below (the permanent principle is in `Full_Design_Document.md` §6):
+**Schema evolution.** *Status: implemented (T0009 enriched `clean_jobs`; T0013 froze the v1 contract at its current 16 agent-visible columns — see `Schema_Contract.md`).* The schema grew from the original four-column sample into the real job-posting shape exactly along the cheap-growth path below (the permanent principle is in `Full_Design_Document.md` §6):
 
 - **Adding a column is free in code.** The SQL validator allowlists the *table* `clean_jobs`, not its columns, and `executor.py`/`table_formatter.py` are key-driven, so a new column reaches the answer with no code change — only the schema description the model reads (`schema_context`) and, where relevant, the honesty rules need an edit.
 - **Adding tables, joins, or renames is the boundary** where this stops being free: it crosses the validator's single-table allowlist. Staying single-table is the design choice that keeps evolution cheap.
 - **Multi-value fields.** `tech_stack` is a comma-separated string today; the path for the real dataset is a Postgres `TEXT[]` or `JSONB`, adopted only when the data demands it — not on the throwaway sample.
-- **Migrations deferred.** The schema is seeded by `scripts/init_*.sql`; a migration tool (e.g. Alembic) is intentionally not adopted until the schema stops being a fixed sample (i.e. real ingestion).
-- **Open decision (T0010) — now answered by T0009.** The question of whether to add real-posting columns (location, salary) vs. only grow the row count is **resolved by T0009**, which enriches `clean_jobs` (adds `role`, `source_url`, `posted_date`, `is_internship`, `job_level`, `location`, and structured salary: `salary_min`, `salary_max`, `salary_currency`, `is_salary_negotiable`) while landing real data. The cheap-growth design above is exactly what makes that enrichment column-cheap. The original open T0010 question is therefore closed. Schema *tooling* is handled lightly by **T0009.9** (an explicit `reset_db.sql` drop-and-recreate path, appropriate because every table is reproducible from a re-ingest); a full migration framework (Alembic) is deferred until deployed data becomes irreplaceable.
+- **Migrations deferred — *both deferral conditions have now fired* (2026-07-16).** The schema is seeded by `scripts/init_*.sql`; a migration tool (e.g. Alembic) was intentionally not adopted until the schema stopped being a fixed sample (i.e. real ingestion) **and** deployed data became irreplaceable. T0009 met the first; T0018.4 (live Neon) plus T0019's accumulating `raw_jobs` — which holds postings that have dropped out of search and can no longer be re-fetched — meet the second. *Status: Alembic adoption scoped as **T0019.2** (baseline migration + env wiring), with `reset_db.sql` demoted to local-dev-only.* Note that migrations are only half the problem: `CREATE TABLE IF NOT EXISTS` silently no-ops on a table whose columns drifted **out-of-band**, which Alembic does not detect — hence the separate pre-flight column assertion in **T0019.5** (`Known_Issues.md`, schema-drift `[HIGH · OPEN]`).
+- **Open decision (T0010) — now answered by T0009.** The question of whether to add real-posting columns (location, salary) vs. only grow the row count is **resolved by T0009**, which enriches `clean_jobs` (adds `role`, `source_url`, `created_on`, `listing_expires_on`, `is_internship`, `job_level`, `location`, and structured salary: `salary_min`, `salary_max`, `salary_currency`, `is_salary_negotiable`) while landing real data. (T0009 originally added `posted_date`; T0013 left it NULL/hidden and superseded it with `created_on`/`listing_expires_on` for freshness — `Schema_Contract.md`.) The cheap-growth design above is exactly what makes that enrichment column-cheap. The original open T0010 question is therefore closed. Schema *tooling* is handled lightly by **T0009.9** (an explicit `reset_db.sql` drop-and-recreate path, appropriate because every table is reproducible from a re-ingest); a full migration framework (Alembic) is deferred until deployed data becomes irreplaceable — which it now has; see *Migrations deferred* above.
 
 ---
 
 ## 5. Error Handling & Resilience
 
-*Status: target design (mostly implemented, T0010.1)*
+*Status: implemented (T0010.1, T0012.5)*
 
 The Spec's quality bar (`MVP_Spec.md` §3) requires that imperfect input or a backend hiccup yields a clean response, never a crash and never a leaked internal error. The target behavior:
 
@@ -145,15 +145,15 @@ The Spec's quality bar (`MVP_Spec.md` §3) requires that imperfect input or a ba
 - **Client-input errors** are distinguished from server/provider errors (implemented, T0010.1): `src/api/routes/query.py` raises `InvalidQueryError` (`src/core/errors.py`) for a blank/whitespace-only `payload.query`, mapped to a `400 "Query must not be empty."`; genuine internal failures still map to the generic `500 "Failed to process query"` with no internals leaked.
 - **A `None`/empty runtime answer** is coerced to a safe fallback string (`FALLBACK_ANSWER` in `src/agents/service.py`) rather than failing Pydantic validation — implemented, T0010.1.
 
-*Status note (T0017, planned):* the status-code mapping above holds only for the one-shot path. Under streaming, once the first byte is sent the response is already `200` and mid-run failures are delivered as in-band SSE `error` events instead of status codes — see §9.5. Pre-stream failures (empty query, provider-busy before the first token) keep the status-code behavior described here.
+*Status note (T0017, implemented):* the status-code mapping above holds only for the one-shot path. Under streaming, once the first byte is sent the response is already `200` and mid-run failures are delivered as in-band SSE `error` events instead of status codes — see §9.5. Pre-stream failures (empty query, provider-busy before the first token) keep the status-code behavior described here.
 
-*Deferred, documented:* the typed error contract above is intentionally minimal (a single `4xx`/`5xx` split, not a broader error taxonomy), matching the MVP scope. One known residual gap: `react_agent._extract_answer` currently *raises* on empty/unreadable final content rather than returning it, so the `FALLBACK_ANSWER` coercion in `service.py` is not yet reachable on that path — an empty agent answer still surfaces as a `500` today. Tracked in `Known_Issues.md` (API layer).
+*Scope note:* the typed error contract above is intentionally minimal (a single `4xx`/`5xx` split, not a broader error taxonomy), matching the MVP scope. The empty-answer path is now closed (T0012.5): `react_agent._extract_answer` returns `""` on empty/unreadable final content, so the `FALLBACK_ANSWER` coercion in `service.py` fires and an empty agent answer returns `200` with the fallback string, not a `500`.
 
 ---
 
 ## 6. Testing Strategy
 
-*Status: target design*
+*Status: implemented.*
 
 Tests prove the Spec's capabilities, not implementation trivia. The strategy spans four layers (the concrete test list and counts live in `Repo_Current_State.md`):
 
@@ -173,6 +173,10 @@ These are **deterministic capability tests** — they prove a feature exists and
 *Status: implemented*
 
 Ingestion is **offline batch tooling** under `src/services/ingestion/`, isolated from the request pipeline — it is never imported by the API, service, runtime, tools, or tracing layers (the layer law is in `Full_Design_Document.md` §3). It runs as a manual, re-runnable CLI, not on a schedule. The deep research behind every decision here is `research/data-ingestion-stage.md` (§0.1, the ✅ reliable & schedulable VietnamWorks experiment) and `research/job-site-comparison.md`; do not re-derive it.
+
+> **Status: scheduled + live-DB operation scoped, not built (T0019, 2026-07-16).** Everything in §7 describes the pipeline as built and stays accurate. T0019 changes three things about *how it runs*, none of which reshape the dataflow or tables above: (a) load semantics become **accumulate-never-wipe** — the `TRUNCATE` in `clean_store.py` is dropped so the `(source, external_id)` upsert below becomes live code, joined by hidden `is_active`/`first_seen_at`/`last_seen_at` lifecycle columns and a time-based expiry pass (**T0019.3**); (b) an **external, out-of-band GitHub Actions cron** invokes the same CLI nightly against the live Neon DB (**T0019.6**, hard-gated on a robots.txt/ToS check, **T0019.1**). This does **not** relax the §7 layer law or the `Full_Design_Document.md` §2 no-schedulers exclusion — the cron runs on GitHub's runner, never in the API process, and §2's exclusion is amended to name what it always meant: *in-request* background execution; (c) unattended-run safety — pre-flight schema assertion, pre-write yield floor, dead-man's-switch ping (**T0019.5**). Scope and sequencing: `docs/Tickets.md` T0019. Rationale: `research/ingestion-milestone-plan.md`.
+>
+> **Until T0019.3 lands, do not run this CLI against the production DSN** — `clean_store.replace_clean_jobs` still truncates `clean_jobs` before the upsert, so a single "just testing" run against Neon rebuilds the live table from whatever that run happened to fetch. Local Docker Postgres runs are fine.
 
 **Design intent: source-agnostic.** v1 ingests **VietnamWorks only**, but the schema, cleaning, and interfaces are built so a future board is just a new adapter + normalizer with **no table reshape**. Only two components ever know a source's specifics — the **adapter** (fetch) and the **normalizer** (payload → common shape). Everything downstream is shared.
 
@@ -205,17 +209,19 @@ JobSource (VietnamWorksSource) --RawPosting--> raw_jobs (verbatim landing, upser
 
 **Agent-layer impact.** Because the new `clean_jobs` columns are agent-visible, T0009 also updates `prompts.schema_context`, the SQL-generation prompt, and the T0008 honesty rules (notably: salary is numeric and currency-scoped — filter within a `salary_currency` — and may be NULL / `is_salary_negotiable = true` → "may be missing or negotiable for some postings", not "not in the data"). This is the column-cheap schema growth §4 describes, applied.
 
-**Deferred.** Other boards, anti-bot scrapers, a scheduler/cron, LLM extraction, parsing a salary *string* into numbers (not needed for VietnamWorks, which supplies the numbers directly), translating source text to a single language, and cross-board dedup are out of scope (see `Tickets.md` T0009 Out of Scope and `research/job-site-comparison.md`).
+**Deferred.** Other boards, anti-bot scrapers, ~~a scheduler/cron~~ (*scoped 2026-07-16 as T0019.6 — see the status note at the top of §7*), LLM extraction, parsing a salary *string* into numbers (not needed for VietnamWorks, which supplies the numbers directly), translating source text to a single language, and cross-board dedup are out of scope (see `Tickets.md` T0009 Out of Scope and `research/job-site-comparison.md`).
 
 ---
 
 ## 8. Evaluation Harness (offline)
 
-*Status: planned (T0011) — **Evaluation v1 (Phase 1)**.*
+*Status: implemented (T0011–T0012) — **Evaluation v1 (Phase 1)**.*
 
 This is the **first version** of the project's evaluation phase: a deliberately-scoped offline harness whose deliverable is the **v1 baseline** — the first measured snapshot of agent behavior against a pinned fixture and golden set. It is intentionally minimal (offline only, no CI gate, no online/production scoring, no chart/DAG metrics — those are later phases, §8.7). Everything downstream that cites "the baseline" means this v1 baseline, and the T0011.5 report records it as such (dated, tied to the fixture + golden version it was measured against). A later re-measure produces a v2 baseline; the two are only comparable because the fixture is version-pinned (§8.3).
 
-The evaluation harness is **offline quality tooling**, isolated from the request pipeline exactly like §7 ingestion — it is never imported by the API, service, runtime, tools, or tracing layers, and it runs on demand (`deepeval test run`), never on a schedule and (for now) never as a CI gate. Its job is to establish a **measurable baseline** of the agent's task-correctness and its `MVP_Spec.md` §3 honesty bar *before* any stage whose design depends on measured model behavior is built (the `is_active` honesty hedge in Ingestion Deploy, `Tickets.md` T0014). The full grounding — DeepEval mechanics, the 2026 version-pinned facts, and the InternHunter-specific findings — is `research/deepeval-sql-agent-eval-planning.md`; **read its §11 first.** Do not re-derive it here.
+The evaluation harness is **offline quality tooling**, isolated from the request pipeline exactly like §7 ingestion — it is never imported by the API, service, runtime, tools, or tracing layers, and it runs on demand (`deepeval test run`), never on a schedule and (for now) never as a CI gate. Its job is to establish a **measurable baseline** of the agent's task-correctness and its `MVP_Spec.md` §3 honesty bar *before* any stage whose design depends on measured model behavior is built (the `is_active` honesty hedge in Ingestion Deploy Readiness — renumbered **`Tickets.md` T0019**, scoped 2026-07-16).
+
+> **This dependency did its job — by blocking (2026-07-16).** The T0011.5 baseline never ran (still blocked on maintainer credentials), so the gate the hedge's design set for itself is unmet, and the evidence that does exist is adverse (`Known_Issues.md` § Agent runtime & prompts: hidden-salary honesty violated 2/2, freshness fabricates 1/3). T0019 therefore **cut the hedge from its scope** rather than shipping it unmeasured: the `is_active` lifecycle *mechanics* ship as hidden DDL columns (no prompt surface, no eval dependency), and the *agent exposure* is deferred behind T0011.5 → prompt-v2 few-shot pass → a targeted recalibration delta. The harness's stated purpose — measure before building on measured behavior — is what produced that split (`research/ingestion-milestone-plan.md` §1B). The full grounding — DeepEval mechanics, the 2026 version-pinned facts, and the InternHunter-specific findings — is `research/deepeval-sql-agent-eval-planning.md`; **read its §11 first.** Do not re-derive it here.
 
 ### 8.1 What it measures — three seams
 
@@ -268,11 +274,11 @@ A post-run step calls `langfuse.create_score(name=metric, value=score, trace_id=
 
 ## 9. Streaming Response Delivery
 
-*Status: planned (T0017).*
+*Status: implemented (T0017).*
 
 The MVP as built answers in one shot: the runtime runs the agent to completion (`react_agent.py::AgentRuntime.ainvoke`), and the route returns a single finished `QueryResponse`. The user waits on a spinner for the whole 5–15 s run, then the entire answer appears at once. Streaming changes the **delivery contract** — from "return one finished value" to "yield the answer token-by-token as the model produces it" — so the first words appear in ~1 s and the answer grows live. This is the clickable-demo's single largest perceived-latency win, and it is the reason T0017 exists. It does **not** change *what* the agent computes, only *how the result is delivered*.
 
-This section is the target design. It revises three earlier sections that describe the one-shot system as built: §1 (adds the branch point that section says does not exist), §3 (the response is no longer a single JSON body), and §5 (mid-run errors are delivered differently). Those sections carry forward-reference notes; this section is the source of truth for the streaming path. Grounded mechanics — pinned versions, the empirically verified node names, and the SSE API surface (all live-checked 2026-07-13) — live in `research/streaming-implementation-plan.md` and are not restated here.
+This section is the streaming design as shipped. It revises three earlier sections that describe the one-shot system: §1 (adds the branch point that section says does not exist), §3 (the response is no longer a single JSON body), and §5 (mid-run errors are delivered differently). Those sections carry forward-reference notes; this section is the source of truth for the streaming path. Grounded mechanics — pinned versions, the empirically verified node names, and the SSE API surface (all live-checked 2026-07-13) — live in `research/streaming-implementation-plan.md` and are not restated here.
 
 ### 9.1 The contract shift — return-once to yield-many
 

@@ -385,14 +385,13 @@ done and points clearly, but nothing is *chosen*. Candidate topology to confirm 
 API on **Render** or **Cloud Run**, Postgres on **Neon**, tracing on **Langfuse Cloud
 Hobby**, ingestion cron on **GitHub Actions**. Total target: **$0–$10/mo**.
 
-### 6b. Security posture is unimplemented (blocking for a *public* deploy)
-`deployment-research-plan.md §11` lists the minimum posture; **none of it is in the code**:
-- **No rate limiting** on the public `POST /api/v1/agent/chat` endpoint (needs `slowapi`).
-- **No CORS** middleware.
-- **`/docs` is exposed** (default FastAPI — `app = FastAPI(lifespan=...)` with no
-  `docs_url=None`). Decide whether to expose Swagger publicly.
-- **No security headers.**
-These are cheap ($0) but must be a deliberate deploy ticket, not an afterthought.
+### 6b. Security posture for a *public* deploy
+`deployment-research-plan.md §11` lists the minimum posture. **2026-07-13 status after T0016:**
+- **Rate limiting:** implemented by T0016.2 with in-process `slowapi` on `POST /api/v1/agent/chat`; `/api/v1/health` remains unlimited.
+- **CORS:** implemented by T0016.1 with credential-less `CORSMiddleware` and config-driven origins.
+- **`/docs` exposure:** decided by T0016.4; the portfolio-demo default keeps `/docs`, `/redoc`, and `/openapi.json` public via `api.docs_enabled: true`, with `api.docs_enabled: false` as the locked-down alternative.
+- **Security headers:** intentionally not added while FastAPI serves API responses only; revisit frame protection if a same-origin HTML UI is served.
+The remaining deploy-hardening work is outside T0016: DB readiness, topology, what-data-ships, CI gate, and UI-specific headers if needed.
 
 ### 6c. Health/readiness endpoint is thin (should fix)
 `src/api/routes/health.py` returns `{"health_status": {"api": "online"}, "status_code": 200}`
@@ -426,11 +425,10 @@ or has no data-refresh story. Decide what the demo serves. This is fine for a po
 MVP but should be a conscious choice, not a surprise.
 
 ### 6h. Doc drift (cheap cleanup)
-`deployment-research-plan.md §11` refers to a `/query` route and `/health`; the real routes
-are `/api/v1/agent/chat` and `/api/v1/health`. Its example Dockerfile `CMD` says
-`src.main:app` (stale — `main.py` was deleted in T0012.9); the **actual** `docker/Dockerfile`
-correctly uses `src.api.app:app`. No functional bug, but worth fixing so the deploy design
-doc isn't misleading.
+**Resolved 2026-07-13 in `research/deployment-research-plan.md` §11.** The stale `/query`,
+`/health`, and `src.main:app` examples were updated to `POST /api/v1/agent/chat`,
+`/api/v1/health`, and `src.api.app:app`. Keep this section as a reminder to check deploy docs
+when routes or entrypoints move.
 
 ### 6i. CI gate + cost ceiling not set (deploy-time)
 No CI pipeline runs `pytest` as a merge gate yet (`deployment-research-plan.md §8`), and no

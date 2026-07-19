@@ -10,6 +10,8 @@ DEFAULT_MAX_QUERY_CHARS = 2000
 class QueryRequest(BaseModel):
     query: str = Field(..., max_length=DEFAULT_MAX_QUERY_CHARS)
     user_id: str | None = None
+    # Omit session_id on the first demo turn: the server mints an unguessable uuid4,
+    # returns it, and the UI reuses it so visitors do not share one conversation.
     session_id: str | None = None
 
 class QueryResponse(BaseModel):

@@ -2,6 +2,8 @@ api:
   docs_enabled: true
   rate_limit: "15/minute"
   max_query_chars: 2000
+  demo:
+    data_snapshot_date: "2026-07-14"  # Update whenever the shipped demo corpus changes.
   cors:
     allowed_origins: []  # Set deployed/demo UI origin(s) here later; keep empty for same-origin or no-browser use.
     allow_credentials: false
@@ -10,14 +12,27 @@ api:
 
 agent:
   provider: groq
-  groq:
+
+  react:
     model: qwen/qwen3.6-27b
     temperature: 0.2
     max_tokens: 2048
     timeout: 30
     max_retries: 2
-    streaming: True
+    streaming: true
     reasoning_format: hidden
+    reasoning_effort: null
+
+  sql_generation:
+    model: qwen/qwen3.6-27b
+    temperature: 0.0
+    max_tokens: 1024
+    timeout: 30
+    max_retries: 2
+    streaming: false
+    reasoning_format: hidden
+    reasoning_effort: none
+
   memory:
     max_messages: 20
   query:

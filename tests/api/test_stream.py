@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 import unittest
 from unittest.mock import AsyncMock
 
@@ -106,6 +107,24 @@ class StreamQueryRouteTests(unittest.TestCase):
         self.assertEqual([event_type for event_type, _ in events], ["session", "token", "error", "done"])
         self.assertEqual(events[2][1], {"message": BUSY_MESSAGE})
         self.assertEqual(events[3][1], {})
+
+    def test_stream_route_returns_uuid4_session_when_omitted(self) -> None:
+        async def _fake_astream(**kwargs):
+            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+
+        self.app.state.runtime.astream = _fake_astream
+
+        response = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "list 3 data engineer jobs"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        events = _parse_sse_events(response.text)
+        self.assertEqual(events[0][0], "session")
+        returned_id = events[0][1]["session_id"]
+        self.assertIsNotNone(returned_id)
+        self.assertEqual(uuid.UUID(returned_id).version, 4)
 
     def test_stream_route_rejects_blank_query_before_stream_starts(self) -> None:
         self.app.state.runtime.astream = AsyncMock()

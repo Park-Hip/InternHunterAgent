@@ -13,6 +13,7 @@ class JobSource(ABC):
     """
 
     source: str  # class-level constant; each adapter sets its own value
+    pages_failed: int = 0  # count of pages given up on after retries; adapters increment in fetch()
 
     @abstractmethod
     def fetch(self) -> Iterator[RawPosting]:

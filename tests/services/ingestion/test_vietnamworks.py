@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
+
 from src.services.ingestion.models import RawPosting
 from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
 
@@ -21,6 +23,31 @@ def _mock_client(fixture: dict) -> MagicMock:
     resp.raise_for_status.return_value = None
     resp.json.return_value = fixture
     client.post.return_value = resp
+    return client
+
+
+def _http_error(status_code: int) -> httpx.HTTPStatusError:
+    """Build a real httpx.HTTPStatusError with a working .response.status_code."""
+    request = httpx.Request("POST", "https://example.com")
+    response = httpx.Response(status_code, request=request)
+    return httpx.HTTPStatusError(f"{status_code} error", request=request, response=response)
+
+
+def _ok_response(fixture: dict) -> MagicMock:
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = fixture
+    return resp
+
+
+def _mock_client_sequence(side_effects: list) -> MagicMock:
+    """Return a mock httpx.Client whose .post() yields each side effect in order.
+
+    Each item is either a MagicMock response (returned) or an exception
+    instance (raised) — see unittest.mock's side_effect-list semantics.
+    """
+    client = MagicMock()
+    client.post.side_effect = side_effects
     return client
 
 
@@ -163,6 +190,97 @@ class VietnamWorksSourceTests(unittest.TestCase):
         source = self._source()
         list(source.fetch())
         self.client.post.assert_called()
+
+
+class VietnamWorksResilienceTests(unittest.TestCase):
+    """Per-page retry/backoff/skip behaviour — no live network calls."""
+
+    def setUp(self) -> None:
+        self.fixture = _load_fixture()
+        patcher = patch("time.sleep")
+        self.mock_sleep = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _source(self, client: MagicMock, queries: list[str], pages_per_query: int) -> VietnamWorksSource:
+        source = VietnamWorksSource(client=client)
+        source._queries = queries
+        source._pages_per_query = pages_per_query
+        return source
+
+    def test_mid_run_failure_skips_page_but_later_pages_still_yield(self) -> None:
+        # page 0: exhausts all 3 attempts with 500s; page 1: succeeds.
+        client = _mock_client_sequence(
+            [_http_error(500), _http_error(500), _http_error(500), _ok_response(self.fixture)]
+        )
+        source = self._source(client, queries=["q"], pages_per_query=2)
+
+        results = list(source.fetch())
+
+        external_ids = {r.external_id for r in results}
+        self.assertIn("1001", external_ids)
+        self.assertIn("1003", external_ids)
+        self.assertEqual(source.pages_failed, 1)
+
+    def test_all_pages_failing_does_not_raise(self) -> None:
+        client = _mock_client_sequence([_http_error(500)] * 3 + [_http_error(500)] * 3)
+        source = self._source(client, queries=["q"], pages_per_query=2)
+
+        results = list(source.fetch())
+
+        self.assertEqual(results, [])
+        self.assertEqual(source.pages_failed, 2)
+
+    def test_transient_failure_is_retried_and_can_succeed(self) -> None:
+        client = _mock_client_sequence([_http_error(500), _ok_response(self.fixture)])
+        source = self._source(client, queries=["q"], pages_per_query=1)
+
+        results = list(source.fetch())
+
+        external_ids = {r.external_id for r in results}
+        self.assertIn("1001", external_ids)
+        self.assertIn("1003", external_ids)
+        self.assertEqual(source.pages_failed, 0)
+
+    def test_permanent_failure_is_not_retried(self) -> None:
+        client = _mock_client_sequence([_http_error(403)])
+        source = self._source(client, queries=["q"], pages_per_query=1)
+
+        results = list(source.fetch())
+
+        self.assertEqual(results, [])
+        self.assertEqual(client.post.call_count, 1)
+        self.assertEqual(source.pages_failed, 1)
+
+    def test_backoff_doubles_between_retry_attempts(self) -> None:
+        client = _mock_client_sequence([_http_error(500), _http_error(500), _http_error(500)])
+        source = self._source(client, queries=["q"], pages_per_query=1)
+
+        list(source.fetch())
+
+        self.mock_sleep.assert_any_call(2.0)
+        self.mock_sleep.assert_any_call(4.0)
+        # Backoff sleeps must occur in order before the trailing politeness delay.
+        backoff_calls = [c.args[0] for c in self.mock_sleep.call_args_list if c.args[0] in (2.0, 4.0)]
+        self.assertEqual(backoff_calls, [2.0, 4.0])
+
+    def test_politeness_delay_still_applies_to_skipped_page(self) -> None:
+        client = _mock_client_sequence([_http_error(403)])
+        source = self._source(client, queries=["q"], pages_per_query=1)
+
+        list(source.fetch())
+
+        self.mock_sleep.assert_any_call(source._delay)
+
+    def test_pages_failed_resets_across_successive_fetch_calls(self) -> None:
+        client = _mock_client_sequence([_http_error(500)] * 3)
+        source = self._source(client, queries=["q"], pages_per_query=1)
+
+        list(source.fetch())
+        self.assertEqual(source.pages_failed, 1)
+
+        source._client = _mock_client_sequence([_ok_response(self.fixture)])
+        list(source.fetch())
+        self.assertEqual(source.pages_failed, 0)
 
 
 if __name__ == "__main__":

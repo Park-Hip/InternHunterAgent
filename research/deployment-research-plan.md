@@ -70,7 +70,32 @@ Sources:
 - [Google Cloud Run free tier 2026 (lalatenduswain.medium.com)](https://lalatenduswain.medium.com/building-cloud-native-apps-for-free-in-2026-the-complete-developers-guide-to-google-cloud-s-3d93b77c4adb)
 - [Cloud Run pricing (cloud.google.com)](https://cloud.google.com/run/pricing)
 
-**Decision:** _____
+**Decision (2026-07-16):** **Render** free tier — Dockerfile deploy from GitHub, Singapore region, `*.onrender.com` + auto-TLS. Chosen over Cloud Run for zero-config simplicity (no billing account, no `gcloud`/Artifact Registry). 15-min idle spin-down + ~1 min cold start accepted for a portfolio demo. **Live: https://internhunteragent.onrender.com** (Free instance, `WEB_CONCURRENCY=1`).
+
+### 1a. Cold-start mitigation — keep-alive ping (decided 2026-07-16, post-deploy)
+
+**Why revisited:** the §1 decision accepted the ~1 min cold start as "tolerable" (§0, expected traffic). Post-deploy that reads worse than modelled: because T0018.2 serves the UI **same-origin**, Render serves `index.html` too, so a cold visitor gets a **blank tab for ~60 s** rather than a slow first answer. There is no UI-side loading state possible — the UI is behind the same cold process. Registered in `docs/Known_Issues.md` § Config, startup & deployment.
+
+**The cold start is ~all Render, not Neon.** Render: 15-min idle spin-down, ~1 min restart (§1). Neon: 5-min suspend, ~300–500 ms resume, p95 ~2.6 s (§3). Neon is a rounding error; **swapping the DB or the stack would buy nothing** — the question was raised and closed on these numbers.
+
+**Decision:** external scheduler (cron-job.org or UptimeRobot free) pinging **`GET /api/v1/health`** every 10–14 min on a **~07:00–23:00 ICT window**. Not yet applied — it is dashboard config, deliberately **not** its own ticket (2026-07-16); it folds into the ingestion milestone, which already defers external ping + dead-man's-switch (§9A) and needs the same machinery.
+
+**Three constraints that shape it:**
+1. **`/health`, never `/ready`.** `/ready` runs `SELECT 1` → holds Neon awake → 0.25 CU × 730 h ≈ **182 CU-h vs the 100 CU-h/month free cap** (§3). Pinging the wrong endpoint would break Neon's free tier to fix Render's. Same reasoning as the §9A decision to point Render's own health check at `/health`. *(Render's internal health checks do not prevent spin-down — only inbound external traffic does.)*
+2. **Window it; do not run 24/7.** Render grants **750 free instance-hours/workspace/month**, and exhausting them *"suspends all of your Free web services until the start of the next month"* ([docs](https://render.com/docs/free)). 24/7 in a **31-day month = 744 h — a 6-hour margin** (this corrects the "≈ 720 hrs" estimate in the §1 summary above, which assumed a 30-day month and understates the risk). One overlapping redeploy or a second Free service crosses it, and the demo goes dark until the calendar flips. A 16 h/day window ≈ **496 h/month** — no cliff.
+3. **Not GitHub Actions.** Free for public repos but UTC-only, auto-disables after 60 days idle (§8), and scheduled runs routinely drift 10+ min under load — fatal against a 15-min window. External scheduler is the right tool and stays out of the repo.
+
+**Policy check (does the ping violate Render's terms?) — checked 2026-07-16 against Render's own docs + AUP, not blog posts:**
+- **No written rule prohibits it.** Render's free-tier docs describe the spin-down in detail and never mention pinging, keep-alives, or uptime monitors. The AUP names no such practice.
+- **One AUP clause has a foothold:** *"intentionally misuse the Service to avoid payment or financial responsibility."* A keep-alive's purpose is to obtain always-on behaviour Render sells at $7/mo. Render's support line is that the supported fix for cold starts is a paid instance. The companion clause — *"impose an unreasonable or disproportionately large load… especially for the purpose of evading payment"* — does **not** apply: one request per 10 min is negligible.
+- **Counter-argument (arithmetic):** Render *grants* 750 h/month, and 24/7 for a 31-day month is 744 h. **The grant exceeds always-on.** Were continuous free uptime the abuse that clause targets, the allowance would sit below 730 h. Render also enforces the allowance by automatic metering, which reads as a designed budget rather than a trap.
+- **The "uncommonly high volume of traffic" suspension clause** in the free docs concerns **outbound** traffic a service *initiates* — not inbound pings. Does not apply.
+- **No documented bans for it.** The most-cited public suspension case (`SunsetMkt/Stop-Using-Render.com`) was an AUP block over two Bing-proxy projects — unrelated to pinging or free-tier usage patterns.
+- **Verdict: low-risk and unsupported, not prohibited.** Recorded here as a deliberate decision rather than done quietly. The windowed (not 24/7) shape also keeps us clear of the "avoid payment" reading, since it demonstrably does not replicate an always-on paid instance. **Escape hatch if Render ever tightens: Starter $7/mo**, inside the §10 ceiling.
+
+**To verify once applied:** whether the checkpointer's idle pool connections alone keep Neon from suspending. If they do, Neon stays awake whenever Render is awake and the CU-hour math bites regardless of endpoint. Watch Neon compute-hours for ~24 h after enabling.
+
+Sources (policy check): [Render — Deploy for Free](https://render.com/docs/free) · [Render — Acceptable Use Policy](https://render.com/acceptable-use) · [Render — Terms of Service](https://render.com/terms) · [Stop-Using-Render.com suspension writeup](https://github.com/SunsetMkt/Stop-Using-Render.com)
 
 ---
 
@@ -111,7 +136,7 @@ COPY --from=builder /app /app
 ENV PATH="/app/.venv/bin:$PATH"
 RUN adduser --disabled-password worker && chown -R worker /app
 USER worker
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 Key points:
@@ -148,7 +173,7 @@ Sources:
 - [Distroless Python with uv 2026 (nerdleveltech.com)](https://nerdleveltech.com/distroless-python-containers-with-uv-tutorial)
 - [Docker image size comparison (chainguard.dev)](https://www.chainguard.dev/supply-chain-security-101/best-python-docker-image-top-options-compared)
 
-**Decision:** _____
+**Decision (2026-07-16):** **`python:3.12-slim` Dockerfile at `docker/Dockerfile`**, built with `uv sync --frozen --no-dev`, non-root `app` user. The `CMD` binds a fixed `--port 8000`; Render routes to it via a **`PORT=8000` env var** (tells Render's proxy which port the container listens on). Distroless deferred. Render built + pushed the image in ~1 min on its own builder.
 
 ---
 
@@ -194,7 +219,7 @@ Sources:
 - [Neon cold-start latency benchmarks (neon.com)](https://neon.com/docs/guides/benchmarking-latency)
 - [Render Postgres free tier (kuberns.com)](https://kuberns.com/blogs/render-postgres-pricing-setup-limits/)
 
-**Decision (local vs deploy DSN strategy):** _____
+**Decision (local vs deploy DSN strategy, 2026-07-16):** `DATABASE_URL` in SQLAlchemy `postgresql+psycopg://…` form everywhere; the checkpointer strips `+psycopg` itself (`src/core/checkpointer.py`). Local = Docker Postgres on `:5433`. Prod = **Neon direct (non-pooled) endpoint** (PG17, Singapore) — for a single low-QPS instance the pooler's PgBouncer prepared-statement subtlety isn't worth it, and direct sits well within Neon's connection cap. Snapshot loaded via the direct **plain** `postgresql://…` DSN (no `+psycopg`, which is a SQLAlchemy-only prefix). Neon Auth left OFF (no end-user auth in this app).
 
 ---
 
@@ -399,7 +424,7 @@ Sources:
 - [pydantic-settings docs (pydantic.dev)](https://pydantic.dev/docs/validation/latest/concepts/pydantic_settings/)
 - [GitHub Actions secrets docs (docs.github.com)](https://docs.github.com/billing/managing-billing-for-github-actions/about-billing-for-github-actions)
 
-**Decision:** _____
+**Decision (2026-07-16):** All secrets injected as **Render dashboard env vars** at runtime — never in the image (`.dockerignore` excludes `.env`) or the repo. Five required, read by `src/core/config.py`: `GROQ_API_KEY`, `DATABASE_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` — **note the code reads `LANGFUSE_BASE_URL`, not `LANGFUSE_HOST`** (§6's earlier draft was wrong). `GOOGLE_API_KEY` omitted (eval-judge only, never on the request path). Plus the non-secret `PORT=8000`. Enter raw values in Render (no surrounding quotes — unlike a `.env` file, Render does not strip them).
 
 ---
 
@@ -459,7 +484,7 @@ Sources:
 - [Langfuse v3 self-hosting discussion (github.com/orgs/langfuse)](https://github.com/orgs/langfuse/discussions/5669)
 - [Langfuse pricing breakdown (cekura.ai)](https://www.cekura.ai/blogs/langfuse-pricing)
 
-**Decision:** _____
+**Decision (2026-07-16):** **Langfuse Cloud Hobby, JP region** (`LANGFUSE_BASE_URL=https://jp.cloud.langfuse.com`). Zero infra, 50k units/month — ample for a demo. Self-host ruled out (adds a paid 4th workload with ClickHouse). Verified live: `trace_url` resolves from the streamed `metadata` event to the JP project.
 
 ---
 
@@ -514,7 +539,7 @@ Sources:
 - [FastAPI CORS middleware docs (fastapi.tiangolo.com)](https://fastapi.tiangolo.com/deployment/docker/)
 - [Koyeb free tier + Mistral acquisition (srvrlss.io)](https://www.srvrlss.io/provider/koyeb/)
 
-**Decision:** _____
+**Decision (2026-07-16):** Default **`internhunteragent.onrender.com`** subdomain + Render auto-TLS; no custom domain (cosmetic, deferred). **CORS stays unused** — the UI is served same-origin from the same FastAPI container, so `api.cors.allowed_origins` stays `[]` and the CORS middleware is never exercised. Recorded here as the deploy rationale for the empty origins list.
 
 ---
 
@@ -578,7 +603,7 @@ Sources:
 - [Fly.io continuous deployment with GitHub Actions (fly.io)](https://fly.io/docs/launch/continuous-deployment-with-github-actions/)
 - [Railway vs Render 2026 (thesoftwarescout.com)](https://thesoftwarescout.com/railway-vs-render-2026-best-platform-for-deploying-apps/)
 
-**Decision:** _____
+**Decision (2026-07-16):** **Render native auto-deploy on push** to `feature/t0018.4-deploy`. A `pytest` merge-gate on `main` is **deferred (out of T0018.4 scope)** — noted for a later CI ticket (`pre-deploy-refinement-plan.md §6i`). Rollback = redeploy a previous deploy from the Render dashboard. No preview environments (free tier).
 
 ---
 
@@ -657,7 +682,7 @@ Sources:
 - [Structured logging with structlog + FastAPI (ouassim.tech)](https://ouassim.tech/notes/setting-up-structured-logging-in-fastapi-with-structlog/)
 - [Best cron monitoring tools 2026 (apistatuscheck.com)](https://apistatuscheck.com/blog/best-cron-job-monitoring-tools-2026)
 
-**Decision:** _____
+**Decision (2026-07-16):** In-app **`GET /api/v1/health`** (liveness — Render health-check target) + **`GET /api/v1/ready`** (`SELECT 1`, DB-gated, returns 503 on failure, excluded from the `slowapi` limiter). Health check pointed at `/health` (not `/ready`) so Render probes don't keep Neon awake. External **UptimeRobot ping + healthchecks.io dead-man's-switch deferred** to the ingestion milestone (no cron ships here). structlog stdout + Render's 7-day log stream suffice for the demo.
 
 ---
 
@@ -705,7 +730,7 @@ Sources:
 - [Langfuse pricing (langfuse.com)](https://langfuse.com/pricing)
 - [Egress bandwidth comparison 2026 (gpuperhour.com)](https://gpuperhour.com/reference/data-egress)
 
-**Decision (cost ceiling):** _____
+**Decision (cost ceiling, 2026-07-16):** **$10/month hard ceiling; actual expected $0.** Render Free + Neon Free (PG17) + Langfuse Hobby + Groq free tier all sit within limits at demo QPS. First likely paid step if ever needed: Render Starter ($7/mo, kills the 15-min cold start) or Groq pay-as-you-go (per-token, tiny at demo scale).
 
 ---
 
@@ -723,6 +748,8 @@ scraping-from-prod-IP ToS/robots question raised in `job-site-comparison.md`.
 
 **Findings:**
 
+> **2026-07-13 T0016 decision delta:** The generic security checklist below has been narrowed for the current API-only, no-auth, read-only portfolio demo. T0016 keeps Swagger/ReDoc/OpenAPI public by default via `api.docs_enabled: true`, with `api.docs_enabled: false` as the locked-down switch for `/docs`, `/redoc`, and `/openapi.json`. CORS and in-process rate limiting are implemented; frame-protection headers remain deferred until FastAPI serves same-origin HTML.
+
 **A. FastAPI production security checklist (minimum for a public demo):**
 
 | Control | Implementation | Cost |
@@ -732,9 +759,9 @@ scraping-from-prod-IP ToS/robots question raised in `job-site-comparison.md`.
 | Rate limiting per IP | `slowapi` library (in-process, Redis optional) | $0 |
 | CORS restricted | `CORSMiddleware` with specific origins (§7) | $0 |
 | Input validation | Pydantic models on all request bodies (already enforced by FastAPI) | $0 |
-| No exposed `/docs` in prod | `app = FastAPI(docs_url=None, redoc_url=None)` if public | $0 |
-| Security headers | `starlette-securecookies` or a custom middleware adding `X-Content-Type-Options`, `X-Frame-Options` | $0 |
-| Health endpoints not rate-limited | Exclude `/health` from `slowapi` limiter | $0 |
+| `/docs` exposure is deliberate | T0016 keeps `/docs`, `/redoc`, and `/openapi.json` public for the portfolio demo by default; set `api.docs_enabled: false` to hide all three | $0 |
+| UI-specific security headers | Add frame-protection headers only if FastAPI later serves same-origin HTML | $0 |
+| Health endpoints not rate-limited | Exclude `/api/v1/health` from `slowapi` limiter | $0 |
 
 **B. Rate limiting for the public API endpoint:**
 
@@ -744,7 +771,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 limiter = Limiter(key_func=get_remote_address)
 
-@app.get("/query")
+@app.post("/api/v1/agent/chat")
 @limiter.limit("10/minute")
 async def query_agent(request: Request, ...):
     ...
@@ -761,14 +788,14 @@ The ingestion cron runs on **GitHub Actions**, not on the API server. This means
 
 Robots.txt status per source (from `data-ingestion-stage.md`):
 - **TopCV:** `robots.txt` permits scraping of listing/detail paths (confirmed by VietJobs academic dataset). ✅
-- **VietnamWorks:** robots.txt + ToS **must be checked before production use** (flagged in `data-ingestion-stage.md §0.1`). The API endpoint used (`ms.vietnamworks.com`) is undocumented — check `ms.vietnamworks.com/robots.txt` specifically. ⚠️ Unverified — needs manual check.
+- **VietnamWorks:** the API endpoint used (`ms.vietnamworks.com`) is undocumented and **serves no robots.txt at all** (HTTP 404); `www.vietnamworks.com/robots.txt` permits the paths in question and sets no `Crawl-delay`; the ToS carries no automated-access clause. ✅ **Checked 2026-07-16 (T0019.1)** — see the *Decision — VietnamWorks robots.txt / ToS* record at the end of this section for the evidence, the recommended verdict, and the one caveat that survives it.
 - **ITviec:** `robots.txt` allows everything except `/subscriptions/new`; our paths (`/segments/viec-lam-ai-data`, `/it-jobs/*`) are permitted. ✅
 
 General 2026 legal posture for scraping public job postings:
 - Scraping public, non-personal, factual job-posting data is **generally defensible** in most jurisdictions. The main legal risks concentrate at: personal data, auth bypass, copyrighted content reproduction at scale, server overload, and explicit ToS breach.
 - ToS violations are typically **civil** (breach of contract), not criminal, for publicly accessible data (the CFAA does not criminalize ToS breach for public sites in the US after *hiQ v. LinkedIn*).
 - Vietnam has no specific web scraping law. PDPD (Personal Data Protection Decree, 2023) applies to personal data — job postings (company name, role, description) are not personal data.
-- **Action required before production:** fetch and read `robots.txt` for VietnamWorks API host; review VietnamWorks ToS. Keep scraping volume low and polite (already designed: 0.6 s delay, daily cadence).
+- ~~**Action required before production:** fetch and read `robots.txt` for VietnamWorks API host; review VietnamWorks ToS.~~ **Done 2026-07-16 (T0019.1)** — see the Decision record below. Keep scraping volume low and polite (already designed: 0.6 s delay, daily cadence — no `Crawl-delay` directive exists to honor, so this stands unchanged).
 
 Sources:
 - [FastAPI security guide (davidmuraya.com)](https://davidmuraya.com/blog/fastapi-security-guide/)
@@ -778,7 +805,64 @@ Sources:
 - [Web scraping ethics + robots.txt (medium.com/@ridhopujiono)](https://medium.com/@ridhopujiono.work/web-scraping-2-ethics-legality-robots-txt-how-to-stay-out-of-trouble-39052f7dc63f)
 - [Scraping job postings 2026 (cavuno.com)](https://cavuno.com/blog/job-scraping)
 
-**Decision:** _____
+**Decision (2026-07-16):** Posture per **T0016** — credential-less CORS (moot same-origin), per-IP rate limit (`15/minute`, `/health` + `/ready` excluded), 2000-char input cap, `/docs` deliberately public. Frame protection now active: **`X-Frame-Options: DENY`** on all responses (T0018.2, verified live). Scraping ToS/robots is **N/A for this deploy** — it ships a static corpus snapshot with no cron; that question re-enters at the ingestion milestone.
+
+**Decision — VietnamWorks robots.txt / ToS (T0019.1, 2026-07-16):** RECOMMENDED VERDICT:
+**favorable** — **pending maintainer confirmation.** *(This is the ingestion-milestone re-entry the
+2026-07-16 decision above anticipated; it supersedes that decision's final sentence only.)*
+
+- `ms.vietnamworks.com/robots.txt` → **HTTP 404**. **Absent** — this host serves no robots.txt at
+  all. The 404 body is a JSON gateway error (`{"message":"no route matched with those values"}`),
+  not a robots file, despite its `text/plain` content-type. There are therefore **no crawl
+  directives of any kind** governing the `/job-search/` path on the host the pipeline actually
+  fetches from. **This is silence — not permission and not refusal** — so the verdict rests on the
+  ToS. Archived: `research/experiments/vietnamworks_robots_2026-07-16.txt`. Crawl-delay: **none**.
+- `www.vietnamworks.com/robots.txt` → **HTTP 200** (`Last-Modified: 11 May 2026`). One
+  `User-agent: *` group; **no `Disallow: /`**, no rule matching `/job-search/`, **no `Crawl-delay`**.
+  Disallows only profile / login / apply / print / AJAX / ad / hrinsider-pagination paths — none of
+  which the pipeline touches. Context only: this is the content host, not the API host the pipeline
+  uses. Archived: `research/experiments/vietnamworks_www_robots_2026-07-16.txt`.
+- **ToS** (https://www.vietnamworks.com/thoa-thuan-su-dung, last updated **unknown** — no date shown
+  on the page; Vietnamese only): **no clause on automated access found.** The terms `robot`,
+  `spider`, `crawler`, `crawl`, `scrape`, `API`, `giao diện lập trình`, `dịch ngược`
+  (reverse-engineer), `trích xuất` (extract) and `hàng loạt` (bulk) return **zero matches** in the
+  document. Sections reviewed in full: §3 (refusal of service), §4 (terms of use), §5 (user rights
+  & responsibilities), §7 (intellectual property), §9 (compliance & violations). The single clause
+  using "tự động" (automated) governs **bulk account registration**, not content access — *"Các tài
+  khoản được đăng ký một cách tự động và/hoặc có hệ thống với số lượng lớn … được xem là vi phạm"*
+  ("Accounts registered in an automated and/or systematic manner in large numbers … shall be deemed
+  a violation") — and the pipeline registers no account (`userId: 0`). Excerpt archived with
+  verbatim Vietnamese + labeled translations:
+  `research/experiments/vietnamworks_tos_excerpt_2026-07-16.md`.
+- **Applying the decision rule:** neither trigger fires. robots.txt does not disallow `/job-search/`
+  (it does not exist on the API host, and the www host permits it), and the ToS does not explicitly
+  prohibit automated access or scraping. Absence of robots.txt is not a disallow; absence of a ToS
+  clause is not a prohibition. → **favorable.**
+- **⚠️ Caveat the maintainer must weigh (does not trigger the rule, but is the one real finding).**
+  ToS §7 (intellectual property) restricts what may be done with content *once obtained*, on an axis
+  the decision rule does not test: *"bạn không được quyền thay đổi, sao chép, mô phỏng, truyền, phân
+  phối, công bố, tạo ra các sản phẩm phái sinh, hiển thị hoặc chuyển giao, hoặc khai thác nhằm mục
+  đích thương mại bất kỳ phần nào của nội dung"* ("you are not entitled to modify, copy, reproduce,
+  transmit, distribute, publish, create derivative works from, display or transfer, or commercially
+  exploit any part of the content"), with a carve-out permitting copies **"để dùng nội bộ"** ("for
+  internal use"). This says nothing about *how* content is fetched — so it is not an automated-access
+  prohibition and does not make the verdict unfavorable — but it does bear on **storing postings in a
+  DB and displaying them on a public demo**. Note this is a *retention/display* question that the
+  already-deployed static snapshot raises **today**, independently of any cron: T0019.6 changes how
+  often the corpus refreshes, not whether it is republished. It is therefore not a reason to park the
+  cron, but it is a live question for the project's public posture. Registered in
+  `docs/Known_Issues.md`. Also recorded, non-binding: §3 lets the Company refuse *service* to those
+  who use its information other than for their own recruitment purposes — an account-directed remedy
+  (we hold no account), which nonetheless signals intent on non-recruitment reuse.
+- **Consequence:** **T0019.6 unblocks once .2–.5 land**, subject to maintainer confirmation of this
+  verdict. Conditions to honor: **(1)** no `Crawl-delay` directive exists on either host, so the
+  existing `0.6 s` delay + daily cadence stands unchanged — **nothing for T0019.4/.6 to implement**;
+  **(2)** keep the pipeline off the paths `www`'s robots.txt disallows (profile / login / apply /
+  print / AJAX) — it touches none of them today, and any future source work must preserve that;
+  **(3)** this verdict is a **point-in-time fetch** — the API host has no robots.txt *now*; if one
+  appears, this gate must be re-run before the cron continues (registered in `Known_Issues.md`).
+  The unfavorable branch (`research/ingestion-milestone-plan.md` §1D — park T0019.6, degrade the
+  milestone, re-open the source question) is **not** triggered and stays on the shelf.
 
 ---
 
@@ -788,6 +872,8 @@ _Fill last._ One diagram + one paragraph: chosen host for the API, the DB, the c
 secret flow; the deploy trigger; and the total monthly cost (target: **$0 → minimal**).
 Then hand off to a deployment **design doc** + deploy tickets.
 
-**Candidate topology (to confirm):** API on _____ · Postgres on _____ · cron on _____ ·
-Langfuse on _____ · CI via _____.
-**Total expected cost:** _____
+**Confirmed topology (2026-07-16, T0018.4 first deploy):** API on **Render** (Docker `docker/Dockerfile`, Singapore, Free instance) · Postgres on **Neon** (PG17, direct DSN, Singapore, 50+50 rows loaded) · cron **none — ships a static corpus snapshot** (ingestion is a separate later milestone) · Langfuse on **Cloud Hobby (JP)** · CI via **Render auto-deploy on push** (pytest merge-gate deferred).
+**Secret flow:** five env vars set in the Render dashboard (never in image/repo) + `PORT=8000`; `DATABASE_URL` in `postgresql+psycopg://…` form.
+**Live URL:** https://internhunteragent.onrender.com — verified end-to-end (SSE streaming, Neon query, Groq answer, Langfuse `trace_url`, `/docs`, `X-Frame-Options: DENY`) on 2026-07-16.
+**Total expected cost:** **$0/month** (hard ceiling $10).
+**Known operational caveat:** the Free instance spins down after 15 min idle, and because the UI is same-origin a cold visitor waits ~60 s for the *page itself*. Mitigation decided but not yet applied — a windowed keep-alive ping of `/api/v1/health` (**§1a**, incl. the Render-policy check and the 750-instance-hour constraint). Both the cold start and the hours cliff are registered in `docs/Known_Issues.md` § Config, startup & deployment. Escape hatch: Render Starter $7/mo (§10).

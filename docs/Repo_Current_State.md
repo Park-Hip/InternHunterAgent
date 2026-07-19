@@ -1,19 +1,12 @@
 ## Current branch
-`feature/t0017.2-sse-endpoint` - the **T0017.2 Streaming service + SSE endpoint** branch.
+`feature/t0019.5-unattended-safety` — **T0019.5 Unattended-run safety: pre-flight schema assertion, yield floor, dead-man ping.** Branched off `feature/t0019.4-source-resilience`, which was branched off `feature/t0019.3-accumulate-lifecycle`, which was branched off `feature/t0019.2-alembic-baseline`, which was branched off `feature/t0019.1-robots-tos-gate`, which was branched off `feature/t0018.4-deploy`, which remains the deployed branch — **LIVE: https://internhunteragent.onrender.com** (verified end-to-end 2026-07-16). **Correction (2026-07-19):** the long-standing note that `main` is "stale at T0009" is **no longer true** — `main` carries PRs #20–#27 (T0010.4, T0010.7, T0011.6, T0016.4, and T0017.1/T0017.2 via the `-recovered` branches) and sits at `e3e65ae`. This branch merged `origin/main` (`83fbe15`) to close that divergence; the merge was content-neutral (resulting tree byte-identical to `bb75d10`) because every `main` change was already present here — the `-recovered` T0017 commits reproduced byte-identical code. After this PR lands, branch off `main`.
 
-This branch is stacked on T0017.1 (`34f2363`). T0017.2 exposes the runtime-only stream over a new SSE endpoint; UI work, browser consumption, session-ID hardening, disclaimers, readiness probes, and deploy plumbing remain out of scope for this branch.
+Built clean off `e4076b2` (the kept ReAct/SQL-generation config split) with the T0018.3 Editorial UI committed as `7d4cfef`, then deployed: API on **Render** (Docker, Singapore, Free), Postgres on **Neon** (PG17, static 50-row snapshot), tracing on **Langfuse Cloud Hobby (JP)**. Secrets are Render env vars; `api.cors.allowed_origins` stays `[]` (same-origin). Full record in [`Completion_Reports.md`](Completion_Reports.md) → T0018.4, and the confirmed topology in `research/deployment-research-plan.md` §12. The dumped T0015.6/.7 provider-A/B phase is parked recoverably at `45d333c` on `feature/t0015.6-provider-ab`.
 
-- Do not rebase this branch onto `main` without an explicit maintainer decision. `main` has historically lagged the M12/M13/T0016 work; use the ticket branch topology recorded here and in `Tickets.md`.
+- Do not rebase this branch onto `main` without an explicit maintainer decision. `main` historically lagged the M12/M13/T0016 work — resolved 2026-07-19 by the `origin/main` merge above, which is a merge, not a rebase; the ticket-branch topology recorded here and in `Tickets.md` is unchanged.
 - The M15 behavior work is not part of this branch unless explicitly merged later. Anything about `Agent_Behavior_Spec.md`, the scenario matrix, or `behavior_glossary` belongs to that parallel track.
-- Everything for this branch's current work is in [`Tickets.md`](Tickets.md) -> **T0017** and the T0017 completion entries in [`Completion_Reports.md`](Completion_Reports.md).
-
-### Historical branch snapshot (T0014)
-`fix/known-issues-hardening` — the **Milestone 14 (Pre-Deploy Known-Issue Fixes)** branch.
-
-**Branch topology — read this before any git work.** This branch was forked from `51913f6` (the **T0013.5 schema-freeze** commit), **not** from `main`. `main`/`origin/main` is stale at **T0011.6** — M12, M13, and the M15 behavior track are **not merged there**; they exist only as feature branches. This branch is a **parallel sibling of the M15 behavior/scenario track** (`feature/t0015.4-v1-scenario-matrix`): both forked at T0013.5 and run independently, neither blocking the other.
-- **Do not rebase this branch onto `main`** — you would drop M12 + M13 (schema freeze, the current `config.py`). The correct base is `51913f6`.
-- The **M15 behavior work (T0015.1–.5) is NOT present here** — it lives on the `feature/t0015.x-*` branches. Anything about behavior specs, the scenario matrix, `Agent_Behavior_Spec.md`, or `behavior_glossary` belongs to that track, not this one.
-- Everything for this branch's work is in [`Tickets.md`](Tickets.md) → **T0014** (objective + sub-tickets) and [`Known_Issues.md`](Known_Issues.md) § "Config, startup & deployment".
+- Everything for this branch's current work is in [`Tickets.md`](Tickets.md) → **T0018.4** and the T0018.4 manual checklist in [`Manual_Verification_Guide.md`](Manual_Verification_Guide.md).
+- Older branch/roadmap snapshots (T0014 and earlier) are archived in [`archive/Repo_State_History.md`](archive/Repo_State_History.md).
 
 ## Completed milestones
 One line per milestone. Per-ticket detail (files changed, test counts, follow-ups) lives in [`Completion_Reports.md`](Completion_Reports.md).
@@ -25,43 +18,52 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 - **M9** (T0009.1–.11) — VietnamWorks data ingestion: `raw_jobs` landing + enriched `clean_jobs`, source-agnostic transform, idempotent loader; plus reset path, bounded query output (Groq `413` fix), and the `get_job_details` detail split.
 - **M10** (T0010.1/.3/.4) — Pre-deploy hardening: typed error contract + graceful answer, true single-table SQL allowlist, off-event-loop LLM call; code-review bugs 3 & 4 fixed.
 - **M11** (T0011.1–.6) — Model evaluation harness: DeepEval judge (Groq→Gemini) + RPM throttle, seeded fixture DB + versioned goldens, three-seam metric stack, Langfuse score writeback.
-- **M12** (T0012.2–.10) — Hardening: qwen `<think>` leak fix, deepeval metric-template unblock, `trace_url` populated, graceful empty-answer fallback, non-str content coercion, eval-test marker hygiene, native-async `generate_sql`, cosmetic cleanup, eval judge cost/rate-limit reduction (thinking-budget cap + dropped redundant `FaithfulnessMetric`).
+- **M12** (T0012.2–.10) — Hardening: qwen `<think>` leak fix, deepeval metric-template unblock, `trace_url` populated, graceful empty-answer fallback, non-str content coercion, eval-test marker hygiene, native-async `generate_sql`, cosmetic cleanup, eval judge cost/rate-limit reduction.
 - **M13** (T0013.1–.5) — Schema Enrichment & v1 Freeze: `tech_stack` rebuilt against an external vocabulary (audit coverage 58% → 89%); `job_level`, `listing_expires_on`, and `created_on` exposed to the agent; the enriched **16-column** v1 contract recorded in [`Schema_Contract.md`](Schema_Contract.md) and enforced by prompt-freeze guards. **This is this branch's base (`51913f6`).**
+- **M16** (T0016.1–.4) — Public-endpoint hardening: credential-less CORS, per-IP rate limit + friendly busy path, request length cap, explicit `/docs` exposure decision.
+- **M17** (T0017.1–.2) — Streaming response delivery: runtime `astream` + no-leak filter, streaming service + `POST /api/v1/agent/chat/stream` SSE endpoint.
 
 ## In progress / next
-**This branch = T0017.2 complete.** T0016 and T0017.1 are complete underneath it:
+**Nothing in progress — T0018 closed 2026-07-16 with the first public deploy.** This branch carries the full T0016 → T0018 stack (security posture → streaming → clickable demo), plus the SQL-generation reasoning-effort hotfix and the ReAct/SQL-generation config split, and it is deployed:
 
 - **T0016.1 - CORS middleware:** `config/settings.yaml` carries `api.cors`, and `src/api/app.py` registers credential-less `CORSMiddleware`.
 - **T0016.2 - Rate limiting and friendly busy path:** `slowapi` is installed, `api.rate_limit` defaults to `"15/minute"`, chat is limited, health is not, and provider pressure maps to a public-safe busy response.
 - **T0016.3 - Request input hardening:** `api.max_query_chars: 2000` is recorded in config, while `src/api/schemas.py` currently enforces the matching static `DEFAULT_MAX_QUERY_CHARS = 2000` Pydantic cap. If this value changes later, update both or introduce a deliberate config-backed schema loader.
-- **T0016.4 - `/docs` exposure and headers decision:** `api.docs_enabled: true` keeps `/docs`, `/redoc`, and `/openapi.json` public for the portfolio demo; `api.docs_enabled: false` disables all three. No security-header middleware is added until FastAPI serves a same-origin HTML UI.
+- **T0016.4 - `/docs` exposure and headers decision:** `api.docs_enabled: true` keeps `/docs`, `/redoc`, and `/openapi.json` public for the portfolio demo; `api.docs_enabled: false` disables all three.
+- **T0017.1 - Runtime streaming + no-leak filter:** `AgentRuntime.astream(...)` emits filtered token events plus trailing metadata without exposing tool internals.
+- **T0017.2 - Streaming service + SSE endpoint:** `POST /api/v1/agent/chat/stream` emits the public `session` → `token`* → `metadata`/`error` → `done` contract.
+- **T0018.1 - Go-live glue:** `generate_agent_response(...)` and `stream_agent_response(...)` mint UUID4 session ids when omitted; `config/settings.yaml` records `api.demo.data_snapshot_date`; `GET /api/v1/ready` runs `SELECT 1` outside the chat limiter and returns readiness plus the snapshot date.
+- **T0018.2 - Same-origin static serving + frame protection:** `src/api/app.py` mounts `src/api/static/` at `/` after API/docs routes and injects `X-Frame-Options: DENY` with a pure-ASGI middleware.
+- **T0018.3 - Editorial streaming chat UI:** `src/api/static/index.html` + `styles.css` + `app.js` replace the placeholder with the vanilla, Editorial-styled demo page (system serif stack, hairline rules, restrained vermilion accent, light theme only). It consumes `POST /api/v1/agent/chat/stream` via `fetch()` + a `ReadableStream` reader, renders tokens one-by-one, reads the disclaimer snapshot date from `GET /api/v1/ready`, ships 4 send-on-click honesty chips, pins the server session id and reuses it on later turns, shows a `view-trace` link only when `trace_url` is non-null, and degrades mid-stream `error` events to a friendly bubble and pre-stream 400/429 to a toast. No backend change.
+- **Split ReAct/SQL-generation LLM config - Backend hotfix:** `AgentProvider.build_model("react")` builds the outer ReAct model from `agent.react`; `AgentProvider.build_model("sql_generation")` builds the nested SQL-generation model from `agent.sql_generation`. Both profiles expose the same model fields, and only the SQL-generation profile sets `reasoning_effort: "none"`.
+- **T0018.4 - Deploy topology + first public deploy:** API on **Render** (Docker, Singapore, Free, `WEB_CONCURRENCY=1`, health check `/api/v1/health`), Postgres on **Neon** (PG17, static 50-row snapshot), tracing on **Langfuse Cloud Hobby (JP)**; secrets are Render env vars, `api.cors.allowed_origins` stays `[]` (same-origin). Auto-deploy on push to this branch. **$0/mo** against a $10 ceiling. No app-code change was needed. **Live: https://internhunteragent.onrender.com**, verified end-to-end 2026-07-16.
 
-**Status update (2026-07-14):** T0016.1-T0016.4 and T0017.1 are complete underneath this branch, and T0017.2 is complete on top. Remaining open issues live in [`Known_Issues.md`](Known_Issues.md), resolved/background items live in [`Resolved_Issues.md`](Resolved_Issues.md), and documentation hygiene findings from the T0016 review live in [`Documentation_Hygiene_Review_T0016.md`](Documentation_Hygiene_Review_T0016.md).
+- **T0019.1 - robots.txt / ToS gate (doc-only, no code):** resolved the `deployment-research-plan.md` §11 hard gate. **`ms.vietnamworks.com` serves no robots.txt at all (HTTP 404)**; `www.vietnamworks.com/robots.txt` permits the relevant paths with no `Crawl-delay`; the ToS contains **no** automated-access/scraping clause. **Recommended verdict: favorable — pending maintainer confirmation**, so **T0019.6 stays blocked until the maintainer signs off** (then on T0019.2–.5). Evidence archived under `research/experiments/` (both robots fetches + a ToS excerpt with verbatim Vietnamese and labeled translations); decision record in `research/deployment-research-plan.md` §11. One caveat registered in `Known_Issues.md`: ToS §7 restricts *republishing* content — a live question for the public demo, but not a cron blocker, since the deployed snapshot already raises it today.
 
-**Milestone map (see `Tickets.md`):** T0013 freeze -> T0014 known-issue fixes -> T0016 security posture -> T0017 streaming response delivery (this branch) -> T0018 clickable demo UI + go-live placeholder.
+- **T0019.2 - Alembic adoption: baseline migration + env wiring:** replaced `scripts/reset_db.sql` (DROP + recreate) as the de-facto migration strategy — that stops working once T0019.3 makes `raw_jobs` accumulate irreplaceable postings. Added `alembic` (`pyproject.toml`), scaffolding (`alembic.ini`, `alembic/env.py` reading `ALEMBIC_DATABASE_URL` → falls back to `settings.DATABASE_URL`, `target_metadata = Base.metadata`), and one hand-written baseline migration (`alembic/versions/f3a1c9d2e7b4_baseline_schema.py`, `down_revision = None`) reproducing the exact schema in `scripts/init_db.sql`. Aligned `RawJob.id`/`CleanJob.id` in `models.py` to `Identity(always=True)` (metadata-only fix — the DB already used `GENERATED ALWAYS AS IDENTITY`; the ORM metadata previously disagreed). `scripts/reset_db.sql` demoted to a local-dev-only header comment; `scripts/init_db.sql` untouched (the eval fixture loader still depends on it). New opt-in `tests/migrations/test_baseline_roundtrip.py` (skips without `SCRATCH_DATABASE_URL`). Verified: empty-DB `alembic upgrade head` builds the full 19-column `clean_jobs` schema correctly; the round-trip test passes against a scratch DB; `alembic stamp head` + `alembic upgrade head` is a clean no-op against the real local DB (row count unchanged at 50); the app boots and answers a live query against the migrated schema — verified via the Dockerized (Linux) `api` service, since native Windows `uv run uvicorn` hangs on a pre-existing, ticket-unrelated `ProactorEventLoop`/async-psycopg incompatibility (`Known_Issues.md`).
 
-**T0017.1 status (2026-07-13):** complete on `feature/t0017.1-runtime-streaming`. `AgentRuntime.astream(...)` now yields transport-agnostic token events from the stable `agent.astream(..., stream_mode="messages")` path, filters to non-empty model-node chunks without `tool_call_chunks`, and emits one trailing metadata event after Langfuse flush. `agent.groq.streaming` is enabled, and the system prompt now tells the model not to narrate before tool calls. The live Groq/Postgres probe is blocked in this sandbox and tracked in [`Known_Issues.md`](Known_Issues.md).
+- **T0019.3 - Accumulate load semantics + hidden lifecycle columns:** dropped the `TRUNCATE` in `clean_store.py` — the already-written `ON CONFLICT (source, external_id) DO UPDATE` upsert (renamed `replace_clean_jobs` → `upsert_clean_jobs`) is now live code, so `raw_jobs`/`clean_jobs` accumulate across runs instead of being rebuilt each time. Added three hidden bookkeeping columns to `clean_jobs` — `is_active boolean not null default true`, `first_seen_at`/`last_seen_at timestamptz not null default now()` — via `alembic/versions/b7e2f4a91c3d_lifecycle_columns.py` (`down_revision = f3a1c9d2e7b4`), with a backfill from `raw_jobs.fetched_at` (confirmed the join was total: 0 orphaned `clean_jobs` rows on the 50-row local snapshot, so no row was left defaulted to migration-run time). The upsert now refreshes `last_seen_at = now()` and flips `is_active = true` on every conflict, and never touches `first_seen_at` (insert-only). New `expire_stale_clean_jobs(expire_after_days)` in `clean_store.py` runs a single time-based `UPDATE ... SET is_active = false WHERE last_seen_at < now() - make_interval(days => :days)` — never `DELETE`, never "not seen this run." `loader.py::run_ingestion` calls it after the upsert using `config/ingestion.yaml`'s new `lifecycle.expire_after_days: 7`, and the run summary gained `expired_count`. All three columns stay off the agent-visible surface — no `NormalizedJob`, `Schema_Contract.md`, or `config/prompts.yaml` change; the hidden-column guard in `tests/agents/runtime/test_prompts.py` was extended to assert `is_active`/`first_seen_at`/`last_seen_at` never appear in `schema_context`. `scripts/init_db.sql` was deliberately left untouched (now diverges from the Alembic head — logged in `Known_Issues.md`). Verified live against the local Docker DB: empty-DB `alembic upgrade head` builds the full 22-column schema; `alembic downgrade -1` cleanly drops the three columns; upgrading the real local DB preserved all 50 rows with a true backfill (0 rows at "now"); a synthetic row proved two upserts keep `is_active=true`/refresh `last_seen_at`/preserve `first_seen_at`, an 8-day-aged row flips to `is_active=false` under a 7-day window without being deleted, and re-seeding it flips `is_active` back to `true`; the Dockerized `api` service answered a live chat query ("13 AI Engineer jobs") with no mention of the hidden columns.
 
-**T0017.2 status (2026-07-14):** complete on `feature/t0017.2-sse-endpoint`. `stream_agent_response(...)` emits the semantic `session` -> `token`* -> `metadata`/`error` -> `done` sequence, and `POST /api/v1/agent/chat/stream` exposes it as SSE while preserving the existing one-shot endpoint.
+- **T0019.4 - Source resilience: per-page try/continue + retry/backoff:** `config/ingestion.yaml` gains `api.retry_attempts: 2` / `api.retry_backoff_seconds: 2.0`. `JobSource` (`sources/base.py`) gains a class-level `pages_failed: int = 0` counter. `VietnamWorksSource._post` stays an unchanged thin primitive; a new `_post_with_retry` wrapper retries transient failures (429, ≥500, timeouts, transport errors) with doubling backoff (2s, then 4s) and gives up immediately on permanent 4xx — on give-up it increments `pages_failed`, logs `ingestion.page_failed` (query + page + attempts + reason), and returns `None` without raising. `_collect` treats `None` as "skip this page" and a `try/finally` around the per-page body guarantees the politeness `time.sleep(self._delay)` still runs even when a page is skipped. `fetch()` resets `pages_failed = 0` at entry so a reused instance doesn't accumulate across runs. `loader.py::run_ingestion` reads `getattr(source, "pages_failed", 0)` after draining the generator and adds `"pages_failed"` to the summary dict — no other loader ordering changed. A single transient failure no longer discards an entire run's already-fetched pages.
 
-**Next recommended ticket:** **T0018** clickable demo UI + go-live scoping, including browser stream consumption, session-ID hardening, disclaimer, readiness probe, CORS origin/deploy decisions, and topology.
+- **T0019.5 - Unattended-run safety: pre-flight schema assertion, yield floor, dead-man ping:** new `src/services/ingestion/safety.py` with `IngestionSafetyError` and three functions. `assert_clean_jobs_schema()` queries live `information_schema.columns` for `clean_jobs` and compares against `{c.name for c in CleanJob.__table__.columns}` (derived from the ORM, never hand-maintained); on any mismatch it logs `ingestion.schema_drift` (missing + unexpected, both directions) and raises before any write — an absent table (empty column set) also raises, with its own message rather than listing all columns "missing." `assert_min_yield(fetched, min_yield)` raises `IngestionSafetyError` naming both numbers when `fetched < min_yield`, logging `ingestion.yield_floor_breached` first. `send_dead_man_ping(url)` POSTs to a healthchecks.io URL via `httpx`; `None`/empty logs `ingestion.ping_skipped` and returns `False` (the normal local path, not an error); any `httpx.HTTPError` or non-2xx logs `ingestion.ping_failed` as a warning and returns `False` without raising — a ping failure never fails the run. `config/ingestion.yaml` gains `safety.min_yield: 20`. `src/core/config.py` gains one optional field, `HEALTHCHECKS_URL: str | None = None`; documented (commented, optional) in `.env.example`. `loader.py::run_ingestion` now calls `assert_clean_jobs_schema()` first — before the source is constructed or anything fetched — then fetches, upserts raw (evidence preserved even on a bad run), calls `assert_min_yield(len(postings), settings.ingestion_yaml["safety"]["min_yield"])`, and only then normalizes/upserts clean/expires; a yield-floor abort happens before both the clean upsert and the expiry pass, so a skipped clean write can never have `expire_stale_clean_jobs` wrongly age out untouched rows. `run_ingestion` stays library code — it lets `IngestionSafetyError` propagate, no `sys.exit`. `main()` now owns the process contract: catches `IngestionSafetyError`, logs `ingestion.aborted`, exits 1; on the fully-green path it logs the existing `ingestion.completed` summary (unchanged: `fetched`/`raw_upserted`/`clean_loaded`/`skipped`/`expired_count`/`pages_failed`) and only then calls `send_dead_man_ping(settings.HEALTHCHECKS_URL)` — withholding the ping on any abort is the dead-man signal. All nine pre-existing `test_loader.py` tests were updated to patch the new `assert_clean_jobs_schema` and set `safety.min_yield: 0` in their mocked `ingestion_yaml` (no assertion weakened); three new loader tests cover schema-abort, yield-floor-abort, and the happy-path ordering/summary shape. New `tests/services/ingestion/test_safety.py` covers both schema-assertion mismatch directions, the empty-table case, both `assert_min_yield` branches, and all three `send_dead_man_ping` paths.
 
-### Historical in-progress snapshot (T0014)
-**Historical T0014 snapshot — Pre-Deploy Known-Issue Fixes** ([`Tickets.md`](Tickets.md) -> T0014). Scope was **only** the deploy-facing items in [`Known_Issues.md`](Known_Issues.md) section "Config, startup & deployment", deliberately kept separate from the broader deploy-hardening body. Both sub-tickets are complete:
-- **T0014.1 — Graceful startup & config-load robustness** is complete on this branch: `src/core/config.py` now resolves YAML and `.env` from the repo root and raises `ConfigLoadError` during startup instead of validating at import time; `src/core.db.py` is lazy for the same reason; FastAPI `lifespan` now fails fast on bad config.
-- **T0014.2 — Known-Issues register housekeeping** is complete: the named 13-column/`job_level` drift bullet was already absent from `Known_Issues.md` on this branch, so the sweep is recorded as a no-op archive note in `Resolved_Issues.md`; the qwen note remains open but clarified as a final pre-T0011.5 confirmation rather than an untested-tool-loop concern.
+**Status (2026-07-19):** T0016.1–T0016.4, T0017.1–T0017.2, **T0018.1–T0018.4**, the SQL-generation reasoning-effort hotfix, and the ReAct/SQL-generation config split are complete on this stack; **T0019.1** is complete pending the maintainer's verdict confirmation; **T0019.2**, **T0019.3**, **T0019.4**, and **T0019.5** are complete. Open issues live in [`Known_Issues.md`](Known_Issues.md); resolved/background items in [`Resolved_Issues.md`](Resolved_Issues.md).
 
-**Next recommended ticket:** **T0011.5** baseline calibration/report, once maintainer credentials are available for the final qwen model-ID/tool-loop confirmation.
+**Milestone map (see `Tickets.md`):** T0013 freeze → T0016 security posture → T0017 streaming response delivery → T0018 clickable demo UI + go-live ✅ → **T0019 ingestion deploy readiness (live-DB) ◀ in progress (T0019.1 ✅, T0019.2 ✅, T0019.3 ✅, T0019.4 ✅, T0019.5 ✅)**.
 
-**Status update (2026-07-12):** T0014 is complete on this branch. T0014.1 fixed startup/config-load robustness; T0014.2 reconciled the living register/archive without code or product-behavior changes. Remaining open issues live in [`Known_Issues.md`](Known_Issues.md), and resolved/background items live in [`Resolved_Issues.md`](Resolved_Issues.md).
-
-**Milestone map (see `Tickets.md`):** T0013 freeze → **T0014 known-issue fixes (this branch)** → T0015 behavior track (parallel, `feature/t0015.x` branches) → **unscheduled backlog** (deploy hardening, demo UI, ingestion deploy readiness — removed from the numbered roadmap 2026-07-12 pending more specific names/scoping; see `Tickets.md` Backlog).
-
-**Open elsewhere (not this branch's concern):** T0011.5 eval baseline (still open, needs live Groq/Google creds; T0012.10 judge-agreement spot-check still BLOCKED on creds — both under M11); the M15 behavior track (T0015.4 paused on the Groq daily quota, T0015.5 pending).
+**Next recommended ticket:** **T0019.6** — see [Next recommended ticket](#next-recommended-ticket) below.
 
 ## Current folder structure
 ```text
 .
+|-- alembic.ini
+|-- alembic/
+|   |-- env.py
+|   |-- script.py.mako
+|   `-- versions/
+|       |-- f3a1c9d2e7b4_baseline_schema.py
+|       `-- b7e2f4a91c3d_lifecycle_columns.py
 |-- config/
 |   |-- ingestion.yaml
 |   |-- prompts.yaml
@@ -112,7 +114,11 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |   |   |-- tracing/
 |   |   `-- service.py
 |   |-- api/
-|   |   `-- routes/
+|   |   |-- routes/
+|   |   `-- static/
+|   |       |-- index.html
+|   |       |-- styles.css
+|   |       `-- app.js
 |   |-- core/
 |   |   |-- checkpointer.py
 |   |   |-- config.py
@@ -126,6 +132,7 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |       |   |-- raw_store.py
 |       |   |-- clean_store.py
 |       |   |-- loader.py
+|       |   |-- safety.py
 |       |   |-- transform.py
 |       |   |-- normalize/
 |       |   |   |-- __init__.py
@@ -146,6 +153,9 @@ One line per milestone. Per-ticket detail (files changed, test counts, follow-up
 |   |   |-- runtime/
 |   |   `-- tools/
 |   |-- api/
+|   |   `-- test_static_serving.py
+|   |-- migrations/
+|   |   `-- test_baseline_roundtrip.py
 |   `-- services/
 |       `-- query/
 |-- pyproject.toml
@@ -159,6 +169,7 @@ Notes on the reorg (commit `182aac0`): the Langfuse Docker stack moved from `doc
 
 ## Installed dependencies
 Runtime dependencies declared in `pyproject.toml`:
+- `alembic>=1.14` (T0019.2 — schema migrations; `alembic.ini` + `alembic/` at repo root)
 - `fastapi>=0.136.3`
 - `langchain>=1.3.1`
 - `langchain-groq>=1.1.2`
@@ -191,207 +202,68 @@ No package scripts or `tool.*.scripts` entries are defined in `pyproject.toml`.
 
 Practical commands from the repository layout:
 - `uv run uvicorn src.api.app:app --reload`
-- `uv run pytest` (T0012.7: the standard suite now excludes the `eval`-marked live tests by default — `addopts = "-m 'not eval' --strict-markers"` in `pyproject.toml`)
-- `uv run pytest -m eval` (T0012.7: runs only the two live-API eval files, `evals/test_judge_scaffold.py` + `evals/test_three_seams.py`, 18 tests total; needs Groq/judge creds + fixture DB)
-- `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval` (T0012.7: the verified working `deepeval` invocation — `deepeval test run` inherits `addopts` too, so `-m eval` must be passed through explicitly or 0 tests are selected; see `Known_Issues.md`)
+- `uv run pytest` (T0012.7: the standard suite excludes the `eval`-marked live tests by default — `addopts = "-m 'not eval' --strict-markers"` in `pyproject.toml`)
+- `uv run pytest -m eval` (runs only the two live-API eval files, `evals/test_judge_scaffold.py` + `evals/test_three_seams.py`, 18 tests total; needs Groq/judge creds + fixture DB)
+- `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval` (the verified working `deepeval` invocation — `-m eval` must be passed through explicitly or 0 tests are selected; see `Known_Issues.md`)
 - `uv run ruff check .` (lint; config in `pyproject.toml` `[tool.ruff]`, `scripts/` spikes excluded)
 - `uv run mypy` (type check `src`; config in `pyproject.toml` `[tool.mypy]`, pydantic plugin enabled)
-- `uv run python scripts/eval_judge_spike.py` (throwaway judge JSON-reliability spike, T0011.1)
-- `PYTHONUTF8=1 uv run deepeval test run evals/test_judge_scaffold.py -m eval` (harness scaffold; `PYTHONUTF8=1` needed on Windows — see `Known_Issues.md`; `-m eval` needed post-T0012.7)
 - `python -m evals.fixtures.loader` (builds/refreshes the `internhunter_eval` fixture DB from scratch, prints `COUNT(*)`, T0011.2)
 - `python -c "from evals.fixtures.loader import reset_fixture; reset_fixture()"` (drops + rebuilds the fixture tables)
 - `docker compose up -d` (root `docker-compose.yml`: Postgres + API, port `5433` host-side)
-- `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql` (routine, non-destructive schema init/no-op)
-- `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/reset_db.sql` (destructive — drops and recreates both tables; use only when the schema shape changes, then re-ingest)
+- `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql` (routine, non-destructive schema init/no-op; retained because `evals/fixtures/loader.py` depends on it to build the eval fixture DB — it and the Alembic baseline migration coexist as two independent schema-creation paths)
+- `docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/reset_db.sql` (**destructive, local dev only** — production and any deployed schema change goes through Alembic; must never be pointed at Neon)
+- `uv run alembic current` (T0019.2 — shows the revision the target DB is stamped at)
+- `uv run alembic history` (T0019.2 — lists migration history)
+- `uv run alembic upgrade head` (T0019.2 — applies pending migrations; DSN from `ALEMBIC_DATABASE_URL` or falls back to `settings.DATABASE_URL`)
 - `docker compose -f infra/docker-compose.yaml up --build` (Langfuse observability stack)
 
 ## Build/test status
-- Command run: `pytest tests/agents/runtime/test_react_agent.py -q`
-- Result: failed because `pytest` is not on PATH in this shell; rerun through `uv run`.
-- Command run: `uv run pytest tests/agents/runtime/test_react_agent.py -q` (T0017.1 focused runtime stream tests)
-- Result: `9 passed`.
-- Command run: `uv run pytest -q` (T0017.1 full standard suite)
-- Result: `273 passed, 7 skipped, 19 deselected, 4 subtests passed`; the 7 skips are the existing eval fixture DB reachability skips because Postgres on `localhost:5433` is not running in this sandbox.
-- Command run: `uv run ruff check src/agents/runtime/react_agent.py tests/agents/runtime/test_react_agent.py`
-- Result: `All checks passed!`.
-- Live probe prerequisites checked for T0017.1: `GROQ_API_KEY` missing and Postgres `127.0.0.1:5433` closed in this sandbox, so the live streaming REPL probe is blocked and tracked in [`Known_Issues.md`](Known_Issues.md).
-- Command run: `uv run pytest tests/api/test_stream.py -q` (T0017.2 focused streaming route tests)
-- Result: `4 passed`.
-- Command run: `uv run pytest tests/api -q` (T0017.2 API route suite, including one-shot path)
-- Result: `24 passed`.
-- Command run: `uv run pytest -q` (T0017.2 full standard suite)
-- Result: `277 passed, 7 skipped, 19 deselected, 4 subtests passed`; the 7 skips are the existing eval fixture DB reachability skips because Postgres on `localhost:5433` is not running in this sandbox.
-- Command run: `uv run ruff check src/agents/service.py src/api/routes/query.py src/api/schemas.py tests/api/test_stream.py`
-- Result: `All checks passed!`.
-- T0017.2 live curl verification is blocked in this sandbox because it needs Groq credentials plus a seeded local Postgres; tracked in [`Known_Issues.md`](Known_Issues.md).
-- Command run: `uv run pytest -q tests/api/test_query.py tests/api/test_rate_limit.py tests/api/test_cors.py tests/api/test_startup_config.py`
-- Result: `18 passed`.
-- Command run: `uv run ruff check src/api/schemas.py tests/api/test_query.py`
-- Result: `All checks passed!`.
-- Command run: `uv run pytest -q tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_cors.py tests/api/test_startup_config.py`
-- Result: `16 passed`.
-- Command run: `uv run pytest -q tests/core/test_config.py tests/api/test_startup_config.py` (T0014.2 smoke check after docs-only register sweep)
-- Result: `4 passed`.
-- Command run: `uv run pytest tests/core/test_config.py -v`
-- Result: `3 passed`.
-- Command run: `uv run pytest tests/api/test_startup_config.py tests/api/test_query.py -v`
-- Result: `10 passed`.
-- Command run: `uv run pytest tests/core/test_config.py tests/api/test_startup_config.py tests/api/test_query.py tests/core/test_db.py tests/agents/runtime/test_prompts.py tests/agents/runtime/test_provider.py tests/services/query/test_executor.py tests/services/query/test_job_details.py tests/services/ingestion/test_clean_store.py tests/services/ingestion/test_raw_store.py -q`
-- Result: `58 passed`.
-- Command run: `uv run pytest -q`
-- Result: attempted in this session, but it did not complete promptly enough to capture a trustworthy final summary here; focused impacted suites above passed.
-- Command run: `uv run pytest`
-- Result: passed
-- Summary: `231 passed` (includes `evals/test_judge_scaffold.py`, incidentally collected by plain pytest — see `Known_Issues.md`)
-- Command run: `uv run mypy`
-- Result: `Found 3 errors in 3 files (checked 41 source files)` — all 3 are pre-existing, documented residuals (`checkpointer.py:25`, `middleware.py:48`, `query_clean_jobs.py:41`); unchanged by T0011.1 (no new errors; `evals/` is outside `[tool.mypy] files = ["src"]`).
-- Command run: `uv run ruff check`
-- Result: `All checks passed!`
-- Command run: `uv run python scripts/eval_judge_spike.py`
-- Result: both Groq candidates PASS; recommended `provider=groq model=openai/gpt-oss-120b`.
-- Command run: `PYTHONUTF8=1 uv run deepeval test run evals/test_judge_scaffold.py`
-- Result: `1 passed` — `Pass Rate: 100.0%`.
-- Command run: `python -m evals.fixtures.loader` (T0011.2, against the live `internhunter_eval` Postgres DB, port 5433)
-- Result: `COUNT(*) = 22`; all pins verified via `psql` (role split 5/4/4/4/4/1, Python=12, Python∩Hanoi=7, COBOL=0, interns=5, VND max 40,000,000, USD max 5,000); `reset_fixture()` rebuilds cleanly back to 22.
-- Command run: `python -m pytest evals/ -v`
-- Result: `10 passed` (7 fixture-count tests against the live eval DB, 2 goldens-load tests with no DB, 1 pre-existing judge-scaffold test).
-- Command run: `python -m ruff check evals config src`
-- Result: `All checks passed!`
-- Command run: `python -m mypy`
-- Result: same 3 pre-existing residuals as T0011.1, no new errors (`evals/` untouched by `[tool.mypy] files = ["src"]`).
-- Command run: `pytest tests/agents/tools/test_query_clean_jobs.py -q` (T0011.3, config-forward change)
-- Result: `8 passed`.
-- Command run: `python -m pytest tests/ -q` (T0011.3, full suite after the config-forward change)
-- Result: `230 passed, 4 subtests passed`.
-- Command run: `git grep -n "deepeval" src/` (T0011.3, tracing-boundary check)
-- Result: no matches.
-- Command run: `python -m evals.fixtures.loader` (T0011.3, fixture DB brought up via `docker compose up -d postgres`)
-- Result: `COUNT(*) = 22`.
-- Command run: `PYTHONUTF8=1 python -m pytest evals/test_three_seams.py -q -k "A1 or A3 or C3 or D1 or D2" -s` (T0011.3, live spot-check against real Groq)
-- Result: `5 passed` (run individually across several invocations to stay under the Groq free-tier rate limit — see `Known_Issues.md`). Real per-seam scores observed, e.g. D1/D2: Tool Correctness `1.0`, Argument Correctness `1.0`, Faithfulness `1.0`, Honesty `1.0`; A3/C3: SQL Schema Quality (seam 2, GEval) `0.2`–`0.5` against an actually-captured nested `generate_sql` span. `ArgumentCorrectnessMetric` (when a tool was called) and `TaskCompletionMetric` (always) scored `None` — a `deepeval==4.0.7` internal template bug, logged in `Known_Issues.md`, not a harness defect. Full 17-golden run not completed live in this sandbox (rate limits); the config-forward/span-capture mechanism itself was additionally verified with a fake-model, no-network check.
-- Command run: `uv run pytest -q evals/test_writeback.py` (T0011.4, no-network unit tests)
-- Result: `6 passed`.
-- Command run: `uv run ruff check .` (T0011.4)
-- Result: `All checks passed!`
-- Command run: `uv run mypy evals/writeback.py evals/harness.py evals/test_writeback.py` (T0011.4)
-- Result: no new errors (the 3 pre-existing residuals live in unrelated files not touched by this ticket).
-- Command run: `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -k D1` (T0011.4, live golden against a locally running self-hosted Langfuse, `LANGFUSE_BASE_URL=http://localhost:3000`)
-- Result: `1 passed`; printed `scores written to trace <id>: 4`; confirmed via `lf.api.scores.get_many(trace_id=...)` that all 4 seam-prefixed scores landed on the real trace.
-- Command run: manual `write_scores(trace_id, {...})` re-run against the same trace_id with a different score value (idempotency check, T0011.4)
-- Result: same `score_id` upserted in place after Langfuse's async worker caught up — still exactly 4 score rows for the trace, no duplicate.
-- Command run: `write_scores(...)` with `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` unset (creds-absent check, T0011.4)
-- Result: returned `0`, no exception.
-- Command run: `uv run pytest -q` (T0011.4, full suite, Langfuse running locally)
-- Result: `246 passed, 17 failed` — all 17 failures are `groq.RateLimitError` (Groq daily token cap) from the full-17-golden live `test_three_seams.py` run, a pre-existing risk already logged under T0011.3's Known_Issues entry; no failures attributable to this ticket's changes.
-- Command run: `PYTHONUTF8=1 uv run python -c "from src.agents.tools.query_clean_jobs import generate_sql; generate_sql('Which companies have AI Engineer roles?')"` (T0012.2, live, pre-fix repro)
-- Result: raw response was a 4166-char `<think>...</think>` chain-of-thought transcript, not bare SQL — confirmed the leak.
-- Command run: same call, post-fix (`agent.groq.reasoning_format: hidden`, `max_tokens: 2048`)
-- Result: clean bare `SELECT id, company FROM clean_jobs WHERE role ILIKE '%AI Engineer%'`, no `<think>` text.
-- Command run: direct `model.invoke(...)` probe with `reasoning_format='hidden'` at the old `max_tokens=1024`
-- Result: `content=''`, `usage_metadata.output_token_details.reasoning == 1024` — proved the empty-answer symptom is separate: reasoning consumed the entire token budget. Re-run at `max_tokens=2048` returned non-empty `.content`.
-- Command run: `AgentRuntime().ainvoke(...)` live on A3 ("Which jobs use Python?") and C3 ("Do you have any COBOL jobs?") (T0012.2)
-- Result: both returned clean, non-empty, `<think>`-free answers — but a graceful "database error" message, not real data, because Docker Desktop was not running in this sandbox (Postgres at `localhost:5433` unreachable, `psycopg.ConnectionTimeout`). Confirms the leak/empty-answer fix holds end-to-end; the data-bearing answer content itself is an open follow-up (see `Known_Issues.md`).
-- Command run: `PYTHONUTF8=1 uv run pytest tests/ -q` (T0012.2, full suite minus slow `evals/`)
-- Result: `232 passed, 4 subtests passed` (230 pre-existing + 2 new `tests/agents/runtime/test_provider.py` tests).
-- Command run: `uv run ruff check src config tests` / `uv run mypy` (T0012.2)
-- Result: both clean — `ruff` all checks passed; `mypy` unchanged at the same 3 pre-existing residuals (`checkpointer.py:25`, `middleware.py:48`, `query_clean_jobs.py:41`), no new errors.
-- Command run: `uv run python -c "..."` checking PyPI's `deepeval` release list (T0012.3, Step A check)
-- Result: latest published release is `4.0.7` (the pinned version) — no patch release exists to fix the template bug; Step A ruled out, proceeded to Step B.
-- Command run: `PYTHONUTF8=1 uv run python -c "from evals.harness import seam1_metrics, seam2_metrics, seam3_metrics; print([type(m).__name__ for m in seam1_metrics()+seam2_metrics()+seam3_metrics()])"` (T0012.3)
-- Result: `['ToolCorrectnessMetric', 'GEval', 'GEval', 'GEval', 'FaithfulnessMetric', 'GEval']` — neither `ArgumentCorrectnessMetric` nor `TaskCompletionMetric` present.
-- Command run: `PYTHONUTF8=1 uv run pytest evals/test_goldens_load.py evals/test_judge_scaffold.py -q` (T0012.3)
-- Result: `3 passed`.
-- Command run: `uv run pytest evals/test_writeback.py -q` (T0012.3)
-- Result: `6 passed`.
-- Command run: `uv run pytest evals/ -q --collect-only` (T0012.3)
-- Result: `33 tests collected`, no import errors.
-- Command run: `docker compose up -d postgres` + `uv run pytest evals/fixtures/test_fixture_counts.py -q` (T0012.3, confirming the eval fixture DB, not run against live goldens)
-- Result: `7 passed` — fixture DB reachable and correctly seeded; live `evals/test_three_seams.py` was deliberately **not** run this session to avoid Groq/Gemini API spend (see the T0012.3 completion entry above).
-- Command run: `uv run pytest tests/agents/runtime/test_react_agent.py tests/agents/test_service.py tests/api/test_query.py -v` (T0012.4)
-- Result: `14 passed`.
-- Command run: `uv run pytest tests/ -q` (T0012.4, full non-eval suite)
-- Result: `232 passed, 4 subtests passed` — one additional pre-existing test (`tests/agents/runtime/test_memory.py::GeneratedSessionIdTests`) also pinned the old runtime-return shape and needed the same `trace_url` key added to its mock, beyond the tests the ticket prompt named.
-- Command run: `uv run ruff check src tests` / `uv run mypy` (T0012.4)
-- Result: `ruff` all checks passed; `mypy` unchanged at the same 3 pre-existing residuals (`checkpointer.py:25`, `middleware.py:48`, `query_clean_jobs.py:41`), no new errors.
-- Command run: manual verification one-liner constructing a real `AgentRuntime` around a fake agent returning `{"messages": []}`, driven through `generate_agent_response` (T0012.5)
-- Result: printed `True` — `result["answer"] == FALLBACK_ANSWER`, confirming the empty-messages path degrades to the `200` fallback instead of raising.
-- Command run: `uv run pytest tests/agents/runtime/test_react_agent.py tests/agents/test_service.py tests/api/test_query.py -v` (T0012.5)
-- Result: `18 passed`.
-- Command run: `uv run pytest tests/ -q` (T0012.5, full suite)
-- Result: `236 passed, 4 subtests passed`.
-- Command run: `uv run ruff check src tests` / `uv run mypy` (T0012.5)
-- Result: `ruff` all checks passed; `mypy` unchanged at the same 3 pre-existing residuals (`checkpointer.py:25`, `middleware.py:48`, `query_clean_jobs.py:41`), no new errors.
-- Command run: `uv run python -c "from src.agents.tools.query_clean_jobs import _content_to_text; print(...)"` (T0012.6, coercion proof)
-- Result: two `True` lines — list-content flattening and the unchanged `str` fast path.
-- Command run: `uv run pytest tests/agents/tools/test_query_clean_jobs.py -q` (T0012.6)
-- Result: `11 passed` (8 pre-existing + 3 new).
-- Command run: `uv run pytest -q --ignore=evals` (T0012.6, full suite excluding live-network eval tests)
-- Result: `239 passed, 4 subtests passed`.
-- Command run: `uv run ruff check .` (T0012.6)
-- Result: `All checks passed!`
-- Command run: `uv run mypy` (T0012.6)
-- Result: `Found 2 errors in 2 files` — `checkpointer.py:25` and `middleware.py:48` remain; the `query_clean_jobs.py:44` union-attr residual is resolved (down from 3).
-- Command run: `PYTHONUTF8=1 uv run pytest -q` (T0012.7, before → after, plain suite)
-- Result: before this ticket the plain suite collected and ran all 272 tests (including 1 live judge call + 17 live seam cases); after adding the `eval` marker + `addopts`, `254 passed, 18 deselected, 4 subtests passed` — the 18 deselected are exactly the live judge test (1) and the 17 `test_three_seams` parametrizations.
-- Command run: `uv run pytest -m eval --collect-only -q` (T0012.7)
-- Result: `18/272 tests collected (254 deselected)` — lists exactly `evals/test_judge_scaffold.py::test_judge_scaffold` and `evals/test_three_seams.py::test_three_seams[A1..E2]` (17 ids), nothing from `tests/`.
-- Command run: `uv run pytest -m eval --collect-only -q 2>&1 | grep -i "PytestUnknownMarkWarning"` (T0012.7)
-- Result: no match — marker registered cleanly, no warning.
-- Command run: `uv run pytest -q --strict-markers` (T0012.7, hardening check before baking `--strict-markers` into `addopts`)
-- Result: `254 passed, 18 deselected, 4 subtests passed` — full suite stays green, so `--strict-markers` was added to `addopts`.
-- Command run: `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py --collect-only -q` (T0012.7, deepeval passthrough check, no `-m eval`)
-- Result: "No test cases found, please try again" — confirms `addopts`' `-m 'not eval'` deselects the eval tests under `deepeval test run` too, same as plain pytest.
-- Command run: `PYTHONUTF8=1 uv run deepeval test run evals/test_judge_scaffold.py -m eval` (T0012.7, deepeval passthrough check, with the override)
-- Result: `1 total tests`, `Pass Rate: 0.0%` (failed on `score=None`/no judge response — no judge credentials in this sandbox) — confirms the test was actually **selected and executed**, not deselected; `-m eval` is the verified working form.
-- Command run: `uv run ruff check .` / `uv run mypy` (T0012.7)
-- Result: `ruff` all checks passed; `mypy` unchanged at the same 2 pre-existing residuals (`checkpointer.py:25`, `middleware.py:48`), no new errors (`evals/` is outside `[tool.mypy] files = ["src"]`).
-- Command run: `uv run pytest tests/agents/tools/test_query_clean_jobs.py -v` (T0012.8)
-- Result: `10 passed` (7 unchanged `QueryCleanJobsToolTests` + 3 converted `GenerateSqlContentCoercionTests`; the thread-offload test is removed, not skipped).
-- Command run: `uv run pytest` (T0012.8, full standard suite)
-- Result: `253 passed, 18 deselected` (18 = the unchanged eval-marked tests from T0012.7).
-- Command run: `uv run mypy src` (T0012.8)
-- Result: `Found 2 errors in 2 files` — same pre-existing residuals as before this ticket (`checkpointer.py:25`, `middleware.py:48`); confirmed identical via `git stash`/re-run. No new errors from the coroutine typing.
-- Command run: `grep -n "to_thread" src/agents/tools/query_clean_jobs.py` / `grep -n "async def generate_sql" src/agents/tools/query_clean_jobs.py` (T0012.8)
-- Result: one `to_thread` hit (`execute_validated_sql`, line 95, unchanged); one `async def generate_sql` hit.
-- Command run: `uv run pytest -q` (T0012.9, verification pass, Docker Desktop not running in this sandbox)
-- Result: `246 passed, 7 skipped, 18 deselected, 4 subtests passed` — the 7 skips are `evals/fixtures/test_fixture_counts.py`'s own reachability guard (`internhunter_eval` Postgres unreachable, port 5433), not a regression; standard suite otherwise green.
-- Command run: `uv run ruff check .` / `uv run mypy` (T0012.9)
-- Result: `ruff` all checks passed; `mypy` unchanged at the same 2 pre-existing residuals (`checkpointer.py:25`, `middleware.py:48`), no new errors.
-- Command run: `uv run python -c "from src.api.app import app; ..."` (T0012.9, confirms nothing imports the deleted `main.py`)
-- Result: imports cleanly, `FastAPI` app object returned.
-- Command run: `uv run pytest evals/test_judge.py -v` (T0012.10, new offline unit test)
-- Result: `1 passed` — `build_judge()`'s google branch forwards `thinking_budget` onto `ChatGoogleGenerativeAI`.
-- Command run: `uv run pytest -q` (T0012.10, full standard suite, Docker Desktop not running in this sandbox)
-- Result: `247 passed, 7 skipped, 18 deselected` — the 7 skips are the fixture DB's own reachability guard (unrelated to this ticket); no regressions.
-- Command run: `uv run python -c "from evals.judge import build_judge"` / `uv run python -c "from evals.harness import seam3_metrics"` (T0012.10)
-- Result: both import cleanly with `FaithfulnessMetric` removed from `harness.py`.
-- Command run: `grep -n "FaithfulnessMetric" evals/harness.py` (T0012.10)
-- Result: no matches — confirmed removed from both the import block and `seam3_metrics()`.
-- Command run: `uv run ruff check .` / `uv run mypy` (T0012.10)
-- Result: `ruff` all checks passed; `mypy` unchanged at the same 2 pre-existing residuals (`checkpointer.py:25`, `middleware.py:48`), no new errors.
-- Command run: `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval` (T0012.10, acceptance-critical live judge-agreement spot-check)
-- Result: **BLOCKED** — no `GOOGLE_API_KEY`/Groq creds in this sandbox; logged as a follow-up in `Known_Issues.md` for the maintainer to run with real credentials.
+Current-branch (T0019.4) results below; earlier per-ticket logs (T0011–T0018.2) are archived in [`archive/Repo_State_History.md`](archive/Repo_State_History.md).
+
+- `uv run pytest -q` (T0019.5, full standard suite, DB-dependent tests skip without Docker up) → `319 passed, 8 skipped, 19 deselected, 4 subtests passed` in ~268s. No pre-existing test's assertions were weakened — the 9 pre-existing `test_loader.py` tests now patch `assert_clean_jobs_schema` and carry `safety.min_yield: 0` in their mocked config.
+- `uv run pytest tests/services/ingestion/test_safety.py tests/services/ingestion/test_loader.py -q` (T0019.5, targeted) → `23 passed` in <1s.
+- `uv run ruff check .` (T0019.5, whole repo) → all checks passed.
+- `uv run mypy` (T0019.5, whole repo) → 2 pre-existing errors, both unrelated to this ticket (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48` — logged in `Known_Issues.md`); the three touched files (`safety.py`, `loader.py`, `src/core/config.py`) are clean.
+- Manual verification against a live local Docker DB (checks B–E of the T0019.5 checklist) was not run in this session — no local Docker Postgres was up. Flagged as a risk below; the checklist is appended to `Manual_Verification_Guide.md` for the next person with the stack running.
+
+- `uv run pytest -q` (T0019.4, full standard suite) → `311 passed, 1 skipped, 19 deselected, 4 subtests passed` in ~5s. The 1 skip is `tests/migrations/test_baseline_roundtrip.py`, which needs `SCRATCH_DATABASE_URL`. No pre-existing test was modified.
+- `uv run ruff check .` (T0019.4, whole repo) → all checks passed.
+- `uv run mypy` (T0019.4, whole repo) → 2 pre-existing errors, both unrelated to this ticket (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48` — logged in `Known_Issues.md`).
+- Manual: a mock-client script driving `VietnamWorksSource` with one page failing 500 three times then a later page succeeding showed `pages_failed == 1`, surviving postings present, and an `ingestion.page_failed` JSON warning on stderr with the query/page/attempts/reason; `run_ingestion` against a stub source with `pages_failed = 2` returned that value in the summary dict alongside `fetched`/`raw_upserted`/`clean_loaded`/`skipped`/`expired_count`.
+- `uv run pytest tests/services/ingestion/test_vietnamworks.py -v` (T0019.4, new `VietnamWorksResilienceTests`) → 7 new tests, all passing, in well under a second (confirms `time.sleep` is patched, not really waiting through backoff).
+
+- `uv run pytest -q` (T0019.3, full standard suite) → `303 passed, 1 skipped, 19 deselected, 4 subtests passed` in ~5s. The 1 skip is `tests/migrations/test_baseline_roundtrip.py`, which needs `SCRATCH_DATABASE_URL`.
+- `uv run ruff check .` (T0019.3, touched files) → all checks passed.
+- `uv run mypy` (T0019.3, touched files) → no issues.
+- Manual: empty-DB `alembic upgrade head` built the full 22-column `clean_jobs` schema (19 baseline + `is_active`/`first_seen_at`/`last_seen_at`); `alembic downgrade -1` cleanly dropped the three columns; upgrading the real local DB preserved all 50 rows and backfilled `first_seen_at`/`last_seen_at` truthfully from `raw_jobs.fetched_at` (0 rows at "now", join confirmed total — 0 orphans); a synthetic-row probe against the local DB proved the upsert refreshes `last_seen_at`/`is_active` and preserves `first_seen_at` across repeat runs, an 8-day-aged row expires under a 7-day window without deletion, and re-seeding flips it back active; the Dockerized (Linux) `api` service answered a live chat query with no mention of the hidden columns. Native Windows `uv run uvicorn` boot still hangs on the pre-existing `ProactorEventLoop` incompatibility, unrelated to this ticket (`Known_Issues.md`).
+- Prior (T0019.2): `alembic upgrade head` against an empty scratch DB built the correct 19-column `clean_jobs` schema; `alembic stamp head` + `alembic upgrade head` against the real local DB was a clean no-op (row count unchanged at 50); the Dockerized (Linux) `api` service booted cleanly and answered a live query against the migrated/stamped schema.
+
+- `uv run pytest tests/agents/runtime/test_provider.py tests/agents/tools/test_query_clean_jobs.py -q` (ReAct/SQL-generation config split) -> `16 passed`.
+- `uv run pytest -q` (full standard suite after ReAct/SQL-generation config split) -> `297 passed, 19 deselected, 4 subtests passed`.
+- `uv run pytest tests/api/test_static_serving.py -q` (static-serving regression — the UI keeps the `InternHunter` string this test asserts on `GET /`) → `4 passed`.
+- `uv run pytest tests/api -q` (API route suite — the UI is static assets only; backend untouched) → `33 passed`.
+- `uv run pytest -q` (full standard suite) → `296 passed, 19 deselected, 4 subtests passed` in ~7s.
+- Render check: served `src/api/static/` standalone and loaded `index.html` in a headless browser at 960px and 390px widths — Editorial masthead/chips/composer render, the vermilion editor's-rule marks agent answers, the streaming cursor and `view-trace` link render from injected turns, and the dateline degrades to the dateless sentence when `/api/v1/ready` is unavailable (no `undefined`, no crash).
 
 ## Known issues
 Open known issues, risks, and out-of-scope follow-ups live in their own living register:
 see [`Known_Issues.md`](Known_Issues.md). Append there when a ticket uncovers a new one.
-Resolved items are archived in [`Resolved_Issues.md`](Resolved_Issues.md) (moved out of the
-register so it stays focused on what is still open). A full per-module logic review
-(2026-07-02) — bugs, improvement backlog, and doc insights — is captured in
+Resolved items are archived in [`Resolved_Issues.md`](Resolved_Issues.md). A full per-module
+logic review (2026-07-02) — bugs, improvement backlog, and doc insights — is captured in
 [`Code_Review_Notes.md`](Code_Review_Notes.md); its bugs are logged in `Known_Issues.md`
 (open) / `Resolved_Issues.md` (closed).
 
 ## Next recommended ticket
-Current recommendation from this branch: no further T0016 ticket is recorded. The next roadmap item in `docs/Tickets.md` is the T0017 Clickable Demo placeholder; T0011.5 baseline calibration remains open separately when maintainer credentials are available.
+**T0019.6 — Nightly ingestion cron.** T0019.5 landed the three preconditions the ticket brief called out: a pre-flight schema assertion that fails the run before any write on out-of-band drift, a `min_yield` floor that blocks a near-empty fetch from overwriting good rows, and a dead-man ping to healthchecks.io that fires only on the fully-green path. T0019 (Ingestion Deploy Readiness, live-DB) was scoped 2026-07-16 into eight sub-tickets: it replaces the static 50-row snapshot with a nightly refresh into the live Neon DB, and absorbs the three ops items previously deferred — the dead-man's switch (`deployment-research-plan.md` §9A, now implemented by T0019.5), the **keep-alive ping** decided 2026-07-16 (§1a, T0019.7's concern — a different ping, to keep Render warm, not to be confused with T0019.5's healthchecks.io dead-man ping), and the **schema-drift assertion/migration** re-pointed from T0018.4 (`Known_Issues.md` `[HIGH · PARTIALLY RESOLVED]` — write-path detection now closed by T0019.5; API-side read-path assertion remains open). Decision validation: [`research/ingestion-milestone-plan.md`](../research/ingestion-milestone-plan.md).
 
-### Historical roadmap note
-T0014 is now closed on `fix/known-issues-hardening`: T0014.1 removed import-time config validation fragility, and T0014.2 reconciled the known-issues register/archive. The qwen item remains open only as a final pre-baseline confirmation, so the next recommended ticket is **T0011.5 â€” threshold calibration + baseline report** once maintainer credentials are available.
-Milestone 9 (data ingestion) is closed, and the structured-query-vs-detail split is complete (T0009.10 bounded `query_clean_jobs`, T0009.11 `get_job_details`). Milestone 10 (pre-deploy hardening) is essentially complete through T0010.7. T0011.1 (judge spike + harness scaffold), T0011.2 (eval fixture DB + golden dataset), T0011.3 (three-seam instrumentation + metric stack), and T0011.4 (Langfuse score writeback) are all closed: the judge is picked, `internhunter_eval` is seeded and pinned, the 17-case golden dataset loads, `evals/harness.py` + `evals/test_three_seams.py` run the agent end-to-end and score every seam, and `evals/writeback.py` attaches every score onto the same Langfuse trace as the raw agent run. T0011.6 (Gemini judge provider) is also closed, plus its rate-limit follow-up (judge RPM throttle, now formally T0012.1). T0012.2 (qwen `<think>` leak fix), T0012.3 (`deepeval` `ArgumentCorrectnessMetric`/`TaskCompletionMetric` template-bug fix), T0012.4 (populate `trace_url`, closing C4), T0012.5 (graceful empty-answer fallback, closing the remaining [MED] item), T0012.6 (coerce non-str model content in `generate_sql`, closing the last pre-existing mypy residual on `query_clean_jobs.py`), T0012.7 (`eval` pytest marker, closing the T0011.1/T0011.6 plain-suite live-network findings), and T0012.8 (native-async `generate_sql`, closing the last "Query tooling & SQL safety" finding) are all now closed — Milestone 12 (Hardening) is complete. Seam-1/seam-3 scores are no longer blanked by the deepeval bug, both hard prerequisites for T0011.5 are cleared, the API response's `trace_url` field is a real Langfuse URL when tracing is enabled, an empty/unreadable agent answer now returns `200` + `FALLBACK_ANSWER` instead of a `500`, `generate_sql` no longer risks an `AttributeError` on a list-content model reply, `uv run pytest` no longer makes a live Groq/Gemini call or takes several minutes, and `generate_sql` awaits the Groq model natively instead of parking a thread-pool worker per SQL-gen round-trip. Two follow-ups remain open from T0012.2/T0012.3 (see `Known_Issues.md`): the full live A3/C3 data-answer re-check from T0012.2 (Docker wasn't running in that sandbox), and a one-golden live spot-check of the new "Argument Correctness"/"Task Completion" GEval scores from T0012.3 (deliberately skipped this session to avoid API spend). Two low-priority follow-ups from T0012.7 are also logged: `evals/conftest.py`'s `DATABASE_URL` redirect still fires at collection time regardless of the marker, and `deepeval test run` requires an explicit `-m eval` passthrough to select the live tests. **Recommended next: T0011.5** (threshold calibration + baseline report) — both hard prerequisites are now cleared, so this can proceed. **Ingestion Deploy Readiness is renumbered T0013 (deferred, sequenced after T0012)**, its full design captured in `research/deployment-research-plan.md` §4.1–§4.2, to be ticketed once the evaluation baseline lands.
+**T0019.1 is done** (2026-07-16, doc-only): recommended verdict **favorable, pending maintainer confirmation** — record in `research/deployment-research-plan.md` §11, evidence in `research/experiments/`. **T0019.2 is done** (2026-07-18): Alembic scaffolding + baseline migration, `Identity(always=True)` alignment in `models.py`, `scripts/reset_db.sql` demoted to local-dev-only. **T0019.3 is done** (2026-07-18): `clean_store.py`'s `TRUNCATE` is gone — the upsert (`upsert_clean_jobs`) is live and accumulate semantics hold; `is_active`/`first_seen_at`/`last_seen_at` are hidden lifecycle columns with a truthful backfill and a time-based expiry pass (`expire_stale_clean_jobs`) wired into the loader. **T0019.4 is done** (2026-07-18): per-page retry-then-skip resilience lives in `VietnamWorksSource`, and `run_ingestion` surfaces `pages_failed` in its summary — a single transient failure (429/5xx/timeout/transport error) no longer discards an entire run's already-fetched pages. **T0019.5 is done** (2026-07-19): `run_ingestion` now aborts before any write on schema drift or under-floor yield, and `main()` sends a dead-man ping to healthchecks.io only after a fully-green run; `pages_failed` stays unconsumed by design (logged as an open item in `Known_Issues.md`). The safety rule below is now lifted.
 
-Other future phases (resume/embedding retrieval, charts, typed error contract) still need tickets authored against `Full_Design_Document.md` / `MVP_Spec.md` §6 before implementation.
-> **2026-07-12 T0016.1 update:** Current working branch is `feature/t0016.1-cors-middleware`, cut from `fix/known-issues-hardening` after T0014.1/T0014.2. T0016.1 is complete here: `config/settings.yaml` now carries the credential-less `api.cors` block, [src/api/app.py](D:/Data_Science_Project/InternHunterAgent/src/api/app.py) registers `CORSMiddleware` before router includes, and [tests/api/test_cors.py](D:/Data_Science_Project/InternHunterAgent/tests/api/test_cors.py) proves allowed/disallowed preflight behavior without lifespan startup. Focused build/test status for this ticket: `uv run pytest -q tests/api/test_cors.py tests/api/test_query.py tests/api/test_startup_config.py` passed. Next recommended ticket: **T0016.2** per-IP rate limiting + graceful 429 handling. The older branch snapshot below remains as historical context for the base branch.
+**Maintainer action outstanding:** confirm T0019.1's favorable verdict before T0019.6 is built; separately, run the documented (not yet executed) `alembic stamp head` Neon-adoption command from `Manual_Verification_Guide.md` → T0019.2 § F, once, deliberately, before any future migration targets Neon. Nothing else in the milestone waits on either.
 
-> **2026-07-12 T0016.2 update:** Current working branch is `feature/t0016.2-rate-limit-429`, cut after the completed T0016.1 CORS work. T0016.2 is complete here: `slowapi` is installed, `config/settings.yaml` sets `api.rate_limit: "15/minute"`, [src/api/app.py](D:/Data_Science_Project/InternHunterAgent/src/api/app.py) registers a per-app limiter and friendly 429 handler, [src/api/routes/query.py](D:/Data_Science_Project/InternHunterAgent/src/api/routes/query.py) applies the limit only to `POST /api/v1/agent/chat`, and [src/agents/service.py](D:/Data_Science_Project/InternHunterAgent/src/agents/service.py) maps provider rate-limit/quota/timeout pressure to a friendly busy response while preserving generic 500 failures. Focused build/test status for this ticket: `uv run pytest -q tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_cors.py tests/api/test_startup_config.py` passed (`16 passed`). Next recommended ticket: **T0016.3** input length cap. Open issues remain centralized in [Known_Issues.md](D:/Data_Science_Project/InternHunterAgent/docs/Known_Issues.md).
+**Sequencing:** .1 ✅ done (hard-blocks the cron in .6 only), .2 ✅ done, .3 ✅ done, .4 ✅ done, .5 ✅ done, then **.6**; .7/.8 float.
 
-> **2026-07-12 T0016.3 update:** Current working branch is `feature/t0016.3-input-length-cap`, cut after the completed T0016.2 rate-limit work. T0016.3 is complete here: `config/settings.yaml` sets `api.max_query_chars: 2000`, [src/api/schemas.py](D:/Data_Science_Project/InternHunterAgent/src/api/schemas.py) constrains `QueryRequest.query` with the matching `DEFAULT_MAX_QUERY_CHARS = 2000` Pydantic `max_length`, and [tests/api/test_query.py](D:/Data_Science_Project/InternHunterAgent/tests/api/test_query.py) proves normal/exactly-at-cap queries reach the service while over-limit requests return HTTP 422 before the agent service is awaited. Focused build/test status for this ticket: `uv run pytest -q tests/api/test_query.py tests/api/test_rate_limit.py tests/api/test_cors.py tests/api/test_startup_config.py` passed (`18 passed`). Next recommended ticket: **T0016.4** `/docs` exposure and minimal security headers. Open issues remain centralized in [Known_Issues.md](D:/Data_Science_Project/InternHunterAgent/docs/Known_Issues.md).
-> **2026-07-13 T0016.4 update:** Current working branch is `feature/t0016.4-docs-headers`, cut after the completed T0016.3 input-length-cap work. T0016.4 is complete here: `config/settings.yaml` now makes the public-docs choice explicit with `api.docs_enabled: true`, [src/api/app.py](D:/Data_Science_Project/InternHunterAgent/src/api/app.py) loads that flag and wires `docs_url`, `redoc_url`, and `openapi_url` together so tests can flip them through `create_app(docs_enabled=...)`, and [tests/api/test_docs_exposure.py](D:/Data_Science_Project/InternHunterAgent/tests/api/test_docs_exposure.py) proves the enabled paths return 200 while the locked-down option returns 404 for all three endpoints. No security-header middleware was added by design because this repo still serves API responses only and not a same-origin HTML UI from FastAPI. Focused build/test status for this ticket: `uv run pytest -q tests/api/test_docs_exposure.py tests/api/test_cors.py tests/api/test_rate_limit.py tests/api/test_query.py tests/api/test_startup_config.py` passed. The documented locked-down alternative is `api.docs_enabled: false`. Next recommended ticket: none recorded yet within T0016; any later HTML UI ticket should decide whether to add `X-Frame-Options` or CSP `frame-ancestors` then. Open issues remain centralized in [Known_Issues.md](D:/Data_Science_Project/InternHunterAgent/docs/Known_Issues.md).
+> ✅ **Safety rule lifted:** the production-DSN ingestion freeze that was in force pending T0019.3 no longer applies — `clean_store.upsert_clean_jobs` no longer truncates `clean_jobs`, so a run against Neon accumulates instead of rebuilding the live table. (T0019.6, the nightly cron, still separately waits on the T0019.1 maintainer sign-off.)
+
+Unscheduled after T0019 (`Tickets.md` → Backlog): **CI merge gate** (`pre-deploy-refinement-plan.md` §6i — no automated gate today; Render auto-deploys straight off this branch) and **`main` reconciliation** (`main` remains stuck at T0009; M10–M19 live on ticket branches — needs an explicit maintainer decision; **do not branch a deploy from `main`**).
+
+Open separately: **T0011.5** baseline calibration, still blocked on maintainer credentials — it also gates the `is_active` agent exposure that T0019 deliberately cut.

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = Field(..., min_length=1)
     GOOGLE_API_KEY: str | None = None
     DATABASE_URL: str = Field(..., min_length=1)
+    HEALTHCHECKS_URL: str | None = None
 
     LANGFUSE_SECRET_KEY: str
     LANGFUSE_PUBLIC_KEY: str

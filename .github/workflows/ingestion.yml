@@ -1,0 +1,79 @@
+name: Nightly ingestion
+
+on:
+  schedule:
+    # 02:00 UTC = 09:00 ICT. GitHub only triggers `schedule` from the
+    # repository's default branch — this stays dormant until the T0019
+    # branch chain is merged to main (see docs/Known_Issues.md). Actual
+    # firing time can drift under GitHub Actions load; a run landing a
+    # few minutes late is expected, not a failure.
+    - cron: '0 2 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ingestion
+  # A run already mid-write must finish rather than be killed partway —
+  # partial writes are the risk this guards against. A queued duplicate
+  # waits for it instead of running alongside it.
+  cancel-in-progress: false
+
+# Least privilege: this workflow only reads the repo and calls the
+# ingestion CLI as an external process, so no elevated scope is needed.
+# `contents: write` is deliberately NOT granted here — see the keepalive
+# note below for why that step is not wired in.
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    # Expected runtime is well under 10 minutes; this is a ceiling that
+    # kills a hung run rather than letting it burn Actions minutes.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.8.15"
+
+      # Mirrors docker/Dockerfile: --frozen matches the lockfile exactly,
+      # --no-dev skips the dev dependency group since ingestion imports
+      # nothing from it.
+      - run: uv sync --frozen --no-dev
+
+      # No migrations run from this workflow. Schema changes go through a
+      # deliberate `alembic upgrade head` run by the maintainer (T0019.2's
+      # decision) — an unattended job must never migrate a production
+      # database.
+      - name: Run ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HEALTHCHECKS_URL: ${{ secrets.HEALTHCHECKS_URL }}
+          # GROQ_API_KEY, LANGFUSE_SECRET_KEY, and LANGFUSE_PUBLIC_KEY are
+          # not read by any ingestion code path, but src/core/config.py's
+          # Settings model declares them as required fields with no
+          # default, constructed on import. Empirically verified (see
+          # Manual_Verification_Guide.md T0019.6, check B): unsetting any
+          # one of these fails the CLI at import with ConfigLoadError
+          # before ingestion logic runs. They are set here purely to
+          # satisfy config validation.
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+        run: uv run python -m src.services.ingestion.loader
+
+      # Keepalive step intentionally omitted, not just left uncommented-out
+      # as a stub. gautamkrishnar/keepalive-workflow — the action the
+      # ticket named — has been disabled by GitHub Staff for violating
+      # GitHub's Terms of Service (the repo returns HTTP 403 "Repository
+      # access blocked: tos" as of this writing). Reporting on it: the
+      # action was designed to circumvent GitHub's 60-day inactivity
+      # auto-disable policy, which is itself the ToS violation GitHub
+      # cited. No commit SHA can be verified because the repository is
+      # inaccessible, and pinning a defunct, ToS-violating action would be
+      # worse than leaving the gap. The 60-day auto-disable risk this was
+      # meant to cover is logged in docs/Known_Issues.md instead, for a
+      # maintainer to address deliberately (e.g. a manual monthly no-op
+      # commit, or a from-scratch workflow that only touches this repo).
+      # TODO(maintainer): decide how to cover the 60-day inactivity risk.

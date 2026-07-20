@@ -47,6 +47,14 @@ Other future phases (resume/embedding retrieval, charts, typed error contract) s
 
 Command logs moved out of the live snapshot. Current-branch results stay in `Repo_Current_State.md`.
 
+### T0018.3 / ReAct-SQL-generation config split (pre-T0019)
+- `uv run pytest tests/agents/runtime/test_provider.py tests/agents/tools/test_query_clean_jobs.py -q` (ReAct/SQL-generation config split) → `16 passed`.
+- `uv run pytest -q` (full standard suite after ReAct/SQL-generation config split) → `297 passed, 19 deselected, 4 subtests passed`.
+- `uv run pytest tests/api/test_static_serving.py -q` (static-serving regression — the UI keeps the `InternHunter` string this test asserts on `GET /`) → `4 passed`.
+- `uv run pytest tests/api -q` (API route suite — the UI is static assets only; backend untouched) → `33 passed`.
+- `uv run pytest -q` (full standard suite) → `296 passed, 19 deselected, 4 subtests passed` in ~7s.
+- Render check: served `src/api/static/` standalone and loaded `index.html` in a headless browser at 960px and 390px widths — Editorial masthead/chips/composer render, the vermilion editor's-rule marks agent answers, the streaming cursor and `view-trace` link render from injected turns, and the dateline degrades to the dateless sentence when `/api/v1/ready` is unavailable (no `undefined`, no crash).
+
 ### T0018.2
 - `uv run pytest tests/api/test_static_serving.py -q` → `4 passed`.
 - `uv run pytest tests/api/test_stream.py -q` → `5 passed`.

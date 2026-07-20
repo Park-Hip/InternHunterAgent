@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -6,6 +7,7 @@ from sqlalchemy import text
 
 from src.core.config import settings
 from src.core.db import session_factory
+from src.core.logger import logger
 
 router = APIRouter()
 
@@ -21,15 +23,34 @@ async def health_check():
     }
 
 
-def get_data_snapshot_date() -> str:
+def _configured_snapshot_date() -> str:
+    """Static fallback from config/settings.yaml; "" when the shape is malformed."""
     api_cfg = settings.config_yaml.get("api")
     if not isinstance(api_cfg, dict):
         return ""
     demo_cfg = api_cfg.get("demo")
     if not isinstance(demo_cfg, dict):
         return ""
-    # Future daily ingestion: replace this with SELECT MAX(fetched_at); endpoint/UI stay unchanged.
     return str(demo_cfg.get("data_snapshot_date", ""))
+
+
+def _select_max_last_seen() -> date | None:
+    with session_factory() as session:
+        result = session.execute(text("SELECT MAX(last_seen_at)::date FROM clean_jobs"))
+        return result.scalar()
+
+
+def get_data_snapshot_date() -> str:
+    """Real refresh date from data state, falling back to the configured value."""
+    try:
+        max_last_seen = _select_max_last_seen()
+    except Exception:
+        logger.warning("snapshot_date_query_failed_using_config_fallback", exc_info=True)
+        return _configured_snapshot_date()
+    if max_last_seen is None:
+        logger.info("snapshot_date_empty_table_using_config_fallback")
+        return _configured_snapshot_date()
+    return max_last_seen.isoformat()
 
 
 def _select_one() -> None:
@@ -43,4 +64,5 @@ async def readiness_check():
         await asyncio.to_thread(_select_one)
     except Exception:
         return JSONResponse(status_code=503, content={"status": "error"})
-    return {"status": "ok", "data_snapshot_date": get_data_snapshot_date()}
+    snapshot_date = await asyncio.to_thread(get_data_snapshot_date)
+    return {"status": "ok", "data_snapshot_date": snapshot_date}

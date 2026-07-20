@@ -174,9 +174,9 @@ These are **deterministic capability tests** — they prove a feature exists and
 
 Ingestion is **offline batch tooling** under `src/services/ingestion/`, isolated from the request pipeline — it is never imported by the API, service, runtime, tools, or tracing layers (the layer law is in `Full_Design_Document.md` §3). It runs as a manual, re-runnable CLI, not on a schedule. The deep research behind every decision here is `research/data-ingestion-stage.md` (§0.1, the ✅ reliable & schedulable VietnamWorks experiment) and `research/job-site-comparison.md`; do not re-derive it.
 
-> **Status: scheduled + live-DB operation scoped, not built (T0019, 2026-07-16).** Everything in §7 describes the pipeline as built and stays accurate. T0019 changes three things about *how it runs*, none of which reshape the dataflow or tables above: (a) load semantics become **accumulate-never-wipe** — the `TRUNCATE` in `clean_store.py` is dropped so the `(source, external_id)` upsert below becomes live code, joined by hidden `is_active`/`first_seen_at`/`last_seen_at` lifecycle columns and a time-based expiry pass (**T0019.3**); (b) an **external, out-of-band GitHub Actions cron** invokes the same CLI nightly against the live Neon DB (**T0019.6**, hard-gated on a robots.txt/ToS check, **T0019.1**). This does **not** relax the §7 layer law or the `Full_Design_Document.md` §2 no-schedulers exclusion — the cron runs on GitHub's runner, never in the API process, and §2's exclusion is amended to name what it always meant: *in-request* background execution; (c) unattended-run safety — pre-flight schema assertion, pre-write yield floor, dead-man's-switch ping (**T0019.5**). Scope and sequencing: `docs/Tickets.md` T0019. Rationale: `research/ingestion-milestone-plan.md`.
+> **Status: live-DB operation built (T0019.1–.5, .7, .8); scheduling not yet landed (T0019.6).** The nightly cron's workflow file exists in the working tree but is **not committed** and its documentation was lost to a concurrent-session collision (see the T0019.7 completion report) — treat T0019.6 as open, not done, until it is committed with a completion report and its two human gates are cleared. Everything in §7 describes the pipeline as built and stays accurate. T0019 changed three things about *how it runs*, none of which reshape the dataflow or tables above: (a) ✅ load semantics are now **accumulate-never-wipe** — the `TRUNCATE` in `clean_store.py` is dropped and the `(source, external_id)` upsert below is live code (`upsert_clean_jobs`), joined by hidden `is_active`/`first_seen_at`/`last_seen_at` lifecycle columns and a time-based expiry pass (**T0019.3**); (b) ⏳ an **external, out-of-band GitHub Actions cron** is intended to invoke the same CLI nightly against the live Neon DB (**T0019.6**, hard-gated on a robots.txt/ToS check, **T0019.1**, whose **recommended** verdict is favorable — *maintainer ratification in a tracked document is still outstanding*, so the gate is not yet cleared). The cron's `schedule:` trigger stays **dormant** regardless: GitHub only fires `schedule:` from the default branch, so it cannot run until the branch chain merges to `main`. Coverage and detail-visibility follow-ups are scoped as **T0019.9** and **T0019.10** (`docs/Tickets.md`); neither is implemented. This does **not** relax the §7 layer law or the `Full_Design_Document.md` §2 no-schedulers exclusion — the cron runs on GitHub's runner, never in the API process, and §2's exclusion is amended to name what it always meant: *in-request* background execution; (c) unattended-run safety — pre-flight schema assertion, pre-write yield floor, dead-man's-switch ping (**T0019.5**). Scope and sequencing: `docs/Tickets.md` T0019. Rationale: `research/ingestion-milestone-plan.md`.
 >
-> **Until T0019.3 lands, do not run this CLI against the production DSN** — `clean_store.replace_clean_jobs` still truncates `clean_jobs` before the upsert, so a single "just testing" run against Neon rebuilds the live table from whatever that run happened to fetch. Local Docker Postgres runs are fine.
+> ✅ **Production-DSN freeze lifted (2026-07-19, T0019.3).** The former rule here — *"do not run this CLI against the production DSN"* — no longer applies. `clean_store.replace_clean_jobs` has been renamed `upsert_clean_jobs` and its `TRUNCATE` is gone, so a run against Neon accumulates via the `(source, external_id)` upsert instead of rebuilding the live table. `Repo_Current_State.md` carries the same lift.
 
 **Design intent: source-agnostic.** v1 ingests **VietnamWorks only**, but the schema, cleaning, and interfaces are built so a future board is just a new adapter + normalizer with **no table reshape**. Only two components ever know a source's specifics — the **adapter** (fetch) and the **normalizer** (payload → common shape). Everything downstream is shared.
 
@@ -351,3 +351,85 @@ One-shot error handling (§5) maps failures to HTTP status codes (`400` empty qu
 - **In scope (T0017):** the `astream` runtime method + two-gate filter + leak test, the streaming service generator, the SSE route and event vocabulary, and the anti-buffering headers.
 - **Out of scope (over-engineering for a demo):** resumable/replayable streams, retry-from-last-token, multi-node progress indicators ("searching… reading…"), and per-tool streamed status. These are explicitly excluded; the demo streams the final answer only.
 - **Sequencing note:** the demo is intended to showcase honesty behavior, which the evaluation baseline (§8) measures and which has recorded gaps; streaming makes any honesty regression *more* visible, not less, so the streamed answer must still route through the same tool/prompt path the eval scores — streaming adds no bypass.
+
+---
+
+## 10. Public-Endpoint Hardening
+
+*Status: implemented (T0016.1–.4).*
+
+Everything above describes an agent reachable from a trusted caller. Exposing it publicly (T0018.4) adds a distinct concern: the endpoint must survive an untrusted internet without a WAF, an API gateway, or an auth layer — none of which the MVP has or needs. Four narrow controls, all assembled in `src/api/app.py::create_app` and all configured under `api.*` in `config/settings.yaml`, carry that load. They are deliberately not an auth system: the demo is public by design, and these bound *abuse*, not *access*.
+
+**Middleware nesting is verified, not assumed.** Starlette's `add_middleware` does `user_middleware.insert(0, …)`, so the **last** registered middleware is the **outermost**. Confirmed against the built app: the stack is `FrameGuardMiddleware` → `CORSMiddleware` → routes. `FrameGuardMiddleware` being outermost is what makes §11.2's header apply to *every* response — API, static asset, docs page, and error alike — rather than only to responses that reach the router.
+
+### 10.1 CORS
+
+`CORSMiddleware` is configured from `api.cors.*` (`allowed_origins`, `allow_credentials`, `allowed_methods`, `allowed_headers`), read through a defensive `_load_cors_config()` that tolerates a missing or malformed `api` block rather than failing startup.
+
+Two decisions are recorded here because the config alone reads as an oversight:
+
+- **`allow_credentials: false` is permanent.** The API has no cookies or sessions to carry; credential-less CORS is the safe default and there is no requirement pushing against it.
+- **`allowed_origins: []` is deliberate, not unfinished.** T0018.2 serves the UI from the same origin as the API (§11.1), so no cross-origin request exists to permit. The empty list is therefore the *correct* production value, and the middleware is effectively inert. It is retained — rather than deleted — because a future separately-hosted frontend is a config change, not a code change, which is exactly the property worth keeping.
+
+### 10.2 Per-IP rate limiting
+
+`slowapi`'s `Limiter(key_func=get_remote_address)` keys on client IP, with the limit string from `api.rate_limit` (default `"15/minute"`). It is applied to the chat routes and **not** to health/readiness — an uptime probe must never be throttled, and §11.3's endpoints exist precisely to be polled.
+
+`RateLimitExceeded` is handled by `_rate_limit_exceeded_handler`, returning `429` with `BUSY_MESSAGE` — **the same body the provider-busy path returns**. This is intentional: a visitor who is rate-limited and a visitor who arrived during Groq pressure both see one honest "busy, try again" message, and neither learns which internal condition fired.
+
+> **The limiter is in-process, which couples this section to the deploy topology.** Counters live in the worker's memory, so with *n* workers the effective limit is *n* × the configured value. The deployment runs `WEB_CONCURRENCY=1`, which makes the configured number the real number. **Scaling past one worker silently multiplies the limit** and is the point at which this must become a shared-store limiter (Redis) or move to an edge/CDN layer. A single-instance free tier is the reason the simple version is adequate today — not an argument that it generalizes.
+
+### 10.3 Request length cap
+
+`QueryRequest.query` carries a Pydantic `max_length`, so an oversized prompt is rejected at validation with a `422` before reaching the agent — bounding both token spend and the checkpointer row a long input would write.
+
+> **Known deviation from the config convention.** `api.max_query_chars: 2000` is recorded in `config/settings.yaml`, but `src/api/schemas.py` enforces a *static* `DEFAULT_MAX_QUERY_CHARS = 2000` — the Pydantic field constraint is evaluated at class-definition time and does not read the YAML. The two agree today by hand, not by construction, which contradicts the project's "parameters live in `settings.yaml`" rule (`CLAUDE.md` §1). **Changing one without the other silently does nothing.** Closing it means either a config-backed schema loader or dropping the unused YAML key; the deviation is recorded rather than quietly tolerated. Also tracked in `Repo_Current_State.md`.
+
+### 10.4 API documentation exposure
+
+`api.docs_enabled` gates `/docs`, `/redoc`, and `/openapi.json` **together**, applied at `FastAPI(...)` construction by passing `None` for each URL when disabled — so the routes are never registered, rather than registered and then blocked.
+
+Keeping them public is a deliberate portfolio choice: the demo's audience includes people evaluating the API design, and the schema reveals nothing that the answer-only contract (§3) does not already imply. The single flag exists so that judgement can be reversed in one line if the endpoint is ever reused in a context where it does not hold.
+
+---
+
+## 11. Demo Surface
+
+*Status: implemented (T0018.1–.3).*
+
+The API needed a face before it could be shown to anyone. This section covers how the browser demo is served and the two endpoints added to support it. It is **not** a UI design document — the visual system, its rationale, and the interaction details belong to the T0018.3 record in `Completion_Reports.md`.
+
+### 11.1 Same-origin static serving
+
+`create_app` mounts `src/api/static/` at `/` with `StaticFiles(html=True)`. Serving the UI from the API process — rather than a separate static host — is what makes `api.cors.allowed_origins: []` correct (§10.1) and removes an entire class of cross-origin and preflight problems from a demo that gains nothing from being split.
+
+> **Mount ordering is a correctness constraint, not style.** The `/` mount is registered **after** both routers, and must stay there. A mount at `/` matches every path, so registering it earlier would shadow `/api/v1/*` and the docs routes, and the failure looks like a `404` from the API rather than a routing mistake. Verified route match order: `/openapi.json`, `/docs`, `/redoc`, `/api/v1/agent/chat`, `/api/v1/agent/chat/stream`, `/api/v1/health`, `/api/v1/ready`, then the catch-all `Mount`. Treat the position of the `app.mount(...)` line in `create_app` as load-bearing.
+
+### 11.2 Frame protection
+
+`FrameGuardMiddleware` is a **pure-ASGI** middleware that injects `X-Frame-Options: DENY` by wrapping the `http.response.start` message. Being outermost in the stack (§10), it covers every response the app can emit.
+
+It is hand-written rather than pulled from a library, and pure-ASGI rather than a `BaseHTTPMiddleware` subclass, for one specific reason: **`BaseHTTPMiddleware` buffers the response body**, which would break the §9 SSE token stream — the single feature the demo exists to show. A middleware that touches only the response-start message leaves the streaming body untouched. This is the same constraint that shaped §9.4's anti-buffering headers, and any future response middleware inherits it.
+
+### 11.3 Health versus readiness
+
+Two endpoints with deliberately different contracts, both outside the chat rate limiter (§10.2):
+
+- **`GET /api/v1/health`** — static liveness. Touches no dependency and always returns `200`. This is what the platform's health check polls; making it depend on the database would let a transient DB blip trigger an instance restart that cannot possibly fix it.
+- **`GET /api/v1/ready`** — real readiness. Executes `SELECT 1` through `session_factory`, off the event loop via `asyncio.to_thread` (the same discipline §2.3 applies to query execution), and returns `503` on any failure. On success it also returns `data_snapshot_date`, which the UI renders as its corpus-age disclaimer.
+
+The liveness/readiness split is what lets the demo degrade honestly: the page can load and explain that data is unavailable, instead of appearing healthy while every query fails.
+
+> ✅ **`data_snapshot_date` is derived from data state (T0019.8, 2026-07-20).** It was a hand-maintained static config value that had to be edited whenever the shipped corpus changed — with T0019.3's accumulate semantics landed, the corpus could advance nightly while that string did not, making the disclaimer the one part of the UI that could silently lie. `get_data_snapshot_date()` in `src/api/routes/health.py` now runs `SELECT MAX(last_seen_at)::date FROM clean_jobs` and returns the ISO date, falling back to `api.demo.data_snapshot_date` when the table is empty or the query fails. The endpoint and UI contracts are unchanged; only the value's source moved.
+>
+> **`last_seen_at`, not `fetched_at`** — an earlier draft of this section named `SELECT MAX(fetched_at)`, which is wrong under T0019.3: `fetched_at` lives on `raw_jobs` (§7), whereas `last_seen_at` is the per-row freshness signal on `clean_jobs` that the upsert refreshes on every run. The disclaimer describes the *served* corpus, so it must read the served table.
+>
+> **The fallback is deliberately silent to the caller and loud in the logs.** `last_seen_at` only exists after T0019.3's migration; against an un-migrated database the query raises, the fallback fires, and `/ready` still returns `200` with a stale-but-plausible date. That keeps a readiness probe from flapping on a cosmetic field, but it means schema drift is invisible from the response body alone — it is recoverable only from the `snapshot_date_query_failed_using_config_fallback` warning (logged with `exc_info`). Tracked in `Known_Issues.md`.
+
+The two DB round trips are separate on purpose: `SELECT 1` runs first and a failure short-circuits to `503` **before** the date query is attempted, so the two failure modes stay independently observable and the 503 path costs exactly one query.
+
+### 11.4 The browser client
+
+`src/api/static/` holds `index.html`, `styles.css`, and `app.js` — vanilla, no build step, no framework, no bundler. It consumes §9's SSE contract via `fetch()` plus a `ReadableStream` reader rather than the native `EventSource`, because `EventSource` is GET-only and the streaming endpoint is a `POST` with a JSON body (the constraint anticipated in §9.4).
+
+The client is a **consumer of the public contract and nothing more**: it holds the server-minted `session_id` and returns it on later turns (§3), renders `token` events as they arrive, shows a trace link only when `metadata` carries a non-null `trace_url`, and renders an in-band `error` event as a normal chat bubble (§9.5). It knows nothing about the agent, the tools, or the schema — the answer-only law (§3, `Full_Design_Document.md` §4) is what makes such a thin client sufficient.

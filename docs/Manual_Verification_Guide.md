@@ -1223,3 +1223,35 @@ If the trigger does **not** fire (compute stays low, suspension gaps are visible
 #### Part D — Rollback
 
 To disable: open the job on cron-job.org and **pause** it (no need to delete). Expect the status quo to return — Render spins down after 15 min idle again, and the next cold visitor after an idle gap waits ~60 s for the page itself, same as before T0019.7 was enabled.
+
+---
+
+### T0019.8: Truthful refresh date on `/ready`
+
+**What changed:** `/api/v1/ready` no longer reports the static `api.demo.data_snapshot_date` from `config/ingestion`-adjacent config. `get_data_snapshot_date()` in `src/api/routes/health.py` now runs `SELECT MAX(last_seen_at)::date FROM clean_jobs` and returns that ISO date, falling back to the configured value only when the table is empty or the query fails. Response shape and the UI are unchanged.
+
+**Why it needs a manual check:** the automated tests patch `_select_max_last_seen`, so they supply a `datetime.date` object directly. They therefore prove the *fallback logic* but **cannot** prove that PostgreSQL's `::date` cast actually arrives as a `datetime.date` through psycopg3, nor that the fallback isn't silently winning against a real database. Only checks 2–4 below establish that.
+
+> **Run these against the Dockerized `api` service.** Native Windows `uv run uvicorn` still hangs on the pre-existing `ProactorEventLoop` incompatibility (`Known_Issues.md`) — unrelated to this ticket.
+
+**A. Setup**
+1. `docker compose up -d`
+2. `uv run alembic upgrade head` — required; `last_seen_at` only exists after T0019.3's migration.
+
+**B. The date is real, not the config fallback** *(the load-bearing check)*
+3. `curl -s localhost:8000/api/v1/ready` → note `data_snapshot_date`.
+4. `docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT MAX(last_seen_at)::date FROM clean_jobs;"`
+5. **The two must match.** If the endpoint instead returns the configured value while the table has rows, the fallback is firing wrongly — check logs for `snapshot_date_query_failed_using_config_fallback`.
+
+**C. The date advances on refresh**
+6. Run a local ingestion against the Docker DB.
+7. `curl -s localhost:8000/api/v1/ready` again → **the date has advanced**. This is the entire point of the ticket.
+8. Load the UI in a browser → the disclaimer line renders the new date.
+
+**D. Fallback paths**
+9. Against a fresh DB with `clean_jobs` **empty** → `/ready` returns `200` with the *configured* date (empty-table fallback), and logs `snapshot_date_empty_table_using_config_fallback`.
+10. Against a DB **without** the T0019.3 migration applied → `/ready` still returns `200` with the configured date, and logs `snapshot_date_query_failed_using_config_fallback` **with a traceback**. Note this degrades silently from the caller's point of view — that is deliberate (a readiness probe must not flap on a cosmetic field) but is why the log line matters. Tracked in `Known_Issues.md`.
+
+**E. Readiness contract unchanged**
+11. Stop Postgres (`docker compose stop postgres`) → `/ready` returns **503** with `{"status": "error"}` and **no** `data_snapshot_date` key. The `SELECT 1` probe short-circuits before the date query is attempted.
+12. Hit `/api/v1/ready` more than `api.rate_limit` times in a minute → all return `200`, never `429`. Readiness must stay outside the limiter.

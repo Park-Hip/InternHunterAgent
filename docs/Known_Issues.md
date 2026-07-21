@@ -33,7 +33,7 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
 - [Demo UI (T0018.3)](#demo-ui-t00183) — 4
-- [Repo state & version control](#repo-state--version-control) — 0
+- [Repo state & version control](#repo-state--version-control) — 1
 
 ---
 
@@ -326,7 +326,12 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **Follow-up:** add a lightweight markdown renderer (or a minimal hand-rolled bold/list/paragraph formatter) on the client to render streamed answer text as HTML instead of raw markdown source.
 
 ## Repo state & version control
-- _(none currently open)_
+
+- **`[MED · OPEN]` T0015.2's `behavior_glossary` freeze never reached the mainline — the canonical phrasings exist only as a specification, not as configuration.**
+  - **Found:** 2026-07-22, during a branch-cleanup pass that restored `docs/Agent_Behavior_Spec.md` from the archived T0015.4 branch. `docs/Tickets.md:906` marks **T0015.2 *(done)*** with the scope "freeze the scenario set + canonical phrasings (the `behavior_glossary`) and author `docs/Agent_Behavior_Spec.md`". The spec was authored — but it lived only on an unmerged branch, and the glossary was never committed anywhere. Verified against `config/prompts.yaml` on this branch: **no `behavior_glossary` key**, and zero occurrences of any canonical phrase ID (`NEGOTIABLE-SALARY`, `FRESHNESS-REFUSAL`, `CROSS-CURRENCY`, `SENIOR-TITLE-HEDGE`, `SQL-DESCRIBE-ONLY`, …).
+  - **Impact:** the Agent Behavior Spec names `config/prompts.yaml`'s `behavior_glossary` as the *machine* source of truth for canonical strings, with itself as the *human* source of truth. Only the human half exists. The live prompts cover a subset of the same ground as free-form prose (e.g. `prompts.schema_context`'s "if a user asks about salary and the value is missing or negotiable, say so plainly") — so behavior is not unguided, but it is uncalibrated against the frozen phrasings, and nothing pins the exact strings the spec specifies. This is also the root of a **documentation-integrity** problem: a ticket marked *(done)* whose output was not in the repo.
+  - **Related:** `research/honesty-enforcement-design.md` §0 recommends resolving canonical phrasings from "the `behavior_glossary` (already frozen on the M15 track)" — that premise is **false as of today**, so any implementation of that design must land the glossary first or it has nothing to resolve against.
+  - **Follow-up:** no ticket owns this. Either (a) land the `behavior_glossary` block into `config/prompts.yaml` from the spec's §3 phrase list, or (b) amend the spec + `Tickets.md` to record that T0015.2 froze the human spec only. Decide before implementing the honesty-enforcement design. Note the phrasings were frozen against the v1 16-column schema, which is still current — they are not stale, just unlanded.
 
 ## Query service (T0019.10)
 

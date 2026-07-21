@@ -1255,3 +1255,66 @@ To disable: open the job on cron-job.org and **pause** it (no need to delete). E
 **E. Readiness contract unchanged**
 11. Stop Postgres (`docker compose stop postgres`) → `/ready` returns **503** with `{"status": "error"}` and **no** `data_snapshot_date` key. The `SELECT 1` probe short-circuits before the date query is attempted.
 12. Hit `/api/v1/ready` more than `api.rate_limit` times in a minute → all return `200`, never `429`. Readiness must stay outside the limiter.
+
+---
+
+### T0019.9: Ingestion coverage — raised cap + round-robin interleave
+
+**What changed:** two fixes to the same defect, neither sufficient alone.
+`config/ingestion.yaml`'s `max_jobs` moved `50 → 150` (a safety ceiling, now
+above the measured ~50–112 yield). `VietnamWorksSource._collect` now iterates
+**page outer / query inner** — page 0 of every query, then page 1 of every query
+— so a cap truncates evenly across queries instead of exhausting the config list
+from the top and starving `"MLOps"`, `"computer vision"`, `"deep learning"`.
+
+> **⚠️ Gate: none of these checks may hit the live API.** This ticket exists
+> because coverage is skewed, but the host's ToS/republishing posture (**D8**,
+> `research/v1-release-readiness-plan.md` §4) is unsettled. Every check below
+> runs against canned responses or a local DB. **Do not run a live fetch — not
+> to measure, not once.** The real re-measure is `research/data-ingestion-stage.md`
+> §11, and it is the maintainer's to run *after* D8.
+
+**Request volume note for the D8 conversation:** raising `max_jobs` does **not**
+increase requests. `pages_per_query x queries` (2 × 8 = 16) determines how many
+requests a run issues, and both are unchanged. The cap only decides when to stop
+early. Request *order* changes; count and per-request delay do not.
+
+**A. Suite green, diff tight**
+1. `uv run pytest && uv run ruff check . && uv run mypy`
+2. `git diff config/ingestion.yaml` → **exactly one changed value** (`max_jobs`)
+   plus its new explanatory comment. The `queries` list, `pages_per_query`,
+   `delay_seconds`, `hits_per_page`, and the retry settings must be untouched.
+3. `git diff --stat` → 5 files, confined to the allowed areas.
+
+**B. The anti-skew test genuinely discriminates** *(the important one)*
+4. `uv run pytest tests/services/ingestion/test_vietnamworks.py -v` → all pass.
+5. Temporarily swap `_collect`'s two loops back to query-outer/page-inner.
+6. Re-run. `test_cap_truncates_evenly_across_queries_not_alphabetically` **must
+   fail**, reporting `q6`/`q7`/`q8` missing, and `test_request_order_is_page_major`
+   must fail alongside it. A test that passes both before and after proves nothing.
+7. **Restore the interleave** and confirm green again.
+
+**C. Per-query coverage, end to end, no network**
+8. Build a `VietnamWorksSource` with a per-query mock client (dispatch on
+   `kwargs["json"]["query"]`, as `_per_query_client` in the test file does),
+   `list(src.fetch())`, and tally postings per query. Expect **all 8 queries
+   represented** and **exactly `max_jobs` total**. Under the old loop the tail
+   queries print `0`.
+9. **Sizing matters here:** the interleave's granularity is a *page*, not a job —
+   `_collect` drains a whole page before moving on. Jobs-per-query-per-page must
+   be `<= max_jobs / len(queries)` for a cap to reach every query. With 8
+   queries and `max_jobs = 20`, use **2 jobs per page**, not 10; at 10 the budget
+   is spent on two queries regardless of loop order and the check is vacuous.
+
+**D. Local pipeline unaffected** *(optional, local Docker only — never Neon)*
+10. With a local Docker Postgres holding existing data, run the loader **with an
+    injected mock client**. Confirm it completes, the summary line is well-formed,
+    `pages_failed` is `0`, and `SELECT COUNT(*) FROM clean_jobs;` does not shrink.
+11. If you cannot do this without a live fetch, **skip it and say so** — the gate
+    outranks the check.
+
+**E. Confirm the gate held**
+12. State explicitly that no request was issued to `ms.vietnamworks.com`, and
+    that this branch was not merged toward `main` or into the nightly cron's path
+    (`.github/workflows/ingestion.yml`). The code lands ready; the maintainer
+    settles D8 and *then* enables it.

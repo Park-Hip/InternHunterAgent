@@ -51,6 +51,42 @@ def _mock_client_sequence(side_effects: list) -> MagicMock:
     return client
 
 
+def _ai_job(job_id: int, query: str) -> dict:
+    """A job that passes the jobFunction precision filter, tagged with its query."""
+    return {
+        "jobId": job_id,
+        "jobTitle": f"{query} role {job_id}",
+        "jobUrl": f"https://www.vietnamworks.com/job-{job_id}-jv",
+        "jobFunction": {"parentId": 5, "children": [{"id": 27}]},
+    }
+
+
+def _per_query_client(
+    jobs_by_query: dict[str, dict[int, list[dict]]],
+    fail_pages: set[tuple[str, int]] | None = None,
+) -> MagicMock:
+    """Mock client whose response depends on the request payload's query and page.
+
+    `_build_payload` puts them at json["query"] / json["page"], so dispatching on
+    kwargs["json"] lets each query return distinct job IDs — the single-fixture
+    client used elsewhere in this file cannot show per-query coverage at all.
+    Any (query, page) in `fail_pages` raises a transient 500 on every attempt.
+    """
+    fail_pages = fail_pages or set()
+
+    def side_effect(url: str, **kwargs: object) -> MagicMock:
+        payload = kwargs["json"]
+        assert isinstance(payload, dict)
+        query, page = payload["query"], payload["page"]
+        if (query, page) in fail_pages:
+            raise _http_error(500)
+        return _ok_response({"data": jobs_by_query.get(query, {}).get(page, [])})
+
+    client = MagicMock()
+    client.post.side_effect = side_effect
+    return client
+
+
 class VietnamWorksSourceTests(unittest.TestCase):
     """Tests for VietnamWorksSource — no live network calls.
 
@@ -281,6 +317,118 @@ class VietnamWorksResilienceTests(unittest.TestCase):
         source._client = _mock_client_sequence([_ok_response(self.fixture)])
         list(source.fetch())
         self.assertEqual(source.pages_failed, 0)
+
+
+class VietnamWorksCoverageTests(unittest.TestCase):
+    """Round-robin interleave: a cap must truncate evenly across queries (T0019.9).
+
+    Shape used throughout: 8 queries x 2 pages x 2 AI/Data jobs per page = 32
+    jobs available, `max_jobs = 20`. The 2-per-page figure is load-bearing — the
+    interleave's granularity is a *page*, not a job, since `_collect` drains a
+    whole page before moving to the next query. Jobs-per-query-per-page must
+    therefore be <= max_jobs / len(queries) for a cap to reach every query at
+    all; with 10 jobs per page the budget is spent on two queries regardless of
+    loop order, and the anti-skew assertion below could not discriminate.
+    """
+
+    QUERIES = [f"q{i}" for i in range(1, 9)]
+    PAGES = 2
+    PER_PAGE = 2
+    MAX_JOBS = 20
+
+    def setUp(self) -> None:
+        patcher = patch("time.sleep")
+        self.mock_sleep = patcher.start()
+        self.addCleanup(patcher.stop)
+        # query -> page -> jobs. IDs encode the query index: qN owns N00..N99.
+        self.jobs_by_query = {
+            query: {
+                page: [
+                    _ai_job((qi + 1) * 100 + page * self.PER_PAGE + n, query)
+                    for n in range(self.PER_PAGE)
+                ]
+                for page in range(self.PAGES)
+            }
+            for qi, query in enumerate(self.QUERIES)
+        }
+
+    def _source(self, client: MagicMock, max_jobs: int | None = None) -> VietnamWorksSource:
+        source = VietnamWorksSource(client=client)
+        source._queries = list(self.QUERIES)
+        source._pages_per_query = self.PAGES
+        source._max_jobs = self.MAX_JOBS if max_jobs is None else max_jobs
+        return source
+
+    @staticmethod
+    def _query_of(external_id: str) -> str:
+        return f"q{int(external_id) // 100}"
+
+    # ------------------------------------------------------------------
+    # The anti-skew assertion — this ticket's core test
+    # ------------------------------------------------------------------
+
+    def test_cap_truncates_evenly_across_queries_not_alphabetically(self) -> None:
+        # Against the old query-outer loop the budget of 20 is consumed by the
+        # first 5 queries (4 jobs each) and q6..q8 are never requested at all.
+        source = self._source(_per_query_client(self.jobs_by_query))
+
+        results = list(source.fetch())
+
+        covered = {self._query_of(r.external_id) for r in results}
+        self.assertEqual(covered, set(self.QUERIES), "some queries were starved by the cap")
+
+    def test_cap_is_still_exact_and_global(self) -> None:
+        source = self._source(_per_query_client(self.jobs_by_query))
+
+        results = list(source.fetch())
+
+        self.assertEqual(len(results), self.MAX_JOBS)
+
+    def test_dedup_holds_across_the_interleave(self) -> None:
+        # q1 and q5 both return job 999 on page 0; it must be emitted exactly once.
+        shared = _ai_job(999, "shared")
+        jobs = copy.deepcopy(self.jobs_by_query)
+        jobs["q1"][0] = [*jobs["q1"][0], shared]
+        jobs["q5"][0] = [*jobs["q5"][0], shared]
+        source = self._source(_per_query_client(jobs), max_jobs=100)
+
+        results = list(source.fetch())
+
+        external_ids = [r.external_id for r in results]
+        self.assertEqual(external_ids.count("999"), 1)
+        self.assertEqual(len(external_ids), len(set(external_ids)))
+
+    def test_request_order_is_page_major(self) -> None:
+        source = self._source(_per_query_client(self.jobs_by_query), max_jobs=1000)
+
+        list(source.fetch())
+
+        pages = [c.kwargs["json"]["page"] for c in source._client.post.call_args_list]
+        # Every page-0 request precedes every page-1 request.
+        self.assertEqual(pages, sorted(pages))
+        self.assertEqual(pages, [0] * len(self.QUERIES) + [1] * len(self.QUERIES))
+
+    def test_politeness_delay_runs_once_per_page_attempt(self) -> None:
+        source = self._source(_per_query_client(self.jobs_by_query), max_jobs=1000)
+
+        list(source.fetch())
+
+        # No failures, so no backoff sleeps — every sleep is the politeness delay.
+        delay_sleeps = [c for c in self.mock_sleep.call_args_list if c.args[0] == source._delay]
+        self.assertEqual(len(delay_sleeps), source._client.post.call_count)
+        self.assertEqual(len(delay_sleeps), len(self.QUERIES) * self.PAGES)
+
+    def test_retry_skip_still_works_under_the_interleave(self) -> None:
+        client = _per_query_client(self.jobs_by_query, fail_pages={("q3", 0)})
+        source = self._source(client, max_jobs=1000)
+
+        results = list(source.fetch())
+
+        self.assertEqual(source.pages_failed, 1)
+        covered = {self._query_of(r.external_id) for r in results}
+        # Other queries are unaffected; q3 still contributes via its page 1.
+        self.assertEqual(covered, set(self.QUERIES))
+        self.assertNotIn("300", {r.external_id for r in results})
 
 
 if __name__ == "__main__":

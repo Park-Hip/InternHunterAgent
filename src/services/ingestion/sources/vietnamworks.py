@@ -131,13 +131,20 @@ class VietnamWorksSource(JobSource):
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def _collect(self, client: httpx.Client) -> Iterator[RawPosting]:
-        """Inner generator: iterate queries × pages, filter, dedup, cap."""
+        """Inner generator: iterate pages × queries round-robin, filter, dedup, cap.
+
+        Page-major on purpose: page 0 of every query, then page 1 of every query.
+        The cap is global, so a query-major order would spend the whole budget on
+        the first queries in the config list and never reach the last ones —
+        interleaving makes a truncated run truncate evenly across queries instead
+        of starving whichever roles happen to be listed later.
+        """
         seen_ids: set[int] = set()
         kept = 0
-        for query in self._queries:
+        for page in range(self._pages_per_query):
             if kept >= self._max_jobs:
                 break
-            for page in range(self._pages_per_query):
+            for query in self._queries:
                 if kept >= self._max_jobs:
                     break
                 try:

@@ -1161,7 +1161,7 @@ ingestion:
 **Out of Scope:**
 * An API-side startup assertion (read-path; follow-up register item); UptimeRobot-style uptime monitoring (T0019.7 owns external-scheduler machinery; §9's ceiling holds); alerting channels beyond healthchecks.io's built-in email.
 
-### T0019.6: GitHub Actions nightly ingestion cron — **T0019.1 recommended favorable 2026-07-16, pending maintainer confirmation; blocked on T0019.2–.5**
+### T0019.6: GitHub Actions nightly ingestion cron — **T0019.1 favorable verdict confirmed 2026-07-19; T0019.2–.5 complete; release-gated on T0019.9–.10 before merge to `main`**
 **Objective:** Land §4.2 #6 / §4.1's decision: an external, out-of-band scheduler invoking the offline ingestion CLI against Neon — reconciled against `Full_Design_Document.md` §2 by *amending* the no-schedulers exclusion to in-request background execution (the documented §4.1 reconciliation), not deleting it.
 **In Scope:**
 * Workflow: `on: schedule: cron: '0 2 * * *'` (02:00 UTC = 09:00 ICT) + `workflow_dispatch` for manual runs; checkout + `uv sync --frozen`; run the ingestion CLI (`uv run python -m src.services.ingestion.loader`); a `concurrency` group so overlapping runs never double-write; a job timeout well under the expected <10-min runtime.

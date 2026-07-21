@@ -22,7 +22,7 @@ These are deliberate, permanent decisions — not gaps to be closed by a future 
 
 - **Single LLM provider** (Groq, via `AgentProvider`) — no multi-provider routing or model-selection logic in the request pipeline.
 - **No multi-agent routing**, sub-agents, or agent-to-agent delegation.
-- **No autonomous or background execution** — no cron jobs, queues, or schedulers.
+- **No in-request autonomous or background execution** — no cron jobs, queues, or schedulers inside the API process or triggered by a request. (Amended 2026-07-19, T0019.6: this exclusion governs the *serving path* only. The single permitted exception is an out-of-band, scheduled invocation of the ingestion CLI on external infrastructure — a GitHub Actions cron (`.github/workflows/ingestion.yml`) that runs on a GitHub-hosted runner, not inside the API process. This preserves §3's ingestion-layer law that "the request pipeline must never import it": the scheduler triggers `src.services.ingestion.loader` as an external process, the same way a maintainer would run it manually, and never touches the API, service, runtime, tools, or tracing layers.)
 - **No cross-session or long-term memory.** Conversation memory is permanently limited to **session-scoped, short-term** context — what the agent needs to follow refinements within a single conversation. This memory may be *persisted* (so a conversation survives a restart and stays coherent across instances), but it is never shared across sessions and never accumulates into user profiles or a long-term store. Long-term recall — user history, resume understanding, embedding/similarity retrieval — is the excluded capability, regardless of how it might be stored.
 - **No authentication/authorization layer.**
 

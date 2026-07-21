@@ -1167,6 +1167,46 @@ Expect `ingestion.ping_sent` after the summary line. Then point it at a URL that
 
 Do not run any of these against Neon. Local Docker only.
 
+### T0019.6: Nightly ingestion cron
+
+Steps A and B are runnable now, with no external dependencies. **Steps C, D, and E require a maintainer to have configured the GitHub Actions secrets listed below**, and the schedule portion of E additionally requires the T0019 branch chain to be merged to `main` — GitHub only fires `schedule:` triggers from the default branch. None of that merge is part of this ticket. C–E additionally require T0019.5's manual checks B–E to have already been run against a live Postgres — they have not, as of this writing (see `Known_Issues.md`), and gate trusting an unattended run, not this checklist.
+
+**A — the YAML is valid and the repo is unchanged**
+```
+uv run python -c "import yaml,sys; yaml.safe_load(open('.github/workflows/ingestion.yml')); print('YAML OK')"
+git status --short
+uv run pytest && uv run ruff check . && uv run mypy
+```
+Expect: `YAML OK`; `git status --short` shows only the files this ticket touched; the full suite still passes (the two pre-existing `mypy` errors in `checkpointer.py`/`middleware.py` are unrelated — see `Known_Issues.md`).
+
+**B — resolve the required-secrets question empirically**
+With `.env` moved aside (`mv .env .env.bak`) so no local file backfills the variables:
+```
+env -u GROQ_API_KEY uv run python -m src.services.ingestion.loader; echo "exit=$?"
+env -u LANGFUSE_SECRET_KEY uv run python -m src.services.ingestion.loader; echo "exit=$?"
+env -u LANGFUSE_PUBLIC_KEY uv run python -m src.services.ingestion.loader; echo "exit=$?"
+```
+Expect all three to fail fast with `src.core.config.ConfigLoadError: Failed to load runtime settings. Missing required environment variables: <NAME>` and `exit=1`, before any database connection is attempted — confirmed live 2026-07-19. Restore `.env` afterwards (`mv .env.bak .env`). This is what justifies the workflow's placeholder values (`"unused-by-ingestion"`) for these three variables instead of real secrets: the CLI genuinely cannot start without them present, but nothing in the ingestion code path ever reads their value.
+
+**C — dispatch a real run from the feature branch**
+Requires maintainer-configured secrets: `DATABASE_URL` (Neon direct, non-pooled) and `HEALTHCHECKS_URL`. `GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_PUBLIC_KEY` are **not** secrets here — the workflow hardcodes placeholder literals for them (see Check B).
+
+Push `feature/t0019.6-nightly-cron-finish`, then in GitHub: Actions → "Nightly ingestion" → Run workflow → select that branch. Confirm:
+- the job completes green, well inside the 15-minute timeout;
+- the log contains the `ingestion.completed` line with all six numbers (`fetched`, `raw_upserted`, `clean_loaded`, `skipped`, `expired_count`, `pages_failed`) — paste it;
+- healthchecks.io shows the check received a ping;
+- on Neon: `SELECT COUNT(*) FROM clean_jobs;` grew or held — never shrank (record before/after);
+- `SELECT COUNT(*) FROM clean_jobs WHERE is_active = false;` is a sane number, not the whole table;
+- the live demo at https://internhunteragent.onrender.com still answers a question correctly.
+
+If this fails partway, do not retry blindly against Neon — report the failure with its log output. A half-written production table is worth a human look.
+
+**D — concurrency actually holds**
+Dispatch two runs back to back (same manual trigger as C). Confirm the second queues behind the first in the Actions run list rather than running alongside it.
+
+**E — the schedule is dormant, and that's expected**
+While this workflow lives only on a feature branch, confirm no scheduled run fires — `schedule:` only triggers from the default branch (`main`), and `main` does not yet contain this workflow. The scheduled (as opposed to `workflow_dispatch`-triggered) run cannot fire until the T0019 branch chain is merged to `main` — that merge is a maintainer decision outside this ticket. Once merged, check the first scheduled run the following morning; a run landing a few minutes after 02:00 UTC is documented GitHub schedule drift under load, not a failure.
+
 ### T0019.7: Windowed keep-alive ping + Neon idle-pool verification
 
 **Doc-only ticket — no code changed.** This section is a runbook for the maintainer to execute by hand on cron-job.org and to observe over ~24 h. Nothing here is run by a coder session. It closes the open question left in `docs/Known_Issues.md` (cold-start entry, `[HIGH · OPEN]` 750-hour entry) and `research/deployment-research-plan.md` §1a: **does the LangGraph checkpointer's idle Postgres pool alone keep Neon awake, regardless of which endpoint is pinged?** `src/core/checkpointer.py::build_checkpointer_pool` opens an `AsyncConnectionPool` with no `min_size`/`max_idle` override, so `psycopg_pool`'s default `min_size=4` holds four connections open at all times once the app starts — whether that idle-but-open state reads as active Neon compute is exactly what Part B measures.

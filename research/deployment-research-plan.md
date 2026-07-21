@@ -820,8 +820,9 @@ Sources:
 **Decision (2026-07-16):** Posture per **T0016** — credential-less CORS (moot same-origin), per-IP rate limit (`15/minute`, `/health` + `/ready` excluded), 2000-char input cap, `/docs` deliberately public. Frame protection now active: **`X-Frame-Options: DENY`** on all responses (T0018.2, verified live). Scraping ToS/robots is **N/A for this deploy** — it ships a static corpus snapshot with no cron; that question re-enters at the ingestion milestone.
 
 **Decision — VietnamWorks robots.txt / ToS (T0019.1, 2026-07-16):** RECOMMENDED VERDICT:
-**favorable** — **pending maintainer confirmation.** *(This is the ingestion-milestone re-entry the
-2026-07-16 decision above anticipated; it supersedes that decision's final sentence only.)*
+**favorable — maintainer confirmed 2026-07-19.** *(This is the ingestion-milestone re-entry the
+2026-07-16 decision above anticipated; it supersedes that decision's final sentence only. Confirmation
+recorded under T0019.6.)*
 
 - `ms.vietnamworks.com/robots.txt` → **HTTP 404**. **Absent** — this host serves no robots.txt at
   all. The 404 body is a JSON gateway error (`{"message":"no route matched with those values"}`),

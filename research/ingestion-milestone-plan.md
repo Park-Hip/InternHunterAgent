@@ -8,11 +8,17 @@
 > (proposed **T0019**) ready to graduate into `docs/Tickets.md`. No implementation here;
 > illustrative fragments only.
 >
-> **Graduated 2026-07-16.** §3's breakdown is now **T0019 (Milestone 19, T0019.1–.8)** in
+> **Graduated 2026-07-16.** §3's original breakdown is now **T0019 (Milestone 19)** in
 > [`docs/Tickets.md`](../docs/Tickets.md) — that file is the source of truth for scope and
 > sequencing from here. This document stays as the *rationale* record: why each §4.2 decision
 > held or was amended (§1), the named rejections (§4), and the unverified assumptions the
 > tickets are designed to measure (§5). Read §1 before scoping a sub-ticket; do not re-derive it.
+>
+> **Scope addendum 2026-07-19.** The source-of-truth ticket plan now adds **T0019.9** (raise
+> the ingestion ceiling to the measured 120-job bound and schedule query pages fairly) and
+> **T0019.10** (enforce the agent-visible detail projection). Both are corrective release gates:
+> the prepared T0019.6 workflow must not merge to `main` until they land. This preserves the
+> plan's live-DB safety goal without reopening its settled lifecycle or prompt decisions.
 >
 > **Read first:** `deployment-research-plan.md` §4/§4.1/§4.2 (the locked decisions),
 > §1a/§3/§9/§10/§11/§12; `docs/Known_Issues.md` § Config/startup/deployment and

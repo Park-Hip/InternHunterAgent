@@ -1318,3 +1318,71 @@ early. Request *order* changes; count and per-request delay do not.
     that this branch was not merged toward `main` or into the nightly cron's path
     (`.github/workflows/ingestion.yml`). The code lands ready; the maintainer
     settles D8 and *then* enables it.
+
+### T0019.10: get_job_details column allowlist
+
+`fetch_job_details` ran `SELECT * FROM clean_jobs`, so every one of the table's 22
+columns reached the agent verbatim through `_build_answer`'s `row.items()` — while
+`prompts.schema_context` tells the model that unlisted columns *do not exist*. Six
+columns leaked: `is_active`, `first_seen_at`, `last_seen_at` (T0019.3 lifecycle,
+deliberately hidden), `posted_date` (always NULL — the documented fabrication trap),
+`source` and `external_id` (ingestion bookkeeping). This ticket replaces the wildcard
+with the 16-column frozen contract, explicitly named.
+
+**A. Suite green**
+
+```
+uv run pytest tests/services/query/test_job_details.py -v
+uv run pytest && uv run ruff check . && uv run mypy
+```
+
+**B. The guard test genuinely discriminates** *(the real deliverable)*
+
+1. Temporarily replace the column list in `src/services/query/job_details.py` with
+   `SELECT *`. Re-run `test_selects_exactly_the_schema_context_column_contract`. It
+   **must fail** — the `*` assertion trips and the parsed token set is `{'*'}`.
+2. **Sharper case, do this one too:** restore the allowlist, then append
+   `, is_active, source, external_id, posted_date` to it. Re-run. The test must fail
+   naming exactly those four as leaked. This is the run that exercises the
+   forbidden-column assertions; step 1 alone does not.
+3. Step 2 is also the substring-trap check: `source` must be reported as a leak while
+   the allowlisted `source_url` is not, and `external_id` while `id` is not. If the
+   test tolerates `source`, the assertions were weakened to substring matching and
+   catch nothing. Guard parsing lives in `_selected_columns` — it splits the
+   `SELECT … FROM` clause on commas and compares **whole stripped tokens**.
+4. **Restore the allowlist** and confirm green again.
+
+**C. The leak is closed against real data** *(needs Docker Postgres up, `clean_jobs` populated)*
+
+```
+uv run python -c "
+from src.services.query.job_details import fetch_job_details
+rows = fetch_job_details([1])
+print(sorted(rows[0].keys()) if rows else 'no row id=1 — pick another id')
+"
+```
+
+Expect exactly the 16 contract keys. Confirm `is_active`, `first_seen_at`,
+`last_seen_at`, `posted_date`, `source`, `external_id` are **all absent**.
+
+**D. What the agent actually receives** *(the verification that matters)*
+
+```
+uv run python -c "
+import asyncio
+from src.agents.tools.get_job_details import get_job_details
+print(asyncio.run(get_job_details.ainvoke({'ids': [1]})))
+"
+```
+
+This is the literal string the model sees. Read it: no `is_active=`, no
+`posted_date=None`, no `first_seen_at=` anywhere in it.
+
+**E. The tool still works in the real app**
+
+5. `uv run uvicorn src.api.app:app --reload`
+6. Ask a listing question ("show me 3 data engineer jobs"), then ask for detail on a
+   returned id ("tell me more about job 12").
+7. Confirm the answer still includes the **full description**, company, salary, and
+   location — the tool is narrowed, not degraded — and that the model does **not**
+   mention listing freshness or activity state.

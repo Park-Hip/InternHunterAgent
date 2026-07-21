@@ -28,7 +28,7 @@ report. If an open item still cross-references the resolved one, leave a short p
 the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.md` (closed).
 
 ## Categories
-- [Config, startup & deployment](#config-startup--deployment) — 20
+- [Config, startup & deployment](#config-startup--deployment) — 21
 - [Agent runtime & prompts](#agent-runtime--prompts) — 13
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
@@ -152,6 +152,11 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **Found:** 2026-07-20, reviewing the untracked `.github/workflows/ingestion.yml` while closing out T0019.8.
   - **Impact:** GitHub auto-disables `schedule:` workflows in repos with 60 days of no activity. T0019.6 scoped `gautamkrishnar/keepalive-workflow` to cover this, but that repository is **blocked by GitHub Staff for a ToS violation** (returns HTTP 403 `Repository access blocked: tos`) — the action existed to circumvent the very policy GitHub cites. It cannot be pinned to a SHA because the repo is inaccessible, so the workflow ships with the step deliberately omitted and a `TODO(maintainer)` comment. Net: once the nightly cron is live, it can silently stop firing after 60 quiet days.
   - **Follow-up** (maintainer decision, D11 in `research/v1-release-readiness-plan.md` §4): monthly manual no-op commit / a from-scratch self-ping workflow touching only this repo / accept-and-calendar it. Not resolvable in code without a decision.
+
+- **`[MED · OPEN]` The checkpointer's raw psycopg pool has no connection-health check, and a resulting pool timeout can be misreported to users as "the demo is busy" (a Groq/provider message) rather than a DB issue.**
+  - **Found:** 2026-07-21, investigating a live Render `WARNING:psycopg.pool:discarding closed connection: <psycopg.AsyncConnection [BAD] ...>` reported by the maintainer, correlated with a "The demo is busy right now. Please try again in a moment." response that self-resolved a few hours later.
+  - **Impact:** `build_checkpointer_pool()` (`src/core/checkpointer.py:12-21`) constructs its `AsyncConnectionPool` with no `check=` validator, no `max_idle`, and default `min_size=4` — so it proactively opens and holds idle connections to Neon regardless of chat traffic. T0019.7's keep-alive ping deliberately hits only `GET /api/v1/health` (no DB call, by design — see the ping-vs-CU-hours entry above), so it does **not** keep Neon's compute awake; Neon still autosuspends after its normal 5-minute idle window (`research/deployment-research-plan.md` §3). When it does, the pool's held connections die server-side; psycopg_pool eventually notices and logs the `discarding closed connection` warning while reconnecting. If a concurrent chat request instead hits `pool.getconn()` while the pool is between a dead connection and a healthy replacement, it can raise `psycopg_pool.PoolTimeout` — whose class name contains the literal substring `"timeout"` — which `classify_provider_busy_error()` (`src/core/errors.py:16-35`) pattern-matches and rewrites into the generic `ProviderBusyError`/`BUSY_MESSAGE`, indistinguishable from real Groq rate-limit pressure. The Render log excerpt gathered for this investigation showed the warning immediately followed by a full graceful process restart (consistent with Render's normal 15-min idle spin-down) and then a clean `200 OK` — i.e., the incident most likely self-healed because a fresh process means a fresh pool, not because Neon or Groq recovered on their own.
+  - **Follow-up:** no ticket owns this yet. Candidate fix: add `check=AsyncConnectionPool.check_connection` (psycopg_pool's built-in liveness probe) to `build_checkpointer_pool()` so dead connections are caught and replaced before being handed to a request, instead of surfacing as a misclassified busy error. Secondary, lower-priority idea: log/tag pool-originated failures distinctly from provider failures in `classify_provider_busy_error` so an operator reading structlog output isn't misled about which upstream is actually under pressure. Ties into the still-open Neon idle-pool verification question above (T0019.7 `[MED · OPEN]` entry) — this finding is evidence that idle pool connections do **not** keep Neon from suspending.
 
 ## Agent runtime & prompts
 
@@ -307,3 +312,18 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 
 ## Repo state & version control
 - _(none currently open)_
+
+## Query service (T0019.10)
+
+- **`[MEDIUM · OPEN]` The `get_job_details` column list and `prompts.schema_context` are coupled by comment and guard test only — not by a shared constant.**
+  - **Found:** 2026-07-21, T0019.10. `fetch_job_details` now names the 16 contract columns explicitly, mirroring `config/prompts.yaml → prompts.schema_context`. Nothing mechanically derives one from the other: a future schema change must update **both**, or the two drift apart again in the same direction this ticket just fixed.
+  - **Why not a shared constant:** `schema_context` is descriptive prose the model reads (per-column type + semantics), not a column list. There is no clean common ancestor to derive both from, and inventing one is architecture T0019.10 did not sanction. The sync comment above the column list plus `test_selects_exactly_the_schema_context_column_contract` is the deliberate coupling.
+  - **Follow-up:** if a third consumer of the contract ever appears, revisit — a machine-readable column manifest that `schema_context` is *rendered from* would be the shape to consider. Not warranted at two consumers.
+
+- **`[RESOLVED]` The `SELECT *` leak was six columns, not the three the ticket named.**
+  - **Found:** 2026-07-21, T0019.10 grounding. The ticket's objective named `is_active`, `first_seen_at`, `last_seen_at`. `clean_jobs` has 22 columns and `schema_context` lists 16, so the actual leaked set also included **`posted_date`** (always NULL — the column this project has repeatedly refused to synthesize, handed to the model as `posted_date=None` on every detail lookup), **`source`**, and **`external_id`** (ingestion bookkeeping). The ticket's In-Scope line ("the 16-column frozen contract and nothing else") already covered all six; a reader following only the objective would have fixed three and left three.
+  - **Resolved by:** T0019.10's explicit allowlist. Recorded here because the miscount is the kind of thing that recurs — the wildcard hid it, and the objective's illustrative list understated it.
+
+- **`[LOW · OPEN]` The guard test asserts against the SQL *string*, not the executed projection.**
+  - `test_selects_exactly_the_schema_context_column_contract` parses the `SELECT … FROM` clause out of the statement text with a regex and compares whole comma-split tokens. This catches a wildcard regression and any added/dropped column name, but it is text analysis: it would not catch a column exposed by other means (a view change, a `SELECT` built dynamically, a join adding columns). Adequate for the current single static statement.
+  - **Follow-up:** if `fetch_job_details` ever builds its SQL dynamically, replace the string assertion with one against real result keys behind a DB-backed test.

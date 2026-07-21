@@ -130,6 +130,15 @@ for the release. None contradict a DoD bullet.
   idle-pool question (same runbook); GitHub Actions 60-day auto-disable unmitigated (the
   named keepalive action is defunct — ToS-blocked; see the workflow header); Langfuse
   self-host secret checklist (moot unless self-hosting).
+- **Checkpointer pool has no connection-health check** (KI, MED, found 2026-07-21): the
+  raw psycopg `AsyncConnectionPool` in `src/core/checkpointer.py` holds idle Neon
+  connections with no `check=` validator, and a live incident showed this is evidence
+  the Neon idle-pool question above resolves unfavorably — idle pool connections do
+  **not** keep Neon awake. Worse, a resulting `psycopg_pool.PoolTimeout` gets
+  misclassified by `classify_provider_busy_error()` as Groq/provider pressure (its class
+  name contains `"timeout"`), so a DB-side hiccup surfaces to users as "the demo is busy"
+  — masking the real cause. Candidate fix: `check=AsyncConnectionPool.check_connection`.
+  No ticket owns it yet.
 - **Ingestion coverage:** `max_jobs: 50` below the measured ~50–112 yield + fixed query
   order starves later queries (KI, MED — the two combinable fixes are recorded);
   `pages_failed` produced but unconsumed; no within-run re-queue of failed pages;

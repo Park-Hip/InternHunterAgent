@@ -5,14 +5,22 @@
 > T0015.2 — `docs/Tickets.md` marks that ticket *(done)*, but neither this file nor the
 > `behavior_glossary` it names had ever reached the mainline.
 >
-> **⚠️ The "machine source of truth" referenced below does not currently exist.**
-> `config/prompts.yaml` has **no `behavior_glossary` block** and none of the canonical phrase
-> IDs (`NEGOTIABLE-SALARY`, `FRESHNESS-REFUSAL`, `CROSS-CURRENCY`, …) appear anywhere in it.
-> The live prompts express some of these behaviors as **prose instruction** instead (e.g. "if
-> a user asks about salary and the value is missing or negotiable, say so plainly"). So this
-> doc is currently the *only* surviving half of a two-part contract — treat the phrase IDs
-> below as a specification to be implemented, not as strings the system already emits.
-> Tracked in `docs/Known_Issues.md`.
+> **⚠️ The "machine source of truth" referenced below is frozen but NOT LANDED.**
+> `config/prompts.yaml` on this branch has **no `behavior_glossary` block** — none of the
+> canonical phrase IDs appear in it, and the live prompts express a subset of these behaviors
+> as **prose instruction** instead (e.g. "if a user asks about salary and the value is missing
+> or negotiable, say so plainly"). The glossary itself is **complete and recoverable** — 18
+> strings, committed 2026-07-11 in `62f2089`, preserved at tag
+> **`archive/t0015.2-behavior-glossary`**:
+>
+> ```bash
+> git show archive/t0015.2-behavior-glossary:config/prompts.yaml
+> ```
+>
+> So treat the phrase IDs below as **specified and written, but not yet what the system
+> emits**. Landing them is owned work, tracked in `docs/Known_Issues.md` → Repo state &
+> version control. Note the ID spelling differs: this doc hyphenates (`NEGOTIABLE-SALARY`),
+> the config uses underscores (`NEGOTIABLE_SALARY`).
 >
 > **Status:** Spec of record — **frozen 2026-07-11 (T0015.2)**. This is the human-readable
 > single source of truth for *how Resumi should behave*, scenario by scenario, against the frozen

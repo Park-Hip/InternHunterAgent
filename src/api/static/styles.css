@@ -204,32 +204,37 @@ input { font: inherit; color: inherit; }
 /* ---- suggested questions (leads) ------------------------------------- */
 .leads {
   margin-top: 1.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--hairline);
 }
-.leads__grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
-  margin-top: 0.75rem;
+
+/* One suggestion per row, stacked vertically under the question box. */
+.leads__stack {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.6rem;
+  border-top: 1px solid var(--hairline);
 }
 .chip {
   display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+  align-items: baseline;
+  gap: 0.85rem;
+  width: 100%;
   text-align: left;
-  padding: 0.9rem 1rem;
+  padding: 0.7rem 0.25rem;
   background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 2px;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 0;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: background 0.15s ease, padding-left 0.15s ease;
 }
 .chip:hover {
-  border-color: var(--ink);
   background: var(--hairline-2);
+  padding-left: 0.6rem;
 }
 .chip__tag {
+  /* wide enough for the longest tag ("Boundaries") — a narrower gutter lets
+     that one row push its question out of alignment with the others */
+  flex: 0 0 6.75rem;
   font-size: 0.66rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -291,7 +296,7 @@ input { font: inherit; color: inherit; }
   cursor: default;
 }
 .composer__send:disabled:hover { background: var(--ink); }
-.chip:disabled:hover { border-color: var(--hairline); background: transparent; }
+.chip:disabled:hover { background: transparent; padding-left: 0.25rem; }
 
 /* ---- colophon --------------------------------------------------------- */
 .colophon {
@@ -336,6 +341,9 @@ input { font: inherit; color: inherit; }
 
 /* ---- phone ------------------------------------------------------------ */
 @media (max-width: 32rem) {
-  .leads__grid { grid-template-columns: 1fr; }
+  /* narrow screens: the label gutter would squeeze the question, so let the
+     tag sit on its own line above it */
+  .chip { flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+  .chip__tag { flex: 0 0 auto; }
   .composer__send { padding: 0.5rem 1.1rem; }
 }

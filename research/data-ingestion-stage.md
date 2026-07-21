@@ -369,3 +369,74 @@ language** (§2.6), which belongs in the agent/prompt design.
 - **Anti-bot / scraping:** [Cloudscraper Python guide (ScrapingBee)](https://www.scrapingbee.com/blog/how-to-scrape-websites-with-cloudscraper-python-example/) · [Scrapfly Pricing](https://scrapfly.io/pricing) · [Scrapfly Billing docs](https://scrapfly.io/docs/scrape-api/billing) · [Scrapfly jobs scraping use-case](https://scrapfly.io/use-case/jobs-web-scraping)
 - **Vietnamese boards context:** [Python web scraping for VN job sites (GitHub)](https://github.com/tcd93/python-web-scraping/)
 - **Legality:** [Is Web Scraping Legal in 2026? (Browserless)](https://www.browserless.io/blog/is-web-scraping-legal) · [robots.txt Scraping Compliance (PromptCloud)](https://www.promptcloud.com/blog/robots-txt-scraping-compliance-guide/)
+
+---
+
+## 11. Coverage re-measure runbook (T0019.9) — **PENDING D8, NOT YET RUN**
+
+T0019.9 raised `config/ingestion.yaml`'s `max_jobs` from `50` to `150` and made
+`VietnamWorksSource._collect` interleave page-major (page 0 of every query, then
+page 1 of every query) so a cap truncates evenly across queries instead of
+starving whichever roles are listed last. Both changes assume the API's real
+yield sits below 150 — an assumption resting on a **06/2026 spike measuring
+~50–112** AI/Data postings across the 8 configured queries. That figure may be
+stale.
+
+Re-measuring requires live fetches against `ms.vietnamworks.com`, which
+**decision D8** (`research/v1-release-readiness-plan.md` §4 — republishing/ToS
+posture for an undocumented API) currently blocks. So this section is a runbook
+with the results deliberately left empty. **Do not fill the table from
+estimation, extrapolation, or the old spike — an invented measurement is worse
+than a visibly absent one.**
+
+### 11.1. Command (run once D8 is settled)
+
+Against a **local Docker Postgres**, never Neon:
+
+```bash
+docker compose up -d postgres
+uv run alembic upgrade head
+uv run python -m src.services.ingestion.loader
+```
+
+The loader's own summary line reports the run's fetched/kept counts. For the
+per-query and overlap breakdown, follow with a read-only count against the local
+DB (chosen over instrumenting the adapter: no production code changes, and the
+loader already persists everything needed):
+
+```bash
+docker compose exec -T postgres psql -U internhunter -d internhunter \
+  -c "SELECT COUNT(*) FROM raw_jobs WHERE fetched_at::date = CURRENT_DATE;" \
+  -c "SELECT COUNT(*) FROM clean_jobs WHERE last_seen_at::date = CURRENT_DATE;"
+```
+
+Per-query yield is **not** recoverable from the DB — `raw_jobs` records the
+posting, not the query that surfaced it. To get it, run the throwaway
+distribution script pattern from the T0019.9 manual check C against a **real**
+client and tally by request, or temporarily log `(query, page, kept)` inside
+`_collect` on a scratch branch. Do not commit either.
+
+### 11.2. Results — _TBD, pending D8_
+
+| Measurement | Value | Notes |
+| --- | --- | --- |
+| Total postings fetched (one run) | _TBD — pending D8_ | Compare against `max_jobs: 150`. |
+| Per-query yield (each of the 8 queries) | _TBD — pending D8_ | The anti-skew fix's real-world payoff. |
+| Dedup overlap rate (cross-query) | _TBD — pending D8_ | `seen_ids` collisions / total returned. |
+| Date measured | _TBD — pending D8_ | |
+
+### 11.3. Decision rule once measured
+
+- **Measured yield comfortably below ~150** → `max_jobs` is a true safety ceiling
+  and is doing its job. Nothing to change. Close the `[MED]` coverage entry in
+  `docs/Known_Issues.md`.
+- **Measured yield at or above ~150** → the cap is **binding again** and the
+  original defect has silently returned: a truncated run still looks identical
+  to a complete one. Raise `max_jobs` above the new ceiling (config-only, no
+  code change) and re-run this runbook. Note that request volume is governed by
+  `pages_per_query x queries`, not by `max_jobs`, so raising the cap does not by
+  itself increase load on the host — but if the ceiling is being hit because
+  more pages are needed, that *would*, and returns to D8.
+- **Per-query yield still visibly skewed** after the interleave → the skew is in
+  the API's own results, not in loop order, and needs a different fix (per-query
+  quotas were explicitly out of scope for T0019.9).

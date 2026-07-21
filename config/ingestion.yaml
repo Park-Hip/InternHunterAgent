@@ -22,7 +22,14 @@ job_function:
   parent_id: 5    # "Information Technology/Telecommunications" — IT precision filter
   child_ids: [27] # "Data Engineer/Data Analyst/AI" — AI/Data focus subset
 
-max_jobs: 50
+# Safety ceiling, NOT a target. It exists to bound a runaway run, and it now sits
+# deliberately above the measured ~50-112 yield (research/data-ingestion-stage.md
+# §11) so the API's actual output — not this cap — is what ends a run. Raising it
+# does NOT increase per-run request volume: pages_per_query x queries determines
+# how many requests are issued, and both are unchanged. It only stops the cap
+# from cutting a run short. Re-measure per the §11 runbook; if the real yield
+# ever exceeds ~150, raise this again rather than let it bind.
+max_jobs: 150
 
 # Lifecycle: time-based soft expiry. A posting absent from search for this many
 # consecutive days flips is_active=false. Rows are NEVER deleted.

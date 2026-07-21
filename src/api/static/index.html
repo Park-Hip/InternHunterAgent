@@ -34,9 +34,26 @@
         </section>
       </main>
 
+      <form class="composer" id="composer" autocomplete="off">
+        <label class="composer__label" for="query">Your question</label>
+        <div class="composer__row">
+          <input
+            class="composer__input"
+            id="query"
+            name="query"
+            type="text"
+            maxlength="2000"
+            placeholder="Ask about a role, a salary, a skill…"
+          />
+          <button class="composer__send" id="send" type="submit">Ask</button>
+        </div>
+      </form>
+
+      <!-- Suggested questions sit BELOW the composer so the conversation flows
+           straight into the question box without a block interrupting it. -->
       <section class="leads" aria-label="Suggested questions">
         <p class="leads__kicker">Try one</p>
-        <div class="leads__grid" id="chips">
+        <div class="leads__stack" id="chips">
           <!-- data-query is the exact text submitted on click. -->
           <button class="chip" type="button" data-query="Which job was posted most recently?">
             <span class="chip__tag">Freshness</span>
@@ -56,21 +73,6 @@
           </button>
         </div>
       </section>
-
-      <form class="composer" id="composer" autocomplete="off">
-        <label class="composer__label" for="query">Your question</label>
-        <div class="composer__row">
-          <input
-            class="composer__input"
-            id="query"
-            name="query"
-            type="text"
-            maxlength="2000"
-            placeholder="Ask about a role, a salary, a skill…"
-          />
-          <button class="composer__send" id="send" type="submit">Ask</button>
-        </div>
-      </form>
 
       <footer class="colophon">
         <span>InternHunter · a portfolio demo</span>

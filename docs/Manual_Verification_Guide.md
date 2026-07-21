@@ -1166,3 +1166,263 @@ HEALTHCHECKS_URL="https://httpbin.org/status/200" uv run python -m src.services.
 Expect `ingestion.ping_sent` after the summary line. Then point it at a URL that fails (`https://httpbin.org/status/500` or an unroutable host) and confirm `ingestion.ping_failed` is logged as a warning while the process still exits `0`.
 
 Do not run any of these against Neon. Local Docker only.
+
+### T0019.6: Nightly ingestion cron
+
+Steps A and B are runnable now, with no external dependencies. **Steps C, D, and E require a maintainer to have configured the GitHub Actions secrets listed below**, and the schedule portion of E additionally requires the T0019 branch chain to be merged to `main` — GitHub only fires `schedule:` triggers from the default branch. None of that merge is part of this ticket. C–E additionally require T0019.5's manual checks B–E to have already been run against a live Postgres — they have not, as of this writing (see `Known_Issues.md`), and gate trusting an unattended run, not this checklist.
+
+**A — the YAML is valid and the repo is unchanged**
+```
+uv run python -c "import yaml,sys; yaml.safe_load(open('.github/workflows/ingestion.yml')); print('YAML OK')"
+git status --short
+uv run pytest && uv run ruff check . && uv run mypy
+```
+Expect: `YAML OK`; `git status --short` shows only the files this ticket touched; the full suite still passes (the two pre-existing `mypy` errors in `checkpointer.py`/`middleware.py` are unrelated — see `Known_Issues.md`).
+
+**B — resolve the required-secrets question empirically**
+With `.env` moved aside (`mv .env .env.bak`) so no local file backfills the variables:
+```
+env -u GROQ_API_KEY uv run python -m src.services.ingestion.loader; echo "exit=$?"
+env -u LANGFUSE_SECRET_KEY uv run python -m src.services.ingestion.loader; echo "exit=$?"
+env -u LANGFUSE_PUBLIC_KEY uv run python -m src.services.ingestion.loader; echo "exit=$?"
+```
+Expect all three to fail fast with `src.core.config.ConfigLoadError: Failed to load runtime settings. Missing required environment variables: <NAME>` and `exit=1`, before any database connection is attempted — confirmed live 2026-07-19. Restore `.env` afterwards (`mv .env.bak .env`). This is what justifies the workflow's placeholder values (`"unused-by-ingestion"`) for these three variables instead of real secrets: the CLI genuinely cannot start without them present, but nothing in the ingestion code path ever reads their value.
+
+**C — dispatch a real run from the feature branch**
+Requires maintainer-configured secrets: `DATABASE_URL` (Neon direct, non-pooled) and `HEALTHCHECKS_URL`. `GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_PUBLIC_KEY` are **not** secrets here — the workflow hardcodes placeholder literals for them (see Check B).
+
+Push `feature/t0019.6-nightly-cron-finish`, then in GitHub: Actions → "Nightly ingestion" → Run workflow → select that branch. Confirm:
+- the job completes green, well inside the 15-minute timeout;
+- the log contains the `ingestion.completed` line with all six numbers (`fetched`, `raw_upserted`, `clean_loaded`, `skipped`, `expired_count`, `pages_failed`) — paste it;
+- healthchecks.io shows the check received a ping;
+- on Neon: `SELECT COUNT(*) FROM clean_jobs;` grew or held — never shrank (record before/after);
+- `SELECT COUNT(*) FROM clean_jobs WHERE is_active = false;` is a sane number, not the whole table;
+- the live demo at https://internhunteragent.onrender.com still answers a question correctly.
+
+If this fails partway, do not retry blindly against Neon — report the failure with its log output. A half-written production table is worth a human look.
+
+**D — concurrency actually holds**
+Dispatch two runs back to back (same manual trigger as C). Confirm the second queues behind the first in the Actions run list rather than running alongside it.
+
+**E — the schedule is dormant, and that's expected**
+While this workflow lives only on a feature branch, confirm no scheduled run fires — `schedule:` only triggers from the default branch (`main`), and `main` does not yet contain this workflow. The scheduled (as opposed to `workflow_dispatch`-triggered) run cannot fire until the T0019 branch chain is merged to `main` — that merge is a maintainer decision outside this ticket. Once merged, check the first scheduled run the following morning; a run landing a few minutes after 02:00 UTC is documented GitHub schedule drift under load, not a failure.
+
+### T0019.7: Windowed keep-alive ping + Neon idle-pool verification
+
+**Doc-only ticket — no code changed.** This section is a runbook for the maintainer to execute by hand on cron-job.org and to observe over ~24 h. Nothing here is run by a coder session. It closes the open question left in `docs/Known_Issues.md` (cold-start entry, `[HIGH · OPEN]` 750-hour entry) and `research/deployment-research-plan.md` §1a: **does the LangGraph checkpointer's idle Postgres pool alone keep Neon awake, regardless of which endpoint is pinged?** `src/core/checkpointer.py::build_checkpointer_pool` opens an `AsyncConnectionPool` with no `min_size`/`max_idle` override, so `psycopg_pool`'s default `min_size=4` holds four connections open at all times once the app starts — whether that idle-but-open state reads as active Neon compute is exactly what Part B measures.
+
+#### Part A — Setup runbook (cron-job.org)
+
+Follow once, in order:
+
+1. Create a free account at [cron-job.org](https://cron-job.org) (or sign in if one already exists).
+2. **Before entering any schedule**, open Account Settings and check the account's configured timezone.
+   - If it is already `Asia/Ho_Chi_Minh` (UTC+7), enter the schedule in Step 5 using the **ICT** hours (`07:00`–`23:00`).
+   - If it is anything else (commonly UTC by default), either change it to `Asia/Ho_Chi_Minh`, **or** leave it and enter the schedule using the **UTC** hours instead (`00:00`–`16:00`). Do not mix the two — entering ICT-intended hours into a UTC-configured account silently shifts the whole window 7 hours, which would ping straight through the Vietnamese night and burn instance-hours for no visitor benefit. This is the single easiest mistake in this ticket.
+3. Click **Create cronjob**.
+4. **Title:** `InternHunterAgent keep-alive` (or similar — cosmetic only).
+5. **URL:** `https://internhunteragent.onrender.com/api/v1/health`
+   - **Never** `https://internhunteragent.onrender.com/api/v1/ready` — `/ready` runs `SELECT 1` against Postgres (`src/api/routes/health.py:40-46`) and would hold Neon awake on every ping, defeating the entire point. `/health` (`health.py:13-21`) returns a static `{"api": "online"}` and touches no database — confirmed by reading the route, not assumed.
+6. **Schedule:** use the custom/advanced schedule editor (not the simple "every N minutes" preset — that preset has no hour restriction and would run 24/7, triggering the 750-hour cliff below). Set:
+   - **Minutes:** every 12 minutes (`*/12`) — inside the required 10–14 min range.
+   - **Hours:** `7-22` if the account timezone is `Asia/Ho_Chi_Minh`, or `0-15` if entering UTC directly (both cover `07:00`–`22:59` ICT, i.e. the intended ~16 h window; the schedule naturally stops before `23:00`).
+   - **Days:** every day.
+   - **A 15-minute interval is not safe.** Render's idle timer is exactly 15 minutes. Any scheduler jitter — cron-job.org's own queueing delay, network latency, a slightly-late trigger — can push a single ping past the 15-minute mark, and the instance spins down anyway, defeating the ping that was supposed to prevent it. The 10–14 min range (12 used above) exists specifically to absorb that jitter.
+7. Save the job. **Record the enable date/time** (e.g. in this file's Part B "Before enabling" column, or a note wherever the maintainer tracks it) — the 24-hour observation in Part B starts from this moment.
+8. **Expected request volume**, for sanity-checking cron-job.org's own execution history afterwards: ~12 min interval × 16 h window ≈ 5 requests/hour × 16 h ≈ **~80 requests/day**.
+9. **One honest caveat, carried forward from `research/deployment-research-plan.md` §1a's policy check:** Render's Acceptable Use Policy has no written rule against keep-alive pings, but one clause has a foothold — *"intentionally misuse the Service to avoid payment or financial responsibility"* — since a keep-alive obtains behavior Render sells at $7/mo (Starter). The §1a policy check reads this as low-risk and unsupported rather than prohibited (the windowed, non-24/7 shape is part of that argument). If the maintainer would rather not sit in that tension at all, decision-rule branch (c) below (Render Starter, $7/mo) removes it outright by making the ping unnecessary.
+
+#### Part B — Measurement template
+
+Fill in after enabling. Read Neon numbers from **Neon Console → project → Monitoring** (or **Usage**); read Render numbers from **Render Dashboard → service → Metrics** (or **Billing** for workspace-wide instance-hours). Neon's usage meter can lag — take the "after ~24 h" reading with a little slack (e.g. at +24–26 h) rather than at exactly +24 h.
+
+| Metric | Before enabling | After ~24 h | Expected if healthy |
+|---|---|---|---|
+| Neon compute (CU-hours, last 24 h) | | | well under ~4 CU-h/day — see arithmetic below |
+| Neon — does the compute show suspension gaps? | | | yes, gaps between pings |
+| Render instance-hours (month to date) | | | tracking ≈16 h/day |
+| Demo cold start during window | | | loads immediately, no blank tab |
+| Demo after 23:00 ICT + 15 min | | | spins down as before |
+
+**The arithmetic that makes this unambiguous:**
+- The ping window is ~16 h/day (07:00–23:00 ICT). `/health` itself touches no database, so the *only* way pinging could keep Neon awake is the checkpointer's idle pool (4 connections, opened once at app startup and never touched by the ping request itself).
+- **If Neon suspends properly** between pings (its own idle timer is 5 min — see §3 of `deployment-research-plan.md`), 24-hour compute should be a **small fraction** of the 16-hour window — the pool's presence doesn't matter if Neon still suspends on inactivity. This is the "well under ~4 CU-h/day" row.
+- **If the idle pool holds Neon awake** for the full time Render is up, compute becomes **16 h × 0.25 CU = 4 CU-h/day**, which annualizes to **≈122 CU-h/month** — over the 100 CU-h/month free cap (see Part C's trigger below).
+- A reading that lands clearly in one bucket or the other (near-zero vs. ≈4 CU-h/day) is the whole point of this measurement — it should not require judgment calls.
+
+#### Part C — Decision rule (pre-written; apply in this order)
+
+▎ **Trigger:** if the 24-hour reading shows Neon compute consistent with staying awake through the window (**≈4 CU-h/day, no suspension gaps**) → projected **≈122 CU-h/month against the 100 CU-h cap** → apply the rule below, in order.
+
+1. **(a) Shed idle pool connections first.** Configure the checkpointer's psycopg pool with `min_size=0` and/or an idle-connection lifetime, with the new params added to `config/settings.yaml` (per this project's "parameters live in config" rule) — **this is a code change and is its own ticket**, not part of T0019.7. Neon resumes in ~300–500 ms (p95 ~2.6 s per §3), so the added per-request latency on a cold Neon connection is acceptable. **Re-run Part B for another 24 h after applying (a)** to confirm the fix actually reduced compute — do not assume it worked.
+2. **(b) If (a) is insufficient:** shrink the ping window. Example: a 12 h/day window ≈ 3 CU-h/day ≈ **91 CU-h/month** — back under the 100 CU-h cap — at the cost of a cold start returning during the trimmed hours.
+3. **(c) If neither works:** move to **Render Starter, $7/mo**, and drop the ping entirely. This sits inside the project's documented $10/month ceiling (`deployment-research-plan.md` §10) and removes the problem at the root — no spin-down means no keep-alive is needed, means no Neon pressure from this mechanism at all. This is also the clean way to sidestep the Render AUP tension noted in Part A step 9, if the maintainer would rather not carry it.
+
+If the trigger does **not** fire (compute stays low, suspension gaps are visible), no action is needed — the ping is safe to leave running as configured.
+
+#### Part D — Rollback
+
+To disable: open the job on cron-job.org and **pause** it (no need to delete). Expect the status quo to return — Render spins down after 15 min idle again, and the next cold visitor after an idle gap waits ~60 s for the page itself, same as before T0019.7 was enabled.
+
+---
+
+### T0019.8: Truthful refresh date on `/ready`
+
+**What changed:** `/api/v1/ready` no longer reports the static `api.demo.data_snapshot_date` from `config/ingestion`-adjacent config. `get_data_snapshot_date()` in `src/api/routes/health.py` now runs `SELECT MAX(last_seen_at)::date FROM clean_jobs` and returns that ISO date, falling back to the configured value only when the table is empty or the query fails. Response shape and the UI are unchanged.
+
+**Why it needs a manual check:** the automated tests patch `_select_max_last_seen`, so they supply a `datetime.date` object directly. They therefore prove the *fallback logic* but **cannot** prove that PostgreSQL's `::date` cast actually arrives as a `datetime.date` through psycopg3, nor that the fallback isn't silently winning against a real database. Only checks 2–4 below establish that.
+
+> **Run these against the Dockerized `api` service.** Native Windows `uv run uvicorn` still hangs on the pre-existing `ProactorEventLoop` incompatibility (`Known_Issues.md`) — unrelated to this ticket.
+
+**A. Setup**
+1. `docker compose up -d`
+2. `uv run alembic upgrade head` — required; `last_seen_at` only exists after T0019.3's migration.
+
+**B. The date is real, not the config fallback** *(the load-bearing check)*
+3. `curl -s localhost:8000/api/v1/ready` → note `data_snapshot_date`.
+4. `docker compose exec -T postgres psql -U internhunter -d internhunter -c "SELECT MAX(last_seen_at)::date FROM clean_jobs;"`
+5. **The two must match.** If the endpoint instead returns the configured value while the table has rows, the fallback is firing wrongly — check logs for `snapshot_date_query_failed_using_config_fallback`.
+
+**C. The date advances on refresh**
+6. Run a local ingestion against the Docker DB.
+7. `curl -s localhost:8000/api/v1/ready` again → **the date has advanced**. This is the entire point of the ticket.
+8. Load the UI in a browser → the disclaimer line renders the new date.
+
+**D. Fallback paths**
+9. Against a fresh DB with `clean_jobs` **empty** → `/ready` returns `200` with the *configured* date (empty-table fallback), and logs `snapshot_date_empty_table_using_config_fallback`.
+10. Against a DB **without** the T0019.3 migration applied → `/ready` still returns `200` with the configured date, and logs `snapshot_date_query_failed_using_config_fallback` **with a traceback**. Note this degrades silently from the caller's point of view — that is deliberate (a readiness probe must not flap on a cosmetic field) but is why the log line matters. Tracked in `Known_Issues.md`.
+
+**E. Readiness contract unchanged**
+11. Stop Postgres (`docker compose stop postgres`) → `/ready` returns **503** with `{"status": "error"}` and **no** `data_snapshot_date` key. The `SELECT 1` probe short-circuits before the date query is attempted.
+12. Hit `/api/v1/ready` more than `api.rate_limit` times in a minute → all return `200`, never `429`. Readiness must stay outside the limiter.
+
+---
+
+### T0019.9: Ingestion coverage — raised cap + round-robin interleave
+
+**What changed:** two fixes to the same defect, neither sufficient alone.
+`config/ingestion.yaml`'s `max_jobs` moved `50 → 150` (a safety ceiling, now
+above the measured ~50–112 yield). `VietnamWorksSource._collect` now iterates
+**page outer / query inner** — page 0 of every query, then page 1 of every query
+— so a cap truncates evenly across queries instead of exhausting the config list
+from the top and starving `"MLOps"`, `"computer vision"`, `"deep learning"`.
+
+> **⚠️ Gate: none of these checks may hit the live API.** This ticket exists
+> because coverage is skewed, but the host's ToS/republishing posture (**D8**,
+> `research/v1-release-readiness-plan.md` §4) is unsettled. Every check below
+> runs against canned responses or a local DB. **Do not run a live fetch — not
+> to measure, not once.** The real re-measure is `research/data-ingestion-stage.md`
+> §11, and it is the maintainer's to run *after* D8.
+
+**Request volume note for the D8 conversation:** raising `max_jobs` does **not**
+increase requests. `pages_per_query x queries` (2 × 8 = 16) determines how many
+requests a run issues, and both are unchanged. The cap only decides when to stop
+early. Request *order* changes; count and per-request delay do not.
+
+**A. Suite green, diff tight**
+1. `uv run pytest && uv run ruff check . && uv run mypy`
+2. `git diff config/ingestion.yaml` → **exactly one changed value** (`max_jobs`)
+   plus its new explanatory comment. The `queries` list, `pages_per_query`,
+   `delay_seconds`, `hits_per_page`, and the retry settings must be untouched.
+3. `git diff --stat` → 5 files, confined to the allowed areas.
+
+**B. The anti-skew test genuinely discriminates** *(the important one)*
+4. `uv run pytest tests/services/ingestion/test_vietnamworks.py -v` → all pass.
+5. Temporarily swap `_collect`'s two loops back to query-outer/page-inner.
+6. Re-run. `test_cap_truncates_evenly_across_queries_not_alphabetically` **must
+   fail**, reporting `q6`/`q7`/`q8` missing, and `test_request_order_is_page_major`
+   must fail alongside it. A test that passes both before and after proves nothing.
+7. **Restore the interleave** and confirm green again.
+
+**C. Per-query coverage, end to end, no network**
+8. Build a `VietnamWorksSource` with a per-query mock client (dispatch on
+   `kwargs["json"]["query"]`, as `_per_query_client` in the test file does),
+   `list(src.fetch())`, and tally postings per query. Expect **all 8 queries
+   represented** and **exactly `max_jobs` total**. Under the old loop the tail
+   queries print `0`.
+9. **Sizing matters here:** the interleave's granularity is a *page*, not a job —
+   `_collect` drains a whole page before moving on. Jobs-per-query-per-page must
+   be `<= max_jobs / len(queries)` for a cap to reach every query. With 8
+   queries and `max_jobs = 20`, use **2 jobs per page**, not 10; at 10 the budget
+   is spent on two queries regardless of loop order and the check is vacuous.
+
+**D. Local pipeline unaffected** *(optional, local Docker only — never Neon)*
+10. With a local Docker Postgres holding existing data, run the loader **with an
+    injected mock client**. Confirm it completes, the summary line is well-formed,
+    `pages_failed` is `0`, and `SELECT COUNT(*) FROM clean_jobs;` does not shrink.
+11. If you cannot do this without a live fetch, **skip it and say so** — the gate
+    outranks the check.
+
+**E. Confirm the gate held**
+12. State explicitly that no request was issued to `ms.vietnamworks.com`, and
+    that this branch was not merged toward `main` or into the nightly cron's path
+    (`.github/workflows/ingestion.yml`). The code lands ready; the maintainer
+    settles D8 and *then* enables it.
+
+### T0019.10: get_job_details column allowlist
+
+`fetch_job_details` ran `SELECT * FROM clean_jobs`, so every one of the table's 22
+columns reached the agent verbatim through `_build_answer`'s `row.items()` — while
+`prompts.schema_context` tells the model that unlisted columns *do not exist*. Six
+columns leaked: `is_active`, `first_seen_at`, `last_seen_at` (T0019.3 lifecycle,
+deliberately hidden), `posted_date` (always NULL — the documented fabrication trap),
+`source` and `external_id` (ingestion bookkeeping). This ticket replaces the wildcard
+with the 16-column frozen contract, explicitly named.
+
+**A. Suite green**
+
+```
+uv run pytest tests/services/query/test_job_details.py -v
+uv run pytest && uv run ruff check . && uv run mypy
+```
+
+**B. The guard test genuinely discriminates** *(the real deliverable)*
+
+1. Temporarily replace the column list in `src/services/query/job_details.py` with
+   `SELECT *`. Re-run `test_selects_exactly_the_schema_context_column_contract`. It
+   **must fail** — the `*` assertion trips and the parsed token set is `{'*'}`.
+2. **Sharper case, do this one too:** restore the allowlist, then append
+   `, is_active, source, external_id, posted_date` to it. Re-run. The test must fail
+   naming exactly those four as leaked. This is the run that exercises the
+   forbidden-column assertions; step 1 alone does not.
+3. Step 2 is also the substring-trap check: `source` must be reported as a leak while
+   the allowlisted `source_url` is not, and `external_id` while `id` is not. If the
+   test tolerates `source`, the assertions were weakened to substring matching and
+   catch nothing. Guard parsing lives in `_selected_columns` — it splits the
+   `SELECT … FROM` clause on commas and compares **whole stripped tokens**.
+4. **Restore the allowlist** and confirm green again.
+
+**C. The leak is closed against real data** *(needs Docker Postgres up, `clean_jobs` populated)*
+
+```
+uv run python -c "
+from src.services.query.job_details import fetch_job_details
+rows = fetch_job_details([1])
+print(sorted(rows[0].keys()) if rows else 'no row id=1 — pick another id')
+"
+```
+
+Expect exactly the 16 contract keys. Confirm `is_active`, `first_seen_at`,
+`last_seen_at`, `posted_date`, `source`, `external_id` are **all absent**.
+
+**D. What the agent actually receives** *(the verification that matters)*
+
+```
+uv run python -c "
+import asyncio
+from src.agents.tools.get_job_details import get_job_details
+print(asyncio.run(get_job_details.ainvoke({'ids': [1]})))
+"
+```
+
+This is the literal string the model sees. Read it: no `is_active=`, no
+`posted_date=None`, no `first_seen_at=` anywhere in it.
+
+**E. The tool still works in the real app**
+
+5. `uv run uvicorn src.api.app:app --reload`
+6. Ask a listing question ("show me 3 data engineer jobs"), then ask for detail on a
+   returned id ("tell me more about job 12").
+7. Confirm the answer still includes the **full description**, company, salary, and
+   location — the tool is narrowed, not degraded — and that the model does **not**
+   mention listing freshness or activity state.

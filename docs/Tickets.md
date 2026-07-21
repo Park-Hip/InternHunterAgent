@@ -23,7 +23,7 @@ Ticket specs and delivery sequence for the MVP. Each entry is the **plan** for o
 | 16 | T0016 | Security Posture | ✅ | CORS, rate limit, input cap, `/docs` decision |
 | 17 | T0017 | Streaming Response Delivery | ✅ | `astream` + no-leak filter, SSE endpoint |
 | 18 | T0018 | Clickable Demo (UI + go-live) | ✅ | .1–.4 done · **live: https://internhunteragent.onrender.com** |
-| 19 | T0019 | Ingestion Deploy Readiness (live-DB) | ▶ | **▶ next** — .1–.8 scoped · nightly cron into Neon, hidden lifecycle columns, ops hardening |
+| 19 | T0019 | Ingestion Deploy Readiness (live-DB) | ▶ | **▶ in progress** — .1–.5, .7, .8 done · .6 (cron) open, human-gated · .9/.10 scoped 2026-07-20 |
 | — | Backlog | CI merge gate, `main` reconciliation | 📋 | unscheduled; seeds future tickets |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on maintainer credentials — see [`Known_Issues.md`](Known_Issues.md).
@@ -781,8 +781,8 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Any agent-side (Groq) change or the agent's Groq-TPD budget constraint — a separate timing limit, not a code fix here.
 * Refining the *agent's own* behavior via prompts, and the matching eval prompt/metric redesign — that is the **v2 refinement** logged in `Known_Issues.md` (Evaluation harness — cost & rate-limit exposure), gated on designing the preferred per-scenario behaviors; not this ticket.
 
-## T0013: Milestone 13 - Pre-Deploy Refinement — ✅ Done
-**Objective:** House the disciplined pre-deploy refinement work researched in `research/pre-deploy-refinement-plan.md` (2026-07-07): the path from the current agent-only base to a deployable v1 — **freeze the schema + eval baseline → measure (v1) → scenario/manual-test → prompt-tune + metric-refine (v2) → deploy-harden**. Each phase rests on a frozen, measured predecessor. Phase 0's first step is to **freeze the schema** so all downstream prompt/eval work pins to a stable, deployed contract — that is T0013.1. Later sub-tickets (the eval **metric-set** freeze, the **scenario matrix**, the **prompt-v2 + metric-v2** refinement pass) are authored from the plan as each phase is reached — this milestone does **not** pre-build them (CLAUDE.md §1: implement one ticket only; no future-ticket features). Cross-refs: `research/pre-deploy-refinement-plan.md`, `research/deployment-research-plan.md`, `docs/Known_Issues.md`.
+## T0013: Milestone 13 - Schema Enrichment & v1 Freeze — ✅ Done
+**Objective:** Enrich the agent-visible `clean_jobs` schema from 13 → 16 columns and then **freeze** it as the v1 contract, so all downstream prompt/eval work pins to a stable, deployed surface. This is **Phase 0** of the disciplined pre-deploy refinement path researched in `research/pre-deploy-refinement-plan.md` (2026-07-07): the enrichment sub-tickets (**T0013.1–T0013.4**) fix *avoidably poor* data before the freeze (**T0013.5**) locks it in. The **later phases** of that plan — the eval **metric-set** freeze, the **scenario matrix**, and the **prompt-v2 + metric-v2** refinement pass — are **not** part of this milestone: they were spun out into **T0015 (Prompt Engineering v2)** plus the automated harness/metric track, and deploy-hardening + ingestion `is_active` recency into **T0014 (Ingestion Deploy Readiness)**. Per CLAUDE.md §1 this milestone implements only Phase 0. Cross-refs: `research/pre-deploy-refinement-plan.md`, `research/schema-enrichment-plan.md`, `research/deployment-research-plan.md`, `docs/Known_Issues.md`.
 **Schema-enrichment amendment (2026-07-09, user-approved):** a schema review before the freeze (recorded in `research/schema-enrichment-plan.md`) found the freeze would otherwise lock in *avoidably poor* data — a hardcoded-allowlist `tech_stack`, a hidden-but-populated `job_level`, and no usable time column — so the user approved **enriching the agent-visible schema from 13 → 16 columns before freezing it**. This adds four predecessor sub-tickets (T0013.1–T0013.4) that must land **before** the freeze (now T0013.5). Full evidence, audits, and the external-vocabulary source table are in `research/schema-enrichment-plan.md` §2–§5; read it before implementing any of these.
 **In Scope:** see sub-tickets below.
 **Sequencing (execution order):** T0013.1 (tech_stack) is standalone and may run anytime. T0013.2 → T0013.3 → T0013.4 each edit the same three schema surfaces, so run them in order to avoid conflicts, and **T0013.5 (the freeze) runs LAST** — it records and guards whatever the enrichments produced. Numbering matches this order; do **not** pick up T0013.5 first.
@@ -1102,7 +1102,7 @@ ingestion:
 * Writing ingestion to a separate DB and swapping — either two DBs leak into the serving path or the rejected promotion step returns; #1/#2 exist to make in-place writes safe.
 * A **second board** (ITviec/TopDev/TopCV/LinkedIn) — the recorded fallback direction if T0019.1 comes back unfavorable, not this milestone's work.
 * CI merge gate + `main` reconciliation (adjacent, separately tracked — `pre-deploy-refinement-plan.md` §6i, `Repo_Current_State.md`); observability beyond the dead-man's switch + yield assertions (§9's sanctioned set is the ceiling); an API-side startup schema assertion (read-path; register follow-up).
-**Sequencing (execution order):** **T0019.1 first** (doc-only gate); **.2 → .3 → .5 → .6** is the dependency spine; **.4, .7, .8** float (.8 needs .3's columns, .5 wants .4's `pages_failed`). Blocked-on markers are explicit per ticket.
+**Sequencing (execution order):** **T0019.1 first** (doc-only gate); **.2 → .3 → .5 → .6** is the dependency spine; **.4, .7, .8** float (.8 needs .3's columns, .5 wants .4's `pages_failed`). **.9 and .10 were added 2026-07-20** (decision D3, `research/v1-release-readiness-plan.md` §4) to give real ticket IDs to the coverage and detail-visibility follow-ups the design doc already referenced: **.10 must land before the cron is enabled** (its leak turns from cosmetic to real the moment rows start expiring); **.9 is genuinely post-cron and additionally gated on D8**. Blocked-on markers are explicit per ticket.
 **Rollback runbook (documented with T0019.3, not a ticket of its own):** rebuild `clean_jobs` from `raw_jobs` via `to_normalized_job` + the upsert — the exact recovery already performed live on 2026-07-15 during the schema-drift fix. Accumulating `raw_jobs` is what makes this possible; it is the milestone's rollback path.
 **If T0019.1 comes back unfavorable** (robots disallows `/job-search/`, or the ToS prohibits automated access): **T0019.6 is parked, not adapted.** The milestone degrades to "lifecycle-ready pipeline + ops hardening" — .2/.3/.5/.7/.8 still land and are independently valuable — the demo stays on the manually-loaded corpus, and the source question re-opens as a new research item. A daily unattended job against a forbidding host is a standing violation and is not shipped quietly.
 
@@ -1161,7 +1161,7 @@ ingestion:
 **Out of Scope:**
 * An API-side startup assertion (read-path; follow-up register item); UptimeRobot-style uptime monitoring (T0019.7 owns external-scheduler machinery; §9's ceiling holds); alerting channels beyond healthchecks.io's built-in email.
 
-### T0019.6: GitHub Actions nightly ingestion cron — **T0019.1 recommended favorable 2026-07-16, pending maintainer confirmation; blocked on T0019.2–.5**
+### T0019.6: GitHub Actions nightly ingestion cron — **T0019.1 favorable verdict confirmed 2026-07-19; T0019.2–.5 complete; release-gated on T0019.9–.10 before merge to `main`**
 **Objective:** Land §4.2 #6 / §4.1's decision: an external, out-of-band scheduler invoking the offline ingestion CLI against Neon — reconciled against `Full_Design_Document.md` §2 by *amending* the no-schedulers exclusion to in-request background execution (the documented §4.1 reconciliation), not deleting it.
 **In Scope:**
 * Workflow: `on: schedule: cron: '0 2 * * *'` (02:00 UTC = 09:00 ICT) + `workflow_dispatch` for manual runs; checkout + `uv sync --frozen`; run the ingestion CLI (`uv run python -m src.services.ingestion.loader`); a `concurrency` group so overlapping runs never double-write; a job timeout well under the expected <10-min runtime.
@@ -1183,7 +1183,7 @@ ingestion:
 **Out of Scope:**
 * 24/7 pinging (the 750-h cliff, `Known_Issues.md` `[HIGH]`); pinging `/ready`; GitHub Actions as the ping scheduler (UTC-only, 60-day auto-disable, 10+-min drift vs a 15-min idle window — cron ≠ ping); paid monitoring.
 
-### T0019.8: Truthful refresh date on `/ready` — **blocked on T0019.3**
+### T0019.8: Truthful refresh date on `/ready` — ✅ **done 2026-07-20** (blocker T0019.3 cleared; live-DB manual checks outstanding)
 **Objective:** Keep the UI disclaimer honest once data refreshes nightly — the static `api.demo.data_snapshot_date` becomes false the first time the cron runs.
 **In Scope:**
 * `/api/v1/ready` derives the disclaimer date from data state — `SELECT MAX(last_seen_at)::date FROM clean_jobs` — falling back to the existing config value when NULL/unavailable. Plain SQL in the existing readiness path; **no ingestion-layer import** (layer isolation holds — it reads a table, not the ingestion package).
@@ -1193,11 +1193,34 @@ ingestion:
 **Out of Scope:**
 * Exposing any freshness value to the *agent* — the `posted_date` fabrication trap stands, and this is a UI/`/ready`-level value the model still cannot see; changing the disclaimer wording or the UI; removing the config fallback.
 
+### T0019.9: Ingestion coverage — raise `max_jobs` + interleave query order — **post-cron; interacts with D8 (ToS posture)**
+**Objective:** Widen and de-bias the corpus the demo answers from. `max_jobs: 50` (`config/ingestion.yaml`) sits below the measured ~50–112 real yield, and `VietnamWorksSource._collect` walks `queries` **sequentially**, so the cap is exhausted by whichever queries run first. With 8 queries × `hits_per_page: 50` × `pages_per_query: 2`, the first two ("data scientist", "data engineer") consume the entire budget and "MLOps", "computer vision", and "deep learning" are effectively never ingested — the corpus is both truncated *and* skewed, and no error surfaces.
+**In Scope:**
+* Raise `max_jobs` in `config/ingestion.yaml` above the measured yield ceiling so the cap stops being the binding constraint (parameters stay in config per `CLAUDE.md` §1 — no constant moves into code).
+* **Round-robin interleave** across `queries` in `src/services/ingestion/sources/vietnamworks.py::_collect` — take a page from each query in turn rather than draining one query before starting the next, so a cap truncates evenly across roles instead of alphabetically by config order.
+* Preserve every existing invariant of `_collect`: `seen_ids` cross-query dedup, the `_is_ai_data` jobFunction filter, the politeness `delay_seconds` between requests, and T0019.4's per-page try/continue + retry/backoff.
+* Tests: a stub source with more queries than the cap proves every query contributes rows (the anti-skew assertion); dedup still holds across the interleave; the cap is still respected exactly.
+* Re-measure the real yield and record it in `research/data-ingestion-stage.md`.
+**Out of Scope:**
+* Any **new source** (ITviec/TopDev/TopCV/LinkedIn) — still a separate research item; changing the nightly cadence or `pages_per_query` politeness envelope; changing the `queries` list itself or the jobFunction filter.
+* Shipping this before **D8** (ToS republishing posture) is settled — this ticket deliberately increases request volume against the same host, so it must not land ahead of that decision.
+
+### T0019.10: `get_job_details` explicit column allowlist — **becomes blocker-tier once the cron expires rows**
+**Objective:** Close the hidden-column leak between the two query tools. `fetch_job_details` (`src/services/query/job_details.py:16`) runs `SELECT * FROM clean_jobs` and returns **every** column to the agent as a dict, including the `is_active` / `first_seen_at` / `last_seen_at` lifecycle columns that T0019.3 deliberately kept out of `schema_context`. One tool hides them; the other hands them over — so the agent can describe lifecycle state it was never given vocabulary to reason about.
+**Priority note:** cosmetic *today* only because every row is `is_active = true`, so the leaked value is uniform and uninformative. It becomes a real correctness/honesty defect the moment the nightly cron (T0019.6) starts expiring rows — at that point the agent can surface stale-listing state through an unguarded path while the sanctioned path still hides it. Fix before the cron is enabled, not after.
+**In Scope:**
+* Replace `SELECT *` with one explicit column list **mirroring `schema_context`** — the 16-column frozen contract and nothing else — so the two tools expose exactly the same surface by construction.
+* A guard test asserting none of `is_active`, `first_seen_at`, `last_seen_at` ever appears in `fetch_job_details` output, in the same spirit as T0019.3's prompt-surface guard tests.
+* A comment at the column list naming `schema_context` as the thing it must stay in sync with, so the coupling is discoverable when the schema next changes.
+**Out of Scope:**
+* **Deliberately** exposing `is_active` to the agent plus the accompanying honesty hedge — that stays cut from T0019 and gated behind the T0011.5 baseline → prompt-v2 few-shot pass → recalibration chain.
+* Changing the 16-column frozen contract, `schema_context`, any prompt, golden, or eval; touching `query_clean_jobs` (the executor path already projects explicitly).
+
 ## Backlog — unscheduled milestones (removed 2026-07-12; to be named & scoped) — 📋 Backlog
 Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Ingestion Deploy Readiness** (briefly numbered T0016–T0018) on 2026-07-12 at the user's request — they need more specific milestone names and scoping before they re-enter the numbered roadmap. Their substance is preserved in research and will seed the future tickets:
 * **Deploy hardening** — `research/pre-deploy-refinement-plan.md` §6, **minus the security posture (§6b) now carved into T0016 (Milestone 16)**. §6f (Langfuse secrets) is moot — the deploy uses **Langfuse Cloud Hobby**, not self-host (user decision 2026-07-12). Remaining unscheduled: topology (§6a), DB readiness probe (§6c), what-data-ships (§6g), deploy-doc drift (§6h), CI gate (§6i).
 * **Demo UI** — **promoted to the numbered roadmap on 2026-07-13, then split:** the streaming backend became **T0017 (Milestone 17, fully scoped)** and the UI + go-live became **T0018 (Milestone 18, fully scoped 2026-07-14; re-split 2026-07-15 into T0018.1–.4)**. See both above. `research/pre-deploy-refinement-plan.md` §6j; `research/demo-ui-and-golive-plan.md`.
-* **Ingestion Deploy Readiness** — **promoted to the numbered roadmap on 2026-07-16 as T0019 (Milestone 19, scoped .1–.8)**. See above. It absorbed the three ops items previously parked here: the keep-alive ping (`deployment-research-plan.md` §1a), the dead-man's switch (§9A), and the schema-drift assertion/migration (`Known_Issues.md` `[HIGH · OPEN]`). Validation of its decisions: `research/ingestion-milestone-plan.md`.
+* **Ingestion Deploy Readiness** — **promoted to the numbered roadmap on 2026-07-16 as T0019 (Milestone 19, scoped .1–.8; extended to .10 on 2026-07-20)**. See above. It absorbed the three ops items previously parked here: the keep-alive ping (`deployment-research-plan.md` §1a), the dead-man's switch (§9A), and the schema-drift assertion/migration (`Known_Issues.md` `[HIGH · OPEN]`). Validation of its decisions: `research/ingestion-milestone-plan.md`.
 
 **Still unscheduled after T0019:**
 * **CI merge gate** — `research/pre-deploy-refinement-plan.md` §6i; no automated gate today, and Render auto-deploys straight off the active branch. Explicitly *not* part of T0019.6 (that workflow is ingestion-only).

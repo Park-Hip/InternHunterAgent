@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from slowapi.util import get_remote_address
 from starlette.datastructures import MutableHeaders
 
 from src.api.routes import query, health
+from src.api.schema_guard import assert_serving_schema
 from src.agents.runtime.factory import agent_factory
 from src.agents.runtime.react_agent import AgentRuntime
 from src.core.checkpointer import build_checkpointer, build_checkpointer_pool
@@ -42,6 +44,7 @@ class FrameGuardMiddleware:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_settings()
+    await asyncio.to_thread(assert_serving_schema)  # boot fails loudly on clean_jobs drift
 
     pool = build_checkpointer_pool()
     await pool.open()

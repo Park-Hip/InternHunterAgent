@@ -315,7 +315,7 @@ expected (the deployed `prompts.yaml` has no glossary block to collide with). Th
 re-run (stage 2) then happens on a branch that has both the mechanism and the frozen
 scenario definitions — recorded as a v2 matrix file next to the v1 one, same protocol,
 same fixture, same model/temp, new `prompt_version`. The wider main-reconciliation problem
-(main stuck at T0009) is explicitly out of scope here and stays where it's tracked.
+(main reconciled to `bcc81db` via PR #29 — T0020.1) is explicitly out of scope here and stays where it's tracked.
 
 ---
 

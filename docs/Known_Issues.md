@@ -33,7 +33,7 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
 - [Demo UI (T0018.3)](#demo-ui-t00183) — 4
-- [Repo state & version control](#repo-state--version-control) — 1
+- [Repo state & version control](#repo-state--version-control) — 4
 - [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 5
 
 ---
@@ -334,6 +334,21 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **Impact:** the Agent Behavior Spec names `config/prompts.yaml`'s `behavior_glossary` as the *machine* source of truth for canonical strings, with itself as the *human* source of truth. Only the human half exists. The live prompts cover a subset of the same ground as free-form prose (e.g. `prompts.schema_context`'s "if a user asks about salary and the value is missing or negotiable, say so plainly") — so behavior is not unguided, but it is uncalibrated against the frozen phrasings, and nothing pins the exact strings the spec specifies. This is also the root of a **documentation-integrity** problem: a ticket marked *(done)* whose output was not in the repo.
   - **Related:** `research/honesty-enforcement-design.md` §0 recommends resolving canonical phrasings from "the `behavior_glossary` (already frozen on the M15 track)" — that premise is **false as of today**, so any implementation of that design must land the glossary first or it has nothing to resolve against.
   - **Follow-up:** needs its own ticket — **deliberately not folded into the 2026-07-22 cleanup pass**, because landing a `behavior_glossary` block changes what the agent says and requires behavioural verification the cleanup could not perform. Scope for that ticket: `git show archive/t0015.2-behavior-glossary:config/prompts.yaml` → lift the 18-entry block into `config/prompts.yaml`, confirm the phrase IDs match `Agent_Behavior_Spec.md` §3 (note the spec writes them hyphenated, `NEGOTIABLE-SALARY`; the config uses underscores, `NEGOTIABLE_SALARY` — reconcile), and re-run the goldens. The phrasings were frozen against the v1 16-column schema, which is still current, so they are not stale. Sequence this **before** implementing `research/honesty-enforcement-design.md`, whose §0 assumes the glossary is already frozen in config.
+
+- **`[LOW · OPEN]` T0020 has no milestone/sub-ticket block in `Tickets.md`, yet T0020.1–.4 are now referenced across the docs.**
+  - **Found:** 2026-07-22, T0020.1. The Backlog line for `main` reconciliation was rewritten to "✅ done (T0020.1, PR #29)", and `Repo_Current_State.md` now points "Next recommended ticket" at T0020.2 and names T0020.3/.4 — but `docs/Tickets.md` carries **no numbered T0020 milestone section** (the ingredient scope the T0020.1 coder prompt cited at "lines 1235–1242" does not exist at `bcc81db`). The roadmap milestone is scoped in `research/v1-release-readiness-plan.md` §2 and the memory note [[v1-release-roadmap-m20-m22]], but not yet in `Tickets.md`.
+  - **Impact:** the numbered roadmap and the prose docs are briefly out of step — a reader following `Tickets.md` alone will not find T0020.1–.4 defined. Cosmetic, not a correctness risk.
+  - **Follow-up:** author the T0020 milestone + sub-ticket In/Out-of-Scope blocks in `Tickets.md` (owns T0020.2 Render repoint, T0020.3 CI gate, T0020.4 cron activation). **Deliberately not done in T0020.1** — that ticket was scoped to docs-reconciliation + the local-ref sync only, and authoring a milestone is separate roadmap work.
+
+- **`[LOW · OPEN]` A concurrent session's uncommitted audit edits were stashed during the T0020.1 branch switch and must be restored.**
+  - **Found:** 2026-07-22, T0020.1. At the start of the ticket the working tree carried uncommitted changes to `docs/Known_Issues.md` and `docs/Tickets.md` from a concurrent "error-handling observability audit" (6 issues). `git checkout main` could not proceed with them present, so they were stashed with a label: `stash@{0}` = *"concurrent-session: error-handling observability audit (Known_Issues + Tickets) - stashed by T0020.1 session"* (on `feature/t0019.10-job-details-allowlist`).
+  - **Impact:** that audit work is **not lost** but is parked in the stash; it will not appear in any branch until restored. The stash was taken against the T0019.10 branch's tree, so a `git stash pop` after T0020.1 merges may surface conflicts in `Known_Issues.md`/`Tickets.md` (both files were edited on both sides).
+  - **Follow-up:** the concurrent session (or maintainer) should `git stash pop` and reconcile onto the appropriate branch. **Not resolved in T0020.1** — restoring another session's live work is outside this ticket and risks its edits.
+
+- **`[LOW · OPEN]` `Repo_Current_State.md`'s deep T0019.6 narrative still calls T0019.10 "in progress, uncommitted".**
+  - **Found:** 2026-07-22, T0020.1. The milestone-map and next-ticket sections were updated to reflect PR #29 landing the chain, but the detailed T0019.6 paragraph (under "In progress / next") retains historical phrasing like "T0019.10 still in progress, uncommitted".
+  - **Impact:** minor internal inconsistency; the authoritative status lines (milestone map, completed milestones, next ticket) are correct.
+  - **Follow-up:** refresh the T0019.6 detail paragraph on a later docs pass. **Not done in T0020.1** — that ticket's `Repo_Current_State.md` scope was the header, topology, completed-work, and next-ticket sections only.
 
 ## Query service (T0019.10)
 

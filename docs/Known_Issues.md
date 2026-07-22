@@ -33,7 +33,7 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
 - [Demo UI (T0018.3)](#demo-ui-t00183) — 4
-- [Repo state & version control](#repo-state--version-control) — 4
+- [Repo state & version control](#repo-state--version-control) — 3
 - [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 5
 
 ---
@@ -344,11 +344,6 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **Found:** 2026-07-22, T0020.1. At the start of the ticket the working tree carried uncommitted changes to `docs/Known_Issues.md` and `docs/Tickets.md` from a concurrent "error-handling observability audit" (6 issues). `git checkout main` could not proceed with them present, so they were stashed with a label: `stash@{0}` = *"concurrent-session: error-handling observability audit (Known_Issues + Tickets) - stashed by T0020.1 session"* (on `feature/t0019.10-job-details-allowlist`).
   - **Impact:** that audit work is **not lost** but is parked in the stash; it will not appear in any branch until restored. The stash was taken against the T0019.10 branch's tree, so a `git stash pop` after T0020.1 merges may surface conflicts in `Known_Issues.md`/`Tickets.md` (both files were edited on both sides).
   - **Follow-up:** the concurrent session (or maintainer) should `git stash pop` and reconcile onto the appropriate branch. **Not resolved in T0020.1** — restoring another session's live work is outside this ticket and risks its edits.
-
-- **`[LOW · OPEN]` `Repo_Current_State.md`'s deep T0019.6 narrative still calls T0019.10 "in progress, uncommitted".**
-  - **Found:** 2026-07-22, T0020.1. The milestone-map and next-ticket sections were updated to reflect PR #29 landing the chain, but the detailed T0019.6 paragraph (under "In progress / next") retains historical phrasing like "T0019.10 still in progress, uncommitted".
-  - **Impact:** minor internal inconsistency; the authoritative status lines (milestone map, completed milestones, next ticket) are correct.
-  - **Follow-up:** refresh the T0019.6 detail paragraph on a later docs pass. **Not done in T0020.1** — that ticket's `Repo_Current_State.md` scope was the header, topology, completed-work, and next-ticket sections only.
 
 ## Query service (T0019.10)
 

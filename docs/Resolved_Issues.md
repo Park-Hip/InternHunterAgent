@@ -13,7 +13,7 @@ resolution detail and a `Verified:` line where relevant. Severity is carried ove
 original register entry (omitted where none was assigned).
 
 ## Categories
-- [Documentation drift](#documentation-drift) — 2
+- [Documentation drift](#documentation-drift) — 3
 - [Config, startup & deployment](#config-startup--deployment) — 3
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 5
@@ -26,6 +26,9 @@ original register entry (omitted where none was assigned).
 ---
 
 ## Documentation drift
+- **`[LOW · RESOLVED · T0020.4, 2026-07-26]` T0020 had no milestone/sub-ticket block in `Tickets.md` while T0020.1–.4 were already referenced across the docs.**
+  - **Resolved 2026-07-26, T0020.4:** the `## T0020: Milestone 20 - Reconciliation & Activation` section was authored in `docs/Tickets.md` (inserted after T0019.10, before `## Backlog`), with four `### T0020.x` sub-ticket In/Out-of-Scope blocks — .1 `main` reconciliation (✅), .2 Render deploy branch → `main` (✅), .3 CI merge gate (✅ `f6cbec0`), .4 gated cron-activation (▶ maintainer-gated, runbook artifact). The numbered roadmap and the prose docs are back in step; a reader following `Tickets.md` alone now finds T0020.1–.4 defined. Originally scoped in `research/v1-release-readiness-plan.md` §2 and the `[[v1-release-roadmap-m20-m22]]` memory note; deliberately deferred from T0020.1 (docs-reconciliation only) per its follow-up note.
+
 - **`[RESOLVED · T0014.2, 2026-07-12]` Pre-deploy plan's old 13-column / `job_level`-hidden references reconciled.**
   - The matching open bullet was already absent from `Known_Issues.md` on `fix/known-issues-hardening`, so T0014.2 did not move a live register item. Sibling commit `75bf992` (`feature/t0015.4-v1-scenario-matrix`) reconciled `research/pre-deploy-refinement-plan.md` to the frozen 16-column agent-visible schema (`job_level`, `listing_expires_on`, `created_on` visible; `posted_date`/bookkeeping columns hidden). This archive note records the no-op register sweep and points future readers to the sibling evidence.
 

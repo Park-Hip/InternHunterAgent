@@ -1216,6 +1216,44 @@ ingestion:
 * **Deliberately** exposing `is_active` to the agent plus the accompanying honesty hedge — that stays cut from T0019 and gated behind the T0011.5 baseline → prompt-v2 few-shot pass → recalibration chain.
 * Changing the 16-column frozen contract, `schema_context`, any prompt, golden, or eval; touching `query_clean_jobs` (the executor path already projects explicitly).
 
+## T0020: Milestone 20 - Reconciliation & Activation — ▶ In progress
+**Scoped 2026-07-26** (authored after the fact — T0020.1–.3 had already landed as docs/CI work while this milestone lived only in `research/v1-release-readiness-plan.md` §2 and the [[v1-release-roadmap-m20-m22]] memory note). The milestone closes the gap between the code being written and the deploy being *trusted*: reconcile `main` as the true head after the T0019 chain merged (PR #29 / `bcc81db`), put the T0019 serving-path honesty fixes live behind Render, gate the merge path with CI, and finally activate the dormant nightly ingestion cron behind its accepted safety gates. The activation itself (T0020.4) is a maintainer-execution sequence captured in [`docs/T0020.4_Cron_Activation_Runbook.md`](T0020.4_Cron_Activation_Runbook.md) — no pipeline code changes anywhere in this milestone.
+
+### T0020.1: `main` reconciliation follow-through (docs + local ref) — ✅ **done** (PR #29 / `bcc81db`)
+**Objective:** After PR #29 merged the full T0019.10 chain to `main` (`bcc81db`), make `main` the true head in fact and in the docs — fast-forward the local `main` ref and correct every doc/memory claim that still described the pre-merge "stuck at T0009 / `ec0b25a`" world.
+**In Scope:**
+* Fast-forward the local `main` ref to `bcc81db` so it matches the merged remote.
+* Reconcile the prose docs (`Repo_Current_State.md`, `Tickets.md` Backlog, memory notes) that still asserted the M10–M19 chain lived only on ticket branches — `main` now carries it and is the true head.
+**Out of Scope:**
+* Any code, config, or git-history change (no rebase/rewrite); authoring the T0020 milestone block itself (deferred — became T0020.4's docs slice); Render's deploy-branch repoint (T0020.2).
+
+### T0020.2: Render deploy branch repoint → `main` (+ tracked `render.yaml`) — ✅ **done 2026-07-22** (live-surface spot-check C open)
+**Objective:** Make `main` the deploy source of record so the reconciled artifact — including the T0019.8 data-derived `/ready` date and the T0019.10 `get_job_details` column allowlist — is what the live site serves, closing the window where the cron could expire rows while the demo still ran pre-fix code.
+**In Scope:**
+* Commit `render.yaml` with `branch: main` as the tracked source-of-record for the deploy topology.
+* Maintainer changed the Render dashboard deploy branch `feature/t0018.4-deploy` → `main` and confirmed the redeploy (2026-07-22), putting the T0019.8/.10 fixes on the live surface.
+**Out of Scope:**
+* The Blueprint-sync decision (record-vs-sync) and the `name:` collision hazard (a mismatch mints a second Free service) — both tracked in `Known_Issues.md`; the live-surface spot-check C (confirm the T0019.10 surface renders) remains an open maintainer verification.
+
+### T0020.3: CI merge gate on `main` — ✅ **done** (`f6cbec0`; branch protection pending)
+**Objective:** Protect the reconciled `main` artifact so a later change cannot silently break the serving path the cron feeds — an automated gate on every PR into `main`.
+**In Scope:**
+* `.github/workflows/ci.yml` runs `ruff` + `mypy` + `pytest -q` on PRs targeting `main` (SHA-pinned actions mirroring `ingestion.yml`, least-privilege `contents: read`, dummy env vars, eval tests auto-deselected).
+* Baseline the two pre-existing `mypy [arg-type]` errors with targeted `# type: ignore[arg-type]` (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`) so the gate is genuinely green without masking new errors.
+**Out of Scope:**
+* The real `mypy` fix (deferred — the ignores are a baseline, not a resolution; `Known_Issues.md`); enabling branch protection to *enforce* the gate (a maintainer action).
+
+### T0020.4: Gated cron-activation sequence — **maintainer execution; runbook is the artifact.** Gates: **D2, D5, D6, D10** — **▶ In progress** (docs slice done; activation pending)
+**Objective:** Turn the committed-but-dormant nightly ingestion cron (`.github/workflows/ingestion.yml`, T0019.6) into an actually-firing job once every accepted safety gate clears. Every live/production step is captured for the maintainer in [`docs/T0020.4_Cron_Activation_Runbook.md`](T0020.4_Cron_Activation_Runbook.md) — the execution artifact — cross-referenced from `Repo_Current_State.md` and the T0019.6 sub-ticket above.
+**In Scope** (all maintainer-executed, captured in the runbook):
+* **D2** — ratify the robots.txt/ToS verdict (T0019.1 recommended *favorable*) in a tracked doc.
+* **D5** — run the T0019.5 safety checks B–E against a live Docker Postgres (local-PG portion signed 2026-07-22, coder session; Neon/prod portion remains).
+* **D6** — one-time `alembic stamp head` on Neon via the **direct, non-pooled** host.
+* Activate via `workflow_dispatch` from `main`, watch the first run, then confirm the first scheduled 02:00 UTC run.
+* **D10** — decision record on whether v1.0 ships with the cron live or parked.
+**Out of Scope:**
+* Any pipeline/ingestion code change (this milestone changes zero behavior); ingestion-coverage widening (T0019.9 re-measure, D8-gated); the 60-day GitHub Actions inactivity auto-disable mitigation (tracked in T0022.3).
+
 ## Backlog — unscheduled milestones (removed 2026-07-12; to be named & scoped) — 📋 Backlog
 Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Ingestion Deploy Readiness** (briefly numbered T0016–T0018) on 2026-07-12 at the user's request — they need more specific milestone names and scoping before they re-enter the numbered roadmap. Their substance is preserved in research and will seed the future tickets:
 * **Deploy hardening** — `research/pre-deploy-refinement-plan.md` §6, **minus the security posture (§6b) now carved into T0016 (Milestone 16)**. §6f (Langfuse secrets) is moot — the deploy uses **Langfuse Cloud Hobby**, not self-host (user decision 2026-07-12). Remaining unscheduled: topology (§6a), DB readiness probe (§6c), what-data-ships (§6g), deploy-doc drift (§6h), CI gate (§6i).
@@ -1224,7 +1262,7 @@ Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Inge
 
 **Still unscheduled after T0019:**
 * **CI merge gate** — `research/pre-deploy-refinement-plan.md` §6i; no automated gate today, and Render auto-deploys straight off the active branch. Explicitly *not* part of T0019.6 (that workflow is ingestion-only).
-* **`main` reconciliation** — ✅ done (T0020.1, PR #29 / `bcc81db`). `main` now carries the full M10–M19 chain and is the true head; the earlier "stuck at T0009 / M10–M19 on ticket branches" state no longer holds. Render's deploy branch repoint is tracked separately in T0020.2.
+* **`main` reconciliation** — ✅ done (T0020.1, PR #29 / `bcc81db`). `main` now carries the full M10–M19 chain and is the true head; the earlier "stuck at T0009 / M10–M19 on ticket branches" state no longer holds. Render's deploy branch repoint is tracked in T0020.2 (see the **T0020** milestone above).
 * **`is_active` agent exposure + honesty hedge** — cut from T0019 (gate unmet); re-enters only after T0011.5 baseline → prompt-v2 few-shot pass → the targeted recalibration delta.
 * **Deploy-doc drift** (`pre-deploy-refinement-plan.md` §6h) and a custom domain (cosmetic).
 

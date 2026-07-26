@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+# Least privilege: the gate only reads the repo and runs local checks.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Dummy values — the standard suite mocks the DB and LLMs; these only
+      # satisfy Settings validation at load. NEVER real credentials.
+      GROQ_API_KEY: "unused-in-ci"
+      DATABASE_URL: "postgresql+psycopg://ci:ci@localhost:5432/ci"
+      LANGFUSE_SECRET_KEY: "unused-in-ci"
+      LANGFUSE_PUBLIC_KEY: "unused-in-ci"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.8.15"
+          # Cache the uv download/build cache (~/.cache/uv), keyed on uv.lock.
+          # Cold run still pays full install; warm runs skip re-downloading and
+          # rebuilding the heavy dev deps (deepeval et al.), the dominant cost.
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      # Includes the dev group (mypy/ruff/pytest) — do NOT use --no-dev here.
+      - run: uv sync --frozen
+
+      - run: uv run ruff check .
+
+      - run: uv run mypy
+
+      # eval-marked tests are auto-deselected by pyproject addopts; do not add -m.
+      - run: uv run pytest -q

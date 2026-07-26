@@ -45,7 +45,7 @@ class TrimMessagesMiddleware(AgentMiddleware):
             include_system=False,
             allow_partial=False,
         )
-        return request.override(messages=trimmed)
+        return request.override(messages=trimmed)  # type: ignore[arg-type]
 
     def wrap_model_call(self, request, handler):
         return handler(self._trim(request))

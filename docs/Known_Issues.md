@@ -28,7 +28,7 @@ report. If an open item still cross-references the resolved one, leave a short p
 the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.md` (closed).
 
 ## Categories
-- [Config, startup & deployment](#config-startup--deployment) — 26
+- [Config, startup & deployment](#config-startup--deployment) — 28
 - [Agent runtime & prompts](#agent-runtime--prompts) — 13
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
@@ -184,6 +184,15 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **Found:** 2026-07-22, T0020.2. The committed `render.yaml` makes the repo the source of truth for the web service's deploy branch and non-secret runtime settings, so the branch config can no longer silently drift. But whether Render actually *reads* it (Blueprint sync) vs. the service staying dashboard-managed with this file as a record is the maintainer's call (see the `name:` collision hazard in the entry above). All five secrets are declared `sync: false` (presence only, no values); `GOOGLE_API_KEY` (optional Gemini) and `HEALTHCHECKS_URL` (ingestion cron only) are intentionally omitted from the web blueprint.
   - **Impact:** none today. Recorded so a future reader knows the file's authority level is a pending maintainer decision, not an accomplished sync.
   - **Follow-up:** settle sync-vs-record when the maintainer performs actions A–D above.
+
+- **`[LOW · OPEN]` Two mypy `[arg-type]` errors are baselined via targeted `# type: ignore`, not really fixed.**
+  - **Found:** 2026-07-22, T0020.3 (CI merge gate). To make the new `uv run mypy` gate genuinely green, the two pre-existing errors were silenced with narrow `# type: ignore[arg-type]` at `src/core/checkpointer.py:25` and `src/agents/runtime/middleware.py:48` (not blanket ignores — a new error of any other type on those lines still fails the gate). Both stem from third-party stub generics, not project logic: `checkpointer.py` — `AsyncPostgresSaver(pool)` expects an `AsyncConnectionPool[AsyncConnection[dict[str, Any]]]` but our pool is typed `AsyncConnection[tuple[Any, ...]]` (langgraph/psycopg pool generic mismatch); `middleware.py` — `request.override(messages=trimmed)` passes `list[BaseMessage]` where langchain's `ModelRequest.override` wants the narrower message-subclass union.
+  - **Impact:** none functional — the runtime behavior is correct; only the static-type signal on those two lines is suppressed.
+  - **Follow-up:** a dedicated typing pass should resolve the real stub/generic mismatch (e.g. re-typing the pool or narrowing the message list) and remove the ignores. Not fixed here per CLAUDE.md §1 (out-of-scope for the gate ticket).
+
+- **`[MED · OPEN]` CI merge-gate branch protection on `main` is a pending maintainer action (not a committed file).**
+  - **Found:** 2026-07-22, T0020.3. The ticket delivers `.github/workflows/ci.yml` (ruff + mypy + pytest on every PR targeting `main`), but branch protection is a repo-admin setting a coder session cannot enable. Until a maintainer turns it on, the workflow *runs* on PRs but does not yet *block* a red merge.
+  - **Follow-up (maintainer):** (A) after this workflow lands on `main`, enable branch protection on `main` requiring the CI check to be green before merge (GitHub → Settings → Branches, or `gh api`). (B) verify end-to-end: a PR with a deliberately failing test is blocked; a green PR merges; confirm the run did not attempt eval-marked tests (the pytest summary shows `19 deselected`).
 
 ## Agent runtime & prompts
 

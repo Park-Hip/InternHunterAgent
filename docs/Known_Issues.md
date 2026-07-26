@@ -28,7 +28,7 @@ report. If an open item still cross-references the resolved one, leave a short p
 the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.md` (closed).
 
 ## Categories
-- [Config, startup & deployment](#config-startup--deployment) — 24
+- [Config, startup & deployment](#config-startup--deployment) — 26
 - [Agent runtime & prompts](#agent-runtime--prompts) — 13
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
@@ -173,6 +173,17 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **Found:** 2026-07-21, T0019.6 recovery, reconciling a stranded stash against the current tree. The stash's own draft of this ticket carried a fuller `Schema_Contract.md` rewrite (hidden-DDL section, visible-vs-physical column count, an updated "Future `is_active`" framing), but that content documents T0019.3's already-shipped schema, not anything this ticket adds — out of scope here.
   - **Impact:** a reader of `Schema_Contract.md` today sees `is_active` framed as planned-for-T0014 work, when T0019.3 already added it (hidden from the agent) months of ticket-numbering ago. The doc's own "16 visible vs N physical columns" bookkeeping is stale.
   - **Follow-up:** own ticket (doc-only) to reconcile `Schema_Contract.md`'s hidden-column section and "Future `is_active`" framing with the T0019.3 reality. Not fixed inline here per this ticket's explicit non-goals.
+
+- **`[HIGH · MOSTLY RESOLVED]` Render deploy source repointed `feature/t0018.4-deploy` → `main` (maintainer, 2026-07-22); one live-surface spot-check (C) still open.**
+  - **Found:** 2026-07-22, T0020.2. A coder session has no Render dashboard or live-site access, so the ticket committed the `render.yaml` blueprint (branch: `main`) + corrected the deploy-branch docs; the dashboard change itself was left as a maintainer action.
+  - **Resolution:** 2026-07-22 the maintainer changed the Render deploy branch to `main` and confirmed the redeploy succeeded — so **actions A and D are done** (a deploy off `main` completed, which also demonstrates `main` triggers a redeploy). The live path now serves the T0019.8/.10 fixes, closing the core risk below: the pre-T0019 honesty defect can no longer reach production ahead of the T0020.4 cron.
+  - **Original impact (now cleared for the code path):** the T0019 serving fixes — truthful `/ready` date (T0019.8) and the `get_job_details` column allowlist closing the six-column lifecycle leak (T0019.10) — were on `main` but not on the live path; that would have become a real honesty defect once the nightly cron (T0020.4) flips `is_active=false`. This was the sequencing reason T0020.2 had to land before the cron.
+  - **Still open — (C) live-surface spot-check:** confirm on the live UI that it shows the T0019.10 surface (composer-above-chips, data-derived `/ready` date, `get_job_details` output carries no `is_active=` / `posted_date=None` lifecycle columns). The deploy succeeding proves `main` is live; this check proves the specific expected behaviors render. **(B) Blueprint-sync decision** remains a separate call — the repoint was a dashboard branch change, *not* a Blueprint sync, so the `name: InternHunterAgent` collision hazard (a mismatched sync mints a second Free service, eroding the 750 instance-hour/month margin — `research/deployment-research-plan.md` §1a) only applies if/when the maintainer chooses to sync `render.yaml` rather than keep it as documentation-of-record. Move this entry to `Resolved_Issues.md` once C is confirmed.
+
+- **`[LOW · NOTE]` `render.yaml` is documentation-of-record, not necessarily an active Blueprint sync.**
+  - **Found:** 2026-07-22, T0020.2. The committed `render.yaml` makes the repo the source of truth for the web service's deploy branch and non-secret runtime settings, so the branch config can no longer silently drift. But whether Render actually *reads* it (Blueprint sync) vs. the service staying dashboard-managed with this file as a record is the maintainer's call (see the `name:` collision hazard in the entry above). All five secrets are declared `sync: false` (presence only, no values); `GOOGLE_API_KEY` (optional Gemini) and `HEALTHCHECKS_URL` (ingestion cron only) are intentionally omitted from the web blueprint.
+  - **Impact:** none today. Recorded so a future reader knows the file's authority level is a pending maintainer decision, not an accomplished sync.
+  - **Follow-up:** settle sync-vs-record when the maintainer performs actions A–D above.
 
 ## Agent runtime & prompts
 

@@ -1,0 +1,32 @@
+# Render Blueprint — source of truth for the InternHunterAgent web service (T0020.2).
+# Secret VALUES stay dashboard-managed (sync: false); this file declares presence +
+# non-secret runtime settings only. Mirrors docker/Dockerfile — it must match, not change it.
+services:
+  - type: web
+    name: InternHunterAgent            # MUST match the existing Render service name exactly
+    runtime: docker
+    repo: https://github.com/Park-Hip/InternHunterAgent
+    branch: main
+    region: singapore
+    plan: free
+    dockerfilePath: ./docker/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: PORT
+        value: "8000"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_BASE_URL
+        sync: false
+      # GOOGLE_API_KEY (optional Gemini provider) and HEALTHCHECKS_URL
+      # (ingestion cron only) are intentionally not declared for the web service.

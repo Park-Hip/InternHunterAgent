@@ -1261,6 +1261,30 @@ ingestion:
 **Out of Scope:**
 * Any pipeline/ingestion code change (this milestone changes zero behavior); ingestion-coverage widening (T0019.9 re-measure, D8-gated); the 60-day GitHub Actions inactivity auto-disable mitigation (tracked in T0022.3).
 
+## T0021: Milestone 21 - Serving-Path Hardening & Honesty Baseline — ▶ In progress
+**Scoped 2026-08-09** (authored after the fact, same pattern as T0020 — T0021.1 shipped as PR #30 on 2026-07-22 and T0021.2 was started in a worktree while this milestone lived only in `research/v1-release-readiness-plan.md` §2 and the [[v1-release-roadmap-m20-m22]] memory note). Where T0020 makes the *artifact* trustworthy, this milestone makes the *running service* trustworthy: assert the schema the read path depends on, and stop the serving path from lying — to operators via swallowed exceptions, and to users via canned messages that overstate what is known. Runs largely parallel to T0020; both block T0022 (v1.0 release cut).
+
+> **Scoping note.** Only **T0021.2** is fully specified below — it is the slice being executed. **T0021.1** (read-path schema assertion) shipped ahead of its block as PR #30 and is summarized here for continuity, not re-scoped. **T0021.3** and **T0021.4** are named but deliberately unscoped; the `get_job_details` column allowlist that the research plan lists under M21 already landed early as **T0019.10**, so this milestone's remaining shape needs a scoping pass before those blocks are authored.
+
+### T0021.1: Read-path schema assertion — ✅ **done** (PR #30, opened 2026-07-22) — *summary only, not re-scoped*
+Asserts the columns the read path depends on, so a schema drift fails loudly at startup instead of surfacing as a canned "database error" mid-answer. Its `EXPECTED_COLUMNS` requires the 22-column post-migration shape, which is why the PR was held until D6 stamped and upgraded Neon (signed off 2026-08-09) — both states were exercised during the D6 run, discharging its manual check C. See `docs/T0020.4_Cron_Activation_Runbook.md`.
+
+### T0021.2: Agent-path error logging at swallowed catch sites — ▶ In progress
+**Objective:** Close the three swallowed-exception sites recorded in the **Error-handling honesty audit (2026-07-22)** in `Known_Issues.md`, so an operator can tell a one-off blip from a systemic outage from structlog alone. Today every one of these replaces a real exception with a canned user-facing string and logs *nothing* — the streaming path is the widest instance, since it backs the primary chat UI and reports a DB outage, an unhandled bug, and a Langfuse crash identically as "the demo is busy". **The log line is the load-bearing deliverable; user-facing message wording is explicitly not in scope.**
+
+**In Scope:**
+* `src/agents/tools/query_clean_jobs.py` — `logger.error("query_clean_jobs.db_error", error=str(exc))` at the `except ExecutorError` catch site, so the real Postgres message carried on `ExecutorError` reaches structlog.
+* `src/agents/tools/get_job_details.py` — the identical twin, `logger.error("get_job_details.db_error", error=str(exc))`.
+* `src/agents/service.py` — in `stream_agent_response`'s catch-all, bind the currently-discarded `classify_provider_busy_error(exc)` return value and record it: `logger.error("stream_agent_response.failed", session_id=..., error=str(exc), reclassified_busy=...)`.
+* Regression tests asserting each catch site logs the expected event name and carries the underlying cause, including the `reclassified_busy` true/false branches.
+* Move the three now-resolved audit entries from `Known_Issues.md` to `Resolved_Issues.md` per the register convention, leaving pointers behind.
+
+**Out of Scope:**
+* **Differentiating the user-facing message by cause** — `BUSY_MESSAGE` is intentionally still returned for *every* streaming failure, including non-provider ones. Introducing a `GENERIC_ERROR_MESSAGE` is honesty/prompt work deferred to **T0021.4**; this ticket is log-only and changes no user-visible string.
+* Logging the `validate_sql` reject branch (not a swallowed exception — nothing raised there).
+* The `[MED · OPEN]` `generate_agent_response` empty/None-answer fallback signal, and the `[MED · OPEN]` checkpointer pool-timeout misreport — both remain open in `Known_Issues.md`; neither is a discarded exception at a catch site.
+* Any Langfuse/tracing-layer change, and the real `mypy [arg-type]` fix baselined by T0020.3.
+
 ## Backlog — unscheduled milestones (removed 2026-07-12; to be named & scoped) — 📋 Backlog
 Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Ingestion Deploy Readiness** (briefly numbered T0016–T0018) on 2026-07-12 at the user's request — they need more specific milestone names and scoping before they re-enter the numbered roadmap. Their substance is preserved in research and will seed the future tickets:
 * **Deploy hardening** — `research/pre-deploy-refinement-plan.md` §6, **minus the security posture (§6b) now carved into T0016 (Milestone 16)**. §6f (Langfuse secrets) is moot — the deploy uses **Langfuse Cloud Hobby**, not self-host (user decision 2026-07-12). Remaining unscheduled: topology (§6a), DB readiness probe (§6c), what-data-ships (§6g), deploy-doc drift (§6h), CI gate (§6i).

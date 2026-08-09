@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import uuid
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import MagicMock, AsyncMock, patch
 
-from src.agents.service import generate_agent_response
+from src.agents.service import BUSY_MESSAGE, generate_agent_response, stream_agent_response
 
 
 class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
@@ -59,6 +59,58 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             session_id=result["session_id"],
             user_id=None,
         )
+
+
+class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
+    @patch("src.agents.service.logger")
+    async def test_stream_failure_logs_and_yields_busy_message(self, mock_logger) -> None:
+        async def failing_stream(**_kwargs):
+            raise RuntimeError("db is down")
+            yield  # pragma: no cover — makes this an async generator
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=failing_stream)
+
+        events = [
+            event
+            async for event in stream_agent_response(
+                query="what internships are available?",
+                runtime=runtime,
+                session_id="session-1",
+            )
+        ]
+
+        error_events = [e for e in events if e["type"] == "error"]
+        self.assertEqual(error_events, [{"type": "error", "message": BUSY_MESSAGE}])
+        self.assertEqual(events[-1], {"type": "done"})
+
+        mock_logger.error.assert_called_once()
+        self.assertEqual(mock_logger.error.call_args.args[0], "stream_agent_response.failed")
+        kwargs = mock_logger.error.call_args.kwargs
+        self.assertEqual(kwargs["session_id"], "session-1")
+        self.assertIn("db is down", kwargs["error"])
+        self.assertFalse(kwargs["reclassified_busy"])
+
+    @patch("src.agents.service.logger")
+    async def test_stream_failure_records_reclassified_busy(self, mock_logger) -> None:
+        async def failing_stream(**_kwargs):
+            raise RuntimeError("Request timed out after 30s")
+            yield  # pragma: no cover — makes this an async generator
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=failing_stream)
+
+        events = [
+            event
+            async for event in stream_agent_response(
+                query="what internships are available?",
+                runtime=runtime,
+                session_id="session-2",
+            )
+        ]
+
+        self.assertIn({"type": "error", "message": BUSY_MESSAGE}, events)
+        self.assertTrue(mock_logger.error.call_args.kwargs["reclassified_busy"])
 
 
 if __name__ == "__main__":

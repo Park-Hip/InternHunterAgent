@@ -3,6 +3,7 @@ import asyncio
 from langchain.tools import tool
 
 from src.core.config import settings
+from src.core.logger import logger
 from src.services.query.executor import ExecutorError
 from src.services.query.job_details import fetch_job_details
 
@@ -60,7 +61,8 @@ async def get_job_details(ids: list[int]) -> str:
 
     try:
         rows = await asyncio.to_thread(fetch_job_details, capped_ids)
-    except ExecutorError:
+    except ExecutorError as exc:
+        logger.error("get_job_details.db_error", error=str(exc))
         return "I couldn't retrieve the requested data due to a database error. Please try again later."
 
     return _build_answer(ids, capped_ids, rows)

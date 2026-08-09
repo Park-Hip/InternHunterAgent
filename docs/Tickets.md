@@ -1163,6 +1163,8 @@ ingestion:
 
 ### T0019.6: GitHub Actions nightly ingestion cron — **T0019.1 favorable verdict confirmed 2026-07-19; T0019.2–.5 complete; release-gated on T0019.9–.10 before merge to `main`**
 **Objective:** Land §4.2 #6 / §4.1's decision: an external, out-of-band scheduler invoking the offline ingestion CLI against Neon — reconciled against `Full_Design_Document.md` §2 by *amending* the no-schedulers exclusion to in-request background execution (the documented §4.1 reconciliation), not deleting it.
+
+> **⚠ Status correction (2026-08-09).** The heading's "release-gated on T0019.9–.10 before merge to `main`" describes an intent nothing enforced. Once this workflow reached `main` in PR #29 (2026-07-22), GitHub armed the `schedule:` trigger **automatically** — merging *is* activating. The cron then ran nightly and failed all 19 times (2026-07-22 → 2026-08-09) on a `DATABASE_URL` secret that was never set, dying at config load before any network or DB call, so no scrape or production write occurred. It ran with **D2 and D6 unsigned**. **PR #33** comments out `schedule:` to restore genuine dormancy. See `Known_Issues.md` → Config, startup & deployment.
 **In Scope:**
 * Workflow: `on: schedule: cron: '0 2 * * *'` (02:00 UTC = 09:00 ICT) + `workflow_dispatch` for manual runs; checkout + `uv sync --frozen`; run the ingestion CLI (`uv run python -m src.services.ingestion.loader`); a `concurrency` group so overlapping runs never double-write; a job timeout well under the expected <10-min runtime.
 * Secrets (GitHub Actions secrets, per `deployment-research-plan.md` §5): `DATABASE_URL` (Neon **direct** DSN) and `HEALTHCHECKS_URL`. **No `GROQ_API_KEY`** — ingestion is deterministic, no LLM (a live-tested §8 decision that stays).

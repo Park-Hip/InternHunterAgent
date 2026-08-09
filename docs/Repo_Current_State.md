@@ -8,9 +8,11 @@
 >    branch automatically — and ran **19 consecutive failing nightly runs** through 2026-08-09, each dying in
 >    ~15 s with `ConfigLoadError: DATABASE_URL: String should have at least 1 character` (the secret was never
 >    set). It failed at config load, before any network or DB call, so nothing was scraped and Neon was never
->    written — but **D2 and D6 were open the whole time**. `schedule:` is now commented out (PR #33). Every
->    "dormant / not activated / activation is a maintainer action" phrase below is **wrong as written** and
->    is corrected in [`T0020.4_Cron_Activation_Runbook.md`](T0020.4_Cron_Activation_Runbook.md).
+>    written — but **D2 and D6 were open the whole time**. **Fixed:** `schedule:` is commented out on `main`
+>    (PR #33, merged 2026-08-09 as `abe84d8`); `workflow_dispatch` is now the sole trigger and no scheduled
+>    run has fired since. Every "dormant / not activated / activation is a maintainer action" phrase below is
+>    **wrong as written** and is corrected in
+>    [`T0020.4_Cron_Activation_Runbook.md`](T0020.4_Cron_Activation_Runbook.md).
 > 2. **The T0020.3 CI merge gate does not exist on GitHub.** `ci.yml` lives only on the unmerged
 >    `feature/t0020.3-ci-merge-gate` branch (PR #32). `git ls-tree main .github/` shows only `ingestion.yml`;
 >    `gh run list --workflow=ci.yml` returns HTTP 404. **No open PR has ever been linted or tested by it.**

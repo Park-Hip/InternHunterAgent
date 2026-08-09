@@ -1,13 +1,36 @@
 name: Nightly ingestion
 
 on:
-  schedule:
-    # 02:00 UTC = 09:00 ICT. GitHub only triggers `schedule` from the
-    # repository's default branch — this stays dormant until the T0019
-    # branch chain is merged to main (see docs/Known_Issues.md). Actual
-    # firing time can drift under GitHub Actions load; a run landing a
-    # few minutes late is expected, not a failure.
-    - cron: '0 2 * * *'
+  # `schedule:` is deliberately DISABLED (commented out, 2026-08-09).
+  #
+  # Why: GitHub fires `schedule:` from the default branch AUTOMATICALLY. The
+  # original comment here read "this stays dormant until the T0019 branch chain
+  # is merged to main" — that was wrong. Reaching `main` is not merely a
+  # precondition for activation, it IS the activation. PR #29 (`bcc81db`,
+  # 2026-07-22) landed this file on `main`, and the cron began firing nightly
+  # that same day, with the D2 (robots/ToS ratification) and D6 (Neon
+  # `alembic stamp head`) gates in docs/T0020.4_Cron_Activation_Runbook.md
+  # still unsigned.
+  #
+  # What actually happened: 19 consecutive scheduled runs, 2026-07-22 through
+  # 2026-08-09, ALL failed in ~15s at the "Run ingestion" step with
+  # `ConfigLoadError: DATABASE_URL: String should have at least 1 character`,
+  # because no `DATABASE_URL` repo secret was ever configured. The failure is
+  # at config load in src/core/config.py — before any network or database
+  # call — so no request ever reached ms.vietnamworks.com and Neon was never
+  # written to. No data was harmed; the gates were bypassed on paper only.
+  #
+  # Re-enable by uncommenting the two lines below, but ONLY after the runbook's
+  # gates are signed: D2 ratified, D6 stamped, and the `DATABASE_URL` (Neon
+  # direct/non-pooled host) + `HEALTHCHECKS_URL` secrets set. Verify with a
+  # `workflow_dispatch` run BEFORE restoring the schedule — that ordering is
+  # what the runbook §4 intended and what the auto-activation skipped.
+  #
+  # 02:00 UTC = 09:00 ICT. Firing time drifts under Actions load; a run landing
+  # a few minutes late is expected, not a failure.
+  #
+  # schedule:
+  #   - cron: '0 2 * * *'
   workflow_dispatch: {}
 
 concurrency:

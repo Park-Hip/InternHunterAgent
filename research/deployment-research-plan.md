@@ -615,7 +615,7 @@ Sources:
 - [Fly.io continuous deployment with GitHub Actions (fly.io)](https://fly.io/docs/launch/continuous-deployment-with-github-actions/)
 - [Railway vs Render 2026 (thesoftwarescout.com)](https://thesoftwarescout.com/railway-vs-render-2026-best-platform-for-deploying-apps/)
 
-**Decision (2026-07-16):** **Render native auto-deploy on push** to `feature/t0018.4-deploy`. A `pytest` merge-gate on `main` is **deferred (out of T0018.4 scope)** — noted for a later CI ticket (`pre-deploy-refinement-plan.md §6i`). Rollback = redeploy a previous deploy from the Render dashboard. No preview environments (free tier).
+**Decision (2026-07-16):** **Render native auto-deploy on push** to `main` (originally `feature/t0018.4-deploy`; repointed in T0020.2, now pinned by the tracked `render.yaml`). A `pytest` merge-gate on `main` is **deferred (out of T0018.4 scope)** — noted for a later CI ticket (`pre-deploy-refinement-plan.md §6i`). Rollback = redeploy a previous deploy from the Render dashboard. No preview environments (free tier).
 
 ---
 

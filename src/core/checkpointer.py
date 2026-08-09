@@ -22,6 +22,6 @@ def build_checkpointer_pool() -> AsyncConnectionPool:
 
 
 async def build_checkpointer(pool: AsyncConnectionPool) -> AsyncPostgresSaver:
-    checkpointer = AsyncPostgresSaver(pool)
+    checkpointer = AsyncPostgresSaver(pool)  # type: ignore[arg-type]
     await checkpointer.setup()
     return checkpointer

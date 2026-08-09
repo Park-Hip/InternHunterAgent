@@ -984,7 +984,7 @@ Verify against the live public URL: **https://internhunteragent.onrender.com**
 * **Multi-turn memory:** ask a follow-up in the same session; confirm it remembers context (the UI omits `session_id` on turn 1, then reuses the server-issued uuid4).
 * **API surface intact:** `https://internhunteragent.onrender.com/docs` loads; `curl .../api/v1/health` → `200`.
 * **Frame protection:** `curl -sI https://internhunteragent.onrender.com/ | grep -i x-frame-options` → `x-frame-options: DENY`.
-* **Deploy hygiene:** Render env vars hold all five secrets + `PORT=8000` (none baked into the image); Render is deploying branch `feature/t0018.4-deploy`.
+* **Deploy hygiene:** Render env vars hold all five secrets + `PORT=8000` (none baked into the image); Render deploys branch `main` (pinned by the tracked `render.yaml`; T0020.2 repointed it from `feature/t0018.4-deploy`).
 
 ### T0019.2: Alembic adoption
 
@@ -1206,6 +1206,15 @@ Dispatch two runs back to back (same manual trigger as C). Confirm the second qu
 
 **E — the schedule is dormant, and that's expected**
 While this workflow lives only on a feature branch, confirm no scheduled run fires — `schedule:` only triggers from the default branch (`main`), and `main` does not yet contain this workflow. The scheduled (as opposed to `workflow_dispatch`-triggered) run cannot fire until the T0019 branch chain is merged to `main` — that merge is a maintainer decision outside this ticket. Once merged, check the first scheduled run the following morning; a run landing a few minutes after 02:00 UTC is documented GitHub schedule drift under load, not a failure.
+
+> **⚠ Correction (2026-08-09).** The last sentence is the only part that stayed true. Check E's framing —
+> "confirm no scheduled run fires" — quietly implies that *someone* must later flip a switch. No one does:
+> the merge itself arms the schedule. PR #29 merged 2026-07-22 and the cron ran nightly from that night,
+> failing all 19 times on a missing `DATABASE_URL` secret (no data impact — it died at config load).
+> **`schedule:` is now commented out on `main` (PR #33)**, so this check is once again meaningful — but
+> verify dormancy with `gh run list --workflow=ingestion.yml`, not by reading the workflow file. Full
+> account: `Known_Issues.md` → Config, startup & deployment, and the correction banner in
+> [`T0020.4_Cron_Activation_Runbook.md`](T0020.4_Cron_Activation_Runbook.md).
 
 ### T0019.7: Windowed keep-alive ping + Neon idle-pool verification
 

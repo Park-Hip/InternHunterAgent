@@ -71,11 +71,12 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Only SELECT statements are allowed", result)
         mock_execute_validated_sql.assert_not_called()
 
+    @patch("src.agents.tools.query_clean_jobs.logger")
     @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
     @patch("src.agents.tools.query_clean_jobs.validate_sql")
     @patch("src.agents.tools.query_clean_jobs.generate_sql")
     async def test_executor_error_returns_refusal_string_without_raising(
-        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql
+        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql, mock_logger
     ) -> None:
         from src.agents.tools.query_clean_jobs import query_clean_jobs
 
@@ -87,6 +88,25 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("database error", result)
         self.assertNotIn("connection refused", result)
+
+    @patch("src.agents.tools.query_clean_jobs.logger")
+    @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_executor_error_is_logged(
+        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql, mock_logger
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import query_clean_jobs
+
+        mock_generate_sql.return_value = "SELECT title FROM clean_jobs"
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql="SELECT title FROM clean_jobs")
+        mock_execute_validated_sql.side_effect = ExecutorError("connection refused")
+
+        await query_clean_jobs.ainvoke({"question": "What internships are available?"})
+
+        mock_logger.error.assert_called_once()
+        self.assertEqual(mock_logger.error.call_args.args[0], "query_clean_jobs.db_error")
+        self.assertIn("connection refused", mock_logger.error.call_args.kwargs["error"])
 
     @patch("src.agents.tools.query_clean_jobs.load_max_rows")
     @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")

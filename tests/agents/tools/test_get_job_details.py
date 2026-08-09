@@ -60,9 +60,10 @@ class GetJobDetailsToolTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(result, str)
             mock_fetch_job_details.assert_not_called()
 
+    @patch("src.agents.tools.get_job_details.logger")
     @patch("src.agents.tools.get_job_details.fetch_job_details")
     async def test_executor_error_returns_safe_string_without_leaking(
-        self, mock_fetch_job_details
+        self, mock_fetch_job_details, mock_logger
     ) -> None:
         from src.agents.tools.get_job_details import get_job_details
 
@@ -72,6 +73,21 @@ class GetJobDetailsToolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("database error", result)
         self.assertNotIn("connection refused", result)
+
+    @patch("src.agents.tools.get_job_details.logger")
+    @patch("src.agents.tools.get_job_details.fetch_job_details")
+    async def test_executor_error_is_logged(
+        self, mock_fetch_job_details, mock_logger
+    ) -> None:
+        from src.agents.tools.get_job_details import get_job_details
+
+        mock_fetch_job_details.side_effect = ExecutorError("connection refused")
+
+        await get_job_details.ainvoke({"ids": [1]})
+
+        mock_logger.error.assert_called_once()
+        self.assertEqual(mock_logger.error.call_args.args[0], "get_job_details.db_error")
+        self.assertIn("connection refused", mock_logger.error.call_args.kwargs["error"])
 
 
 if __name__ == "__main__":

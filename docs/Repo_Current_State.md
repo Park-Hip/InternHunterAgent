@@ -18,6 +18,10 @@
 >    `gh run list --workflow=ci.yml` returns HTTP 404. **No open PR has ever been linted or tested by it.**
 > 3. **The T0021 track has begun**, contrary to "Next recommended ticket" below: PR #30 (T0021.1) is open,
 >    and the `IHA-t0021.2` worktree holds 8 uncommitted files.
+>    **Closed out 2026-08-09:** PR #30 merged (`df451ef`) once D6 made Neon 22 columns, and the worktree's
+>    8 files are committed on `feature/t0021.2-agent-error-logging`. Its two stale doc edits were
+>    **discarded and rewritten** rather than committed — cut from `bcc81db` on 2026-07-22, they would have
+>    reverted the T0020.x + D6 doc work that landed in the 18 commits after.
 >
 > Verified **true**: `main` = `bcc81db`; Render deploys from `main` (live `index.html` is byte-identical to
 > `main`'s, and differs from `feature/t0018.4-deploy`'s), so the T0019.8/.10 serving fixes **are** live.
@@ -27,8 +31,13 @@
 > PR #36 and passed (`329 passed, 8 skipped, 19 deselected`). Item 1 (the cron) is unchanged: still parked,
 > `workflow_dispatch` only.
 
-`feature/t0021.1-read-path-schema-assertion` — **T0021.1 API read-path startup schema assertion (2026-07-22).** Cut from `main` (`bcc81db`, the PR #29 reconciliation carrying all T0019 work); T0021 is an independent code track parallel to T0020, so it branches off `main`, not the T0020 chain. Adds a boot-time `clean_jobs` schema guard on the serving path: `src/api/schema_guard.py::assert_serving_schema` (new) is called inside `app.py`'s `lifespan` via `asyncio.to_thread`, after `load_settings()` and before the checkpointer pool opens, and aborts the FastAPI boot with `SchemaGuardError` on any schema drift (missing/renamed/extra column), an absent table, or a DB-inspection failure — closing the read-path half of the 2026-07-15 drift incident (T0019.5 covered the write path). The guard imports **only** from `src.core.*` + `sqlalchemy`; per the layer-isolation rule it does **not** import the `src.services.ingestion` package, so the 22-column expected set is a frozen literal duplicated deliberately (tracked in `Known_Issues.md` → Config, startup & deployment). Distinct log events `api.schema_ok` / `api.schema_drift` keep serving-path drift separable from the ingestion path's `ingestion.schema_*`.
+`feature/t0021.2-agent-error-logging` — **T0021.2 agent-path error logging at swallowed catch sites (2026-08-09).** Cut from `main` (`3b5fc0a`, the PR #38 D6-signoff merge, which carries T0021.1 via PR #30). Adds one `logger.error(...)` at each of the three catch sites named by the 2026-07-22 error-handling honesty audit: `query_clean_jobs.db_error` and `get_job_details.db_error` at the two `except ExecutorError` sites, and `stream_agent_response.failed` in the streaming catch-all — the last also **binding** the `classify_provider_busy_error(exc)` result that was previously computed and thrown away, recording it as `reclassified_busy`, plus `session_id` so a user-reported failure is traceable. **Log-only by design: no user-facing string changed.** `stream_agent_response` still returns `BUSY_MESSAGE` for every failure including non-provider ones; introducing a `GENERIC_ERROR_MESSAGE` is honesty work deferred to **T0021.4**, so the audit's "misreported to the user" half stays open — this ticket closes the observability half only. Three `Known_Issues.md` entries (1 MED + 2 HIGH) moved to `Resolved_Issues.md`; the `validate_sql` reject-branch logging idea was **split out as a new `[LOW · OPEN]`** rather than closed with them, since nothing is raised there. The `## T0021` milestone + the `### T0021.2` block were authored in `Tickets.md` (same after-the-fact pattern as T0020; .3/.4 deliberately left unscoped). **Note on the base:** this branch sat at `bcc81db` with the work uncommitted for 18 days and was rebased twice — first to local `main`, then to `origin/main` after PRs #30/#38 merged mid-session. Its stale `Known_Issues.md` / `Repo_Current_State.md` edits were rewritten against the current base, not applied.
 
+Prior ticket — `feature/t0021.1-read-path-schema-assertion` — **T0021.1 API read-path startup schema assertion (2026-07-22).** Cut from `main` (`bcc81db`, the PR #29 reconciliation carrying all T0019 work); T0021 is an independent code track parallel to T0020, so it branches off `main`, not the T0020 chain. Adds a boot-time `clean_jobs` schema guard on the serving path: `src/api/schema_guard.py::assert_serving_schema` (new) is called inside `app.py`'s `lifespan` via `asyncio.to_thread`, after `load_settings()` and before the checkpointer pool opens, and aborts the FastAPI boot with `SchemaGuardError` on any schema drift (missing/renamed/extra column), an absent table, or a DB-inspection failure — closing the read-path half of the 2026-07-15 drift incident (T0019.5 covered the write path). The guard imports **only** from `src.core.*` + `sqlalchemy`; per the layer-isolation rule it does **not** import the `src.services.ingestion` package, so the 22-column expected set is a frozen literal duplicated deliberately (tracked in `Known_Issues.md` → Config, startup & deployment). Distinct log events `api.schema_ok` / `api.schema_drift` keep serving-path drift separable from the ingestion path's `ingestion.schema_*`.
+
+> **✅ Resolved — this merged as PR #30 (`df451ef`) on 2026-08-09**, after D6 took Neon from 19 to 22 columns.
+> The hold below is retained as the record of why it was held. Original text:
+>
 > **⚠ This branch must not merge yet (2026-08-09).** Merged `origin/main` (`56d74d9`) to clear doc conflicts;
 > that merge brought in the Neon-baseline finding. Production `clean_jobs` has **19** columns, not 22 —
 > `first_seen_at`, `is_active`, `last_seen_at` are missing — so `assert_serving_schema` would raise
@@ -295,7 +304,17 @@ Practical commands from the repository layout:
 - `docker compose -f infra/docker-compose.yaml up --build` (Langfuse observability stack)
 
 ## Build/test status
-Current-branch (T0019.10 + the cherry-picked T0019.6) results below; earlier per-ticket logs (T0011–T0018.3, incl. the ReAct/SQL-generation config split) are archived in [`archive/Repo_State_History.md`](archive/Repo_State_History.md).
+Latest — **T0021.2** (`feature/t0021.2-agent-error-logging`, cut from `main` at `3b5fc0a`, measured 2026-08-09); the earlier T0019.10 + cherry-picked T0019.6 results follow, and per-ticket logs (T0011–T0018.3, incl. the ReAct/SQL-generation config split) are archived in [`archive/Repo_State_History.md`](archive/Repo_State_History.md).
+
+- `uv run pytest -q` (T0021.2, full standard suite) → `346 passed, 1 skipped, 19 deselected, 4 subtests passed` in 5.71s.
+- **Baseline measured in the same session, same base, changes stashed** → `342 passed, 1 skipped, 19 deselected, 4 subtests passed`. So the **`+4` is measured, not asserted** — the four tests this ticket adds. No pre-existing test was modified or weakened; the only edits to existing tests are added `@patch(...logger)` decorators.
+- `uv run pytest -q tests/agents` (T0021.2, targeted) → `62 passed` in 2.40s.
+- `uv run ruff check src tests` (T0021.2) → all checks passed.
+- `uv run mypy src` (T0021.2) → **`Success: no issues found in 43 source files`.** This supersedes the "2 pre-existing `[arg-type]` errors" line recorded under T0019.6 below and repeated elsewhere in this file: T0020.3 baselined both with targeted `# type: ignore[arg-type]`, so `mypy src` is now genuinely clean and any new error is a real regression.
+- Scope check — `git status --short` before commit showed only the 3 changed `src/` files, their 3 test files, and 4 docs (`Tickets.md`, `Known_Issues.md`, `Resolved_Issues.md`, this file). No config, migration, or workflow change.
+- **Counts are not comparable to older lines in this section.** The T0019.6 entry below records `328 passed, 8 skipped` at ~8567s, and PR #36's CI run recorded `329 passed, 8 skipped`; the numbers here are higher and the skips lower because `main` moved 18 commits in between (T0020.3's CI work, T0021.1's `tests/api/test_schema_guard.py`, and the migration round-trip test now skipping singly). Recorded so the deltas are not misread as this ticket's doing.
+
+Earlier — current-branch (T0019.10 + the cherry-picked T0019.6) results:
 
 - `uv run python -c "import yaml; yaml.safe_load(open('.github/workflows/ingestion.yml')); print('YAML OK')"` (T0019.6) → `YAML OK`.
 - `git status --short` (T0019.6, before commit) → only the files this ticket touched (`docs/**`, `research/**`) plus the previously-untracked `.github/` now staged; no `src/`/`tests/`/`config/` changes.
@@ -363,18 +382,24 @@ logic review (2026-07-02) — bugs, improvement backlog, and doc insights — is
 
 **~~the nightly ingestion cron is not activated~~ — FALSE when written (2026-07-26); corrected 2026-08-09.** The cron had already been firing nightly for four days by then, because merging the workflow to `main` in PR #29 *is* what activates a `schedule:` trigger. It ran 19 times and failed 19 times (missing `DATABASE_URL` secret), harmlessly but silently, with D2 and D6 unsigned. **PR #33 comments out `schedule:`**, so the statement is true again — the cron is now genuinely dormant and activation *is* now a deliberate maintainer step. Follow the runbook, not this file, and note its new ordering: manual `workflow_dispatch` green **first**, re-arm `schedule:` **last**.
 
-**The immediate work is not a ticket — it is landing what is already written.** Four PRs are open and unmerged; none of them is blocked on anything:
+~~**The immediate work is not a ticket — it is landing what is already written.** Four PRs are open and unmerged~~ — **all four have since merged (2026-08-09).** `gh pr list --state open` now returns empty. Retained as the record of what landed:
 
-| PR | Branch | Opened | What lands |
+| PR | Branch | Merged | What landed |
 |---|---|---|---|
-| **#33** | `fix/cron-schedule-dormant` | 2026-08-09 | Stops the 19-night failing cron. **Merge first.** |
-| **#31** | `feature/t0020.2-render-main-deploy` | 2026-07-26 | Tracked `render.yaml` (T0020.1 + T0020.2) |
-| **#32** | `feature/t0020.3-ci-merge-gate` | 2026-07-26 | The CI gate itself — inert until merged |
-| **#30** | `feature/t0021.1-read-path-schema-assertion` | 2026-07-22 | T0021.1 read-path schema assertion |
+| **#33** | `fix/cron-schedule-dormant` | 2026-08-09 | Stopped the 19-night failing cron |
+| **#31** | `feature/t0020.2-render-main-deploy` | 2026-08-09 | Tracked `render.yaml` (T0020.1 + T0020.2) |
+| **#32** | `feature/t0020.3-ci-merge-gate` | 2026-08-09 | The CI gate — first ran on PR #36 and passed |
+| **#34/#35** | `feature/t0020.4-cron-activation` | 2026-08-09 | Runbook + T0020 milestone blocks |
+| **#36** | `fix/neon-baseline-d6-correction` | 2026-08-09 | D6 corrected to stamp-baseline + upgrade |
+| **#37** | `docs/d6-rehearsal-evidence` | 2026-08-09 | Rehearsal evidence for the stamp-head failure |
+| **#30** | `feature/t0021.1-read-path-schema-assertion` | 2026-08-09 | T0021.1 read-path schema assertion (held until D6 made Neon 22 columns) |
+| **#38** | `docs/d6-signoff` | 2026-08-09 | D6 sign-off; `main` = `3b5fc0a` |
 
-Also unpushed: this branch (`feature/t0020.4-cron-activation`, 1 commit) and the `IHA-t0021.2` worktree (8 uncommitted files, T0021.2 agent error logging).
+**Unmerged now:** only `feature/t0021.2-agent-error-logging` (this branch). The `IHA-t0021.2` worktree's 8 uncommitted files are committed here — see the T0021.2 entry at the top of this file for why its two stale doc edits were rewritten rather than applied.
 
-**The T0021 / T0022 track has already begun** (release integrity → honesty → v1.0 tag — see `research/v1-release-readiness-plan.md` §2 and the `[[v1-release-roadmap-m20-m22]]` memory note). The former instruction here — *"do not treat the T0021/T0022 track as begun until cron activation is signed off"* — was overtaken by events: T0021.1 was opened as PR #30 on 2026-07-22 and T0021.2 was started in a worktree.
+**The T0021 / T0022 track has already begun** (release integrity → honesty → v1.0 tag — see `research/v1-release-readiness-plan.md` §2 and the `[[v1-release-roadmap-m20-m22]]` memory note). The former instruction here — *"do not treat the T0021/T0022 track as begun until cron activation is signed off"* — was overtaken by events: T0021.1 merged as PR #30 and T0021.2 is this branch.
+
+**Next coder work after this branch merges:** T0021 has no `.3`/`.4` scoped — the `## T0021` block in `Tickets.md` names them but deliberately leaves them unscoped, and the `get_job_details` allowlist the research plan filed under M21 already shipped early as T0019.10. **A scoping pass on the remainder of M21 is the next step**, and T0021.4 now has concrete inherited scope: the user-facing half of the error-handling honesty audit that T0021.2 deliberately left open (every streaming failure still reads as "the demo is busy").
 
 Also pending, all maintainer-gated:
 

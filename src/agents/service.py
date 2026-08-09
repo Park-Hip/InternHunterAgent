@@ -4,6 +4,7 @@ from typing import TypedDict
 
 from src.agents.runtime.react_agent import AgentRuntime
 from src.core.errors import BUSY_MESSAGE, classify_provider_busy_error
+from src.core.logger import logger
 
 FALLBACK_ANSWER = "I couldn't produce an answer for that — please try rephrasing."
 
@@ -79,7 +80,13 @@ async def stream_agent_response(
 
         yield metadata_event
     except Exception as exc:
-        classify_provider_busy_error(exc)
+        provider_busy = classify_provider_busy_error(exc)
+        logger.error(
+            "stream_agent_response.failed",
+            session_id=session_id,
+            error=str(exc),
+            reclassified_busy=provider_busy is not None,
+        )
         yield {"type": "error", "message": BUSY_MESSAGE}
 
     yield {"type": "done"}

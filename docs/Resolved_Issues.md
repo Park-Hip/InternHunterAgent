@@ -18,9 +18,10 @@ original register entry (omitted where none was assigned).
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 5
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
-- [Query tooling & SQL safety](#query-tooling--sql-safety) — 4
+- [Query tooling & SQL safety](#query-tooling--sql-safety) — 5
 - [Capacity & performance](#capacity--performance) — 1
 - [Evaluation harness](#evaluation-harness) — 10 (T0011.1–T0012.2)
+- [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 2 (T0021.2)
 - [Earlier resolved (pre-register)](#earlier-resolved-pre-register--chronological) — 12
 
 ---
@@ -109,6 +110,12 @@ original register entry (omitted where none was assigned).
 - **`[LOW · RESOLVED · T0012.8, 2026-07-06]` Nested SQL-generation call used thread-offloaded sync `invoke`, not native async.**
   - `generate_sql` is now `async def` and calls `await model.ainvoke(...)` directly; `query_clean_jobs` calls `await generate_sql(question, config)` with no thread hop. The `execute_validated_sql` `asyncio.to_thread` offload (genuinely-sync DB work) is unchanged. Scheduling-only — the generated SQL, prompt, and model are byte-for-byte the same. `test_generate_sql_runs_off_the_event_loop_thread` was removed (it asserted the old thread-offload behavior this fix eliminates); `GenerateSqlContentCoercionTests` converted to `IsolatedAsyncioTestCase` with `fake_model.ainvoke = AsyncMock(...)`.
 
+- **`[MED · RESOLVED · T0021.2, 2026-08-09]` A DB execution failure inside `query_clean_jobs` was swallowed with no log of the real cause.**
+  - **Found:** 2026-07-15, while debugging the live schema drift — and the drift is what made the cost concrete: `executor.execute_validated_sql` wraps the underlying `OperationalError`/`DBAPIError` into `ExecutorError(f"Failed to execute query: {exc}")`, carrying the real Postgres message, but the tool caught `ExecutorError` and returned the canned "database error" string **without logging `exc`**. The streaming path logged nothing either, and the tool returns a plain string, so Langfuse showed only the generic message. A real defect (`column "created_on" does not exist`) was invisible on every diagnostic surface at once — which is why diagnosing it needed a manual `psql` repro.
+  - **Resolution:** one `logger.error("query_clean_jobs.db_error", error=str(exc))` at the `except ExecutorError` catch site (structlog was already wired). The user-facing string is unchanged — this is log-only. Landed with its `get_job_details` twin, as the original entry proposed.
+  - **Verified:** `tests/agents/tools/test_query_clean_jobs.py::test_executor_error_is_logged` asserts the event name and that the underlying cause reaches the log payload; the pre-existing no-leak test still asserts the cause does **not** reach the user-facing string.
+  - **Not covered:** the same entry also floated logging the `validate_sql` reject branch. That is not a swallowed exception and was left out of T0021.2's catch-site scope — carried forward as a `[LOW · OPEN]` entry in `Known_Issues.md`.
+
 ## Capacity & performance
 - **`[LOW · RESOLVED · 2026-07-02]` Per-request `client.flush()` on the event loop.**
   - `react_agent.ainvoke` flushed the Langfuse client synchronously on every request — blocking I/O on the async path that stalled concurrent requests. Now offloaded via `await asyncio.to_thread(client.flush)`, matching the existing `asyncio.to_thread(...)` pattern; per-request flush semantics preserved, it just no longer blocks the event loop. Detail: `Code_Review_Notes.md` bug 7.
@@ -156,6 +163,23 @@ original register entry (omitted where none was assigned).
   - **(b) Empty final-answer symptom (A3/C3) is a *different* bug:** `reasoning_format='hidden'` alone reproduced it — at the old `max_tokens=1024`, a direct `model.invoke(...)` returned `content=''` with `output_tokens=1024, reasoning=1024`, i.e. reasoning consumed the entire budget before any visible answer. Same root cause as T0011.6's Gemini truncation — a thinking model's `max_tokens` must cover reasoning *and* answer. Fixed by raising `agent.groq.max_tokens` 1024 → 2048; confirmed non-empty coherent `.content` and clean bare SQL.
   - **Live end-to-end only partially verified:** Docker Desktop wasn't running, so Postgres (`localhost:5433`) was unreachable — A3/C3 final answers came back as a graceful, non-empty, `<think>`-free "database error" message (proving the fix holds through the full ReAct pipeline), but data-bearing answer content wasn't confirmed against real rows. Follow-up: re-run `test_three_seams.py -k "A3 or C3"` once Docker/Postgres is up.
   - **Not adopted:** the ticket's fallback of swapping `generate_sql` to a smaller non-thinking model — the provider-level `reasoning_format`/`max_tokens` levers resolved both symptoms in two config lines, so the swap (which would change what seam 2 measures for the T0011.5 baseline) was unnecessary.
+
+## Error-handling honesty audit (2026-07-22)
+
+> The audit's two `[HIGH]` entries — the cases where a real exception was discarded at a catch site — were closed by **T0021.2 (2026-08-09)**. T0021.2 was deliberately **log-only**: it makes failures visible to operators and changes **no user-facing string**. The audit's other half — that the user is told "the demo is busy" regardless of actual cause — is still open, deferred to **T0021.4**, and remains tracked in `Known_Issues.md` under the same section header.
+
+- **`[HIGH · RESOLVED · T0021.2, 2026-08-09]` `get_job_details` swallowed `ExecutorError` with no logging — the same defect as the tracked `query_clean_jobs` one, never extended to the second tool.**
+  - **Found:** 2026-07-22, error-handling audit. `src/agents/tools/get_job_details.py` caught `ExecutorError` bare and returned "I couldn't retrieve the requested data due to a database error. Please try again later." The real Postgres message carried on `ExecutorError` was discarded — not even `str(exc)` was logged.
+  - **Resolution:** `logger.error("get_job_details.db_error", error=str(exc))` at the catch site. Return string unchanged. Landed together with the `query_clean_jobs` twin (see Query tooling & SQL safety), as both entries specified.
+  - **Verified:** `tests/agents/tools/test_get_job_details.py::test_executor_error_is_logged`.
+  - **Lesson worth keeping:** this entry existed only because someone re-read the *other* tool. A defect fixed in one call site is not fixed in the codebase; the twin had sat unnoticed since the original was tracked.
+
+- **`[HIGH · RESOLVED · T0021.2, 2026-08-09]` The streaming path's catch-all discarded `classify_provider_busy_error`'s result and logged nothing — any failure reached the user as "the demo is busy."**
+  - **Found:** 2026-07-22, error-handling audit. In `stream_agent_response`: `except Exception as exc: classify_provider_busy_error(exc); yield {"type": "error", "message": BUSY_MESSAGE}` — the classifier's return value was computed and thrown away, never branched on, and there was no `logger.error` in the block at all. `generate_agent_response`'s own catch block a few lines above got both halves right (branch on the classifier, re-raise when it is *not* provider pressure); the streaming path got neither.
+  - **Why it was the widest instance in the audit:** `stream_agent_response` backs the primary chat UI (`POST /api/v1/agent/chat/stream`), so a DB outage, an unhandled bug, and a Langfuse crash were all invisible in structlog *and* all reported to the user as transient provider load.
+  - **Resolution:** the classifier result is now bound and recorded — `logger.error("stream_agent_response.failed", session_id=session_id, error=str(exc), reclassified_busy=provider_busy is not None)`. `session_id` is included so a user-reported failure can be traced to its log line.
+  - **Verified:** `tests/agents/test_service.py::StreamAgentResponseTests` — two cases, covering `reclassified_busy` false (a plain `RuntimeError`) and true (a message the classifier matches as provider pressure).
+  - **Deliberately only half-fixed.** The user-facing message is still `BUSY_MESSAGE` for **every** failure, including non-provider ones. The entry's proposed `GENERIC_ERROR_MESSAGE` branch was **not** taken: introducing a second user-facing string is honesty work, not observability work, and belongs with T0021.4's prompt/messaging pass. So the "misreported to the user" half of this entry's title is still true in production — closed here as an *observability* fix only, on the reasoning that the log line was the load-bearing part and a silent failure cannot be diagnosed at all, whereas a mislabelled one can at least be seen.
 
 ## Earlier resolved (pre-register / chronological)
 - **`[MED · RESOLVED · T0010.7, 2026-07-02]` Explicit user-requested counts were silently overridden by the system cap.**

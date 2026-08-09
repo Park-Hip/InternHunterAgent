@@ -28,7 +28,7 @@ report. If an open item still cross-references the resolved one, leave a short p
 the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.md` (closed).
 
 ## Categories
-- [Config, startup & deployment](#config-startup--deployment) — 32
+- [Config, startup & deployment](#config-startup--deployment) — 34
 - [Agent runtime & prompts](#agent-runtime--prompts) — 13
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
@@ -184,6 +184,18 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **Found:** 2026-07-21, T0019.6 recovery, reconciling a stranded stash against the current tree. The stash's own draft of this ticket carried a fuller `Schema_Contract.md` rewrite (hidden-DDL section, visible-vs-physical column count, an updated "Future `is_active`" framing), but that content documents T0019.3's already-shipped schema, not anything this ticket adds — out of scope here.
   - **Impact:** a reader of `Schema_Contract.md` today sees `is_active` framed as planned-for-T0014 work, when T0019.3 already added it (hidden from the agent) months of ticket-numbering ago. The doc's own "16 visible vs N physical columns" bookkeeping is stale.
   - **Follow-up:** own ticket (doc-only) to reconcile `Schema_Contract.md`'s hidden-column section and "Future `is_active`" framing with the T0019.3 reality. Not fixed inline here per this ticket's explicit non-goals.
+
+- **`[LOW · NOTE]` The expected `clean_jobs` column set is duplicated between `src/api/schema_guard.py` and `src/services/ingestion/models.py::CleanJob`; a legitimate schema change must update both.**
+  - **Found:** 2026-07-22, T0021.1 (read-path startup schema assertion). The serving guard's `EXPECTED_COLUMNS` frozenset enumerates the 22 `clean_jobs` columns as a literal rather than deriving them from the ingestion ORM. This is **required by the ticket's layer-isolation rule** — the serving path must not import the `src.services.ingestion` package — and the duplication is therefore deliberate, not an oversight.
+  - **Impact:** a real schema change (add/rename/drop a column) that updates only the ingestion ORM, or only the serving constant, leaves the two out of sync. A drift **between the constant and the live DB** is caught loudly at API boot (`SchemaGuardError`, `api.schema_drift`), so this fails safe rather than silently — but the maintenance coupling between the two source-of-truth lists is real and easy to forget.
+  - **Verified in practice (2026-08-09):** the two lists were compared directly — `EXPECTED_COLUMNS` (22) matches `CleanJob.__table__.columns` (22) exactly, in both directions. The duplication is currently consistent; this entry tracks the ongoing coupling, not a present defect.
+  - **Follow-up (out of scope here):** promote the ORM models to a shared `src/core` location both the API and ingestion layers import, retiring the duplicated literal. Not done in T0021.1 (moving/refactoring the ORM was an explicit non-goal).
+
+- **`[LOW · NOTE]` Exact-match schema semantics mean a future *additive* migration to `clean_jobs` breaks the live API boot until `EXPECTED_COLUMNS` is updated.**
+  - **Found:** 2026-07-22, T0021.1. `assert_serving_schema` fails on **either** direction of difference — missing columns *and* unexpected extras. So adding a new column to `clean_jobs` (a backward-compatible migration for the read path, which uses an explicit allowlisted `SELECT`) will still abort the API boot with `api.schema_drift` naming the new column as `unexpected`, until the constant is updated to include it.
+  - **Impact:** an additive migration must land together with the `EXPECTED_COLUMNS` update, or the API will refuse to start. This is the **accepted trade-off** for symmetry with the write-path guard (`assert_clean_jobs_schema`), which is exact-match for the same reason — required-subset semantics were considered and deliberately not chosen (decision recorded T0021.1).
+  - **Note (2026-08-09):** the *missing*-direction half of this is not hypothetical — see the Neon-baseline entry at the end of this section. Production is three columns short, so the guard aborts boot there today. The ordering constraint this entry describes (migration and constant must move together) is exactly what has to be respected when merging PR #30: **migrate Neon first, merge second.**
+  - **Follow-up:** none planned; documented so an operator hitting a boot failure right after a schema migration knows the constant, not the migration, is what needs the follow-up edit.
 
 - **`[HIGH · MOSTLY RESOLVED]` Render deploy source repointed `feature/t0018.4-deploy` → `main` (maintainer, 2026-07-22); one live-surface spot-check (C) still open.**
   - **Found:** 2026-07-22, T0020.2. A coder session has no Render dashboard or live-site access, so the ticket committed the `render.yaml` blueprint (branch: `main`) + corrected the deploy-branch docs; the dashboard change itself was left as a maintainer action.

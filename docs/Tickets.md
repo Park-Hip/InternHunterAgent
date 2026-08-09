@@ -1245,11 +1245,16 @@ ingestion:
 
 ### T0020.4: Gated cron-activation sequence — **maintainer execution; runbook is the artifact.** Gates: **D2, D5, D6, D10** — **▶ In progress** (docs slice done; activation pending)
 **Objective:** Turn the committed-but-dormant nightly ingestion cron (`.github/workflows/ingestion.yml`, T0019.6) into an actually-firing job once every accepted safety gate clears. Every live/production step is captured for the maintainer in [`docs/T0020.4_Cron_Activation_Runbook.md`](T0020.4_Cron_Activation_Runbook.md) — the execution artifact — cross-referenced from `Repo_Current_State.md` and the T0019.6 sub-ticket above.
+
+> **⚠ Correction (2026-08-09) — "committed-but-dormant" was false when this was written.** The cron was **already firing**. GitHub arms `schedule:` the moment the workflow reaches the default branch, so PR #29 (2026-07-22) activated it; it then ran and failed nightly for 19 days on a missing `DATABASE_URL` secret (no scrape, no production write — it died at config load). This ticket was authored 2026-07-26, four days *into* that window, describing an activation that had already occurred with **D2 and D6 unsigned**. **PR #33** comments out `schedule:` on `main`, restoring genuine dormancy and making this ticket's objective achievable as stated. Read the runbook's correction banner before executing. Full account: `Known_Issues.md` → Config, startup & deployment.
+
 **In Scope** (all maintainer-executed, captured in the runbook):
 * **D2** — ratify the robots.txt/ToS verdict (T0019.1 recommended *favorable*) in a tracked doc.
 * **D5** — run the T0019.5 safety checks B–E against a live Docker Postgres (local-PG portion signed 2026-07-22, coder session; Neon/prod portion remains).
 * **D6** — one-time `alembic stamp head` on Neon via the **direct, non-pooled** host.
-* Activate via `workflow_dispatch` from `main`, watch the first run, then confirm the first scheduled 02:00 UTC run.
+* Set the `DATABASE_URL` (Neon direct host) and `HEALTHCHECKS_URL` GitHub Actions secrets — **neither has ever been set**; this is the irreversible step, gated behind D2 + D6.
+* Activate via `workflow_dispatch` from `main` and watch the run go green.
+* **Only then** re-arm `schedule:` (uncomment the two `cron:` lines PR #33 disabled), and confirm the first scheduled 02:00 UTC run. Arming before a green manual run is what produced the 19-night silent failure.
 * **D10** — decision record on whether v1.0 ships with the cron live or parked.
 **Out of Scope:**
 * Any pipeline/ingestion code change (this milestone changes zero behavior); ingestion-coverage widening (T0019.9 re-measure, D8-gated); the 60-day GitHub Actions inactivity auto-disable mitigation (tracked in T0022.3).

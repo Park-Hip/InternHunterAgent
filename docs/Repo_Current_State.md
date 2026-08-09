@@ -1,4 +1,25 @@
 ## Current branch
+
+> **⚠ Reality check (2026-08-09).** This file is stale on `main` — a T0020 doc stack (`main` reconciliation,
+> Render repoint, CI gate, cron runbook) is written but sits behind unmerged PRs #31/#32. Three claims were
+> verified against GitHub/Render and found **false**:
+>
+> 1. **The nightly ingestion cron was NOT dormant.** It self-activated when PR #29 landed
+>    `.github/workflows/ingestion.yml` on `main` (2026-07-22) — GitHub arms `schedule:` from the default
+>    branch automatically — and ran **19 consecutive failing nightly runs** through 2026-08-09, each dying in
+>    ~15 s on a missing `DATABASE_URL` secret. It failed at config load, before any network or DB call, so
+>    nothing was scraped and Neon was never written — but **D2 and D6 were open the whole time.**
+>    `schedule:` is now commented out (**PR #33**). See `Known_Issues.md` → Config, startup & deployment.
+> 2. **The T0020.3 CI merge gate does not exist on GitHub.** `ci.yml` lives only on the unmerged
+>    `feature/t0020.3-ci-merge-gate` branch (PR #32). No open PR has ever been linted or tested by it.
+> 3. **`main` is no longer "stale at T0009".** It is `bcc81db` (PR #29), carrying the full T0019 chain.
+>
+> Verified **true**: Render deploys from `main` (the live `index.html` is byte-identical to `main`'s and
+> differs from `feature/t0018.4-deploy`'s), so the T0019.8/.10 serving fixes **are** live.
+>
+> The full corrected state lives in the pending T0020 stack (`feature/t0020.4-cron-activation`). Trust that
+> over this file once it merges.
+
 `feature/t0019.10-job-details-allowlist` — **T0019.10 `get_job_details` explicit column allowlist (2026-07-21).** `fetch_job_details` no longer runs `SELECT *`; it names the 16 columns of the `prompts.schema_context` frozen contract explicitly, closing a six-column leak (`is_active`, `first_seen_at`, `last_seen_at`, `posted_date`, `source`, `external_id`) that reached the agent verbatim through `_build_answer`'s `row.items()`. Cut from `feature/t0019.9-ingestion-coverage` — **T0019.9 Ingestion coverage: raised `max_jobs` + round-robin query interleave (2026-07-20).** Cut from `feature/t0019.8-truthful-refresh-date` — **T0019.8 Truthful refresh date on `/ready` (2026-07-20).** Previously `feature/t0019.7-keepalive-verification` — **T0019.7 Windowed keep-alive ping + Neon idle-pool verification (doc-only, independent of T0019.2–.6).** Cut from `feature/t0019.6-nightly-cron` (`bb75d10`), which sits at the same commit as `feature/t0019.5-unattended-safety`'s post-merge state at the time of cutting. Branched off `feature/t0019.4-source-resilience`, which was branched off `feature/t0019.3-accumulate-lifecycle`, which was branched off `feature/t0019.2-alembic-baseline`, which was branched off `feature/t0019.1-robots-tos-gate`, which was branched off `feature/t0018.4-deploy`, which remains the deployed branch — **LIVE: https://internhunteragent.onrender.com** (verified end-to-end 2026-07-16). **Correction (2026-07-19):** the long-standing note that `main` is "stale at T0009" is **no longer true** — `main` carries PRs #20–#27 (T0010.4, T0010.7, T0011.6, T0016.4, and T0017.1/T0017.2 via the `-recovered` branches) and sits at `e3e65ae`. `feature/t0019.5-unattended-safety` merged `origin/main` (`83fbe15`) to close that divergence; the merge was content-neutral (resulting tree byte-identical to `bb75d10`) because every `main` change was already present here — the `-recovered` T0017 commits reproduced byte-identical code. After this PR lands, branch off `main`.
 
 **Note on `.github/workflows/ingestion.yml` (T0019.6):** the workflow is now **present on this branch**. T0019.6's recovery commit (`ad1c269`, originally on `feature/t0019.6-nightly-cron-finish`) was cherry-picked here on 2026-07-22 during a branch-consolidation pass, so the T0019 chain no longer forks across two tips. Cherry-picked rather than left isolated because GitHub only fires `schedule:` from the **default branch** — the cron is structurally incapable of running from a feature branch, so consolidating carries no activation risk, while the doc-conflict cost of keeping it separate grew with every ticket landed. **The D2/D5 maintainer gates are unchanged and still bind before `main`.** See `Tickets.md` → T0019.6.

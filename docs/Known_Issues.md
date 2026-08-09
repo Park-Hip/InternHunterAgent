@@ -28,12 +28,12 @@ report. If an open item still cross-references the resolved one, leave a short p
 the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.md` (closed).
 
 ## Categories
-- [Config, startup & deployment](#config-startup--deployment) — 25
+- [Config, startup & deployment](#config-startup--deployment) — 27
 - [Agent runtime & prompts](#agent-runtime--prompts) — 13
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
 - [Demo UI (T0018.3)](#demo-ui-t00183) — 4
-- [Repo state & version control](#repo-state--version-control) — 1
+- [Repo state & version control](#repo-state--version-control) — 3
 - [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 5
 
 ---
@@ -183,6 +183,17 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **Found:** 2026-07-21, T0019.6 recovery, reconciling a stranded stash against the current tree. The stash's own draft of this ticket carried a fuller `Schema_Contract.md` rewrite (hidden-DDL section, visible-vs-physical column count, an updated "Future `is_active`" framing), but that content documents T0019.3's already-shipped schema, not anything this ticket adds — out of scope here.
   - **Impact:** a reader of `Schema_Contract.md` today sees `is_active` framed as planned-for-T0014 work, when T0019.3 already added it (hidden from the agent) months of ticket-numbering ago. The doc's own "16 visible vs N physical columns" bookkeeping is stale.
   - **Follow-up:** own ticket (doc-only) to reconcile `Schema_Contract.md`'s hidden-column section and "Future `is_active`" framing with the T0019.3 reality. Not fixed inline here per this ticket's explicit non-goals.
+
+- **`[HIGH · MOSTLY RESOLVED]` Render deploy source repointed `feature/t0018.4-deploy` → `main` (maintainer, 2026-07-22); one live-surface spot-check (C) still open.**
+  - **Found:** 2026-07-22, T0020.2. A coder session has no Render dashboard or live-site access, so the ticket committed the `render.yaml` blueprint (branch: `main`) + corrected the deploy-branch docs; the dashboard change itself was left as a maintainer action.
+  - **Resolution:** 2026-07-22 the maintainer changed the Render deploy branch to `main` and confirmed the redeploy succeeded — so **actions A and D are done** (a deploy off `main` completed, which also demonstrates `main` triggers a redeploy). The live path now serves the T0019.8/.10 fixes, closing the core risk below: the pre-T0019 honesty defect can no longer reach production ahead of the T0020.4 cron.
+  - **Original impact (now cleared for the code path):** the T0019 serving fixes — truthful `/ready` date (T0019.8) and the `get_job_details` column allowlist closing the six-column lifecycle leak (T0019.10) — were on `main` but not on the live path; that would have become a real honesty defect once the nightly cron (T0020.4) flips `is_active=false`. This was the sequencing reason T0020.2 had to land before the cron.
+  - **Still open — (C) live-surface spot-check:** confirm on the live UI that it shows the T0019.10 surface (composer-above-chips, data-derived `/ready` date, `get_job_details` output carries no `is_active=` / `posted_date=None` lifecycle columns). The deploy succeeding proves `main` is live; this check proves the specific expected behaviors render. **(B) Blueprint-sync decision** remains a separate call — the repoint was a dashboard branch change, *not* a Blueprint sync, so the `name: InternHunterAgent` collision hazard (a mismatched sync mints a second Free service, eroding the 750 instance-hour/month margin — `research/deployment-research-plan.md` §1a) only applies if/when the maintainer chooses to sync `render.yaml` rather than keep it as documentation-of-record. Move this entry to `Resolved_Issues.md` once C is confirmed.
+
+- **`[LOW · NOTE]` `render.yaml` is documentation-of-record, not necessarily an active Blueprint sync.**
+  - **Found:** 2026-07-22, T0020.2. The committed `render.yaml` makes the repo the source of truth for the web service's deploy branch and non-secret runtime settings, so the branch config can no longer silently drift. But whether Render actually *reads* it (Blueprint sync) vs. the service staying dashboard-managed with this file as a record is the maintainer's call (see the `name:` collision hazard in the entry above). All five secrets are declared `sync: false` (presence only, no values); `GOOGLE_API_KEY` (optional Gemini) and `HEALTHCHECKS_URL` (ingestion cron only) are intentionally omitted from the web blueprint.
+  - **Impact:** none today. Recorded so a future reader knows the file's authority level is a pending maintainer decision, not an accomplished sync.
+  - **Follow-up:** settle sync-vs-record when the maintainer performs actions A–D above.
 
 ## Agent runtime & prompts
 
@@ -344,6 +355,16 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **Impact:** the Agent Behavior Spec names `config/prompts.yaml`'s `behavior_glossary` as the *machine* source of truth for canonical strings, with itself as the *human* source of truth. Only the human half exists. The live prompts cover a subset of the same ground as free-form prose (e.g. `prompts.schema_context`'s "if a user asks about salary and the value is missing or negotiable, say so plainly") — so behavior is not unguided, but it is uncalibrated against the frozen phrasings, and nothing pins the exact strings the spec specifies. This is also the root of a **documentation-integrity** problem: a ticket marked *(done)* whose output was not in the repo.
   - **Related:** `research/honesty-enforcement-design.md` §0 recommends resolving canonical phrasings from "the `behavior_glossary` (already frozen on the M15 track)" — that premise is **false as of today**, so any implementation of that design must land the glossary first or it has nothing to resolve against.
   - **Follow-up:** needs its own ticket — **deliberately not folded into the 2026-07-22 cleanup pass**, because landing a `behavior_glossary` block changes what the agent says and requires behavioural verification the cleanup could not perform. Scope for that ticket: `git show archive/t0015.2-behavior-glossary:config/prompts.yaml` → lift the 18-entry block into `config/prompts.yaml`, confirm the phrase IDs match `Agent_Behavior_Spec.md` §3 (note the spec writes them hyphenated, `NEGOTIABLE-SALARY`; the config uses underscores, `NEGOTIABLE_SALARY` — reconcile), and re-run the goldens. The phrasings were frozen against the v1 16-column schema, which is still current, so they are not stale. Sequence this **before** implementing `research/honesty-enforcement-design.md`, whose §0 assumes the glossary is already frozen in config.
+
+- **`[LOW · OPEN]` T0020 has no milestone/sub-ticket block in `Tickets.md`, yet T0020.1–.4 are now referenced across the docs.**
+  - **Found:** 2026-07-22, T0020.1. The Backlog line for `main` reconciliation was rewritten to "✅ done (T0020.1, PR #29)", and `Repo_Current_State.md` now points "Next recommended ticket" at T0020.2 and names T0020.3/.4 — but `docs/Tickets.md` carries **no numbered T0020 milestone section** (the ingredient scope the T0020.1 coder prompt cited at "lines 1235–1242" does not exist at `bcc81db`). The roadmap milestone is scoped in `research/v1-release-readiness-plan.md` §2 and the memory note [[v1-release-roadmap-m20-m22]], but not yet in `Tickets.md`.
+  - **Impact:** the numbered roadmap and the prose docs are briefly out of step — a reader following `Tickets.md` alone will not find T0020.1–.4 defined. Cosmetic, not a correctness risk.
+  - **Follow-up:** author the T0020 milestone + sub-ticket In/Out-of-Scope blocks in `Tickets.md` (owns T0020.2 Render repoint, T0020.3 CI gate, T0020.4 cron activation). **Deliberately not done in T0020.1** — that ticket was scoped to docs-reconciliation + the local-ref sync only, and authoring a milestone is separate roadmap work.
+
+- **`[LOW · OPEN]` A concurrent session's uncommitted audit edits were stashed during the T0020.1 branch switch and must be restored.**
+  - **Found:** 2026-07-22, T0020.1. At the start of the ticket the working tree carried uncommitted changes to `docs/Known_Issues.md` and `docs/Tickets.md` from a concurrent "error-handling observability audit" (6 issues). `git checkout main` could not proceed with them present, so they were stashed with a label: `stash@{0}` = *"concurrent-session: error-handling observability audit (Known_Issues + Tickets) - stashed by T0020.1 session"* (on `feature/t0019.10-job-details-allowlist`).
+  - **Impact:** that audit work is **not lost** but is parked in the stash; it will not appear in any branch until restored. The stash was taken against the T0019.10 branch's tree, so a `git stash pop` after T0020.1 merges may surface conflicts in `Known_Issues.md`/`Tickets.md` (both files were edited on both sides).
+  - **Follow-up:** the concurrent session (or maintainer) should `git stash pop` and reconcile onto the appropriate branch. **Not resolved in T0020.1** — restoring another session's live work is outside this ticket and risks its edits.
 
 ## Query service (T0019.10)
 

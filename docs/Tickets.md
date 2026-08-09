@@ -1226,7 +1226,7 @@ Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Inge
 
 **Still unscheduled after T0019:**
 * **CI merge gate** — `research/pre-deploy-refinement-plan.md` §6i; no automated gate today, and Render auto-deploys straight off the active branch. Explicitly *not* part of T0019.6 (that workflow is ingestion-only).
-* **`main` reconciliation** — `main` is stuck at T0009; M10–M19 live on ticket branches. Needs an explicit maintainer decision; **do not branch a deploy from `main`**.
+* **`main` reconciliation** — ✅ done (T0020.1, PR #29 / `bcc81db`). `main` now carries the full M10–M19 chain and is the true head; the earlier "stuck at T0009 / M10–M19 on ticket branches" state no longer holds. Render's deploy branch repoint is tracked separately in T0020.2.
 * **`is_active` agent exposure + honesty hedge** — cut from T0019 (gate unmet); re-enters only after T0011.5 baseline → prompt-v2 few-shot pass → the targeted recalibration delta.
 * **Deploy-doc drift** (`pre-deploy-refinement-plan.md` §6h) and a custom domain (cosmetic).
 

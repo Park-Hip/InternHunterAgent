@@ -984,7 +984,7 @@ Verify against the live public URL: **https://internhunteragent.onrender.com**
 * **Multi-turn memory:** ask a follow-up in the same session; confirm it remembers context (the UI omits `session_id` on turn 1, then reuses the server-issued uuid4).
 * **API surface intact:** `https://internhunteragent.onrender.com/docs` loads; `curl .../api/v1/health` → `200`.
 * **Frame protection:** `curl -sI https://internhunteragent.onrender.com/ | grep -i x-frame-options` → `x-frame-options: DENY`.
-* **Deploy hygiene:** Render env vars hold all five secrets + `PORT=8000` (none baked into the image); Render is deploying branch `feature/t0018.4-deploy`.
+* **Deploy hygiene:** Render env vars hold all five secrets + `PORT=8000` (none baked into the image); Render deploys branch `main` (pinned by the tracked `render.yaml`; T0020.2 repointed it from `feature/t0018.4-deploy`).
 
 ### T0019.2: Alembic adoption
 

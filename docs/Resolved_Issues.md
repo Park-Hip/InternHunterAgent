@@ -17,7 +17,7 @@ original register entry (omitted where none was assigned).
 - [Config, startup & deployment](#config-startup--deployment) — 3
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 5
-- [Data & ingestion / database schema](#data--ingestion--database-schema) — 3
+- [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 4
 - [Capacity & performance](#capacity--performance) — 1
 - [Evaluation harness](#evaluation-harness) — 10 (T0011.1–T0012.2)
@@ -79,6 +79,21 @@ original register entry (omitted where none was assigned).
 
 - **`[LOW · RESOLVED · 2026-07-02]` `replace_clean_jobs` would crash on intra-batch duplicate keys** (latent).
   - `INSERT … ON CONFLICT DO UPDATE` errored if the same `(source, external_id)` appeared twice in one batch. `replace_clean_jobs` now dedups `rows` by `(source, external_id)` (last-write-wins) before the insert, and the returned count reflects the deduped rows. Verified: `tests/services/ingestion/test_clean_store.py::ReplaceCleanJobsTests::test_intra_batch_duplicate_key_is_deduped_last_wins`. Detail: `Code_Review_Notes.md` bug 8.
+
+- **`[HIGH · RESOLVED · D6, 2026-08-09]` Neon production was still at the Alembic baseline — the T0019.3 lifecycle migration had never run against it.**
+  - **Found:** 2026-08-09, checking the live Neon schema against `EXPECTED_COLUMNS` in `src/api/schema_guard.py` before merging PR #30. Neon returned `actual=19, expected=22, missing={first_seen_at, is_active, last_seen_at}, unexpected={}` — the baseline `f3a1c9d2e7b4` shape exactly. T0018.4 had seeded Neon by `pg_dump | psql` from a pre-migration sandbox and `alembic_version` was empty, so nothing ever reported a version mismatch.
+  - **Three live consequences, all now cleared:** (1) PR #30 would have aborted the FastAPI boot on Render and taken the public demo down; (2) `/ready` reported a fabricated date (separate entry below); (3) the nightly cron would have aborted at T0019.5's `assert_clean_jobs_schema()` even with `DATABASE_URL` set — the `ConfigLoadError` was masking a schema error.
+  - **The dangerous part was a doc instruction, not code.** The runbook's D6 step said `alembic stamp head`, described as adopting Neon into version tracking *"without touching its schema."* That is right only when the schema already matches head. **Rehearsed on a faithful replica and confirmed:** `stamp head` → `alembic current` reports `b7e2f4a91c3d (head)` → `upgrade head` runs nothing → columns stay 19. The old runbook's own verification step (*"expect `(head)`"*) **passes**, so D6 would have been signed off with production permanently stranded and no error anywhere. Root cause: at T0019.2 `head` genuinely *was* `f3a1c9d2e7b4`; the instruction expired when T0019.3 moved head forward. **A procedure that names a moving label outlives its own correctness** — the corrected steps pin the revision hash.
+  - **Resolution (2026-08-09):** `alembic stamp f3a1c9d2e7b4` → `alembic upgrade head` against the direct non-pooled endpoint, behind gates that abort before any write. Actual: `19 → 22` columns; **0 of 50 rows orphaned**, so every row backfilled from its real `raw_jobs.fetched_at`; `last_seen_at` range `2026-07-01 .. 2026-07-01` (correctly historical, not migration day); `is_active` 50/50. Full execution record: `T0020.4_Cron_Activation_Runbook.md` §3 + D6 execution record.
+  - **Generalisable lesson:** `stamp` asserts "the schema already looks like revision X" — a claim about physical reality that nothing verifies. Query `information_schema.columns` before stamping, especially when the DB was seeded by a dump rather than by migrations.
+
+- **`[MED · RESOLVED · D6, 2026-08-09]` `/ready` served the config fallback in production for its entire life, overstating data freshness by 13 days.**
+  - **Found:** 2026-07-20 as a *hypothetical* (T0019.8 logged it `[LOW · NOTE]`: "degrades silently to the config fallback when the schema is un-migrated"). Confirmed 2026-08-09 to be the actual steady state and upgraded to `[MED · OPEN]` before being resolved the same day.
+  - **Impact:** `get_data_snapshot_date` runs `SELECT MAX(last_seen_at)::date FROM clean_jobs` and falls back to `api.demo.data_snapshot_date` on any exception. Because the column did not exist on Neon, that query raised on **every** `/api/v1/ready` call since T0019.8 deployed, and the public demo served the hardcoded `2026-07-14`. T0019.8's entire purpose was to stop `/ready` reporting a hand-maintained date; in production it had only ever reported the hand-maintained date.
+  - **Why it stayed invisible:** the fallback value is plausible, the response is a normal `200`, and the only signal was a `snapshot_date_query_failed_using_config_fallback` warning in Render logs that nobody was reading.
+  - **The error had a direction:** the static value claimed `2026-07-14`; the data is actually from `2026-07-01`. The demo told visitors its corpus was **13 days fresher than it is** — an overstatement, not a rounding error.
+  - **Resolution:** no code change. The D6 migration above made the query succeed, and `/api/v1/ready` began returning `2026-07-01` immediately — **no redeploy required**, since the fix was the column appearing.
+  - **Residual (unowned, carried forward):** the *silence* is still there. A future degradation would look identical. Candidate: expose `data_date_source: "measured" | "fallback"` on `/ready` so a degraded date is visible without log access. Small; would have made this self-reporting from day one.
 
 ## Query tooling & SQL safety
 - **`[HIGH · RESOLVED · T0010.3, 2026-07-02]` SQL validator did not enforce a single table.**

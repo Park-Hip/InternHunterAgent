@@ -48,7 +48,10 @@ def markdown_files(root: Path = ROOT) -> list[Path]:
         check=True,
         capture_output=True,
     )
-    return sorted(root / Path(name) for name in result.stdout.decode().split("\0") if name)
+    return sorted(
+        path for name in result.stdout.decode().split("\0") if name
+        if (path := root / Path(name)).exists()
+    )
 
 
 def is_archive(path: Path) -> bool:

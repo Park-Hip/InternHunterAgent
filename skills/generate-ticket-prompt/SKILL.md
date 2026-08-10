@@ -1,93 +1,94 @@
 ---
 name: generate-ticket-prompt
-description: Turn one ticket from `docs/Tickets.md` into a grounded implementation prompt for a separate coder session. Use when asked to generate, draft, or refine a ticket prompt, especially for requests like "make the prompt for T0013" or "write the implementation prompt for this ticket." Produce the prompt only; do not implement the ticket itself.
+description: Turn a ticket from docs/Tickets.md into a structured, self-sufficient implementation prompt for a separate coder session to execute. Use when asked to "make/generate the prompt for TXXXX", "draft a ticket prompt", or act as the prompt engineer. This produces a PROMPT ONLY — it never implements the ticket.
 ---
 
 # Generate Ticket Prompt
 
-Write a self-sufficient implementation prompt for another cold-start coder session. The prompt must be accurate to the current repo, constrained to one ticket, and cheap for the implementer to follow without re-discovering the codebase.
+You are the **prompt engineer** for this project. Your job is to transform one ticket
+(`docs/Tickets.md`) into a structured implementation prompt that a **separate, cold-start
+coder session (Sonnet)** will execute. You do **not** write the feature code — you write
+the prompt.
 
-## Workflow
+The prompt must be self-sufficient: the coder starts with zero context from this session,
+so everything it needs must be in the prompt or in the precise files you point it to.
 
-### 1. Understand the ticket with targeted reads
+## Hard rules (never violate)
+1. **Never guess.** Read the relevant docs and the *actual implemented state* before
+   drafting. When a real ambiguity remains (field name, shape, semantics, scope boundary),
+   ask the user with `AskUserQuestion` — do not invent an answer. Guessing has burned us
+   before (config lived in `config/ingestion.yaml`, not `settings.yaml`; fixture was
+   normalized, not raw).
+2. **One ticket only.** The prompt must forbid future-ticket features, unrelated refactors,
+   and new architecture/dependencies (per `CLAUDE.md` §1).
+3. **Ground against reality, not assumption.** Verify names/paths/signatures exist in the
+   repo now. Prefer the ticket's exact wording for scope lines.
 
-Read only what is needed to draft the prompt.
+## Step 1 — Understand the ticket (read narrowly)
+Read only what you need, using targeted tools — **not** full-file reads of large docs:
+- The ticket's own lines in `docs/Tickets.md` (grep the ticket id, read that range).
+- `CLAUDE.md` (operating rules), `docs/Repo_Current_State.md` (current state, deps, next
+  ticket), `docs/Known_Issues.md` (open risks).
+- `research/README.md` → the relevant `research/*.md` and any `milestone/*.md` for LOCKED
+  design decisions behind this ticket. Grep for the specific decision, don't read it whole.
+- The **actual** files this ticket consumes or mirrors (models, config, a sibling module
+  that establishes the pattern). Read the specific functions/line ranges, not entire files.
+- **Existing tests that assert the thing you are changing.** Grep the test tree for the
+  current value/behavior the ticket modifies (a column list, a prompt string, a schema, an
+  error message). A ticket that edits config/prompts/schema almost always has a test pinning
+  the old state that will break — the prompt must tell the coder exactly which test to
+  update and how. This is the highest-value grounding step for config/prompt/doc tickets.
 
-- Find the ticket in `docs/Tickets.md` and read the smallest useful line range around it.
-- Read `AGENTS.md` and `CLAUDE.md` for project rules that the implementer must follow.
-- Read `research/README.md` first, then only the relevant research or milestone docs for the ticket.
-- Read `docs/Repo_Current_State.md` and `docs/Known_Issues.md` if they affect scope, dependencies, current status, or follow-ups.
-- Read the actual implementation files the ticket will touch. Prefer targeted reads of the relevant functions, models, config blocks, prompts, or scripts.
-- Search tests for the current behavior being changed. Tickets that alter schemas, prompts, config, or persisted fields often already have assertions pinning the old state.
+Do not re-read files already loaded earlier in the same session.
 
-Use targeted search and narrow reads instead of loading large files end to end. Verify names, paths, function signatures, and config locations against the repo instead of guessing.
+## Step 2 — Clarify genuine unknowns
+If anything material is ambiguous — a raw field's real name/shape, "replace vs upsert"
+semantics, whether a column is in-scope, which module owns new logic — ask via
+`AskUserQuestion` with concrete options and a recommendation. Resolve before drafting.
 
-### 2. Resolve real ambiguity before drafting
+**Automatic clarification trigger:** when a ticket's literal wording conflicts with an
+earlier ticket's decision — e.g. it lists a column/field that a prior ticket deferred or
+dropped (`posted_date` was listed in T0009.7 but deferred in T0009.5) — do not follow the
+literal wording blindly. Surface the conflict to the user and let them choose (omit /
+describe-as-unavailable / follow-literally). Silently obeying the ticket would ship a
+misleading prompt or a query against an empty column.
 
-If a material ambiguity remains, ask the user directly before writing the prompt.
-
-Examples:
-
-- The ticket wording conflicts with a newer research or schema decision.
-- A field name or source field shape is unclear.
-- The ticket appears to imply future-ticket scope.
-- The owning module or update pattern is not discoverable from the repo.
-
-Do not invent missing details. If the repo and ticket disagree, surface the conflict clearly and recommend the safest interpretation.
-
-### 3. Draft a prompt that is strict and implementation-ready
-
-Write the prompt in markdown. Optimize for a separate coder session that starts with no context from the current conversation.
+## Step 3 — Draft the prompt (tightened style)
+Base structure = `docs/Prompt_Playbook.md`, but optimize for a cheap coder's context:
+- **Trim the read list to 2–4 items with exact line ranges.** Mark anything else
+  "reference only if stuck." A long "review these docs" list makes the coder full-read
+  every file (~25k wasted tokens per ticket — measured).
+- **Inline the pattern to mirror.** If a sibling module (e.g. `raw_store.py`) sets the
+  shape, paste its ~10-line core into the prompt so the coder need not open it.
+- **List consumed interfaces with signatures** (`fn(x: T) -> R`, DTO fields) so the coder
+  doesn't hunt for them.
+- **Keep the spec full.** Field mappings, acceptance criteria, non-goals, and manual
+  verification stay complete and inline — that accuracy is the deliverable; do not trim it
+  to save tokens. (Tokens are cheap; a wrong implementation + rework is not.)
 
 Include these sections:
+- Project one-liner + "read only these" list (line-ranged) + "Implement this ticket only."
+- **Ticket** (id + title), **Branch** (`feature/tXXXX-slug`, off the prior ticket's branch).
+- **Goal**, **Dependencies**.
+- **Allowed areas** (exact files to create/change) and **Do not touch** (explicit).
+- **Interfaces you consume** (signatures) and **Pattern to mirror** (inlined snippet).
+- **Requirements** (precise, per-file), **Non-goals**.
+- **Acceptance criteria**, **Manual verification** (runnable steps a developer can check —
+  `CLAUDE.md` §4: never just "build passed").
+- **Project rules** (one ticket; no unrelated refactors/deps/architecture; models in
+  `models.py`; params in `config/`; keep layers isolated; **log any risk/issue/deferred
+  item to `docs/Known_Issues.md`, do not fix inline**; produce completion report +
+  update `Repo_Current_State.md`).
+- **After implementation, provide**: summary · files changed · commands run · build/test
+  results · manual verification · docs needing updates · risks/follow-ups **and confirm
+  each was appended to `docs/Known_Issues.md`**.
 
-- Project one-liner.
-- Read only these files:
-  Use 2 to 4 exact file references with line ranges when possible. Mark anything else as reference-only if stuck.
-- Ticket:
-  Include the ticket id and title exactly.
-- Branch:
-  Recommend `feature/tXXXX-slug`, based on the prior ticket branch if the repo docs say so.
-- Goal.
-- Dependencies.
-- Allowed areas:
-  List the exact files or folders the coder is expected to edit.
-- Do not touch:
-  Name unrelated files, layers, or future-ticket areas that are out of scope.
-- Interfaces you consume:
-  Include relevant signatures, DTO fields, model attributes, or config keys so the coder does not have to hunt for them.
-- Pattern to mirror:
-  Inline a short sibling snippet or describe the local pattern to copy.
-- Requirements:
-  Make them concrete and file-specific.
-- Non-goals.
-- Acceptance criteria.
-- Manual verification:
-  Provide runnable checks, not vague statements like "tests pass."
-- Project rules:
-  Restate the local constraints that matter most:
-  one ticket only; no unrelated refactors; no unnecessary dependencies; models live in `models.py`; parameters belong in `config/settings.yaml`; read `research/` before design; keep layer boundaries intact; log risks and deferred work separately instead of fixing them inline.
-- After implementation, provide:
-  summary of changes; files changed; commands run; build and test results; manual verification steps; risks; follow-up tickets; docs needing updates; completion report expectations; `Repo_Current_State.md` update expectations when the ticket requires it.
+## Step 4 — Deliver
+Output the prompt as plain markdown for the user to hand to the coder session. Briefly note
+any judgment calls you made and any decision you left to the implementer. Offer to draft the
+next sub-ticket in the same style.
 
-### 4. Keep the prompt grounded in current repo reality
-
-Prefer precise repo facts over generic advice.
-
-- Mirror existing file names and patterns exactly.
-- Call out the specific test files likely to fail or need updates.
-- Preserve known semantics from the repo and research notes instead of silently "simplifying" them.
-- If a value is source-derived or nullable today, keep that truth visible in the prompt.
-- If a date field should be treated as a date, describe date-safe behavior rather than text matching.
-
-### 5. Deliver only the prompt plus minimal notes
-
-Output the implementation prompt as plain markdown for the user to hand to another coder session.
-
-After the prompt, optionally add a short note covering:
-
-- judgment calls you made while drafting,
-- open decisions you intentionally left to the user,
-- any repo ambiguity that should be resolved before implementation.
-
-Do not implement the ticket. Do not add extra roadmap ideas, future-ticket work, or speculative architecture.
+## Model/workflow note
+Opus (this session) writes the prompt once; Sonnet (coder session) executes it. A detailed,
+self-sufficient prompt is exactly what lets the cheaper model implement reliably — so invest
+in prompt precision, keep the coder on Sonnet unless quality (not token count) demands more.

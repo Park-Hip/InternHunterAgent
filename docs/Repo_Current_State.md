@@ -1,8 +1,8 @@
 ## Current branch
 
-> **Ticket status (2026-08-10):** `feature/t0022.1-docs-lint` contains completed T0022.1
-> work, pending review and merge. It adds `scripts/docs_lint.py`, its focused tests,
-> `docs/Docs_Conventions.md`, and a warn-only CI job. The next recommended ticket is T0022.2.
+> **Ticket status (2026-08-10):** `feature/t0022.2-encoding-parity-orphans` contains completed
+> T0022.2 work, pending review and merge. It repairs the T0019.10 mojibake, preserves agent
+> surfaces, removes the tagged `milestone/` scratchpad, and corrects the stale Langfuse README.
 
 `main` — **`a5ff82e`**, and it is the only branch. As of **2026-08-09** the repo is quiet: no other local or remote branches, no worktrees, no open PRs. `main` is the single source of truth for what is built, what is deployed, and what is tested.
 

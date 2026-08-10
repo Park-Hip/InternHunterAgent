@@ -49,6 +49,20 @@ def test_dagger_mojibake_is_reported(tmp_path: Path) -> None:
     assert findings[0].check == "encoding"
 
 
+def test_completion_reports_encoding_is_clean() -> None:
+    report = SCRIPT.parents[1] / "docs" / "Completion_Reports.md"
+
+    assert docs_lint.check_encoding([report]) == []
+
+
+def test_shared_skill_instructions_match() -> None:
+    root = SCRIPT.parents[1]
+    codex_skill = root / "skills" / "generate-ticket-prompt" / "SKILL.md"
+    claude_skill = root / ".claude" / "skills" / "generate-ticket-prompt" / "SKILL.md"
+
+    assert codex_skill.read_bytes() == claude_skill.read_bytes()
+
+
 def test_missing_repo_path_is_reported(tmp_path: Path) -> None:
     document = tmp_path / "guide.md"
     document.write_text("See `src/missing.py`.\n", encoding="utf-8")

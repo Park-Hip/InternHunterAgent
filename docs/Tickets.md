@@ -1369,11 +1369,78 @@ against a 3,101-line backlog would redden every unrelated PR.
 * Any external-URL link checking (slow and flaky in CI), pre-commit framework, or docs-site
   generator.
 
-### T0022.2 – T0022.9: remaining blocks — summarized, authored when picked up
-* **T0022.2 — Encoding, parity & orphan cleanup.** Repair the `Completion_Reports.md` mojibake;
-  confirm `AGENTS.md`/`CLAUDE.md` parity with both files complete; tag-and-delete the root
-  `skills/` copy (`.claude/skills/` is canonical) and the self-declared disposable `milestone/`
-  folder; fix or drop `infra/langfuse/README.md`, which points at a nonexistent compose file.
+### T0022.2: Encoding repair, agent-surface parity & orphan cleanup — ▶ Next
+***T0022.1 prerequisite resolved (2026-08-10).** The corrected `encoding` check first
+failed against the unrepaired report and now passes after this ticket's byte-level repair. The
+check ignores intentional mojibake examples inside backticked code spans, as documented.
+
+**In Scope:**
+* **Repair `docs/Completion_Reports.md`.** 29 occurrences, concentrated in the T0019.10
+  section: `—` rendered as `â€"`, `⚠️` as `âš ï¸`, `→` as `â†'`. Restore the intended
+  characters. **Content is not otherwise touched** — this is a byte-level repair of an
+  append-only archive, not an edit of the record.
+* **Confirm `AGENTS.md` / `CLAUDE.md` parity holds** (`--check agent-parity` currently passes;
+  keep it passing). Both files stay complete — see the milestone's governing constraint above.
+* **Reconcile the two `SKILL.md` copies without deleting either.** See the correction below.
+* **Delete `milestone/`** — a single file whose own banner declares it "**DISPOSABLE /
+  temporary working doc … then this file is deleted**". Confirm its content reached
+  `Full_Design_Document.md` / `MVP_Technical_Design.md` / `Tickets.md`, tag as
+  `archive/milestone-scratchpad`, then remove. It also collides by filename with
+  `research/data-ingestion-stage.md`.
+* **Fix `infra/langfuse/README.md`** — 5 lines instructing the reader to run
+  `docker compose -f infra/langfuse/docker-compose.yaml up -d` against a file that does not
+  exist; the folder contains only the README. The deploy uses **Langfuse Cloud Hobby**, not
+  self-host (decided 2026-07-12), so the instruction is unreachable. Either restore the compose
+  file or replace the README with a pointer to the Cloud decision. **Prefer the pointer** —
+  reviving self-host contradicts a settled decision.
+* Re-run `docs_lint.py --check encoding --check agent-parity`; both exit 0 **and the encoding
+  check is demonstrably non-inert** (see manual verification).
+
+**⚠ Correction to the 2026-08-09 answer on the skill copies — do not delete root `skills/`.**
+That answer ("`.claude/skills/` is canonical, tag and delete the root copy") was given when the
+only known difference was a 93-vs-94-line `SKILL.md` diff. Inspection on 2026-08-10 found
+`skills/generate-ticket-prompt/agents/**openai.yaml**` — an **OpenAI/Codex agent interface
+manifest** (`display_name`, `short_description`, `default_prompt` invoking
+`$generate-ticket-prompt`). `.claude/skills/` has **no equivalent file**. The two trees are not
+duplicates: they are the same workflow packaged for **two different agents**, exactly like
+`AGENTS.md` / `CLAUDE.md`. Deleting the root tree would remove the Codex skill definition.
+**Revised action:** keep both; treat `.claude/skills/…/SKILL.md` as canonical **for the shared
+instruction text only**, sync the root copy's `SKILL.md` to match, and leave `openai.yaml`
+untouched as Codex-only surface. Extending `agent-parity` to cover this `SKILL.md` pair is
+optional and may be deferred to T0022.9.
+
+**Out of Scope:**
+* **Any reflow or rewrapping** (T0022.3), including in the files repaired here. A mojibake fix
+  that also rewraps its paragraph is unreviewable — the semantic diff disappears into churn.
+* **The 83 `link-path` findings.** They need a design decision first — the check currently
+  scans `docs/archive/**`, which `line-length` excludes by design, and many findings are
+  correct references to files preserved on archive tags needing `<!-- archived-on-tag -->`
+  rather than repair. Belongs to T0022.3/.6.
+* Adding the four deferred checks (`stamp`, `size-cap`, `check-stack`, `duplicate-heading`),
+  and flipping CI to blocking (T0022.9).
+* Any edit to the *substance* of `Completion_Reports.md` entries, and any `Known_Issues.md`
+  triage beyond logging follow-ups this ticket creates.
+
+**Manual verification** (the first check is the one that matters — an inert check passing is
+indistinguishable from a clean repo, which is precisely how this defect survived T0022.1):
+1. **Prove the check is live before repairing.** On the corrected patterns, run
+   `docs_lint.py --check encoding` against the *unrepaired* file: it must **fail**, naming
+   `docs/Completion_Reports.md` and ~29 lines. A pass here means the check is still inert —
+   stop and fix the patterns, do not proceed to the repair.
+2. Repair, then re-run: exits 0.
+3. Open the `T0019.10` section of `Completion_Reports.md` in a markdown preview — `—`, `⚠️`
+   and `→` render correctly, and no other text on those lines changed.
+4. `git diff --word-diff docs/Completion_Reports.md` shows **only** character substitutions —
+   no rewrapped lines, no moved prose.
+5. `diff AGENTS.md CLAUDE.md` is empty and both files are ≥1000 bytes.
+6. **Codex still resolves the skill:** `skills/generate-ticket-prompt/agents/openai.yaml` is
+   present and unmodified, and a Codex session can still invoke `$generate-ticket-prompt`.
+7. `/generate-ticket-prompt` still loads in Claude Code from `.claude/skills/`.
+8. `git tag` lists `archive/milestone-scratchpad`, and `milestone/` is gone.
+9. `docs_lint.py --stat` still reports 48 files minus the one deleted, and `lines >100` is
+   **unchanged** from the pre-ticket baseline — proof no reflow leaked in.
+
+### T0022.3 – T0022.9: remaining blocks — summarized, authored when picked up
 * **T0022.3 — Mechanical reflow.** ~40 files to the 100-char standard, `docs/archive/**`
   excluded. **No content change** — reviewed with `git diff --word-diff` to prove no semantic
   edit, and committed separately from every content ticket.

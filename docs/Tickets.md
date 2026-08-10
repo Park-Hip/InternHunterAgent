@@ -1590,10 +1590,88 @@ setup sits below the fold and operator detail belongs in `Operations.md` (T0022.
 **Follow-ups logged:** demo screenshot (`docs/assets/demo.png`) when the live demo is next up;
 the README quickstart clean-clone run above.
 
-### T0022.5 – T0022.9: remaining blocks — summarized, authored when picked up
-* **T0022.5 — Operations consolidation.** New `docs/Operations.md` owning deploy topology, env
-  vars, DB operations, and the cron. **Merge, don't move** — `T0020.4_Cron_Activation_Runbook.md`
-  stays reachable until the cron activation it governs is complete.
+### T0022.5: Operations consolidation — `docs/Operations.md` — ▶ Next
+**Objective:** Give the project's operational facts a single owner. Today "how this thing is
+deployed and run" is spread across `Repo_Current_State.md`, `Completion_Reports.md` (T0018.4),
+`research/deployment-research-plan.md`, `render.yaml`, `.env.example`, the ingestion workflow's
+comment block, and the T0020.4 runbook — each drifting independently. Measured 2026-08-10:
+**"Neon" appears in 17 live docs, `/api/v1/health` in 11, `WEB_CONCURRENCY` and "Langfuse Cloud
+Hobby" in 7 each.** An operator has no single page to open, and a reader cannot tell which copy
+is current.
+
+**⚠ The T0020.4 runbook is a LIVE artifact, not history — do not fold it away.** Its §7 sign-off
+table has **6 of 10 gates still unsigned**: D2 (ToS verdict), the `DATABASE_URL` +
+`HEALTHCHECKS_URL` secrets, the manual `workflow_dispatch` run, re-enabling `schedule:`, the
+first confirmed scheduled run, and the D10 decision. The maintainer is mid-execution against
+that table. Consolidation must not disturb a partially-signed checklist, break its ordering, or
+strand the sign-off state. **Merge the steady-state facts; leave the gated activation
+sequence exactly where it is.**
+
+**⚠ Boundary to settle — `Tech_Stack.md` vs `Operations.md`.** T0022.4 gave `Tech_Stack.md` a
+"Hosted services" section, so both documents can plausibly claim Render/Neon/Langfuse. Left
+unresolved this recreates the exact duplication the milestone exists to remove. **Decide and
+record the split in the Fact Ledger:** `Tech_Stack.md` owns **what was chosen** (which service,
+which tier, which version, and why not the alternative); `Operations.md` owns **how it is
+operated** (env vars, deploy flow, database procedures, cron, incident response). Trim
+`Tech_Stack.md`'s hosted-services table to the choice plus a link, rather than duplicating
+operational detail into it.
+
+**In Scope:**
+* **Create `docs/Operations.md`** (T3 living doc, ≤200 lines, carrying a `Last verified:` stamp):
+  * **Topology** — API on Render (Docker, Singapore, Free, `WEB_CONCURRENCY=1`, health check
+    `/api/v1/health`, `autoDeploy` from `main` pinned by the tracked `render.yaml`), Postgres on
+    Neon (PG17, Alembic head `b7e2f4a91c3d`), tracing on Langfuse Cloud Hobby (JP).
+  * **Environment variables** — one table sourced from `render.yaml` + `.env.example`, marking
+    for each: where it is set, whether it is secret (`sync: false`), and which surface needs it.
+    Capture the two easily-missed facts: `GOOGLE_API_KEY` and `HEALTHCHECKS_URL` are
+    **deliberately not declared for the web service**, and the ingestion cron's `DATABASE_URL`
+    must be Neon's **direct/non-pooled** host, not the pooled one.
+  * **Deploy flow** — push to `main` → Render auto-deploy; what `render.yaml` does and does not
+    control (it declares secret *presence*, never values).
+  * **Database operations** — init, the destructive reset path **relocated out of `README.md`**
+    (T0022.4 parked it there deliberately), `alembic upgrade head`, and the current head.
+  * **Ingestion cron** — current state (`schedule:` commented out, `workflow_dispatch` only),
+    why it is parked, and a **pointer to the runbook** for activation. Do not restate the gates.
+  * **Keep-alive / idle-pool** notes and the $0-of-$10 cost position.
+* **Leave `T0020.4_Cron_Activation_Runbook.md` in place and functional**, reflowed to the 100-char
+  standard (**130 line-length findings** — this ticket owns them). Add a short header note saying
+  steady-state operations now live in `Operations.md` while this file remains the execution
+  record until §7 is fully signed.
+* **Repoint the duplicated topology statements** in live docs to `Operations.md` rather than
+  restating them. Where a doc needs the fact inline, keep one sentence and link.
+* Register `Operations.md` in `docs/README.md` and add its Fact Ledger row.
+
+**Out of Scope:**
+* **Signing any gate, setting any secret, or activating the cron.** This is a documentation
+  ticket; the activation remains a maintainer action executed against the runbook.
+* **Deleting or archiving the runbook** — that becomes possible only after §7 is fully signed,
+  and is not this milestone's call.
+* `docs/Repo_Current_State.md` (72 findings) → **T0022.7** rebuilds it; only its *topology
+  paragraph* may be reduced to a link here.
+* `research/deployment-research-plan.md` (116 findings) → **T0022.8** archives it. Harvest its
+  decisions there, not here.
+* `Completion_Reports.md`'s T0018.4 entry — an append-only historical record; it keeps its
+  point-in-time topology description untouched.
+* Any change to `render.yaml`, the Dockerfile, the workflow, or actual infrastructure.
+
+**Manual verification:**
+1. **The runbook still works as an execution document.** Diff §7 before and after: all 10 rows
+   present, same order, the 4 signed rows still signed, the 6 open rows still open. A maintainer
+   resuming activation mid-way must lose nothing.
+2. Every step of the old runbook that describes *steady-state* operation appears in
+   `Operations.md`; every step that describes *the gated activation sequence* stayed put.
+3. The env-var table matches `render.yaml` and `.env.example` line by line — including the two
+   deliberately-undeclared variables and the direct-vs-pooled `DATABASE_URL` distinction.
+4. Follow the relocated database-reset procedure end to end against a local Docker Postgres and
+   confirm it still works after the move. *(Needs Docker.)*
+5. `docs_lint.py --check line-length` findings drop by ~130; `--check link-path` gains nothing —
+   run it **before and after**, since this ticket moves content between files.
+6. `grep -rn "Singapore\|WEB_CONCURRENCY" docs/ --include="*.md" | grep -v archive` returns
+   `Operations.md` plus links, not five independent restatements.
+7. Open `Operations.md` cold and answer: *which host does the cron's `DATABASE_URL` use, and
+   why?* — in under 30 seconds, without opening another file.
+
+### T0022.6 – T0022.9: remaining blocks — summarized, authored when picked up
 * **T0022.6 — Archive split.** `Tickets.md` (1,299 lines, 19 done milestones) and
   `Manual_Verification_Guide.md` (1,503 lines) shed their history to `docs/archive/`; the live
   files keep open work plus a one-line-per-milestone index.

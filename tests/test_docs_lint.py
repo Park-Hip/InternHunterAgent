@@ -94,6 +94,12 @@ def test_reflow_does_not_touch_yaml_frontmatter(tmp_path: Path) -> None:
     assert frontmatter in document.read_text(encoding="utf-8")
 
 
+def test_link_only_code_path_with_punctuation_is_line_length_exempt() -> None:
+    line = "`tests/services/test_example.py::Example::test_a_very_long_name_for_regression_coverage`."
+
+    assert docs_lint.is_line_length_exempt(line, in_fence=False)
+
+
 def test_missing_repo_path_is_reported(tmp_path: Path) -> None:
     document = tmp_path / "guide.md"
     document.write_text("See `src/missing.py`.\n", encoding="utf-8")

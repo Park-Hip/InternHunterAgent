@@ -85,7 +85,7 @@ def is_line_length_exempt(line: str, in_fence: bool, in_frontmatter: bool = Fals
         in_fence
         or in_frontmatter
         or stripped.startswith("|")
-        or (stripped.startswith("`") and stripped.endswith("`") and " " not in stripped)
+        or re.fullmatch(r"`[^`]+`[.,;:]?", stripped) is not None
         or re.fullmatch(r"<?https?://\S+>?", stripped) is not None
         or re.search(r"https?://\S{100,}", line) is not None
     )

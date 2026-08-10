@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import textwrap
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,6 +23,10 @@ MOJIBAKE = (
 )
 ARCHIVED_MARKER = "<!-- archived-on-tag -->"
 ENCODING_MARKER = "<!-- lint-allow-encoding -->"
+TECH_STACK = ROOT / "docs" / "Tech_Stack.md"
+PYPROJECT = ROOT / "pyproject.toml"
+DEPS_BEGIN = "<!-- deps:begin -->"
+DEPS_END = "<!-- deps:end -->"
 REFLOW_TARGETS = frozenset(
     {
         "AGENTS.md",
@@ -201,11 +206,60 @@ def check_agent_parity(_: list[Path]) -> list[Finding]:
     return []
 
 
+def declared_dependencies(raw: bytes) -> set[str]:
+    """Return the distribution names from pyproject's runtime and dev dependency groups."""
+    data = tomllib.loads(raw.decode("utf-8"))
+    specifiers = list(data.get("project", {}).get("dependencies", []))
+    for group in data.get("dependency-groups", {}).values():
+        specifiers.extend(item for item in group if isinstance(item, str))
+    names = set()
+    for specifier in specifiers:
+        # Strip extras and any version/marker suffix: "psycopg[binary,pool]>=3.2" -> "psycopg".
+        name = re.split(r"[\[<>=!~;\s]", specifier, maxsplit=1)[0].strip()
+        if name:
+            names.add(name.lower())
+    return names
+
+
+def documented_dependencies(text: str) -> set[str]:
+    """Return package names from the first column of tables in the deps-marked region.
+
+    Only table rows count, so ordinary prose in the region may use backticks freely.
+    """
+    start, end = text.find(DEPS_BEGIN), text.find(DEPS_END)
+    if start == -1 or end == -1 or end < start:
+        return set()
+    region = text[start + len(DEPS_BEGIN) : end]
+    rows = re.findall(r"^\|\s*`([^`]+)`\s*\|", region, re.M)
+    return {name.strip().lower() for name in rows}
+
+
+def check_stack(_: list[Path]) -> list[Finding]:
+    """Keep Tech_Stack.md and pyproject.toml agreeing on the dependency set."""
+    if not TECH_STACK.exists():
+        return [Finding("stack", TECH_STACK, 0, "docs/Tech_Stack.md is missing")]
+    stack_text = TECH_STACK.read_text(encoding="utf-8")
+    if DEPS_BEGIN not in stack_text or DEPS_END not in stack_text:
+        return [Finding("stack", TECH_STACK, 0, f"missing {DEPS_BEGIN} / {DEPS_END} markers")]
+    declared = declared_dependencies(PYPROJECT.read_bytes())
+    documented = documented_dependencies(stack_text)
+    findings = [
+        Finding("stack", TECH_STACK, 0, f"dependency {name!r} is not documented")
+        for name in sorted(declared - documented)
+    ]
+    findings.extend(
+        Finding("stack", TECH_STACK, 0, f"documented {name!r} is not a dependency")
+        for name in sorted(documented - declared)
+    )
+    return findings
+
+
 CHECKS = {
     "line-length": check_line_length,
     "link-path": check_link_path,
     "encoding": check_encoding,
     "agent-parity": check_agent_parity,
+    "stack": check_stack,
 }
 
 

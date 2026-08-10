@@ -1,8 +1,12 @@
 ## Current branch
 
-> **Ticket status (2026-08-10):** `feature/t0022.3-structure-safe-reflow` contains completed
-> T0022.3 work, pending review and merge. It adds a prefix-safe, frontmatter-aware reflower and
-> mechanically wraps the stable documentation set. The next recommended ticket is T0022.4.
+> **Ticket status (2026-08-10):** `feature/t0022.4-front-door` contains completed T0022.4 work,
+> pending review and merge, and builds on the unmerged T0022.1–.3 chain. It rewrites the root
+> `README.md` recruiter-first, adds [`Tech_Stack.md`](Tech_Stack.md) as the sole owner of stack
+> facts, and adds a `stack` lint check that holds that doc to `pyproject.toml`. The next
+> recommended ticket is **T0022.5** (Operations consolidation), which absorbs
+> [`T0020.4_Cron_Activation_Runbook.md`](T0020.4_Cron_Activation_Runbook.md) and the README's
+> database-reset section into a new `Operations.md`.
 
 `main` — **`a5ff82e`**, and it is the only branch. As of **2026-08-09** the repo is quiet: no other local or remote branches, no worktrees, no open PRs. `main` is the single source of truth for what is built, what is deployed, and what is tested.
 

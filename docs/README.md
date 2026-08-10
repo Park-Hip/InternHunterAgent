@@ -30,6 +30,7 @@ drifts) across files.
 |---|---|
 | Prompt design and conventions | `Prompt_Playbook.md` |
 | The frozen v1 `clean_jobs` column contract | `Schema_Contract.md` |
+| Languages, frameworks, versions, hosted services, and what was deliberately avoided | `Tech_Stack.md` |
 
 > Teaching walkthroughs (e.g. the SSE/streaming beginner's guide) live outside `docs/`
 > in the top-level [`guides/`](../guides/) folder — they explain concepts rather than

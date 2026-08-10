@@ -108,3 +108,45 @@ def test_missing_repo_path_is_reported(tmp_path: Path) -> None:
 
     assert len(findings) == 1
     assert findings[0].check == "link-path"
+
+
+PYPROJECT_SAMPLE = b"""
+[project]
+dependencies = ["fastapi>=0.136.3", "psycopg[binary,pool]>=3.2"]
+
+[dependency-groups]
+dev = ["ruff>=0.15.20"]
+"""
+
+
+def test_extras_and_specifiers_are_stripped_from_dependency_names() -> None:
+    """`psycopg[binary,pool]>=3.2` must resolve to `psycopg`, not swallow the group."""
+    assert docs_lint.declared_dependencies(PYPROJECT_SAMPLE) == {"fastapi", "psycopg", "ruff"}
+
+
+def test_documented_dependencies_reads_table_rows_only() -> None:
+    """Prose inside the marked region may use backticks without registering as a dependency."""
+    text = (
+        f"{docs_lint.DEPS_BEGIN}\n"
+        "| Package | Role |\n|---|---|\n"
+        "| `fastapi` | HTTP layer. |\n"
+        "Configured in `config/settings.yaml` under `agent`.\n"
+        f"{docs_lint.DEPS_END}\n"
+    )
+
+    assert docs_lint.documented_dependencies(text) == {"fastapi"}
+
+
+def test_stack_check_reports_both_directions() -> None:
+    declared = docs_lint.declared_dependencies(PYPROJECT_SAMPLE)
+    documented = docs_lint.documented_dependencies(
+        f"{docs_lint.DEPS_BEGIN}\n| `fastapi` | x |\n| `tenacity` | x |\n{docs_lint.DEPS_END}\n"
+    )
+
+    assert declared - documented == {"psycopg", "ruff"}  # added but undocumented
+    assert documented - declared == {"tenacity"}  # documented but removed
+
+
+def test_tech_stack_matches_pyproject() -> None:
+    """The shipped Tech_Stack.md must agree with the real pyproject.toml."""
+    assert docs_lint.check_stack([]) == []

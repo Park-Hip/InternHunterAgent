@@ -120,5 +120,7 @@ matters.
 
 - [Google Gemini API rate limits (official)](https://ai.google.dev/gemini-api/docs/rate-limits)
 - [Gemini API pricing (official)](https://ai.google.dev/gemini-api/docs/pricing)
-- [Gemini free-tier limits 2026 guide](https://www.aifreeapi.com/en/posts/gemini-api-free-tier-rate-limits)
-- [Gemini 2.5 Flash pricing (pricepertoken)](https://pricepertoken.com/pricing-page/model/google-gemini-2.5-flash)
+- [Gemini free-tier limits 2026
+  guide](https://www.aifreeapi.com/en/posts/gemini-api-free-tier-rate-limits)
+- [Gemini 2.5 Flash pricing
+  (pricepertoken)](https://pricepertoken.com/pricing-page/model/google-gemini-2.5-flash)

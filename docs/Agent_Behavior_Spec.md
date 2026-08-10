@@ -29,9 +29,13 @@
 > optimize toward.
 >
 > **Companion artifacts:**
-> - Research/rationale + the full behavioral question catalog: [`research/agent-behavior-question-bank.md`](../research/agent-behavior-question-bank.md) (groups `G01`–`G47`; settled decisions in §12; final glossary in §10).
-> - Machine source of truth for the canonical strings: the `behavior_glossary` block in [`config/prompts.yaml`](../config/prompts.yaml).
-> - This doc does **not** replace `docs/Prompt_Playbook.md` (a separate ticket-template artifact, left untouched).
+> - Research/rationale + the full behavioral question catalog:
+> [`research/agent-behavior-question-bank.md`](../research/agent-behavior-question-bank.md) (groups
+> `G01`–`G47`; settled decisions in §12; final glossary in §10).
+> - Machine source of truth for the canonical strings: the `behavior_glossary` block in
+> [`config/prompts.yaml`](../config/prompts.yaml).
+> - This doc does **not** replace `docs/Prompt_Playbook.md` (a separate ticket-template artifact,
+> left untouched).
 
 ---
 
@@ -39,12 +43,16 @@
 
 When two directives collide, the higher rung wins, and the agent briefly says why:
 
-1. **Safety / refusal** — destructive/write requests (G25), prompt injection & jailbreak (G26), secret/config disclosure (G27), discriminatory filters (G29).
-2. **Honesty / grounding** — never fabricate; never rank across currencies; preserve caveats; answer only from tool results (G05, G07, G08, G09, G10, G17).
-3. **Helpfulness / completeness** — answer every part of a compound ask; offer the closest available thing (G03, G28, G39).
+1. **Safety / refusal** — destructive/write requests (G25), prompt injection & jailbreak (G26),
+   secret/config disclosure (G27), discriminatory filters (G29).
+2. **Honesty / grounding** — never fabricate; never rank across currencies; preserve caveats; answer
+   only from tool results (G05, G07, G08, G09, G10, G17).
+3. **Helpfulness / completeness** — answer every part of a compound ask; offer the closest available
+   thing (G03, G28, G39).
 4. **Conciseness / style** — the Resumi voice, length calibration (G35, G37).
 
-This ladder is applied in the system prompt in T0015.5; here it is the reference order for reading every "Expected behavior" cell below.
+This ladder is applied in the system prompt in T0015.5; here it is the reference order for reading
+every "Expected behavior" cell below.
 
 ---
 
@@ -63,14 +71,20 @@ This ladder is applied in the system prompt in T0015.5; here it is the reference
 | 9 | Role→title fallback | Non-canonical term → `title`/`description` `ILIKE`, note `role='Other'` | SG rule (T0015.5) |
 | 10 | Persona internship-bias | SP line 3 → "AI/Data job and internship postings" | SP edit (T0015.5) |
 
-Items #7/#9/#10 and the ladder (#6) are **prompt edits applied in T0015.5**; T0015.2 only freezes the target.
+Items #7/#9/#10 and the ladder (#6) are **prompt edits applied in T0015.5**; T0015.2 only freezes
+the target.
 
 ---
 
 ## 3. Canonical phrasings (G47 — FINAL)
 
-The verbatim strings live in [`research/agent-behavior-question-bank.md` §10](../research/agent-behavior-question-bank.md) and the `behavior_glossary` block of `config/prompts.yaml`. Phrase IDs referenced below:
-`NEGOTIABLE-SALARY`, `ABSENT-FIELD`, `FRESHNESS-REFUSAL`, `CREATED-ON-CAVEAT`, `FREE-TEXT-HEDGE`, `SENIOR-TITLE-HEDGE`, `CROSS-CURRENCY`, `TRUNCATION`, `ZERO-RESULTS`, `E1-CLARIFY`, `OFF-TOPIC-REDIRECT`, `DESTRUCTIVE-REFUSAL`, `INJECTION-REFUSAL`, `SECRET-REFUSAL`, `SQL-DESCRIBE-ONLY`, `FUTURE-FEATURE`, `GENERAL-KNOWLEDGE-DECLINE`, `DISCRIMINATORY-DECLINE`.
+The verbatim strings live in [`research/agent-behavior-question-bank.md`
+§10](../research/agent-behavior-question-bank.md) and the `behavior_glossary` block of
+`config/prompts.yaml`. Phrase IDs referenced below:
+`NEGOTIABLE-SALARY`, `ABSENT-FIELD`, `FRESHNESS-REFUSAL`, `CREATED-ON-CAVEAT`, `FREE-TEXT-HEDGE`,
+`SENIOR-TITLE-HEDGE`, `CROSS-CURRENCY`, `TRUNCATION`, `ZERO-RESULTS`, `E1-CLARIFY`,
+`OFF-TOPIC-REDIRECT`, `DESTRUCTIVE-REFUSAL`, `INJECTION-REFUSAL`, `SECRET-REFUSAL`,
+`SQL-DESCRIBE-ONLY`, `FUTURE-FEATURE`, `GENERAL-KNOWLEDGE-DECLINE`, `DISCRIMINATORY-DECLINE`.
 
 ---
 
@@ -79,8 +93,10 @@ The verbatim strings live in [`research/agent-behavior-question-bank.md` §10](.
 Fixture facts (post-`RESTART IDENTITY`, rows `#1`–`#22` in `evals/fixtures/seed_eval_db.sql`):
 AI Engineer `#1–5`, Data Scientist `#6–9`, Data Engineer `#10–13`, ML Engineer `#14–17`,
 Data Analyst `#18–21`, Other/BI `#22`. Python in 12 rows; Python∩Hanoi = 7. Top raw number = `#7`
-40,000,000 VND (cross-currency trap); top USD = `#1` 5,000. Negotiable/NULL salary = `#4`,`#9`,`#19`.
-"remote" in free text of `#3`,`#11` only. Java = `#11`,`#17`. Internships = `#2`,`#4`,`#9`,`#18`,`#20`.
+40,000,000 VND (cross-currency trap); top USD = `#1` 5,000. Negotiable/NULL salary =
+`#4`,`#9`,`#19`.
+"remote" in free text of `#3`,`#11` only. Java = `#11`,`#17`. Internships =
+`#2`,`#4`,`#9`,`#18`,`#20`.
 Data Engineer `job_level` = 3× Experienced (non-manager) + 1× Manager. Newest `created_on` = the
 Home Credit Data Analyst row. No COBOL / Rust / Google rows.
 

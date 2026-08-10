@@ -1,5 +1,6 @@
 ## 1. General Operational Rules
-These rules apply to every ticket and interaction to ensure we maintain control over the repository's scope and quality.
+These rules apply to every ticket and interaction to ensure we maintain control over the
+repository's scope and quality.
 
 * Implement one ticket only.
 * Do not implement future-ticket features.
@@ -11,28 +12,36 @@ These rules apply to every ticket and interaction to ensure we maintain control 
 * Never over-engineer a problem, find a suitable solution to the MVP.
 * Models should be seperated in models.py
 * Paramters must be set at config/settings.yaml
-* Before designing, planning, or implementing any stage, read the relevant document in `research/` (start at `research/README.md`). It holds the pre-design research, live-tested facts, and ruled-out dead-ends behind each decision — do not re-derive what is already recorded there.
+* Before designing, planning, or implementing any stage, read the relevant document in `research/`
+  (start at `research/README.md`). It holds the pre-design research, live-tested facts, and
+  ruled-out dead-ends behind each decision — do not re-derive what is already recorded there.
 
 ## 2. Architecture-Specific Rules
-This project is a React-style MVP utilizing FastAPI, LangChain, and Langfuse. Strict adherence to these architectural boundaries is required.
+This project is a React-style MVP utilizing FastAPI, LangChain, and Langfuse. Strict adherence to
+these architectural boundaries is required.
 
-* Maintain strict layer isolation: Keep the API layer, Application service, Agent runtime, and Tracing layer entirely separated.
+* Maintain strict layer isolation: Keep the API layer, Application service, Agent runtime, and
+  Tracing layer entirely separated.
 * API Agnosticism: The API layer must not know how the agent is built internally.
 * Route Constraints: FastAPI routes must never own LangChain logic directly.
-* Tracing Boundaries: Keep tracing localized to its respective layer; do not let Langfuse or tracing concerns leak across the entire codebase.
+* Tracing Boundaries: Keep tracing localized to its respective layer; do not let Langfuse or tracing
+  concerns leak across the entire codebase.
 
 
 ## 3. Branching Strategy
 * Use branches per ticket.
-* For each ticket flow: main ↓ feature/t0001-project-skeleton ↓ test ↓ merge ↓ feature/t0002-core-model.
+* For each ticket flow: main ↓ feature/t0001-project-skeleton ↓ test ↓ merge ↓
+  feature/t0002-core-model.
 
 ## 4. Manual Verification
-* Always add manual verification that the developer can test after make changes not just  "build passed".
+* Always add manual verification that the developer can test after make changes not just  "build
+  passed".
 * Every ticket should have a small manual checklist.
 
 
 ## 5. Completion Report Requirement
-At the end of every ticket execution, a completion report must be generated. The report must strictly include:
+At the end of every ticket execution, a completion report must be generated. The report must
+strictly include:
 
 * Summary of changes.
 * Files created, changed, or modified.
@@ -52,5 +61,6 @@ Update a Repo_Current_State.md file after completion. Include the following:
 * Installed dependencies.
 * Available scripts.
 * Build/test status.
-* Known issues — do not list these inline; record them in `docs/Known_Issues.md` (the living register) and link to it from Repo_Current_State.md.
+* Known issues — do not list these inline; record them in `docs/Known_Issues.md` (the living
+  register) and link to it from Repo_Current_State.md.
 * Next recommended ticket.

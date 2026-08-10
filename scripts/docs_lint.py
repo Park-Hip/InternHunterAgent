@@ -22,6 +22,25 @@ MOJIBAKE = (
 )
 ARCHIVED_MARKER = "<!-- archived-on-tag -->"
 ENCODING_MARKER = "<!-- lint-allow-encoding -->"
+REFLOW_TARGETS = frozenset(
+    {
+        "AGENTS.md",
+        "CLAUDE.md",
+        ".claude/skills/generate-ticket-prompt/SKILL.md",
+        "docs/Agent_Behavior_Spec.md",
+        "docs/Completion_Reports.md",
+        "docs/Full_Design_Document.md",
+        "docs/Known_Issues.md",
+        "docs/MVP_Spec.md",
+        "docs/MVP_Technical_Design.md",
+        "docs/Resolved_Issues.md",
+        "evals/v1_scenario_matrix.md",
+        "research/eval-cost-and-rate-limits.md",
+        "research/honesty-enforcement-design.md",
+        "skills/generate-ticket-prompt/SKILL.md",
+    }
+)
+BLOCK_PREFIX = re.compile(r"^(?P<indent>[ \t]*)(?P<marker>>[ \t]*|[-*+][ \t]+|\d+[.)][ \t]+)(?P<body>\S.*)$")
 
 
 @dataclass(frozen=True)
@@ -55,16 +74,20 @@ def markdown_files(root: Path = ROOT) -> list[Path]:
 
 
 def is_archive(path: Path) -> bool:
-    return path.is_relative_to(ROOT / "docs" / "archive")
+    return path.is_relative_to(ROOT / "docs" / "archive") or path.is_relative_to(
+        ROOT / "research" / "archive"
+    )
 
 
-def is_line_length_exempt(line: str, in_fence: bool) -> bool:
+def is_line_length_exempt(line: str, in_fence: bool, in_frontmatter: bool = False) -> bool:
     stripped = line.strip()
     return (
         in_fence
+        or in_frontmatter
         or stripped.startswith("|")
         or (stripped.startswith("`") and stripped.endswith("`") and " " not in stripped)
         or re.fullmatch(r"<?https?://\S+>?", stripped) is not None
+        or re.search(r"https?://\S{100,}", line) is not None
     )
 
 
@@ -74,10 +97,20 @@ def check_line_length(files: list[Path]) -> list[Finding]:
         if is_archive(path):
             continue
         in_fence = False
+        in_frontmatter = False
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if number == 1 and line.strip() == "---":
+                in_frontmatter = True
+                continue
+            if in_frontmatter:
+                if line.strip() in {"---", "..."}:
+                    in_frontmatter = False
+                continue
             if line.lstrip().startswith("```"):
                 in_fence = not in_fence
-            if len(line) > LINE_LIMIT and not is_line_length_exempt(line, in_fence):
+            if len(line) > LINE_LIMIT and not is_line_length_exempt(
+                line, in_fence, in_frontmatter
+            ):
                 findings.append(Finding("line-length", path, number, f"{len(line)} characters"))
     return findings
 
@@ -179,26 +212,40 @@ CHECKS = {
 def reflow_line_length(files: list[Path]) -> list[Path]:
     changed: list[Path] = []
     for path in files:
-        if is_archive(path):
+        if is_archive(path) or not is_reflow_target(path):
             continue
         lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         result: list[str] = []
         in_fence = False
+        in_frontmatter = False
         modified = False
-        for line in lines:
+        for number, line in enumerate(lines, 1):
             content = line.rstrip("\r\n")
+            if number == 1 and content.strip() == "---":
+                in_frontmatter = True
+                result.append(line)
+                continue
+            if in_frontmatter:
+                if content.strip() in {"---", "..."}:
+                    in_frontmatter = False
+                result.append(line)
+                continue
             if content.lstrip().startswith("```"):
                 in_fence = not in_fence
-            if len(content) > LINE_LIMIT and not is_line_length_exempt(content, in_fence):
-                indent = content[: len(content) - len(content.lstrip())]
+            if len(content) > LINE_LIMIT and not is_line_length_exempt(
+                content, in_fence, in_frontmatter
+            ):
+                initial_indent, subsequent_indent, body = reflow_indents(content)
                 wrapped = textwrap.wrap(
-                    content.strip(),
-                    width=LINE_LIMIT - len(indent),
+                    body,
+                    width=LINE_LIMIT,
+                    initial_indent=initial_indent,
+                    subsequent_indent=subsequent_indent,
                     break_long_words=False,
                     break_on_hyphens=False,
                 )
                 if len(wrapped) > 1:
-                    result.extend(f"{indent}{part}\n" for part in wrapped)
+                    result.extend(f"{part}\n" for part in wrapped)
                     modified = True
                     continue
             result.append(line if line.endswith(("\n", "\r")) else f"{line}\n")
@@ -206,6 +253,26 @@ def reflow_line_length(files: list[Path]) -> list[Path]:
             path.write_text("".join(result), encoding="utf-8", newline="\n")
             changed.append(path)
     return changed
+
+
+def is_reflow_target(path: Path) -> bool:
+    try:
+        return path.relative_to(ROOT).as_posix() in REFLOW_TARGETS
+    except ValueError:
+        return True
+
+
+def reflow_indents(line: str) -> tuple[str, str, str]:
+    match = BLOCK_PREFIX.match(line)
+    if match is None:
+        indent = line[: len(line) - len(line.lstrip())]
+        return indent, indent, line.strip()
+    indent = match.group("indent")
+    marker = match.group("marker")
+    initial_indent = f"{indent}{marker}"
+    if marker.startswith(">"):
+        return initial_indent, initial_indent, match.group("body")
+    return initial_indent, f"{indent}{' ' * len(marker)}", match.group("body")
 
 
 def print_stat(files: list[Path]) -> None:

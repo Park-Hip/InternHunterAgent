@@ -63,6 +63,37 @@ def test_shared_skill_instructions_match() -> None:
     assert codex_skill.read_bytes() == claude_skill.read_bytes()
 
 
+def test_reflow_preserves_blockquote_prefix(tmp_path: Path) -> None:
+    document = tmp_path / "guide.md"
+    document.write_text(f"> {'word ' * 30}\n", encoding="utf-8")
+
+    docs_lint.reflow_line_length([document])
+
+    assert all(line.startswith("> ") for line in document.read_text(encoding="utf-8").splitlines())
+
+
+def test_reflow_preserves_list_content_columns(tmp_path: Path) -> None:
+    cases = (("- ", "  "), ("  - ", "    "), ("1. ", "   "))
+    for number, (prefix, continuation) in enumerate(cases):
+        document = tmp_path / f"guide-{number}.md"
+        document.write_text(f"{prefix}{'word ' * 30}\n", encoding="utf-8")
+
+        docs_lint.reflow_line_length([document])
+
+        lines = document.read_text(encoding="utf-8").splitlines()
+        assert lines[0].startswith(prefix)
+        assert all(line.startswith(continuation) for line in lines[1:])
+
+
+def test_reflow_does_not_touch_yaml_frontmatter(tmp_path: Path) -> None:
+    document = tmp_path / "guide.md"
+    frontmatter = f"description: {'word ' * 30}\n"
+    document.write_text(f"---\n{frontmatter}---\n", encoding="utf-8")
+
+    assert docs_lint.reflow_line_length([document]) == []
+    assert frontmatter in document.read_text(encoding="utf-8")
+
+
 def test_missing_repo_path_is_reported(tmp_path: Path) -> None:
     document = tmp_path / "guide.md"
     document.write_text("See `src/missing.py`.\n", encoding="utf-8")

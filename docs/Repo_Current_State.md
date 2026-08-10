@@ -1,5 +1,9 @@
 ## Current branch
 
+> **Ticket status (2026-08-10):** `feature/t0022.1-docs-lint` contains completed T0022.1
+> work, pending review and merge. It adds `scripts/docs_lint.py`, its focused tests,
+> `docs/Docs_Conventions.md`, and a warn-only CI job. The next recommended ticket is T0022.2.
+
 `main` — **`a5ff82e`**, and it is the only branch. As of **2026-08-09** the repo is quiet: no other local or remote branches, no worktrees, no open PRs. `main` is the single source of truth for what is built, what is deployed, and what is tested.
 
 **Everything through T0021.2 has landed.** The M10–M19 chain, the T0020 reconciliation/activation milestone, and T0021.1–.2 are all merged. The historical branch topology — the per-ticket "Prior ticket — …" chain, the 2026-07-22 prune record, and the reality-check box that had accumulated three layers of correction-on-correction — is archived in [`archive/Repo_State_History.md`](archive/Repo_State_History.md). It is history, not guidance; do not reconcile against it.

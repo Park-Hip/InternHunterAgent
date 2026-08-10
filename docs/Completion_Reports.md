@@ -1,5 +1,29 @@
 # Completion Reports
 
+## T0022.1 - Docs lint harness, conventions, and warn-only CI gate
+
+- **Summary:** Added the dependency-free documentation linter with `line-length`, `link-path`,
+  `encoding`, and `agent-parity` checks; documented the conventions; and added a non-blocking
+  CI job. The encoding check was corrected before merge to match the actual `â€` and `â†`
+  codepoints in the repository. Existing findings are intentionally not repaired in this ticket.
+- **Files:** `scripts/docs_lint.py`, `tests/test_docs_lint.py`, `docs/Docs_Conventions.md`,
+  `.github/workflows/ci.yml`, `docs/Repo_Current_State.md`, and this report.
+- **Commands:** `uv run pytest tests/test_docs_lint.py -q`; `uv run ruff check
+  scripts/docs_lint.py tests/test_docs_lint.py`; `uv run python scripts/docs_lint.py --check
+  agent-parity`; `uv run python scripts/docs_lint.py --stat`.
+- **Build/test:** 5 focused tests passed; Ruff passed; agent parity passed. The corrected
+  encoding check exits 1 on 18 actionable existing findings; 11 further raw occurrences are
+  exempt inside backticked code spans. Baseline: 48 tracked
+  or unignored Markdown files, 1,490,851 bytes, 3,200 lines over 100 characters, and 1,564 over
+  200 characters.
+- **Manual verification:** run `uv run python scripts/docs_lint.py --stat`; run each individual
+  `--check`; confirm the GitHub Actions `docs` job reports its findings without blocking a PR.
+- **Risks:** the linter is warn-only by design until T0022.9; the existing documentation backlog
+  still makes a bare run exit non-zero.
+- **Follow-up:** T0022.2 repairs the current encoding/parity/orphan findings. T0022.3 handles
+  mechanical reflow. T0022.9 turns the job into a blocking CI gate.
+- **Docs updated:** `docs/Docs_Conventions.md`, `docs/Repo_Current_State.md`, and this report.
+
 Per-ticket outcome records (`CLAUDE.md §5`). Append-only: each entry captures what changed,
 files touched, test results, and follow-ups for one ticket. This is the durable record;
 `Repo_Current_State.md` holds only the milestone-level snapshot and links here.

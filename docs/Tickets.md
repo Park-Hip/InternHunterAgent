@@ -1324,7 +1324,7 @@ decisions out of nine executed research plans before they are archived.
 > are byte-identical **by policy, not by accident**, and both must stay complete. Reducing
 > either to a pointer degrades the other agent. Enforce parity in lint; never deduplicate.
 
-### T0022.1: Docs lint harness + conventions + warn-only CI gate — ▶ Next
+### T0022.1: Docs lint harness + conventions + warn-only CI gate — ✅ Complete
 **Objective:** Make docs hygiene machine-checkable before any doc is touched, so the eight
 tickets that follow have an objective target instead of a subjective one. This ticket changes
 **no existing documentation content** — it adds the checker, writes down the standard the repo
@@ -1369,7 +1369,7 @@ against a 3,101-line backlog would redden every unrelated PR.
 * Any external-URL link checking (slow and flaky in CI), pre-commit framework, or docs-site
   generator.
 
-### T0022.2: Encoding repair, agent-surface parity & orphan cleanup — ▶ Next
+### T0022.2: Encoding repair, agent-surface parity & orphan cleanup — ✅ Complete
 ***T0022.1 prerequisite resolved (2026-08-10).** The corrected `encoding` check first
 failed against the unrepaired report and now passes after this ticket's byte-level repair. The
 check ignores intentional mojibake examples inside backticked code spans, as documented.
@@ -1527,11 +1527,70 @@ far worse than one that never ran):
 8. `uv run pytest -q` still green — `tests/test_docs_lint.py` must cover the new prefix-aware
    reflow and the frontmatter guard.
 
-### T0022.4 – T0022.9: remaining blocks — summarized, authored when picked up
-* **T0022.4 — Front door.** Rewrite the root `README.md` **recruiter-first** (what it is, live
-  demo link, sample exchange, what's interesting, then setup below the fold); add
-  `docs/Tech_Stack.md` as the single owner of stack facts now scattered across five files, and
-  wire `--check-stack` to diff it against `pyproject.toml`.
+### T0022.4: Front door — recruiter-first README + `Tech_Stack.md` — ✅ Complete
+**Objective:** Fix the repo's front door and give the tech stack a single owner. The root
+`README.md` still described only the T0002-era Postgres bootstrap — 50 lines that never said
+what the project *is*, never linked the live demo, and would have been the first thing a
+visitor read against a `v1.0.0` tag. Separately, stack facts were spread across
+`pyproject.toml`, `config/settings.yaml`, `render.yaml`, `Repo_Current_State.md`, and three
+research docs, with no document owning them.
+
+**Audience decision (2026-08-09): recruiter/portfolio first.** The README is optimized for a
+30-second skim by someone evaluating the author, not for someone about to run it locally, so
+setup sits below the fold and operator detail belongs in `Operations.md` (T0022.5).
+
+**In Scope — delivered:**
+* **`README.md` rewritten** (120 lines, at its cap) in this order: what it is · live demo link
+  above the fold · sample exchange · what is engineering-interesting (grounded answers, honesty
+  as a design constraint, leak-free streaming, real ingestion, DeepEval measurement, tracing) ·
+  architecture diagram · quickstart · docs map · status.
+* **`docs/Tech_Stack.md` added** (112 lines) — at-a-glance table plus runtime, agent, data,
+  observability, ingestion and quality sections, hosted services with the $0/mo position, and a
+  **"Deliberately not used"** section recording why CORS, self-hosted Langfuse, a JS framework,
+  a task queue, and `EventSource` were each rejected, so those choices stop being re-litigated.
+* **`stack` check added to `scripts/docs_lint.py`** — parses `pyproject.toml` with stdlib
+  `tomllib` (no new dependency) and compares **bidirectionally** against the package names in
+  the tables between `<!-- deps:begin -->` / `<!-- deps:end -->`, catching both an added
+  dependency that was never documented and a documented one that no longer exists.
+* Five tests in `tests/test_docs_lint.py`, including one asserting the shipped `Tech_Stack.md`
+  actually agrees with the real `pyproject.toml`.
+* `docs/README.md` gains a `Tech_Stack.md` row so the new doc is not an orphan.
+
+**Out of Scope:**
+* `docs/Operations.md` and relocating the database-reset section — **T0022.5**. The reset
+  instructions stay in the README until that doc exists, so nothing is lost in transit.
+* The `stamp`, `size-cap` and `duplicate-heading` checks, and flipping CI to blocking (T0022.9).
+* Any reflow beyond the two files authored here, and the 79 outstanding `link-path` findings.
+
+**Two judgment calls worth recording:**
+* **No fabricated demo figures.** Docker was unavailable, so no real query results could be
+  produced. Rather than invent plausible counts, the sample exchange uses the two *behavioural*
+  exchanges — the missing-posting-date refusal and the prompt-injection decline — which
+  demonstrate the differentiator and need no data. It is labelled as paraphrased response
+  shapes, not a transcript. Inventing statistics in a project built around not inventing data
+  would undercut the claim the README is making.
+* **No screenshot** (decided 2026-08-09, none available). The sample exchange lives in its own
+  section so an image can slot in later without a rewrite. Logged as a follow-up.
+
+**Manual verification:**
+1. **Prove the `stack` check is not inert** — add a fake dependency to `pyproject.toml`, run
+   `docs_lint.py --check stack`, confirm it **fails naming that package**, then revert.
+   *(Run 2026-08-10 with `tenacity>=9.0`: reported `dependency 'tenacity' is not documented`.)*
+2. `--check stack` exits 0 against the committed tree.
+3. Every quickstart command resolves: `scripts/init_db.sql`, `scripts/reset_db.sql`,
+   `.env.example`, `docker-compose.yml` exist; `src.api.app` and `src.services.ingestion.loader`
+   import; `src/api/app.py` exposes `app`; compose publishes host port 5433. *(All confirmed.)*
+4. `uv run pytest tests/test_docs_lint.py -q` green (15 passed); `ruff` and `mypy` clean.
+5. **Outstanding — needs a machine with Docker:** follow the quickstart on a *clean clone* end
+   to end and reach a streamed answer at `http://localhost:8000`. Note any step that required
+   knowledge not on the page. This is the only check that validates the README's core promise.
+6. Render `README.md` and `Tech_Stack.md` in a markdown preview — the architecture diagram and
+   both tables lay out correctly, and no line wraps badly at 100 chars.
+
+**Follow-ups logged:** demo screenshot (`docs/assets/demo.png`) when the live demo is next up;
+the README quickstart clean-clone run above.
+
+### T0022.5 – T0022.9: remaining blocks — summarized, authored when picked up
 * **T0022.5 — Operations consolidation.** New `docs/Operations.md` owning deploy topology, env
   vars, DB operations, and the cron. **Merge, don't move** — `T0020.4_Cron_Activation_Runbook.md`
   stays reachable until the cron activation it governs is complete.

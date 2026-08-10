@@ -1,8 +1,8 @@
 ## Current branch
 
-> **Ticket status (2026-08-10):** `feature/t0022.2-encoding-parity-orphans` contains completed
-> T0022.2 work, pending review and merge. It repairs the T0019.10 mojibake, preserves agent
-> surfaces, removes the tagged `milestone/` scratchpad, and corrects the stale Langfuse README.
+> **Ticket status (2026-08-10):** `feature/t0022.3-structure-safe-reflow` contains completed
+> T0022.3 work, pending review and merge. It adds a prefix-safe, frontmatter-aware reflower and
+> mechanically wraps the stable documentation set. The next recommended ticket is T0022.4.
 
 `main` — **`a5ff82e`**, and it is the only branch. As of **2026-08-09** the repo is quiet: no other local or remote branches, no worktrees, no open PRs. `main` is the single source of truth for what is built, what is deployed, and what is tested.
 

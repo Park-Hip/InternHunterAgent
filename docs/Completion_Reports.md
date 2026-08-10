@@ -1,5 +1,26 @@
 # Completion Reports
 
+## T0022.3 - Structure-safe reflow of stable documentation
+
+- **Summary:** Added prefix-aware Markdown reflow and YAML-frontmatter protection, then
+  mechanically wrapped the ticket's stable documentation set. The one residual code-span
+  ellipsis was repaired separately before reflow.
+- **Files:** `scripts/docs_lint.py`, `tests/test_docs_lint.py`, both agent instruction files,
+  eight stable docs under `docs/`, `evals/v1_scenario_matrix.md`, and two stable research docs.
+- **Commands:** ran the focused docs-lint tests, Ruff, encoding and parity checks, `--fix`,
+  line-length checks, word-diff review, and `git diff --check`.
+- **Build/test:** 11 focused tests passed; Ruff passed; encoding and agent parity passed.
+  The full suite was stopped after four minutes without output, so it is inconclusive.
+- **Manual verification:** preview `MVP_Spec.md`, `Known_Issues.md`, and
+  `Agent_Behavior_Spec.md`; run `uv run python scripts/docs_lint.py --check line-length`;
+  confirm the remaining findings are outside this ticket's scope.
+- **Risks:** no word-level content changes were found in the dedicated reflow commit. Remaining
+  line-length findings belong to documents deferred to T0022.4-T0022.9.
+- **Follow-up:** T0022.4 is the next recommended ticket; it owns the root README and
+  `Tech_Stack.md`.
+- **Docs updated:** `docs/Completion_Reports.md`, `docs/Repo_Current_State.md`, and
+  `docs/Tickets.md`.
+
 ## T0022.2 - Encoding repair, agent-surface parity, and orphan cleanup
 
 - **Summary:** Repaired the T0019.10 mojibake without reflowing prose, confirmed agent-file

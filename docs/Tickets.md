@@ -1440,10 +1440,94 @@ indistinguishable from a clean repo, which is precisely how this defect survived
 9. `docs_lint.py --stat` still reports 48 files minus the one deleted, and `lines >100` is
    **unchanged** from the pre-ticket baseline — proof no reflow leaked in.
 
-### T0022.3 – T0022.9: remaining blocks — summarized, authored when picked up
-* **T0022.3 — Mechanical reflow.** ~40 files to the 100-char standard, `docs/archive/**`
-  excluded. **No content change** — reviewed with `git diff --word-diff` to prove no semantic
-  edit, and committed separately from every content ticket.
+### T0022.3: Structure-safe reflow of the stable docs — ✅ Complete
+**Objective:** Bring the documents whose *structure no later ticket changes* to the 100-char
+standard, so their diffs become line-level and reviewable. **No content change of any kind** —
+this ticket rewraps bytes and nothing else. Two prerequisites make that claim verifiable
+rather than hopeful: the reflower must stop destroying markdown structure, and the scope must
+exclude every file another M22 ticket is about to rewrite or archive.
+
+**Baseline (measured 2026-08-10, post-T0022.2):** `--check line-length` reports **2,357
+findings across 28 files**; `--stat` reports 47 files, 3,187 lines >100, 1,561 lines >200.
+`docs/archive/**` is already excluded by `is_archive()`.
+
+**⚠ Prerequisite 1 — `--fix` corrupts markdown structure today; fix it before mass use.**
+Verified 2026-08-10 by running the shipped `reflow_line_length` logic against real content.
+It computes `indent` from leading whitespace only, so **every non-whitespace block marker is
+lost on continuation lines**:
+
+| Construct | Continuation line produced | Damage |
+|---|---|---|
+| `> **Status:** …` | `and not a ticket.` | blockquote marker `>` dropped |
+| `- **Severity:** …` | `or cosmetic and omitted…` | list indent dropped to column 0 |
+| `  - **Found:** …` | `  longer than expected…` | indented 2, but item content starts at 4 |
+| `1. **MVP_Spec.md** …` | `technical design documents.` | ordered-list indent dropped |
+
+All four *usually* still render, but only because CommonMark **lazy continuation** rescues
+them — and lazy continuation **fails** when a wrapped line happens to begin with a token
+markdown reads as a new block (`-`, `*`, `1.`, `#`, `>`). At 928 rewrapped lines the odds of
+hitting that are not small, and the failure is **silent**: a paragraph quietly becomes a list
+item. Teach `reflow_line_length` to detect the block prefix (`>`, `-`, `*`, `N.`) and indent
+continuations to the content column, then re-verify against the four cases above.
+
+**⚠ Prerequisite 2 — scope out the files another ticket is about to replace.** Reflowing a
+file that T0022.6/.7/.8 will split, rebuild, or archive is throwaway work, and it inflates a
+"no content change" diff until nobody can review it. **1,429 of the 2,357 findings (61%) are
+in such files.** Each owning ticket leaves its own output conformant instead; CI stays
+warn-only until T0022.9, so nothing forces zero findings before then.
+
+**In Scope — reflow these 13 files (~928 findings):**
+* `docs/Completion_Reports.md` (273) · `docs/Known_Issues.md` (270) ·
+  `docs/MVP_Technical_Design.md` (151) · `docs/Resolved_Issues.md` (111) ·
+  `docs/Full_Design_Document.md` (30) · `docs/MVP_Spec.md` (25) ·
+  `docs/Agent_Behavior_Spec.md` (12) · `evals/v1_scenario_matrix.md` (8).
+* `research/honesty-enforcement-design.md` (27) and `research/eval-cost-and-rate-limits.md` (2)
+  — the two surviving research docs with findings.
+* **`AGENTS.md` (9) and `CLAUDE.md` (9) — reflow both, identically, in one commit.** They are
+  byte-identical by policy; rewrapping one alone breaks `--check agent-parity`. Verify with
+  `diff` afterwards, not by eye.
+* **`skills/…/SKILL.md` (1) and its `.claude/skills/…` twin — same trap, plus a worse one:**
+  the offending line is inside **YAML frontmatter**. Wrapping a `description:` value across
+  lines is invalid YAML and will break skill loading for both agents. Either leave that line
+  as an explicit exemption or convert it to a YAML block scalar — **do not let `--fix` touch
+  frontmatter**. Add a frontmatter guard to the reflower.
+* Extend `is_archive()` to cover **`research/archive/`** as well as `docs/archive/`, so the
+  9 docs T0022.8 relocates are excluded on arrival rather than needing a later pass.
+* **One explicit content exception, committed separately:** `docs/Completion_Reports.md:361`
+  still contains `SELECT â€¦ FROM` — residual T0022.2 mojibake that survived because it sits
+  inside a code span, where `code_spans_removed()` makes the `encoding` check blind. It is 3
+  codepoints; repair it here rather than knowingly reflowing around it, in its own commit with
+  its own message so the reflow diff stays purely mechanical.
+
+**Out of Scope — deferred to the ticket that owns each file (1,429 findings):**
+* `docs/Tickets.md` (614) and `docs/Manual_Verification_Guide.md` (293) → **T0022.6** splits them.
+* `docs/T0020.4_Cron_Activation_Runbook.md` (130) → **T0022.5** absorbs it into `Operations.md`.
+* `docs/Repo_Current_State.md` (72) → **T0022.7** rebuilds it from scratch.
+* `README.md` (4) → **T0022.4** rewrites it; `docs/README.md` (2) → **T0022.9** rewrites it.
+* The 9 archive-bound research docs (314 total, `deployment-research-plan.md` 121 and
+  `deepeval-sql-agent-eval-planning.md` 109 the largest) → **T0022.8**.
+* The 83 `link-path` findings, the four deferred checks, and flipping CI to blocking (T0022.9).
+* **Any wording, structure, ordering, or heading change.** If a reflowed paragraph reads badly,
+  that is a finding to log — not to fix here.
+
+**Manual verification** (check 2 is the one that matters — a reflow that changes meaning is
+far worse than one that never ran):
+1. Re-run the four constructs from Prerequisite 1 against the patched reflower: blockquote,
+   flat bullet, nested bullet, ordered item — each continuation keeps its marker/indent.
+2. **`git diff --word-diff` across every reflowed file shows only whitespace and newline
+   moves — zero added or deleted words.** Any word-level change means the reflower ate content.
+3. Render `MVP_Spec.md`, `Known_Issues.md` and `Agent_Behavior_Spec.md` in a markdown preview
+   and confirm no paragraph became a list item and no blockquote broke mid-way.
+4. `diff AGENTS.md CLAUDE.md` is empty; `--check agent-parity` exits 0.
+5. `/generate-ticket-prompt` still loads in Claude Code, and
+   `skills/generate-ticket-prompt/agents/openai.yaml` is untouched — frontmatter intact.
+6. `--check line-length` findings drop from 2,357 to **≤1,429**, and every remaining finding is
+   in a file this ticket deliberately deferred.
+7. `--check encoding` exits 0 and `Completion_Reports.md:361` now reads `SELECT … FROM`.
+8. `uv run pytest -q` still green — `tests/test_docs_lint.py` must cover the new prefix-aware
+   reflow and the frontmatter guard.
+
+### T0022.4 – T0022.9: remaining blocks — summarized, authored when picked up
 * **T0022.4 — Front door.** Rewrite the root `README.md` **recruiter-first** (what it is, live
   demo link, sample exchange, what's interesting, then setup below the fold); add
   `docs/Tech_Stack.md` as the single owner of stack facts now scattered across five files, and
@@ -1475,4 +1559,3 @@ Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Inge
 * **`main` reconciliation** — ✅ done (T0020.1, PR #29 / `bcc81db`). `main` now carries the full M10–M19 chain and is the true head; the earlier "stuck at T0009 / M10–M19 on ticket branches" state no longer holds. Render's deploy branch repoint is tracked in T0020.2 (see the **T0020** milestone above).
 * **`is_active` agent exposure + honesty hedge** — cut from T0019 (gate unmet); re-enters only after T0011.5 baseline → prompt-v2 few-shot pass → the targeted recalibration delta.
 * **Deploy-doc drift** (`pre-deploy-refinement-plan.md` §6h) and a custom domain (cosmetic).
-

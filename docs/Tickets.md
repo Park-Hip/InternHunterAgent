@@ -23,10 +23,16 @@ Ticket specs and delivery sequence for the MVP. Each entry is the **plan** for o
 | 16 | T0016 | Security Posture | ✅ | CORS, rate limit, input cap, `/docs` decision |
 | 17 | T0017 | Streaming Response Delivery | ✅ | `astream` + no-leak filter, SSE endpoint |
 | 18 | T0018 | Clickable Demo (UI + go-live) | ✅ | .1–.4 done · **live: https://internhunteragent.onrender.com** |
-| 19 | T0019 | Ingestion Deploy Readiness (live-DB) | ▶ | **▶ in progress** — .1–.5, .7, .8 done · .6 (cron) open, human-gated · .9/.10 scoped 2026-07-20 |
-| — | Backlog | CI merge gate, `main` reconciliation | 📋 | unscheduled; seeds future tickets |
+| 19 | T0019 | Ingestion Deploy Readiness (live-DB) | ✅ | .1–.10 done; landed on `main` via PR #29 |
+| 20 | T0020 | Reconciliation & Activation | ✅ ⚠ | `main` reconciled, Render pinned to `main`, CI gate live, cron runbook — **2 maintainer actions open** |
+| 21 | T0021 | Serving-Path Hardening & Honesty Baseline | 🔨 | .1 schema assertion + .2 error logging done · .3/.4 named, unscoped |
+| 22 | T0022 | **Docs Hygiene & Documentation System** | ▶ | **▶ next** — lint gate, front door, Decision Log, research prune (.1–.9, scoped 2026-08-09) |
+| 23 | T0023 | v1.0 Release Cut | 📋 | DoD sweep, ToS posture, tag — renumbered from T0022 on 2026-08-09 |
+| — | Backlog | `is_active` honesty hedge, custom domain | 📋 | unscheduled; seeds future tickets |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on maintainer credentials — see [`Known_Issues.md`](Known_Issues.md).
+>
+> ⚠ **M20:** complete as a coder milestone; two **maintainer** actions remain open — branch protection to *enforce* the CI gate, and the gated cron activation. See [`T0020.4_Cron_Activation_Runbook.md`](T0020.4_Cron_Activation_Runbook.md).
 
 ---
 
@@ -1262,7 +1268,7 @@ ingestion:
 * Any pipeline/ingestion code change (this milestone changes zero behavior); ingestion-coverage widening (T0019.9 re-measure, D8-gated); the 60-day GitHub Actions inactivity auto-disable mitigation (tracked in T0022.3).
 
 ## T0021: Milestone 21 - Serving-Path Hardening & Honesty Baseline — ▶ In progress
-**Scoped 2026-08-09** (authored after the fact, same pattern as T0020 — T0021.1 shipped as PR #30 on 2026-07-22 and T0021.2 was started in a worktree while this milestone lived only in `research/v1-release-readiness-plan.md` §2 and the [[v1-release-roadmap-m20-m22]] memory note). Where T0020 makes the *artifact* trustworthy, this milestone makes the *running service* trustworthy: assert the schema the read path depends on, and stop the serving path from lying — to operators via swallowed exceptions, and to users via canned messages that overstate what is known. Runs largely parallel to T0020; both block T0022 (v1.0 release cut).
+**Scoped 2026-08-09** (authored after the fact, same pattern as T0020 — T0021.1 shipped as PR #30 on 2026-07-22 and T0021.2 was started in a worktree while this milestone lived only in `research/v1-release-readiness-plan.md` §2 and the [[v1-release-roadmap-m20-m22]] memory note). Where T0020 makes the *artifact* trustworthy, this milestone makes the *running service* trustworthy: assert the schema the read path depends on, and stop the serving path from lying — to operators via swallowed exceptions, and to users via canned messages that overstate what is known. Runs largely parallel to T0020; both block **T0023** (v1.0 release cut — renumbered from T0022 on 2026-08-09 when docs hygiene took the T0022 slot).
 
 > **Scoping note.** Only **T0021.2** is fully specified below — it is the slice being executed. **T0021.1** (read-path schema assertion) shipped ahead of its block as PR #30 and is summarized here for continuity, not re-scoped. **T0021.3** and **T0021.4** are named but deliberately unscoped; the `get_job_details` column allowlist that the research plan lists under M21 already landed early as **T0019.10**, so this milestone's remaining shape needs a scoping pass before those blocks are authored.
 
@@ -1284,6 +1290,112 @@ Asserts the columns the read path depends on, so a schema drift fails loudly at 
 * Logging the `validate_sql` reject branch (not a swallowed exception — nothing raised there).
 * The `[MED · OPEN]` `generate_agent_response` empty/None-answer fallback signal, and the `[MED · OPEN]` checkpointer pool-timeout misreport — both remain open in `Known_Issues.md`; neither is a discarded exception at a catch site.
 * Any Langfuse/tracing-layer change, and the real `mypy [arg-type]` fix baselined by T0020.3.
+
+## T0022: Milestone 22 - Docs Hygiene & Documentation System — ▶ Next
+**Scoped 2026-08-09** from
+[`research/docs-hygiene-and-system-plan.md`](../research/docs-hygiene-and-system-plan.md),
+which carries the measured baseline, the full disposition of all 46 tracked `.md` files, and
+the per-ticket risk notes. **Read that plan before executing any block below** — it is not
+restated here.
+
+**Why this milestone exists, and why it precedes the release cut.** The docs surface is
+1.37 MB across 46 files, and it has drifted measurably: **21% of all doc lines exceed 100
+characters** (worst single line: 5,424), **15 of 162** referenced repo paths no longer
+resolve, 8 files appear in no index, `docs/Completion_Reports.md` carries committed mojibake
+from a PowerShell round-trip, and **46 of 150 commits are docs-only** — `Repo_Current_State.md`
+alone has been rewritten 66 times. The root `README.md` still describes only the T0002-era
+Postgres bootstrap. Tagging v1.0 against that front door ships the weakest artifact under the
+strongest label, so **the v1.0 release cut renumbers from T0022 to T0023** (decision 2026-08-09).
+
+**The milestone is not a tidy-up.** Five of the nine tickets are cleanup; the rest install the
+system that keeps it clean — a `docs_lint.py` gate in CI, a Fact Ledger assigning every fact
+class exactly one owning document, and a `Decision_Log.md` that gathers ~25–35 durable
+decisions out of nine executed research plans before they are archived.
+
+> **Scoping note.** Only **T0022.1** is fully specified below — it is the slice to execute
+> first, and it is deliberately first because it converts every later ticket from a subjective
+> judgement into a pass/fail check. Blocks **.2–.9** are summarized for sequencing and will be
+> authored as each is picked up, per the T0020/T0021 pattern. Two maintainer inputs are already
+> settled: `.claude/skills/` is the canonical skill copy, and no demo screenshot exists yet
+> (T0022.4 ships the sample exchange instead and is not blocked).
+
+> **Constraint that governs the whole milestone — two agents, one repo.** This project is
+> worked by **both Claude Code and Codex**. `CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex)
+> are byte-identical **by policy, not by accident**, and both must stay complete. Reducing
+> either to a pointer degrades the other agent. Enforce parity in lint; never deduplicate.
+
+### T0022.1: Docs lint harness + conventions + warn-only CI gate — ▶ Next
+**Objective:** Make docs hygiene machine-checkable before any doc is touched, so the eight
+tickets that follow have an objective target instead of a subjective one. This ticket changes
+**no existing documentation content** — it adds the checker, writes down the standard the repo
+already follows in its best files (`Schema_Contract.md`, `Prompt_Playbook.md`), and wires a
+**non-blocking** CI job. Blocking is deliberately deferred to T0022.9, because flipping it on
+against a 3,101-line backlog would redden every unrelated PR.
+
+**In Scope:**
+* `scripts/docs_lint.py` — **stdlib only, no new dependency** (CLAUDE.md §1). Four checks in
+  this ticket, chosen because each has immediate real findings:
+  * `line-length` — no line >100 chars. Exemptions: table rows, fenced code, link-only lines,
+    long URLs. **`docs/archive/**` is permanently excluded** (read rarely, edited never).
+  * `link-path` — every backticked repo path and relative markdown link resolves, unless
+    marked `<!-- archived-on-tag -->`. That escape hatch is required: several broken paths
+    (`src/core/event_loop.py`, `scripts/run_scenario_matrix.py`) are *correctly* referenced
+    files preserved on archive tags, and a naive fixer would delete valid references.
+  * `encoding` — valid UTF-8, no BOM, no `â€` / `Â ` / `ï»¿` / `â†` mojibake sequences. Must
+    ignore matches inside backtick code spans, or honor `<!-- lint-allow-encoding -->`, so
+    that docs *documenting* the hazard do not trip it.
+  * `agent-parity` — `AGENTS.md` and `CLAUDE.md` are byte-identical **and both non-trivial**
+    (a length floor, so neither can be reduced to a pointer and still pass).
+* CLI surface: bare run executes all checks; `--check <name>` runs one; `--stat` prints the
+  baseline table (file count, total bytes, lines >100, lines >200) so progress is measurable
+  at any point; `--fix` safely reflows `line-length` only.
+* `docs/Docs_Conventions.md` — the written standard: the 100-char wrap and its exemptions, the
+  ≤5-line paragraph rule, lead-with-a-table, absolute `YYYY-MM-DD` dates, the
+  `> **Last verified:**` stamp, the `<!-- archived-on-tag -->` marker, and — prominently — the
+  **PowerShell hazard**: never round-trip a doc through `Get-Content`/`Set-Content`; it strips
+  em-dashes and adds a BOM. This is the documented cause of the `Completion_Reports.md` damage.
+* `.github/workflows/ci.yml` — a `docs` job alongside the existing ruff/mypy/pytest gate,
+  running `uv run python scripts/docs_lint.py` with **`continue-on-error: true`**.
+* Tests for the checker itself under `tests/`, including the two trap cases: a correctly
+  archived-on-tag reference must **pass**, and a doc quoting a mojibake sequence in a code span
+  must **pass**.
+
+**Out of Scope:**
+* **Fixing any finding the linter reports.** This ticket ships the instrument, not the repair —
+  reflow is T0022.3, encoding and parity repair is T0022.2.
+* The other four checks (`stamp`, `size-cap`, `check-stack`, `duplicate-heading`). Each depends
+  on artifacts that do not exist yet — tier assignments, `Tech_Stack.md` — and lands with them.
+* Making the CI job blocking (T0022.9), and any branch-protection change.
+* Any external-URL link checking (slow and flaky in CI), pre-commit framework, or docs-site
+  generator.
+
+### T0022.2 – T0022.9: remaining blocks — summarized, authored when picked up
+* **T0022.2 — Encoding, parity & orphan cleanup.** Repair the `Completion_Reports.md` mojibake;
+  confirm `AGENTS.md`/`CLAUDE.md` parity with both files complete; tag-and-delete the root
+  `skills/` copy (`.claude/skills/` is canonical) and the self-declared disposable `milestone/`
+  folder; fix or drop `infra/langfuse/README.md`, which points at a nonexistent compose file.
+* **T0022.3 — Mechanical reflow.** ~40 files to the 100-char standard, `docs/archive/**`
+  excluded. **No content change** — reviewed with `git diff --word-diff` to prove no semantic
+  edit, and committed separately from every content ticket.
+* **T0022.4 — Front door.** Rewrite the root `README.md` **recruiter-first** (what it is, live
+  demo link, sample exchange, what's interesting, then setup below the fold); add
+  `docs/Tech_Stack.md` as the single owner of stack facts now scattered across five files, and
+  wire `--check-stack` to diff it against `pyproject.toml`.
+* **T0022.5 — Operations consolidation.** New `docs/Operations.md` owning deploy topology, env
+  vars, DB operations, and the cron. **Merge, don't move** — `T0020.4_Cron_Activation_Runbook.md`
+  stays reachable until the cron activation it governs is complete.
+* **T0022.6 — Archive split.** `Tickets.md` (1,299 lines, 19 done milestones) and
+  `Manual_Verification_Guide.md` (1,503 lines) shed their history to `docs/archive/`; the live
+  files keep open work plus a one-line-per-milestone index.
+* **T0022.7 — Rebuild `Repo_Current_State.md`** as a ≤120-line fact sheet, and evict the five
+  `RESOLVED` entries `Known_Issues.md` currently holds in violation of its own stated rule.
+* **T0022.8 — Research prune (highest risk).** Harvest ~25–35 decisions into
+  `docs/Decision_Log.md`, then move nine executed research plans (~4,900 lines) to
+  `research/archive/` verbatim. **Every research doc is cited by 1–6 live docs**, so this is
+  archive-plus-link-rewrite, never deletion; `link-path` must be green before *and* after.
+* **T0022.9 — Index, ledger & enforcement.** Rewrite `docs/README.md` (four-tier model + Fact
+  Ledger) and `research/README.md` (5 live docs + archive pointer); **flip the CI docs job to
+  blocking**.
 
 ## Backlog — unscheduled milestones (removed 2026-07-12; to be named & scoped) — 📋 Backlog
 Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Ingestion Deploy Readiness** (briefly numbered T0016–T0018) on 2026-07-12 at the user's request — they need more specific milestone names and scoping before they re-enter the numbered roadmap. Their substance is preserved in research and will seed the future tickets:

@@ -8,6 +8,16 @@
 > a three-milestone shape (M20–M22) ready to graduate into `docs/Tickets.md` **after
 > maintainer approval — this document deliberately does not touch `Tickets.md`**.
 >
+> **⚠ Final IDs assigned 2026-08-09 — the release cut is now M23, not M22.** M20 and M21
+> graduated under their proposed numbers, but **M22 was taken by Docs Hygiene &
+> Documentation System** (see [`docs-hygiene-and-system-plan.md`](docs-hygiene-and-system-plan.md)),
+> which was promoted ahead of the release cut: this plan's §2 lists "docs conformance" as a
+> single DoD bullet of the cut, and the measured state of the docs — a root `README.md` still
+> describing the T0002 Postgres bootstrap, 15 broken path references, committed mojibake —
+> is far past what one bullet can absorb. **Read every "M22" below as "M23"**; the section
+> headings are left at their original numbers because §2 states the numbering is illustrative
+> and `Tickets.md` is the authority. Live roadmap: `docs/Tickets.md` → T0022, T0023.
+>
 > **Decisions taken as fixed (not re-litigated here):** `main` reconciliation is the
 > maintainer's call; T0019's sequencing is fixed as scoped 2026-07-16; `is_active` agent
 > exposure stays gated behind T0011.5 → prompt-v2 → recalibration and is therefore
@@ -161,6 +171,10 @@ for the release. None contradict a DoD bullet.
 Numbering is illustrative (next free milestone numbers); the maintainer assigns final IDs
 in `Tickets.md`. Ticket-level splits are indicative, not scoped to house depth yet.
 
+> **Assigned 2026-08-09:** M20 → **T0020** ✅, M21 → **T0021** 🔨, and the **v1.0 Release Cut
+> below → T0023**, because **T0022 went to Docs Hygiene & Documentation System**. See the
+> status banner at the top of this file.
+
 ### M20 — Release Integrity (branch reunification + T0019 closeout + CI gate)
 
 **Objective:** one trusted `main` that a CI gate protects and that both deploy paths
@@ -222,7 +236,7 @@ pre-baseline checks → v1 baseline → prompt-v2 → v2 re-measure. Nothing in 
 M20 *except* that the eventual prompt-v2 merge should go through M20's CI gate if it
 lands first.
 
-### M22 — v1.0 Release Cut
+### M22 — v1.0 Release Cut  *(graduated as **T0023**, 2026-08-09)*
 
 **Objective:** turn "the deploy works" into a versioned, defensible release: every DoD
 bullet verified and recorded against the shipped artifact, the legal posture decided and

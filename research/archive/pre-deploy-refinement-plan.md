@@ -128,7 +128,7 @@ the mapping and the gaps:
 |---|---|---|
 | Scenarios + edge cases | `golden_dataset.json` — 17 cases in 5 categories: **A** happy-path, **B** multi-turn refinement, **C** honesty probes, **D** refusals/injection, **E** vague/ambiguous | Set is **thin** (1–6 per category). Expand the edge cases you care about (see §3). |
 | Expected behaviors | Each golden has `expected_tools` + `expected_output` | Add a crisp *pass/fail rubric* per case for manual runs (a scenario matrix — §2a). |
-| Manual test | `Manual_Verification_Guide.md` per-ticket checklists; ad-hoc live runs done during T0009.8/T0012.2 | No **structured manual scenario matrix** yet. Build one (§2a). |
+| Manual test | `docs/archive/Manual_Verification_Archive.md` per-ticket checklists; ad-hoc live runs done during T0009.8/T0012.2 | No **structured manual scenario matrix** yet. Build one (§2a). |
 | Measure objectively | Three-seam harness (`harness.py`): seam-1 tool correctness, seam-2 SQL/schema GEval, seam-3 answer honesty/task-completion GEval; Langfuse writeback | **T0011.5 baseline + thresholds not run yet.** This is the missing keystone (see §5d). |
 | Optimize the prompt | Prompts fully externalized in `config/prompts.yaml` (good — no code change to iterate) | Prompts are **zero-shot** today (pure instructions, no examples). The known failures want **few-shot** (§3). |
 | Re-measure | Harness re-runnable; v1 vs v2 framing already named in `Known_Issues.md` | Produce the **v2 baseline** and diff it against v1. |

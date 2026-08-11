@@ -205,7 +205,7 @@ The repo went from **55 local branches, 2 worktrees and 1 stash** to **2 branche
 **Deleted without a tag, because their content is demonstrably in this branch:** the 45 branches already merged into HEAD; `feature/t0019.5-unattended-safety` (contained in HEAD, refused `-d` only for being ahead of its remote); `docs/rename-t0013-schema-freeze` (applied as `284430c`); `feature/t0018.1-go-live-glue-recovered` (its only unique lines were stale review notes calling CORS/rate-limiting/`/docs` unimplemented — T0016 has since implemented all of it); `feature/t0019.6-nightly-cron-finish` (cherry-picked as `8f8406f`, workflow byte-identical).
 
 **Remote branches were NOT pruned** — 30 still exist on `origin`, 19 of them merged into `origin/main`. Deleting them affects any other clone and needs its own explicit decision.
-- Everything for this branch's current work is in [`Tickets.md`](Tickets.md) → **T0018.4** and the T0018.4 manual checklist in [`Manual_Verification_Guide.md`](Manual_Verification_Guide.md).
+- Everything for this branch's current work is in [`Tickets.md`](Tickets.md) → **T0018.4** and the T0018.4 manual checklist in [`Manual_Verification_Archive.md`](Manual_Verification_Archive.md).
 - Older branch/roadmap snapshots (T0014 and earlier) are archived in [`archive/Repo_State_History.md`](archive/Repo_State_History.md).
 
 ## Build/test history (T0019.3 – T0019.10)
@@ -225,7 +225,7 @@ Earlier — current-branch (T0019.10 + the cherry-picked T0019.6) results:
 - `grep -n "secrets\." .github/workflows/ingestion.yml` → exactly 2 lines (`DATABASE_URL`, `HEALTHCHECKS_URL`); no real Groq or Langfuse secret referenced.
 - `grep -n "No autonomous or background execution" docs/Full_Design_Document.md` → no match (the amended line replaces it); `sed -n '20,30p'` confirms the amended §2 bullet + T0019.6 note is present.
 - **Manual check B (empirical secrets-required test) was run this session, not just carried from the stash:** with `.env` moved aside, unsetting each of `GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` in turn against `uv run python -m src.services.ingestion.loader` failed fast with `ConfigLoadError` and `exit=1` before any DB connection, for all three. `.env` restored immediately after. Full transcript in the T0019.6 completion report.
-- **Checks C, D, E were not run** — they require GitHub Actions secrets configured on the repo and/or the T0019 chain merged to `main`, both maintainer-gated actions outside this ticket's scope. Not fabricated; see `Manual_Verification_Guide.md` → T0019.6.
+- **Checks C, D, E were not run** — they require GitHub Actions secrets configured on the repo and/or the T0019 chain merged to `main`, both maintainer-gated actions outside this ticket's scope. Not fabricated; see `Manual_Verification_Archive.md` → T0019.6.
 - `git stash list` → `b7a291e`, the recovered T0019.6 stash, remains present and was not dropped. (The separate T0019.10 WIP stash referenced in the original T0019.6 report was restored and committed as `62654eb`; only `b7a291e` is left.)
 
 - `uv run pytest` (T0019.10, full standard suite) → `329 passed, 8 skipped, 19 deselected` in 526.10s. **+1 over T0019.9's 328**, exactly the one net-new guard case. No pre-existing test was modified, weakened or removed — all 6 prior cases in `test_job_details.py` pass unchanged.
@@ -243,7 +243,7 @@ Earlier — current-branch (T0019.10 + the cherry-picked T0019.6) results:
 - `uv run pytest tests/api/test_ready.py -v` (T0019.8, targeted) → `7 passed` in 1.88s — MAX-present, empty-table fallback, query-raises fallback, 503 short-circuit with `assert_not_called()` on the date query, and the not-rate-limited guarantee.
 - `uv run ruff check .` (T0019.8, whole repo) → all checks passed.
 - `uv run mypy` (T0019.8, whole repo) → the same 2 pre-existing, unrelated errors (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48` — logged in `Known_Issues.md`). No third error introduced; `src/api/routes/health.py` is clean.
-- **⚠ Manual verification NOT run (T0019.8).** Docker Desktop was not running this session (`docker ps` → `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`), so none of checks A–E in the new `Manual_Verification_Guide.md` T0019.8 entry were executed. The automated tests patch `_select_max_last_seen` and feed it a `datetime.date`, so they prove the fallback logic but **cannot** prove that Postgres's `::date` cast arrives as a `datetime.date` through psycopg3, nor that the real value wins over the fallback against a populated table. **Check B is outstanding** — this is the same class of gap as T0019.5's unrun checks B–E, and is recorded rather than glossed.
+- **⚠ Manual verification NOT run (T0019.8).** Docker Desktop was not running this session (`docker ps` → `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`), so none of checks A–E in the new `Manual_Verification_Archive.md` T0019.8 entry were executed. The automated tests patch `_select_max_last_seen` and feed it a `datetime.date`, so they prove the fallback logic but **cannot** prove that Postgres's `::date` cast arrives as a `datetime.date` through psycopg3, nor that the real value wins over the fallback against a populated table. **Check B is outstanding** — this is the same class of gap as T0019.5's unrun checks B–E, and is recorded rather than glossed.
 
 Earlier T0019.7 and T0019.5 results follow.
 
@@ -256,7 +256,7 @@ Earlier T0019.7 and T0019.5 results follow.
 - `uv run pytest tests/services/ingestion/test_safety.py tests/services/ingestion/test_loader.py -q` (T0019.5, targeted) → `23 passed` in <1s.
 - `uv run ruff check .` (T0019.5, whole repo) → all checks passed.
 - `uv run mypy` (T0019.5, whole repo) → 2 pre-existing errors, both unrelated to this ticket (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48` — logged in `Known_Issues.md`); the three touched files (`safety.py`, `loader.py`, `src/core/config.py`) are clean.
-- Manual verification against a live local Docker DB (checks B–E of the T0019.5 checklist) was not run in this session — no local Docker Postgres was up. Flagged as a risk below; the checklist is appended to `Manual_Verification_Guide.md` for the next person with the stack running.
+- Manual verification against a live local Docker DB (checks B–E of the T0019.5 checklist) was not run in this session — no local Docker Postgres was up. Flagged as a risk below; the checklist is appended to `Manual_Verification_Archive.md` for the next person with the stack running.
 
 - `uv run pytest -q` (T0019.4, full standard suite) → `311 passed, 1 skipped, 19 deselected, 4 subtests passed` in ~5s. The 1 skip is `tests/migrations/test_baseline_roundtrip.py`, which needs `SCRATCH_DATABASE_URL`. No pre-existing test was modified.
 - `uv run ruff check .` (T0019.4, whole repo) → all checks passed.

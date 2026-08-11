@@ -3,7 +3,7 @@
 > **Status:** Research / pre-design. A running comparison of candidate job boards as
 > data sources for InternHunterAgent's ingestion stage. Each candidate is scored on the
 > same axes so the final source choice is evidence-based, not assumed. Findings here feed
-> `data-ingestion-stage.md` and the eventual ingestion design doc.
+> `research/archive/data-ingestion-stage.md` and the eventual ingestion design doc.
 >
 > **Target data (decided 06/2026):** IT jobs focused on **AI/Data** roles (AI Engineer,
 > Data Scientist, Data/ML Engineer, Data Analyst). **All seniority levels** collected;
@@ -177,7 +177,7 @@ recoverable alert.
 ### Evidence
 - Spike: `scripts/scrape_spike.py`
 - Sample output: `research/experiments/vietnamworks_ai_data_sample.json` (112 records)
-- Detailed write-up: `research/data-ingestion-stage.md` §0.1
+- Detailed write-up: `research/archive/data-ingestion-stage.md` §0.1
 
 ---
 

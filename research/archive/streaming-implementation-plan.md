@@ -116,7 +116,7 @@ Live probe status: blocked in the coder sandbox because `GROQ_API_KEY` was absen
 Postgres on `127.0.0.1:5433` was closed. The deterministic runtime tests cover the leak
 shape by simulating a model tool-call chunk, a tools-node SQL/raw-output chunk, and final
 model answer chunks; a maintainer with credentials should still run the live REPL probe from
-`docs/Manual_Verification_Guide.md` T0017.1.
+`docs/archive/Manual_Verification_Archive.md` T0017.1.
 
 ---
 

@@ -4,8 +4,9 @@
 > enforcement lives* for the C-category failures measured in
 > `evals/v1_scenario_matrix.md` (branch `feature/t0015.4-v1-scenario-matrix` @ `eba3e1f`).
 > Companion evidence: `docs/Known_Issues.md` (§ Agent runtime & prompts),
-> `docs/Agent_Behavior_Spec.md` @ `eba3e1f`, `research/pre-deploy-refinement-plan.md` §4/§5f,
-> `research/deployment-research-plan.md` §4.2 #3.
+> `docs/Agent_Behavior_Spec.md` @ `eba3e1f`, `research/archive/pre-deploy-refinement-plan.md`
+> §4/§5f,
+> `research/archive/deployment-research-plan.md` §4.2 #3.
 
 ---
 
@@ -85,7 +86,8 @@ role, but a narrower one: one structural rule that defines the caveat-relay cont
 (in the separately re-scoped T0015.5) few-shots for the failures that are genuinely
 linguistic (see §7).
 
-### 2b. Deterministic post-processing of tool output, before the model sees it — adopted (this is stage 1)
+### 2b. Deterministic post-processing of tool output, before the model sees it — adopted (this is
+stage 1)
 
 This is where the hedge conditions are all still visible: the validated SQL string and the
 structured rows exist side by side inside `query_clean_jobs` for exactly four lines
@@ -130,7 +132,8 @@ them against each other directly — want me to compare within one currency?
 Do **not** return raw JSON to the model: qwen3.6-27b's relay fidelity is measured on
 prose tool messages (A4/C3/M-G44); JSON-in-tool-message is an unmeasured behavior change.
 
-### 2d. Middleware (`src/agents/runtime/middleware.py`) — wrong locus for detection, possible locus for enforcement
+### 2d. Middleware (`src/agents/runtime/middleware.py`) — wrong locus for detection, possible locus
+for enforcement
 
 By the time `wrap_model_call` sees a `ModelRequest`, the SQL and the rows have been
 flattened to prose — detection there means re-parsing text the service layer had as
@@ -260,7 +263,7 @@ untouched — and this design re-affirms it concretely by *rejecting* the one va
 would cross it (widening C5's SELECT to force salary columns into the result, §4).
 
 The same test disposes of the `is_active` alternatives already ruled out in
-`deployment-research-plan.md` §4.2 #3: a hide-inactive view and `WHERE is_active`
+`research/archive/deployment-research-plan.md` §4.2 #3: a hide-inactive view and `WHERE is_active`
 injection both change what data comes back — semantic rewriting. Hedging on what *did*
 come back does not.
 
@@ -288,7 +291,8 @@ glossary-backed few-shots for …") genuinely conflict. Resolution:
   keep the persona internship-bias rebalance, multi-turn/compound few-shots (B1, M-G03),
   synonym/abstraction guidance (M-D7/M-D8/M-D9), `DISCRIMINATORY-DECLINE` (M-G29),
   `SQL-DESCRIBE-ONLY` (M-D4), and C6's counts — behaviors where wording *is* the substance.
-- **Forward consistency:** `deployment-research-plan.md` §4.2 #3 planned the `is_active`
+- **Forward consistency:** `research/archive/deployment-research-plan.md` §4.2 #3 planned the
+  `is_active`
   hedge as "a prompt nudge — best-effort, like the existing role/salary/id-first nudges,"
   gated on the Evaluation milestone confirming the model honors nudges. That gate has now
   effectively *failed* (hidden-salary 2/2 violation, freshness 1/3, C-category 0/7).
@@ -315,7 +319,8 @@ expected (the deployed `prompts.yaml` has no glossary block to collide with). Th
 re-run (stage 2) then happens on a branch that has both the mechanism and the frozen
 scenario definitions — recorded as a v2 matrix file next to the v1 one, same protocol,
 same fixture, same model/temp, new `prompt_version`. The wider main-reconciliation problem
-(main reconciled to `bcc81db` via PR #29 — T0020.1) is explicitly out of scope here and stays where it's tracked.
+(main reconciled to `bcc81db` via PR #29 — T0020.1) is explicitly out of scope here and stays where
+it's tracked.
 
 ---
 
@@ -331,11 +336,14 @@ can read it, without waiting for full M15 merge.
 **In Scope:**
 * Merge/cherry-pick the `behavior_glossary` block and `prompt_version` key from
   `eba3e1f:config/prompts.yaml` into the deploy lineage's `config/prompts.yaml`.
-* Loader function in `src/agents/runtime/prompts.py` style: `load_behavior_glossary() -> dict[str, str]`, with a test that every token the detector will reference exists.
+* Loader function in `src/agents/runtime/prompts.py` style: `load_behavior_glossary() -> dict[str,
+  str]`, with a test that every token the detector will reference exists.
 * Add the one new schema-fact string this design needs: `LISTING_EXPIRY_NOT_DEADLINE`
   (follow the spec's process — record it in the question-bank/spec on the M15 track too).
 **Out of Scope:** any detection code; any system-prompt change; merging the spec/matrix files.
-**Manual verification:** `uv run python -c "from src.agents.runtime.prompts import load_behavior_glossary; print(load_behavior_glossary()['CROSS_CURRENCY'])"` prints the canonical string; `uv run pytest -q` green.
+**Manual verification:** `uv run python -c "from src.agents.runtime.prompts import
+load_behavior_glossary; print(load_behavior_glossary()['CROSS_CURRENCY'])"` prints the canonical
+string; `uv run pytest -q` green.
 **Blockers:** none. **Do first.**
 
 ### T0020.2: Obligation detection + the revived structured seam — **blocked on T0020.1**
@@ -344,20 +352,30 @@ revive `QueryToolResult` as the tool's internal result shape.
 **In Scope:**
 * `src/services/query/models.py`: add `HedgeObligation`; extend `QueryToolResult` with
   `obligations: list[HedgeObligation]` (keep `refusal`).
-* `src/services/query/obligations.py`: `detect_obligations(sql: str, table: TableArtifact) -> list[HedgeObligation]` implementing the §4 rules (zero_results, created_on_caveat, free_text_hedge, cross_currency, negotiable_salary, listing_expiry_not_deadline; optional senior_title_hedge behind a default-off toggle). Pure function, no I/O.
+ * A future query-service obligations module: `detect_obligations(sql: str, table: TableArtifact) ->
+  list[HedgeObligation]` implementing the §4 rules (zero_results, created_on_caveat,
+  free_text_hedge, cross_currency, negotiable_salary, listing_expiry_not_deadline; optional
+  senior_title_hedge behind a default-off toggle). Pure function, no I/O.
 * `src/services/query/table_formatter.py` or a sibling `render_tool_message()`: serialize
-  `QueryToolResult` to the tool-message string with the delimited `MANDATORY CAVEATS` block; canned zero-results answer becomes glossary `ZERO_RESULTS`; truncation header becomes glossary `TRUNCATION` (removes the internship-bias wording C3 echoed).
+  `QueryToolResult` to the tool-message string with the delimited `MANDATORY CAVEATS` block; canned
+  zero-results answer becomes glossary `ZERO_RESULTS`; truncation header becomes glossary
+  `TRUNCATION` (removes the internship-bias wording C3 echoed).
 * `query_clean_jobs.py` + `get_job_details.py`: compose detection into the return path
   (`get_job_details` uses the row-scan rules only).
 * Executor-error upgrade: map Postgres `UndefinedColumn` to a structured `QueryRefusal`
   rendered with `ABSENT_FIELD` instead of the generic "database error" string.
 * `config/settings.yaml`: `agent.query.obligations.enabled` + per-rule toggles.
 * Unit tests per rule (SQL/rows fixtures → expected obligations), renderer tests, toggle tests.
-**Out of Scope:** any prompt change (T0020.3); middleware; SQL rewriting of any kind; streaming changes.
-**Manual verification:** with the local fixture DB, run the agent REPL and ask C1's question — the Langfuse trace's tool message shows the `[CREATED_ON_CAVEAT]` block; ask C3's — tool message is the canonical `ZERO_RESULTS` string; set `obligations.enabled: false`, rebuild, confirm tool output matches today's byte-for-byte shape.
+**Out of Scope:** any prompt change (T0020.3); middleware; SQL rewriting of any kind; streaming
+changes.
+**Manual verification:** with the local fixture DB, run the agent REPL and ask C1's question — the
+Langfuse trace's tool message shows the `[CREATED_ON_CAVEAT]` block; ask C3's — tool message is the
+canonical `ZERO_RESULTS` string; set `obligations.enabled: false`, rebuild, confirm tool output
+matches today's byte-for-byte shape.
 **Blockers:** T0020.1.
 
-### T0020.3: Caveat-relay contract in the system prompt (structural rule, version bump) — **blocked on T0020.2**
+### T0020.3: Caveat-relay contract in the system prompt (structural rule, version bump) — **blocked
+on T0020.2**
 **Objective:** Tell the model what the `MANDATORY CAVEATS` block is and that it must be
 carried into the answer — the delivery half of the contract.
 **In Scope:**
@@ -368,23 +386,30 @@ carried into the answer — the delivery half of the contract.
 * Bump `prompt_version` (v1 → v2-structural or per the spec's versioning), so the stage-2
   matrix is comparable and labeled.
 **Out of Scope:** few-shots (re-scoped T0015.5, §6); any other wording change; glossary edits.
-**Manual verification:** C1 question in the REPL → answer contains the created-on caveat substance; A1/A2 smoke — no caveat block leaks verbatim markers like `[CREATED_ON_CAVEAT]` into user-visible text.
+**Manual verification:** C1 question in the REPL → answer contains the created-on caveat substance;
+A1/A2 smoke — no caveat block leaks verbatim markers like `[CREATED_ON_CAVEAT]` into user-visible
+text.
 **Blockers:** T0020.2.
 
-### T0020.4: Scenario-matrix re-run (the ship gate) — **blocked on T0020.3 + a fresh Groq TPD window**
+### T0020.4: Scenario-matrix re-run (the ship gate) — **blocked on T0020.3 + a fresh Groq TPD
+window**
 **Objective:** Measure the mechanism with the same protocol that produced the 0/7.
 **In Scope:**
 * Re-run the 29-scenario T0015.4 protocol (probes ≥3×, determinism grading) against the
   fixture DB: full C category + full regression on the 13 passing scenarios; record as
-  `evals/v2_scenario_matrix.md` with `prompt_version` and mechanism config noted.
+   a future v2 scenario matrix document with `prompt_version` and mechanism config noted.
 * Per-rule bisect on any C row that still fails (toggles exist for exactly this).
 * Decision record: per-scenario pass/fail deltas; explicit go/no-go for stage 3
   (T0020.5) based on whether explicit caveats were dropped.
-**Out of Scope:** the automated T0011.5 baseline (separate, still blocked on creds); prompt edits in reaction to results (that's the re-scoped T0015.5).
-**Manual verification:** the matrix file itself is the artifact; fixture confirmation line (`COUNT(*) = 22`) present as in v1.
-**Blockers:** T0020.3; Groq daily quota (the 2026-07-14 v1 run completed within a day's window — treat one full day as the budget, checkpoint mid-run as the eval memory notes).
+**Out of Scope:** the automated T0011.5 baseline (separate, still blocked on creds); prompt edits in
+reaction to results (that's the re-scoped T0015.5).
+**Manual verification:** the matrix file itself is the artifact; fixture confirmation line
+(`COUNT(*) = 22`) present as in v1.
+**Blockers:** T0020.3; Groq daily quota (the 2026-07-14 v1 run completed within a day's window —
+treat one full day as the budget, checkpoint mid-run as the eval memory notes).
 
-### T0020.5 (conditional): Verify-and-append enforcement middleware — **blocked on adverse T0020.4 evidence; do not build otherwise**
+### T0020.5 (conditional): Verify-and-append enforcement middleware — **blocked on adverse T0020.4
+evidence; do not build otherwise**
 **Objective:** Deterministic floor for caveat presence if (and only if) measurement shows
 the model drops explicit caveats.
 **In Scope (if triggered):**
@@ -393,8 +418,10 @@ the model drops explicit caveats.
   substance (token-keyed check), append the canonical string; streaming path emits the
   appendix as trailing tokens before `done`.
 * Config: `agent.obligations_enforcement.enabled`.
-**Out of Scope:** answer rewriting beyond appending; any detection logic (stays in the service layer).
-**Manual verification (if built):** force-drop via a stub model in tests → appended caveat present; live REPL C1 with rule on → no double-caveat when the model already complied.
+**Out of Scope:** answer rewriting beyond appending; any detection logic (stays in the service
+layer).
+**Manual verification (if built):** force-drop via a stub model in tests → appended caveat present;
+live REPL C1 with rule on → no double-caveat when the model already complied.
 **Blockers:** T0020.4 outcome.
 
 **Riders (registered, not folded in — per CLAUDE.md §1):** the executor-error logging gap
@@ -437,16 +464,25 @@ caveat conditions.
 
 ## 10. Rejected alternatives — one line each
 
-- **Prompt-only few-shots as the fix:** forbidden by the 2026-07-02 doctrine and mis-aimed — the model fails to *decide*, not to *phrase* (kept only for the §6 residue).
-- **Force-widening the model's SELECT (inject salary columns / id):** the actual T0009.11 line — changes what data the query returns.
-- **`WHERE is_active` injection / hide-inactive view:** already ruled out in §4.2 #3; same semantic-rewriting violation.
-- **Middleware as the detection locus:** structure is already flattened to prose there; would re-parse what the service layer had as objects.
-- **Post-hoc answer rewriting as primary:** guarantees presence, not correctness (can't un-crown C2); speaks for the model; kept only as the conditional stage 3.
-- **Runtime LLM self-critique pass:** doubles free-tier spend and latency; nondeterministic checker for a nondeterminism problem.
-- **JSON tool returns to the model:** unmeasured behavior change; relay fidelity is only evidenced on prose tool messages.
-- **Model swap / temp 0.0:** rider not thesis per the brief; temp 0.0 is already the spec's recorded fallback if probes stay flaky *after* the mechanism (§5 of the spec).
+- **Prompt-only few-shots as the fix:** forbidden by the 2026-07-02 doctrine and mis-aimed — the
+  model fails to *decide*, not to *phrase* (kept only for the §6 residue).
+- **Force-widening the model's SELECT (inject salary columns / id):** the actual T0009.11 line —
+  changes what data the query returns.
+- **`WHERE is_active` injection / hide-inactive view:** already ruled out in §4.2 #3; same
+  semantic-rewriting violation.
+- **Middleware as the detection locus:** structure is already flattened to prose there; would
+  re-parse what the service layer had as objects.
+- **Post-hoc answer rewriting as primary:** guarantees presence, not correctness (can't un-crown
+  C2); speaks for the model; kept only as the conditional stage 3.
+- **Runtime LLM self-critique pass:** doubles free-tier spend and latency; nondeterministic checker
+  for a nondeterminism problem.
+- **JSON tool returns to the model:** unmeasured behavior change; relay fidelity is only evidenced
+  on prose tool messages.
+- **Model swap / temp 0.0:** rider not thesis per the brief; temp 0.0 is already the spec's recorded
+  fallback if probes stay flaky *after* the mechanism (§5 of the spec).
 - **Fine-tuning:** out of budget and out of scope.
-- **Folding this into T0019:** different concern, different layer; T0019 explicitly cut all prompt/eval/agent-surface work — honesty enforcement deserves its own milestone and gate.
+- **Folding this into T0019:** different concern, different layer; T0019 explicitly cut all
+  prompt/eval/agent-surface work — honesty enforcement deserves its own milestone and gate.
 
 ---
 

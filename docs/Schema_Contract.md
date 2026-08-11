@@ -5,7 +5,7 @@
 This document records the frozen v1 deployed schema and API contract for InternHunterAgent.
 Downstream prompt tuning, the T0011.5 eval baseline, and the deferred prompt-v2 pass pin to
 this contract so before/after comparisons are reproducible. This is the "schemas fixed to
-the deployed version" Phase 0 precondition from `research/pre-deploy-refinement-plan.md`.
+the deployed version" Phase 0 precondition from `research/archive/pre-deploy-refinement-plan.md`.
 
 ## Agent-Visible Columns
 

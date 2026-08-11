@@ -5,19 +5,22 @@
 > the **measurement record** cited by `research/honesty-enforcement-design.md`, which quotes
 > its C-category results as the evidence for the deterministic-hedging recommendation.
 >
-> **The harness that produced it was deliberately not restored** — `scripts/run_scenario_matrix.py`,
-> `evals/scenarios_v1.yaml`, `evals/test_scenarios_v1_load.py` and the raw
+> **The harness that produced it was deliberately not restored.**
+> `scripts/run_scenario_matrix.py` <!-- archived-on-tag -->
+> `evals/scenarios_v1.yaml`, `evals/test_scenarios_v1_load.py` <!-- archived-on-tag --> and the raw
 > `v1_scenario_matrix.observed.json` remain only on the archive tag. Re-running the matrix
 > therefore requires recovering them from that tag first. Read this as a dated finding
 > (run 2026-07-14), not as a live suite.
 
-Template - Observed/Pass are filled by the live run per docs/Manual_Verification_Guide.md -> T0015.4. Do not hand-fill from imagination.
+Template - Observed/Pass are filled by the live run per docs/Manual_Verification_Guide.md ->
+T0015.4. Do not hand-fill from imagination.
 
 - prompt_version: `v1`
 - model: `qwen/qwen3.6-27b`
 - temperature: `0.2`
 - run_date_utc: `2026-07-14T06:24:33+00:00`
-- fixture_seed_confirmation: User confirms `COUNT(*) = 22` from `python -m evals.fixtures.loader` against `postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval`
+- fixture_seed_confirmation: User confirms `COUNT(*) = 22` from `python -m evals.fixtures.loader`
+  against `postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval`
 
 ## 4a. Golden-anchored scenarios
 | ID | Category | Input / turns | Expected behavior | Observed (r1 / r2 / r3) | Pass? (N/N) | Prompt lever if fail |
@@ -62,16 +65,24 @@ Template - Observed/Pass are filled by the live run per docs/Manual_Verification
 
 ## Failures -> prompt levers (fill after grading)
 
-**Final grading - 29 of 29 scenarios collected.** Probe rows are graded under the determinism protocol: correct on all reruns; 2/3 is FAIL.
+**Final grading - 29 of 29 scenarios collected.** Probe rows are graded under the determinism
+protocol: correct on all reruns; 2/3 is FAIL.
 
 **Passing (13):** A1, A2, A3, A4, B2, D1, D2, D3, E1, E2, M-G26d, M-G44, M-D3c.
 
 **Failing (16):** B1, C1, C2, C3, C4, C5, C6, C7, M-G03, M-G10, M-G29, M-D2, M-D4, M-D7, M-D8, M-D9.
 
 **Highest-leverage T0015.5 prompt levers:**
-- Add glossary-backed few-shots for CREATED-ON-CAVEAT, CROSS-CURRENCY, ZERO-RESULTS, FREE-TEXT-HEDGE, NEGOTIABLE-SALARY, ABSENT-FIELD, SQL-DESCRIBE-ONLY, SENIOR-TITLE-HEDGE, and DISCRIMINATORY-DECLINE.
-- Rebalance the system prompt away from internship-only framing; this appears in C3, C4, E2 wording, and M-D7.
-- Add few-shots for multi-part and multi-turn requests: B1, M-G03, and M-D3c show that the happy path can work, but B1/M-G03 still hit empty-answer fallback or dropped requirements.
-- Add explicit synonym/abstraction guidance for Saigon -> Ho Chi Minh City, ML abstraction handling, and Business Intelligence title fallback with role=Other disclosure.
+- Add glossary-backed few-shots for CREATED-ON-CAVEAT, CROSS-CURRENCY, ZERO-RESULTS,
+  FREE-TEXT-HEDGE, NEGOTIABLE-SALARY, ABSENT-FIELD, SQL-DESCRIBE-ONLY, SENIOR-TITLE-HEDGE, and
+  DISCRIMINATORY-DECLINE.
+- Rebalance the system prompt away from internship-only framing; this appears in C3, C4, E2 wording,
+  and M-D7.
+- Add few-shots for multi-part and multi-turn requests: B1, M-G03, and M-D3c show that the happy
+  path can work, but B1/M-G03 still hit empty-answer fallback or dropped requirements.
+- Add explicit synonym/abstraction guidance for Saigon -> Ho Chi Minh City, ML abstraction handling,
+  and Business Intelligence title fallback with role=Other disclosure.
 
-**Non-prompt follow-up surfaced during measurement:** intermittent empty-answer fallback still appears in B1, C2, M-G03, M-D4, and M-D8 despite the longer manual-eval timeout; track separately from prompt wording if it persists after T0015.5.
+**Non-prompt follow-up surfaced during measurement:** intermittent empty-answer fallback still
+appears in B1, C2, M-G03, M-D4, and M-D8 despite the longer manual-eval timeout; track separately
+from prompt wording if it persists after T0015.5.

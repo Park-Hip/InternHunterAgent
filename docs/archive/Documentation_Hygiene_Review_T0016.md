@@ -141,7 +141,7 @@ Suggested fix:
 ### [P3] Manual verification T0016 entries are not Markdown headings
 
 Evidence:
-- `docs/Manual_Verification_Guide.md:826`, `841`, and `858` introduce T0016.2-T0016.4 as plain text labels, not headings.
+- `docs/archive/Manual_Verification_Archive.md:826`, `841`, and `858` introduce T0016.2-T0016.4 as plain text labels, not headings.
 
 Why it matters:
 - The manual guide is long. Plain labels are harder to navigate, link, and scan, especially when future tickets refer to "Manual_Verification_Guide -> T0016.4".
@@ -166,7 +166,7 @@ Suggested fix:
 ## Non-Issues / Acceptable Notes
 
 - `docs/Completion_Reports.md:81` explicitly records the static input-cap risk. That is good hygiene; the problem is that other docs do not carry the same caveat.
-- `docs/Manual_Verification_Guide.md:858-878` gives a clear T0016.4 manual checklist and correctly covers `/openapi.json`.
+- `docs/archive/Manual_Verification_Archive.md:858-878` gives a clear T0016.4 manual checklist and correctly covers `/openapi.json`.
 - `tests/api/test_docs_exposure.py` covers both docs-on and docs-off behavior; no doc finding is needed there.
 
 ## Verification Performed During Review
@@ -184,4 +184,4 @@ Suggested fix:
 4. Update `Tickets.md` T0016.4 to name `api.docs_enabled: false`.
 5. Mark fixed T0016 items in `Code_Review_Notes.md`.
 6. Add a corrective note for the old T0016.5 completion-report follow-up.
-7. Normalize T0016 headings in `Manual_Verification_Guide.md`.
+7. Normalize T0016 headings in `Manual_Verification_Archive.md`.

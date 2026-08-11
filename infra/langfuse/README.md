@@ -1,6 +1,6 @@
-## Note
-This is the folder for activate self-host Langfuse. Run this to activate the service
-`
-docker compose -f infra/langfuse/docker-compose.yaml up -d
-`
-### CHANGEME secrets must be set before any non-local use.
+# Langfuse
+
+InternHunter uses Langfuse Cloud Hobby rather than a self-hosted Langfuse deployment.
+
+The infrastructure directory has no local Compose service. The Cloud decision is recorded in
+[the deployment research plan](../../research/archive/deployment-research-plan.md).

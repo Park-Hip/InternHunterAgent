@@ -1,5 +1,150 @@
 # Completion Reports
 
+## T0022.7 - Rebuild repository state and true up registers
+
+- **Summary:** Rebuilt `Repo_Current_State.md` as an 85-line current-facts sheet. It retains the
+  recovery tags, unverified stash, and M15 behavior-track caveat while linking operational facts to
+  `Operations.md`. Moved three closed items to `Resolved_Issues.md`, removed five duplicate stubs,
+  and rebuilt the eight-category open-register index from the resulting entries.
+- **Files:** `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, `docs/Resolved_Issues.md`,
+  `docs/Tickets.md`, and this report.
+- **Commands:** inspected the ticket research, Git branch, tags, stash, registers, and documentation
+  linter; counted entries from the final register; ran `uv run python scripts/docs_lint.py --check
+  line-length` and `--check link-path`.
+- **Build/test:** `uv run pytest -q tests/test_docs_lint.py` passed (15 tests), and `uv run ruff
+  check .` passed. The rebuilt state file is 85 lines and has no non-table line-length findings.
+  `Known_Issues.md` has three closed-state headlines, all intentionally partially or mostly closed.
+  The full `uv run pytest -q` attempt timed out after 64 seconds without output. The full
+  line-length
+  and link-path checks still report findings in out-of-scope research and legacy documentation,
+  including the two `docs/README.md` line-length findings owned by T0022.9.
+- **Manual verification:** open `Repo_Current_State.md` and confirm the branch, head, live URL, and
+  next ticket are visible immediately. Run `Select-String -Pattern 'RESOLVED' docs/Known_Issues.md`
+  and confirm only the three partial-state headlines remain. Compare each index count with a fresh
+  section count and locate the three moved entries in `Resolved_Issues.md`.
+- **Risks:** archived resolution notes retain historic statements. This ticket relocates them and
+  does not re-triage their factual claims.
+- **Follow-up:** T0022.8 owns research pruning and broken research links. T0022.9 owns the remaining
+  live index cleanup and blocking documentation CI enforcement.
+- **Docs updated:** `Repo_Current_State.md`, both issue registers, `Tickets.md`, and this report.
+
+## T0022.6 - History split
+
+- **Summary:** Moved completed ticket specifications into `Tickets_Archive.md` and reusable
+  completed checklists into `Manual_Verification_Archive.md`. The live roadmap retains its full
+  index, open work, and the current verification checklist. Reconciled the stale keep-alive record:
+  the ICT cron-job.org `/api/v1/health` job is running, and idle Neon pool connections do not keep
+  compute awake.
+- **Files:** `docs/Tickets.md`, `docs/archive/Tickets_Archive.md`,
+  `docs/Manual_Verification_Guide.md`, `docs/archive/Manual_Verification_Archive.md`,
+  `docs/Operations.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, `docs/README.md`,
+  `docs/Completion_Reports.md`, `scripts/docs_lint.py`, and textual-pointer references.
+- **Commands:** ran focused documentation lint checks, automatic reflow, pointer audit, docs-lint
+  tests, Ruff, and `git diff --check`.
+- **Build/test:** Ruff and the `encoding`, `agent-parity`, and `stack` docs-lint checks passed.
+  Focused docs-lint tests could not run because the checked-in virtualenv points to a missing uv
+  Python installation. The full `link-path` check remains non-zero because of pre-existing stale
+  paths outside this ticket's scope.
+- **Manual verification:** open `Tickets.md` and find the current T0022 work in the first two
+  screenfuls; open `Manual_Verification_Guide.md` and find T0021.1 immediately; follow one
+  archive-index entry; and confirm the keep-alive facts in `Operations.md`.
+- **Risks:** no browser session was available to inspect cron-job.org directly. The scheduled
+  timezone and endpoint are recorded from maintainer-supplied facts in the ticket.
+- **Follow-up:** T0022.7 owns the full state-sheet rebuild and resolved-issue eviction. T0022.8
+  owns research pruning. T0022.9 owns the remaining index and CI enforcement work.
+- **Docs updated:** `Tickets.md`, `Manual_Verification_Guide.md`, both new archive files,
+  `Operations.md`, `Known_Issues.md`, `Repo_Current_State.md`, `README.md`, and this report.
+
+## T0022.5 - Operations consolidation
+
+- **Summary:** Added `Operations.md` as the sole operational reference for deployment, environment
+  variables, database procedures, cron state, keep-alive constraints, and incident response.
+  Moved the local database-reset procedure out of the root README and reduced duplicated live
+  topology statements to links.
+- **Files:** `docs/Operations.md`, `README.md`, `docs/Tech_Stack.md`, `docs/README.md`,
+  `docs/T0020.4_Cron_Activation_Runbook.md`, `docs/Repo_Current_State.md`,
+  `scripts/docs_lint.py`, this report, and `docs/Tickets.md`.
+- **Commands:** ran docs-lint checks and reflow, focused documentation-lint tests, Ruff, and
+  `git diff --check`.
+- **Build/test:** 15 focused docs-lint tests passed; Ruff passed; `stack` and `encoding`
+  checks passed. The runbook and new operations guide have no line-length findings.
+- **Manual verification:** compare every runbook sign-off row with its pre-change state; confirm
+  the env-var table against `render.yaml` and `.env.example`; use the local reset procedure with
+  Docker; and confirm the cron's direct, non-pooled Neon host requirement can be found within
+  `Operations.md`.
+- **Risks:** cron activation gates and dashboard-managed secrets intentionally remain maintainer
+  actions. The schedule remains disabled.
+- **Follow-up:** T0022.6 owns the archive split. T0022.7 will rebuild the remaining state sheet.
+- **Docs updated:** `README.md`, `docs/Operations.md`, `docs/Tech_Stack.md`, `docs/README.md`,
+  `docs/T0020.4_Cron_Activation_Runbook.md`, `docs/Repo_Current_State.md`,
+  `docs/Completion_Reports.md`, and `docs/Tickets.md`.
+
+## T0022.3 - Structure-safe reflow of stable documentation
+
+- **Summary:** Added prefix-aware Markdown reflow and YAML-frontmatter protection, then
+  mechanically wrapped the ticket's stable documentation set. The one residual code-span
+  ellipsis was repaired separately before reflow.
+- **Files:** `scripts/docs_lint.py`, `tests/test_docs_lint.py`, both agent instruction files,
+  eight stable docs under `docs/`, `evals/v1_scenario_matrix.md`, and two stable research docs.
+- **Commands:** ran the focused docs-lint tests, Ruff, encoding and parity checks, `--fix`,
+  line-length checks, word-diff review, and `git diff --check`.
+- **Build/test:** 11 focused tests passed; Ruff passed; encoding and agent parity passed.
+  The full suite was stopped after four minutes without output, so it is inconclusive.
+- **Manual verification:** preview `MVP_Spec.md`, `Known_Issues.md`, and
+  `Agent_Behavior_Spec.md`; run `uv run python scripts/docs_lint.py --check line-length`;
+  confirm the remaining findings are outside this ticket's scope.
+- **Risks:** no word-level content changes were found in the dedicated reflow commit. Remaining
+  line-length findings belong to documents deferred to T0022.4-T0022.9.
+- **Follow-up:** T0022.4 is the next recommended ticket; it owns the root README and
+  `Tech_Stack.md`.
+- **Docs updated:** `docs/Completion_Reports.md`, `docs/Repo_Current_State.md`, and
+  `docs/Tickets.md`.
+
+## T0022.2 - Encoding repair, agent-surface parity, and orphan cleanup
+
+- **Summary:** Repaired the T0019.10 mojibake without reflowing prose, confirmed agent-file
+  parity, synchronized the shared skill instructions while retaining Codex's manifest, removed
+  the disposable milestone scratchpad after tagging it, and replaced the stale Langfuse README.
+- **Files:** `docs/Completion_Reports.md`, `AGENTS.md`/`CLAUDE.md` (verified only),
+  `skills/generate-ticket-prompt/SKILL.md`, `skills/generate-ticket-prompt/agents/openai.yaml`
+  (retained), deleted `milestone/data-ingestion-stage.md`, `infra/langfuse/README.md`,
+  `scripts/docs_lint.py`, `tests/test_docs_lint.py`, `docs/Tickets.md`, and this report.
+- **Commands:** verified exact repair counts before replacement; ran `uv run pytest
+  tests/test_docs_lint.py -q`, `uv run ruff check scripts/docs_lint.py tests/test_docs_lint.py`,
+  and the `encoding` and `agent-parity` checks.
+- **Build/test:** 7 focused tests passed; Ruff passed; `encoding` and `agent-parity` both pass.
+- **Manual verification:** confirm `git tag --list archive/milestone-scratchpad` lists the tag,
+  `Test-Path milestone` is false, and the root skill still has `agents/openai.yaml`.
+- **Risks:** 83 known `link-path` findings remain out of scope. The full suite was not rerun;
+  its most recent attempt in T0022.1 exceeded the 120-second command limit.
+- **Follow-up:** T0022.3 handles mechanical reflow; T0022.6 handles broader archive structure.
+- **Docs updated:** `docs/Completion_Reports.md`, `docs/Repo_Current_State.md`,
+  `docs/Tickets.md`, and `infra/langfuse/README.md`.
+
+## T0022.1 - Docs lint harness, conventions, and warn-only CI gate
+
+- **Summary:** Added the dependency-free documentation linter with `line-length`, `link-path`,
+  `encoding`, and `agent-parity` checks; documented the conventions; and added a non-blocking
+  CI job. The encoding check was corrected before merge to match the actual `â€` and `â†`
+  codepoints in the repository. Existing findings are intentionally not repaired in this ticket.
+- **Files:** `scripts/docs_lint.py`, `tests/test_docs_lint.py`, `docs/Docs_Conventions.md`,
+  `.github/workflows/ci.yml`, `docs/Repo_Current_State.md`, and this report.
+- **Commands:** `uv run pytest tests/test_docs_lint.py -q`; `uv run ruff check
+  scripts/docs_lint.py tests/test_docs_lint.py`; `uv run python scripts/docs_lint.py --check
+  agent-parity`; `uv run python scripts/docs_lint.py --stat`.
+- **Build/test:** 5 focused tests passed; Ruff passed; agent parity passed. The corrected
+  encoding check exits 1 on 18 actionable existing findings; 11 further raw occurrences are
+  exempt inside backticked code spans. Baseline: 48 tracked
+  or unignored Markdown files, 1,490,851 bytes, 3,200 lines over 100 characters, and 1,564 over
+  200 characters.
+- **Manual verification:** run `uv run python scripts/docs_lint.py --stat`; run each individual
+  `--check`; confirm the GitHub Actions `docs` job reports its findings without blocking a PR.
+- **Risks:** the linter is warn-only by design until T0022.9; the existing documentation backlog
+  still makes a bare run exit non-zero.
+- **Follow-up:** T0022.2 repairs the current encoding/parity/orphan findings. T0022.3 handles
+  mechanical reflow. T0022.9 turns the job into a blocking CI gate.
+- **Docs updated:** `docs/Docs_Conventions.md`, `docs/Repo_Current_State.md`, and this report.
+
 Per-ticket outcome records (`CLAUDE.md §5`). Append-only: each entry captures what changed,
 files touched, test results, and follow-ups for one ticket. This is the durable record;
 `Repo_Current_State.md` holds only the milestone-level snapshot and links here.
@@ -19,379 +164,1479 @@ Follow-ups / Docs).
 
 ## Milestone 16 — Security Posture (Public-Endpoint Hardening)
 - **T0016.1 — CORS middleware (config-driven, credential-less).**
-  - **Did:** added an `api.cors` block to `config/settings.yaml` (credential-less defaults: empty `allowed_origins`, `allow_credentials: false`, methods `GET/POST/OPTIONS`); `src/api/app.py` registers `CORSMiddleware` before router includes; added `create_app(...)` so focused tests build a CORS app without opening the lifespan/runtime/DB.
+  - **Did:** added an `api.cors` block to `config/settings.yaml` (credential-less defaults: empty
+    `allowed_origins`, `allow_credentials: false`, methods `GET/POST/OPTIONS`); `src/api/app.py`
+    registers `CORSMiddleware` before router includes; added `create_app(...)` so focused tests
+    build a CORS app without opening the lifespan/runtime/DB.
   - **Files:** `config/settings.yaml`, `src/api/app.py`, `tests/api/test_cors.py`.
-  - **Tests:** `tests/api/test_cors.py tests/api/test_query.py tests/api/test_startup_config.py` pass (allowed preflight returns CORS headers, disallowed omits them).
-  - **Follow-up:** the deployed UI origin is still intentionally unset — fill it into `config/settings.yaml` when the demo host is known.
-  - **Correction (2026-07-13):** no `T0016.5 Langfuse secrets hygiene` ticket exists; superseded when deploy moved to Langfuse Cloud Hobby and T0016 was scoped to CORS / rate-limit / input-cap / `/docs`.
+  - **Tests:** `tests/api/test_cors.py tests/api/test_query.py tests/api/test_startup_config.py`
+    pass (allowed preflight returns CORS headers, disallowed omits them).
+  - **Follow-up:** the deployed UI origin is still intentionally unset — fill it into
+    `config/settings.yaml` when the demo host is known.
+  - **Correction (2026-07-13):** no `T0016.5 Langfuse secrets hygiene` ticket exists; superseded
+    when deploy moved to Langfuse Cloud Hobby and T0016 was scoped to CORS / rate-limit / input-cap
+    / `/docs`.
 
 - **T0016.2 — Per-IP rate limiting + graceful 429/quota degradation.**
-  - **Did:** added `slowapi` + `api.rate_limit: "15/minute"`; `app.py` builds a per-app `Limiter(key_func=get_remote_address)` + friendly `RateLimitExceeded` handler, applied only to `POST /api/v1/agent/chat` (health not decorated). `errors.py` adds `ProviderBusyError` + `BUSY_MESSAGE` + a 429/quota/timeout classifier; `service.py` translates provider pressure to a friendly busy response, preserving the generic 500 for real bugs.
-  - **Files:** `pyproject.toml`/`uv.lock`, `config/settings.yaml`, `src/api/app.py`, `src/core/errors.py`, `src/agents/service.py`, `src/api/routes/query.py`, `tests/api/test_rate_limit.py`, `tests/api/test_query.py`.
+  - **Did:** added `slowapi` + `api.rate_limit: "15/minute"`; `app.py` builds a per-app
+    `Limiter(key_func=get_remote_address)` + friendly `RateLimitExceeded` handler, applied only to
+    `POST /api/v1/agent/chat` (health not decorated). `errors.py` adds `ProviderBusyError` +
+    `BUSY_MESSAGE` + a 429/quota/timeout classifier; `service.py` translates provider pressure to a
+    friendly busy response, preserving the generic 500 for real bugs.
+  - **Files:** `pyproject.toml`/`uv.lock`, `config/settings.yaml`, `src/api/app.py`,
+    `src/core/errors.py`, `src/agents/service.py`, `src/api/routes/query.py`,
+    `tests/api/test_rate_limit.py`, `tests/api/test_query.py`.
   - **Tests:** `16 passed` (focused API suite).
-  - **Follow-up:** live provider-quota behavior not exercised — confirm the classifier with credentials when available.
+  - **Follow-up:** live provider-quota behavior not exercised — confirm the classifier with
+    credentials when available.
 
 - **T0016.3 — Request input hardening (length cap).**
-  - **Did:** `api.max_query_chars: 2000` in config + matching static `DEFAULT_MAX_QUERY_CHARS = 2000` `Field(max_length=...)` on `QueryRequest.query`. Oversized bodies fail with HTTP 422 before the route runs (not logged, service not awaited); blank input keeps the existing 400 path.
+  - **Did:** `api.max_query_chars: 2000` in config + matching static `DEFAULT_MAX_QUERY_CHARS =
+    2000` `Field(max_length=...)` on `QueryRequest.query`. Oversized bodies fail with HTTP 422
+    before the route runs (not logged, service not awaited); blank input keeps the existing 400
+    path.
   - **Files:** `config/settings.yaml`, `src/api/schemas.py`, `tests/api/test_query.py`.
   - **Tests:** `18 passed`; ruff clean.
-  - **Follow-up:** the cap is static in code and mirrored in config — if the value changes later, update both or add a validated config loader.
+  - **Follow-up:** the cap is static in code and mirrored in config — if the value changes later,
+    update both or add a validated config loader.
 
 - **T0016.4 — `/docs` exposure decision + minimal security headers.**
-  - **Did:** `api.docs_enabled: true` makes Swagger/ReDoc/OpenAPI an explicit config choice; `app.py` wires `docs_url`/`redoc_url`/`openapi_url` together (all three removed when disabled), flippable via `create_app(docs_enabled=...)`. No security-header middleware added by design (still API-only until a same-origin HTML UI is served).
+  - **Did:** `api.docs_enabled: true` makes Swagger/ReDoc/OpenAPI an explicit config choice;
+    `app.py` wires `docs_url`/`redoc_url`/`openapi_url` together (all three removed when disabled),
+    flippable via `create_app(docs_enabled=...)`. No security-header middleware added by design
+    (still API-only until a same-origin HTML UI is served).
   - **Files:** `config/settings.yaml`, `src/api/app.py`, `tests/api/test_docs_exposure.py`.
   - **Tests:** focused API suite passes (enabled→200, disabled→404 for all three).
-  - **Follow-up:** when FastAPI later serves an HTML UI, add frame-protection headers in that ticket (done in T0018.2).
+  - **Follow-up:** when FastAPI later serves an HTML UI, add frame-protection headers in that ticket
+    (done in T0018.2).
 
 ## Milestone 17 — Streaming Response Delivery
 - **T0017.1 — Runtime streaming + no-leak filter.**
-  - **Did:** added `AgentRuntime.astream(...)` beside `ainvoke` using the stable `agent.astream(..., stream_mode="messages")` surface; emits transport-agnostic `token` dicts then one trailing `metadata` dict after Langfuse flush. Two-gate no-leak filter: only `langgraph_node == "model"` survives, and chunks with empty/non-string content or any `tool_call_chunks` are dropped. Enabled `agent.groq.streaming: true` + a system-prompt line to not narrate before tool calls.
-  - **Files:** `src/agents/runtime/react_agent.py`, `config/settings.yaml`, `config/prompts.yaml`, `tests/agents/runtime/test_react_agent.py`, `research/streaming-implementation-plan.md`.
+  - **Did:** added `AgentRuntime.astream(...)` beside `ainvoke` using the stable `agent.astream(...,
+    stream_mode="messages")` surface; emits transport-agnostic `token` dicts then one trailing
+    `metadata` dict after Langfuse flush. Two-gate no-leak filter: only `langgraph_node == "model"`
+    survives, and chunks with empty/non-string content or any `tool_call_chunks` are dropped.
+    Enabled `agent.groq.streaming: true` + a system-prompt line to not narrate before tool calls.
+  - **Files:** `src/agents/runtime/react_agent.py`, `config/settings.yaml`, `config/prompts.yaml`,
+    `tests/agents/runtime/test_react_agent.py`, `research/archive/streaming-implementation-plan.md`.
   - **Tests:** `9` focused stream tests pass; full suite `273 passed, 7 skipped, 19 deselected`.
-  - **Follow-up:** live tool-using stream probe BLOCKED (no Groq creds / DB in sandbox) → `Known_Issues.md`.
+  - **Follow-up:** live tool-using stream probe BLOCKED (no Groq creds / DB in sandbox) →
+    `Known_Issues.md`.
 
 - **T0017.2 — Streaming service + SSE endpoint.**
-  - **Did:** `stream_agent_response(...)` in `service.py` — transport-agnostic async generator emitting `session` → `token`* → (`metadata` held until after the empty-answer fallback decision) / in-band `error` (carrying `BUSY_MESSAGE`, no `str(exc)` leak) → terminal `done`. `POST /api/v1/agent/chat/stream` reuses the chat limiter, keeps the pre-stream blank-query 400, and returns `EventSourceResponse` with explicit `json.dumps` framing + anti-buffering headers (`Cache-Control: no-cache`, `X-Accel-Buffering: no`). Verified FastAPI 0.136.3's `ServerSentEvent` isn't auto-encoded, hence the explicit framing.
-  - **Files:** `src/agents/service.py`, `src/api/routes/query.py`, `src/api/schemas.py`, `tests/api/test_stream.py`.
-  - **Tests:** `test_stream.py` `4 passed`; API suite `24 passed`; full suite `277 passed, 7 skipped, 19 deselected`.
-  - **Follow-up:** live `curl -N` check BLOCKED (needs Groq creds + seeded Postgres) → `Known_Issues.md`.
+  - **Did:** `stream_agent_response(...)` in `service.py` — transport-agnostic async generator
+    emitting `session` → `token`* → (`metadata` held until after the empty-answer fallback decision)
+    / in-band `error` (carrying `BUSY_MESSAGE`, no `str(exc)` leak) → terminal `done`. `POST
+    /api/v1/agent/chat/stream` reuses the chat limiter, keeps the pre-stream blank-query 400, and
+    returns `EventSourceResponse` with explicit `json.dumps` framing + anti-buffering headers
+    (`Cache-Control: no-cache`, `X-Accel-Buffering: no`). Verified FastAPI 0.136.3's
+    `ServerSentEvent` isn't auto-encoded, hence the explicit framing.
+  - **Files:** `src/agents/service.py`, `src/api/routes/query.py`, `src/api/schemas.py`,
+    `tests/api/test_stream.py`.
+  - **Tests:** `test_stream.py` `4 passed`; API suite `24 passed`; full suite `277 passed, 7
+    skipped, 19 deselected`.
+  - **Follow-up:** live `curl -N` check BLOCKED (needs Groq creds + seeded Postgres) →
+    `Known_Issues.md`.
 
 ## Milestone 18 — Clickable Demo (UI + go-live)
 - **T0018.1 — Go-live glue: server session IDs, data disclaimer, DB readiness probe.**
-  - **Did:** UUID4 session ids minted when omitted in both one-shot and streaming paths (client ids kept as advisory); `api.demo.data_snapshot_date: "2026-07-14"` as the disclaimer source of truth; `GET /api/v1/ready` runs `session_factory()` + `text("SELECT 1")` and returns readiness + snapshot date (or 503), included outside the chat limiter so probes aren't rate-limited; fixed the `/health` `async def` typo.
-  - **Files:** `config/settings.yaml`, `src/api/routes/health.py`, `src/api/schemas.py`, `tests/api/test_ready.py`, `tests/agents/test_service.py`, `tests/api/test_stream.py`.
-  - **Tests:** focused `11 passed`; API suite `29 passed`; full suite `282 passed, 7 skipped, 19 deselected`; ruff clean.
-  - **Follow-up:** `data_snapshot_date` must be updated whenever the demo corpus changes; live `/ready` against a running Postgres not exercised in-sandbox.
+  - **Did:** UUID4 session ids minted when omitted in both one-shot and streaming paths (client ids
+    kept as advisory); `api.demo.data_snapshot_date: "2026-07-14"` as the disclaimer source of
+    truth; `GET /api/v1/ready` runs `session_factory()` + `text("SELECT 1")` and returns readiness +
+    snapshot date (or 503), included outside the chat limiter so probes aren't rate-limited; fixed
+    the `/health` `async def` typo.
+  - **Files:** `config/settings.yaml`, `src/api/routes/health.py`, `src/api/schemas.py`,
+    `tests/api/test_ready.py`, `tests/agents/test_service.py`, `tests/api/test_stream.py`.
+  - **Tests:** focused `11 passed`; API suite `29 passed`; full suite `282 passed, 7 skipped, 19
+    deselected`; ruff clean.
+  - **Follow-up:** `data_snapshot_date` must be updated whenever the demo corpus changes; live
+    `/ready` against a running Postgres not exercised in-sandbox.
 
 - **T0018.2 — Same-origin static serving + frame protection.**
-  - **Did:** `create_app()` registers a pure-ASGI frame guard injecting `X-Frame-Options: DENY`, includes API/docs routes first, then mounts `StaticFiles(directory=src/api/static, html=True)` at `/`. The root page is a deliberately minimal placeholder (no CSS/JS/UI behavior yet).
-  - **Files:** `src/api/app.py`, `src/api/static/` (placeholder), `tests/api/test_static_serving.py`.
-  - **Tests:** `test_static_serving.py` `4 passed`; `test_stream.py` `5 passed`; API suite `33 passed`; full suite `286 passed, 7 skipped, 19 deselected`.
+  - **Did:** `create_app()` registers a pure-ASGI frame guard injecting `X-Frame-Options: DENY`,
+    includes API/docs routes first, then mounts `StaticFiles(directory=src/api/static, html=True)`
+    at `/`. The root page is a deliberately minimal placeholder (no CSS/JS/UI behavior yet).
+  - **Files:** `src/api/app.py`, `src/api/static/` (placeholder),
+    `tests/api/test_static_serving.py`.
+  - **Tests:** `test_static_serving.py` `4 passed`; `test_stream.py` `5 passed`; API suite `33
+    passed`; full suite `286 passed, 7 skipped, 19 deselected`.
   - **Follow-up:** none.
-  - *(Backfilled from `Repo_Current_State` during the 2026-07-15 docs-hygiene pass — this ticket originally had no completion entry.)*
+  - *(Backfilled from `Repo_Current_State` during the 2026-07-15 docs-hygiene pass — this ticket
+    originally had no completion entry.)*
 
 - **T0018.3 — Editorial streaming chat UI (vanilla).**
-  - **Did:** three static assets — `index.html` + `styles.css` + `app.js` — replace the placeholder with the vanilla Editorial demo page (system serif stack, hairline rules, restrained vermilion accent, light theme; no build step, no framework, no new dependency, CSP-clean). Consumes `POST /api/v1/agent/chat/stream` via `fetch()` + a `ReadableStream` reader + a ~30-line in-app SSE parser dispatching `session`/`token`/`metadata`/`error`/`done` (stops on `done`, no reconnect). Reads the disclaimer date from `GET /api/v1/ready`; ships 4 send-on-click honesty chips; pins + reuses the server session id; shows `view-trace` only when `trace_url` is non-null; degrades mid-stream `error` to a friendly bubble and pre-stream 400/429 to a toast. Preserves the `InternHunter` string `test_static_serving` asserts. No backend change.
+  - **Did:** three static assets — `index.html` + `styles.css` + `app.js` — replace the placeholder
+    with the vanilla Editorial demo page (system serif stack, hairline rules, restrained vermilion
+    accent, light theme; no build step, no framework, no new dependency, CSP-clean). Consumes `POST
+    /api/v1/agent/chat/stream` via `fetch()` + a `ReadableStream` reader + a ~30-line in-app SSE
+    parser dispatching `session`/`token`/`metadata`/`error`/`done` (stops on `done`, no reconnect).
+    Reads the disclaimer date from `GET /api/v1/ready`; ships 4 send-on-click honesty chips; pins +
+    reuses the server session id; shows `view-trace` only when `trace_url` is non-null; degrades
+    mid-stream `error` to a friendly bubble and pre-stream 400/429 to a toast. Preserves the
+    `InternHunter` string `test_static_serving` asserts. No backend change.
   - **Files:** `src/api/static/index.html`, `src/api/static/styles.css`, `src/api/static/app.js`.
-  - **Tests:** `test_static_serving.py` `4 passed`; API suite `33 passed`; full suite `286 passed, 7 skipped, 19 deselected`. Rendered + screenshot-verified at 960px and 390px; the mid-stream `error` path is code-inspection-only.
-  - **Follow-up:** mid-stream `error` bubble, SSE-parser assumptions, and no idle-timeout → `Known_Issues.md` § Demo UI (T0018.3).
-  - *(Backfilled from `Repo_Current_State` during the 2026-07-15 docs-hygiene pass — this ticket originally had no completion entry.)*
+  - **Tests:** `test_static_serving.py` `4 passed`; API suite `33 passed`; full suite `286 passed, 7
+    skipped, 19 deselected`. Rendered + screenshot-verified at 960px and 390px; the mid-stream
+    `error` path is code-inspection-only.
+  - **Follow-up:** mid-stream `error` bubble, SSE-parser assumptions, and no idle-timeout →
+    `Known_Issues.md` § Demo UI (T0018.3).
+  - *(Backfilled from `Repo_Current_State` during the 2026-07-15 docs-hygiene pass — this ticket
+    originally had no completion entry.)*
 
 ## Backend hotfix — SQL-generation reasoning effort
-- **Summary:** disabled qwen reasoning only for the hidden SQL-generation model build. `AgentProvider.build_model()` now accepts an optional per-call `reasoning_effort` kwarg (omitted by default, so the main ReAct agent path is unchanged); `query_clean_jobs.generate_sql()` reads `agent.query.sql_generation_reasoning_effort` and passes `"none"` only to the mechanical SQL-generation call. Fixes the `[HIGH]` empty-SQL-on-reasoning-heavy-queries issue.
-- **Files:** `src/agents/runtime/provider.py`, `src/agents/tools/query_clean_jobs.py`, `config/settings.yaml`, `tests/agents/runtime/test_provider.py`, `tests/agents/tools/test_query_clean_jobs.py`, plus `docs/Known_Issues.md`, `docs/Resolved_Issues.md`, `docs/Repo_Current_State.md`.
-- **Build & test:** focused provider/tool suite `15 passed`; ruff clean; full standard suite `296 passed, 19 deselected, 4 subtests passed`.
-- **Manual verification:** live Groq SQL probe, streaming curl, and DeepEval regression BLOCKED (no `GROQ_API_KEY`/`GOOGLE_API_KEY` in sandbox; local Postgres `127.0.0.1:5433` was reachable) → `Known_Issues.md`.
-- **Risks:** covered offline at the construction boundary; live provider behavior still needs maintainer credentials.
-- **Follow-ups:** salary-sort SQL may need single-currency prompt tuning if it appears in evals; maintainer live verification remains blocked on credentials.
+- **Summary:** disabled qwen reasoning only for the hidden SQL-generation model build.
+  `AgentProvider.build_model()` now accepts an optional per-call `reasoning_effort` kwarg (omitted
+  by default, so the main ReAct agent path is unchanged); `query_clean_jobs.generate_sql()` reads
+  `agent.query.sql_generation_reasoning_effort` and passes `"none"` only to the mechanical
+  SQL-generation call. Fixes the `[HIGH]` empty-SQL-on-reasoning-heavy-queries issue.
+- **Files:** `src/agents/runtime/provider.py`, `src/agents/tools/query_clean_jobs.py`,
+  `config/settings.yaml`, `tests/agents/runtime/test_provider.py`,
+  `tests/agents/tools/test_query_clean_jobs.py`, plus `docs/Known_Issues.md`,
+  `docs/Resolved_Issues.md`, `docs/Repo_Current_State.md`.
+- **Build & test:** focused provider/tool suite `15 passed`; ruff clean; full standard suite `296
+  passed, 19 deselected, 4 subtests passed`.
+- **Manual verification:** live Groq SQL probe, streaming curl, and DeepEval regression BLOCKED (no
+  `GROQ_API_KEY`/`GOOGLE_API_KEY` in sandbox; local Postgres `127.0.0.1:5433` was reachable) →
+  `Known_Issues.md`.
+- **Risks:** covered offline at the construction boundary; live provider behavior still needs
+  maintainer credentials.
+- **Follow-ups:** salary-sort SQL may need single-currency prompt tuning if it appears in evals;
+  maintainer live verification remains blocked on credentials.
 
 ## Backend hotfix — Split ReAct-agent and SQL-generation LLM configs
-- **Summary:** replaced the shared `agent.groq` model profile plus per-call `reasoning_effort` override with two explicit profiles: `agent.react` for the outer ReAct agent and `agent.sql_generation` for the nested SQL-generation LLM call. Both profiles expose the same fields; only `agent.sql_generation.reasoning_effort: none` is forwarded for SQL generation.
-- **Files:** `config/settings.yaml`, `src/agents/runtime/provider.py`, `src/agents/runtime/factory.py`, `src/agents/tools/query_clean_jobs.py`, `tests/agents/runtime/test_provider.py`, `tests/agents/tools/test_query_clean_jobs.py`, plus `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, `docs/MVP_Technical_Design.md`, `docs/Completion_Reports.md`, `docs/Manual_Verification_Guide.md`.
-- **Commands:** `uv run pytest tests/agents/runtime/test_provider.py tests/agents/tools/test_query_clean_jobs.py -q`; `uv run pytest -q`.
-- **Build & test:** focused provider/tool suite `16 passed`; full standard suite `297 passed, 19 deselected, 4 subtests passed`.
-- **Manual verification:** confirm config has independent `agent.react` and `agent.sql_generation` blocks; confirm `agent_factory()` uses `build_model("react")`; confirm `query_clean_jobs.generate_sql()` uses `build_model("sql_generation")`; with maintainer credentials and seeded DB, run `generate_sql("List the AI Engineer jobs that require Python, sorted by salary descending.")`.
-- **Risks:** live Groq behavior still requires maintainer credentials; no prompt, schema, eval fixture, API, or UI changes were made for this split.
-- **Follow-ups:** none from the config split itself; existing salary-sort prompt-adherence and maintainer live-verification notes remain tracked in `Known_Issues.md`.
+- **Summary:** replaced the shared `agent.groq` model profile plus per-call `reasoning_effort`
+  override with two explicit profiles: `agent.react` for the outer ReAct agent and
+  `agent.sql_generation` for the nested SQL-generation LLM call. Both profiles expose the same
+  fields; only `agent.sql_generation.reasoning_effort: none` is forwarded for SQL generation.
+- **Files:** `config/settings.yaml`, `src/agents/runtime/provider.py`,
+  `src/agents/runtime/factory.py`, `src/agents/tools/query_clean_jobs.py`,
+  `tests/agents/runtime/test_provider.py`, `tests/agents/tools/test_query_clean_jobs.py`, plus
+  `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, `docs/MVP_Technical_Design.md`,
+  `docs/Completion_Reports.md`, `docs/Manual_Verification_Guide.md`.
+- **Commands:** `uv run pytest tests/agents/runtime/test_provider.py
+  tests/agents/tools/test_query_clean_jobs.py -q`; `uv run pytest -q`.
+- **Build & test:** focused provider/tool suite `16 passed`; full standard suite `297 passed, 19
+  deselected, 4 subtests passed`.
+- **Manual verification:** confirm config has independent `agent.react` and `agent.sql_generation`
+  blocks; confirm `agent_factory()` uses `build_model("react")`; confirm
+  `query_clean_jobs.generate_sql()` uses `build_model("sql_generation")`; with maintainer
+  credentials and seeded DB, run `generate_sql("List the AI Engineer jobs that require Python,
+  sorted by salary descending.")`.
+- **Risks:** live Groq behavior still requires maintainer credentials; no prompt, schema, eval
+  fixture, API, or UI changes were made for this split.
+- **Follow-ups:** none from the config split itself; existing salary-sort prompt-adherence and
+  maintainer live-verification notes remain tracked in `Known_Issues.md`.
 
 ## T0018.4 — Deploy topology + first public deploy
-- **Summary:** first public deploy of the same-origin app + DB + tracing. Confirmed and recorded the researched topology (all blank `Decision:` lines in `research/deployment-research-plan.md` now filled), injected secrets via env vars, loaded a static corpus snapshot into Neon, and verified the streamed demo end-to-end at the public URL. **Live: https://internhunteragent.onrender.com** (verified 2026-07-16).
-- **Topology:** API on **Render** (Docker `docker/Dockerfile`, Singapore, Free instance, `WEB_CONCURRENCY=1`, health check `/api/v1/health`, `PORT=8000`) · Postgres on **Neon** (PG17, direct `postgresql+psycopg://…` DSN, Singapore, Neon Auth off) · tracing on **Langfuse Cloud Hobby (JP)** · CI via **Render auto-deploy on push** to `main` (repointed from `feature/t0018.4-deploy` in T0020.2; `render.yaml` now pins the source). Cost: **$0/mo** (hard ceiling $10).
-- **Branch prep:** built `feature/t0018.4-deploy` clean off `e4076b2` (kept ReAct/SQL config split) + the T0018.3 Editorial UI committed fresh as `7d4cfef`; the T0015.6/.7 provider-A/B phase was dumped (reversed + pruned) and parked recoverably at `45d333c` on `feature/t0015.6-provider-ab`.
-- **Files/config:** `research/deployment-research-plan.md` (§1–§12 Decision lines), `docs/Completion_Reports.md`, `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`. No app-code change was needed — the fixed-port Dockerfile is handled by the `PORT=8000` env var. `config/settings.yaml` `api.demo.data_snapshot_date` kept at `2026-07-14` (reflects the corpus, not the copy date).
-- **Secrets:** `GROQ_API_KEY`, `DATABASE_URL` (Neon), `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` (code reads `LANGFUSE_BASE_URL`, **not** `LANGFUSE_HOST`) — Render dashboard env vars only, never in image/repo. `api.cors.allowed_origins` stays `[]` (same-origin; CORS never exercised) — rationale recorded in the deploy plan §7.
-- **Data shipped:** static snapshot — Neon loaded with **50 `clean_jobs` + 50 `raw_jobs`** via `pg_dump | psql` (direct DSN). Checkpointer tables self-create on boot.
-- **Build & verify (against the live public URL):** boot clean (`Application startup complete` → checkpointer connected to Neon); `GET /` + `/styles.css` 200 (Editorial UI); streamed a canned prompt → `session`→`token`*→`metadata`→`done`, answer *"There are 10 AI Engineer jobs that require Python."* (Groq + Neon query working); `trace_url` resolves to the Langfuse JP project; `/api/v1/health` + `/api/v1/ready` 20/20 when warm; `/docs` 200; `X-Frame-Options: DENY` present.
-- **Risks:** free-tier compound cold start (Render spin-down + Neon suspend) → first request after idle can take 1–2 min, and the very first `/ready` during the wake window can 404 briefly (UI degrades to a dateless disclaimer; refresh fixes) — infra behavior, not a bug. Static snapshot goes stale until the ingestion milestone lands; the honest disclaimer covers this.
-- **Follow-ups:** ingestion cron / `is_active` (separate milestone); CI merge-gate on `main` (`pre-deploy-refinement-plan.md §6i`); external uptime + dead-man's-switch monitoring; optional custom domain; optional snapshot-date bump. _(Reconciliation update, T0020.1:)_ `main` is no longer stuck at T0009 — it was reconciled to `bcc81db` via PR #29, carrying the full M10–M19 chain (T0019.6/.8/.9/.10 + the M13/M15 doc rescues). Render's deploy branch is repointed to `main` separately in T0020.2.
-- *(Annotated 2026-07-16, milestone-close pass.)* The cold start above was re-assessed and is **worse than this report models**: it is ~all Render (~60 s), not a Render+Neon compound — Neon resumes in ~300–500 ms — and because the UI is same-origin it blanks the *page*, not just the first answer. It is now registered as `[MED · OPEN]` in [`Known_Issues.md`](Known_Issues.md) § Config, startup & deployment, with a windowed `/health` keep-alive ping as the decided-but-unapplied mitigation and the Render-policy check recorded in `research/deployment-research-plan.md` §1a. The companion `[HIGH · OPEN]` 750-instance-hour cliff is registered alongside it. Also re-pointed: the `[HIGH · OPEN]` schema-drift issue this ticket was expected to absorb was **not** absorbed — `pg_dump | psql` sidestepped drift without adding an assertion or migration path — so it moves to the ingestion milestone.
+- **Summary:** first public deploy of the same-origin app + DB + tracing. Confirmed and recorded the
+  researched topology (all blank `Decision:` lines in `research/archive/deployment-research-plan.md`
+  now
+  filled), injected secrets via env vars, loaded a static corpus snapshot into Neon, and verified
+  the streamed demo end-to-end at the public URL. **Live: https://internhunteragent.onrender.com**
+  (verified 2026-07-16).
+- **Topology:** API on **Render** (Docker `docker/Dockerfile`, Singapore, Free instance,
+  `WEB_CONCURRENCY=1`, health check `/api/v1/health`, `PORT=8000`) · Postgres on **Neon** (PG17,
+  direct `postgresql+psycopg://…` DSN, Singapore, Neon Auth off) · tracing on **Langfuse Cloud Hobby
+  (JP)** · CI via **Render auto-deploy on push** to `main` (repointed from `feature/t0018.4-deploy`
+  in T0020.2; `render.yaml` now pins the source). Cost: **$0/mo** (hard ceiling $10).
+- **Branch prep:** built `feature/t0018.4-deploy` clean off `e4076b2` (kept ReAct/SQL config split)
+  + the T0018.3 Editorial UI committed fresh as `7d4cfef`; the T0015.6/.7 provider-A/B phase was
+  dumped (reversed + pruned) and parked recoverably at `45d333c` on `feature/t0015.6-provider-ab`.
+- **Files/config:** `research/archive/deployment-research-plan.md` (§1–§12 Decision lines),
+  `docs/Completion_Reports.md`, `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`.
+  No app-code change was needed — the fixed-port Dockerfile is handled by the `PORT=8000` env var.
+  `config/settings.yaml` `api.demo.data_snapshot_date` kept at `2026-07-14` (reflects the corpus,
+  not the copy date).
+- **Secrets:** `GROQ_API_KEY`, `DATABASE_URL` (Neon), `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`,
+  `LANGFUSE_BASE_URL` (code reads `LANGFUSE_BASE_URL`, **not** `LANGFUSE_HOST`) — Render dashboard
+  env vars only, never in image/repo. `api.cors.allowed_origins` stays `[]` (same-origin; CORS never
+  exercised) — rationale recorded in the deploy plan §7.
+- **Data shipped:** static snapshot — Neon loaded with **50 `clean_jobs` + 50 `raw_jobs`** via
+  `pg_dump | psql` (direct DSN). Checkpointer tables self-create on boot.
+- **Build & verify (against the live public URL):** boot clean (`Application startup complete` →
+  checkpointer connected to Neon); `GET /` + `/styles.css` 200 (Editorial UI); streamed a canned
+  prompt → `session`→`token`*→`metadata`→`done`, answer *"There are 10 AI Engineer jobs that require
+  Python."* (Groq + Neon query working); `trace_url` resolves to the Langfuse JP project;
+  `/api/v1/health` + `/api/v1/ready` 20/20 when warm; `/docs` 200; `X-Frame-Options: DENY` present.
+- **Risks:** free-tier compound cold start (Render spin-down + Neon suspend) → first request after
+  idle can take 1–2 min, and the very first `/ready` during the wake window can 404 briefly (UI
+  degrades to a dateless disclaimer; refresh fixes) — infra behavior, not a bug. Static snapshot
+  goes stale until the ingestion milestone lands; the honest disclaimer covers this.
+- **Follow-ups:** ingestion cron / `is_active` (separate milestone); CI merge-gate on `main`
+  (`research/archive/pre-deploy-refinement-plan.md §6i`); external uptime + dead-man's-switch
+  monitoring; optional
+  custom domain; optional snapshot-date bump. _(Reconciliation update, T0020.1:)_ `main` is no
+  longer stuck at T0009 — it was reconciled to `bcc81db` via PR #29, carrying the full M10–M19 chain
+  (T0019.6/.8/.9/.10 + the M13/M15 doc rescues). Render's deploy branch is repointed to `main`
+  separately in T0020.2.
+- *(Annotated 2026-07-16, milestone-close pass.)* The cold start above was re-assessed and is
+  **worse than this report models**: it is ~all Render (~60 s), not a Render+Neon compound — Neon
+  resumes in ~300–500 ms — and because the UI is same-origin it blanks the *page*, not just the
+  first answer. It is now registered as `[MED · OPEN]` in [`Known_Issues.md`](Known_Issues.md) §
+  Config, startup & deployment, with a windowed `/health` keep-alive ping as the
+  decided-but-unapplied mitigation and the Render-policy check recorded in
+  `research/archive/deployment-research-plan.md` §1a. The companion `[HIGH · OPEN]`
+  750-instance-hour cliff
+  is registered alongside it. Also re-pointed: the `[HIGH · OPEN]` schema-drift issue this ticket
+  was expected to absorb was **not** absorbed — `pg_dump | psql` sidestepped drift without adding an
+  assertion or migration path — so it moves to the ingestion milestone.
 
 ## Milestone 19 — Ingestion Deploy Readiness (live-DB)
 
 ## T0019.1 — robots.txt / ToS verification for `ms.vietnamworks.com`
-- **RECOMMENDED VERDICT: favorable — pending maintainer confirmation.** Neither trigger of the decision rule fires. **T0019.6 (nightly cron) unblocks once the maintainer confirms and .2–.5 land.** The unfavorable branch (`research/ingestion-milestone-plan.md` §1D) is not triggered.
-- **Summary:** resolved the `research/deployment-research-plan.md` §11 hard gate before any scheduled run exists. Fetched and archived both robots.txt files, located and read the VietnamWorks ToS (Vietnamese-only), and recorded a dated Decision in §11. **Doc-only and research-only: zero lines of code changed** — nothing under `src/`, `tests/`, `config/`, `alembic/`, or `.github/` was touched, and the ingestion pipeline was never run.
+- **RECOMMENDED VERDICT: favorable — pending maintainer confirmation.** Neither trigger of the
+  decision rule fires. **T0019.6 (nightly cron) unblocks once the maintainer confirms and .2–.5
+  land.** The unfavorable branch (`research/archive/ingestion-milestone-plan.md` §1D) is not
+  triggered.
+- **Summary:** resolved the `research/archive/deployment-research-plan.md` §11 hard gate before any
+  scheduled run exists. Fetched and archived both robots.txt files, located and read the
+  VietnamWorks ToS (Vietnamese-only), and recorded a dated Decision in §11. **Doc-only and
+  research-only: zero lines of code changed** — nothing under `src/`, `tests/`, `config/`,
+  `alembic/`, or `.github/` was touched, and the ingestion pipeline was never run.
 - **Findings:**
-  - `ms.vietnamworks.com/robots.txt` → **HTTP 404**. The API host the pipeline actually fetches from **serves no robots.txt at all**; the 404 body is a JSON gateway error, not a robots file. **This is a third outcome the ticket's favorable/unfavorable framing did not enumerate** — it is *silence*: neither permission nor refusal, which throws the verdict onto the ToS alone. No `Crawl-delay`.
-  - `www.vietnamworks.com/robots.txt` → **HTTP 200** (`Last-Modified: 11 May 2026`). One `User-agent: *` group, no `Disallow: /`, no rule matching `/job-search/`, no `Crawl-delay`. Disallows only profile/login/apply/print/AJAX/ad paths — the pipeline touches none. Context only; different host from the API.
-  - **ToS** (https://www.vietnamworks.com/thoa-thuan-su-dung, Vietnamese only, **no last-updated date shown**): **no automated-access clause exists.** `robot`, `spider`, `crawler`, `crawl`, `scrape`, `API`, `giao diện lập trình`, `dịch ngược`, `trích xuất`, `hàng loạt` all return **zero matches**. The one "tự động" (automated) clause governs **bulk account registration**, not content access — and the pipeline registers no account (`userId: 0`). Sections read in full: §3, §4, §5, §7, §9.
-- **Decision rule applied:** unfavorable requires robots.txt disallowing `/job-search/` for `*` **or** a ToS clause explicitly prohibiting automated access. Neither holds. Absence of robots.txt is not a disallow; absence of a ToS clause is not a prohibition. → **favorable**.
-- **⚠️ The one caveat the maintainer must weigh** (registered `[MED · DECISION]` in `Known_Issues.md`; it does **not** change the verdict): ToS **§7** restricts what may be done with content *once obtained* — *"bạn không được quyền thay đổi, sao chép, … công bố, … hiển thị hoặc chuyển giao, hoặc khai thác nhằm mục đích thương mại bất kỳ phần nào của nội dung"* ("you are not entitled to modify, copy, … publish, … display or transfer, or commercially exploit any part of the content"), carving out copies *"để dùng nội bộ"* ("for internal use"). This is a **retention/display** constraint, not an **access** one, so it does not trigger the rule — but the pipeline stores postings in a DB and the demo displays them publicly. **Crucially it is not a reason to park the cron:** the already-deployed static snapshot raises this exact question **today**, independently of any schedule; T0019.6 changes refresh frequency, not whether the corpus is republished. Cheapest partial step (per §7's own wording): attribute VietnamWorks and link each posting's source URL.
-- **Files created:** `research/experiments/vietnamworks_robots_2026-07-16.txt`, `research/experiments/vietnamworks_www_robots_2026-07-16.txt` (both verbatim bodies with source URL / fetch date / HTTP status / response headers in a `#` header), `research/experiments/vietnamworks_tos_excerpt_2026-07-16.md` (verbatim Vietnamese + explicitly-labeled English translations, negative-search record, section list).
-- **Files changed:** `research/deployment-research-plan.md` (§11 — new dated Decision appended; the prior `Decision (2026-07-16)` line left **intact**, its final sentence superseded; the stale "⚠️ Unverified — needs manual check" bullet and the companion "Action required before production" line updated to point at the new record), `docs/Tickets.md` (T0019.6 blocked-on marker), `docs/Known_Issues.md` (2 entries + category count 7→9), `docs/Repo_Current_State.md`, `docs/Completion_Reports.md`.
-- **Commands:** `curl -sS -D - https://ms.vietnamworks.com/robots.txt`; `curl -sS -D - https://www.vietnamworks.com/robots.txt`; `curl -sS https://www.vietnamworks.com/thoa-thuan-su-dung` (+ tag-strip and keyword search); byte-comparison of each archive against its live fetch; verbatim-verification of every quoted clause against the fetched page. **No pipeline run, no build, no test run.**
-- **Build & test:** **not applicable — doc-only ticket; no build or test was run and none is claimed.** No code path, dependency, or config was touched, so the existing suite is unaffected. Verification performed instead: both archives confirmed **byte-identical** to their live fetches (BOM and CRLF preserved), and **every** Vietnamese clause quoted in the excerpt and §11 was confirmed present **verbatim** in the fetched page (elisions marked `[…]`; 475 chars elided in the §3 quote, order preserved).
-- **Manual verification:** (1) `git diff --name-only` → only `research/**` and `docs/**`. (2) `ls research/experiments/*robots*` → both dated copies exist, non-empty. (3) `curl -sS -o - -w "\nHTTP %{http_code}\n" https://ms.vietnamworks.com/robots.txt` → 404 + JSON gateway body, matching the archive; same for the www host → 200 + matching body. (4) `research/deployment-research-plan.md` §11 → new Decision present, marked *pending maintainer confirmation*, every claim traceable to an archived file. (5) Open https://www.vietnamworks.com/thoa-thuan-su-dung → loads; spot-check a quote by searching the page for `Hoạt động không đúng mục đích`. (6) `grep -n "T0019.1" docs/Tickets.md` → T0019.6's marker reflects the outcome.
-- **Risks:** (a) **the verdict is a point-in-time fetch** — the API host has no robots.txt *now*, and the ToS shows no last-updated date, so neither can be diffed for change; an unattended nightly cron would keep fetching through a newly published `Disallow` (registered `[LOW · NOTE]`; the dated archives exist to make a re-check cheap). (b) The ToS §7 republishing caveat above (registered `[MED · DECISION]`). (c) Translations are mine, not official — the ToS is Vietnamese-only; the verbatim Vietnamese is authoritative and archived so the maintainer can verify independently. (d) **This is a recommended verdict, not a legal opinion**; the maintainer owns the call.
-- **Follow-ups:** maintainer confirms the verdict (gates T0019.6 only — .2–.5, .7, .8 proceed regardless); decide the public demo's attribution/posture per the `[MED · DECISION]` entry (own ticket if actioned, **not** folded into T0019). Both registered in `Known_Issues.md`. **No conditions to implement:** no `Crawl-delay` exists on either host, so the pipeline's `0.6 s` delay and daily cadence stand unchanged — nothing for T0019.4/.6 to honor beyond keeping off the paths `www` disallows (it already does).
-- **Docs updated:** `research/deployment-research-plan.md` §11, `docs/Tickets.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this file. `research/ingestion-milestone-plan.md` deliberately **not** touched (its §1D prescribes both branches; this ticket executes it). **Left stale on purpose — outside this ticket's allowed files:** `research/data-ingestion-stage.md` §4's robots.txt bullet carries a *"Status 2026-07-16 — still unverified for `ms.vietnamworks.com`, and now a hard gate"* line, which the §11 record now answers. Worth re-pointing at §11 when that file is next edited; flagged rather than fixed, per `CLAUDE.md` §1.
-- **Working-tree note (not this ticket's work):** the branch was cut from `feature/t0018.4-deploy` with **pre-existing uncommitted changes** already present from the prior T0019-scoping session — `docs/Tickets.md` (the T0019.1–.8 scoping, ~137 lines), `docs/MVP_Technical_Design.md`, `research/data-ingestion-stage.md`, and the untracked `research/ingestion-milestone-plan.md`. Only the single T0019.6 marker line in `docs/Tickets.md` is mine; `MVP_Technical_Design.md` and `data-ingestion-stage.md` were **not** touched by this ticket despite appearing in `git status`. Worth committing that scoping work separately from this gate.
+  - `ms.vietnamworks.com/robots.txt` → **HTTP 404**. The API host the pipeline actually fetches from
+    **serves no robots.txt at all**; the 404 body is a JSON gateway error, not a robots file. **This
+    is a third outcome the ticket's favorable/unfavorable framing did not enumerate** — it is
+    *silence*: neither permission nor refusal, which throws the verdict onto the ToS alone. No
+    `Crawl-delay`.
+  - `www.vietnamworks.com/robots.txt` → **HTTP 200** (`Last-Modified: 11 May 2026`). One
+    `User-agent: *` group, no `Disallow: /`, no rule matching `/job-search/`, no `Crawl-delay`.
+    Disallows only profile/login/apply/print/AJAX/ad paths — the pipeline touches none. Context
+    only; different host from the API.
+  - **ToS** (https://www.vietnamworks.com/thoa-thuan-su-dung, Vietnamese only, **no last-updated
+    date shown**): **no automated-access clause exists.** `robot`, `spider`, `crawler`, `crawl`,
+    `scrape`, `API`, `giao diện lập trình`, `dịch ngược`, `trích xuất`, `hàng loạt` all return
+    **zero matches**. The one "tự động" (automated) clause governs **bulk account registration**,
+    not content access — and the pipeline registers no account (`userId: 0`). Sections read in full:
+    §3, §4, §5, §7, §9.
+- **Decision rule applied:** unfavorable requires robots.txt disallowing `/job-search/` for `*`
+  **or** a ToS clause explicitly prohibiting automated access. Neither holds. Absence of robots.txt
+  is not a disallow; absence of a ToS clause is not a prohibition. → **favorable**.
+- **⚠️ The one caveat the maintainer must weigh** (registered `[MED · DECISION]` in
+  `Known_Issues.md`; it does **not** change the verdict): ToS **§7** restricts what may be done with
+  content *once obtained* — *"bạn không được quyền thay đổi, sao chép, … công bố, … hiển thị hoặc
+  chuyển giao, hoặc khai thác nhằm mục đích thương mại bất kỳ phần nào của nội dung"* ("you are not
+  entitled to modify, copy, … publish, … display or transfer, or commercially exploit any part of
+  the content"), carving out copies *"để dùng nội bộ"* ("for internal use"). This is a
+  **retention/display** constraint, not an **access** one, so it does not trigger the rule — but the
+  pipeline stores postings in a DB and the demo displays them publicly. **Crucially it is not a
+  reason to park the cron:** the already-deployed static snapshot raises this exact question
+  **today**, independently of any schedule; T0019.6 changes refresh frequency, not whether the
+  corpus is republished. Cheapest partial step (per §7's own wording): attribute VietnamWorks and
+  link each posting's source URL.
+- **Files created:** `research/experiments/vietnamworks_robots_2026-07-16.txt`,
+  `research/experiments/vietnamworks_www_robots_2026-07-16.txt` (both verbatim bodies with source
+  URL / fetch date / HTTP status / response headers in a `#` header),
+  `research/experiments/vietnamworks_tos_excerpt_2026-07-16.md` (verbatim Vietnamese +
+  explicitly-labeled English translations, negative-search record, section list).
+- **Files changed:** `research/archive/deployment-research-plan.md` (§11 — new dated Decision
+  appended; the
+  prior `Decision (2026-07-16)` line left **intact**, its final sentence superseded; the stale "⚠️
+  Unverified — needs manual check" bullet and the companion "Action required before production" line
+  updated to point at the new record), `docs/Tickets.md` (T0019.6 blocked-on marker),
+  `docs/Known_Issues.md` (2 entries + category count 7→9), `docs/Repo_Current_State.md`,
+  `docs/Completion_Reports.md`.
+- **Commands:** `curl -sS -D - https://ms.vietnamworks.com/robots.txt`; `curl -sS -D -
+  https://www.vietnamworks.com/robots.txt`; `curl -sS
+  https://www.vietnamworks.com/thoa-thuan-su-dung` (+ tag-strip and keyword search); byte-comparison
+  of each archive against its live fetch; verbatim-verification of every quoted clause against the
+  fetched page. **No pipeline run, no build, no test run.**
+- **Build & test:** **not applicable — doc-only ticket; no build or test was run and none is
+  claimed.** No code path, dependency, or config was touched, so the existing suite is unaffected.
+  Verification performed instead: both archives confirmed **byte-identical** to their live fetches
+  (BOM and CRLF preserved), and **every** Vietnamese clause quoted in the excerpt and §11 was
+  confirmed present **verbatim** in the fetched page (elisions marked `[…]`; 475 chars elided in the
+  §3 quote, order preserved).
+- **Manual verification:** (1) `git diff --name-only` → only `research/**` and `docs/**`. (2) `ls
+  research/experiments/*robots*` → both dated copies exist, non-empty. (3) `curl -sS -o - -w "\nHTTP
+  %{http_code}\n" https://ms.vietnamworks.com/robots.txt` → 404 + JSON gateway body, matching the
+  archive; same for the www host → 200 + matching body. (4)
+  `research/archive/deployment-research-plan.md`
+  §11 → new Decision present, marked *pending maintainer confirmation*, every claim traceable to an
+  archived file. (5) Open https://www.vietnamworks.com/thoa-thuan-su-dung → loads; spot-check a
+  quote by searching the page for `Hoạt động không đúng mục đích`. (6) `grep -n "T0019.1"
+  docs/Tickets.md` → T0019.6's marker reflects the outcome.
+- **Risks:** (a) **the verdict is a point-in-time fetch** — the API host has no robots.txt *now*,
+  and the ToS shows no last-updated date, so neither can be diffed for change; an unattended nightly
+  cron would keep fetching through a newly published `Disallow` (registered `[LOW · NOTE]`; the
+  dated archives exist to make a re-check cheap). (b) The ToS §7 republishing caveat above
+  (registered `[MED · DECISION]`). (c) Translations are mine, not official — the ToS is
+  Vietnamese-only; the verbatim Vietnamese is authoritative and archived so the maintainer can
+  verify independently. (d) **This is a recommended verdict, not a legal opinion**; the maintainer
+  owns the call.
+- **Follow-ups:** maintainer confirms the verdict (gates T0019.6 only — .2–.5, .7, .8 proceed
+  regardless); decide the public demo's attribution/posture per the `[MED · DECISION]` entry (own
+  ticket if actioned, **not** folded into T0019). Both registered in `Known_Issues.md`. **No
+  conditions to implement:** no `Crawl-delay` exists on either host, so the pipeline's `0.6 s` delay
+  and daily cadence stand unchanged — nothing for T0019.4/.6 to honor beyond keeping off the paths
+  `www` disallows (it already does).
+- **Docs updated:** `research/archive/deployment-research-plan.md` §11, `docs/Tickets.md`,
+  `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this file.
+  `research/archive/ingestion-milestone-plan.md` deliberately **not** touched (its §1D prescribes
+  both
+  branches; this ticket executes it). **Left stale on purpose — outside this ticket's allowed
+  files:** `research/archive/data-ingestion-stage.md` §4's robots.txt bullet carries a *"Status
+  2026-07-16 —
+  still unverified for `ms.vietnamworks.com`, and now a hard gate"* line, which the §11 record now
+  answers. Worth re-pointing at §11 when that file is next edited; flagged rather than fixed, per
+  `CLAUDE.md` §1.
+- **Working-tree note (not this ticket's work):** the branch was cut from `feature/t0018.4-deploy`
+  with **pre-existing uncommitted changes** already present from the prior T0019-scoping session —
+  `docs/Tickets.md` (the T0019.1–.8 scoping, ~137 lines), `docs/MVP_Technical_Design.md`,
+  `research/archive/data-ingestion-stage.md`, and the untracked
+  `research/archive/ingestion-milestone-plan.md`. Only
+  the single T0019.6 marker line in `docs/Tickets.md` is mine; `MVP_Technical_Design.md` and
+  `research/archive/data-ingestion-stage.md` were **not** touched by this ticket despite appearing
+  in `git status`.
+  Worth committing that scoping work separately from this gate.
 
 ## T0019.2 — Alembic adoption: baseline migration + env wiring
-- **Summary:** adopted Alembic as the forward path for schema change. `scripts/reset_db.sql` (DROP + recreate) stops being the de-facto migration strategy — that was only acceptable while `raw_jobs`/`clean_jobs` were fully reproducible, which stops holding once T0019.3 lands accumulating, irreplaceable postings. Added Alembic scaffolding, a hand-written baseline migration that reproduces the exact current schema (cross-checked against `scripts/init_db.sql`), and aligned the ORM's `id` columns to the DB's actual `BIGINT GENERATED ALWAYS AS IDENTITY` (was `BIGSERIAL`-shaped metadata, a pre-existing metadata/reality mismatch this ticket had to fix so the baseline wouldn't diverge from the deployed schema).
-- **Files created:** `alembic.ini`, `alembic/env.py`, `alembic/script.py.mako`, `alembic/README`, `alembic/versions/f3a1c9d2e7b4_baseline_schema.py`, `tests/migrations/test_baseline_roundtrip.py`.
-- **Files changed:** `pyproject.toml` (added `alembic>=1.14` to `[project].dependencies`), `uv.lock`, `src/services/ingestion/models.py` (`RawJob.id`/`CleanJob.id` → `mapped_column(BigInteger, Identity(always=True), primary_key=True)`, dropped `autoincrement=True`; metadata-only, no DDL against existing data, no other columns touched), `scripts/reset_db.sql` (header comment only — now states destructive/local-dev-only, prod goes through Alembic, must never point at Neon), `docs/Manual_Verification_Guide.md` (new `### T0019.2: Alembic adoption` entry with checklist A–F), `docs/Repo_Current_State.md` (§ Available scripts — `alembic current`/`alembic history`/`alembic upgrade head` added, `reset_db.sql` line annotated, `init_db.sql` line notes the eval-fixture-loader dependency), `docs/Known_Issues.md` (1 new entry + category count 9→10).
-- **`alembic/env.py` details:** imports `settings` from `src.core.config` and `Base` from `src.services.ingestion.models`; `target_metadata = Base.metadata`; resolves the DSN as `os.environ.get("ALEMBIC_DATABASE_URL") or settings.DATABASE_URL` so migrations can be pointed at Neon's direct, non-pooled endpoint independently of the app's runtime DSN; `alembic.ini`'s `sqlalchemy.url` is commented out — never committed. `run_migrations_online()` sets `pool_pre_ping=True`. Repo root is prepended to `sys.path` so `from src...` resolves regardless of invocation cwd.
-- **Baseline migration:** `f3a1c9d2e7b4_baseline_schema.py`, `down_revision = None`, hand-written (not autogenerate-derived — autogenerate against an already-matching DB produces an empty diff and wasn't trustworthy at this scale). Creates `raw_jobs` (6 columns + unique `(source, external_id)`) and `clean_jobs` (19 columns in `scripts/init_db.sql`'s exact order, including `tech_stack`/`job_level` which the ticket prose's column list dropped mid-transcription — cross-checked and confirmed against `init_db.sql` and `models.py` per the ticket's own instruction to treat `init_db.sql` as ground truth). `posted_date` stays in the schema, stays nullable, no backfill. `downgrade()` drops `clean_jobs` then `raw_jobs`.
-- **Commands run:** `uv sync`; `uv run alembic init alembic`; `uv run pytest -q`; `uv run ruff check .`; `uv run mypy`; `docker compose exec -T postgres psql ... CREATE DATABASE internhunter_scratch`; `ALEMBIC_DATABASE_URL=... uv run alembic upgrade head`; `docker compose exec -T postgres psql ... "\d clean_jobs"`; `SCRATCH_DATABASE_URL=... uv run pytest tests/migrations -v`; `uv run alembic stamp head`; `uv run alembic current`; `uv run alembic upgrade head` (no-op check); `docker compose up -d --build api` (Linux app-boot check); `curl .../api/v1/ready`; `curl -X POST .../api/v1/agent/chat -d '{"query":"How many jobs are there?"}'`; `docker compose stop api`; `DROP DATABASE internhunter_scratch`.
-- **Build & test:** `uv run pytest -q` → `297 passed, 1 skipped, 19 deselected, 4 subtests passed` in ~5s (the new round-trip test skips cleanly without `SCRATCH_DATABASE_URL`, confirmed both ways). `uv run ruff check .` → all checks passed. `uv run mypy` → `2 errors` — both **pre-existing**, in files this ticket does not touch (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`), already documented as benign in `Known_Issues.md` § Agent runtime & prompts.
+- **Summary:** adopted Alembic as the forward path for schema change. `scripts/reset_db.sql` (DROP +
+  recreate) stops being the de-facto migration strategy — that was only acceptable while
+  `raw_jobs`/`clean_jobs` were fully reproducible, which stops holding once T0019.3 lands
+  accumulating, irreplaceable postings. Added Alembic scaffolding, a hand-written baseline migration
+  that reproduces the exact current schema (cross-checked against `scripts/init_db.sql`), and
+  aligned the ORM's `id` columns to the DB's actual `BIGINT GENERATED ALWAYS AS IDENTITY` (was
+  `BIGSERIAL`-shaped metadata, a pre-existing metadata/reality mismatch this ticket had to fix so
+  the baseline wouldn't diverge from the deployed schema).
+- **Files created:** `alembic.ini`, `alembic/env.py`, `alembic/script.py.mako`, `alembic/README`,
+  `alembic/versions/f3a1c9d2e7b4_baseline_schema.py`, `tests/migrations/test_baseline_roundtrip.py`.
+- **Files changed:** `pyproject.toml` (added `alembic>=1.14` to `[project].dependencies`),
+  `uv.lock`, `src/services/ingestion/models.py` (`RawJob.id`/`CleanJob.id` →
+  `mapped_column(BigInteger, Identity(always=True), primary_key=True)`, dropped
+  `autoincrement=True`; metadata-only, no DDL against existing data, no other columns touched),
+  `scripts/reset_db.sql` (header comment only — now states destructive/local-dev-only, prod goes
+  through Alembic, must never point at Neon), `docs/archive/Manual_Verification_Archive.md` (new
+  `### T0019.2:
+  Alembic adoption` entry with checklist A–F), `docs/Repo_Current_State.md` (§ Available scripts —
+  `alembic current`/`alembic history`/`alembic upgrade head` added, `reset_db.sql` line annotated,
+  `init_db.sql` line notes the eval-fixture-loader dependency), `docs/Known_Issues.md` (1 new entry
+  + category count 9→10).
+- **`alembic/env.py` details:** imports `settings` from `src.core.config` and `Base` from
+  `src.services.ingestion.models`; `target_metadata = Base.metadata`; resolves the DSN as
+  `os.environ.get("ALEMBIC_DATABASE_URL") or settings.DATABASE_URL` so migrations can be pointed at
+  Neon's direct, non-pooled endpoint independently of the app's runtime DSN; `alembic.ini`'s
+  `sqlalchemy.url` is commented out — never committed. `run_migrations_online()` sets
+  `pool_pre_ping=True`. Repo root is prepended to `sys.path` so `from src...` resolves regardless of
+  invocation cwd.
+- **Baseline migration:** `f3a1c9d2e7b4_baseline_schema.py`, `down_revision = None`, hand-written
+  (not autogenerate-derived — autogenerate against an already-matching DB produces an empty diff and
+  wasn't trustworthy at this scale). Creates `raw_jobs` (6 columns + unique `(source, external_id)`)
+  and `clean_jobs` (19 columns in `scripts/init_db.sql`'s exact order, including
+  `tech_stack`/`job_level` which the ticket prose's column list dropped mid-transcription —
+  cross-checked and confirmed against `init_db.sql` and `models.py` per the ticket's own instruction
+  to treat `init_db.sql` as ground truth). `posted_date` stays in the schema, stays nullable, no
+  backfill. `downgrade()` drops `clean_jobs` then `raw_jobs`.
+- **Commands run:** `uv sync`; `uv run alembic init alembic`; `uv run pytest -q`; `uv run ruff check
+  .`; `uv run mypy`; `docker compose exec -T postgres psql ... CREATE DATABASE
+  internhunter_scratch`; `ALEMBIC_DATABASE_URL=... uv run alembic upgrade head`; `docker compose
+  exec -T postgres psql ... "\d clean_jobs"`; `SCRATCH_DATABASE_URL=... uv run pytest
+  tests/migrations -v`; `uv run alembic stamp head`; `uv run alembic current`; `uv run alembic
+  upgrade head` (no-op check); `docker compose up -d --build api` (Linux app-boot check); `curl
+  .../api/v1/ready`; `curl -X POST .../api/v1/agent/chat -d '{"query":"How many jobs are there?"}'`;
+  `docker compose stop api`; `DROP DATABASE internhunter_scratch`.
+- **Build & test:** `uv run pytest -q` → `297 passed, 1 skipped, 19 deselected, 4 subtests passed`
+  in ~5s (the new round-trip test skips cleanly without `SCRATCH_DATABASE_URL`, confirmed both
+  ways). `uv run ruff check .` → all checks passed. `uv run mypy` → `2 errors` — both
+  **pre-existing**, in files this ticket does not touch (`src/core/checkpointer.py:25`,
+  `src/agents/runtime/middleware.py:48`), already documented as benign in `Known_Issues.md` § Agent
+  runtime & prompts.
 - **Manual verification (actual results):**
-  - **A — empty scratch DB:** `alembic upgrade head` against `internhunter_scratch` built the schema; `\d clean_jobs` showed all 19 columns in the documented order, `id` as `generated always as identity`, `UNIQUE (source, external_id)` present.
-  - **B — round-trip test:** with `SCRATCH_DATABASE_URL` set, `tests/migrations` → `1 passed` (after fixing the test's type-name comparison — SQLAlchemy's reflected type is `BIGINT`, the ORM-declared type is `BigInteger`; added a small alias map rather than a brittle exact match, matching the spec's own guidance to compare at the name/nullability/type-family altitude). With the var unset → `1 skipped`.
-  - **C — no-op on the real local DB:** `alembic stamp head` → stamped at `f3a1c9d2e7b4`; `alembic current` → `f3a1c9d2e7b4 (head)`; `alembic upgrade head` → no DDL emitted; `SELECT COUNT(*) FROM clean_jobs` → `50` both before and after, unchanged.
-  - **D — app boots and answers a query:** native `uv run uvicorn ... --reload` on this Windows sandbox **never completed startup** — a pre-existing, ticket-unrelated issue (see Known Issues below), not caused by anything in this ticket's diff. Verified instead via `docker compose up -d --build api` (Linux): booted cleanly (`Application startup complete`), `GET /api/v1/ready` → `{"status":"ok","data_snapshot_date":"2026-07-14"}`, and `POST /api/v1/agent/chat` with `"How many jobs are there?"` → `"There are 50 jobs in the database."` — correct, matches the row count, proves the migrated/stamped schema serves live reads unchanged.
-  - **E — full suite:** `uv run pytest && uv run ruff check . && uv run mypy` → pytest green, ruff clean, mypy shows only the two pre-existing benign errors noted above.
-  - **F — Neon adoption:** documented only (not executed) in `docs/Manual_Verification_Guide.md` → T0019.2 § F, instructing the maintainer to run `ALEMBIC_DATABASE_URL="...<neon-DIRECT-non-pooled-host>...?sslmode=require" uv run alembic stamp head` once, deliberately, against Neon's direct endpoint (never the pooler).
+  - **A — empty scratch DB:** `alembic upgrade head` against `internhunter_scratch` built the
+    schema; `\d clean_jobs` showed all 19 columns in the documented order, `id` as `generated always
+    as identity`, `UNIQUE (source, external_id)` present.
+  - **B — round-trip test:** with `SCRATCH_DATABASE_URL` set, `tests/migrations` → `1 passed` (after
+    fixing the test's type-name comparison — SQLAlchemy's reflected type is `BIGINT`, the
+    ORM-declared type is `BigInteger`; added a small alias map rather than a brittle exact match,
+    matching the spec's own guidance to compare at the name/nullability/type-family altitude). With
+    the var unset → `1 skipped`.
+  - **C — no-op on the real local DB:** `alembic stamp head` → stamped at `f3a1c9d2e7b4`; `alembic
+    current` → `f3a1c9d2e7b4 (head)`; `alembic upgrade head` → no DDL emitted; `SELECT COUNT(*) FROM
+    clean_jobs` → `50` both before and after, unchanged.
+  - **D — app boots and answers a query:** native `uv run uvicorn ... --reload` on this Windows
+    sandbox **never completed startup** — a pre-existing, ticket-unrelated issue (see Known Issues
+    below), not caused by anything in this ticket's diff. Verified instead via `docker compose up -d
+    --build api` (Linux): booted cleanly (`Application startup complete`), `GET /api/v1/ready` →
+    `{"status":"ok","data_snapshot_date":"2026-07-14"}`, and `POST /api/v1/agent/chat` with `"How
+    many jobs are there?"` → `"There are 50 jobs in the database."` — correct, matches the row
+    count, proves the migrated/stamped schema serves live reads unchanged.
+  - **E — full suite:** `uv run pytest && uv run ruff check . && uv run mypy` → pytest green, ruff
+    clean, mypy shows only the two pre-existing benign errors noted above.
+  - **F — Neon adoption:** documented only (not executed) in `docs/Manual_Verification_Guide.md` →
+    T0019.2 § F, instructing the maintainer to run
+    `ALEMBIC_DATABASE_URL="...<neon-DIRECT-non-pooled-host>...?sslmode=require" uv run alembic stamp
+    head` once, deliberately, against Neon's direct endpoint (never the pooler).
 - **Risks:**
-  - Native Windows `uv run uvicorn` local dev is currently unusable end-to-end (async checkpointer pool loops forever under `ProactorEventLoop`) — pre-existing, not introduced here, but it means future tickets on this machine will need the same Docker workaround for boot-level manual checks. Registered `[LOW · NOTE]` in `Known_Issues.md`.
-  - The Identity-alignment change in `models.py` is metadata-only and was verified to emit no DDL against the existing local DB (`alembic upgrade head` was a clean no-op after stamping) — low risk, but worth re-confirming against Neon specifically when the maintainer runs check F, since Neon's `id` columns were never independently inspected in this session (no Neon access).
-  - The baseline migration was hand-written per the ticket's explicit sanction, not autogenerated; correctness rests on the manual cross-check against `scripts/init_db.sql` plus the passing round-trip test — both done, but a future column addition (T0019.3) is the first real test of whether the baseline truly matches production.
-- **Follow-ups:** T0019.3 (lifecycle columns: `is_active`, `first_seen_at`, `last_seen_at`) is now unblocked. The native-Windows-uvicorn-boot issue is logged but not fixed (out of scope — requires touching `checkpointer.py`, which this ticket must not touch). Maintainer still needs to run the Neon `alembic stamp head` adoption command (§ F) deliberately, once, before any future migration targets Neon.
-- **Docs updated:** `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, this file.
+  - Native Windows `uv run uvicorn` local dev is currently unusable end-to-end (async checkpointer
+    pool loops forever under `ProactorEventLoop`) — pre-existing, not introduced here, but it means
+    future tickets on this machine will need the same Docker workaround for boot-level manual
+    checks. Registered `[LOW · NOTE]` in `Known_Issues.md`.
+  - The Identity-alignment change in `models.py` is metadata-only and was verified to emit no DDL
+    against the existing local DB (`alembic upgrade head` was a clean no-op after stamping) — low
+    risk, but worth re-confirming against Neon specifically when the maintainer runs check F, since
+    Neon's `id` columns were never independently inspected in this session (no Neon access).
+  - The baseline migration was hand-written per the ticket's explicit sanction, not autogenerated;
+    correctness rests on the manual cross-check against `scripts/init_db.sql` plus the passing
+    round-trip test — both done, but a future column addition (T0019.3) is the first real test of
+    whether the baseline truly matches production.
+- **Follow-ups:** T0019.3 (lifecycle columns: `is_active`, `first_seen_at`, `last_seen_at`) is now
+  unblocked. The native-Windows-uvicorn-boot issue is logged but not fixed (out of scope — requires
+  touching `checkpointer.py`, which this ticket must not touch). Maintainer still needs to run the
+  Neon `alembic stamp head` adoption command (§ F) deliberately, once, before any future migration
+  targets Neon.
+- **Docs updated:** `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`,
+  `docs/Known_Issues.md`, this file.
 
 ## T0019.3 — Accumulate load semantics + hidden lifecycle columns
-- **Summary:** landed §4.2 #1/#2 — dropped the `TRUNCATE` in `clean_store.py` so the already-written `ON CONFLICT (source, external_id) DO UPDATE` upsert becomes the live load path, and added time-based `is_active` soft-expiry as three **hidden** `clean_jobs` columns (`is_active`, `first_seen_at`, `last_seen_at`) with zero agent-visible surface change. `raw_jobs`/`clean_jobs` now accumulate across ingestion runs instead of being rebuilt from whatever came through the latest run — the standing safety rule blocking ingestion against the production DSN (recorded in `Repo_Current_State.md` since T0019.2) is lifted by this ticket.
+- **Summary:** landed §4.2 #1/#2 — dropped the `TRUNCATE` in `clean_store.py` so the already-written
+  `ON CONFLICT (source, external_id) DO UPDATE` upsert becomes the live load path, and added
+  time-based `is_active` soft-expiry as three **hidden** `clean_jobs` columns (`is_active`,
+  `first_seen_at`, `last_seen_at`) with zero agent-visible surface change. `raw_jobs`/`clean_jobs`
+  now accumulate across ingestion runs instead of being rebuilt from whatever came through the
+  latest run — the standing safety rule blocking ingestion against the production DSN (recorded in
+  `Repo_Current_State.md` since T0019.2) is lifted by this ticket.
 - **Files created:** `alembic/versions/b7e2f4a91c3d_lifecycle_columns.py`.
-- **Files changed:** `config/ingestion.yaml` (new `lifecycle: { expire_after_days: 7 }` block near `max_jobs`), `src/services/ingestion/models.py` (`CleanJob` gains `is_active`/`first_seen_at`/`last_seen_at` mapped columns; `NormalizedJob` untouched per the ticket's non-goals), `src/services/ingestion/clean_store.py` (renamed `replace_clean_jobs` → `upsert_clean_jobs`, removed the `TRUNCATE`, `set_` gains `last_seen_at`/`is_active` refresh, new `expire_stale_clean_jobs(expire_after_days)`), `src/services/ingestion/loader.py` (import/call-site rename, calls `expire_stale_clean_jobs` after the upsert using `settings.ingestion_yaml["lifecycle"]["expire_after_days"]`, run summary gains `expired_count`, module docstring-style comment documents the rollback runbook), `tests/services/ingestion/test_clean_store.py` (renamed tests, removed the TRUNCATE assertion, added upsert-refresh and expiry-pass coverage), `tests/services/ingestion/test_loader.py` (updated all `@patch` targets for the rename, added ordering + `expired_count` coverage), `tests/agents/runtime/test_prompts.py` (hidden-column guard tuple extended with the three new columns), `docs/Manual_Verification_Guide.md` (new `### T0019.3` checklist A–H), `docs/Repo_Current_State.md` (branch header, folder structure, milestone summary, build/test status, next-recommended-ticket section, safety-rule notice lifted), `docs/Known_Issues.md` (2 new entries + category count 10→12).
-- **`clean_store.py` details:** `upsert_clean_jobs` is otherwise identical to the old `replace_clean_jobs` (same dedup-last-wins guard, same 16 payload columns in `set_`) — only the `TRUNCATE` line is gone and `set_` gains `"last_seen_at": text("now()")` and `"is_active": text("true")`. `first_seen_at` is deliberately absent from `set_` (insert-only; the column's own `server_default=now()` only fires on the initial `INSERT`, per Postgres `ON CONFLICT` semantics). `expire_stale_clean_jobs` executes exactly one time-based `UPDATE` — no `DELETE`, no "absent from this run" logic — and returns `result.rowcount` inside the same `(OperationalError, DBAPIError) → CleanStoreError` wrapping as the upsert.
-- **Migration details:** `b7e2f4a91c3d_lifecycle_columns.py`, `down_revision = "f3a1c9d2e7b4"`. `upgrade()` adds the three columns with `sa.text(...)` server defaults (mirroring the baseline's style), then runs a single `UPDATE ... FROM raw_jobs` backfill matching `(source, external_id)`. `downgrade()` drops the three columns in reverse order. Not autogenerate-derived, consistent with T0019.2's baseline precedent at this migration count.
-- **Commands run:** `uv run pytest tests/services/ingestion/test_clean_store.py tests/services/ingestion/test_loader.py tests/agents/runtime/test_prompts.py -q`; `uv run pytest -q`; `uv run ruff check <touched files>`; `uv run mypy <touched files>`; `docker compose ps`; `docker compose exec -T postgres psql ... CREATE DATABASE internhunter_scratch2`; `ALEMBIC_DATABASE_URL=... uv run alembic upgrade head`; `docker compose exec -T postgres psql ... "\d clean_jobs"`; `ALEMBIC_DATABASE_URL=... uv run alembic downgrade -1`; `docker compose exec -T postgres psql ... DROP DATABASE internhunter_scratch2`; `uv run alembic current`; `docker compose exec -T postgres psql -c "SELECT COUNT(*) ... WHERE NOT EXISTS (... raw_jobs join ...)"` (join-totality check); `uv run alembic upgrade head` (real local DB); `docker compose exec -T postgres psql -c "SELECT COUNT(*) FROM clean_jobs WHERE first_seen_at > now() - interval '1 minute'"`; a scratch Python script exercising `upsert_clean_jobs`/`expire_stale_clean_jobs` directly against the local DB with a synthetic row (then deleted, and the real 50-row snapshot's `is_active`/`last_seen_at` restored — see Known Issues); `docker compose up -d --build api`; `curl .../api/v1/ready`; `curl -X POST .../api/v1/agent/chat -d '{"query":"How many AI Engineer jobs are there?"}'`; `docker compose stop api`.
-- **Build & test:** `uv run pytest -q` → `303 passed, 1 skipped, 19 deselected, 4 subtests passed` in ~5s. `uv run ruff check .` (touched files) → all checks passed. `uv run mypy` (touched files) → no issues found.
+- **Files changed:** `config/ingestion.yaml` (new `lifecycle: { expire_after_days: 7 }` block near
+  `max_jobs`), `src/services/ingestion/models.py` (`CleanJob` gains
+  `is_active`/`first_seen_at`/`last_seen_at` mapped columns; `NormalizedJob` untouched per the
+  ticket's non-goals), `src/services/ingestion/clean_store.py` (renamed `replace_clean_jobs` →
+  `upsert_clean_jobs`, removed the `TRUNCATE`, `set_` gains `last_seen_at`/`is_active` refresh, new
+  `expire_stale_clean_jobs(expire_after_days)`), `src/services/ingestion/loader.py`
+  (import/call-site rename, calls `expire_stale_clean_jobs` after the upsert using
+  `settings.ingestion_yaml["lifecycle"]["expire_after_days"]`, run summary gains `expired_count`,
+  module docstring-style comment documents the rollback runbook),
+  `tests/services/ingestion/test_clean_store.py` (renamed tests, removed the TRUNCATE assertion,
+  added upsert-refresh and expiry-pass coverage), `tests/services/ingestion/test_loader.py` (updated
+  all `@patch` targets for the rename, added ordering + `expired_count` coverage),
+  `tests/agents/runtime/test_prompts.py` (hidden-column guard tuple extended with the three new
+  columns), `docs/archive/Manual_Verification_Archive.md` (new `### T0019.3` checklist A–H),
+  `docs/Repo_Current_State.md` (branch header, folder structure, milestone summary, build/test
+  status, next-recommended-ticket section, safety-rule notice lifted), `docs/Known_Issues.md` (2 new
+  entries + category count 10→12).
+- **`clean_store.py` details:** `upsert_clean_jobs` is otherwise identical to the old
+  `replace_clean_jobs` (same dedup-last-wins guard, same 16 payload columns in `set_`) — only the
+  `TRUNCATE` line is gone and `set_` gains `"last_seen_at": text("now()")` and `"is_active":
+  text("true")`. `first_seen_at` is deliberately absent from `set_` (insert-only; the column's own
+  `server_default=now()` only fires on the initial `INSERT`, per Postgres `ON CONFLICT` semantics).
+  `expire_stale_clean_jobs` executes exactly one time-based `UPDATE` — no `DELETE`, no "absent from
+  this run" logic — and returns `result.rowcount` inside the same `(OperationalError, DBAPIError) →
+  CleanStoreError` wrapping as the upsert.
+- **Migration details:** `b7e2f4a91c3d_lifecycle_columns.py`, `down_revision = "f3a1c9d2e7b4"`.
+  `upgrade()` adds the three columns with `sa.text(...)` server defaults (mirroring the baseline's
+  style), then runs a single `UPDATE ... FROM raw_jobs` backfill matching `(source, external_id)`.
+  `downgrade()` drops the three columns in reverse order. Not autogenerate-derived, consistent with
+  T0019.2's baseline precedent at this migration count.
+- **Commands run:** `uv run pytest tests/services/ingestion/test_clean_store.py
+  tests/services/ingestion/test_loader.py tests/agents/runtime/test_prompts.py -q`; `uv run pytest
+  -q`; `uv run ruff check <touched files>`; `uv run mypy <touched files>`; `docker compose ps`;
+  `docker compose exec -T postgres psql ... CREATE DATABASE internhunter_scratch2`;
+  `ALEMBIC_DATABASE_URL=... uv run alembic upgrade head`; `docker compose exec -T postgres psql ...
+  "\d clean_jobs"`; `ALEMBIC_DATABASE_URL=... uv run alembic downgrade -1`; `docker compose exec -T
+  postgres psql ... DROP DATABASE internhunter_scratch2`; `uv run alembic current`; `docker compose
+  exec -T postgres psql -c "SELECT COUNT(*) ... WHERE NOT EXISTS (... raw_jobs join ...)"`
+  (join-totality check); `uv run alembic upgrade head` (real local DB); `docker compose exec -T
+  postgres psql -c "SELECT COUNT(*) FROM clean_jobs WHERE first_seen_at > now() - interval '1
+  minute'"`; a scratch Python script exercising `upsert_clean_jobs`/`expire_stale_clean_jobs`
+  directly against the local DB with a synthetic row (then deleted, and the real 50-row snapshot's
+  `is_active`/`last_seen_at` restored — see Known Issues); `docker compose up -d --build api`; `curl
+  .../api/v1/ready`; `curl -X POST .../api/v1/agent/chat -d '{"query":"How many AI Engineer jobs are
+  there?"}'`; `docker compose stop api`.
+- **Build & test:** `uv run pytest -q` → `303 passed, 1 skipped, 19 deselected, 4 subtests passed`
+  in ~5s. `uv run ruff check .` (touched files) → all checks passed. `uv run mypy` (touched files) →
+  no issues found.
 - **Manual verification (actual results):**
-  - **A — migrate + inspect schema:** empty-DB `alembic upgrade head` built the full schema through `b7e2f4a91c3d`; `\d clean_jobs` on the scratch DB showed 22 columns, with `is_active boolean not null default true`, `first_seen_at`/`last_seen_at timestamp with time zone not null default now()` appended after `is_salary_negotiable`.
-  - **B — backfill join-totality (pre-flight check required by the ticket):** `SELECT COUNT(*) FROM clean_jobs c WHERE NOT EXISTS (SELECT 1 FROM raw_jobs r WHERE r.source=c.source AND r.external_id=c.external_id)` → **`0`** on the real local DB before migrating — the join is total, so no row was left defaulted to migration-run time. Confirmed after migrating: `SELECT COUNT(*) FROM clean_jobs WHERE first_seen_at > now() - interval '1 minute'` → **`0`**.
-  - **C — downgrade:** `alembic downgrade -1` on the scratch DB cleanly dropped all three columns; `\d clean_jobs` afterward showed the original 19-column T0019.2 baseline shape.
-  - **D — real local DB upgrade:** row count unchanged at `50` before and after `alembic upgrade head`; `0` rows flagged `is_active = false` immediately after.
-  - **E — accumulate/expire/re-activate semantics:** exercised directly against the real Docker Postgres via a scratch script calling `upsert_clean_jobs`/`expire_stale_clean_jobs` with a synthetic `NormalizedJob` (not a live double-fetch — see `Known_Issues.md` for why). Two successive upserts of the same `(source, external_id)` kept `is_active=true`, advanced `last_seen_at`, and left `first_seen_at` unchanged. Aging that row's `last_seen_at` to 8 days ago and calling `expire_stale_clean_jobs(7)` flipped it (and, correctly per the real time-based logic, the real 50-row snapshot rows whose `last_seen_at` had been backfilled from weeks-old `fetched_at`) to `is_active=false` — none were deleted, all still selected normally. Re-upserting the synthetic row flipped its `is_active` back to `true`. The 50 real snapshot rows were restored afterward (`is_active=true`, `last_seen_at=fetched_at` re-applied) so local dev state was left as found — logged in `Known_Issues.md`.
-  - **F — hidden-column guard:** `uv run pytest tests/agents/runtime/test_prompts.py -q` → green; `schema_context` never mentions `is_active`, `first_seen_at`, or `last_seen_at`.
-  - **G — agent answers unchanged:** `docker compose up -d --build api` booted cleanly; `GET /api/v1/ready` → `{"status":"ok","data_snapshot_date":"2026-07-14"}`; `POST /api/v1/agent/chat` with `"How many AI Engineer jobs are there?"` → `"There are 13 AI Engineer jobs in the database."` — a plain count, no mention of any hidden column in the answer text.
+  - **A — migrate + inspect schema:** empty-DB `alembic upgrade head` built the full schema through
+    `b7e2f4a91c3d`; `\d clean_jobs` on the scratch DB showed 22 columns, with `is_active boolean not
+    null default true`, `first_seen_at`/`last_seen_at timestamp with time zone not null default
+    now()` appended after `is_salary_negotiable`.
+  - **B — backfill join-totality (pre-flight check required by the ticket):** `SELECT COUNT(*) FROM
+    clean_jobs c WHERE NOT EXISTS (SELECT 1 FROM raw_jobs r WHERE r.source=c.source AND
+    r.external_id=c.external_id)` → **`0`** on the real local DB before migrating — the join is
+    total, so no row was left defaulted to migration-run time. Confirmed after migrating: `SELECT
+    COUNT(*) FROM clean_jobs WHERE first_seen_at > now() - interval '1 minute'` → **`0`**.
+  - **C — downgrade:** `alembic downgrade -1` on the scratch DB cleanly dropped all three columns;
+    `\d clean_jobs` afterward showed the original 19-column T0019.2 baseline shape.
+  - **D — real local DB upgrade:** row count unchanged at `50` before and after `alembic upgrade
+    head`; `0` rows flagged `is_active = false` immediately after.
+  - **E — accumulate/expire/re-activate semantics:** exercised directly against the real Docker
+    Postgres via a scratch script calling `upsert_clean_jobs`/`expire_stale_clean_jobs` with a
+    synthetic `NormalizedJob` (not a live double-fetch — see `Known_Issues.md` for why). Two
+    successive upserts of the same `(source, external_id)` kept `is_active=true`, advanced
+    `last_seen_at`, and left `first_seen_at` unchanged. Aging that row's `last_seen_at` to 8 days
+    ago and calling `expire_stale_clean_jobs(7)` flipped it (and, correctly per the real time-based
+    logic, the real 50-row snapshot rows whose `last_seen_at` had been backfilled from weeks-old
+    `fetched_at`) to `is_active=false` — none were deleted, all still selected normally.
+    Re-upserting the synthetic row flipped its `is_active` back to `true`. The 50 real snapshot rows
+    were restored afterward (`is_active=true`, `last_seen_at=fetched_at` re-applied) so local dev
+    state was left as found — logged in `Known_Issues.md`.
+  - **F — hidden-column guard:** `uv run pytest tests/agents/runtime/test_prompts.py -q` → green;
+    `schema_context` never mentions `is_active`, `first_seen_at`, or `last_seen_at`.
+  - **G — agent answers unchanged:** `docker compose up -d --build api` booted cleanly; `GET
+    /api/v1/ready` → `{"status":"ok","data_snapshot_date":"2026-07-14"}`; `POST /api/v1/agent/chat`
+    with `"How many AI Engineer jobs are there?"` → `"There are 13 AI Engineer jobs in the
+    database."` — a plain count, no mention of any hidden column in the answer text.
   - **H — full suite:** `uv run pytest -q` green as above; `ruff`/`mypy` clean on touched files.
 - **Risks:**
-  - `scripts/init_db.sql` now diverges from the Alembic head (it does not create the three lifecycle columns) — deliberately left untouched per the ticket's "Do not touch" list, since the eval fixture loader depends on its exact current shape. A DB built purely from `init_db.sql` and never migrated would break `upsert_clean_jobs`/`expire_stale_clean_jobs` (both assume the columns exist), though the read-only `query_clean_jobs` agent tool is unaffected. Logged `[LOW · OPEN]` in `Known_Issues.md` with a follow-up recommendation (point the eval fixture loader at `alembic upgrade head`, or accept the divergence permanently).
-  - The manual "run ingestion twice" check was verified via direct `upsert_clean_jobs`/`expire_stale_clean_jobs` calls against a synthetic row rather than a genuine live double-fetch of VietnamWorks — a deliberate choice to avoid an unnecessary extra live crawl during dev; the SQL exercised is identical regardless of how the `NormalizedJob` batch was produced. Logged `[LOW · NOTE]` in `Known_Issues.md`.
-  - `expire_stale_clean_jobs` is a blunt, single-statement time-based pass by design (per the ticket's explicit non-goals) — it will flip any row whose `last_seen_at` ages past the window even if the underlying posting is still live but the source happened to omit it from search transiently. Accepted as the intended MVP behavior; not a defect.
-- **Follow-ups:** T0019.4 (source resilience: per-page try/continue + retry/backoff) is next in the milestone spine — T0019.5 (unattended-run safety) needs both this ticket (done) and T0019.4's `pages_failed` field before it unblocks. The `init_db.sql` ↔ Alembic-head divergence follow-up above is its own small future task, not scheduled as a numbered ticket.
-- **Docs updated:** `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, this file.
+  - `scripts/init_db.sql` now diverges from the Alembic head (it does not create the three lifecycle
+    columns) — deliberately left untouched per the ticket's "Do not touch" list, since the eval
+    fixture loader depends on its exact current shape. A DB built purely from `init_db.sql` and
+    never migrated would break `upsert_clean_jobs`/`expire_stale_clean_jobs` (both assume the
+    columns exist), though the read-only `query_clean_jobs` agent tool is unaffected. Logged `[LOW ·
+    OPEN]` in `Known_Issues.md` with a follow-up recommendation (point the eval fixture loader at
+    `alembic upgrade head`, or accept the divergence permanently).
+  - The manual "run ingestion twice" check was verified via direct
+    `upsert_clean_jobs`/`expire_stale_clean_jobs` calls against a synthetic row rather than a
+    genuine live double-fetch of VietnamWorks — a deliberate choice to avoid an unnecessary extra
+    live crawl during dev; the SQL exercised is identical regardless of how the `NormalizedJob`
+    batch was produced. Logged `[LOW · NOTE]` in `Known_Issues.md`.
+  - `expire_stale_clean_jobs` is a blunt, single-statement time-based pass by design (per the
+    ticket's explicit non-goals) — it will flip any row whose `last_seen_at` ages past the window
+    even if the underlying posting is still live but the source happened to omit it from search
+    transiently. Accepted as the intended MVP behavior; not a defect.
+- **Follow-ups:** T0019.4 (source resilience: per-page try/continue + retry/backoff) is next in the
+  milestone spine — T0019.5 (unattended-run safety) needs both this ticket (done) and T0019.4's
+  `pages_failed` field before it unblocks. The `init_db.sql` ↔ Alembic-head divergence follow-up
+  above is its own small future task, not scheduled as a numbered ticket.
+- **Docs updated:** `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`,
+  `docs/Known_Issues.md`, this file.
 
 ## T0019.4 — Source resilience: per-page try/continue + retry/backoff
-- **Summary:** a single transient failure used to kill an entire ingestion run — `_post`'s `resp.raise_for_status()` propagated straight out through `_collect` → `fetch()` → `run_ingestion`, and because `loader.py` does `list(source.fetch())`, one 429/5xx on any page discarded every posting already fetched from every earlier page. Now that T0019.3 made loading accumulate (soft, time-based expiry instead of `TRUNCATE`), a partial run is no longer a correctness problem, only a completeness one — a run that salvages 14 of 16 pages is strictly better than one that saves nothing, and the missing postings are simply re-seen on the next run, well inside the 7-day expiry window. This ticket adds retry-then-skip at the page level and surfaces a `pages_failed` count in the run summary for T0019.5 to consume.
-- **Files changed:** `config/ingestion.yaml` (two new keys under `api:` — `retry_attempts: 2`, `retry_backoff_seconds: 2.0`, with inline comments documenting the "retries after the initial attempt" semantics), `src/services/ingestion/sources/base.py` (`JobSource` gains `pages_failed: int = 0` as a class-level default; no `__init__` added to the ABC), `src/services/ingestion/sources/vietnamworks.py` (new `_post_with_retry` wrapper; `_post` itself is byte-for-byte unchanged — the retry policy lives entirely in the wrapper; `_collect`'s page loop calls the wrapper and `continue`s past a `None` result; the politeness `time.sleep(self._delay)` moved into a `finally` so it still fires on a skipped page; `fetch()` resets `self.pages_failed = 0` at entry), `src/services/ingestion/loader.py` (`pages_failed = getattr(source, "pages_failed", 0)` read after `list(source.fetch())`, added to the returned summary dict — no other loader ordering changed), `tests/services/ingestion/test_vietnamworks.py` (new `VietnamWorksResilienceTests` class, 7 tests, plus `_http_error`/`_ok_response`/`_mock_client_sequence` helpers), `tests/services/ingestion/test_loader.py` (one new test asserting a stub source's `pages_failed` surfaces in the summary — no existing test needed editing), `docs/Manual_Verification_Guide.md` (new `### T0019.4` entry, checklist A–E), `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, this file.
-- **`_post_with_retry` details:** transient = `httpx.HTTPStatusError` with `.response.status_code` `== 429` or `>= 500`, plus `httpx.TimeoutException` and `httpx.TransportError` (checked in that order since `TimeoutException` is a subclass of `TransportError`). On a transient failure with retries remaining, sleeps `retry_backoff_seconds * 2**(attempt-1)` (2.0s, then 4.0s at the defaults) and retries. Permanent failures (any other 4xx) are not retried — give up immediately, since a retry cannot fix a 403 and burning delays on one would mask a block. On give-up (retries exhausted or permanent failure): increments `self.pages_failed`, logs a `structlog` warning `ingestion.page_failed` with `source`/`query`/`page`/`attempts`/`reason` (e.g. `"http_500"`, `"timeout"`, `"transport_error"`), and returns `None` — the exception never escapes the wrapper.
-- **Commands run:** `git add -A && git commit` (T0019.1–.3, previously uncommitted WIP, committed first so this branch has a clean base); `uv run pytest tests/services/ingestion/test_vietnamworks.py tests/services/ingestion/test_loader.py -v`; `uv run pytest -q`; `uv run ruff check .`; `uv run mypy`; a throwaway scratch script (not committed) driving `VietnamWorksSource` with a mock client where page 0 fails 500 three times then page 1 succeeds; `uv run python -c "..."` exercising `run_ingestion` end-to-end with a stub source exposing `pages_failed = 2`.
-- **Build & test:** `uv run pytest -q` → `311 passed, 1 skipped, 19 deselected, 4 subtests passed` in ~5s (the skip is the pre-existing `SCRATCH_DATABASE_URL`-gated migration round-trip test; unrelated to this ticket). `uv run ruff check .` → all checks passed. `uv run mypy` → 2 pre-existing errors in `src/core/checkpointer.py:25` and `src/agents/runtime/middleware.py:48`, both already logged in `Known_Issues.md` and untouched by this ticket's diff. **No pre-existing test was modified** — the new `test_pages_failed_surfaced_in_summary` case is additive, and `StubSource` already inherited the ABC's `pages_failed = 0` default so no existing assertion needed a change.
+- **Summary:** a single transient failure used to kill an entire ingestion run — `_post`'s
+  `resp.raise_for_status()` propagated straight out through `_collect` → `fetch()` →
+  `run_ingestion`, and because `loader.py` does `list(source.fetch())`, one 429/5xx on any page
+  discarded every posting already fetched from every earlier page. Now that T0019.3 made loading
+  accumulate (soft, time-based expiry instead of `TRUNCATE`), a partial run is no longer a
+  correctness problem, only a completeness one — a run that salvages 14 of 16 pages is strictly
+  better than one that saves nothing, and the missing postings are simply re-seen on the next run,
+  well inside the 7-day expiry window. This ticket adds retry-then-skip at the page level and
+  surfaces a `pages_failed` count in the run summary for T0019.5 to consume.
+- **Files changed:** `config/ingestion.yaml` (two new keys under `api:` — `retry_attempts: 2`,
+  `retry_backoff_seconds: 2.0`, with inline comments documenting the "retries after the initial
+  attempt" semantics), `src/services/ingestion/sources/base.py` (`JobSource` gains `pages_failed:
+  int = 0` as a class-level default; no `__init__` added to the ABC),
+  `src/services/ingestion/sources/vietnamworks.py` (new `_post_with_retry` wrapper; `_post` itself
+  is byte-for-byte unchanged — the retry policy lives entirely in the wrapper; `_collect`'s page
+  loop calls the wrapper and `continue`s past a `None` result; the politeness
+  `time.sleep(self._delay)` moved into a `finally` so it still fires on a skipped page; `fetch()`
+  resets `self.pages_failed = 0` at entry), `src/services/ingestion/loader.py` (`pages_failed =
+  getattr(source, "pages_failed", 0)` read after `list(source.fetch())`, added to the returned
+  summary dict — no other loader ordering changed), `tests/services/ingestion/test_vietnamworks.py`
+  (new `VietnamWorksResilienceTests` class, 7 tests, plus
+  `_http_error`/`_ok_response`/`_mock_client_sequence` helpers),
+  `tests/services/ingestion/test_loader.py` (one new test asserting a stub source's `pages_failed`
+  surfaces in the summary — no existing test needed editing), `docs/Manual_Verification_Guide.md`
+  (new `### T0019.4` entry, checklist A–E), `docs/Repo_Current_State.md`, `docs/Known_Issues.md`,
+  this file.
+- **`_post_with_retry` details:** transient = `httpx.HTTPStatusError` with `.response.status_code`
+  `== 429` or `>= 500`, plus `httpx.TimeoutException` and `httpx.TransportError` (checked in that
+  order since `TimeoutException` is a subclass of `TransportError`). On a transient failure with
+  retries remaining, sleeps `retry_backoff_seconds * 2**(attempt-1)` (2.0s, then 4.0s at the
+  defaults) and retries. Permanent failures (any other 4xx) are not retried — give up immediately,
+  since a retry cannot fix a 403 and burning delays on one would mask a block. On give-up (retries
+  exhausted or permanent failure): increments `self.pages_failed`, logs a `structlog` warning
+  `ingestion.page_failed` with `source`/`query`/`page`/`attempts`/`reason` (e.g. `"http_500"`,
+  `"timeout"`, `"transport_error"`), and returns `None` — the exception never escapes the wrapper.
+- **Commands run:** `git add -A && git commit` (T0019.1–.3, previously uncommitted WIP, committed
+  first so this branch has a clean base); `uv run pytest
+  tests/services/ingestion/test_vietnamworks.py tests/services/ingestion/test_loader.py -v`; `uv run
+  pytest -q`; `uv run ruff check .`; `uv run mypy`; a throwaway scratch script (not committed)
+  driving `VietnamWorksSource` with a mock client where page 0 fails 500 three times then page 1
+  succeeds; `uv run python -c "..."` exercising `run_ingestion` end-to-end with a stub source
+  exposing `pages_failed = 2`.
+- **Build & test:** `uv run pytest -q` → `311 passed, 1 skipped, 19 deselected, 4 subtests passed`
+  in ~5s (the skip is the pre-existing `SCRATCH_DATABASE_URL`-gated migration round-trip test;
+  unrelated to this ticket). `uv run ruff check .` → all checks passed. `uv run mypy` → 2
+  pre-existing errors in `src/core/checkpointer.py:25` and `src/agents/runtime/middleware.py:48`,
+  both already logged in `Known_Issues.md` and untouched by this ticket's diff. **No pre-existing
+  test was modified** — the new `test_pages_failed_surfaced_in_summary` case is additive, and
+  `StubSource` already inherited the ABC's `pages_failed = 0` default so no existing assertion
+  needed a change.
 - **Manual verification (actual results):**
-  - **A — full suite green:** `uv run pytest && uv run ruff check . && uv run mypy` → pytest and ruff green; mypy shows only the two pre-existing, unrelated errors noted above.
-  - **B — resilience tests specifically:** `uv run pytest tests/services/ingestion/test_vietnamworks.py -v` → all 15 tests pass (8 pre-existing + 7 new `VietnamWorksResilienceTests`), finishing in well under a second — confirming `time.sleep` is patched and no real backoff delay fired.
-  - **C — the summary line carries `pages_failed` (no network):** a mock client returned 500 three times for page 0 (query `"q"`, `pages_per_query=2`) then a real fixture response for page 1. Output: `posting_count: 1`, `pages_failed: 1`, and a JSON `ingestion.page_failed` warning on stderr showing `"query": "q", "page": 0, "attempts": 3, "reason": "http_500"`.
-  - **D — end-to-end summary shape:** a stub `JobSource` with `pages_failed = 2` and an empty `fetch()`, run through `run_ingestion` with `upsert_raw_postings`/`upsert_clean_jobs`/`expire_stale_clean_jobs` patched, returned `{'fetched': 0, 'raw_upserted': 0, 'clean_loaded': 0, 'skipped': 0, 'expired_count': 0, 'pages_failed': 2}` — `pages_failed` present alongside every other summary key, matching the ticket's expected shape exactly.
-  - **E — real ingestion against the local DB:** not exercised this session (no live network call is part of this ticket's scope; the ticket's own non-goals exclude any live fetch against `ms.vietnamworks.com`). Deferred to whenever the pipeline is next run against local Docker Postgres.
+  - **A — full suite green:** `uv run pytest && uv run ruff check . && uv run mypy` → pytest and
+    ruff green; mypy shows only the two pre-existing, unrelated errors noted above.
+  - **B — resilience tests specifically:** `uv run pytest
+    tests/services/ingestion/test_vietnamworks.py -v` → all 15 tests pass (8 pre-existing + 7 new
+    `VietnamWorksResilienceTests`), finishing in well under a second — confirming `time.sleep` is
+    patched and no real backoff delay fired.
+  - **C — the summary line carries `pages_failed` (no network):** a mock client returned 500 three
+    times for page 0 (query `"q"`, `pages_per_query=2`) then a real fixture response for page 1.
+    Output: `posting_count: 1`, `pages_failed: 1`, and a JSON `ingestion.page_failed` warning on
+    stderr showing `"query": "q", "page": 0, "attempts": 3, "reason": "http_500"`.
+  - **D — end-to-end summary shape:** a stub `JobSource` with `pages_failed = 2` and an empty
+    `fetch()`, run through `run_ingestion` with
+    `upsert_raw_postings`/`upsert_clean_jobs`/`expire_stale_clean_jobs` patched, returned
+    `{'fetched': 0, 'raw_upserted': 0, 'clean_loaded': 0, 'skipped': 0, 'expired_count': 0,
+    'pages_failed': 2}` — `pages_failed` present alongside every other summary key, matching the
+    ticket's expected shape exactly.
+  - **E — real ingestion against the local DB:** not exercised this session (no live network call is
+    part of this ticket's scope; the ticket's own non-goals exclude any live fetch against
+    `ms.vietnamworks.com`). Deferred to whenever the pipeline is next run against local Docker
+    Postgres.
 - **Risks:**
-  - A page that exhausts retries is skipped for that run only — there is no query-level retry or end-of-run re-queue, per the ticket's explicit non-goal. Logged `[LOW · NOTE]` in `Known_Issues.md`.
-  - `pages_failed` is produced but nothing yet acts on it (no exit-code logic, no alerting) — intentional, since that is T0019.5's job. Logged `[LOW · NOTE]` in `Known_Issues.md`.
-  - Working-tree note: this branch was cut from `feature/t0019.3-accumulate-lifecycle`, which had T0019.1–.3's completed-but-uncommitted work sitting in the working tree at the start of this session (30 files, matching each ticket's own completion-report narrative already drafted in `docs/`). That work was committed as `a74f462` before cutting `feature/t0019.4-source-resilience`, so this ticket's diff is clean and isolated on top of it.
-- **Follow-ups:** T0019.5 (unattended-run safety) is next — it consumes `pages_failed` for its pre-flight/assertion logic. Both `[LOW · NOTE]` items above are recorded in `Known_Issues.md` and need no further action from this ticket.
-- **Docs updated:** `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, this file.
+  - A page that exhausts retries is skipped for that run only — there is no query-level retry or
+    end-of-run re-queue, per the ticket's explicit non-goal. Logged `[LOW · NOTE]` in
+    `Known_Issues.md`.
+  - `pages_failed` is produced but nothing yet acts on it (no exit-code logic, no alerting) —
+    intentional, since that is T0019.5's job. Logged `[LOW · NOTE]` in `Known_Issues.md`.
+  - Working-tree note: this branch was cut from `feature/t0019.3-accumulate-lifecycle`, which had
+    T0019.1–.3's completed-but-uncommitted work sitting in the working tree at the start of this
+    session (30 files, matching each ticket's own completion-report narrative already drafted in
+    `docs/`). That work was committed as `a74f462` before cutting
+    `feature/t0019.4-source-resilience`, so this ticket's diff is clean and isolated on top of it.
+- **Follow-ups:** T0019.5 (unattended-run safety) is next — it consumes `pages_failed` for its
+  pre-flight/assertion logic. Both `[LOW · NOTE]` items above are recorded in `Known_Issues.md` and
+  need no further action from this ticket.
+- **Docs updated:** `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`,
+  `docs/Known_Issues.md`, this file.
 
 ## T0019.5 — Unattended-run safety: pre-flight assertion, yield floor, dead-man ping
-- **Summary:** T0019.6 will run this pipeline nightly against the live Neon DB with nobody watching. Three preconditions had to be true first: the run must fail *before writing* when the schema looks wrong (T0019.2's Alembic closes the correction path but does not detect a DB someone changed by hand — that detection is this ticket); a near-empty fetch must not overwrite good rows under T0019.3's accumulate semantics (a `min_yield` pre-write floor); and a run that never happens must be noticeable (a dead-man ping to healthchecks.io that fires only on the fully-green path, so silence is the alert). A new `src/services/ingestion/safety.py` module implements all three as independently testable, `sys.exit`-free functions; `run_ingestion` calls them in the ordering the ticket specifies, and only `main()` owns the process exit contract.
-- **Files changed:** `src/services/ingestion/safety.py` (new — `IngestionSafetyError`, `assert_clean_jobs_schema`, `assert_min_yield`, `send_dead_man_ping`), `tests/services/ingestion/test_safety.py` (new, 13 tests), `src/services/ingestion/loader.py` (calls the three safety functions in order; `main()` catches `IngestionSafetyError` and exits 1; sends the ping only after a successful run), `tests/services/ingestion/test_loader.py` (patched `assert_clean_jobs_schema` and added `safety.min_yield: 0` into all 9 pre-existing tests' mocked `ingestion_yaml`; 3 new tests for schema-abort, yield-floor-abort, and happy-path ordering), `config/ingestion.yaml` (new `safety.min_yield: 20` block), `src/core/config.py` (new optional `HEALTHCHECKS_URL: str | None = None`), `.env.example` (documents the new var, commented out), `docs/Manual_Verification_Guide.md` (new `### T0019.5` entry, checklist A–E), `docs/Known_Issues.md` (updated the `[HIGH · OPEN]` schema-drift entry to `[HIGH · PARTIALLY RESOLVED]` — write-path detection closed, API-side read-path assertion flagged as the remaining gap; corrected the T0019.4 `pages_failed` note, which had wrongly predicted this ticket would consume it), `docs/Repo_Current_State.md`, this file.
-- **`assert_clean_jobs_schema` details:** queries `information_schema.columns` for `clean_jobs`/`public` via `session_factory()` + `sqlalchemy.text`, wrapping `(OperationalError, DBAPIError)` into `IngestionSafetyError` the same way `clean_store.py` wraps into `CleanStoreError`. The expected column set is derived live from `{c.name for c in CleanJob.__table__.columns}` — never hand-maintained, so it can't itself become a drift source. An empty result (table doesn't exist) raises with its own "table not found" message rather than listing all 22 columns as "missing." On any mismatch it logs `ingestion.schema_drift` with both `missing` and `unexpected` (sorted lists) before raising; on match it logs `ingestion.schema_ok`.
-- **`run_ingestion` ordering (as specified):** `assert_clean_jobs_schema()` first — before the source is constructed, before any fetch — then `fetch()` → `upsert_raw_postings` (raw landing always proceeds, preserving evidence of a bad run) → `assert_min_yield(len(postings), min_yield)` → normalize/skip loop → `upsert_clean_jobs` → `expire_stale_clean_jobs`. A yield-floor abort therefore happens before *both* the clean write and the expiry pass — getting the expiry-safety property (a skipped run can never wrongly expire healthy rows whose `last_seen_at` didn't get refreshed) for free, without a special case.
-- **Commands run:** `git checkout -b feature/t0019.5-unattended-safety` (cut from `feature/t0019.4-source-resilience`, after committing that branch's own uncommitted T0019.4 work as `b0b3016`); `uv run pytest tests/services/ingestion/test_safety.py tests/services/ingestion/test_loader.py -q`; `uv run pytest -q`; `uv run ruff check .`; `uv run mypy`.
-- **Build & test:** `uv run pytest -q` → `319 passed, 8 skipped, 19 deselected, 4 subtests passed` in ~268s (skips are all DB-dependent — no local Docker Postgres was running this session; unrelated to this ticket's diff). `uv run ruff check .` → all checks passed. `uv run mypy` (whole repo) → the same 2 pre-existing, unrelated errors as every prior ticket in this stack (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`); the three touched files are clean. **No pre-existing test's assertions were weakened** — all 9 pre-existing `test_loader.py` tests needed only a patch for the new schema-assertion call and a `safety.min_yield: 0` addition to their already-mocked config, per the ticket's explicit instruction.
+- **Summary:** T0019.6 will run this pipeline nightly against the live Neon DB with nobody watching.
+  Three preconditions had to be true first: the run must fail *before writing* when the schema looks
+  wrong (T0019.2's Alembic closes the correction path but does not detect a DB someone changed by
+  hand — that detection is this ticket); a near-empty fetch must not overwrite good rows under
+  T0019.3's accumulate semantics (a `min_yield` pre-write floor); and a run that never happens must
+  be noticeable (a dead-man ping to healthchecks.io that fires only on the fully-green path, so
+  silence is the alert). A new `src/services/ingestion/safety.py` module implements all three as
+  independently testable, `sys.exit`-free functions; `run_ingestion` calls them in the ordering the
+  ticket specifies, and only `main()` owns the process exit contract.
+- **Files changed:** `src/services/ingestion/safety.py` (new — `IngestionSafetyError`,
+  `assert_clean_jobs_schema`, `assert_min_yield`, `send_dead_man_ping`),
+  `tests/services/ingestion/test_safety.py` (new, 13 tests), `src/services/ingestion/loader.py`
+  (calls the three safety functions in order; `main()` catches `IngestionSafetyError` and exits 1;
+  sends the ping only after a successful run), `tests/services/ingestion/test_loader.py` (patched
+  `assert_clean_jobs_schema` and added `safety.min_yield: 0` into all 9 pre-existing tests' mocked
+  `ingestion_yaml`; 3 new tests for schema-abort, yield-floor-abort, and happy-path ordering),
+  `config/ingestion.yaml` (new `safety.min_yield: 20` block), `src/core/config.py` (new optional
+  `HEALTHCHECKS_URL: str | None = None`), `.env.example` (documents the new var, commented out),
+  `docs/archive/Manual_Verification_Archive.md` (new `### T0019.5` entry, checklist A–E),
+  `docs/Known_Issues.md` (updated the `[HIGH · OPEN]` schema-drift entry to `[HIGH · PARTIALLY
+  RESOLVED]` — write-path detection closed, API-side read-path assertion flagged as the remaining
+  gap; corrected the T0019.4 `pages_failed` note, which had wrongly predicted this ticket would
+  consume it), `docs/Repo_Current_State.md`, this file.
+- **`assert_clean_jobs_schema` details:** queries `information_schema.columns` for
+  `clean_jobs`/`public` via `session_factory()` + `sqlalchemy.text`, wrapping `(OperationalError,
+  DBAPIError)` into `IngestionSafetyError` the same way `clean_store.py` wraps into
+  `CleanStoreError`. The expected column set is derived live from `{c.name for c in
+  CleanJob.__table__.columns}` — never hand-maintained, so it can't itself become a drift source. An
+  empty result (table doesn't exist) raises with its own "table not found" message rather than
+  listing all 22 columns as "missing." On any mismatch it logs `ingestion.schema_drift` with both
+  `missing` and `unexpected` (sorted lists) before raising; on match it logs `ingestion.schema_ok`.
+- **`run_ingestion` ordering (as specified):** `assert_clean_jobs_schema()` first — before the
+  source is constructed, before any fetch — then `fetch()` → `upsert_raw_postings` (raw landing
+  always proceeds, preserving evidence of a bad run) → `assert_min_yield(len(postings), min_yield)`
+  → normalize/skip loop → `upsert_clean_jobs` → `expire_stale_clean_jobs`. A yield-floor abort
+  therefore happens before *both* the clean write and the expiry pass — getting the expiry-safety
+  property (a skipped run can never wrongly expire healthy rows whose `last_seen_at` didn't get
+  refreshed) for free, without a special case.
+- **Commands run:** `git checkout -b feature/t0019.5-unattended-safety` (cut from
+  `feature/t0019.4-source-resilience`, after committing that branch's own uncommitted T0019.4 work
+  as `b0b3016`); `uv run pytest tests/services/ingestion/test_safety.py
+  tests/services/ingestion/test_loader.py -q`; `uv run pytest -q`; `uv run ruff check .`; `uv run
+  mypy`.
+- **Build & test:** `uv run pytest -q` → `319 passed, 8 skipped, 19 deselected, 4 subtests passed`
+  in ~268s (skips are all DB-dependent — no local Docker Postgres was running this session;
+  unrelated to this ticket's diff). `uv run ruff check .` → all checks passed. `uv run mypy` (whole
+  repo) → the same 2 pre-existing, unrelated errors as every prior ticket in this stack
+  (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`); the three touched files
+  are clean. **No pre-existing test's assertions were weakened** — all 9 pre-existing
+  `test_loader.py` tests needed only a patch for the new schema-assertion call and a
+  `safety.min_yield: 0` addition to their already-mocked config, per the ticket's explicit
+  instruction.
 - **Manual verification (actual results / what's deferred):**
-  - **A — full suite green:** `uv run pytest && uv run ruff check . && uv run mypy` → pytest and ruff green; mypy shows only the two pre-existing, unrelated errors noted above.
-  - **B/C/D/E — live-DB checks:** **not run this session — no local Docker Postgres was up.** These require `docker compose up -d`, a scratch `internhunter_drift` database for check C, and a temporary `min_yield` edit for check D, none of which are safe to fabricate results for. The full checklist is appended to `Manual_Verification_Guide.md` → `### T0019.5` for the next person with the stack running, and is a **prerequisite gate before T0019.6** is trusted to run unattended.
+  - **A — full suite green:** `uv run pytest && uv run ruff check . && uv run mypy` → pytest and
+    ruff green; mypy shows only the two pre-existing, unrelated errors noted above.
+  - **B/C/D/E — live-DB checks:** **not run this session — no local Docker Postgres was up.** These
+    require `docker compose up -d`, a scratch `internhunter_drift` database for check C, and a
+    temporary `min_yield` edit for check D, none of which are safe to fabricate results for. The
+    full checklist is appended to `archive/Manual_Verification_Archive.md` → `### T0019.5` for the
+    next person
+    with the stack running, and is a **prerequisite gate before T0019.6** is trusted to run
+    unattended.
 - **Risks:**
-  - **Unverified against a live DB this session** — the schema-drift detection (check C) and yield-floor abort (check D) are exercised only by mocked unit tests here, not against a real Postgres instance. Since this ticket exists specifically to protect an unattended live-DB writer, running checks B–D before T0019.6 ships is not optional. Logged as a follow-up below.
-  - The dead-man ping is single-attempt, fire-and-forget by design (per the ticket's explicit non-goals — no retry, no `/start` ping, no alerting beyond healthchecks.io's own email). A transient network blip on the ping POST looks identical to a real failed run from healthchecks.io's perspective until the next scheduled run succeeds.
-  - `pages_failed` remains produced but unconsumed — T0019.4's completion report predicted T0019.5 would act on it; this ticket's explicit non-goals rule that out. Corrected in `Known_Issues.md`.
-  - The API-side read path (`query_clean_jobs`, `get_job_details`) still has no schema-drift protection — only the ingestion write path is covered. Logged in `Known_Issues.md` as the remaining gap on the now-`[HIGH · PARTIALLY RESOLVED]` entry.
+  - **Unverified against a live DB this session** — the schema-drift detection (check C) and
+    yield-floor abort (check D) are exercised only by mocked unit tests here, not against a real
+    Postgres instance. Since this ticket exists specifically to protect an unattended live-DB
+    writer, running checks B–D before T0019.6 ships is not optional. Logged as a follow-up below.
+  - The dead-man ping is single-attempt, fire-and-forget by design (per the ticket's explicit
+    non-goals — no retry, no `/start` ping, no alerting beyond healthchecks.io's own email). A
+    transient network blip on the ping POST looks identical to a real failed run from
+    healthchecks.io's perspective until the next scheduled run succeeds.
+  - `pages_failed` remains produced but unconsumed — T0019.4's completion report predicted T0019.5
+    would act on it; this ticket's explicit non-goals rule that out. Corrected in `Known_Issues.md`.
+  - The API-side read path (`query_clean_jobs`, `get_job_details`) still has no schema-drift
+    protection — only the ingestion write path is covered. Logged in `Known_Issues.md` as the
+    remaining gap on the now-`[HIGH · PARTIALLY RESOLVED]` entry.
 - **Follow-ups:**
-  - Run manual checks B–D against local Docker Postgres before T0019.6 is built or merged — this is the actual proof the abort-before-write behavior works outside of mocks.
-  - No ticket currently owns an API-side startup schema assertion (protecting the read path). Candidate: reuse or adapt `assert_clean_jobs_schema` at FastAPI startup.
-  - No ticket currently owns turning `pages_failed` into a threshold/abort; revisit if observed non-zero on a recurring basis once T0019.6 is live.
-  - T0019.6 (nightly cron) is next and was blocked on this ticket; it is now unblocked pending the maintainer's T0019.1 verdict confirmation (independent, pre-existing blocker, unaffected by this ticket).
-- **Docs updated:** `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, this file.
+  - Run manual checks B–D against local Docker Postgres before T0019.6 is built or merged — this is
+    the actual proof the abort-before-write behavior works outside of mocks.
+  - No ticket currently owns an API-side startup schema assertion (protecting the read path).
+    Candidate: reuse or adapt `assert_clean_jobs_schema` at FastAPI startup.
+  - No ticket currently owns turning `pages_failed` into a threshold/abort; revisit if observed
+    non-zero on a recurring basis once T0019.6 is live.
+  - T0019.6 (nightly cron) is next and was blocked on this ticket; it is now unblocked pending the
+    maintainer's T0019.1 verdict confirmation (independent, pre-existing blocker, unaffected by this
+    ticket).
+- **Docs updated:** `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`,
+  `docs/Known_Issues.md`, this file.
 
 ## T0019.7 — Windowed keep-alive ping + Neon idle-pool verification (doc-only)
-- **Summary:** applies the cold-start mitigation decided 2026-07-16 (`deployment-research-plan.md` §1a) but never executed: a windowed external ping of `GET /api/v1/health` to keep Render's free instance from spinning down. The ticket is deliberately doc-only — dashboard config and a ~24 h Neon observation are not things a coder session can perform — so the deliverable is a runbook precise enough to execute without re-deriving anything, a measurement template with the "expected if healthy" arithmetic worked out, and a pre-written, numerically-triggered decision rule for the one open question: whether the checkpointer's idle Postgres pool (`min_size=4` by psycopg_pool default, never overridden in `src/core/checkpointer.py`) alone keeps Neon awake regardless of which endpoint is pinged, which would blow Neon's 100 CU-h/month free cap.
-- **Files changed (documentation only):** `docs/Manual_Verification_Guide.md` (new `### T0019.7` entry — Part A setup runbook, Part B measurement template, Part C decision rule, Part D rollback), `research/deployment-research-plan.md` (§1a status update + new empty **Verification outcome (T0019.7, date)** record), `docs/Known_Issues.md` (updated the cold-start entry's "To verify when applied" line and the 750-instance-hour entry's "latent today" line — both still `OPEN`, neither closed by this ticket), `docs/Repo_Current_State.md`, this file. **No file under `src/`, `tests/`, `config/`, `.github/`, or `alembic/` was touched.**
-- **Runbook contents (Part A):** target `https://internhunteragent.onrender.com/api/v1/health` (never `/ready` — confirmed by reading `src/api/routes/health.py:13-21` vs `:40-46` that `/health` touches no database), 10–14 min interval (12 used as the concrete value) with an explicit "15 min is not safe" warning tied to Render's exact 15-min idle timer, the `07:00–23:00 ICT` / `00:00–16:00 UTC` window with a step telling the maintainer to check the cron-job.org account's configured timezone before entering hours (flagged as the easiest mistake in the ticket), the ~80 requests/day sanity-check figure, and a note to record the enable timestamp since Part B's 24 h window starts there. Part A also carries forward the Render AUP tension from §1a's policy check (one clause has a foothold — "avoid payment or financial responsibility" — read as low-risk-not-prohibited) so it isn't quietly dropped, and points to decision-rule branch (c) as the clean way out of that tension if the maintainer would rather not sit in it.
-- **Measurement template (Part B):** the five pre-written rows from the ticket, with "expected if healthy" values derived rather than left vague — well under ~4 CU-h/day if Neon suspends properly between pings vs. exactly 4 CU-h/day (16 h × 0.25 CU) → ≈122 CU-h/month if the idle pool holds it awake, against the 100 CU-h cap. Notes where each number is read from (Neon Console → Monitoring/Usage; Render Dashboard → Metrics/Billing) and that Neon's meter can lag, so the 24 h reading should be taken with slack.
-- **Decision rule (Part C):** numeric trigger (≈4 CU-h/day, no suspension gaps → ≈122 CU-h/month projected) gating three ordered branches — (a) shed idle pool connections (`min_size=0`/idle lifetime in `config/settings.yaml`, explicitly flagged as its own future ticket, conditional on this ticket's measurement, with an instruction to re-run Part B afterward — **not implemented here**), (b) shrink the window (12 h/day ≈ 91 CU-h/month, arithmetic shown), (c) Render Starter $7/mo (inside the $10 ceiling, removes the problem at the root).
-- **Commands run:** `git checkout feature/t0019.6-nightly-cron` / reconciliation of pre-existing uncommitted work found in the working tree at session start (see "Working-tree note" below), `git checkout -b feature/t0019.7-keepalive-verification`, `uv run ruff check .`, `uv run mypy`, `uv run pytest -q`, `curl -s -o /dev/null -w "%{http_code}\n" --max-time 90 https://internhunteragent.onrender.com/api/v1/health`, `git status --short` / `git diff --stat` (before finalizing, to confirm the diff stayed documentation-only).
-- **Build & test:** `uv run ruff check .` → all checks passed. `uv run mypy` → the same 2 pre-existing, unrelated errors as every prior ticket in this stack (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`). `uv run pytest -q` → `319 passed, 8 skipped, 19 deselected, 4 subtests passed` in ~266s — identical counts to the pre-ticket baseline; skips are all DB-dependent (no local Docker Postgres this session). None of these were expected to move, since no code changed; run anyway per the ticket's manual-verification requirement B.
+- **Summary:** applies the cold-start mitigation decided 2026-07-16
+  (`research/archive/deployment-research-plan.md`
+  §1a) but never executed: a windowed external ping of `GET /api/v1/health` to keep Render's free
+  instance from spinning down. The ticket is deliberately doc-only — dashboard config and a ~24 h
+  Neon observation are not things a coder session can perform — so the deliverable is a runbook
+  precise enough to execute without re-deriving anything, a measurement template with the "expected
+  if healthy" arithmetic worked out, and a pre-written, numerically-triggered decision rule for the
+  one open question: whether the checkpointer's idle Postgres pool (`min_size=4` by psycopg_pool
+  default, never overridden in `src/core/checkpointer.py`) alone keeps Neon awake regardless of
+  which endpoint is pinged, which would blow Neon's 100 CU-h/month free cap.
+- **Files changed (documentation only):** `docs/archive/Manual_Verification_Archive.md` (new `###
+  T0019.7`
+  entry — Part A setup runbook, Part B measurement template, Part C decision rule, Part D rollback),
+  `research/archive/deployment-research-plan.md` (§1a status update + new empty **Verification
+  outcome
+  (T0019.7, date)** record), `docs/Known_Issues.md` (updated the cold-start entry's "To verify when
+  applied" line and the 750-instance-hour entry's "latent today" line — both still `OPEN`, neither
+  closed by this ticket), `docs/Repo_Current_State.md`, this file. **No file under `src/`, `tests/`,
+  `config/`, `.github/`, or `alembic/` was touched.**
+- **Runbook contents (Part A):** target `https://internhunteragent.onrender.com/api/v1/health`
+  (never `/ready` — confirmed by reading `src/api/routes/health.py:13-21` vs `:40-46` that `/health`
+  touches no database), 10–14 min interval (12 used as the concrete value) with an explicit "15 min
+  is not safe" warning tied to Render's exact 15-min idle timer, the `07:00–23:00 ICT` /
+  `00:00–16:00 UTC` window with a step telling the maintainer to check the cron-job.org account's
+  configured timezone before entering hours (flagged as the easiest mistake in the ticket), the ~80
+  requests/day sanity-check figure, and a note to record the enable timestamp since Part B's 24 h
+  window starts there. Part A also carries forward the Render AUP tension from §1a's policy check
+  (one clause has a foothold — "avoid payment or financial responsibility" — read as
+  low-risk-not-prohibited) so it isn't quietly dropped, and points to decision-rule branch (c) as
+  the clean way out of that tension if the maintainer would rather not sit in it.
+- **Measurement template (Part B):** the five pre-written rows from the ticket, with "expected if
+  healthy" values derived rather than left vague — well under ~4 CU-h/day if Neon suspends properly
+  between pings vs. exactly 4 CU-h/day (16 h × 0.25 CU) → ≈122 CU-h/month if the idle pool holds it
+  awake, against the 100 CU-h cap. Notes where each number is read from (Neon Console →
+  Monitoring/Usage; Render Dashboard → Metrics/Billing) and that Neon's meter can lag, so the 24 h
+  reading should be taken with slack.
+- **Decision rule (Part C):** numeric trigger (≈4 CU-h/day, no suspension gaps → ≈122 CU-h/month
+  projected) gating three ordered branches — (a) shed idle pool connections (`min_size=0`/idle
+  lifetime in `config/settings.yaml`, explicitly flagged as its own future ticket, conditional on
+  this ticket's measurement, with an instruction to re-run Part B afterward — **not implemented
+  here**), (b) shrink the window (12 h/day ≈ 91 CU-h/month, arithmetic shown), (c) Render Starter
+  $7/mo (inside the $10 ceiling, removes the problem at the root).
+- **Commands run:** `git checkout feature/t0019.6-nightly-cron` / reconciliation of pre-existing
+  uncommitted work found in the working tree at session start (see "Working-tree note" below), `git
+  checkout -b feature/t0019.7-keepalive-verification`, `uv run ruff check .`, `uv run mypy`, `uv run
+  pytest -q`, `curl -s -o /dev/null -w "%{http_code}\n" --max-time 90
+  https://internhunteragent.onrender.com/api/v1/health`, `git status --short` / `git diff --stat`
+  (before finalizing, to confirm the diff stayed documentation-only).
+- **Build & test:** `uv run ruff check .` → all checks passed. `uv run mypy` → the same 2
+  pre-existing, unrelated errors as every prior ticket in this stack (`src/core/checkpointer.py:25`,
+  `src/agents/runtime/middleware.py:48`). `uv run pytest -q` → `319 passed, 8 skipped, 19
+  deselected, 4 subtests passed` in ~266s — identical counts to the pre-ticket baseline; skips are
+  all DB-dependent (no local Docker Postgres this session). None of these were expected to move,
+  since no code changed; run anyway per the ticket's manual-verification requirement B.
 - **Manual verification (actual results):**
-  - **A — diff is documentation-only:** `git status --short` / `git diff --stat` → only `docs/*` and `research/*` changed (3 files, 73 insertions / 4 deletions); confirmed no `src/` file appears.
-  - **B — suite unaffected:** confirmed above, byte-for-byte the same pass/skip counts as the untouched baseline.
-  - **C — runbook executable cold:** re-read Part A assuming no prior context — every value is concrete (full URL, `*/12` minute value, both ICT and UTC hour ranges spelled out, exact dashboard paths for Part B's readings). No step points back to `deployment-research-plan.md` to look something up; the checkpointer/pool detail that motivates the whole verification is inlined in the section's opening paragraph instead of cross-referenced.
-  - **D — ping target live:** `curl` → `200`. Confirmed from reading `src/api/routes/health.py` that `/health` (lines 13–21) returns a static dict and runs no query, unlike `/ready` (lines 40–46), which calls `_select_one()` against Postgres. The service was warm at request time (T0019.7's own curl didn't need to wait out a cold start), so the ~60 s cold-start case named in the ticket's manual check D was not observed directly this session — noted, not fabricated.
-  - **E — maintainer steps, not executed:** creating the cron-job.org job, recording the enable timestamp, taking before/after readings, waiting ~24 h, applying the decision rule, and filling in the §1a outcome record were **not** attempted. **No external service (cron-job.org or otherwise) was configured or signed into.**
-- **Working-tree note (not this ticket's own work, but resolved before starting it):** this branch was cut from `feature/t0019.6-nightly-cron`, which itself sat at the same commit as `feature/t0019.5-unattended-safety` — T0019.6's actual work (`.github/workflows/ingestion.yml` + supporting docs) had been done in an earlier session but left uncommitted on the wrong branch. While reconciling that (maintainer-directed, see below), a **second, concurrent session** was found to be actively operating on the same working directory mid-reconciliation — causing a transient merge-conflict-like state and, confirmed after the fact, the loss of the uncommitted T0019.6 *documentation* (its completion report draft, Manual Verification Guide entry, Known_Issues updates) that was never `git add`ed before the collision. The concurrent session's own legitimate work (`ec063e7`, correcting stale `main`-divergence notes and logging a T0019.5 live-DB verification gap) survived and was left as-is. Per maintainer direction: committed one small, self-contained, genuinely-orphaned T0019.5 doc addition (`docs/MVP_Technical_Design.md` §7.1, `24020b3`) that predated the collision; left `.github/workflows/ingestion.yml` (the surviving T0019.6 file, now undocumented) untouched and untracked for a future session to properly redo T0019.6's documentation. T0019.7's own branch and diff are unaffected by any of this — verified clean via requirement A above.
+  - **A — diff is documentation-only:** `git status --short` / `git diff --stat` → only `docs/*` and
+    `research/*` changed (3 files, 73 insertions / 4 deletions); confirmed no `src/` file appears.
+  - **B — suite unaffected:** confirmed above, byte-for-byte the same pass/skip counts as the
+    untouched baseline.
+  - **C — runbook executable cold:** re-read Part A assuming no prior context — every value is
+    concrete (full URL, `*/12` minute value, both ICT and UTC hour ranges spelled out, exact
+    dashboard paths for Part B's readings). No step points back to
+    `research/archive/deployment-research-plan.md` to
+    look something up; the checkpointer/pool detail that motivates the whole verification is inlined
+    in the section's opening paragraph instead of cross-referenced.
+  - **D — ping target live:** `curl` → `200`. Confirmed from reading `src/api/routes/health.py` that
+    `/health` (lines 13–21) returns a static dict and runs no query, unlike `/ready` (lines 40–46),
+    which calls `_select_one()` against Postgres. The service was warm at request time (T0019.7's
+    own curl didn't need to wait out a cold start), so the ~60 s cold-start case named in the
+    ticket's manual check D was not observed directly this session — noted, not fabricated.
+  - **E — maintainer steps, not executed:** creating the cron-job.org job, recording the enable
+    timestamp, taking before/after readings, waiting ~24 h, applying the decision rule, and filling
+    in the §1a outcome record were **not** attempted. **No external service (cron-job.org or
+    otherwise) was configured or signed into.**
+- **Working-tree note (not this ticket's own work, but resolved before starting it):** this branch
+  was cut from `feature/t0019.6-nightly-cron`, which itself sat at the same commit as
+  `feature/t0019.5-unattended-safety` — T0019.6's actual work (`.github/workflows/ingestion.yml` +
+  supporting docs) had been done in an earlier session but left uncommitted on the wrong branch.
+  While reconciling that (maintainer-directed, see below), a **second, concurrent session** was
+  found to be actively operating on the same working directory mid-reconciliation — causing a
+  transient merge-conflict-like state and, confirmed after the fact, the loss of the uncommitted
+  T0019.6 *documentation* (its completion report draft, Manual Verification Guide entry,
+  Known_Issues updates) that was never `git add`ed before the collision. The concurrent session's
+  own legitimate work (`ec063e7`, correcting stale `main`-divergence notes and logging a T0019.5
+  live-DB verification gap) survived and was left as-is. Per maintainer direction: committed one
+  small, self-contained, genuinely-orphaned T0019.5 doc addition (`docs/MVP_Technical_Design.md`
+  §7.1, `24020b3`) that predated the collision; left `.github/workflows/ingestion.yml` (the
+  surviving T0019.6 file, now undocumented) untouched and untracked for a future session to properly
+  redo T0019.6's documentation. T0019.7's own branch and diff are unaffected by any of this —
+  verified clean via requirement A above.
 - **Risks:**
-  - The core question — does the idle pool hold Neon awake — is still genuinely unmeasured; this ticket only makes it measurable. Logged as the load-bearing open item in both `Known_Issues.md` entries and the new §1a outcome slot, all left open by design.
-  - Decision-rule branch (a) (pool `min_size=0`/idle lifetime) is explicitly not implemented here per the ticket's "Do not touch `checkpointer.py`" instruction — it is speculative work against an untested hypothesis until Part B's measurement says otherwise. Logged as a conditional future ticket in `Known_Issues.md`.
-  - The Render AUP "avoid payment" clause tension is carried forward, not resolved — recorded in §1a and Part A step 9; branch (c) is the clean resolution if the maintainer wants to exit the tension rather than accept it.
-  - `.github/workflows/ingestion.yml` now exists in the working tree with no corresponding documentation (completion report, Manual Verification Guide entry, Known_Issues entries) after the concurrent-session data loss described above — flagged here since it's adjacent to this session's work, even though redoing T0019.6's docs is out of scope for T0019.7.
+  - The core question — does the idle pool hold Neon awake — is still genuinely unmeasured; this
+    ticket only makes it measurable. Logged as the load-bearing open item in both `Known_Issues.md`
+    entries and the new §1a outcome slot, all left open by design.
+  - Decision-rule branch (a) (pool `min_size=0`/idle lifetime) is explicitly not implemented here
+    per the ticket's "Do not touch `checkpointer.py`" instruction — it is speculative work against
+    an untested hypothesis until Part B's measurement says otherwise. Logged as a conditional future
+    ticket in `Known_Issues.md`.
+  - The Render AUP "avoid payment" clause tension is carried forward, not resolved — recorded in §1a
+    and Part A step 9; branch (c) is the clean resolution if the maintainer wants to exit the
+    tension rather than accept it.
+  - `.github/workflows/ingestion.yml` now exists in the working tree with no corresponding
+    documentation (completion report, Manual Verification Guide entry, Known_Issues entries) after
+    the concurrent-session data loss described above — flagged here since it's adjacent to this
+    session's work, even though redoing T0019.6's docs is out of scope for T0019.7.
 - **Follow-ups:**
   - Maintainer executes Part A–E of the T0019.7 runbook (own action, not a ticket).
-  - If Part C's trigger fires, decision-rule branch (a) (shed idle pool connections) becomes its own ticket, gated on the measurement — touches `src/core/checkpointer.py` and `config/settings.yaml`, explicitly out of scope here.
-  - T0019.6's documentation (completion report, Manual Verification Guide entry, Known_Issues/Full_Design_Document/deployment-research-plan updates) needs to be redone from scratch in a future session — the workflow file survived, its docs did not.
-- **Docs updated:** `docs/Manual_Verification_Guide.md`, `research/deployment-research-plan.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this file.
+  - If Part C's trigger fires, decision-rule branch (a) (shed idle pool connections) becomes its own
+    ticket, gated on the measurement — touches `src/core/checkpointer.py` and
+    `config/settings.yaml`, explicitly out of scope here.
+  - T0019.6's documentation (completion report, Manual Verification Guide entry,
+    Known_Issues/Full_Design_Document/deployment-research-plan updates) needs to be redone from
+    scratch in a future session — the workflow file survived, its docs did not.
+- **Docs updated:** `docs/Manual_Verification_Guide.md`,
+  `research/archive/deployment-research-plan.md`,
+  `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this file.
 
 ## T0019.8 — Truthful refresh date on `/ready`
-- **Summary:** the UI's corpus-age disclaimer was rendering a hand-maintained static config value (`api.demo.data_snapshot_date`). With T0019.3's accumulate semantics landed, the corpus can advance nightly while that string does not — making the disclaimer the one part of the UI able to silently lie, and release-blocker #7 in `research/v1-release-readiness-plan.md`. `/api/v1/ready` now derives the date from data state: `SELECT MAX(last_seen_at)::date FROM clean_jobs`, falling back to the configured value when the table is empty or the query fails. Response shape, field name, and the UI are all unchanged — only the value's source moved. This session also **verified and finished work already present uncommitted in the working tree** rather than reimplementing it, and (per maintainer decision D3) gave real ticket IDs to the T0019.9/T0019.10 references that an earlier uncommitted design-doc edit had cited without them existing anywhere.
+- **Summary:** the UI's corpus-age disclaimer was rendering a hand-maintained static config value
+  (`api.demo.data_snapshot_date`). With T0019.3's accumulate semantics landed, the corpus can
+  advance nightly while that string does not — making the disclaimer the one part of the UI able to
+  silently lie, and release-blocker #7 in `research/v1-release-readiness-plan.md`. `/api/v1/ready`
+  now derives the date from data state: `SELECT MAX(last_seen_at)::date FROM clean_jobs`, falling
+  back to the configured value when the table is empty or the query fails. Response shape, field
+  name, and the UI are all unchanged — only the value's source moved. This session also **verified
+  and finished work already present uncommitted in the working tree** rather than reimplementing it,
+  and (per maintainer decision D3) gave real ticket IDs to the T0019.9/T0019.10 references that an
+  earlier uncommitted design-doc edit had cited without them existing anywhere.
 - **Files created / changed:**
-  - `src/api/routes/health.py` — split the old `get_data_snapshot_date` into `_configured_snapshot_date()` (the static fallback, unchanged defensive handling of a malformed `api.demo` block) and a new data-derived `get_data_snapshot_date()`; added `_select_max_last_seen()` running the plain SQL through the existing `session_factory`. `readiness_check` runs the date query via `asyncio.to_thread` *after* the `SELECT 1` probe.
-  - `tests/api/test_ready.py` — 7 cases covering: MAX present, empty-table fallback, query-raises fallback, 503 short-circuit with `assert_not_called()` on the date query, and the not-rate-limited guarantee.
-  - `docs/Tickets.md` — **new T0019.9 and T0019.10 ticket entries**; milestone sequencing line, roadmap row, and backlog pointer updated.
-  - `docs/MVP_Technical_Design.md` — §11.3 rewritten; §7 status banner corrected (see "Doc corrections" below).
-  - `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this file.
-- **Layer isolation:** holds. The readiness route reads a *table* with plain SQL; it does not import `src.services.ingestion` (the ticket's explicit constraint). No LangChain logic entered the route.
+  - `src/api/routes/health.py` — split the old `get_data_snapshot_date` into
+    `_configured_snapshot_date()` (the static fallback, unchanged defensive handling of a malformed
+    `api.demo` block) and a new data-derived `get_data_snapshot_date()`; added
+    `_select_max_last_seen()` running the plain SQL through the existing `session_factory`.
+    `readiness_check` runs the date query via `asyncio.to_thread` *after* the `SELECT 1` probe.
+  - `tests/api/test_ready.py` — 7 cases covering: MAX present, empty-table fallback, query-raises
+    fallback, 503 short-circuit with `assert_not_called()` on the date query, and the
+    not-rate-limited guarantee.
+  - `docs/Tickets.md` — **new T0019.9 and T0019.10 ticket entries**; milestone sequencing line,
+    roadmap row, and backlog pointer updated.
+  - `docs/MVP_Technical_Design.md` — §11.3 rewritten; §7 status banner corrected (see "Doc
+    corrections" below).
+  - `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this
+    file.
+- **Layer isolation:** holds. The readiness route reads a *table* with plain SQL; it does not import
+  `src.services.ingestion` (the ticket's explicit constraint). No LangChain logic entered the route.
 - **Doc corrections made (this ticket found three untrue statements in the working tree):**
-  1. §11.3 named `SELECT MAX(fetched_at)` as the intended fix. That is wrong under T0019.3 — `fetched_at` lives on `raw_jobs`, while `last_seen_at` is the per-row freshness signal on `clean_jobs` that the upsert refreshes each run. The disclaimer describes the *served* corpus, so it must read the served table. Doc updated to match the implementation.
-  2. The §7 banner asserted the T0019.1 robots/ToS verdict was "favorable and **maintainer-confirmed** 2026-07-19". **No committed document records that confirmation** — the T0019.1 completion report says "RECOMMENDED VERDICT: favorable — pending maintainer confirmation." Softened to state the gate is not yet cleared (decision D2 remains open).
-  3. The same banner claimed T0019.6 was **built**, while `.github/workflows/ingestion.yml` is untracked and its docs were lost to the concurrent-session collision recorded in the T0019.7 report. A committed doc must not assert a file the repo does not contain; the banner now marks T0019.6 open with the reason.
-- **Commands run:** `uv run pytest tests/api/test_ready.py -v`, `uv run pytest -q`, `uv run ruff check .`, `uv run mypy`, `docker ps`, plus `git diff`/`git status` inspection and grep/read of `config/ingestion.yaml`, `src/services/query/job_details.py`, `src/services/ingestion/sources/vietnamworks.py`.
-- **Build & test:** `uv run pytest tests/api/test_ready.py -v` → **7 passed** in 1.88s. `uv run ruff check .` → all checks passed. `uv run mypy` → the same **2 pre-existing, unrelated** errors as every prior ticket in this stack (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`) — no third error introduced.
+  1. §11.3 named `SELECT MAX(fetched_at)` as the intended fix. That is wrong under T0019.3 —
+     `fetched_at` lives on `raw_jobs`, while `last_seen_at` is the per-row freshness signal on
+     `clean_jobs` that the upsert refreshes each run. The disclaimer describes the *served* corpus,
+     so it must read the served table. Doc updated to match the implementation.
+  2. The §7 banner asserted the T0019.1 robots/ToS verdict was "favorable and
+     **maintainer-confirmed** 2026-07-19". **No committed document records that confirmation** — the
+     T0019.1 completion report says "RECOMMENDED VERDICT: favorable — pending maintainer
+     confirmation." Softened to state the gate is not yet cleared (decision D2 remains open).
+  3. The same banner claimed T0019.6 was **built**, while `.github/workflows/ingestion.yml` is
+     untracked and its docs were lost to the concurrent-session collision recorded in the T0019.7
+     report. A committed doc must not assert a file the repo does not contain; the banner now marks
+     T0019.6 open with the reason.
+- **Commands run:** `uv run pytest tests/api/test_ready.py -v`, `uv run pytest -q`, `uv run ruff
+  check .`, `uv run mypy`, `docker ps`, plus `git diff`/`git status` inspection and grep/read of
+  `config/ingestion.yaml`, `src/services/query/job_details.py`,
+  `src/services/ingestion/sources/vietnamworks.py`.
+- **Build & test:** `uv run pytest tests/api/test_ready.py -v` → **7 passed** in 1.88s. `uv run ruff
+  check .` → all checks passed. `uv run mypy` → the same **2 pre-existing, unrelated** errors as
+  every prior ticket in this stack (`src/core/checkpointer.py:25`,
+  `src/agents/runtime/middleware.py:48`) — no third error introduced.
 - **Manual verification — NOT RUN. This is the ticket's main gap, stated plainly:**
-  - **Docker Desktop was not running this session** (`docker ps` → `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`), so **none** of checks A–E in the new `Manual_Verification_Guide.md` T0019.8 entry were executed against a real database.
-  - What this leaves unproven: the automated tests patch `_select_max_last_seen` and hand it a `datetime.date` object, so they exercise the fallback logic but **cannot** prove that PostgreSQL's `::date` cast actually arrives as a `datetime.date` through psycopg3, nor that against a populated table the real value wins rather than the fallback quietly firing. Check B (endpoint value vs. `psql` value must match) is the load-bearing one and is outstanding.
-  - This is the **same class of gap** as T0019.5's unrun checks B–E. It is recorded rather than papered over; do not treat T0019.8 as end-to-end verified until check B passes.
+  - **Docker Desktop was not running this session** (`docker ps` → `open
+    //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`), so **none** of
+    checks A–E in the new `archive/Manual_Verification_Archive.md` T0019.8 entry were executed
+    against a real
+    database.
+  - What this leaves unproven: the automated tests patch `_select_max_last_seen` and hand it a
+    `datetime.date` object, so they exercise the fallback logic but **cannot** prove that
+    PostgreSQL's `::date` cast actually arrives as a `datetime.date` through psycopg3, nor that
+    against a populated table the real value wins rather than the fallback quietly firing. Check B
+    (endpoint value vs. `psql` value must match) is the load-bearing one and is outstanding.
+  - This is the **same class of gap** as T0019.5's unrun checks B–E. It is recorded rather than
+    papered over; do not treat T0019.8 as end-to-end verified until check B passes.
 - **Risks:**
-  - **The live-DB behaviour is unverified** (above). Confidence in the SQL and the psycopg3 date mapping is from reading, not from running.
-  - **Silent degradation by design.** Against an un-migrated DB the query raises, the fallback fires, and `/ready` still returns `200` with a stale-but-plausible date — no signal in the response body, only the `snapshot_date_query_failed_using_config_fallback` warning (with `exc_info`). Deliberate (a readiness probe must not flap on a cosmetic field) but logged as `[LOW · NOTE]` in `Known_Issues.md`.
-  - **`/ready` now costs a second DB round trip** on the success path. Kept as two separate `asyncio.to_thread` calls on purpose: the 503 path short-circuits before the date query, so failure modes stay independently observable and a down-DB probe still costs exactly one query.
-  - T0019.9/T0019.10 are **scoped only** — neither is implemented, and the design doc now points at ticket text rather than at nothing.
+  - **The live-DB behaviour is unverified** (above). Confidence in the SQL and the psycopg3 date
+    mapping is from reading, not from running.
+  - **Silent degradation by design.** Against an un-migrated DB the query raises, the fallback
+    fires, and `/ready` still returns `200` with a stale-but-plausible date — no signal in the
+    response body, only the `snapshot_date_query_failed_using_config_fallback` warning (with
+    `exc_info`). Deliberate (a readiness probe must not flap on a cosmetic field) but logged as
+    `[LOW · NOTE]` in `Known_Issues.md`.
+  - **`/ready` now costs a second DB round trip** on the success path. Kept as two separate
+    `asyncio.to_thread` calls on purpose: the 503 path short-circuits before the date query, so
+    failure modes stay independently observable and a down-DB probe still costs exactly one query.
+  - T0019.9/T0019.10 are **scoped only** — neither is implemented, and the design doc now points at
+    ticket text rather than at nothing.
 - **Follow-ups:**
-  - **Run the T0019.8 manual checks A–E** against local Docker Postgres (needs Docker up). Check B specifically.
-  - **T0019.10 before the cron is enabled** — the `get_job_details` `SELECT *` leak is cosmetic only while all rows are `is_active = true`; it becomes a real honesty defect the moment expiry starts flipping rows.
+  - **Run the T0019.8 manual checks A–E** against local Docker Postgres (needs Docker up). Check B
+    specifically.
+  - **T0019.10 before the cron is enabled** — the `get_job_details` `SELECT *` leak is cosmetic only
+    while all rows are `is_active = true`; it becomes a real honesty defect the moment expiry starts
+    flipping rows.
   - **T0019.9** after the D8 ToS-posture decision (it raises request volume against the same host).
-  - **T0019.6 remains open** and is not this ticket's work: it needs its lost docs rewritten, its workflow committed, D2 (ToS verdict ratified in a tracked doc) and D5 (T0019.5 checks B–E) cleared.
-  - **D11** — the 60-day Actions auto-disable has no mitigation; the action T0019.6 named is ToS-blocked by GitHub. Newly logged in `Known_Issues.md`.
-- **Docs updated:** `docs/Tickets.md`, `docs/MVP_Technical_Design.md`, `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this file.
+  - **T0019.6 remains open** and is not this ticket's work: it needs its lost docs rewritten, its
+    workflow committed, D2 (ToS verdict ratified in a tracked doc) and D5 (T0019.5 checks B–E)
+    cleared.
+  - **D11** — the 60-day Actions auto-disable has no mitigation; the action T0019.6 named is
+    ToS-blocked by GitHub. Newly logged in `Known_Issues.md`.
+- **Docs updated:** `docs/Tickets.md`, `docs/MVP_Technical_Design.md`,
+  `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this
+  file.
 
 ## T0019.9 — Ingestion coverage: raise `max_jobs` + interleave query order
-- **Summary:** the corpus the demo answers from was both **truncated** and **skewed**, and the two defects were independent. `config/ingestion.yaml` capped every run at `max_jobs: 50` while a 06/2026 spike measured ~50–112 postings actually available across the 8 configured queries — so the cap bound at the low end of the real range, and a truncated run looked identical to a complete one. Worse, that global cap was spent in **fixed config order**: `_collect` iterated queries outer / pages inner and broke the outer loop once `kept >= max_jobs`, so if `"data scientist"` and `"data engineer"` alone filled the budget, the remaining six queries never issued a single request — `"MLOps"`, `"computer vision"` and `"deep learning"` were structurally starved. The corpus was not a sample of AI/Data roles; it was a prefix of the config file. Both fixes land: the cap rises to `150`, and `_collect` now interleaves **page outer / query inner**. Neither suffices alone — raising the cap does not fix order bias, interleaving does not fix a ceiling that is too low.
-- **⚠️ The D8 gate held — no live API request was issued.** This ticket raises request *volume tolerance* against `ms.vietnamworks.com`, an undocumented API whose republishing posture (decision **D8**, `research/v1-release-readiness-plan.md` §4) is unsettled. Everything was implemented and tested against **canned responses only**. No live fetch was performed — not to measure, not once. This branch was **not** merged toward `main` and **not** merged into the nightly cron's path (`.github/workflows/ingestion.yml` is untouched and remains untracked). The re-measure §11 calls for is written as a runbook for the maintainer and was **not executed**.
+- **Summary:** the corpus the demo answers from was both **truncated** and **skewed**, and the two
+  defects were independent. `config/ingestion.yaml` capped every run at `max_jobs: 50` while a
+  06/2026 spike measured ~50–112 postings actually available across the 8 configured queries — so
+  the cap bound at the low end of the real range, and a truncated run looked identical to a complete
+  one. Worse, that global cap was spent in **fixed config order**: `_collect` iterated queries outer
+  / pages inner and broke the outer loop once `kept >= max_jobs`, so if `"data scientist"` and
+  `"data engineer"` alone filled the budget, the remaining six queries never issued a single request
+  — `"MLOps"`, `"computer vision"` and `"deep learning"` were structurally starved. The corpus was
+  not a sample of AI/Data roles; it was a prefix of the config file. Both fixes land: the cap rises
+  to `150`, and `_collect` now interleaves **page outer / query inner**. Neither suffices alone —
+  raising the cap does not fix order bias, interleaving does not fix a ceiling that is too low.
+- **⚠️ The D8 gate held — no live API request was issued.** This ticket raises request *volume
+  tolerance* against `ms.vietnamworks.com`, an undocumented API whose republishing posture (decision
+  **D8**, `research/v1-release-readiness-plan.md` §4) is unsettled. Everything was implemented and
+  tested against **canned responses only**. No live fetch was performed — not to measure, not once.
+  This branch was **not** merged toward `main` and **not** merged into the nightly cron's path
+  (`.github/workflows/ingestion.yml` is untouched and remains untracked). The re-measure §11 calls
+  for is written as a runbook for the maintainer and was **not executed**.
 - **Files changed:**
-  - `config/ingestion.yaml` — `max_jobs: 50 → 150`, one value, plus a comment explaining it is a **safety ceiling, not a target**: it bounds a runaway run, now sits above the measured yield so the API's real output ends a run, and — the point that matters for D8 — **raising it does not increase per-run request volume**, since `pages_per_query x queries` (2 × 8 = 16) determines request count and neither moved.
-  - `src/services/ingestion/sources/vietnamworks.py` — `_collect` only: loop nesting inverted to page-outer/query-inner; docstring rewritten to describe the interleave and why.
-  - `tests/services/ingestion/test_vietnamworks.py` — new `_ai_job` / `_per_query_client` helpers (the existing mock returns one fixture for every call and therefore **cannot** show per-query coverage at all) and a new `VietnamWorksCoverageTests` class, 6 cases.
-  - `research/data-ingestion-stage.md` — new §11: re-measure runbook, results table with every cell `_TBD — pending D8_`, and a decision rule.
-  - `docs/Known_Issues.md`, `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, this file.
-- **Invariants verified explicitly (each one re-read against the final code):** `seen_ids` is still initialised **once before both loops**, so cross-query dedup holds — the interleave makes collisions surface *earlier*, not differently. `kept` is still a single global counter and **all three cap checks remain** (outer loop, inner loop, inner-most job loop), so the run stops at exactly `max_jobs`, never one more. `_is_ai_data` is applied per job, unchanged. `time.sleep(self._delay)` is still in the `finally`, unmoved and unconditional, with its comment intact — it runs for every page attempt including skipped ones. T0019.4's `_post_with_retry` semantics are untouched: `None` still means `continue`, `pages_failed` still increments, nothing raises.
-- **Commands run:** `git checkout -b feature/t0019.9-ingestion-coverage`, `uv run pytest tests/services/ingestion/test_vietnamworks.py -q/-v`, `uv run pytest -q`, `uv run ruff check .`, `uv run mypy`, `git diff config/ingestion.yaml`, `git diff --stat`, and a throwaway distribution script run from scratch space (not committed).
-- **Build & test:** `uv run pytest -q` → **328 passed, 8 skipped**, 19 deselected, 4 subtests passed (~526s) — **+6 over T0019.8's 322**, exactly the six new cases. `uv run ruff check .` → all checks passed. `uv run mypy` → the same **2 pre-existing, unrelated** errors as every prior ticket in this stack; no third introduced. **No existing test broke, was loosened, or was removed** — all 21 prior cases in the file pass unchanged, `test_max_jobs_cap_is_honoured` included.
+  - `config/ingestion.yaml` — `max_jobs: 50 → 150`, one value, plus a comment explaining it is a
+    **safety ceiling, not a target**: it bounds a runaway run, now sits above the measured yield so
+    the API's real output ends a run, and — the point that matters for D8 — **raising it does not
+    increase per-run request volume**, since `pages_per_query x queries` (2 × 8 = 16) determines
+    request count and neither moved.
+  - `src/services/ingestion/sources/vietnamworks.py` — `_collect` only: loop nesting inverted to
+    page-outer/query-inner; docstring rewritten to describe the interleave and why.
+  - `tests/services/ingestion/test_vietnamworks.py` — new `_ai_job` / `_per_query_client` helpers
+    (the existing mock returns one fixture for every call and therefore **cannot** show per-query
+    coverage at all) and a new `VietnamWorksCoverageTests` class, 6 cases.
+  - `research/archive/data-ingestion-stage.md` — new §11: re-measure runbook, results table with
+    every cell
+    `_TBD — pending D8_`, and a decision rule.
+  - `docs/Known_Issues.md`, `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, this
+    file.
+- **Invariants verified explicitly (each one re-read against the final code):** `seen_ids` is still
+  initialised **once before both loops**, so cross-query dedup holds — the interleave makes
+  collisions surface *earlier*, not differently. `kept` is still a single global counter and **all
+  three cap checks remain** (outer loop, inner loop, inner-most job loop), so the run stops at
+  exactly `max_jobs`, never one more. `_is_ai_data` is applied per job, unchanged.
+  `time.sleep(self._delay)` is still in the `finally`, unmoved and unconditional, with its comment
+  intact — it runs for every page attempt including skipped ones. T0019.4's `_post_with_retry`
+  semantics are untouched: `None` still means `continue`, `pages_failed` still increments, nothing
+  raises.
+- **Commands run:** `git checkout -b feature/t0019.9-ingestion-coverage`, `uv run pytest
+  tests/services/ingestion/test_vietnamworks.py -q/-v`, `uv run pytest -q`, `uv run ruff check .`,
+  `uv run mypy`, `git diff config/ingestion.yaml`, `git diff --stat`, and a throwaway distribution
+  script run from scratch space (not committed).
+- **Build & test:** `uv run pytest -q` → **328 passed, 8 skipped**, 19 deselected, 4 subtests passed
+  (~526s) — **+6 over T0019.8's 322**, exactly the six new cases. `uv run ruff check .` → all checks
+  passed. `uv run mypy` → the same **2 pre-existing, unrelated** errors as every prior ticket in
+  this stack; no third introduced. **No existing test broke, was loosened, or was removed** — all 21
+  prior cases in the file pass unchanged, `test_max_jobs_cap_is_honoured` included.
 - **Manual verification — A–C run and passing, D skipped, E confirmed:**
-  - **A — diff is tight.** `git diff config/ingestion.yaml` shows exactly one changed value plus its comment; `queries`, `pages_per_query`, `delay_seconds`, `hits_per_page` and the retry settings are untouched. `git diff --stat` → 5 files, all inside the allowed areas.
-  - **B — the anti-skew test genuinely discriminates (the load-bearing check).** With the interleave: `27 passed`. With `_collect`'s loops **temporarily reverted** to query-outer: `2 failed, 25 passed` — `test_cap_truncates_evenly_across_queries_not_alphabetically` fails with `AssertionError: Items in the second set but not the first: 'q7', 'q6', 'q8' : some queries were starved by the cap`, and `test_request_order_is_page_major` fails with `[0,1,0,1,…] != [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1]`. The interleave was then restored and green re-confirmed. A test that passed both before and after would prove nothing; this one names the exact starved queries.
-  - **C — per-query distribution, end to end, no network.** 8 queries × 2 pages × 2 jobs, `max_jobs = 20` → `total postings: 20`, `requests issued: 10`, `pages_failed: 0`, distribution `q1:4 q2:4 q3:2 q4:2 q5:2 q6:2 q7:2 q8:2`, **queries represented: 8/8**. Under the old loop this is `4,4,4,4,4,0,0,0`.
-  - **D — local pipeline: SKIPPED, stated plainly.** Running the loader end-to-end could not be done without either a live fetch or scaffolding beyond this ticket's scope, so it was not attempted. The gate outranks the check. Nothing about the local pipeline is claimed as verified.
-  - **E — gate confirmed.** No request to `ms.vietnamworks.com`; branch not merged toward `main` or the cron workflow.
-- **Deviation from the ticket, with reasoning (please review):** the ticket specified the anti-skew test use **8 queries each yielding 10 AI/Data jobs with `max_jobs = 20`**, expecting an even spread across all 8 and predicting the old code prints `10,10,0,0,0,0,0,0`. **That shape cannot produce the assertion.** The interleave's granularity is a **page**, not a job — `_collect` drains an entire page before moving to the next query — so with 10 jobs on each query's page 0 the budget of 20 is spent on two queries *under page-major order too*, and the test would fail identically before and after the fix. Jobs-per-query-per-page must be `<= max_jobs / len(queries)` for a cap to reach every query at all. I used **2 jobs per page** (8 queries × 2 pages = 32 available, cap 20), which discriminates exactly as intended — see check B's failure output. This constraint is documented in the test class docstring and in the Manual Verification Guide entry, because anyone re-deriving the check from the ticket text would hit the same wall.
-- **Working-tree note (not my work, left untouched):** `docs/Known_Issues.md` acquired an unrelated `[LOW · OPEN]` Demo-UI entry (agent markdown rendered as raw text, dated 2026-07-20) **during this session** — `git status` at session start showed only `?? .github/`. This is consistent with the concurrent-session activity recorded in the T0019.7 report. I left the entry and its index-count bump exactly as found, edited only my own entries around it, and staged only this ticket's files. Flagging it so it is not mistaken for T0019.9's work or silently swept into this commit.
+  - **A — diff is tight.** `git diff config/ingestion.yaml` shows exactly one changed value plus its
+    comment; `queries`, `pages_per_query`, `delay_seconds`, `hits_per_page` and the retry settings
+    are untouched. `git diff --stat` → 5 files, all inside the allowed areas.
+  - **B — the anti-skew test genuinely discriminates (the load-bearing check).** With the
+    interleave: `27 passed`. With `_collect`'s loops **temporarily reverted** to query-outer: `2
+    failed, 25 passed` — `test_cap_truncates_evenly_across_queries_not_alphabetically` fails with
+    `AssertionError: Items in the second set but not the first: 'q7', 'q6', 'q8' : some queries were
+    starved by the cap`, and `test_request_order_is_page_major` fails with `[0,1,0,1,…] !=
+    [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1]`. The interleave was then restored and green re-confirmed. A
+    test that passed both before and after would prove nothing; this one names the exact starved
+    queries.
+  - **C — per-query distribution, end to end, no network.** 8 queries × 2 pages × 2 jobs, `max_jobs
+    = 20` → `total postings: 20`, `requests issued: 10`, `pages_failed: 0`, distribution `q1:4 q2:4
+    q3:2 q4:2 q5:2 q6:2 q7:2 q8:2`, **queries represented: 8/8**. Under the old loop this is
+    `4,4,4,4,4,0,0,0`.
+  - **D — local pipeline: SKIPPED, stated plainly.** Running the loader end-to-end could not be done
+    without either a live fetch or scaffolding beyond this ticket's scope, so it was not attempted.
+    The gate outranks the check. Nothing about the local pipeline is claimed as verified.
+  - **E — gate confirmed.** No request to `ms.vietnamworks.com`; branch not merged toward `main` or
+    the cron workflow.
+- **Deviation from the ticket, with reasoning (please review):** the ticket specified the anti-skew
+  test use **8 queries each yielding 10 AI/Data jobs with `max_jobs = 20`**, expecting an even
+  spread across all 8 and predicting the old code prints `10,10,0,0,0,0,0,0`. **That shape cannot
+  produce the assertion.** The interleave's granularity is a **page**, not a job — `_collect` drains
+  an entire page before moving to the next query — so with 10 jobs on each query's page 0 the budget
+  of 20 is spent on two queries *under page-major order too*, and the test would fail identically
+  before and after the fix. Jobs-per-query-per-page must be `<= max_jobs / len(queries)` for a cap
+  to reach every query at all. I used **2 jobs per page** (8 queries × 2 pages = 32 available, cap
+  20), which discriminates exactly as intended — see check B's failure output. This constraint is
+  documented in the test class docstring and in the Manual Verification Guide entry, because anyone
+  re-deriving the check from the ticket text would hit the same wall.
+- **Working-tree note (not my work, left untouched):** `docs/Known_Issues.md` acquired an unrelated
+  `[LOW · OPEN]` Demo-UI entry (agent markdown rendered as raw text, dated 2026-07-20) **during this
+  session** — `git status` at session start showed only `?? .github/`. This is consistent with the
+  concurrent-session activity recorded in the T0019.7 report. I left the entry and its index-count
+  bump exactly as found, edited only my own entries around it, and staged only this ticket's files.
+  Flagging it so it is not mistaken for T0019.9's work or silently swept into this commit.
 - **Risks:**
-  - **The `150` figure is unverified against current reality.** It clears the *06/2026* measurement, which may be stale. If the API's yield has grown past ~150 the cap is binding again and the original defect has silently returned — with, per the follow-up below, still no signal. This is the reason the `Known_Issues` entry is `PARTIALLY RESOLVED` rather than closed.
-  - **The interleave changes request *order* against the live host** (`q1p0, q2p0, …, q8p0, q1p1, …` instead of `q1p0, q1p1, q2p0, …`). Count and per-request delay are identical, but the traffic *shape* differs, and this has never been exercised live. Worth a sentence in the D8 conversation.
-  - **Fairness is page-granular, not job-granular.** If one query returns far more jobs per page than others, it still takes a larger share of the budget. The interleave bounds the skew; it does not eliminate it. Per-query quotas were explicitly out of scope.
-  - **Raising the cap widens the budget but not the discovery ratio** — most of it is still spent re-confirming postings already in `clean_jobs` (logged below).
+  - **The `150` figure is unverified against current reality.** It clears the *06/2026* measurement,
+    which may be stale. If the API's yield has grown past ~150 the cap is binding again and the
+    original defect has silently returned — with, per the follow-up below, still no signal. This is
+    the reason the `Known_Issues` entry is `PARTIALLY RESOLVED` rather than closed.
+  - **The interleave changes request *order* against the live host** (`q1p0, q2p0, …, q8p0, q1p1, …`
+    instead of `q1p0, q1p1, q2p0, …`). Count and per-request delay are identical, but the traffic
+    *shape* differs, and this has never been exercised live. Worth a sentence in the D8
+    conversation.
+  - **Fairness is page-granular, not job-granular.** If one query returns far more jobs per page
+    than others, it still takes a larger share of the budget. The interleave bounds the skew; it
+    does not eliminate it. Per-query quotas were explicitly out of scope.
+  - **Raising the cap widens the budget but not the discovery ratio** — most of it is still spent
+    re-confirming postings already in `clean_jobs` (logged below).
 - **Follow-ups — all three appended to `docs/Known_Issues.md`:**
-  - The `[MED]` coverage entry moved `OPEN → PARTIALLY RESOLVED` with an explicit Status paragraph: both fixes landed, closure requires the §11 re-measure, which requires D8. It also corrects one claim in its own old follow-up text — raising `max_jobs` alone does not increase request volume.
-  - **New `[LOW · OPEN]`:** budget still spent re-confirming known postings (`seen_ids` is per-run; no "skip IDs already in `clean_jobs`"). Unowned — the fix needs a **DB read inside the source adapter**, which is a layer-isolation question, not just an optimisation. Deliberately not attempted here.
-  - **New `[LOW · OPEN]`:** a truncated run surfaces no signal — hitting `max_jobs` logs nothing and leaves `pages_failed` at `0`, so an operator cannot distinguish a capped run from a complete one. Cheap to fix; would make the §11 re-measure partly self-reporting.
-- **Docs updated:** `research/data-ingestion-stage.md`, `docs/Known_Issues.md`, `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, this file.
+  - The `[MED]` coverage entry moved `OPEN → PARTIALLY RESOLVED` with an explicit Status paragraph:
+    both fixes landed, closure requires the §11 re-measure, which requires D8. It also corrects one
+    claim in its own old follow-up text — raising `max_jobs` alone does not increase request volume.
+  - **New `[LOW · OPEN]`:** budget still spent re-confirming known postings (`seen_ids` is per-run;
+    no "skip IDs already in `clean_jobs`"). Unowned — the fix needs a **DB read inside the source
+    adapter**, which is a layer-isolation question, not just an optimisation. Deliberately not
+    attempted here.
+  - **New `[LOW · OPEN]`:** a truncated run surfaces no signal — hitting `max_jobs` logs nothing and
+    leaves `pages_failed` at `0`, so an operator cannot distinguish a capped run from a complete
+    one. Cheap to fix; would make the §11 re-measure partly self-reporting.
+- **Docs updated:** `research/archive/data-ingestion-stage.md`, `docs/Known_Issues.md`,
+  `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, this file.
 
-## T0019.10 â€” `get_job_details` explicit column allowlist
-- **Summary:** the two query tools disagreed about what the agent was allowed to see. `prompts.schema_context` defines a 16-column frozen contract and ends "Do not reference any column not listed above â€” unlisted columns do not exist in this schema"; the executor path behind `query_clean_jobs` respects it by projecting explicitly. `fetch_job_details` did not â€” it ran `SELECT * FROM clean_jobs` and returned every column as a dict, which `_build_answer` then rendered key-by-key via `row.items()` straight into the tool result. So one tool told the model those columns did not exist while the other handed them over. The fix is one statement: the wildcard becomes the 16 contract columns, named explicitly, in `schema_context`'s own order, under a comment binding the two together. Nothing downstream changed â€” `_build_answer` renders whatever it receives, so fixing the data source is the whole fix.
-- **âš ï¸ The leak was six columns, not the three the ticket's objective named.** `clean_jobs` has 22 columns; `schema_context` lists 16. Beyond the three T0019.3 lifecycle columns the ticket called out (`is_active`, `first_seen_at`, `last_seen_at`), the wildcard was also leaking **`source`** and **`external_id`** (ingestion bookkeeping, not in the agent's vocabulary) and â€” the one that matters most â€” **`posted_date`**, the always-NULL column this project has repeatedly refused to synthesize. The model was receiving `posted_date=None` on **every single detail lookup**: exactly the field a model narrates ("no posting date available") or quietly reasons about. The ticket's In-Scope line ("the 16-column frozen contract and nothing else") already covered all six, so this is a clarification rather than a scope change â€” but a reader following only the objective would have fixed three and left three, including the worst one.
-- **Why now, not after:** the leak is cosmetic *today* only because every row is `is_active = true`, so the leaked value is uniform and tells the model nothing. The moment T0019.6's nightly cron starts expiring rows, the agent can read and describe stale-listing state through an unguarded path, using vocabulary it was never given and reasoning it was never calibrated for, while the sanctioned path still hides it. This ticket is sequenced ahead of enabling that cron.
-- **Files changed (5 â€” all inside the ticket's allowed areas):**
-  - `src/services/query/job_details.py` â€” the `SELECT` statement only, plus a 7-line sync comment naming `config/prompts.yaml â†’ prompts.schema_context` as the counterpart this list mirrors and stating why they must change together. Everything else is byte-identical: the `if not ids: return []` early exit, `SET TRANSACTION READ ONLY`, the `:ids` bound parameter, `result.mappings().all()`, and the `(OperationalError, DBAPIError) â†’ ExecutorError` wrapping.
-  - `tests/services/query/test_job_details.py` â€” one new guard test plus two module-level column tuples and a `_selected_columns` parsing helper. All 6 pre-existing tests unchanged.
-  - `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this file.
-- **Not touched, deliberately:** `config/prompts.yaml` (the contract is the reference, not the target), `src/agents/tools/get_job_details.py`, `src/services/query/executor.py` / `query_clean_jobs`, and every prompt, golden file, and eval fixture. No schema change â€” the six columns stay in the table, they just stop being selected.
-- **`description` was kept in the allowlist.** `sql_generation`'s "never SELECT the description column" rule governs the *executor* path, where descriptions are large blobs that bloat multi-row results. `get_job_details` is precisely the tool whose job is to return the full description â€” that is what its docstring promises the model. Dropping it would have degraded the tool rather than narrowing it.
-- **How the `source` / `source_url` substring trap was handled.** This was the ticket's flagged failure mode: `source` is a substring of the allowlisted `source_url`, and `external_id` of `id`, so `assertNotIn("source", statement)` fails against *correct* code â€” and the natural "fix" is to weaken the assertion until it passes, at which point it catches nothing. The guard does **no substring matching against raw SQL**. A helper, `_selected_columns`, regexes the `SELECT â€¦ FROM` clause out of the statement, splits it on commas, strips each token, and returns a `set` of **whole column names**; every allowed/forbidden assertion runs against that set. Proof it works is in check B scenario 2 below: the test reports `source` as leaked while `source_url` stays clean, and `external_id` while `id` stays clean â€” a distinction a substring version is structurally incapable of making.
-- **Assertion order matters and was changed from the obvious layout.** The set-equality check (`selected == CONTRACT_COLUMNS`) is the strongest assertion, but placing it first makes it short-circuit so the per-column named assertions never run, and failures report an opaque set diff. The guard now asserts, in order: no `*` in the statement; each of the 16 contract columns present **by name**; each of the 6 out-of-contract columns absent **by name**; then set equality last, as a catch-all for columns in neither list (e.g. one added to the table later).
-- **Commands run:** `git add -u && git commit` (T0019.9's uncommitted work, at the maintainer's direction, so this ticket's diff stays clean), `git checkout -b feature/t0019.10-job-details-allowlist`, `uv run pytest tests/services/query/test_job_details.py -v`, `uv run pytest`, `uv run ruff check .`, `uv run ruff check` on the two changed files, `uv run mypy`, plus the two deliberate-regression runs of check B and a live `fetch_job_details([1])` attempt.
-- **Build & test:** `uv run pytest` (full standard suite) → **329 passed, 8 skipped**, 19 deselected in 526.10s — **+1 over T0019.9's 328**, exactly accounting for the single net-new guard case. `uv run pytest tests/services/query/test_job_details.py -v` → **7 passed** in 0.53s; the 6 pre-existing cases pass **unchanged** — none was modified, weakened or removed, `test_returns_rows_as_dicts` / `test_maps_result_rows_to_list_of_dicts_incl_description` included (it hand-builds its own dict and does not care what was selected, so it needed no edit, as the ticket predicted). The 8 skips are the usual DB-dependent ones plus `tests/migrations/test_baseline_roundtrip.py` (needs `SCRATCH_DATABASE_URL`) — unchanged from prior tickets, not caused by this one. `uv run ruff check .` → all checks passed. `uv run mypy` → the same **2 pre-existing, unrelated** errors as every prior ticket in this stack (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`); no third introduced, and `src/services/query/job_details.py` is clean. The chained command's exit code 1 came from those two known mypy errors, not from pytest or ruff.
-- **Manual verification â€” A and B run and passing; C, D and E NOT run:**
-  - **A â€” suite green.** See Build & test above.
-  - **B â€” the guard genuinely discriminates (the ticket's real deliverable). Two scenarios were needed, not one.**
-    - *Scenario 1, the ticket's version:* reverting to `SELECT *` **fails** the guard â€” but it fails naming the 16 **missing** columns, not any leaked one, because with a wildcard the parsed token set is simply `{'*'}` and the forbidden-column assertions are never reached. The `*` assertion is what trips. This proves the wildcard-regression case and nothing more.
-    - *Scenario 2, added because scenario 1 is insufficient:* keeping the allowlist but appending `, is_active, source, external_id, posted_date` fails with `AssertionError: Items in the first set but not the second: 'posted_date', 'is_active', 'external_id', 'source'` â€” naming all four leaks exactly. **This is the run that exercises the forbidden-column assertions, and the run that proves the substring trap was handled.** A report claiming check B passed on scenario 1 alone would be overstating the coverage.
+## T0019.10 — `get_job_details` explicit column allowlist
+- **Summary:** the two query tools disagreed about what the agent was allowed to see.
+  `prompts.schema_context` defines a 16-column frozen contract and ends "Do not reference any column
+  not listed above — unlisted columns do not exist in this schema"; the executor path behind
+  `query_clean_jobs` respects it by projecting explicitly. `fetch_job_details` did not — it ran
+  `SELECT * FROM clean_jobs` and returned every column as a dict, which `_build_answer` then
+  rendered key-by-key via `row.items()` straight into the tool result. So one tool told the model
+  those columns did not exist while the other handed them over. The fix is one statement: the
+  wildcard becomes the 16 contract columns, named explicitly, in `schema_context`'s own order, under
+  a comment binding the two together. Nothing downstream changed — `_build_answer` renders whatever
+  it receives, so fixing the data source is the whole fix.
+- **⚠️ The leak was six columns, not the three the ticket's objective named.** `clean_jobs` has 22
+  columns; `schema_context` lists 16. Beyond the three T0019.3 lifecycle columns the ticket called
+  out (`is_active`, `first_seen_at`, `last_seen_at`), the wildcard was also leaking **`source`** and
+  **`external_id`** (ingestion bookkeeping, not in the agent's vocabulary) and — the one that
+  matters most — **`posted_date`**, the always-NULL column this project has repeatedly refused to
+  synthesize. The model was receiving `posted_date=None` on **every single detail lookup**: exactly
+  the field a model narrates ("no posting date available") or quietly reasons about. The ticket's
+  In-Scope line ("the 16-column frozen contract and nothing else") already covered all six, so this
+  is a clarification rather than a scope change — but a reader following only the objective would
+  have fixed three and left three, including the worst one.
+- **Why now, not after:** the leak is cosmetic *today* only because every row is `is_active = true`,
+  so the leaked value is uniform and tells the model nothing. The moment T0019.6's nightly cron
+  starts expiring rows, the agent can read and describe stale-listing state through an unguarded
+  path, using vocabulary it was never given and reasoning it was never calibrated for, while the
+  sanctioned path still hides it. This ticket is sequenced ahead of enabling that cron.
+- **Files changed (5 — all inside the ticket's allowed areas):**
+  - `src/services/query/job_details.py` — the `SELECT` statement only, plus a 7-line sync comment
+    naming `config/prompts.yaml → prompts.schema_context` as the counterpart this list mirrors and
+    stating why they must change together. Everything else is byte-identical: the `if not ids:
+    return []` early exit, `SET TRANSACTION READ ONLY`, the `:ids` bound parameter,
+    `result.mappings().all()`, and the `(OperationalError, DBAPIError) → ExecutorError` wrapping.
+  - `tests/services/query/test_job_details.py` — one new guard test plus two module-level column
+    tuples and a `_selected_columns` parsing helper. All 6 pre-existing tests unchanged.
+  - `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this
+    file.
+- **Not touched, deliberately:** `config/prompts.yaml` (the contract is the reference, not the
+  target), `src/agents/tools/get_job_details.py`, `src/services/query/executor.py` /
+  `query_clean_jobs`, and every prompt, golden file, and eval fixture. No schema change — the six
+  columns stay in the table, they just stop being selected.
+- **`description` was kept in the allowlist.** `sql_generation`'s "never SELECT the description
+  column" rule governs the *executor* path, where descriptions are large blobs that bloat multi-row
+  results. `get_job_details` is precisely the tool whose job is to return the full description —
+  that is what its docstring promises the model. Dropping it would have degraded the tool rather
+  than narrowing it.
+- **How the `source` / `source_url` substring trap was handled.** This was the ticket's flagged
+  failure mode: `source` is a substring of the allowlisted `source_url`, and `external_id` of `id`,
+  so `assertNotIn("source", statement)` fails against *correct* code — and the natural "fix" is to
+  weaken the assertion until it passes, at which point it catches nothing. The guard does **no
+  substring matching against raw SQL**. A helper, `_selected_columns`, regexes the `SELECT … FROM`
+  clause out of the statement, splits it on commas, strips each token, and returns a `set` of
+  **whole column names**; every allowed/forbidden assertion runs against that set. Proof it works is
+  in check B scenario 2 below: the test reports `source` as leaked while `source_url` stays clean,
+  and `external_id` while `id` stays clean — a distinction a substring version is structurally
+  incapable of making.
+- **Assertion order matters and was changed from the obvious layout.** The set-equality check
+  (`selected == CONTRACT_COLUMNS`) is the strongest assertion, but placing it first makes it
+  short-circuit so the per-column named assertions never run, and failures report an opaque set
+  diff. The guard now asserts, in order: no `*` in the statement; each of the 16 contract columns
+  present **by name**; each of the 6 out-of-contract columns absent **by name**; then set equality
+  last, as a catch-all for columns in neither list (e.g. one added to the table later).
+- **Commands run:** `git add -u && git commit` (T0019.9's uncommitted work, at the maintainer's
+  direction, so this ticket's diff stays clean), `git checkout -b
+  feature/t0019.10-job-details-allowlist`, `uv run pytest tests/services/query/test_job_details.py
+  -v`, `uv run pytest`, `uv run ruff check .`, `uv run ruff check` on the two changed files, `uv run
+  mypy`, plus the two deliberate-regression runs of check B and a live `fetch_job_details([1])`
+  attempt.
+- **Build & test:** `uv run pytest` (full standard suite) → **329 passed, 8 skipped**, 19 deselected
+  in 526.10s — **+1 over T0019.9's 328**, exactly accounting for the single net-new guard case. `uv
+  run pytest tests/services/query/test_job_details.py -v` → **7 passed** in 0.53s; the 6
+  pre-existing cases pass **unchanged** — none was modified, weakened or removed,
+  `test_returns_rows_as_dicts` / `test_maps_result_rows_to_list_of_dicts_incl_description` included
+  (it hand-builds its own dict and does not care what was selected, so it needed no edit, as the
+  ticket predicted). The 8 skips are the usual DB-dependent ones plus
+  `tests/migrations/test_baseline_roundtrip.py` (needs `SCRATCH_DATABASE_URL`) — unchanged from
+  prior tickets, not caused by this one. `uv run ruff check .` → all checks passed. `uv run mypy` →
+  the same **2 pre-existing, unrelated** errors as every prior ticket in this stack
+  (`src/core/checkpointer.py:25`, `src/agents/runtime/middleware.py:48`); no third introduced, and
+  `src/services/query/job_details.py` is clean. The chained command's exit code 1 came from those
+  two known mypy errors, not from pytest or ruff.
+- **Manual verification — A and B run and passing; C, D and E NOT run:**
+  - **A — suite green.** See Build & test above.
+  - **B — the guard genuinely discriminates (the ticket's real deliverable). Two scenarios were
+    needed, not one.**
+    - *Scenario 1, the ticket's version:* reverting to `SELECT *` **fails** the guard — but it fails
+      naming the 16 **missing** columns, not any leaked one, because with a wildcard the parsed
+      token set is simply `{'*'}` and the forbidden-column assertions are never reached. The `*`
+      assertion is what trips. This proves the wildcard-regression case and nothing more.
+    - *Scenario 2, added because scenario 1 is insufficient:* keeping the allowlist but appending `,
+      is_active, source, external_id, posted_date` fails with `AssertionError: Items in the first
+      set but not the second: 'posted_date', 'is_active', 'external_id', 'source'` — naming all four
+      leaks exactly. **This is the run that exercises the forbidden-column assertions, and the run
+      that proves the substring trap was handled.** A report claiming check B passed on scenario 1
+      alone would be overstating the coverage.
     - The allowlist was restored and green re-confirmed after each scenario.
-  - **C, D, E â€” NOT RUN. Docker Desktop was not running this session.** `fetch_job_details([1])` was attempted and failed with `ExecutorError: Failed to execute query: (psycopg.errors.ConnectionTimeout) connection timeout expired` against `localhost:5433`. One incidental confirmation from that failure: the `(OperationalError, DBAPIError) â†’ ExecutorError` wrapping demonstrably still works against a **real** driver error, not only against the mocked ones. But the substantive checks are outstanding, and **check D is the load-bearing one** â€” it prints the literal string the model receives, which is the only direct evidence the agent's actual view is clean. Do not treat T0019.10 as end-to-end verified until C and D pass. Same class of gap as T0019.8's and T0019.5's unrun checks; recorded rather than papered over.
+  - **C, D, E — NOT RUN. Docker Desktop was not running this session.** `fetch_job_details([1])` was
+    attempted and failed with `ExecutorError: Failed to execute query:
+    (psycopg.errors.ConnectionTimeout) connection timeout expired` against `localhost:5433`. One
+    incidental confirmation from that failure: the `(OperationalError, DBAPIError) → ExecutorError`
+    wrapping demonstrably still works against a **real** driver error, not only against the mocked
+    ones. But the substantive checks are outstanding, and **check D is the load-bearing one** — it
+    prints the literal string the model receives, which is the only direct evidence the agent's
+    actual view is clean. Do not treat T0019.10 as end-to-end verified until C and D pass. Same
+    class of gap as T0019.8's and T0019.5's unrun checks; recorded rather than papered over.
 - **Risks:**
-  - **The 16-column list and `schema_context` are coupled by comment and test only, not by a shared constant.** A future schema change must update both or they drift apart again in exactly the direction this ticket just closed. The ticket explicitly ruled out the shared-constant refactor and I did not build it: `schema_context` is descriptive prose the model reads (per-column type + semantics), not a column list, so there is no clean common ancestor, and inventing one is architecture this ticket did not sanction. Logged in `Known_Issues.md`.
-  - **The guard asserts against the SQL *string*, not the executed projection.** It parses statement text, so it catches a wildcard regression and any added/dropped column name, but it would not catch a column exposed by other means (a view change, dynamically-built SQL, a join). Adequate for one static statement; logged with a follow-up trigger.
-  - **Unverified against live data** (C/D/E above). Confidence that the returned dict has exactly 16 keys comes from reading the statement, not from running it.
-  - **No behavioural change was measured on the agent.** Narrowing what the tool returns necessarily changes the tool-result string the model conditions on. Nothing in the eval suite was re-run (prompts, goldens and fixtures were out of scope), so the claim "narrowed, not degraded" rests on check E â€” which was also not run.
-- **Follow-ups â€” all appended to `docs/Known_Issues.md`:**
-  - **New `[MEDIUM Â· OPEN]`:** the column list â†” `schema_context` coupling is by comment and guard test, not mechanical. Revisit only if a third consumer of the contract appears; a machine-readable manifest that `schema_context` is *rendered from* would be the shape, and is not warranted at two consumers.
-  - **New `[RESOLVED]`:** the leak was six columns, not three â€” recorded because the wildcard hid the miscount and the ticket's own objective understated it.
-  - **New `[LOW Â· OPEN]`:** the guard is text analysis over a static statement; replace with a DB-backed assertion on real result keys if `fetch_job_details` ever builds SQL dynamically.
+  - **The 16-column list and `schema_context` are coupled by comment and test only, not by a shared
+    constant.** A future schema change must update both or they drift apart again in exactly the
+    direction this ticket just closed. The ticket explicitly ruled out the shared-constant refactor
+    and I did not build it: `schema_context` is descriptive prose the model reads (per-column type +
+    semantics), not a column list, so there is no clean common ancestor, and inventing one is
+    architecture this ticket did not sanction. Logged in `Known_Issues.md`.
+  - **The guard asserts against the SQL *string*, not the executed projection.** It parses statement
+    text, so it catches a wildcard regression and any added/dropped column name, but it would not
+    catch a column exposed by other means (a view change, dynamically-built SQL, a join). Adequate
+    for one static statement; logged with a follow-up trigger.
+  - **Unverified against live data** (C/D/E above). Confidence that the returned dict has exactly 16
+    keys comes from reading the statement, not from running it.
+  - **No behavioural change was measured on the agent.** Narrowing what the tool returns necessarily
+    changes the tool-result string the model conditions on. Nothing in the eval suite was re-run
+    (prompts, goldens and fixtures were out of scope), so the claim "narrowed, not degraded" rests
+    on check E — which was also not run.
+- **Follow-ups — all appended to `docs/Known_Issues.md`:**
+  - **New `[MEDIUM Â· OPEN]`:** the column list — `schema_context` coupling is by comment and guard
+    test, not mechanical. Revisit only if a third consumer of the contract appears; a
+    machine-readable manifest that `schema_context` is *rendered from* would be the shape, and is
+    not warranted at two consumers.
+  - **New `[RESOLVED]`:** the leak was six columns, not three — recorded because the wildcard hid
+    the miscount and the ticket's own objective understated it.
+  - **New `[LOW Â· OPEN]`:** the guard is text analysis over a static statement; replace with a
+    DB-backed assertion on real result keys if `fetch_job_details` ever builds SQL dynamically.
   - **Run manual checks C and D** against a local Docker Postgres. D specifically.
-- **Docs updated:** `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this file.
+- **Docs updated:** `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`,
+  `docs/Repo_Current_State.md`, this file.
 
 ## T0019.6 — GitHub Actions nightly ingestion cron (recovery & finish)
-- **Summary:** this is a recovery ticket, not a greenfield build. T0019.6's work was written 2026-07-19 and then stranded — the workflow file (`.github/workflows/ingestion.yml`) survived untracked across several later tickets' sessions, but its supporting doc set sat in `stash@{0}` (`b7a291e`, "T0019.6 WIP: nightly cron workflow + docs"), based at `bb75d10`, five commits stale by the time this session started. This ticket hand-ports the stash's doc hunks onto the current tree (not a raw `git stash pop`, which would have conflicted destructively against `.7`–`.9`'s rewrites of the same files), fixes one real defect in the recovered workflow (the secrets block), and lands everything as a committed, still-dormant workflow.
-- **Base branch deviation (per the ticket's own contingency clause):** the ticket says branch off `feature/t0019.10-job-details-allowlist` if it has been committed, otherwise off `b44aa20` (T0019.9). At session start, `feature/t0019.10-job-details-allowlist` was checked out but **its own tip was still `b44aa20`** — T0019.10's work (`src/services/query/job_details.py`, its test file, and doc drafts) sat uncommitted in the working tree. Per the contingency clause, this ticket branches off `b44aa20` directly. To do so without touching T0019.10's in-progress work, the seven affected tracked files were stashed (`git stash push -m "T0019.10 WIP..."`, a **new**, separate stash entry — `stash@{0}` after this operation, distinct from the pre-existing T0019.6 stash which shifted to `stash@{1}`), the branch was cut cleanly from `b44aa20`, and the T0019.10 stash was restored onto `feature/t0019.10-job-details-allowlist` afterward. Neither stash was dropped.
-- **Files changed:** `.github/workflows/ingestion.yml` (now tracked, one edit — see below), `docs/Full_Design_Document.md` (§2 amendment, carried verbatim from the stash), `docs/Manual_Verification_Guide.md` (new `### T0019.6` entry), `docs/Known_Issues.md` (2 new entries + 1 new follow-up + category count), `docs/Repo_Current_State.md` (rewritten), `docs/Tickets.md` (1 marker line), `research/deployment-research-plan.md` (§11 confirmation line), `research/ingestion-milestone-plan.md` (scope-addendum block), this file. **No file under `src/`, `tests/`, or `config/` touched.**
-- **Carry-vs-skip table followed exactly:** `docs/Full_Design_Document.md` carried verbatim; `Manual_Verification_Guide.md` and `Completion_Reports.md` carried-and-edited; `Known_Issues.md` carried a reduced set (2 of the stash's 2 T0019.6-original entries — the third, the 60-day keepalive gap, had **already been carried forward for real** by a later ticket's session and exists in the current file; duplicating it would have been wrong, so it was left alone and only cross-checked); `Repo_Current_State.md` rewritten, not carried (the stash's version describes a branch state five tickets stale); `Tickets.md` carried only the one heading-status line (T0019.9/.10 ticket bodies already exist for real, committed by those tickets — the stash's versions of those sections were **not** reapplied, since they'd be a stale duplicate of already-landed work); both `research/` files carried their named blocks. `docs/Schema_Contract.md` was **skipped** per the ticket's explicit instruction (orphaned T0019.3 documentation work, not this ticket's) — logged as a new `[LOW · OPEN]` follow-up in `Known_Issues.md` instead of fixed inline. `docs/MVP_Technical_Design.md` was also skipped — its stashed hunk is already present in `HEAD` (verified by diff before touching it).
-- **The one real fix, Step 2 (secrets block):** the ticket's own scope line says ingestion needs **no** `GROQ_API_KEY` — it is deterministic, no LLM. But `src/core/config.py`'s `Settings` declares `GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` as required-no-default, validated at import — so the CLI cannot start without them regardless of whether ingestion logic reads them. The recovered stash workflow wired all three to real `secrets.*`, contradicting the ticket. Per this session's maintainer decision, the three lines were replaced with literal placeholders (`"unused-by-ingestion"`) instead — no real LLM or tracing credential ever reaches the ingestion runner. Only `DATABASE_URL` and `HEALTHCHECKS_URL` remain real GitHub secrets. The inline comment above the `env:` block was rewritten to match. Nothing else in the workflow changed: cron expression, concurrency, `timeout-minutes: 15`, `permissions: contents: read`, the SHA-pinned actions, the no-migrations note, and the keepalive-omission block (with its `TODO(maintainer)`) are all exactly as recovered.
-- **Manual Verification Guide entry:** new `### T0019.6` placed between the existing `T0019.5` and `T0019.7` entries (ticket order). Checks A and B carried as-is (B's live-tested claim — "confirmed live 2026-07-19" — is preserved as historical fact, and B was **also re-run this session**, see below). Check C's stale prerequisite ("`feature/t0019.6-nightly-cron` does not exist yet ... cut it off `bb75d10`") was rewritten: push `feature/t0019.6-nightly-cron-finish`, then Actions → "Nightly ingestion" → Run workflow → select that branch; also notes C–E additionally require T0019.5's manual checks B–E to have been run against a live DB first (they have not, per `Known_Issues.md`). Checks D/E carried; E states plainly that the scheduled (as opposed to `workflow_dispatch`-triggered) run cannot fire until the T0019 chain merges to `main`.
-- **Commands run:** `git branch -a`, `git stash list`, `git log --oneline` (several forms), `git show b7a291e:<path>` (per file, to read stash contents without popping), `git diff b7a291e^1 b7a291e -- <path>` (per file, to see the stash's own diff), `git diff b44aa20:<path>` equivalents via reading current files, `git stash push -m "..." -- <7 tracked files>`, `git checkout -b feature/t0019.6-nightly-cron-finish b44aa20`, `uv run python -c "import yaml; yaml.safe_load(open('.github/workflows/ingestion.yml')); print('YAML OK')"`, `uv run pytest -q`, `uv run ruff check .`, `uv run mypy`, `grep -n "secrets\." .github/workflows/ingestion.yml`, `grep -n "No autonomous or background execution" docs/Full_Design_Document.md`, `grep -c "T0019.6" docs/Manual_Verification_Guide.md`, `git status --short`.
-- **Build & test:** `uv run pytest -q` → `328 passed, 8 skipped, 19 deselected, 4 subtests passed` in ~8567s — identical to T0019.9's baseline, exactly as expected since no `src`/`tests` file was touched. `uv run ruff check .` → all checks passed. `uv run mypy` → the same 2 pre-existing, unrelated errors in `checkpointer.py:25` / `middleware.py:48`. `YAML OK` from the `yaml.safe_load` check.
+- **Summary:** this is a recovery ticket, not a greenfield build. T0019.6's work was written
+  2026-07-19 and then stranded — the workflow file (`.github/workflows/ingestion.yml`) survived
+  untracked across several later tickets' sessions, but its supporting doc set sat in `stash@{0}`
+  (`b7a291e`, "T0019.6 WIP: nightly cron workflow + docs"), based at `bb75d10`, five commits stale
+  by the time this session started. This ticket hand-ports the stash's doc hunks onto the current
+  tree (not a raw `git stash pop`, which would have conflicted destructively against `.7`–`.9`'s
+  rewrites of the same files), fixes one real defect in the recovered workflow (the secrets block),
+  and lands everything as a committed, still-dormant workflow.
+- **Base branch deviation (per the ticket's own contingency clause):** the ticket says branch off
+  `feature/t0019.10-job-details-allowlist` if it has been committed, otherwise off `b44aa20`
+  (T0019.9). At session start, `feature/t0019.10-job-details-allowlist` was checked out but **its
+  own tip was still `b44aa20`** — T0019.10's work (`src/services/query/job_details.py`, its test
+  file, and doc drafts) sat uncommitted in the working tree. Per the contingency clause, this ticket
+  branches off `b44aa20` directly. To do so without touching T0019.10's in-progress work, the seven
+  affected tracked files were stashed (`git stash push -m "T0019.10 WIP..."`, a **new**, separate
+  stash entry — `stash@{0}` after this operation, distinct from the pre-existing T0019.6 stash which
+  shifted to `stash@{1}`), the branch was cut cleanly from `b44aa20`, and the T0019.10 stash was
+  restored onto `feature/t0019.10-job-details-allowlist` afterward. Neither stash was dropped.
+- **Files changed:** `.github/workflows/ingestion.yml` (now tracked, one edit — see below),
+  `docs/Full_Design_Document.md` (§2 amendment, carried verbatim from the stash),
+  `docs/archive/Manual_Verification_Archive.md` (new `### T0019.6` entry), `docs/Known_Issues.md` (2
+  new
+  entries + 1 new follow-up + category count), `docs/Repo_Current_State.md` (rewritten),
+  `docs/Tickets.md` (1 marker line), `research/archive/deployment-research-plan.md` (§11
+  confirmation line),
+  `research/archive/ingestion-milestone-plan.md` (scope-addendum block), this file. **No file under
+  `src/`,
+  `tests/`, or `config/` touched.**
+- **Carry-vs-skip table followed exactly:** `docs/Full_Design_Document.md` carried verbatim;
+  `Manual_Verification_Guide.md` and `Completion_Reports.md` carried-and-edited; `Known_Issues.md`
+  carried a reduced set (2 of the stash's 2 T0019.6-original entries — the third, the 60-day
+  keepalive gap, had **already been carried forward for real** by a later ticket's session and
+  exists in the current file; duplicating it would have been wrong, so it was left alone and only
+  cross-checked); `Repo_Current_State.md` rewritten, not carried (the stash's version describes a
+  branch state five tickets stale); `Tickets.md` carried only the one heading-status line
+  (T0019.9/.10 ticket bodies already exist for real, committed by those tickets — the stash's
+  versions of those sections were **not** reapplied, since they'd be a stale duplicate of
+  already-landed work); both `research/` files carried their named blocks. `docs/Schema_Contract.md`
+  was **skipped** per the ticket's explicit instruction (orphaned T0019.3 documentation work, not
+  this ticket's) — logged as a new `[LOW · OPEN]` follow-up in `Known_Issues.md` instead of fixed
+  inline. `docs/MVP_Technical_Design.md` was also skipped — its stashed hunk is already present in
+  `HEAD` (verified by diff before touching it).
+- **The one real fix, Step 2 (secrets block):** the ticket's own scope line says ingestion needs
+  **no** `GROQ_API_KEY` — it is deterministic, no LLM. But `src/core/config.py`'s `Settings`
+  declares `GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` as required-no-default,
+  validated at import — so the CLI cannot start without them regardless of whether ingestion logic
+  reads them. The recovered stash workflow wired all three to real `secrets.*`, contradicting the
+  ticket. Per this session's maintainer decision, the three lines were replaced with literal
+  placeholders (`"unused-by-ingestion"`) instead — no real LLM or tracing credential ever reaches
+  the ingestion runner. Only `DATABASE_URL` and `HEALTHCHECKS_URL` remain real GitHub secrets. The
+  inline comment above the `env:` block was rewritten to match. Nothing else in the workflow
+  changed: cron expression, concurrency, `timeout-minutes: 15`, `permissions: contents: read`, the
+  SHA-pinned actions, the no-migrations note, and the keepalive-omission block (with its
+  `TODO(maintainer)`) are all exactly as recovered.
+- **Manual Verification Guide entry:** new `### T0019.6` placed between the existing `T0019.5` and
+  `T0019.7` entries (ticket order). Checks A and B carried as-is (B's live-tested claim — "confirmed
+  live 2026-07-19" — is preserved as historical fact, and B was **also re-run this session**, see
+  below). Check C's stale prerequisite ("`feature/t0019.6-nightly-cron` does not exist yet ... cut
+  it off `bb75d10`") was rewritten: push `feature/t0019.6-nightly-cron-finish`, then Actions →
+  "Nightly ingestion" → Run workflow → select that branch; also notes C–E additionally require
+  T0019.5's manual checks B–E to have been run against a live DB first (they have not, per
+  `Known_Issues.md`). Checks D/E carried; E states plainly that the scheduled (as opposed to
+  `workflow_dispatch`-triggered) run cannot fire until the T0019 chain merges to `main`.
+- **Commands run:** `git branch -a`, `git stash list`, `git log --oneline` (several forms), `git
+  show b7a291e:<path>` (per file, to read stash contents without popping), `git diff b7a291e^1
+  b7a291e -- <path>` (per file, to see the stash's own diff), `git diff b44aa20:<path>` equivalents
+  via reading current files, `git stash push -m "..." -- <7 tracked files>`, `git checkout -b
+  feature/t0019.6-nightly-cron-finish b44aa20`, `uv run python -c "import yaml;
+  yaml.safe_load(open('.github/workflows/ingestion.yml')); print('YAML OK')"`, `uv run pytest -q`,
+  `uv run ruff check .`, `uv run mypy`, `grep -n "secrets\." .github/workflows/ingestion.yml`, `grep
+  -n "No autonomous or background execution" docs/Full_Design_Document.md`, `grep -c "T0019.6"
+  docs/Manual_Verification_Guide.md`, `git status --short`.
+- **Build & test:** `uv run pytest -q` → `328 passed, 8 skipped, 19 deselected, 4 subtests passed`
+  in ~8567s — identical to T0019.9's baseline, exactly as expected since no `src`/`tests` file was
+  touched. `uv run ruff check .` → all checks passed. `uv run mypy` → the same 2 pre-existing,
+  unrelated errors in `checkpointer.py:25` / `middleware.py:48`. `YAML OK` from the `yaml.safe_load`
+  check.
 - **Manual verification — actually run this session:**
-  - **Check A** — YAML parse (`YAML OK`), `git status --short` (clean except intended files), full suite/ruff/mypy — all as expected above.
-  - **Check B** — with `.env` moved aside, unsetting each of `GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` in turn and running `uv run python -m src.services.ingestion.loader` failed fast with `ConfigLoadError` and `exit=1`, before any DB connection, for all three. `.env` restored immediately after.
-  - **Acceptance-criteria greps** — `grep -n "secrets\." .github/workflows/ingestion.yml` → exactly 2 lines (`DATABASE_URL`, `HEALTHCHECKS_URL`); `grep -n "No autonomous or background execution" docs/Full_Design_Document.md` → no match (line replaced); `grep -c "T0019.6" docs/Manual_Verification_Guide.md` → `1` (the new heading; > 0, satisfying the criterion).
-- **Checks C, D, and E were NOT run** — stated plainly, per the ticket's own instruction not to fabricate them. They require GitHub Actions secrets configured on the real repo (`DATABASE_URL`, `HEALTHCHECKS_URL`) and, for the schedule half of E, the T0019 chain merged to `main`. Both are maintainer-gated actions outside this ticket's scope. T0019.5's manual checks B–E (live-DB schema-drift/yield-floor proof) also remain unrun, as recorded in that ticket's own completion report and `Known_Issues.md` — this ticket does not run them either, per its explicit instruction not to.
+  - **Check A** — YAML parse (`YAML OK`), `git status --short` (clean except intended files), full
+    suite/ruff/mypy — all as expected above.
+  - **Check B** — with `.env` moved aside, unsetting each of `GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`,
+    `LANGFUSE_PUBLIC_KEY` in turn and running `uv run python -m src.services.ingestion.loader`
+    failed fast with `ConfigLoadError` and `exit=1`, before any DB connection, for all three. `.env`
+    restored immediately after.
+  - **Acceptance-criteria greps** — `grep -n "secrets\." .github/workflows/ingestion.yml` → exactly
+    2 lines (`DATABASE_URL`, `HEALTHCHECKS_URL`); `grep -n "No autonomous or background execution"
+    docs/Full_Design_Document.md` → no match (line replaced); `grep -c "T0019.6"
+    docs/Manual_Verification_Guide.md` → `1` (the new heading; > 0, satisfying the criterion).
+- **Checks C, D, and E were NOT run** — stated plainly, per the ticket's own instruction not to
+  fabricate them. They require GitHub Actions secrets configured on the real repo (`DATABASE_URL`,
+  `HEALTHCHECKS_URL`) and, for the schedule half of E, the T0019 chain merged to `main`. Both are
+  maintainer-gated actions outside this ticket's scope. T0019.5's manual checks B–E (live-DB
+  schema-drift/yield-floor proof) also remain unrun, as recorded in that ticket's own completion
+  report and `Known_Issues.md` — this ticket does not run them either, per its explicit instruction
+  not to.
 - **Risks (all appended to `docs/Known_Issues.md`):**
-  - The nightly cron stays fully dormant until the T0019 chain merges to `main` — a maintainer decision, out of scope here. `[MED · OPEN]`.
-  - Three config-validation-only placeholders (`GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`) must stay in the workflow despite never being read by ingestion — logged so a future reader doesn't strip them and break the first run. `[LOW · NOTE]`.
-  - No keepalive mechanism covers GitHub's 60-day scheduled-workflow auto-disable; the ticket's suggested action is itself 403'd for a ToS violation. **Already logged** by a prior ticket's session — not duplicated here, only cross-checked. `[MED · OPEN]`, pre-existing.
-  - `docs/Schema_Contract.md` still describes `is_active`/`first_seen_at`/`last_seen_at` as a future T0014 addition; they have been live hidden columns since T0019.3. Newly logged here as orphaned doc drift, explicitly not fixed inline. `[LOW · OPEN]`.
+  - The nightly cron stays fully dormant until the T0019 chain merges to `main` — a maintainer
+    decision, out of scope here. `[MED · OPEN]`.
+  - Three config-validation-only placeholders (`GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`,
+    `LANGFUSE_PUBLIC_KEY`) must stay in the workflow despite never being read by ingestion — logged
+    so a future reader doesn't strip them and break the first run. `[LOW · NOTE]`.
+  - No keepalive mechanism covers GitHub's 60-day scheduled-workflow auto-disable; the ticket's
+    suggested action is itself 403'd for a ToS violation. **Already logged** by a prior ticket's
+    session — not duplicated here, only cross-checked. `[MED · OPEN]`, pre-existing.
+  - `docs/Schema_Contract.md` still describes `is_active`/`first_seen_at`/`last_seen_at` as a future
+    T0014 addition; they have been live hidden columns since T0019.3. Newly logged here as orphaned
+    doc drift, explicitly not fixed inline. `[LOW · OPEN]`.
 - **Follow-ups:**
   - Merge the T0019 chain to `main` (maintainer decision) — activates the schedule.
-  - Run T0019.5's manual checks B–E against a live Postgres at least once before trusting the cron unattended (pre-existing follow-up, restated).
-  - Finish and commit T0019.10 (in progress on its own branch, stashed aside during this ticket) — a named release gate before the T0019.6 workflow may merge to `main`, alongside the already-landed T0019.9.
-  - Reconcile `docs/Schema_Contract.md`'s stale "future `is_active`" framing against the T0019.3 reality (own doc-only ticket).
-- **Docs updated:** `docs/Full_Design_Document.md`, `docs/Manual_Verification_Guide.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, `docs/Tickets.md`, `research/deployment-research-plan.md`, `research/ingestion-milestone-plan.md`, this file.
+  - Run T0019.5's manual checks B–E against a live Postgres at least once before trusting the cron
+    unattended (pre-existing follow-up, restated).
+  - Finish and commit T0019.10 (in progress on its own branch, stashed aside during this ticket) — a
+    named release gate before the T0019.6 workflow may merge to `main`, alongside the already-landed
+    T0019.9.
+  - Reconcile `docs/Schema_Contract.md`'s stale "future `is_active`" framing against the T0019.3
+    reality (own doc-only ticket).
+- **Docs updated:** `docs/Full_Design_Document.md`, `docs/Manual_Verification_Guide.md`,
+  `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, `docs/Tickets.md`,
+  `research/archive/deployment-research-plan.md`, `research/archive/ingestion-milestone-plan.md`,
+  this file.
 
 ## Milestone 20 — Reconciliation & Activation
-- **T0020.4 (docs slice) — cron-activation runbook committed + T0020 milestone authored; activation gates (D2/D6/activation/D10) remain maintainer-pending.**
-  - **Summary:** a docs-only slice of T0020.4. It does **not** activate the nightly ingestion cron — the cron stays dormant. It (1) verifies and commits the maintainer-execution runbook, (2) authors the previously-missing `## T0020` milestone + `### T0020.1`–`.4` sub-ticket blocks in `Tickets.md`, and (3) wires the cross-references. The live activation steps (D2 ratification, D6 Neon `alembic stamp head`, `workflow_dispatch` activation + first scheduled run, D10 live-vs-parked decision) are the maintainer's, captured in the runbook; D5's local Docker-Postgres portion was signed in a prior 2026-07-22 coder session, the Neon portion remains.
-  - **Runbook verification:** spot-checked every load-bearing claim against the repo as it stands — **no drift found, nothing rewritten.** Confirmed: `.github/workflows/ingestion.yml` is on `main`/`origin/main` (`git log origin/main -- …/ingestion.yml` → `8f8406f`), so activation is structurally possible; `config/ingestion.yaml` carries `safety.min_yield: 20` and `lifecycle.expire_after_days: 7`; `src/services/ingestion/loader.py` resolves; `docs/Manual_Verification_Guide.md` has the `### T0019.2`, `### T0019.5`, `### T0019.6` anchors the runbook cites; the §2 "mypy now green" note matches `Known_Issues.md` (T0020.3 baseline), and the §4 secrets note (real `DATABASE_URL`/`HEALTHCHECKS_URL`; placeholder `GROQ_API_KEY`/`LANGFUSE_*`) matches the `[LOW · NOTE]` Known_Issues entry.
-  - **Files:** `docs/T0020.4_Cron_Activation_Runbook.md` (committed — was untracked, unchanged content), `docs/Tickets.md` (new `## T0020` milestone block + 1 light Backlog cross-ref line), `docs/Known_Issues.md` (moved the `[LOW · OPEN]` "T0020 has no milestone block" entry out + category count 3→2), `docs/Resolved_Issues.md` (received the resolved entry, Documentation-drift count 2→3), `docs/Repo_Current_State.md` (T0020.4 status line + "Next recommended ticket"), this file. **No `src/`, `config/`, `tests/`, `.github/` change.**
-  - **Commands run:** `git checkout -b feature/t0020.4-cron-activation`, `git add docs/T0020.4_Cron_Activation_Runbook.md`, `git log origin/main -- .github/workflows/ingestion.yml`, `grep` for `min_yield`/`expire_after_days`/the MVG anchors, `git status --short`, `git diff --stat`.
-  - **Build & test:** docs-only — no build/tests run (nothing under `src/`/`tests/`/`config/` changed; no green run is claimed).
-  - **Manual verification:** runbook shows as tracked/added in `git status`; `git log origin/main -- .github/workflows/ingestion.yml` confirms the P1 precondition; `grep "^### T0020\.[1-4]:" docs/Tickets.md` → 4 lines between T0019.10 and `## Backlog`; the old ":358" entry text is absent from `Known_Issues.md` and present (dated) in `Resolved_Issues.md`; neither the Completion_Reports entry nor the Repo_Current_State "Next recommended ticket" claims the cron is live.
-  - **Wording note (honesty):** the cron is **not** activated by this ticket. The **final activation sign-off entry will be appended by the maintainer** per runbook §7 once every gate (D2/D6/activation/D10) clears — this entry is the docs slice, not that sign-off.
-  - **Follow-ups:** maintainer executes the runbook (D2/D6/activation/D10); after sign-off, move the T0019.5 "never run against live Postgres" HIGH item and the cron-dormant items to `Resolved_Issues.md` and set "Next recommended ticket" to the T0021/T0022 track. The next **coder** work is the T0021/T0022 track (release integrity → honesty → v1.0 tag).
-  - **Docs updated:** `docs/Tickets.md`, `docs/Known_Issues.md`, `docs/Resolved_Issues.md`, `docs/Repo_Current_State.md`, `docs/T0020.4_Cron_Activation_Runbook.md`, this file.
+- **T0020.4 (docs slice) — cron-activation runbook committed + T0020 milestone authored; activation
+  gates (D2/D6/activation/D10) remain maintainer-pending.**
+  - **Summary:** a docs-only slice of T0020.4. It does **not** activate the nightly ingestion cron —
+    the cron stays dormant. It (1) verifies and commits the maintainer-execution runbook, (2)
+    authors the previously-missing `## T0020` milestone + `### T0020.1`–`.4` sub-ticket blocks in
+    `Tickets.md`, and (3) wires the cross-references. The live activation steps (D2 ratification, D6
+    Neon `alembic stamp head`, `workflow_dispatch` activation + first scheduled run, D10
+    live-vs-parked decision) are the maintainer's, captured in the runbook; D5's local
+    Docker-Postgres portion was signed in a prior 2026-07-22 coder session, the Neon portion
+    remains.
+  - **Runbook verification:** spot-checked every load-bearing claim against the repo as it stands —
+    **no drift found, nothing rewritten.** Confirmed: `.github/workflows/ingestion.yml` is on
+    `main`/`origin/main` (`git log origin/main -- …/ingestion.yml` → `8f8406f`), so activation is
+    structurally possible; `config/ingestion.yaml` carries `safety.min_yield: 20` and
+    `lifecycle.expire_after_days: 7`; `src/services/ingestion/loader.py` resolves;
+    `docs/archive/Manual_Verification_Archive.md` has the `### T0019.2`, `### T0019.5`, `###
+    T0019.6` anchors
+    the runbook cites; the §2 "mypy now green" note matches `Known_Issues.md` (T0020.3 baseline),
+    and the §4 secrets note (real `DATABASE_URL`/`HEALTHCHECKS_URL`; placeholder
+    `GROQ_API_KEY`/`LANGFUSE_*`) matches the `[LOW · NOTE]` Known_Issues entry.
+  - **Files:** `docs/T0020.4_Cron_Activation_Runbook.md` (committed — was untracked, unchanged
+    content), `docs/Tickets.md` (new `## T0020` milestone block + 1 light Backlog cross-ref line),
+    `docs/Known_Issues.md` (moved the `[LOW · OPEN]` "T0020 has no milestone block" entry out +
+    category count 3→2), `docs/Resolved_Issues.md` (received the resolved entry, Documentation-drift
+    count 2→3), `docs/Repo_Current_State.md` (T0020.4 status line + "Next recommended ticket"), this
+    file. **No `src/`, `config/`, `tests/`, `.github/` change.**
+  - **Commands run:** `git checkout -b feature/t0020.4-cron-activation`, `git add
+    docs/T0020.4_Cron_Activation_Runbook.md`, `git log origin/main --
+    .github/workflows/ingestion.yml`, `grep` for `min_yield`/`expire_after_days`/the MVG anchors,
+    `git status --short`, `git diff --stat`.
+  - **Build & test:** docs-only — no build/tests run (nothing under `src/`/`tests/`/`config/`
+    changed; no green run is claimed).
+  - **Manual verification:** runbook shows as tracked/added in `git status`; `git log origin/main --
+    .github/workflows/ingestion.yml` confirms the P1 precondition; `grep "^### T0020\.[1-4]:"
+    docs/Tickets.md` → 4 lines between T0019.10 and `## Backlog`; the old ":358" entry text is
+    absent from `Known_Issues.md` and present (dated) in `Resolved_Issues.md`; neither the
+    Completion_Reports entry nor the Repo_Current_State "Next recommended ticket" claims the cron is
+    live.
+  - **Wording note (honesty):** the cron is **not** activated by this ticket. The **final activation
+    sign-off entry will be appended by the maintainer** per runbook §7 once every gate
+    (D2/D6/activation/D10) clears — this entry is the docs slice, not that sign-off.
+  - **Follow-ups:** maintainer executes the runbook (D2/D6/activation/D10); after sign-off, move the
+    T0019.5 "never run against live Postgres" HIGH item and the cron-dormant items to
+    `Resolved_Issues.md` and set "Next recommended ticket" to the T0021/T0022 track. The next
+    **coder** work is the T0021/T0022 track (release integrity → honesty → v1.0 tag).
+  - **Docs updated:** `docs/Tickets.md`, `docs/Known_Issues.md`, `docs/Resolved_Issues.md`,
+    `docs/Repo_Current_State.md`, `docs/T0020.4_Cron_Activation_Runbook.md`, this file.
 
 ## Milestone 21 — Release integrity
 
 ## T0021.1 — API read-path startup schema assertion
 
-- **Summary:** Added a boot-time `clean_jobs` schema guard on the serving (read) path, closing the read-path half of the 2026-07-15 drift incident (T0019.5 covered the write path). On any schema mismatch — a missing/renamed/extra column, an absent table, or a DB-inspection failure — the FastAPI boot now aborts loudly with `SchemaGuardError` naming the diff, instead of starting a server that errors mid-query on the first request. The guard lives in the **API layer** and imports only `src.core.*` + `sqlalchemy`; per the ticket's layer-isolation rule it does **not** import the `src.services.ingestion` package, so the expected 22-column set is a frozen literal (`EXPECTED_COLUMNS`) duplicated deliberately rather than derived from the ingestion ORM.
-- **Branch:** `feature/t0021.1-read-path-schema-assertion`, cut from `main` (`bcc81db`). Implemented in a dedicated git worktree (`../IHA-t0021.1`) to avoid colliding with a concurrent T0020 session that had uncommitted edits to `docs/Known_Issues.md` and `docs/Repo_Current_State.md` in the shared working tree.
+- **Summary:** Added a boot-time `clean_jobs` schema guard on the serving (read) path, closing the
+  read-path half of the 2026-07-15 drift incident (T0019.5 covered the write path). On any schema
+  mismatch — a missing/renamed/extra column, an absent table, or a DB-inspection failure — the
+  FastAPI boot now aborts loudly with `SchemaGuardError` naming the diff, instead of starting a
+  server that errors mid-query on the first request. The guard lives in the **API layer** and
+  imports only `src.core.*` + `sqlalchemy`; per the ticket's layer-isolation rule it does **not**
+  import the `src.services.ingestion` package, so the expected 22-column set is a frozen literal
+  (`EXPECTED_COLUMNS`) duplicated deliberately rather than derived from the ingestion ORM.
+- **Branch:** `feature/t0021.1-read-path-schema-assertion`, cut from `main` (`bcc81db`). Implemented
+  in a dedicated git worktree (`../IHA-t0021.1`) to avoid colliding with a concurrent T0020 session
+  that had uncommitted edits to `docs/Known_Issues.md` and `docs/Repo_Current_State.md` in the
+  shared working tree.
 - **Files created:**
-  - `src/api/schema_guard.py` — `SchemaGuardError(RuntimeError)`, the `EXPECTED_COLUMNS` frozenset (22 columns, with the "frozen contract" provenance comment), and `assert_serving_schema()`. Distinct log events `api.schema_ok` / `api.schema_drift` keep serving-path drift separable from the ingestion path's `ingestion.schema_*`.
-  - `tests/api/test_schema_guard.py` — six cases mirroring `test_safety.py`'s mock-`session_factory` style, patching `src.api.schema_guard.session_factory`: correct schema (no raise), missing column, renamed column (both directions named), unexpected extra, empty result → table-missing, `OperationalError` → inspect failure.
+  - `src/api/schema_guard.py` — `SchemaGuardError(RuntimeError)`, the `EXPECTED_COLUMNS` frozenset
+    (22 columns, with the "frozen contract" provenance comment), and `assert_serving_schema()`.
+    Distinct log events `api.schema_ok` / `api.schema_drift` keep serving-path drift separable from
+    the ingestion path's `ingestion.schema_*`.
+  - `tests/api/test_schema_guard.py` — six cases mirroring `test_safety.py`'s mock-`session_factory`
+    style, patching `src.api.schema_guard.session_factory`: correct schema (no raise), missing
+    column, renamed column (both directions named), unexpected extra, empty result → table-missing,
+    `OperationalError` → inspect failure.
 - **Files changed:**
-  - `src/api/app.py` — added `import asyncio` and `from src.api.schema_guard import assert_serving_schema`; the `lifespan` hook now calls `await asyncio.to_thread(assert_serving_schema)` after `load_settings()` and before `build_checkpointer_pool()`. `SchemaGuardError` is left uncaught so the boot aborts.
-  - `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, `docs/Manual_Verification_Guide.md`, this file.
-- **Commands run:** `uv run pytest -q tests/api/test_schema_guard.py` → `6 passed`; `uv run pytest -q` (full) → `335 passed, 8 skipped, 19 deselected, 4 subtests passed` (+6 over the 329 baseline); `uv run ruff check .` → all checks passed; `uv run mypy` → the same 2 pre-existing baselined errors, no third; `git grep -n "services.ingestion" src/api/` → no match.
+  - `src/api/app.py` — added `import asyncio` and `from src.api.schema_guard import
+    assert_serving_schema`; the `lifespan` hook now calls `await
+    asyncio.to_thread(assert_serving_schema)` after `load_settings()` and before
+    `build_checkpointer_pool()`. `SchemaGuardError` is left uncaught so the boot aborts.
+  - `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, `docs/Manual_Verification_Guide.md`, this
+    file.
+- **Commands run:** `uv run pytest -q tests/api/test_schema_guard.py` → `6 passed`; `uv run pytest
+  -q` (full) → `335 passed, 8 skipped, 19 deselected, 4 subtests passed` (+6 over the 329 baseline);
+  `uv run ruff check .` → all checks passed; `uv run mypy` → the same 2 pre-existing baselined
+  errors, no third; `git grep -n "services.ingestion" src/api/` → no match.
 - **Build/test results:** green. ruff clean, mypy at baseline, full suite +6.
-- **Manual verification:** see `Manual_Verification_Guide.md` → T0021.1. Checks A (suite) and B (layer-isolation greps) run and passing. **Checks C (happy boot) and D (drift-fails-boot) were NOT run** — both need Docker Postgres, which was unavailable this session. The automated cases patch `session_factory` and prove the diff/exception logic but not the live-DB boot end-to-end.
+- **Manual verification:** see `archive/Manual_Verification_Archive.md` → T0021.1. Checks A (suite)
+  and B
+  (layer-isolation greps) run and passing. **Checks C (happy boot) and D (drift-fails-boot) were NOT
+  run** — both need Docker Postgres, which was unavailable this session. The automated cases patch
+  `session_factory` and prove the diff/exception logic but not the live-DB boot end-to-end.
 - **Risks / known issues logged (both `Known_Issues.md` → Config, startup & deployment):**
-  - `[LOW · NOTE]` The 22-column expected set is duplicated between `schema_guard.py` and `CleanJob` — required by the isolation rule; a real schema change must update both. Fails safe (drift vs the live DB is caught loudly at boot), but the maintenance coupling is real. Possible future refactor (out of scope): promote the ORM to a shared `src/core` location.
-  - `[LOW · NOTE]` Exact-match semantics mean a future *additive* migration to `clean_jobs` aborts the live API boot until `EXPECTED_COLUMNS` is updated — the accepted trade-off for symmetry with the write-path guard (required-subset semantics deliberately not chosen).
-- **Follow-ups:** run manual checks C and D against a live Postgres at least once before relying on the guard in production; the shared-`src/core`-ORM refactor if the duplication becomes a maintenance burden. Both are out of scope here.
-- **Docs updated:** `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, `docs/Manual_Verification_Guide.md`, this file.
-- **Merge note (2026-08-09):** merged `origin/main` (`56d74d9`) to clear conflicts before review. That merge brought in the **Neon-baseline finding** — production `clean_jobs` has only 19 columns, missing `first_seen_at`/`is_active`/`last_seen_at`. `assert_serving_schema` therefore **fails against production as it stands today**, and this PR must not merge until Neon is migrated to Alembic head (`T0020.4_Cron_Activation_Runbook.md` §3, steps 3a–3d). That is not a defect in this ticket — the guard correctly detected real drift, pre-merge rather than in production, which is exactly what it was built to do. See `Known_Issues.md` → *"Neon production is still at the Alembic baseline."*
+  - `[LOW · NOTE]` The 22-column expected set is duplicated between `schema_guard.py` and `CleanJob`
+    — required by the isolation rule; a real schema change must update both. Fails safe (drift vs
+    the live DB is caught loudly at boot), but the maintenance coupling is real. Possible future
+    refactor (out of scope): promote the ORM to a shared `src/core` location.
+  - `[LOW · NOTE]` Exact-match semantics mean a future *additive* migration to `clean_jobs` aborts
+    the live API boot until `EXPECTED_COLUMNS` is updated — the accepted trade-off for symmetry with
+    the write-path guard (required-subset semantics deliberately not chosen).
+- **Follow-ups:** run manual checks C and D against a live Postgres at least once before relying on
+  the guard in production; the shared-`src/core`-ORM refactor if the duplication becomes a
+  maintenance burden. Both are out of scope here.
+- **Docs updated:** `docs/Known_Issues.md`, `docs/Repo_Current_State.md`,
+  `docs/Manual_Verification_Guide.md`, this file.
+- **Merge note (2026-08-09):** merged `origin/main` (`56d74d9`) to clear conflicts before review.
+  That merge brought in the **Neon-baseline finding** — production `clean_jobs` has only 19 columns,
+  missing `first_seen_at`/`is_active`/`last_seen_at`. `assert_serving_schema` therefore **fails
+  against production as it stands today**, and this PR must not merge until Neon is migrated to
+  Alembic head (`T0020.4_Cron_Activation_Runbook.md` §3, steps 3a–3d). That is not a defect in this
+  ticket — the guard correctly detected real drift, pre-merge rather than in production, which is
+  exactly what it was built to do. See `Known_Issues.md` → *"Neon production is still at the Alembic
+  baseline."*
+
+## T0022.8 - Research prune, decision harvest, and link rewrite
+
+- **Summary:** Harvested 34 durable decisions into `docs/Decision_Log.md`, archived the nine
+  completed research records without changing their contents, and redirected every live reference
+  to the archive. Added the archive index and policy, and recorded the evaluation quota headline in
+  `Tech_Stack.md`.
+- **Files created:** `docs/Decision_Log.md` and `research/archive/README.md`.
+- **Files moved:** Nine completed research records moved unchanged to `research/archive/`.
+- The archive index names each record and its current destination.
+- **Files changed:** live inbound-reference documents, `docs/Tech_Stack.md`,
+  `docs/Repo_Current_State.md`, `scripts/docs_lint.py`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py --check link-path` before and after the
+  move; a candidate-name sweep with `git grep`; and a live research-file inventory.
+- **Build and test:** documentation-only ticket. The link check still fails on pre-existing stale
+  live references. Archive records are intentionally excluded, matching the documented policy.
+- **Manual verification:** confirm `research/` has five live research files plus `README.md`; open
+  `Decision_Log.md` and locate the `tech_stack` rationale; follow five decision-log links; and run
+  the per-filename candidate sweep from T0022.8.
+- **Risks:** the repository-wide link check was already failing before this ticket, so its zero-exit
+  acceptance gate remains blocked by pre-existing stale links outside this ticket's scope.
+- **Follow-up tickets:** T0022.9 owns the remaining index rewrite and blocking CI enforcement.
+- **Docs that need updating:** T0022.9 should replace the transitional archive references in the
+  research and docs indexes with their final curated navigation.
+
+## T0022.9 - Index, ledger, and enforcement
+
+- **Summary:** Completed the documentation-system closing ticket.
+  The documentation indexes now distinguish live records from archive evidence.
+  The Fact Ledger assigns every tracked fact class a sole owner.
+  Documentation lint now checks living-document verification stamps and the CI docs job fails on a
+  finding.
+- **Files created:** None in this ticket.
+- **Link-cleanup decisions:** The measured hygiene-audit table remains intact inside a deliberate
+  `lint-allow-link-path` region.
+  Archived-tag references retain the `archived-on-tag` marker.
+  Deliberately unbuilt future artifacts and prose false positives were rephrased so they are not
+  represented as current files.
+  Stale Langfuse and golden-module references now describe their actual locations.
+  Fenced Markdown examples are not link-checked because they document syntax rather than assert
+  repository state.
+- **Files changed:** `docs/README.md`, `research/README.md`, `docs/Docs_Conventions.md`,
+  `docs/Known_Issues.md`, `docs/Tickets.md`, `docs/Repo_Current_State.md`,
+  `docs/Resolved_Issues.md`, `evals/v1_scenario_matrix.md`,
+  `research/docs-hygiene-and-system-plan.md`, `research/honesty-enforcement-design.md`,
+  `AGENTS.md`, `CLAUDE.md`, `.github/workflows/ci.yml`, `scripts/docs_lint.py`, and
+  `tests/test_docs_lint.py`.
+- **Commands run:** `python scripts/docs_lint.py`; the 20-test dependency-free docs-lint harness;
+  `.venv\\Scripts\\ruff.exe check scripts\\docs_lint.py tests\\test_docs_lint.py`;
+  `uv run pytest -q`; and `git diff --check`.
+- **Build and test results:** All documentation checks passed.
+  The 20 docs-lint tests passed through the available Python 3.12 interpreter.
+  `uv run pytest -q` could not run locally because the existing uv cache path cannot be created.
+- **Manual verification:** Create a PR with a documentation line over 100 characters and confirm the
+  `docs` job is red.
+  Edit only one of `AGENTS.md` or `CLAUDE.md` and confirm the parity check fails.
+  Remove the stamp from `Known_Issues.md` locally and confirm `--check stamp` reports it.
+  Open `docs/README.md` and `research/README.md` cold to confirm the ledger and five live research
+  records are understandable without archive plans.
+- **Risks:** CI failure is now live, but branch protection still decides whether a failing docs job
+  blocks merging.
+  That maintainer-controlled action remains outside this ticket.
+- **Follow-up tickets:** T0023 scopes and executes the v1.0 release cut.
+  M20's branch-protection follow-up remains open.
+- **Docs that need updating:** None for this ticket.

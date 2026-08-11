@@ -6,7 +6,7 @@
 > (`topdev.vn`)**. It is the IT-board counterpart to the existing VietnamWorks JSON-API
 > spike (`scripts/scrape_spike.py`), the TopCV spike (`scripts/scrape_topcv_spike.py`),
 > and the ITviec spike (`scripts/scrape_itviec_spike.py`). Background:
-> `research/data-ingestion-stage.md` (TopDev noted at §0.1 lines 53/57/132 — *"exposes no
+> `research/archive/data-ingestion-stage.md` (TopDev noted at §0.1 lines 53/57/132 — *"exposes no
 > JSON API", "Cloudflare-style", "technology skill tags"*) and the running comparison
 > `research/job-site-comparison.md` (Candidate 3 — TopDev, currently a stub).
 >
@@ -177,5 +177,5 @@ TIMEOUT_SECONDS   = 30
    with a full write-up at the same depth as the VietnamWorks / ITviec / TopCV sections
    (access method, anti-bot, AI/Data scoping, `tech_stack` quality, fields, measured
    results, strengths, weaknesses, evidence, net call) and update its scorecard row. If a
-   broader finding emerges, append a sub-section to `research/data-ingestion-stage.md`
+   broader finding emerges, append a sub-section to `research/archive/data-ingestion-stage.md`
    (mirroring §0.1) — but **ask before editing that doc**.

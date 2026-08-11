@@ -25,7 +25,8 @@
 >
 > **Read first:** `docs/MVP_Spec.md` §3–§4; `docs/Repo_Current_State.md`;
 > `docs/Known_Issues.md`; `docs/Tickets.md` T0019 + Backlog;
-> `pre-deploy-refinement-plan.md` §6; `ingestion-milestone-plan.md` §1/§5.
+> `research/archive/pre-deploy-refinement-plan.md` §6;
+> `research/archive/ingestion-milestone-plan.md` §1/§5.
 
 ---
 
@@ -68,7 +69,7 @@ completion reports; "live" means observed against the deployed service.
 | # | DoD bullet (`MVP_Spec.md` §4) | Verdict | Evidence |
 |---|---|---|---|
 | 1 | Job-data question → grounded answer | **Met** | Verified live end-to-end 2026-07-16 (T0018.4); `query_clean_jobs`/`get_job_details` ground every answer; no-fabrication rules in `config/prompts.yaml`. |
-| 2 | Refine ≥2× in one conversation, context-aware | **Met** | M7 checkpointer memory; T0009.8 multi-turn manual verification; demo UI reuses the pinned session id across turns (T0018.3). *Caveat:* coherence is observationally verified, not eval-scored (`pre-deploy-refinement-plan.md` §5g) — debt, not a gap. |
+| 2 | Refine ≥2× in one conversation, context-aware | **Met** | M7 checkpointer memory; T0009.8 multi-turn manual verification; demo UI reuses the pinned session id across turns (T0018.3). *Caveat:* coherence is observationally verified, not eval-scored (`research/archive/pre-deploy-refinement-plan.md` §5g) — debt, not a gap. |
 | 3 | Two conversations stay independent | **Met** | `session_id → thread_id` isolation (T0007.2) + tests. |
 | 4 | Session identity issued when absent, reusable | **Met** | T0018.1 mints UUID4 server-side on both endpoints; UI pins and reuses it. |
 | 5 | Memory survives a service restart | **Met** | Postgres-backed `AsyncPostgresSaver` on Neon; state external to the process; Render redeploys/spin-downs since 2026-07-16 haven't reset sessions. *Caveat:* the §2 capability text also claims multi-**instance** safety — plausible by construction (shared Postgres) but never observed; prod runs `WEB_CONCURRENCY=1`. The DoD bullet itself only requires restart survival. |
@@ -191,7 +192,8 @@ half-landed in a working tree.
   rebase, matching the 2026-07-19 precedent. Includes flipping Render's deploy source to
   `main` and correcting the now-stale "main is stuck at T0009" lines (`Tickets.md`
   Backlog, memory notes).
-- **CI merge gate** (`pre-deploy-refinement-plan.md` §6i): GitHub Actions PR workflow
+- **CI merge gate** (`research/archive/pre-deploy-refinement-plan.md` §6i): GitHub Actions PR
+  workflow
   running `pytest` (standard suite — `eval`-marked stays excluded: needs creds + spends
   quota), `ruff check`, `mypy`. Branch protection on `main`.
 - **Cron activation sequence** (maintainer-gated): T0019.5 manual checks B–E against a
@@ -347,11 +349,14 @@ Decisions (a call to make):
 - `docs/Repo_Current_State.md` — branch topology, T0019 status, live-deploy record.
 - `docs/Known_Issues.md` — every gap cited in §1 lives there with full context.
 - `docs/Tickets.md` T0019 + Backlog — fixed sequencing; the unscheduled seeds M20 absorbs.
-- `pre-deploy-refinement-plan.md` §6/§7/§8 — the deploy-hardening body and open decisions
+- `research/archive/pre-deploy-refinement-plan.md` §6/§7/§8 — the deploy-hardening body and open
+  decisions
   M20–M22 graduate.
-- `ingestion-milestone-plan.md` §1/§5 — T0019 rationale and its unverified assumptions
+- `research/archive/ingestion-milestone-plan.md` §1/§5 — T0019 rationale and its unverified
+  assumptions
   (several become M20 gates).
-- `deployment-research-plan.md` §1a/§9/§10/§11 — keep-alive, monitoring ceiling, cost
+- `research/archive/deployment-research-plan.md` §1a/§9/§10/§11 — keep-alive, monitoring ceiling,
+  cost
   ceiling, robots/ToS record.
 - `.github/workflows/ingestion.yml` (untracked) — the T0019.6 artifact; its header records
   the default-branch and defunct-keepalive facts §0 relies on.

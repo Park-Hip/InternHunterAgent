@@ -105,6 +105,8 @@ propagating an internal convention, not importing an external one.**
 
 **15 of 162** file paths referenced in docs no longer resolve (**9.3%**):
 
+<!-- lint-allow-link-path:begin -->
+
 | Broken reference | Verdict |
 |---|---|
 | `docs/Code_Review_Notes.md` | **Stale** — moved to `docs/archive/`; 4 docs still point at the old path |
@@ -114,6 +116,8 @@ propagating an internal convention, not importing an external one.**
 | `src/core/event_loop.py`, `scripts/run_scenario_matrix.py`, `evals/scenarios_v1.yaml`, `evals/test_scenarios_v1_load.py` | **Legitimately archived-on-tag** — must be *annotated*, not "fixed" |
 | `evals/goldens.py`, `evals/v2_scenario_matrix.md`, `tests/services/query/test_schema_context.py` | Needs case-by-case triage |
 | `config/ingestion`, `src/core.db`, `docs/rename-t0013-schema-freeze` | Prose fragments caught by the matcher — mostly false positives, confirm and ignore |
+
+<!-- lint-allow-link-path:end -->
 
 The archived-on-tag cases are important: a naive link-fixer would delete correct references.
 The lint rule in §8 therefore needs an explicit **`<!-- archived-on-tag -->`** escape hatch.
@@ -126,10 +130,11 @@ The lint rule in §8 therefore needs an explicit **`<!-- archived-on-tag -->`** 
 | `docs/T0020.4_Cron_Activation_Runbook.md` | `docs/README.md` |
 | `research/eval-cost-and-rate-limits.md` | `research/README.md` |
 | `research/honesty-enforcement-design.md` | `research/README.md` |
-| `research/ingestion-milestone-plan.md` | `research/README.md` |
+| `research/archive/ingestion-milestone-plan.md` | `research/README.md` |
 | `research/experiments/*.md` (3 files) | `research/README.md` |
 
-**Content drift in `research/README.md`** — it describes `deployment-research-plan.md` as a
+**Content drift in `research/README.md`** — it describes
+`research/archive/deployment-research-plan.md` as a
 "**Skeleton** … findings to be filled in" (the file is now 892 lines / 71 KB, fully
 populated) and calls the DeepEval evaluation milestone "**now next**" (M11 shipped; the repo
 is at M21).
@@ -141,7 +146,7 @@ is at M21).
 | **`AGENTS.md` and `CLAUDE.md` are byte-identical** | Both exactly 2,778 bytes; `diff` returns clean. **This is intentional, not a defect** — see §2.4.1 |
 | **The ticket-prompt skill exists twice and has diverged** | `skills/generate-ticket-prompt/SKILL.md` (93 lines) vs `.claude/skills/…` (94 lines) — `diff` shows a full-file rewrite |
 | **`milestone/` is a self-declared temporary folder that was never deleted** | Its own banner: "**DISPOSABLE / temporary working doc** … then this file is deleted" |
-| **Filename collision** | `milestone/data-ingestion-stage.md` vs `research/data-ingestion-stage.md` — different content, same name |
+| **Filename collision** | `milestone/data-ingestion-stage.md` vs `research/archive/data-ingestion-stage.md` — different content, same name |
 | **Orphan README** | `infra/langfuse/README.md` — 5 lines, points to a nonexistent compose file |
 
 ### 2.4.1 Two agents, two instruction files — a constraint, not a duplicate
@@ -205,24 +210,27 @@ history while the decisions inside it are still load-bearing.
 | `honesty-enforcement-design.md` | 479 | **Live** — "No implementation"; the honesty work is unbuilt | **KEEP** |
 | `eval-cost-and-rate-limits.md` | 124 | Reference — Groq/Gemini quota facts still true | **KEEP** (fold headline numbers into `Tech_Stack.md`) |
 | `job-site-comparison.md` | 528 | Scorecard; VietnamWorks decided, rivals are stubs | **KEEP, TRIM** — collapse unfilled stubs to one line |
-| `data-ingestion-stage.md` | 442 | Banner: *"shipped tickets twice"* (T0009, T0019) | **ARCHIVE** |
-| `deployment-research-plan.md` | 892 | Deploy shipped (T0018.4); **8 unfilled placeholders** | **ARCHIVE** |
-| `deepeval-sql-agent-eval-planning.md` | 648 | M11 shipped | **ARCHIVE** (§11 grounding → Decision Log) |
-| `ingestion-milestone-plan.md` | 573 | Banner: *"Graduated 2026-07-16"* → T0019 | **ARCHIVE** |
-| `pre-deploy-refinement-plan.md` | 595 | Brainstorm; consumed by M16–M19 | **ARCHIVE** |
-| `demo-ui-and-golive-plan.md` | 397 | T0018 shipped | **ARCHIVE** |
-| `streaming-implementation-plan.md` | 313 | T0017 shipped | **ARCHIVE** |
-| `schema-enrichment-plan.md` | 310 | M13 shipped; superseded by `Schema_Contract.md` | **ARCHIVE** |
-| `agent-behavior-question-bank.md` | 755 | **Stub, never populated** — ~48 question groups, no answers; M15 track parked | **ARCHIVE** — revive only if the behavior track restarts |
+| `research/archive/data-ingestion-stage.md` | 442 | Banner: *"shipped tickets twice"* (T0009, T0019) | **ARCHIVE** |
+| `research/archive/deployment-research-plan.md` | 892 | Deploy shipped (T0018.4); **8 unfilled placeholders** | **ARCHIVE** |
+| `research/archive/deepeval-sql-agent-eval-planning.md` | 648 | M11 shipped | **ARCHIVE** (§11 grounding → Decision Log) |
+| `research/archive/ingestion-milestone-plan.md` | 573 | Banner: *"Graduated 2026-07-16"* → T0019 | **ARCHIVE** |
+| `research/archive/pre-deploy-refinement-plan.md` | 595 | Brainstorm; consumed by M16–M19 | **ARCHIVE** |
+| `research/archive/demo-ui-and-golive-plan.md` | 397 | T0018 shipped | **ARCHIVE** |
+| `research/archive/streaming-implementation-plan.md` | 313 | T0017 shipped | **ARCHIVE** |
+| `research/archive/schema-enrichment-plan.md` | 310 | M13 shipped; superseded by `Schema_Contract.md` | **ARCHIVE** |
+| `research/archive/agent-behavior-question-bank.md` | 755 | **Stub, never populated** — ~48 question groups, no answers; M15 track parked | **ARCHIVE** — revive only if the behavior track restarts |
 
 **Net: 4 keep, 1 keep-and-trim, 9 archive — about 4,900 lines leaving the live surface.**
 
 #### The constraint that rules out plain deletion
 
 > **Every single research doc is cited by 1–6 live docs.** Measured:
-> `data-ingestion-stage.md` ×6, `deployment-research-plan.md` ×6, `job-site-comparison.md` ×4,
-> `streaming-implementation-plan.md` ×4, `ingestion-milestone-plan.md` ×4,
-> `pre-deploy-refinement-plan.md` ×4, `deepeval-sql-agent-eval-planning.md` ×4 …
+> `research/archive/data-ingestion-stage.md` ×6, `research/archive/deployment-research-plan.md` ×6,
+> `job-site-comparison.md` ×4,
+> `research/archive/streaming-implementation-plan.md` ×4,
+> `research/archive/ingestion-milestone-plan.md` ×4,
+> `research/archive/pre-deploy-refinement-plan.md` ×4,
+> `research/archive/deepeval-sql-agent-eval-planning.md` ×4 …
 
 Deleting any of them breaks live references — and `CLAUDE.md` §1 *requires* reading the
 relevant `research/` doc before designing any stage, so a dangling pointer is a real
@@ -462,7 +470,7 @@ front-door material.
 
 > **Screenshot — ✅ resolved 2026-08-09: none available yet.** T0022.4 ships **item 3 as the
 > 6-line sample exchange only** and is not blocked. Add a `[LOW · OPEN]` entry to
-> `Known_Issues.md` for the screenshot (suggested path `docs/assets/demo.png`), to be captured
+> `Known_Issues.md` for the screenshot (suggested future location `assets/demo.png`), to be captured
 > when the live demo is next up. Write the README so the image slots in without a rewrite —
 > put the sample exchange in its own section, not woven into a paragraph.
 
@@ -470,7 +478,7 @@ front-door material.
 
 Absorbs `T0020.4_Cron_Activation_Runbook.md` (424 lines) and consolidates the deploy topology
 now restated in `Repo_Current_State.md`, `Completion_Reports.md` (T0018.4),
-`research/deployment-research-plan.md`, and the runbook.
+`research/archive/deployment-research-plan.md`, and the runbook.
 
 Sections: topology table (Render / Neon / Langfuse, region, tier, health check) · environment
 variables and where each is set · deploy flow and the `render.yaml` pin · database operations
@@ -514,8 +522,8 @@ restates completion reports. Cut it; link instead.
 **This is the answer to "gather all the information into one place."** Nine research docs
 (~4,900 lines) are executed plans whose remaining value is the handful of decisions inside
 them. Today, answering *"why does `tech_stack` use an external vocabulary instead of an
-allowlist?"* means knowing that `schema-enrichment-plan.md` superseded
-`data-ingestion-stage.md` §5 — a fact recorded only inside the superseding doc.
+allowlist?"* means knowing that `research/archive/schema-enrichment-plan.md` superseded
+`research/archive/data-ingestion-stage.md` §5 — a fact recorded only inside the superseding doc.
 
 **Format — one row per decision, ADR-style but compact:**
 
@@ -524,7 +532,7 @@ allowlist?"* means knowing that `schema-enrichment-plan.md` superseded
 - **Decided:** 2026-07-09 · **Status:** Active · **Shipped in:** M13 (T0013.1)
 - **Why:** a hardcoded allowlist could not keep pace with source tags; audit coverage
   rose 58% → 89% against an external vocabulary.
-- **Supersedes:** `data-ingestion-stage.md` §5 (allowlist default).
+- **Supersedes:** `research/archive/data-ingestion-stage.md` §5 (allowlist default).
 - **Full record:** [`research/archive/schema-enrichment-plan.md`](…)
 ```
 
@@ -637,7 +645,7 @@ measurable pass/fail target rather than a subjective one.
 | **T0022.3** | **Mechanical reflow, no content change.** ~40 files to the 100-char standard — T1/T2/T3, `research/**`, `Completion_Reports.md`, `Resolved_Issues.md`, `evals/v1_scenario_matrix.md`. **`docs/archive/**` excluded** (§5.2.1). Separate commits per group | .1 | Low, high volume — review as "no semantic diff" |
 | **T0022.4** | **Front door:** rewrite `README.md`; add `Tech_Stack.md`; wire `--check-stack` | .1 | Medium — quickstart must be verified on a clean clone |
 | **T0022.5** | **Operations consolidation:** new `Operations.md`; absorb the T0020.4 runbook (leave a pointer); single-source the topology | .4 | **Medium-high** — cron activation is live work; do not break the runbook |
-| **T0022.6** | **Archive split:** `Tickets.md` → `Tickets_Archive.md`; `Manual_Verification_Guide.md` → history. Living files keep open items + an index | .3 | Medium — mind inbound links |
+| **T0022.6** | **Archive split:** `Tickets.md` → `Tickets_Archive.md`; `docs/archive/Manual_Verification_Archive.md` → history. Living files keep open items + an index | .3 | Medium — mind inbound links |
 | **T0022.7** | **Rebuild `Repo_Current_State.md`** as a fact sheet; evict `RESOLVED` entries from `Known_Issues.md`; rebuild its category counts | .6 | Medium |
 | **T0022.8** | **Research prune (§2.7):** harvest ~25–35 decisions into `Decision_Log.md`; move the 9 executed docs to `research/archive/`; trim `job-site-comparison.md`; rewrite every inbound link; add `research/archive/README.md` | .3 | **Highest** — 9 docs × up to 6 inbound links each; `link-path` must be green before and after |
 | **T0022.9** | **Index + ledger:** rewrite `docs/README.md` (4 tiers + Fact Ledger) and `research/README.md` (5 live docs + archive pointer); **flip CI to blocking** | all | Low |

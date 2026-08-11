@@ -4,8 +4,9 @@
 > enforcement lives* for the C-category failures measured in
 > `evals/v1_scenario_matrix.md` (branch `feature/t0015.4-v1-scenario-matrix` @ `eba3e1f`).
 > Companion evidence: `docs/Known_Issues.md` (§ Agent runtime & prompts),
-> `docs/Agent_Behavior_Spec.md` @ `eba3e1f`, `research/pre-deploy-refinement-plan.md` §4/§5f,
-> `research/deployment-research-plan.md` §4.2 #3.
+> `docs/Agent_Behavior_Spec.md` @ `eba3e1f`, `research/archive/pre-deploy-refinement-plan.md`
+> §4/§5f,
+> `research/archive/deployment-research-plan.md` §4.2 #3.
 
 ---
 
@@ -262,7 +263,7 @@ untouched — and this design re-affirms it concretely by *rejecting* the one va
 would cross it (widening C5's SELECT to force salary columns into the result, §4).
 
 The same test disposes of the `is_active` alternatives already ruled out in
-`deployment-research-plan.md` §4.2 #3: a hide-inactive view and `WHERE is_active`
+`research/archive/deployment-research-plan.md` §4.2 #3: a hide-inactive view and `WHERE is_active`
 injection both change what data comes back — semantic rewriting. Hedging on what *did*
 come back does not.
 
@@ -290,7 +291,8 @@ glossary-backed few-shots for …") genuinely conflict. Resolution:
   keep the persona internship-bias rebalance, multi-turn/compound few-shots (B1, M-G03),
   synonym/abstraction guidance (M-D7/M-D8/M-D9), `DISCRIMINATORY-DECLINE` (M-G29),
   `SQL-DESCRIBE-ONLY` (M-D4), and C6's counts — behaviors where wording *is* the substance.
-- **Forward consistency:** `deployment-research-plan.md` §4.2 #3 planned the `is_active`
+- **Forward consistency:** `research/archive/deployment-research-plan.md` §4.2 #3 planned the
+  `is_active`
   hedge as "a prompt nudge — best-effort, like the existing role/salary/id-first nudges,"
   gated on the Evaluation milestone confirming the model honors nudges. That gate has now
   effectively *failed* (hidden-salary 2/2 violation, freshness 1/3, C-category 0/7).
@@ -350,7 +352,7 @@ revive `QueryToolResult` as the tool's internal result shape.
 **In Scope:**
 * `src/services/query/models.py`: add `HedgeObligation`; extend `QueryToolResult` with
   `obligations: list[HedgeObligation]` (keep `refusal`).
-* `src/services/query/obligations.py`: `detect_obligations(sql: str, table: TableArtifact) ->
+ * A future query-service obligations module: `detect_obligations(sql: str, table: TableArtifact) ->
   list[HedgeObligation]` implementing the §4 rules (zero_results, created_on_caveat,
   free_text_hedge, cross_currency, negotiable_salary, listing_expiry_not_deadline; optional
   senior_title_hedge behind a default-off toggle). Pure function, no I/O.
@@ -395,7 +397,7 @@ window**
 **In Scope:**
 * Re-run the 29-scenario T0015.4 protocol (probes ≥3×, determinism grading) against the
   fixture DB: full C category + full regression on the 13 passing scenarios; record as
-  `evals/v2_scenario_matrix.md` with `prompt_version` and mechanism config noted.
+   a future v2 scenario matrix document with `prompt_version` and mechanism config noted.
 * Per-rule bisect on any C row that still fails (toggles exist for exactly this).
 * Decision record: per-scenario pass/fail deltas; explicit go/no-go for stage 3
   (T0020.5) based on whether explicit caveats were dropped.

@@ -12,9 +12,13 @@ repository's scope and quality.
 * Never over-engineer a problem, find a suitable solution to the MVP.
 * Models should be seperated in models.py
 * Paramters must be set at config/settings.yaml
-* Before designing, planning, or implementing any stage, read the relevant document in `research/`
-  (start at `research/README.md`). It holds the pre-design research, live-tested facts, and
-  ruled-out dead-ends behind each decision — do not re-derive what is already recorded there.
+* Before designing, planning, or implementing any stage, read `docs/Decision_Log.md`, then the
+  relevant document in `research/` (start at `research/README.md`). It holds the pre-design
+  research,
+  live-tested facts, and ruled-out dead-ends behind each decision - do not re-derive what is already
+  recorded there.
+* Before changing Markdown documentation, read `docs/Docs_Conventions.md` and follow its ownership,
+  verification-stamp, and lint-exemption rules.
 
 ## 2. Architecture-Specific Rules
 This project is a React-style MVP utilizing FastAPI, LangChain, and Langfuse. Strict adherence to

@@ -14,11 +14,11 @@ original register entry (omitted where none was assigned).
 
 ## Categories
 - [Documentation drift](#documentation-drift) — 3
-- [Config, startup & deployment](#config-startup--deployment) — 3
+- [Config, startup & deployment](#config-startup--deployment) — 4
 - [API layer](#api-layer) — 2
-- [Agent runtime & prompts](#agent-runtime--prompts) — 5
+- [Agent runtime & prompts](#agent-runtime--prompts) — 6
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
-- [Query tooling & SQL safety](#query-tooling--sql-safety) — 5
+- [Query tooling & SQL safety](#query-tooling--sql-safety) — 6
 - [Capacity & performance](#capacity--performance) — 1
 - [Evaluation harness](#evaluation-harness) — 10 (T0011.1–T0012.2)
 - [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 2
@@ -44,7 +44,7 @@ original register entry (omitted where none was assigned).
   - The matching open bullet was already absent from `Known_Issues.md` on
     `fix/known-issues-hardening`, so T0014.2 did not move a live register item. Sibling commit
     `75bf992` (`feature/t0015.4-v1-scenario-matrix`) reconciled
-    `research/pre-deploy-refinement-plan.md` to the frozen 16-column agent-visible schema
+    `research/archive/pre-deploy-refinement-plan.md` to the frozen 16-column agent-visible schema
     (`job_level`, `listing_expires_on`, `created_on` visible; `posted_date`/bookkeeping columns
     hidden). This archive note records the no-op register sweep and points future readers to the
     sibling evidence.
@@ -63,7 +63,8 @@ original register entry (omitted where none was assigned).
   - `src/core/config.py` no longer runs `settings = load_settings()` at import; it resolves `.env`
     and all four YAMLs from the repo root, wraps missing/invalid env or YAML in a clear
     `ConfigLoadError`, and exposes a lazy `settings` proxy so existing `settings.*` call sites still
-    work after startup. `src/core.db` made lazy for the same reason (avoids an import-time
+    work after startup. The core database module was made lazy for the same reason (avoids an
+    import-time
     `DATABASE_URL` crash via SQLAlchemy engine construction). FastAPI `lifespan` calls
     `load_settings()` first, so startup fails fast with an actionable config error instead of an
     opaque `ImportError`.
@@ -79,8 +80,43 @@ original register entry (omitted where none was assigned).
     `openai/gpt-oss-120b`, which has reported tool-calling regressions on Groq — LangChain #34155 —
     kept only as the *judge* model where no tool calls happen). The retired
     `llama-3.3-70b-versatile` (Groq deprecated 2026-06-17, shutdown 2026-08-16) is no longer
-    referenced. Background: `research/deepeval-sql-agent-eval-planning.md` §11.4/§11.7 (F1).
+    referenced. Background: `research/archive/deepeval-sql-agent-eval-planning.md` §11.4/§11.7 (F1).
   - **Residual:** live-validation of the qwen pin remains tracked in `Known_Issues.md`.
+
+- **`[HIGH · RESOLVED]` The nightly ingestion cron auto-activated on merge to `main` and failed
+  silently for 19 nights.**
+  - **Found:** 2026-08-09, orientation audit. Every doc (`Repo_Current_State.md`, `Tickets.md` →
+    T0019.6/T0020.4, `T0020.4_Cron_Activation_Runbook.md`, the workflow's own header comment)
+    described `.github/workflows/ingestion.yml` as **dormant**, with activation framed as a
+    deliberate maintainer step gated on D2/D5/D6. **That premise was false.** GitHub fires
+    `schedule:` from the default branch automatically, so PR #29 (`bcc81db`) landing the workflow on
+    `main` on 2026-07-22 *was* the activation. The first scheduled run fired at 05:24 UTC that same
+    day — four days before the runbook that describes activating it was written.
+  - **Impact:** **19 consecutive scheduled runs, 2026-07-22 → 2026-08-09, all failed** in ~15 s at
+    step 5 (`Run ingestion`) with `ConfigLoadError: Invalid settings: DATABASE_URL: String should
+    have at least 1 character`. No `DATABASE_URL` repo secret has ever been configured (`gh secret
+    list` → empty). **No data impact:** the failure is at config load in `src/core/config.py`,
+    before any network or DB call — `ms.vietnamworks.com` was never requested, Neon was never
+    connected to or written, and no row was ever expired. But the job ran un-gated with **D2
+    (robots/ToS ratification) and D6 (Neon `alembic stamp head`) both unsigned**, and it was
+    silently red for 19 nights with nothing surfacing the failure.
+  - **Root cause of the doc error:** the runbook's §0/P1 states the rule correctly — *"`schedule:`
+    only fires from the default branch, so the workflow had to reach `main`"* — but treats reaching
+    `main` as a **necessary** condition when it is also **sufficient**. There is no separate arming
+    switch. The `.1 → .2 → .3 → .4` sub-ticket ordering was believed to gate activation; it never
+    did.
+  - **Fix:** **PR #33** (`fix/cron-schedule-dormant`) comments out the `schedule:` trigger on
+    `main`, keeping `workflow_dispatch`. **Merged 2026-08-09 as `abe84d8`** — verified on `main`:
+    `workflow_dispatch` is the sole trigger, and no scheduled run has fired since. The workflow is
+    now genuinely dormant, which restores the gated-activation story the docs already told.
+  - **Follow-up:** the runbook's §4 now separates *arming the schedule* from *proving a run works*,
+    and re-arming (uncommenting two `cron:` lines) is the **last** step, after a green
+    `workflow_dispatch`. Setting `DATABASE_URL` is the irreversible action — it converts a
+    harmlessly-failing job into one that really scrapes and really writes production; do not set it
+    before D2 and D6 are signed.
+  - **Generalisable lesson:** a CI/CD trigger's dormancy is a property of the *platform*, not of the
+    docs. Verify with `gh run list --workflow=<name>` rather than reading the workflow file's
+    comments.
 
 ## API layer
 - **`[RESOLVED · T0012.4, 2026-07-06]` `trace_url` always returned `None` in
@@ -134,6 +170,15 @@ original register entry (omitted where none was assigned).
     `_content_to_text` helper (flattens `str` unchanged; joins `{"text": ...}` blocks for list
     content; unrecognized blocks contribute nothing) before `.strip()`. The `str` fast path is
     byte-identical. mypy's union-attr residual on this line is gone (3 → 2).
+
+- **`[MED · RESOLVED 2026-07-15]` No default parameter to turn the agent model's reasoning on/off —
+  only to hide it.**
+  - **Found:** 2026-07-13, reviewing the T0012.2 fix.
+  - **Resolution:** `config/settings.yaml` now carries independent `agent.react.reasoning_effort:
+    null` and `agent.sql_generation.reasoning_effort: none` fields, both forwarded through
+    `AgentProvider.build_model(profile)` only when configured to a non-empty string. This keeps the
+    outer ReAct path explicit while disabling reasoning only for the mechanical SQL-generation
+    profile.
 
 ## Data & ingestion / database schema
 - **`[LOW · RESOLVED · T0012.9, 2026-07-06]` Stale comment in `normalize/vietnamworks.py`.**
@@ -282,6 +327,18 @@ original register entry (omitted where none was assigned).
     not a swallowed exception and was left out of T0021.2's catch-site scope — carried forward as a
     `[LOW · OPEN]` entry in `Known_Issues.md`.
 
+- **`[RESOLVED]` The `SELECT *` leak was six columns, not the three the ticket named.**
+  - **Found:** 2026-07-21, T0019.10 grounding. The ticket's objective named `is_active`,
+    `first_seen_at`, `last_seen_at`. `clean_jobs` has 22 columns and `schema_context` lists 16, so
+    the actual leaked set also included **`posted_date`** (always NULL — the column this project has
+    repeatedly refused to synthesize, handed to the model as `posted_date=None` on every detail
+    lookup), **`source`**, and **`external_id`** (ingestion bookkeeping). The ticket's In-Scope line
+    ("the 16-column frozen contract and nothing else") already covered all six; a reader following
+    only the objective would have fixed three and left three.
+  - **Resolved by:** T0019.10's explicit allowlist. Recorded here because the miscount is the kind
+    of thing that recurs — the wildcard hid it, and the objective's illustrative list understated
+    it.
+
 ## Capacity & performance
 - **`[LOW · RESOLVED · 2026-07-02]` Per-request `client.flush()` on the event loop.**
   - `react_agent.ainvoke` flushed the Langfuse client synchronously on every request — blocking I/O
@@ -376,7 +433,7 @@ original register entry (omitted where none was assigned).
     driven by `eval.judge.rpm: 8`. Groq's agent-side budget has enough headroom to skip a default
     throttle (`rpm: 0` disables it; the key works for either provider). Verified via a
     `_RpmThrottle` unit check (3rd call in a 2-RPM window waits ~60s) — see
-    `Manual_Verification_Guide.md` → T0011.6.
+    `archive/Manual_Verification_Archive.md` → T0011.6.
 
 ### T0011.6
 - **`[RESOLVED · T0011.6, 2026-07-05]` Gemini judge truncated its JSON because `gemini-2.5-flash` is
@@ -517,7 +574,7 @@ original register entry (omitted where none was assigned).
   - (a) **API endpoint drift:** docs said `POST /api/v1/agent/chat` but the route was
     `/agent/query`; renamed to `/agent/chat` (owner decision — "chat" is canonical for the coming
     UI) and updated `test_query.py`, `MVP_Technical_Design.md`, `Manual_Verification_Guide.md`. (b)
-    **Doc drift:** corrected the Langfuse compose path (`infra/langfuse/docker-compose.yaml` →
+    **Doc drift:** corrected the Langfuse compose path (the obsolete Langfuse-specific location to
     `infra/docker-compose.yaml`) in `Repo_Current_State.md`; added missing runtime deps
     (`cloudscraper`, `beautifulsoup4`, `lxml`, `httpx`) + dev deps (`ruff`, `mypy`); fixed the stale
     schema-evolution header in `MVP_Technical_Design.md`. (c) **Static analysis stood up:** added
@@ -539,7 +596,7 @@ original register entry (omitted where none was assigned).
 
 - **`[RESOLVED · 2026-07-01]` Doc drift: `Manual_Verification_Guide.md` pointed at
   `docker/docker-compose.yaml`** — corrected to `infra/docker-compose.yaml` in both T0003/T0004
-  steps. (The register had also mis-stated it as `infra/langfuse/docker-compose.yaml`; corrected
+   steps. (The register had also mis-stated it as a Langfuse-specific compose location; corrected
   too.)
 
 - **`[RESOLVED · T0009.8 — no code change]` Empty-fetch guard relies on source not raising**

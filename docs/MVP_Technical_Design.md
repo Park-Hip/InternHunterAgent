@@ -369,7 +369,8 @@ separately by the offline **Evaluation Harness (§8)**, not here.
 Ingestion is **offline batch tooling** under `src/services/ingestion/`, isolated from the request
 pipeline — it is never imported by the API, service, runtime, tools, or tracing layers (the layer
 law is in `Full_Design_Document.md` §3). It runs as a manual, re-runnable CLI, not on a schedule.
-The deep research behind every decision here is `research/data-ingestion-stage.md` (§0.1, the ✅
+The deep research behind every decision here is `research/archive/data-ingestion-stage.md` (§0.1,
+the ✅
 reliable & schedulable VietnamWorks experiment) and `research/job-site-comparison.md`; do not
 re-derive it.
 
@@ -393,7 +394,7 @@ re-derive it.
 > on GitHub's runner, never in the API process, and §2's exclusion is amended to name what it always
 > meant: *in-request* background execution; (c) unattended-run safety — pre-flight schema assertion,
 > pre-write yield floor, dead-man's-switch ping (**T0019.5**). Scope and sequencing:
-> `docs/Tickets.md` T0019. Rationale: `research/ingestion-milestone-plan.md`.
+> `docs/Tickets.md` T0019. Rationale: `research/archive/ingestion-milestone-plan.md`.
 >
 > ✅ **Production-DSN freeze lifted (2026-07-19, T0019.3).** The former rule here — *"do not run this
 > CLI against the production DSN"* — no longer applies. `clean_store.replace_clean_jobs` has been
@@ -546,9 +547,11 @@ job is to establish a **measurable baseline** of the agent's task-correctness an
 > hidden DDL columns (no prompt surface, no eval dependency), and the *agent exposure* is deferred
 > behind T0011.5 → prompt-v2 few-shot pass → a targeted recalibration delta. The harness's stated
 > purpose — measure before building on measured behavior — is what produced that split
-> (`research/ingestion-milestone-plan.md` §1B). The full grounding — DeepEval mechanics, the 2026
+> (`research/archive/ingestion-milestone-plan.md` §1B). The full grounding — DeepEval mechanics, the
+> 2026
 > version-pinned facts, and the InternHunter-specific findings — is
-> `research/deepeval-sql-agent-eval-planning.md`; **read its §11 first.** Do not re-derive it here.
+> `research/archive/deepeval-sql-agent-eval-planning.md`; **read its §11 first.** Do not re-derive
+> it here.
 
 ### 8.1 What it measures — three seams
 
@@ -686,7 +689,8 @@ one-shot system: §1 (adds the branch point that section says does not exist), �
 longer a single JSON body), and §5 (mid-run errors are delivered differently). Those sections carry
 forward-reference notes; this section is the source of truth for the streaming path. Grounded
 mechanics — pinned versions, the empirically verified node names, and the SSE API surface (all
-live-checked 2026-07-13) — live in `research/streaming-implementation-plan.md` and are not restated
+live-checked 2026-07-13) — live in `research/archive/streaming-implementation-plan.md` and are not
+restated
 here.
 
 ### 9.1 The contract shift — return-once to yield-many
@@ -708,7 +712,7 @@ is unchanged):
   about the wire. On the pinned `langchain 1.3.1`, `v3` emits a beta warning (verified 2026-07-13),
   so the v3-vs-fallback choice is an implementation finding made *in the ticket*, not fixed here;
   both mechanisms owe the same §9.2 no-leak guarantee. (See
-  `research/streaming-implementation-plan.md` §2.)
+  `research/archive/streaming-implementation-plan.md` §2.)
 - **Service** gains a streaming sibling of `generate_agent_response` that mints the `session_id` up
   front (still known before the run), passes runtime events through, and owns fallback/error
   *policy* — but now delivers that policy as yielded events, not exceptions.
@@ -751,7 +755,8 @@ rejected: it would defeat streaming on the final turn, the one turn that most ne
 differ (`"model"` vs `"agent"`), and node names can change across versions. Verified 2026-07-13
 against the compiled agent: `agent_factory().get_graph()` has nodes `['__start__', 'model', 'tools',
 '__end__']`, so the answer streams from the **`model`** node
-(`research/streaming-implementation-plan.md` §3). Re-confirm with a `(langgraph_node, content,
+(`research/archive/streaming-implementation-plan.md` §3). Re-confirm with a `(langgraph_node,
+content,
 has_tool_call)` probe if the langchain version or the factory changes.
 
 ### 9.3 Metadata timing — trace data trails the answer
@@ -791,7 +796,8 @@ T0017.2: direct `EventSourceResponse(async_generator)` does not auto-encode yiel
 conflicts with the required pre-stream blank-query `400`; therefore this endpoint explicitly
 JSON-frames the small `event:`/`data:` blocks and sets the anti-buffering headers (`Cache-Control:
 no-cache`, `X-Accel-Buffering: no`) on the response. This still avoids `sse-starlette` and keeps the
-API layer limited to wire-format translation. (`research/streaming-implementation-plan.md` §4;
+API layer limited to wire-format translation. (`research/archive/streaming-implementation-plan.md`
+§4;
 `sse-starlette` is not installed and not required.)
 
 *Browser-consumption note (for the T0017 UI phase, not this doc's scope):* the native `EventSource`

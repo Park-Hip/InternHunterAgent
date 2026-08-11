@@ -22,6 +22,9 @@ Use these conventions for every Markdown document in this repository.
 - Use relative Markdown links and backticked repository paths only when they resolve locally.
 - Retain references to files intentionally preserved only on a release tag by adding
   `<!-- archived-on-tag -->` to that same line.
+- A historical audit may list paths that were intentionally missing when it was measured.
+  Keep that evidence intact and wrap the measured region in
+  `<!-- lint-allow-link-path:begin -->` and `<!-- lint-allow-link-path:end -->`.
 
 ## Encoding safety
 

@@ -23,7 +23,17 @@ MOJIBAKE = (
 )
 ARCHIVED_MARKER = "<!-- archived-on-tag -->"
 ENCODING_MARKER = "<!-- lint-allow-encoding -->"
+LINK_PATH_MARKER = "<!-- lint-allow-link-path -->"
+LINK_PATH_BLOCK_BEGIN = "<!-- lint-allow-link-path:begin -->"
+LINK_PATH_BLOCK_END = "<!-- lint-allow-link-path:end -->"
 TECH_STACK = ROOT / "docs" / "Tech_Stack.md"
+STAMPED_DOCS = (
+    ROOT / "docs" / "Repo_Current_State.md",
+    ROOT / "docs" / "Known_Issues.md",
+    ROOT / "docs" / "Tickets.md",
+    ROOT / "docs" / "Operations.md",
+)
+LAST_VERIFIED = re.compile(r"^> \*\*Last verified:\*\* \d{4}-\d{2}-\d{2}(?:\b|$)")
 PYPROJECT = ROOT / "pyproject.toml"
 DEPS_BEGIN = "<!-- deps:begin -->"
 DEPS_END = "<!-- deps:end -->"
@@ -34,14 +44,20 @@ REFLOW_TARGETS = frozenset(
         ".claude/skills/generate-ticket-prompt/SKILL.md",
         "docs/Agent_Behavior_Spec.md",
         "docs/Completion_Reports.md",
+        "docs/README.md",
         "docs/Full_Design_Document.md",
         "docs/Known_Issues.md",
         "docs/MVP_Spec.md",
         "docs/MVP_Technical_Design.md",
+        "docs/Manual_Verification_Guide.md",
         "docs/Resolved_Issues.md",
+        "docs/T0020.4_Cron_Activation_Runbook.md",
+        "docs/Tickets.md",
         "evals/v1_scenario_matrix.md",
         "research/eval-cost-and-rate-limits.md",
+        "research/docs-hygiene-and-system-plan.md",
         "research/honesty-enforcement-design.md",
+        "research/v1-release-readiness-plan.md",
         "skills/generate-ticket-prompt/SKILL.md",
     }
 )
@@ -91,6 +107,9 @@ def is_line_length_exempt(line: str, in_fence: bool, in_frontmatter: bool = Fals
         or in_frontmatter
         or stripped.startswith("|")
         or re.fullmatch(r"`[^`]+`[.,;:]?", stripped) is not None
+        or re.fullmatch(r">?\s*\[[^\]]+\]\([^)]+\)", stripped) is not None
+        or ARCHIVED_MARKER in line
+        or LINK_PATH_MARKER in line
         or re.fullmatch(r"<?https?://\S+>?", stripped) is not None
         or re.search(r"https?://\S{100,}", line) is not None
     )
@@ -157,8 +176,21 @@ def check_link_path(files: list[Path]) -> list[Finding]:
     link_pattern = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
     code_pattern = re.compile(r"`([^`]+)`")
     for path in files:
+        if is_archive(path):
+            continue
+        in_fence = False
+        link_path_allowed = False
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if ARCHIVED_MARKER in line:
+            if LINK_PATH_BLOCK_BEGIN in line:
+                link_path_allowed = True
+                continue
+            if LINK_PATH_BLOCK_END in line:
+                link_path_allowed = False
+                continue
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence or link_path_allowed or ARCHIVED_MARKER in line or LINK_PATH_MARKER in line:
                 continue
             targets = [(target, False) for target in link_pattern.findall(line)]
             targets.extend(
@@ -254,12 +286,25 @@ def check_stack(_: list[Path]) -> list[Finding]:
     return findings
 
 
+def check_stamps(paths: tuple[Path, ...] = STAMPED_DOCS) -> list[Finding]:
+    """Require each current-state document to state when it was verified."""
+    findings: list[Finding] = []
+    for path in paths:
+        if not path.exists():
+            findings.append(Finding("stamp", path, 0, "required living document is missing"))
+            continue
+        if not any(LAST_VERIFIED.match(line) for line in path.read_text(encoding="utf-8").splitlines()):
+            findings.append(Finding("stamp", path, 0, "missing > **Last verified:** YYYY-MM-DD"))
+    return findings
+
+
 CHECKS = {
     "line-length": check_line_length,
     "link-path": check_link_path,
     "encoding": check_encoding,
     "agent-parity": check_agent_parity,
     "stack": check_stack,
+    "stamp": lambda _: check_stamps(),
 }
 
 

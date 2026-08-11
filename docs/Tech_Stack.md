@@ -87,15 +87,24 @@ allowlist. The frozen v1 column contract lives in [`Schema_Contract.md`](Schema_
 
 ## Hosted services
 
-| Service | Tier | Region | Notes |
-|---|---|---|---|
-| **Render** | Free, Docker | Singapore | Deploys from `main`, pinned by `render.yaml`. Health check `/api/v1/health`. |
-| **Neon** | Free, PostgreSQL 17 | — | Serverless Postgres. Idle-pool behaviour matters on the free tier. |
-| **Langfuse Cloud** | Hobby | JP | Chosen over self-hosting (decided 2026-07-12). |
-| **GitHub Actions** | Free | — | CI merge gate, plus the ingestion cron (currently parked). |
+| Service | Chosen offering | Why |
+|---|---|---|
+| Render | Free Docker web service | Managed container hosting without an additional platform. |
+| Neon | Free PostgreSQL 17 | Managed serverless Postgres. |
+| Langfuse Cloud | Hobby, JP | Selected over self-hosting on operational-cost grounds. |
+| GitHub Actions | Free | CI and the ingestion workflow. |
 
-Running cost is **$0/month** against a self-imposed $10 ceiling. Secrets are Render
-environment variables; nothing credential-bearing is committed.
+For the current cost position, topology, environment variables, deploy procedures, and cron
+operation, see [Operations.md](Operations.md).
+
+## Evaluation quotas
+
+The serving agent uses Groq's free tier, while the DeepEval judge uses Gemini's free tier.
+This keeps evaluation work off the serving provider's quota.
+The current evaluation run is expected to cost zero on those free tiers.
+The paid-equivalent estimate is about 0.50 USD per run and is primarily judge-output driven.
+For the measured derivation and rate-limit caveats, see
+[`research/eval-cost-and-rate-limits.md`](../research/eval-cost-and-rate-limits.md).
 
 ## Deliberately not used
 

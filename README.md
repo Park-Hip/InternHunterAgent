@@ -92,23 +92,13 @@ uv run uvicorn src.api.app:app --reload
 Open **http://localhost:8000**. Health is at `/api/v1/health`, readiness at `/api/v1/ready`,
 and interactive API docs at `/docs`.
 
-### Resetting the database
-
-`init_db.sql` never drops anything, so it cannot apply a schema *change*. When the schema
-shape itself changes, reset and re-ingest — this discards all current rows, so use it only for
-that purpose:
-
-```bash
-docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/reset_db.sql
-uv run python -m src.services.ingestion.loader
-```
-
 ## Documentation
 
 | Doc | What it answers |
 |---|---|
 | [`docs/README.md`](docs/README.md) | Map of every document and which one owns what |
 | [`docs/Tech_Stack.md`](docs/Tech_Stack.md) | What this is built with, and what was deliberately avoided |
+| [`docs/Operations.md`](docs/Operations.md) | How the deployed service, database, and ingestion cron are operated |
 | [`docs/MVP_Spec.md`](docs/MVP_Spec.md) | What the product must do, and why |
 | [`docs/Full_Design_Document.md`](docs/Full_Design_Document.md) | Permanent system laws and layer boundaries |
 | [`docs/Repo_Current_State.md`](docs/Repo_Current_State.md) | Where the work stands right now |

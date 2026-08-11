@@ -1,12 +1,12 @@
 # Prompt — Fill the Deployment Research Plan (findings only)
 
 Paste the text below to an agent with web access. It researches and fills the **Findings**
-in `research/deployment-research-plan.md` while leaving every **Decision** for the human.
+in `research/archive/deployment-research-plan.md` while leaving every **Decision** for the human.
 
 ---
 
-You are completing the research in `research/deployment-research-plan.md`. Read that file
-and `research/README.md` first; also skim `research/data-ingestion-stage.md` and
+You are completing the research in `research/archive/deployment-research-plan.md`. Read that file
+and `research/README.md` first; also skim `research/archive/data-ingestion-stage.md` and
 `research/job-site-comparison.md` for context they reference.
 
 ## Your job

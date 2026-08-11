@@ -1,5 +1,84 @@
 # Completion Reports
 
+## T0022.7 - Rebuild repository state and true up registers
+
+- **Summary:** Rebuilt `Repo_Current_State.md` as an 85-line current-facts sheet. It retains the
+  recovery tags, unverified stash, and M15 behavior-track caveat while linking operational facts to
+  `Operations.md`. Moved three closed items to `Resolved_Issues.md`, removed five duplicate stubs,
+  and rebuilt the eight-category open-register index from the resulting entries.
+- **Files:** `docs/Repo_Current_State.md`, `docs/Known_Issues.md`, `docs/Resolved_Issues.md`,
+  `docs/Tickets.md`, and this report.
+- **Commands:** inspected the ticket research, Git branch, tags, stash, registers, and documentation
+  linter; counted entries from the final register; ran `uv run python scripts/docs_lint.py --check
+  line-length` and `--check link-path`.
+- **Build/test:** `uv run pytest -q tests/test_docs_lint.py` passed (15 tests), and `uv run ruff
+  check .` passed. The rebuilt state file is 85 lines and has no non-table line-length findings.
+  `Known_Issues.md` has three closed-state headlines, all intentionally partially or mostly closed.
+  The full `uv run pytest -q` attempt timed out after 64 seconds without output. The full
+  line-length
+  and link-path checks still report findings in out-of-scope research and legacy documentation,
+  including the two `docs/README.md` line-length findings owned by T0022.9.
+- **Manual verification:** open `Repo_Current_State.md` and confirm the branch, head, live URL, and
+  next ticket are visible immediately. Run `Select-String -Pattern 'RESOLVED' docs/Known_Issues.md`
+  and confirm only the three partial-state headlines remain. Compare each index count with a fresh
+  section count and locate the three moved entries in `Resolved_Issues.md`.
+- **Risks:** archived resolution notes retain historic statements. This ticket relocates them and
+  does not re-triage their factual claims.
+- **Follow-up:** T0022.8 owns research pruning and broken research links. T0022.9 owns the remaining
+  live index cleanup and blocking documentation CI enforcement.
+- **Docs updated:** `Repo_Current_State.md`, both issue registers, `Tickets.md`, and this report.
+
+## T0022.6 - History split
+
+- **Summary:** Moved completed ticket specifications into `Tickets_Archive.md` and reusable
+  completed checklists into `Manual_Verification_Archive.md`. The live roadmap retains its full
+  index, open work, and the current verification checklist. Reconciled the stale keep-alive record:
+  the ICT cron-job.org `/api/v1/health` job is running, and idle Neon pool connections do not keep
+  compute awake.
+- **Files:** `docs/Tickets.md`, `docs/archive/Tickets_Archive.md`,
+  `docs/Manual_Verification_Guide.md`, `docs/archive/Manual_Verification_Archive.md`,
+  `docs/Operations.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, `docs/README.md`,
+  `docs/Completion_Reports.md`, `scripts/docs_lint.py`, and textual-pointer references.
+- **Commands:** ran focused documentation lint checks, automatic reflow, pointer audit, docs-lint
+  tests, Ruff, and `git diff --check`.
+- **Build/test:** Ruff and the `encoding`, `agent-parity`, and `stack` docs-lint checks passed.
+  Focused docs-lint tests could not run because the checked-in virtualenv points to a missing uv
+  Python installation. The full `link-path` check remains non-zero because of pre-existing stale
+  paths outside this ticket's scope.
+- **Manual verification:** open `Tickets.md` and find the current T0022 work in the first two
+  screenfuls; open `Manual_Verification_Guide.md` and find T0021.1 immediately; follow one
+  archive-index entry; and confirm the keep-alive facts in `Operations.md`.
+- **Risks:** no browser session was available to inspect cron-job.org directly. The scheduled
+  timezone and endpoint are recorded from maintainer-supplied facts in the ticket.
+- **Follow-up:** T0022.7 owns the full state-sheet rebuild and resolved-issue eviction. T0022.8
+  owns research pruning. T0022.9 owns the remaining index and CI enforcement work.
+- **Docs updated:** `Tickets.md`, `Manual_Verification_Guide.md`, both new archive files,
+  `Operations.md`, `Known_Issues.md`, `Repo_Current_State.md`, `README.md`, and this report.
+
+## T0022.5 - Operations consolidation
+
+- **Summary:** Added `Operations.md` as the sole operational reference for deployment, environment
+  variables, database procedures, cron state, keep-alive constraints, and incident response.
+  Moved the local database-reset procedure out of the root README and reduced duplicated live
+  topology statements to links.
+- **Files:** `docs/Operations.md`, `README.md`, `docs/Tech_Stack.md`, `docs/README.md`,
+  `docs/T0020.4_Cron_Activation_Runbook.md`, `docs/Repo_Current_State.md`,
+  `scripts/docs_lint.py`, this report, and `docs/Tickets.md`.
+- **Commands:** ran docs-lint checks and reflow, focused documentation-lint tests, Ruff, and
+  `git diff --check`.
+- **Build/test:** 15 focused docs-lint tests passed; Ruff passed; `stack` and `encoding`
+  checks passed. The runbook and new operations guide have no line-length findings.
+- **Manual verification:** compare every runbook sign-off row with its pre-change state; confirm
+  the env-var table against `render.yaml` and `.env.example`; use the local reset procedure with
+  Docker; and confirm the cron's direct, non-pooled Neon host requirement can be found within
+  `Operations.md`.
+- **Risks:** cron activation gates and dashboard-managed secrets intentionally remain maintainer
+  actions. The schedule remains disabled.
+- **Follow-up:** T0022.6 owns the archive split. T0022.7 will rebuild the remaining state sheet.
+- **Docs updated:** `README.md`, `docs/Operations.md`, `docs/Tech_Stack.md`, `docs/README.md`,
+  `docs/T0020.4_Cron_Activation_Runbook.md`, `docs/Repo_Current_State.md`,
+  `docs/Completion_Reports.md`, and `docs/Tickets.md`.
+
 ## T0022.3 - Structure-safe reflow of stable documentation
 
 - **Summary:** Added prefix-aware Markdown reflow and YAML-frontmatter protection, then
@@ -139,7 +218,7 @@ Follow-ups / Docs).
     survives, and chunks with empty/non-string content or any `tool_call_chunks` are dropped.
     Enabled `agent.groq.streaming: true` + a system-prompt line to not narrate before tool calls.
   - **Files:** `src/agents/runtime/react_agent.py`, `config/settings.yaml`, `config/prompts.yaml`,
-    `tests/agents/runtime/test_react_agent.py`, `research/streaming-implementation-plan.md`.
+    `tests/agents/runtime/test_react_agent.py`, `research/archive/streaming-implementation-plan.md`.
   - **Tests:** `9` focused stream tests pass; full suite `273 passed, 7 skipped, 19 deselected`.
   - **Follow-up:** live tool-using stream probe BLOCKED (no Groq creds / DB in sandbox) →
     `Known_Issues.md`.
@@ -250,7 +329,8 @@ Follow-ups / Docs).
 
 ## T0018.4 — Deploy topology + first public deploy
 - **Summary:** first public deploy of the same-origin app + DB + tracing. Confirmed and recorded the
-  researched topology (all blank `Decision:` lines in `research/deployment-research-plan.md` now
+  researched topology (all blank `Decision:` lines in `research/archive/deployment-research-plan.md`
+  now
   filled), injected secrets via env vars, loaded a static corpus snapshot into Neon, and verified
   the streamed demo end-to-end at the public URL. **Live: https://internhunteragent.onrender.com**
   (verified 2026-07-16).
@@ -262,7 +342,7 @@ Follow-ups / Docs).
 - **Branch prep:** built `feature/t0018.4-deploy` clean off `e4076b2` (kept ReAct/SQL config split)
   + the T0018.3 Editorial UI committed fresh as `7d4cfef`; the T0015.6/.7 provider-A/B phase was
   dumped (reversed + pruned) and parked recoverably at `45d333c` on `feature/t0015.6-provider-ab`.
-- **Files/config:** `research/deployment-research-plan.md` (§1–§12 Decision lines),
+- **Files/config:** `research/archive/deployment-research-plan.md` (§1–§12 Decision lines),
   `docs/Completion_Reports.md`, `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`.
   No app-code change was needed — the fixed-port Dockerfile is handled by the `PORT=8000` env var.
   `config/settings.yaml` `api.demo.data_snapshot_date` kept at `2026-07-14` (reflects the corpus,
@@ -283,7 +363,8 @@ Follow-ups / Docs).
   degrades to a dateless disclaimer; refresh fixes) — infra behavior, not a bug. Static snapshot
   goes stale until the ingestion milestone lands; the honest disclaimer covers this.
 - **Follow-ups:** ingestion cron / `is_active` (separate milestone); CI merge-gate on `main`
-  (`pre-deploy-refinement-plan.md §6i`); external uptime + dead-man's-switch monitoring; optional
+  (`research/archive/pre-deploy-refinement-plan.md §6i`); external uptime + dead-man's-switch
+  monitoring; optional
   custom domain; optional snapshot-date bump. _(Reconciliation update, T0020.1:)_ `main` is no
   longer stuck at T0009 — it was reconciled to `bcc81db` via PR #29, carrying the full M10–M19 chain
   (T0019.6/.8/.9/.10 + the M13/M15 doc rescues). Render's deploy branch is repointed to `main`
@@ -294,7 +375,8 @@ Follow-ups / Docs).
   first answer. It is now registered as `[MED · OPEN]` in [`Known_Issues.md`](Known_Issues.md) §
   Config, startup & deployment, with a windowed `/health` keep-alive ping as the
   decided-but-unapplied mitigation and the Render-policy check recorded in
-  `research/deployment-research-plan.md` §1a. The companion `[HIGH · OPEN]` 750-instance-hour cliff
+  `research/archive/deployment-research-plan.md` §1a. The companion `[HIGH · OPEN]`
+  750-instance-hour cliff
   is registered alongside it. Also re-pointed: the `[HIGH · OPEN]` schema-drift issue this ticket
   was expected to absorb was **not** absorbed — `pg_dump | psql` sidestepped drift without adding an
   assertion or migration path — so it moves to the ingestion milestone.
@@ -304,8 +386,9 @@ Follow-ups / Docs).
 ## T0019.1 — robots.txt / ToS verification for `ms.vietnamworks.com`
 - **RECOMMENDED VERDICT: favorable — pending maintainer confirmation.** Neither trigger of the
   decision rule fires. **T0019.6 (nightly cron) unblocks once the maintainer confirms and .2–.5
-  land.** The unfavorable branch (`research/ingestion-milestone-plan.md` §1D) is not triggered.
-- **Summary:** resolved the `research/deployment-research-plan.md` §11 hard gate before any
+  land.** The unfavorable branch (`research/archive/ingestion-milestone-plan.md` §1D) is not
+  triggered.
+- **Summary:** resolved the `research/archive/deployment-research-plan.md` §11 hard gate before any
   scheduled run exists. Fetched and archived both robots.txt files, located and read the
   VietnamWorks ToS (Vietnamese-only), and recorded a dated Decision in §11. **Doc-only and
   research-only: zero lines of code changed** — nothing under `src/`, `tests/`, `config/`,
@@ -346,7 +429,8 @@ Follow-ups / Docs).
   URL / fetch date / HTTP status / response headers in a `#` header),
   `research/experiments/vietnamworks_tos_excerpt_2026-07-16.md` (verbatim Vietnamese +
   explicitly-labeled English translations, negative-search record, section list).
-- **Files changed:** `research/deployment-research-plan.md` (§11 — new dated Decision appended; the
+- **Files changed:** `research/archive/deployment-research-plan.md` (§11 — new dated Decision
+  appended; the
   prior `Decision (2026-07-16)` line left **intact**, its final sentence superseded; the stale "⚠️
   Unverified — needs manual check" bullet and the companion "Action required before production" line
   updated to point at the new record), `docs/Tickets.md` (T0019.6 blocked-on marker),
@@ -366,7 +450,8 @@ Follow-ups / Docs).
 - **Manual verification:** (1) `git diff --name-only` → only `research/**` and `docs/**`. (2) `ls
   research/experiments/*robots*` → both dated copies exist, non-empty. (3) `curl -sS -o - -w "\nHTTP
   %{http_code}\n" https://ms.vietnamworks.com/robots.txt` → 404 + JSON gateway body, matching the
-  archive; same for the www host → 200 + matching body. (4) `research/deployment-research-plan.md`
+  archive; same for the www host → 200 + matching body. (4)
+  `research/archive/deployment-research-plan.md`
   §11 → new Decision present, marked *pending maintainer confirmation*, every claim traceable to an
   archived file. (5) Open https://www.vietnamworks.com/thoa-thuan-su-dung → loads; spot-check a
   quote by searching the page for `Hoạt động không đúng mục đích`. (6) `grep -n "T0019.1"
@@ -385,20 +470,24 @@ Follow-ups / Docs).
   conditions to implement:** no `Crawl-delay` exists on either host, so the pipeline's `0.6 s` delay
   and daily cadence stand unchanged — nothing for T0019.4/.6 to honor beyond keeping off the paths
   `www` disallows (it already does).
-- **Docs updated:** `research/deployment-research-plan.md` §11, `docs/Tickets.md`,
+- **Docs updated:** `research/archive/deployment-research-plan.md` §11, `docs/Tickets.md`,
   `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this file.
-  `research/ingestion-milestone-plan.md` deliberately **not** touched (its §1D prescribes both
+  `research/archive/ingestion-milestone-plan.md` deliberately **not** touched (its §1D prescribes
+  both
   branches; this ticket executes it). **Left stale on purpose — outside this ticket's allowed
-  files:** `research/data-ingestion-stage.md` §4's robots.txt bullet carries a *"Status 2026-07-16 —
+  files:** `research/archive/data-ingestion-stage.md` §4's robots.txt bullet carries a *"Status
+  2026-07-16 —
   still unverified for `ms.vietnamworks.com`, and now a hard gate"* line, which the §11 record now
   answers. Worth re-pointing at §11 when that file is next edited; flagged rather than fixed, per
   `CLAUDE.md` §1.
 - **Working-tree note (not this ticket's work):** the branch was cut from `feature/t0018.4-deploy`
   with **pre-existing uncommitted changes** already present from the prior T0019-scoping session —
   `docs/Tickets.md` (the T0019.1–.8 scoping, ~137 lines), `docs/MVP_Technical_Design.md`,
-  `research/data-ingestion-stage.md`, and the untracked `research/ingestion-milestone-plan.md`. Only
+  `research/archive/data-ingestion-stage.md`, and the untracked
+  `research/archive/ingestion-milestone-plan.md`. Only
   the single T0019.6 marker line in `docs/Tickets.md` is mine; `MVP_Technical_Design.md` and
-  `data-ingestion-stage.md` were **not** touched by this ticket despite appearing in `git status`.
+  `research/archive/data-ingestion-stage.md` were **not** touched by this ticket despite appearing
+  in `git status`.
   Worth committing that scoping work separately from this gate.
 
 ## T0019.2 — Alembic adoption: baseline migration + env wiring
@@ -417,7 +506,8 @@ Follow-ups / Docs).
   `mapped_column(BigInteger, Identity(always=True), primary_key=True)`, dropped
   `autoincrement=True`; metadata-only, no DDL against existing data, no other columns touched),
   `scripts/reset_db.sql` (header comment only — now states destructive/local-dev-only, prod goes
-  through Alembic, must never point at Neon), `docs/Manual_Verification_Guide.md` (new `### T0019.2:
+  through Alembic, must never point at Neon), `docs/archive/Manual_Verification_Archive.md` (new
+  `### T0019.2:
   Alembic adoption` entry with checklist A–F), `docs/Repo_Current_State.md` (§ Available scripts —
   `alembic current`/`alembic history`/`alembic upgrade head` added, `reset_db.sql` line annotated,
   `init_db.sql` line notes the eval-fixture-loader dependency), `docs/Known_Issues.md` (1 new entry
@@ -519,7 +609,7 @@ Follow-ups / Docs).
   added upsert-refresh and expiry-pass coverage), `tests/services/ingestion/test_loader.py` (updated
   all `@patch` targets for the rename, added ordering + `expired_count` coverage),
   `tests/agents/runtime/test_prompts.py` (hidden-column guard tuple extended with the three new
-  columns), `docs/Manual_Verification_Guide.md` (new `### T0019.3` checklist A–H),
+  columns), `docs/archive/Manual_Verification_Archive.md` (new `### T0019.3` checklist A–H),
   `docs/Repo_Current_State.md` (branch header, folder structure, milestone summary, build/test
   status, next-recommended-ticket section, safety-rule notice lifted), `docs/Known_Issues.md` (2 new
   entries + category count 10→12).
@@ -718,7 +808,7 @@ Follow-ups / Docs).
   `ingestion_yaml`; 3 new tests for schema-abort, yield-floor-abort, and happy-path ordering),
   `config/ingestion.yaml` (new `safety.min_yield: 20` block), `src/core/config.py` (new optional
   `HEALTHCHECKS_URL: str | None = None`), `.env.example` (documents the new var, commented out),
-  `docs/Manual_Verification_Guide.md` (new `### T0019.5` entry, checklist A–E),
+  `docs/archive/Manual_Verification_Archive.md` (new `### T0019.5` entry, checklist A–E),
   `docs/Known_Issues.md` (updated the `[HIGH · OPEN]` schema-drift entry to `[HIGH · PARTIALLY
   RESOLVED]` — write-path detection closed, API-side read-path assertion flagged as the remaining
   gap; corrected the T0019.4 `pages_failed` note, which had wrongly predicted this ticket would
@@ -758,7 +848,8 @@ Follow-ups / Docs).
   - **B/C/D/E — live-DB checks:** **not run this session — no local Docker Postgres was up.** These
     require `docker compose up -d`, a scratch `internhunter_drift` database for check C, and a
     temporary `min_yield` edit for check D, none of which are safe to fabricate results for. The
-    full checklist is appended to `Manual_Verification_Guide.md` → `### T0019.5` for the next person
+    full checklist is appended to `archive/Manual_Verification_Archive.md` → `### T0019.5` for the
+    next person
     with the stack running, and is a **prerequisite gate before T0019.6** is trusted to run
     unattended.
 - **Risks:**
@@ -789,7 +880,8 @@ Follow-ups / Docs).
   `docs/Known_Issues.md`, this file.
 
 ## T0019.7 — Windowed keep-alive ping + Neon idle-pool verification (doc-only)
-- **Summary:** applies the cold-start mitigation decided 2026-07-16 (`deployment-research-plan.md`
+- **Summary:** applies the cold-start mitigation decided 2026-07-16
+  (`research/archive/deployment-research-plan.md`
   §1a) but never executed: a windowed external ping of `GET /api/v1/health` to keep Render's free
   instance from spinning down. The ticket is deliberately doc-only — dashboard config and a ~24 h
   Neon observation are not things a coder session can perform — so the deliverable is a runbook
@@ -798,9 +890,11 @@ Follow-ups / Docs).
   one open question: whether the checkpointer's idle Postgres pool (`min_size=4` by psycopg_pool
   default, never overridden in `src/core/checkpointer.py`) alone keeps Neon awake regardless of
   which endpoint is pinged, which would blow Neon's 100 CU-h/month free cap.
-- **Files changed (documentation only):** `docs/Manual_Verification_Guide.md` (new `### T0019.7`
+- **Files changed (documentation only):** `docs/archive/Manual_Verification_Archive.md` (new `###
+  T0019.7`
   entry — Part A setup runbook, Part B measurement template, Part C decision rule, Part D rollback),
-  `research/deployment-research-plan.md` (§1a status update + new empty **Verification outcome
+  `research/archive/deployment-research-plan.md` (§1a status update + new empty **Verification
+  outcome
   (T0019.7, date)** record), `docs/Known_Issues.md` (updated the cold-start entry's "To verify when
   applied" line and the 750-instance-hour entry's "latent today" line — both still `OPEN`, neither
   closed by this ticket), `docs/Repo_Current_State.md`, this file. **No file under `src/`, `tests/`,
@@ -847,7 +941,8 @@ Follow-ups / Docs).
     untouched baseline.
   - **C — runbook executable cold:** re-read Part A assuming no prior context — every value is
     concrete (full URL, `*/12` minute value, both ICT and UTC hour ranges spelled out, exact
-    dashboard paths for Part B's readings). No step points back to `deployment-research-plan.md` to
+    dashboard paths for Part B's readings). No step points back to
+    `research/archive/deployment-research-plan.md` to
     look something up; the checkpointer/pool detail that motivates the whole verification is inlined
     in the section's opening paragraph instead of cross-referenced.
   - **D — ping target live:** `curl` → `200`. Confirmed from reading `src/api/routes/health.py` that
@@ -898,7 +993,8 @@ Follow-ups / Docs).
   - T0019.6's documentation (completion report, Manual Verification Guide entry,
     Known_Issues/Full_Design_Document/deployment-research-plan updates) needs to be redone from
     scratch in a future session — the workflow file survived, its docs did not.
-- **Docs updated:** `docs/Manual_Verification_Guide.md`, `research/deployment-research-plan.md`,
+- **Docs updated:** `docs/Manual_Verification_Guide.md`,
+  `research/archive/deployment-research-plan.md`,
   `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, this file.
 
 ## T0019.8 — Truthful refresh date on `/ready`
@@ -953,7 +1049,8 @@ Follow-ups / Docs).
 - **Manual verification — NOT RUN. This is the ticket's main gap, stated plainly:**
   - **Docker Desktop was not running this session** (`docker ps` → `open
     //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`), so **none** of
-    checks A–E in the new `Manual_Verification_Guide.md` T0019.8 entry were executed against a real
+    checks A–E in the new `archive/Manual_Verification_Archive.md` T0019.8 entry were executed
+    against a real
     database.
   - What this leaves unproven: the automated tests patch `_select_max_last_seen` and hand it a
     `datetime.date` object, so they exercise the fallback logic but **cannot** prove that
@@ -1021,7 +1118,8 @@ Follow-ups / Docs).
   - `tests/services/ingestion/test_vietnamworks.py` — new `_ai_job` / `_per_query_client` helpers
     (the existing mock returns one fixture for every call and therefore **cannot** show per-query
     coverage at all) and a new `VietnamWorksCoverageTests` class, 6 cases.
-  - `research/data-ingestion-stage.md` — new §11: re-measure runbook, results table with every cell
+  - `research/archive/data-ingestion-stage.md` — new §11: re-measure runbook, results table with
+    every cell
     `_TBD — pending D8_`, and a decision rule.
   - `docs/Known_Issues.md`, `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, this
     file.
@@ -1106,7 +1204,7 @@ Follow-ups / Docs).
   - **New `[LOW · OPEN]`:** a truncated run surfaces no signal — hitting `max_jobs` logs nothing and
     leaves `pages_failed` at `0`, so an operator cannot distinguish a capped run from a complete
     one. Cheap to fix; would make the §11 re-measure partly self-reporting.
-- **Docs updated:** `research/data-ingestion-stage.md`, `docs/Known_Issues.md`,
+- **Docs updated:** `research/archive/data-ingestion-stage.md`, `docs/Known_Issues.md`,
   `docs/Manual_Verification_Guide.md`, `docs/Repo_Current_State.md`, this file.
 
 ## T0019.10 — `get_job_details` explicit column allowlist
@@ -1264,10 +1362,13 @@ Follow-ups / Docs).
   restored onto `feature/t0019.10-job-details-allowlist` afterward. Neither stash was dropped.
 - **Files changed:** `.github/workflows/ingestion.yml` (now tracked, one edit — see below),
   `docs/Full_Design_Document.md` (§2 amendment, carried verbatim from the stash),
-  `docs/Manual_Verification_Guide.md` (new `### T0019.6` entry), `docs/Known_Issues.md` (2 new
+  `docs/archive/Manual_Verification_Archive.md` (new `### T0019.6` entry), `docs/Known_Issues.md` (2
+  new
   entries + 1 new follow-up + category count), `docs/Repo_Current_State.md` (rewritten),
-  `docs/Tickets.md` (1 marker line), `research/deployment-research-plan.md` (§11 confirmation line),
-  `research/ingestion-milestone-plan.md` (scope-addendum block), this file. **No file under `src/`,
+  `docs/Tickets.md` (1 marker line), `research/archive/deployment-research-plan.md` (§11
+  confirmation line),
+  `research/archive/ingestion-milestone-plan.md` (scope-addendum block), this file. **No file under
+  `src/`,
   `tests/`, or `config/` touched.**
 - **Carry-vs-skip table followed exactly:** `docs/Full_Design_Document.md` carried verbatim;
   `Manual_Verification_Guide.md` and `Completion_Reports.md` carried-and-edited; `Known_Issues.md`
@@ -1359,7 +1460,8 @@ Follow-ups / Docs).
     reality (own doc-only ticket).
 - **Docs updated:** `docs/Full_Design_Document.md`, `docs/Manual_Verification_Guide.md`,
   `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, `docs/Tickets.md`,
-  `research/deployment-research-plan.md`, `research/ingestion-milestone-plan.md`, this file.
+  `research/archive/deployment-research-plan.md`, `research/archive/ingestion-milestone-plan.md`,
+  this file.
 
 ## Milestone 20 — Reconciliation & Activation
 - **T0020.4 (docs slice) — cron-activation runbook committed + T0020 milestone authored; activation
@@ -1377,7 +1479,8 @@ Follow-ups / Docs).
     `main`/`origin/main` (`git log origin/main -- …/ingestion.yml` → `8f8406f`), so activation is
     structurally possible; `config/ingestion.yaml` carries `safety.min_yield: 20` and
     `lifecycle.expire_after_days: 7`; `src/services/ingestion/loader.py` resolves;
-    `docs/Manual_Verification_Guide.md` has the `### T0019.2`, `### T0019.5`, `### T0019.6` anchors
+    `docs/archive/Manual_Verification_Archive.md` has the `### T0019.2`, `### T0019.5`, `###
+    T0019.6` anchors
     the runbook cites; the §2 "mypy now green" note matches `Known_Issues.md` (T0020.3 baseline),
     and the §4 secrets note (real `DATABASE_URL`/`HEALTHCHECKS_URL`; placeholder
     `GROQ_API_KEY`/`LANGFUSE_*`) matches the `[LOW · NOTE]` Known_Issues entry.
@@ -1446,7 +1549,8 @@ Follow-ups / Docs).
   `uv run ruff check .` → all checks passed; `uv run mypy` → the same 2 pre-existing baselined
   errors, no third; `git grep -n "services.ingestion" src/api/` → no match.
 - **Build/test results:** green. ruff clean, mypy at baseline, full suite +6.
-- **Manual verification:** see `Manual_Verification_Guide.md` → T0021.1. Checks A (suite) and B
+- **Manual verification:** see `archive/Manual_Verification_Archive.md` → T0021.1. Checks A (suite)
+  and B
   (layer-isolation greps) run and passing. **Checks C (happy boot) and D (drift-fails-boot) were NOT
   run** — both need Docker Postgres, which was unavailable this session. The automated cases patch
   `session_factory` and prove the diff/exception logic but not the live-DB boot end-to-end.
@@ -1471,3 +1575,68 @@ Follow-ups / Docs).
   ticket — the guard correctly detected real drift, pre-merge rather than in production, which is
   exactly what it was built to do. See `Known_Issues.md` → *"Neon production is still at the Alembic
   baseline."*
+
+## T0022.8 - Research prune, decision harvest, and link rewrite
+
+- **Summary:** Harvested 34 durable decisions into `docs/Decision_Log.md`, archived the nine
+  completed research records without changing their contents, and redirected every live reference
+  to the archive. Added the archive index and policy, and recorded the evaluation quota headline in
+  `Tech_Stack.md`.
+- **Files created:** `docs/Decision_Log.md` and `research/archive/README.md`.
+- **Files moved:** Nine completed research records moved unchanged to `research/archive/`.
+- The archive index names each record and its current destination.
+- **Files changed:** live inbound-reference documents, `docs/Tech_Stack.md`,
+  `docs/Repo_Current_State.md`, `scripts/docs_lint.py`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py --check link-path` before and after the
+  move; a candidate-name sweep with `git grep`; and a live research-file inventory.
+- **Build and test:** documentation-only ticket. The link check still fails on pre-existing stale
+  live references. Archive records are intentionally excluded, matching the documented policy.
+- **Manual verification:** confirm `research/` has five live research files plus `README.md`; open
+  `Decision_Log.md` and locate the `tech_stack` rationale; follow five decision-log links; and run
+  the per-filename candidate sweep from T0022.8.
+- **Risks:** the repository-wide link check was already failing before this ticket, so its zero-exit
+  acceptance gate remains blocked by pre-existing stale links outside this ticket's scope.
+- **Follow-up tickets:** T0022.9 owns the remaining index rewrite and blocking CI enforcement.
+- **Docs that need updating:** T0022.9 should replace the transitional archive references in the
+  research and docs indexes with their final curated navigation.
+
+## T0022.9 - Index, ledger, and enforcement
+
+- **Summary:** Completed the documentation-system closing ticket.
+  The documentation indexes now distinguish live records from archive evidence.
+  The Fact Ledger assigns every tracked fact class a sole owner.
+  Documentation lint now checks living-document verification stamps and the CI docs job fails on a
+  finding.
+- **Files created:** None in this ticket.
+- **Link-cleanup decisions:** The measured hygiene-audit table remains intact inside a deliberate
+  `lint-allow-link-path` region.
+  Archived-tag references retain the `archived-on-tag` marker.
+  Deliberately unbuilt future artifacts and prose false positives were rephrased so they are not
+  represented as current files.
+  Stale Langfuse and golden-module references now describe their actual locations.
+  Fenced Markdown examples are not link-checked because they document syntax rather than assert
+  repository state.
+- **Files changed:** `docs/README.md`, `research/README.md`, `docs/Docs_Conventions.md`,
+  `docs/Known_Issues.md`, `docs/Tickets.md`, `docs/Repo_Current_State.md`,
+  `docs/Resolved_Issues.md`, `evals/v1_scenario_matrix.md`,
+  `research/docs-hygiene-and-system-plan.md`, `research/honesty-enforcement-design.md`,
+  `AGENTS.md`, `CLAUDE.md`, `.github/workflows/ci.yml`, `scripts/docs_lint.py`, and
+  `tests/test_docs_lint.py`.
+- **Commands run:** `python scripts/docs_lint.py`; the 20-test dependency-free docs-lint harness;
+  `.venv\\Scripts\\ruff.exe check scripts\\docs_lint.py tests\\test_docs_lint.py`;
+  `uv run pytest -q`; and `git diff --check`.
+- **Build and test results:** All documentation checks passed.
+  The 20 docs-lint tests passed through the available Python 3.12 interpreter.
+  `uv run pytest -q` could not run locally because the existing uv cache path cannot be created.
+- **Manual verification:** Create a PR with a documentation line over 100 characters and confirm the
+  `docs` job is red.
+  Edit only one of `AGENTS.md` or `CLAUDE.md` and confirm the parity check fails.
+  Remove the stamp from `Known_Issues.md` locally and confirm `--check stamp` reports it.
+  Open `docs/README.md` and `research/README.md` cold to confirm the ledger and five live research
+  records are understandable without archive plans.
+- **Risks:** CI failure is now live, but branch protection still decides whether a failing docs job
+  blocks merging.
+  That maintainer-controlled action remains outside this ticket.
+- **Follow-up tickets:** T0023 scopes and executes the v1.0 release cut.
+  M20's branch-protection follow-up remains open.
+- **Docs that need updating:** None for this ticket.

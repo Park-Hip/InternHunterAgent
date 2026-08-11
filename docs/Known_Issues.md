@@ -1,5 +1,7 @@
 # Known Issues & Risks
 
+> **Last verified:** 2026-08-10 against the active issue entries and their linked records.
+
 Living register of **open** known issues, risks, and out-of-scope follow-ups discovered
 while implementing tickets. This is the single place to record such findings — do **not**
 fix them inline as part of an unrelated ticket (per `CLAUDE.md` §1: report follow-ups
@@ -33,13 +35,14 @@ report. If an open item still cross-references the resolved one, leave a short p
 the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.md` (closed).
 
 ## Categories
-- [Config, startup & deployment](#config-startup--deployment) — 34
-- [Agent runtime & prompts](#agent-runtime--prompts) — 13
-- [Query tooling & SQL safety](#query-tooling--sql-safety) — 4
+- [Config, startup & deployment](#config-startup--deployment) — 31
+- [Agent runtime & prompts](#agent-runtime--prompts) — 12
+- [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
 - [Demo UI (T0018.3)](#demo-ui-t00183) — 4
 - [Repo state & version control](#repo-state--version-control) — 2
-- [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 6
+- [Query service (T0019.10)](#query-service-t001910) — 2
+- [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 4
 
 ---
 
@@ -70,7 +73,7 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     model ID is still current in Groq and that `query_clean_jobs`/`get_job_details` still invoke
     cleanly, so the baseline measures the shipping model. A wrong ID surfaces as a `ChatGroq`
     runtime error, not a config error.
-  - **Background:** `research/deepeval-sql-agent-eval-planning.md` §11.4/§11.7 (F1).
+  - **Background:** `research/archive/deepeval-sql-agent-eval-planning.md` §11.4/§11.7 (F1).
 
 - **`[HIGH · PARTIALLY RESOLVED]` Live `clean_jobs` can drift behind the frozen 16-column schema —
   no migration mechanism.** Silently breaks all freshness/expiry queries.
@@ -100,7 +103,7 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     pre-flight `information_schema.columns` assertion** is the detection path — migrations do *not*
     detect a DB that drifted **out-of-band**, which is exactly this incident. The assertion fails
     the run non-zero *before any write*, which is what protects the unattended nightly writer.
-  - **Resolved (2026-07-19, T0019.5):** `src/services/ingestion/safety.py::assert_clean_jobs_schema`
+  - **Fixed (2026-07-19, T0019.5):** `src/services/ingestion/safety.py::assert_clean_jobs_schema`
     now runs first in `run_ingestion`, before the source is constructed or anything is fetched. It
     compares live `information_schema.columns` for `clean_jobs` against
     `CleanJob.__table__.columns`, derived from the ORM (not hand-maintained), and raises
@@ -150,27 +153,25 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     ~60 s, not a slow first response. There is no UI-side mitigation available: the UI is behind the
     same cold process. The Neon half of the "compound" cold start is a rounding error by comparison
     — it suspends after 5 min but resumes in ~300–500 ms (p95 ~2.6 s), per
-    `research/deployment-research-plan.md` §3. A first `/ready` during the wake window can 404
+    `research/archive/deployment-research-plan.md` §3. A first `/ready` during the wake window can
+    404
     briefly, degrading the disclaimer to dateless (refresh fixes).
-  - **Mitigation** (decided 2026-07-16, not yet applied — see `research/deployment-research-plan.md`
-    §1a, which also records the Render-policy check behind it): an external scheduler (cron-job.org
-    / UptimeRobot) pinging **`GET /api/v1/health`** every 10–14 min on a **waking-hours window**,
+  - **Mitigation** (running as of 2026-08-10): cron-job.org pings
+    **`GET /api/v1/health`** every 12 minutes on the **07:00-22:59 ICT waking-hours window**,
     *not* 24/7 — see the instance-hours entry below for why the window is mandatory. Ping `/health`,
     **never `/ready`**: `/ready` runs `SELECT 1`, which would hold Neon awake and blow its 100
     CU-hour/month free cap (0.25 CU × 730 h ≈ 182 CU-h). This mirrors the existing §9A decision to
     point Render's own health check at `/health` for the same reason. Render's internal health
     checks do **not** prevent spin-down — only inbound external traffic does.
-  - **To verify when applied:** whether the checkpointer's idle pool connections alone keep Neon
-    from suspending. If they do, Neon stays awake whenever Render is awake and the CU-hour math
-    bites regardless of which endpoint is pinged. **Now documented-and-ready, not merely decided
-    (2026-07-19, T0019.7):** the full cron-job.org setup runbook, a 24-hour measurement template
-    with the arithmetic worked out, and a pre-written decision rule live in
-    `docs/Manual_Verification_Guide.md` → `### T0019.7`. Watch Neon's compute-hours for ~24 h after
-    enabling, per that runbook's Part B.
+  - **Recorded outcome (2026-08-10):** the checkpointer's idle pool connections do not keep Neon
+    compute awake. Neon suspension gaps persist between `/health` pings, so no pool-setting change
+    is required. The executed setup and outcome record live in
+    `docs/archive/Manual_Verification_Archive.md` → `### T0019.7`.
   - **Escape hatch:** Render Starter **$7/mo** eliminates spin-down outright and sits inside the
-    recorded $10 ceiling (`deployment-research-plan.md` §10).
+    recorded $10 ceiling (`research/archive/deployment-research-plan.md` §10).
   - **Follow-up:** folds into the **ingestion milestone**, which already defers "external
-    UptimeRobot ping + healthchecks.io dead-man's-switch" (`deployment-research-plan.md` §9A) and
+    UptimeRobot ping + healthchecks.io dead-man's-switch"
+    (`research/archive/deployment-research-plan.md` §9A) and
     needs the same external-scheduler machinery. Deliberately **not** its own ticket — it is
     dashboard config, no code (2026-07-16 decision).
   - **Owned (scoped 2026-07-16): T0019.7**, structured as *enable → verify → decide* rather than
@@ -181,13 +182,11 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     $7/mo) and closes this open question either way.
 
 - **`[HIGH · OPEN]` If the keep-alive ping is ever run 24/7, Render's 750 free instance-hours run
-  out and suspend the demo until the 1st of next month.** Latent today (no ping enabled) —
-  **documented-and-ready to enable as of 2026-07-19 (T0019.7)**, at which point this transitions
-  from latent to **live-and-mitigated-by-windowing**: the ping runs, but only across the
-  ~07:00–23:00 ICT window (`docs/Manual_Verification_Guide.md` → `### T0019.7` Part A), so it stays
-  at ≈496 h/month, well under the 750 h cap. **24/7 pinging is what would trigger the cliff** — the
-  window is the entire mitigation, not a preference. Still open until the maintainer actually
-  enables the ping and it is observed running windowed.
+  out and suspend the demo until the 1st of next month.** **Live-and-mitigated-by-windowing:** the
+  running cron-job.org ping covers the ~07:00-23:00 ICT window
+  (`docs/archive/Manual_Verification_Archive.md` → `### T0019.7` Part A), so it projects to about
+  498 h/month, well under the 750 h cap. **24/7 pinging is what would trigger the cliff** - the
+  window is the entire mitigation, not a preference.
   - **Found:** 2026-07-16, while assessing the cold-start mitigation above.
   - **Impact:** Render grants **750 Free instance-hours per workspace per calendar month**; exhaust
     them and *"Render suspends all of your Free web services until the start of the next month"*
@@ -203,7 +202,8 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     whose Out of Scope names 24/7 pinging as the excluded option — so the mitigation and the cliff
     ship together, not one without the other.
   - **Note:** this hazard exists **only** if the ping is enabled; today's spin-down-on-idle deploy
-    burns ~100–300 h/month (`deployment-research-plan.md` §10) and is nowhere near the cap. It is
+    burns ~100–300 h/month (`research/archive/deployment-research-plan.md` §10) and is nowhere near
+    the cap. It is
     recorded now because it is the binding constraint on the mitigation, and because the penalty is
     invisible until the demo is already dark.
 
@@ -212,7 +212,7 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   T0019.1's verdict unfavorable.
   - **Found:** 2026-07-16, T0019.1 robots/ToS gate. Evidence:
     `research/experiments/vietnamworks_tos_excerpt_2026-07-16.md`; decision record in
-    `research/deployment-research-plan.md` §11.
+    `research/archive/deployment-research-plan.md` §11.
   - **Impact:** ToS §7 (Các Quyền Sở Hữu Trí Tuệ) states *"bạn không được quyền thay đổi, sao chép,
     mô phỏng, truyền, phân phối, công bố, tạo ra các sản phẩm phái sinh, hiển thị hoặc chuyển giao,
     hoặc khai thác nhằm mục đích thương mại bất kỳ phần nào của nội dung"* ("you are not entitled to
@@ -227,7 +227,8 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     changes how often the corpus refreshes, not whether it is republished. Parking the cron would
     not address it; shipping the cron does not worsen it in kind.
   - **Mitigating context (not legal advice):** the corpus is public, factual, non-personal
-    job-posting data; the demo is a non-commercial portfolio project; `deployment-research-plan.md`
+    job-posting data; the demo is a non-commercial portfolio project;
+    `research/archive/deployment-research-plan.md`
     §11 records that ToS breach for public data is civil, not criminal (post-*hiQ*), and that PDPD
     does not reach non-personal posting data. Vietnamese IP law's fair-dealing scope for this use
     was **not** researched and is the actual gap.
@@ -349,12 +350,13 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     actually clears the API's *current* ceiling — the ~50–112 figure is a 06/2026 spike and may be
     stale. Re-measuring needs live fetches against `ms.vietnamworks.com`, which **decision D8**
     blocks, so **no live request was issued by T0019.9**. Runbook with deliberately empty result
-    slots: `research/data-ingestion-stage.md` §11. Close this entry only once §11.2 is filled in
+    slots: `research/archive/data-ingestion-stage.md` §11. Close this entry only once §11.2 is
+    filled in
     from a real run and the yield is confirmed below the cap; if it is at or above ~150, the cap is
     binding again and the original defect has returned.
   - **Found:** 2026-07-19, reviewing ingestion coverage/overlap ahead of the nightly cron going
     live.
-  - **Impact:** `research/ingestion-milestone-plan.md:552` records a 06/2026 spike measuring
+  - **Impact:** `research/archive/ingestion-milestone-plan.md:552` records a 06/2026 spike measuring
     **~50–112** AI/Data postings available across the 8 `config/ingestion.yaml` queries +
     jobFunction filter, but `config/ingestion.yaml:23`'s `max_jobs: 50` caps every run at the low
     end of that range with no signal when a run was truncated. Worse, the cap is global, not per
@@ -420,12 +422,6 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     the run exits because the cap was reached. Cheap and self-contained; would make the §11
     re-measure partly self-reporting.
 
-- **`[MED · RESOLVED 2026-08-09]` `/ready` served the config fallback in production, overstating
-  freshness by 13 days.** Moved to [`Resolved_Issues.md`](Resolved_Issues.md) → Data & ingestion /
-  database schema. Fixed as a side effect of the D6 migration, no redeploy: `2026-07-14` →
-  `2026-07-01`. The residual *silence* (a future degradation would look identical) is carried
-  forward there as unowned.
-
 - **`[LOW · OPEN]` The cron-job.org keep-alive ping (T0019.7) sometimes fails with a timeout.**
   - **Found:** 2026-07-21, observed in the cron-job.org execution history: a run scheduled for
     7:00:00 AM executed at 7:00:13 AM, ran 13.37 s against a 30 s timeout, and was recorded as
@@ -464,7 +460,8 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     it proactively opens and holds idle connections to Neon regardless of chat traffic. T0019.7's
     keep-alive ping deliberately hits only `GET /api/v1/health` (no DB call, by design — see the
     ping-vs-CU-hours entry above), so it does **not** keep Neon's compute awake; Neon still
-    autosuspends after its normal 5-minute idle window (`research/deployment-research-plan.md` §3).
+    autosuspends after its normal 5-minute idle window
+    (`research/archive/deployment-research-plan.md` §3).
     When it does, the pool's held connections die server-side; psycopg_pool eventually notices and
     logs the `discarding closed connection` warning while reconnecting. If a concurrent chat request
     instead hits `pool.getconn()` while the pool is between a dead connection and a healthy
@@ -503,13 +500,14 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **⚠ SUPERSEDED 2026-08-09 — this entry's framing caused the incident below.** "Stays dormant
     *until* the merge" is correct but incomplete: the merge does not just *permit* the schedule to
     fire, it **makes it fire**. The T0019 chain merged via PR #29 on 2026-07-22 and the cron began
-    running that night, un-gated. See the `[HIGH · RESOLVED]` entry further down this section. The
+    running that night, un-gated. See the archived cron-resolution record. The
     Render auto-deploy claim in this follow-up was separately corrected in `Resolved_Issues.md`
     (main was not the deploy branch at the time; it is now).
 
 - **`[LOW · NOTE]` The nightly-cron workflow sets `GROQ_API_KEY`, `LANGFUSE_SECRET_KEY`, and
   `LANGFUSE_PUBLIC_KEY` to literal placeholder strings, not GitHub secrets — deliberately.**
-  - **Found:** 2026-07-19/21, T0019.6, empirically verified (see `Manual_Verification_Guide.md` →
+  - **Found:** 2026-07-19/21, T0019.6, empirically verified (see
+    `archive/Manual_Verification_Archive.md` →
     T0019.6 check B). `src/core/config.py`'s `Settings` model declares all three as required fields
     with no default, constructed at import — the CLI cannot start without them present at all, even
     though ingestion never reads their value (it is deterministic and calls no LLM). Unsetting any
@@ -599,7 +597,8 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     live; this check proves the specific expected behaviors render. **(B) Blueprint-sync decision**
     remains a separate call — the repoint was a dashboard branch change, *not* a Blueprint sync, so
     the `name: InternHunterAgent` collision hazard (a mismatched sync mints a second Free service,
-    eroding the 750 instance-hour/month margin — `research/deployment-research-plan.md` §1a) only
+    eroding the 750 instance-hour/month margin — `research/archive/deployment-research-plan.md` §1a)
+    only
     applies if/when the maintainer chooses to sync `render.yaml` rather than keep it as
     documentation-of-record. Move this entry to `Resolved_Issues.md` once C is confirmed.
 
@@ -660,41 +659,6 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     introduces it, so #32's own merge is necessarily ungated.
   - **Follow-up:** then do branch protection (entry above), which is a separate maintainer action.
 
-- **`[HIGH · RESOLVED]` The nightly ingestion cron auto-activated on merge to `main` and failed
-  silently for 19 nights.**
-  - **Found:** 2026-08-09, orientation audit. Every doc (`Repo_Current_State.md`, `Tickets.md` →
-    T0019.6/T0020.4, `T0020.4_Cron_Activation_Runbook.md`, the workflow's own header comment)
-    described `.github/workflows/ingestion.yml` as **dormant**, with activation framed as a
-    deliberate maintainer step gated on D2/D5/D6. **That premise was false.** GitHub fires
-    `schedule:` from the default branch automatically, so PR #29 (`bcc81db`) landing the workflow on
-    `main` on 2026-07-22 *was* the activation. The first scheduled run fired at 05:24 UTC that same
-    day — four days before the runbook that describes activating it was written.
-  - **Impact:** **19 consecutive scheduled runs, 2026-07-22 → 2026-08-09, all failed** in ~15 s at
-    step 5 (`Run ingestion`) with `ConfigLoadError: Invalid settings: DATABASE_URL: String should
-    have at least 1 character`. No `DATABASE_URL` repo secret has ever been configured (`gh secret
-    list` → empty). **No data impact:** the failure is at config load in `src/core/config.py`,
-    before any network or DB call — `ms.vietnamworks.com` was never requested, Neon was never
-    connected to or written, and no row was ever expired. But the job ran un-gated with **D2
-    (robots/ToS ratification) and D6 (Neon `alembic stamp head`) both unsigned**, and it was
-    silently red for 19 nights with nothing surfacing the failure.
-  - **Root cause of the doc error:** the runbook's §0/P1 states the rule correctly — *"`schedule:`
-    only fires from the default branch, so the workflow had to reach `main`"* — but treats reaching
-    `main` as a **necessary** condition when it is also **sufficient**. There is no separate arming
-    switch. The `.1 → .2 → .3 → .4` sub-ticket ordering was believed to gate activation; it never
-    did.
-  - **Fix:** **PR #33** (`fix/cron-schedule-dormant`) comments out the `schedule:` trigger on
-    `main`, keeping `workflow_dispatch`. **Merged 2026-08-09 as `abe84d8`** — verified on `main`:
-    `workflow_dispatch` is the sole trigger, and no scheduled run has fired since. The workflow is
-    now genuinely dormant, which restores the gated-activation story the docs already told.
-  - **Follow-up:** the runbook's §4 now separates *arming the schedule* from *proving a run works*,
-    and re-arming (uncommenting two `cron:` lines) is the **last** step, after a green
-    `workflow_dispatch`. Setting `DATABASE_URL` is the irreversible action — it converts a
-    harmlessly-failing job into one that really scrapes and really writes production; do not set it
-    before D2 and D6 are signed.
-  - **Generalisable lesson:** a CI/CD trigger's dormancy is a property of the *platform*, not of the
-    docs. Verify with `gh run list --workflow=<name>` rather than reading the workflow file's
-    comments.
-
 - **`[LOW · NOTE]` GitHub's 60-day inactivity auto-disable clock was being reset by the failing
   cron.**
   - **Found:** 2026-08-09, as a side observation of the entry above. GitHub disables scheduled
@@ -706,12 +670,6 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     dormant period — confirm the workflow has not been auto-disabled before trusting the first
     scheduled run.
 
-- **`[HIGH · RESOLVED 2026-08-09]` Neon production was at the Alembic baseline — migrated to head
-  via D6.** Moved to [`Resolved_Issues.md`](Resolved_Issues.md) → Data & ingestion / database
-  schema. `clean_jobs` went 19 → 22 columns, 0 of 50 rows orphaned, `last_seen_at` correctly
-  historical. Execution record:
-  [`T0020.4_Cron_Activation_Runbook.md`](T0020.4_Cron_Activation_Runbook.md) §3.
-
 ## Agent runtime & prompts
 
 > **Deploy-gating note (2026-07-02 audit):** the four model-*behavior* items below — the redundant
@@ -722,7 +680,8 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 > **Update 2026-07-03:** the Evaluation milestone is now the **next** milestone (`Tickets.md`
 > T0011), sequenced *before* Ingestion Deploy Readiness (T0013, deferred) — precisely because these
 > behaviors, plus the planned `is_active` honesty hedge, must be *measured* before a stage whose
-> honesty guarantees depend on them is built. Decisions in `research/deployment-research-plan.md`
+> honesty guarantees depend on them is built. Decisions in
+> `research/archive/deployment-research-plan.md`
 > §4.2.
 > **Update 2026-07-05:** Ingestion Deploy Readiness is renumbered T0013; a new `Tickets.md` T0012
 > (Hardening & Known-Issue Fixes) sits between the Evaluation milestone and it, closing several
@@ -779,7 +738,7 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     `schema_context` note "last relisted — may reflect an employer refresh, not original posting").
     All three depend on the accumulate-upsert persistence planned for T0013 (today `clean_jobs` is
     `TRUNCATE`d and rebuilt every run). Deferred as a T0013 rider gated on the T0011 baseline; fold
-    into `research/deployment-research-plan.md` §4 when T0013 is drafted.
+    into `research/archive/deployment-research-plan.md` §4 when T0013 is drafted.
 
 - **`[MED · OPEN]` Hidden-salary honesty rule not reliably followed** (T0009.8).
   - **Impact:** the T0009.7 rule says "say so plainly rather than claiming it is not in the data,"
@@ -800,15 +759,6 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     enforcement.
   - **Follow-up:** if omission proves frequent, add a few-shot example in `sql_generation`
     reinforcing the id-first convention.
-
-- **`[MED · RESOLVED 2026-07-15]` No default parameter to turn the agent model's reasoning on/off —
-  only to hide it.**
-  - **Found:** 2026-07-13, reviewing the T0012.2 fix.
-  - **Resolution:** `config/settings.yaml` now carries independent `agent.react.reasoning_effort:
-    null` and `agent.sql_generation.reasoning_effort: none` fields, both forwarded through
-    `AgentProvider.build_model(profile)` only when configured to a non-empty string. This keeps the
-    outer ReAct path explicit while disabling reasoning only for the mechanical SQL-generation
-    profile.
 
 - **`[LOW · OPEN]` Salary-sort SQL may omit single-currency scoping.**
   - **Found:** 2026-07-15, while validating the SQL-generation reasoning-effort fix.
@@ -836,8 +786,9 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     tool-using REPL check for `AgentRuntime.astream("list 3 data engineer jobs")` couldn't confirm
     real provider/node behavior. Deterministic no-network tests cover the intended leak shape (model
     tool-call chunk dropped, tools-node SQL/raw output dropped, final model text kept);
-    `research/streaming-implementation-plan.md` records the finding.
-  - **Follow-up:** maintainer runs the T0017.1 live REPL checklist in `Manual_Verification_Guide.md`
+    `research/archive/streaming-implementation-plan.md` records the finding.
+  - **Follow-up:** maintainer runs the T0017.1 live REPL checklist in
+    `archive/Manual_Verification_Archive.md`
     with Groq creds + a seeded `clean_jobs` DB, confirming no `SELECT`, `clean_jobs`, tool
     names/args, or raw rows appear in streamed token events.
 
@@ -847,7 +798,8 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     encoding, anti-buffering headers, blank-query `400`, empty-answer fallback, and mid-stream
     `error` behavior, but the live `curl -N` against `POST /api/v1/agent/chat/stream` still needs
     `GROQ_API_KEY`, Langfuse/runtime env, and a seeded Postgres `clean_jobs`.
-  - **Follow-up:** maintainer runs the T0017.2 checklist in `Manual_Verification_Guide.md`,
+  - **Follow-up:** maintainer runs the T0017.2 checklist in
+    `archive/Manual_Verification_Archive.md`,
     confirming tokens arrive incrementally, metadata carries the trace URL when tracing is
     configured, HTTP 400 for blank input, and no SQL/tool/raw-row content in streamed token events.
 
@@ -883,13 +835,6 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
   - **Follow-up:** fetch `requested + 1` instead of exactly `requested` when honoring an explicit
     count and add a soft hint, e.g. "Showing the 3 you asked for — more may match."
 
-- **`[MED · RESOLVED T0021.2, 2026-08-09]` A DB execution failure inside `query_clean_jobs` was
-  swallowed with no log of the real cause.** Moved to [`Resolved_Issues.md`](Resolved_Issues.md) →
-  Query tooling & SQL safety. One `logger.error("query_clean_jobs.db_error", error=str(exc))` at the
-  catch site; the real Postgres message carried on `ExecutorError` now reaches structlog.
-  User-facing string unchanged. The `validate_sql` reject-branch logging idea it also floated is
-  **not** resolved — carried forward below.
-
 - **`[LOW · OPEN]` The `validate_sql` reject branch still logs nothing.** Split out of the entry
   above when T0021.2 closed it (2026-08-09).
   - **Impact:** a rejected SQL candidate returns a refusal string to the model with no structlog
@@ -904,7 +849,7 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 ### T0011.1
 - **`[NOTE]` Judge selected: Groq `openai/gpt-oss-120b`** (spike 2026-07-03,
   `scripts/eval_judge_spike.py`).
-  - Both Groq candidates from `research/deepeval-sql-agent-eval-planning.md` §11.4 returned
+  - Both Groq candidates from `research/archive/deepeval-sql-agent-eval-planning.md` §11.4 returned
     schema-valid JSON on a live `GEval` probe (`gpt-oss-120b` PASS, `qwen/qwen3.6-27b` PASS); per
     the ticket's priority order the first passing candidate won, with qwen as proven fallback. Feeds
     the F1 agent-migration follow-up (same family, but the agent's tool-calling loop must be
@@ -922,12 +867,12 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 
 ### T0011.2
 - **`[NOTE]` T0011.2 ticket asked for two files that can't coexist: `evals/goldens/__init__.py` and
-  `evals/goldens.py`.**
+  a separate `evals.goldens` module.**
   - Python can't resolve `import evals.goldens` to both a module file and a same-named package at
     once. Resolved by putting `load_goldens()`/`build_eval_dataset()` directly in
-    `evals/goldens/__init__.py` and not creating `evals/goldens.py`; `from evals.goldens import
+    `evals/goldens/__init__.py` and not creating a separate module file; `from evals.goldens import
     load_goldens, build_eval_dataset` works. No functionality lost. Flagged in case a later ticket
-    assumes `evals/goldens.py` exists as a distinct file.
+    assumes a separate `evals.goldens` module file exists.
 
 - **`[NOTE]` `evals/fixtures/test_fixture_counts.py` needs a live `internhunter_eval` Postgres or it
   skips** (by design, T0011.2).
@@ -1003,7 +948,8 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     `deepeval test run evals/test_three_seams.py` alone reports "No test cases found" (0 selected).
     Verified working form: `PYTHONUTF8=1 uv run deepeval test run evals/test_three_seams.py -m eval`
     (confirmed live against `evals/test_judge_scaffold.py`). Documented in
-    `Manual_Verification_Guide.md` → T0012.7 and `Repo_Current_State.md` → Available scripts.
+    `archive/Manual_Verification_Archive.md` → T0012.7 and `Repo_Current_State.md` → Available
+    scripts.
 
 ### Cost & rate-limit exposure (analysis 2026-07-07)
 - **`[MED · OPEN]` A full 17-golden run fires ~120 sequential Gemini judge calls (~325K judge
@@ -1039,7 +985,8 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     removal are implemented and covered by an offline unit test (`evals/test_judge.py`), and `uv run
     pytest -q` is green, but the "does capping thinking silently weaken the flash judge on subtle
     honesty calls" question (`research/eval-cost-and-rate-limits.md` §4) is unverified.
-  - **Follow-up:** maintainer runs the T0012.10 step 4 checklist in `Manual_Verification_Guide.md`
+  - **Follow-up:** maintainer runs the T0012.10 step 4 checklist in
+    `archive/Manual_Verification_Archive.md`
     and records the before/after verdict comparison.
 
 - **`[DECISION]` `eval.judge.thinking_budget: 0` (thinking fully disabled) is the current default —
@@ -1158,18 +1105,6 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
     column manifest that `schema_context` is *rendered from* would be the shape to consider. Not
     warranted at two consumers.
 
-- **`[RESOLVED]` The `SELECT *` leak was six columns, not the three the ticket named.**
-  - **Found:** 2026-07-21, T0019.10 grounding. The ticket's objective named `is_active`,
-    `first_seen_at`, `last_seen_at`. `clean_jobs` has 22 columns and `schema_context` lists 16, so
-    the actual leaked set also included **`posted_date`** (always NULL — the column this project has
-    repeatedly refused to synthesize, handed to the model as `posted_date=None` on every detail
-    lookup), **`source`**, and **`external_id`** (ingestion bookkeeping). The ticket's In-Scope line
-    ("the 16-column frozen contract and nothing else") already covered all six; a reader following
-    only the objective would have fixed three and left three.
-  - **Resolved by:** T0019.10's explicit allowlist. Recorded here because the miscount is the kind
-    of thing that recurs — the wildcard hid it, and the objective's illustrative list understated
-    it.
-
 - **`[LOW · OPEN]` The guard test asserts against the SQL *string*, not the executed projection.**
   - `test_selects_exactly_the_schema_context_column_contract` parses the `SELECT … FROM` clause out
     of the statement text with a regex and compares whole comma-split tokens. This catches a
@@ -1182,39 +1117,25 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 ## Error-handling honesty audit (2026-07-22)
 
 > Prompted by a general request to check whether production error handling is misleading.
-> Cross-references the two existing entries this confirms and extends: `[MED · RESOLVED T0021.2]` "A
-> DB execution failure inside `query_clean_jobs` is swallowed with no log of the real cause" (§
-> Query tooling & SQL safety) and `[MED · OPEN]` "checkpointer pool timeout misreported as 'the demo
-> is busy'" (§ Config, startup & deployment). The theme across all of these: real exceptions are
+> Cross-references the archived database logging fix in
+> [`Resolved_Issues.md`](Resolved_Issues.md) and the `[MED · OPEN]` checkpointer-pool timeout item
+> in Config, startup & deployment. The theme across all of these: real exceptions are
 > replaced with one of two canned user-facing strings, with no `logger.error(exc_info=...)` at the
 > catch site — so operators cannot tell a one-off blip from a systemic outage from logs alone.
 >
-> **Status after T0021.2 (2026-08-09):** the two `[HIGH]` entries below — the ones where a real
-> exception was discarded at a catch site — are closed; both now log. **The audit's theme is only
+> **Status after T0021.2 (2026-08-09):** the two high-severity catch-site entries are archived;
+> both now log. **The audit's theme is only
 > half-addressed.** T0021.2 was deliberately log-only, so the user-facing misreport this audit named
-> is unchanged. That half is **not** left implicit in the resolved entries: it is tracked as its own
+> is unchanged. That half is **not** left implicit in the archived entries: it is tracked as its own
 > `[MED · OPEN]` entry below ("Every streaming failure is still reported to the user as 'the demo is
 > busy'"), deferred to **T0021.4** along with the other honesty items here.
-
-- **`[HIGH · RESOLVED T0021.2, 2026-08-09]` `get_job_details` swallowed `ExecutorError` with no
-  logging, same defect as the `query_clean_jobs` twin.** Moved to
-  [`Resolved_Issues.md`](Resolved_Issues.md) → Error-handling honesty audit. Landed together with
-  that twin as the entry proposed; event name `get_job_details.db_error`, return string unchanged.
-
-- **`[HIGH · RESOLVED T0021.2, 2026-08-09]` The streaming path's catch-all discarded
-  `classify_provider_busy_error`'s result and logged nothing.** Moved to
-  [`Resolved_Issues.md`](Resolved_Issues.md) → Error-handling honesty audit. The classifier result
-  is now bound and recorded as `reclassified_busy` on a `stream_agent_response.failed` log line.
-  **Only the logging half was taken:** the user still sees `BUSY_MESSAGE` for a DB outage or an
-  unhandled bug, exactly as this entry described — that misreport is now carried by the T0021.4
-  deferral noted above, not closed.
 
 - **`[MED · OPEN]` Every streaming failure is still reported to the user as "the demo is busy,"
   whatever actually went wrong.** The user-facing half of the two `[HIGH]` entries above, left open
   by T0021.2 on purpose.
   - **Found:** 2026-07-22, error-handling audit; **carried forward as its own entry 2026-08-09**
-    when T0021.2 closed the logging half. Filed separately because the resolved entries now say
-    "RESOLVED" in the archive, and a deferral recorded only inside a resolved entry's prose is
+    when T0021.2 closed the logging half. Filed separately because an archived entry is not part of
+    the open-register sweep, and a deferral recorded only inside its prose is
     invisible to a `· OPEN` sweep of this register — which is how a release gate would look for it.
   - **Impact:** `src/agents/service.py::stream_agent_response` yields `BUSY_MESSAGE` from its
     catch-all for **every** exception — a Neon outage, an unhandled bug, a Langfuse crash — even

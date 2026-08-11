@@ -20,6 +20,25 @@ def test_archived_on_tag_reference_is_allowed(tmp_path: Path) -> None:
     assert docs_lint.check_link_path([document]) == []
 
 
+def test_measured_link_path_block_is_allowed(tmp_path: Path) -> None:
+    document = tmp_path / "audit.md"
+    document.write_text(
+        "<!-- lint-allow-link-path:begin -->\n"
+        "Measured `src/missing.py`.\n"
+        "<!-- lint-allow-link-path:end -->\n",
+        encoding="utf-8",
+    )
+
+    assert docs_lint.check_link_path([document]) == []
+
+
+def test_markdown_link_in_fenced_example_is_not_checked(tmp_path: Path) -> None:
+    document = tmp_path / "guide.md"
+    document.write_text("```markdown\n[example](not-a-real-file.md)\n```\n", encoding="utf-8")
+
+    assert docs_lint.check_link_path([document]) == []
+
+
 def test_mojibake_in_code_span_is_allowed(tmp_path: Path) -> None:
     document = tmp_path / "guide.md"
     sequence = "\u00e2\u20ac"
@@ -100,6 +119,12 @@ def test_link_only_code_path_with_punctuation_is_line_length_exempt() -> None:
     assert docs_lint.is_line_length_exempt(line, in_fence=False)
 
 
+def test_link_only_markdown_reference_is_line_length_exempt() -> None:
+    line = "> [A deliberately long reference](../research/archive/agent-behavior-question-bank.md)"
+
+    assert docs_lint.is_line_length_exempt(line, in_fence=False)
+
+
 def test_missing_repo_path_is_reported(tmp_path: Path) -> None:
     document = tmp_path / "guide.md"
     document.write_text("See `src/missing.py`.\n", encoding="utf-8")
@@ -150,3 +175,17 @@ def test_stack_check_reports_both_directions() -> None:
 def test_tech_stack_matches_pyproject() -> None:
     """The shipped Tech_Stack.md must agree with the real pyproject.toml."""
     assert docs_lint.check_stack([]) == []
+
+
+def test_stamp_check_reports_missing_stamp(tmp_path: Path) -> None:
+    document = tmp_path / "current-state.md"
+    document.write_text("# Current State\n", encoding="utf-8")
+
+    findings = docs_lint.check_stamps((document,))
+
+    assert len(findings) == 1
+    assert findings[0].check == "stamp"
+
+
+def test_required_living_documents_have_stamps() -> None:
+    assert docs_lint.check_stamps() == []

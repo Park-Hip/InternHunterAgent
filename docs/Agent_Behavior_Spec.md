@@ -30,7 +30,8 @@
 >
 > **Companion artifacts:**
 > - Research/rationale + the full behavioral question catalog:
-> [`research/agent-behavior-question-bank.md`](../research/agent-behavior-question-bank.md) (groups
+> [`research/archive/agent-behavior-question-bank.md`](../research/archive/agent-behavior-question-bank.md)
+> (groups
 > `G01`–`G47`; settled decisions in §12; final glossary in §10).
 > - Machine source of truth for the canonical strings: the `behavior_glossary` block in
 > [`config/prompts.yaml`](../config/prompts.yaml).
@@ -78,8 +79,8 @@ the target.
 
 ## 3. Canonical phrasings (G47 — FINAL)
 
-The verbatim strings live in [`research/agent-behavior-question-bank.md`
-§10](../research/agent-behavior-question-bank.md) and the `behavior_glossary` block of
+The verbatim strings live in [`research/archive/agent-behavior-question-bank.md`
+§10](../research/archive/agent-behavior-question-bank.md) and the `behavior_glossary` block of
 `config/prompts.yaml`. Phrase IDs referenced below:
 `NEGOTIABLE-SALARY`, `ABSENT-FIELD`, `FRESHNESS-REFUSAL`, `CREATED-ON-CAVEAT`, `FREE-TEXT-HEDGE`,
 `SENIOR-TITLE-HEDGE`, `CROSS-CURRENCY`, `TRUNCATION`, `ZERO-RESULTS`, `E1-CLARIFY`,

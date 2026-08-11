@@ -5,8 +5,9 @@
 > the **measurement record** cited by `research/honesty-enforcement-design.md`, which quotes
 > its C-category results as the evidence for the deterministic-hedging recommendation.
 >
-> **The harness that produced it was deliberately not restored** — `scripts/run_scenario_matrix.py`,
-> `evals/scenarios_v1.yaml`, `evals/test_scenarios_v1_load.py` and the raw
+> **The harness that produced it was deliberately not restored.**
+> `scripts/run_scenario_matrix.py` <!-- archived-on-tag -->
+> `evals/scenarios_v1.yaml`, `evals/test_scenarios_v1_load.py` <!-- archived-on-tag --> and the raw
 > `v1_scenario_matrix.observed.json` remain only on the archive tag. Re-running the matrix
 > therefore requires recovering them from that tag first. Read this as a dated finding
 > (run 2026-07-14), not as a live suite.

@@ -131,7 +131,7 @@ obtained**: copying, storing, republishing, and derivative works are restricted,
 carve-out for **internal use**. The pipeline copies postings into a database and the demo
 displays them publicly. That is a *retention and display* question, not an *access*
 question — and it is a question the deployed snapshot already raises today, independently
-of any cron. See the Consequence line in `research/deployment-research-plan.md` §11.
+of any cron. See the Consequence line in `research/archive/deployment-research-plan.md` §11.
 
 ---
 

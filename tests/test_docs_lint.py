@@ -4,6 +4,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "docs_lint.py"
 SPEC = importlib.util.spec_from_file_location("docs_lint", SCRIPT)
@@ -78,6 +80,9 @@ def test_shared_skill_instructions_match() -> None:
     root = SCRIPT.parents[1]
     codex_skill = root / "skills" / "generate-ticket-prompt" / "SKILL.md"
     claude_skill = root / ".claude" / "skills" / "generate-ticket-prompt" / "SKILL.md"
+
+    if not claude_skill.exists():
+        pytest.skip(".claude/ is gitignored, so the Claude Code copy is local-only")
 
     assert codex_skill.read_bytes() == claude_skill.read_bytes()
 

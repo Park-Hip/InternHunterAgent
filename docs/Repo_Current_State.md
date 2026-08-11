@@ -5,7 +5,7 @@
 
 ## Current branch
 
-- Working branch: feature/t0022.10-prune-dead-docs (a git branch, not a directory).
+- Working branch: feature/t0022.11-collapse-research-archives (a git branch, not a directory).
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -38,7 +38,7 @@ Completed ticket plans are preserved in the [ticket archive](archive/Tickets_Arc
 M21 has T0021.1 and T0021.2 complete; T0021.3 and T0021.4 remain unscoped.
 M22 - Docs Hygiene & Documentation System has phase 1 (T0022.1-.9) merged to `main` on
 2026-08-11 via PR #41.
-T0022.10 is complete; T0022.11-.14 remain scoped and not started.
+T0022.10 and T0022.11 are complete; T0022.12-.14 remain scoped and not started.
 
 ## Archive tags
 
@@ -92,7 +92,7 @@ The authoritative package declarations are in `pyproject.toml`.
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Passed locally on 2026-08-10 (all checks) |
+| `python scripts/docs_lint.py` | Passed locally on 2026-08-11 (all checks) |
 | `uv run pytest -q` | 346 passed, 1 skipped, 19 deselected, 4 subtests passed |
 | `uv run ruff check src tests` | Passed |
 | `uv run mypy src` | Success: no issues in 43 source files |
@@ -108,4 +108,5 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0022.11 - collapse the executed research archives. T0023, the v1.0 release cut, follows M22.
+T0022.12 - harvest the gaps and rebuild `Known_Issues.md`. T0023, the v1.0 release cut,
+follows M22.

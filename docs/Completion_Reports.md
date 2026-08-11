@@ -1664,3 +1664,35 @@ Follow-ups / Docs).
 - **Follow-up tickets:** T0022.11 remains next; no new issue-register entry was needed.
 - **Docs updated:** `Decision_Log.md`, `Known_Issues.md`, `Resolved_Issues.md`,
   `Repo_Current_State.md`, `Tickets.md`, and documentation indexes and records.
+
+## T0022.11 - Collapse the executed research archives
+
+- **Summary:** Collapsed the five fully superseded research records into compact archive decision
+  records while retaining every genuine cited section heading.
+  Corrected the stale deployment-research banner and reduced the code-review record to its cited
+  bug and doc-insight index.
+- **Files changed:** `research/archive/deepeval-sql-agent-eval-planning.md`,
+  `research/archive/ingestion-milestone-plan.md`,
+  `research/archive/demo-ui-and-golive-plan.md`,
+  `research/archive/streaming-implementation-plan.md`,
+  `research/archive/schema-enrichment-plan.md`,
+  `research/archive/deployment-research-plan.md`, `docs/archive/Code_Review_Notes.md`,
+  `docs/Tickets.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** Citation-heading inventory, inbound-reference search, line-count comparison,
+  `python scripts/docs_lint.py`, and `git diff --check`.
+- **Build and test results:** The direct documentation linter and diff whitespace check passed.
+  `uv run` could not execute in this environment because its configured cache path is invalid.
+- **Manual verification:** Open D-016, D-020, and D-014 in `Decision_Log.md` and confirm their
+  named archive sections remain present.
+  Confirm the eight `Code_Review_Notes.md` bug labels and doc insight 3 remain discoverable.
+  Run `uv run python scripts/docs_lint.py`.
+- **Citation audit:** Checked 39 cited section headings, all present.
+  The inventory's ingestion sections 4.2 and 11 were confirmed as false positives because they
+  refer to `deployment-research-plan.md` rather than this record.
+- **Risks:** Historical research prose was reduced from 2,241 to 955 total lines across the five
+  records (700 excluding blank lines), so readers needing removed planning scaffolding must use
+  Git history. The comparable T0022.11 target was ~700-900 total lines; 955 is modestly over,
+  because every genuine cited section was retained as a heading.
+- **Follow-up tickets:** T0022.12 owns the unharvested archive records and `Known_Issues.md`
+  re-triage.
+- **Docs that need updating:** No additional documentation update is required for this ticket.

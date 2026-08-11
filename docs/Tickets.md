@@ -1024,7 +1024,7 @@ after restructuring throws the restructuring away.
 7. `Known_Issues.md` no longer holds the deploy-secret entry; `Resolved_Issues.md` does, naming
    the tag. `docs/README.md` has no dead Prompt Playbook row.
 
-### T0022.11: Collapse the executed research archives — ▶ Next
+### T0022.11: Collapse the executed research archives — Done
 **Objective:** Shrink the five fully-superseded research records whose outcomes are now owned by
 canonical documents, keeping the deliberation — options weighed, roads not taken, live-checked
 facts — and dropping the scaffolding. The archive is the only place that answers *"did we

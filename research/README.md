@@ -14,6 +14,7 @@ Completed research is historical evidence, not current implementation guidance, 
 |---|---|
 | [v1 release readiness plan](v1-release-readiness-plan.md) | Defines the remaining release path, blockers, and maintainer decisions for the M20-M23 sequence. |
 | [Documentation hygiene and system plan](docs-hygiene-and-system-plan.md) | Evidence and decisions behind M22 documentation hygiene, including the Fact Ledger and enforcement model. |
+| [Documentation prune and structure plan](docs-prune-and-structure-plan.md) | Measured file-level prune and per-file restructuring plan for M22 phase 2 (T0022.10-.14). |
 | [Honesty enforcement design](honesty-enforcement-design.md) | Unimplemented design for keeping generated job-search answers faithful to available evidence. |
 | [Evaluation cost and rate limits](eval-cost-and-rate-limits.md) | Current quota and cost analysis for the Groq serving path and Gemini evaluation judge. |
 | [Job-site comparison](job-site-comparison.md) | Source-market scorecard. VietnamWorks is decided; competing sources remain candidates for future spikes. |

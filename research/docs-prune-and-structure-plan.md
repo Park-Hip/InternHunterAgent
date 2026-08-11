@@ -164,13 +164,22 @@ tracing is Cloud-hosted, and closes the security entry as *"resolved by removal"
 | File | Reader it serves |
 |---|---|
 | `research/experiments/vietnamworks_tos_excerpt_2026-07-16.md` | The legal-gate evidence behind D-034. Dated, unreproducible — the page carries no version |
-| `docs/archive/Code_Review_Notes.md` | Cited 7× from `Resolved_Issues.md` as the "bug N" detail behind closed entries |
+| `docs/archive/Code_Review_Notes.md` | **Reversed 2026-08-11 — now retired in T0022.13.** See below |
 | `docs/archive/Completion_Reports_Archive.md`, `Manual_Verification_History.md` | 83 and 86 lines. Below the cost of touching |
 | `docs/archive/Tickets_Archive.md`, `Manual_Verification_Archive.md` | Archived by T0022.6 one ticket ago. Re-litigating is churn (**decided 2026-08-10**) |
 | `guides/Streaming_And_SSE_Explained.md` | A deliberate learning walkthrough, correctly outside `docs/`. Needs indexing, not pruning |
 
-**`Code_Review_Notes.md` gets one edit, not deletion:** keep the bug index the 7 links resolve
-against; drop the 2026-07-02 improvement backlog after checking which items shipped.
+**`Code_Review_Notes.md` is retired, not trimmed — revised 2026-08-11.** This section originally
+kept it, reasoning that 7 `Resolved_Issues.md` links needed its bug index. Executing the trim in
+T0022.11 disproved that: with the per-module analysis gone, **8 of the 9 pointers return less
+than the sentence citing them** — `Resolved_Issues.md` states the bug, the fix, the test, and
+the false-positive class, then links to a one-line struck-through restatement.
+
+A pointer that returns less than its own citation is worse than no pointer. **T0022.13 retires
+the file**: fold `Doc insight 3` (the only content it uniquely holds) into the entry that cites
+it, delete the rest, and mark the remaining citations `<!-- archived-on-tag -->`. The full
+203-line original is preserved at `archive/docs-pre-prune`, so the pointers resolve to *more*
+detail than they do today, not less.
 
 ---
 
@@ -388,7 +397,7 @@ paid the cost of one renumbering (M22 → M23) whose correction banners §2.1 no
 | **T0022.10** | **Prune (§3).** Tag, delete 7 files + `infra/`, repair 4 inbound links, close the Langfuse security entry, reconcile `Full_Design_Document.md` §5 and `Tech_Stack.md`, record the `skills/` reversal (§3.1.1) | .9 merged | Low | <!-- archived-on-tag -->
 | **T0022.11** | **Archive collapse (§4).** Collapse 5 research docs to decision records; fix `deployment-research-plan.md`'s stale banner; trim `Code_Review_Notes.md` | .10 | **Medium** — section identity is a citation target |
 | **T0022.12** | **Registers (§5).** Harvest the 2 gaps into `Decision_Log.md`; re-triage 46 open entries against code; rebuild `Known_Issues.md` | .11 | **Highest** — needs code reading, not just doc editing |
-| **T0022.13** | **Structure (§6).** `Tickets.md` split; `MVP_Technical_Design.md` split; the 7 smaller fixes; 2 stale canonical claims | .10 | Medium |
+| **T0022.13** | **Structure (§6).** `Tickets.md` split; `MVP_Technical_Design.md` split; the 7 smaller fixes; 2 stale canonical claims; retire `Code_Review_Notes.md` (§3.3) | .10 | Medium |
 | **T0022.14** | **Enforcement (§7).** Ship `size-cap`, `eviction-rule`, `amendment`, `orphan`; raise the T2 cap to 650; update `Docs_Conventions.md` with Rules A and B | all | Low |
 
 **Order matters:** prune first so nothing is restructured and then deleted; enforcement last so

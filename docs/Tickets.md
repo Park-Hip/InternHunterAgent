@@ -1185,6 +1185,22 @@ boundary `Full_Design_Document.md` §3 already declares — ingestion and evalua
 `Offline_Pipelines_Design.md`. Plus the seven smaller fixes in plan §6.3 and the two stale
 canonical claims in §6.4.
 
+**Added 2026-08-11 — retire `docs/archive/Code_Review_Notes.md`.** T0022.11 trimmed it to a
+54-line pointer index, which made a latent problem obvious: **8 of its 9 pointers now return
+less than the sentence citing them.** `Resolved_Issues.md` says *"…SQL validator did not enforce
+a single table"* plus the fix, the test, and the false-positive class, then offers
+*"Detail: `Code_Review_Notes.md` bug 1"* — and bug 1 is a single struck-through restatement.
+The file also contradicts its own header, which says `Known_Issues.md` is the source of truth
+and *"these are pointers only."* Steps: (1) fold **Doc insight 3** — the only content it
+uniquely holds, explaining why the `FALLBACK_ANSWER` coercion is unreachable because
+`react_agent._extract_answer` raises first — into the `Resolved_Issues.md` entry that cites it;
+(2) delete the file; (3) mark the 8 remaining `Detail: … bug N` lines `<!-- archived-on-tag -->`.
+This is a net improvement rather than a loss because `archive/docs-pre-prune` holds the **full
+203-line** original, not the stub — so a reader following the pointer reaches the complete
+per-module review instead of a dead end. Note the 16 further references in
+`Tickets_Archive.md`, `Completion_Reports.md`, and archived research are **dated records**: they
+get markers, never edits.
+
 ### T0022.14: Enforce the caps — 📋 Planned
 Ship `size-cap`, `eviction-rule`, `amendment`, and `orphan`; raise the T2 cap from 400 to 650,
 which is the honest number for a blueprint covering eleven subsystems. Give every capped

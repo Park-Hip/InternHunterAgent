@@ -18,13 +18,13 @@
 | # | Move | Effect |
 |---|---|---|
 | 1 | **Delete 7 dead files** and the unused self-hosted Langfuse stack | -956 doc lines; closes 1 open security issue |
-| 2 | **Collapse 5 executed research archives** into decision records | 2,241 → ~450 lines, every inbound link intact |
+| 2 | **Collapse 5 executed research archives** into decision records | 2,241 → ~700-900 lines, every inbound link and section citation intact |
 | 3 | **Re-triage and rebuild `Known_Issues.md`** | 1,199 → ~250 lines; the register stops being partly fiction |
 | 4 | **Restructure 6 living/canonical docs** for scannability | `Tickets.md` 945 → ~200; blueprint split along the layer boundary |
 | 5 | **Close the M22 harvest gap** and fix 3 factual contradictions | 2 unharvested archives; `infra/` claims that disagree three ways | <!-- archived-on-tag -->
 | 6 | **Give every capped doc an eviction rule, and lint the caps** | The reason phase 1's caps were already breached |
 
-**Live surface:** 19,755 lines today → **~14,000**, of which the part a person actually reads
+**Live surface:** 19,755 lines today → **~14,400**, of which the part a person actually reads
 drops from ~6,700 to **~2,400**.
 
 ### Decisions locked 2026-08-10
@@ -201,7 +201,7 @@ ticket breakdowns for shipped tickets, and "open decisions for the user" that we
 | `demo-ui-and-golive-plan.md` | 397 | `MVP_Technical_Design.md` §11, D-002/3/4 | §6 sub-ticket split; §7 "open decisions" all answered |
 | `streaming-implementation-plan.md` | 313 | `MVP_Technical_Design.md` §9, D-005…D-009 | §8 T0017 sub-ticket implications |
 | `schema-enrichment-plan.md` | 310 | `Schema_Contract.md`, D-010…D-015 | §5 sequencing and ticket implications |
-| **Total** | **2,241** | | **→ ~450** |
+| **Total** | **2,241** | | **→ ~700-900** |
 
 **The uniform decision-record shape** each collapses to:
 
@@ -217,10 +217,17 @@ ticket breakdowns for shipped tickets, and "open decisions for the user" that we
 
 **Two constraints on the collapse:**
 
-1. **Section identity is a link target.** `Decision_Log.md` names the section inside the *link
-   text* — "DeepEval planning §4" — rather than as a URL anchor, so removing a section makes the
-   citation nonsense while `link-path` stays green. Every cited section number must survive, or
-   the citing entry is updated in the same commit.
+1. **Section identity is a link target.** Citations name the section inside the *link text* —
+   "DeepEval planning §4" — rather than as a URL anchor, so removing a section makes the
+   citation nonsense while `link-path` stays green. **Every cited section number must survive as
+   a heading**, even when its body collapses to one line.
+
+   The 2026-08-11 audit found the citing surface is far wider than `Decision_Log.md`:
+   `MVP_Technical_Design.md`, `Known_Issues.md`, `Completion_Reports.md`, `Resolved_Issues.md`,
+   and `archive/Tickets_Archive.md` all cite these records by section, and several cited
+   sections are exactly the scaffolding this section proposed to drop. That is why the target
+   is ~700-900 lines rather than the ~450 first estimated. The enumerated starting set lives in
+   `docs/Tickets.md` → T0022.11.
 2. **Do not reword findings.** Phase 1's non-goal holds: prose, dates, and evidence are moved or
    dropped verbatim, never rewritten.
 
@@ -361,11 +368,11 @@ above are what this pass proves it needs.
 | Surface | Before | After |
 |---|---:|---:|
 | Markdown files | 53 | **46** |
-| Total lines | 19,755 | **~14,000** |
+| Total lines | 19,755 | **~14,400** |
 | Lines a person actually reads (T1-T3 + live research) | ~6,700 | **~2,400** |
 | `Known_Issues.md` | 1,199 | ~250 |
 | `Tickets.md` | 945 | ~200 |
-| `research/archive/` | 4,925 | ~3,100 |
+| `research/archive/` | 4,925 | ~3,500 |
 | Docs over their tier cap | 4 | **0** |
 
 ---

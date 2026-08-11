@@ -1024,15 +1024,81 @@ after restructuring throws the restructuring away.
 7. `Known_Issues.md` no longer holds the deploy-secret entry; `Resolved_Issues.md` does, naming
    the tag. `docs/README.md` has no dead Prompt Playbook row.
 
-### T0022.11: Collapse the executed research archives — 📋 Planned
-Collapse the **5** fully-superseded records (`deepeval-sql-agent-eval-planning.md`,
-`ingestion-milestone-plan.md`, `demo-ui-and-golive-plan.md`, `streaming-implementation-plan.md`,
-`schema-enrichment-plan.md`) from 2,241 lines to ~450, using the uniform decision-record shape
-in plan §4.1. Leave the other 4 at full length. Also fixes `deployment-research-plan.md`'s stale
-banner and trims `docs/archive/Code_Review_Notes.md` to the bug index its 7 inbound links need.
-**Risk:** `Decision_Log.md` cites sections in *link text*, not URL anchors, so dropping a cited
-section leaves `link-path` green while making the citation nonsense. Enumerate cited sections
-first.
+### T0022.11: Collapse the executed research archives — ▶ Next
+**Objective:** Shrink the five fully-superseded research records whose outcomes are now owned by
+canonical documents, keeping the deliberation — options weighed, roads not taken, live-checked
+facts — and dropping the scaffolding. The archive is the only place that answers *"did we
+consider X, and why not?"*, so this collapses those records rather than deleting them.
+
+> **⚠ Re-scoped 2026-08-11 after a citation audit.** The plan's §4.1 assumed the only section
+> citations were in `Decision_Log.md`. They are not: `MVP_Technical_Design.md`,
+> `Known_Issues.md`, `Completion_Reports.md`, `Resolved_Issues.md`, and
+> `archive/Tickets_Archive.md` all cite these files **by section**, and several of the cited
+> sections are exactly the scaffolding §4.1 proposed to drop. The plan's ~450-line target is
+> therefore **not achievable without breaking citations**; the honest target is **~700-900**.
+
+**In Scope:**
+* **Collapse five records** (2,241 lines today → ~700-900), each to the decision-record shape in
+  plan §4.1 — banner, decisions taken, rejected alternatives, live-checked facts, sources:
+
+| Record | Lines | Outcome now owned by |
+|---|---:|---|
+| `deepeval-sql-agent-eval-planning.md` | 648 | `MVP_Technical_Design.md` §8, D-016/17/18 |
+| `ingestion-milestone-plan.md` | 573 | `MVP_Technical_Design.md` §7, `Operations.md`, D-019/20/21/24 |
+| `demo-ui-and-golive-plan.md` | 397 | `MVP_Technical_Design.md` §11, D-002/3/4 |
+| `streaming-implementation-plan.md` | 313 | `MVP_Technical_Design.md` §9, D-005…D-009 |
+| `schema-enrichment-plan.md` | 310 | `Schema_Contract.md`, D-010…D-015 |
+
+* **The governing rule: a cited section number must survive as a heading**, even when its body
+  collapses to a single line. Citations name sections in *link text* (`DeepEval planning §4`),
+  not URL anchors, so `link-path` stays green while the citation silently becomes nonsense —
+  the check cannot protect this. Retaining the heading is what makes the collapse safe.
+* **Enumerate citations before editing.** The measured starting set (2026-08-11) is below.
+  It contains false positives from the extraction window — for example a `§6c/§6l` found near a
+  demo-UI mention actually belongs to `pre-deploy-refinement-plan.md` — so **confirm each hit
+  against its source line**; do not treat this table as final.
+
+| Record | Sections cited by live docs (starting set) |
+|---|---|
+| `deepeval-sql-agent-eval-planning.md` | §2, §4, §5, §8, §11, §11.4, §11.7 |
+| `ingestion-milestone-plan.md` | §1, §1A, §1B, §1C, §1D, §3, §4, §4.2, §5, §11 |
+| `demo-ui-and-golive-plan.md` | §0a, §2, §3, §4, §5, §5.3, §5.5, §6 |
+| `streaming-implementation-plan.md` | §2, §3, §4, §5, §6 |
+| `schema-enrichment-plan.md` | §1, §2, §2.2, §2.3, §2.4, §2.6, §3, §4, §4.2, §4.3, §5 |
+
+* **Fix `deployment-research-plan.md`'s banner only.** It still opens by calling itself "an
+  *outline of what to research*, not the findings" — untrue since it was filled to 892 lines.
+  Correct that paragraph; **collapse nothing else in that file** (it backs 12 decisions).
+* **Trim `docs/archive/Code_Review_Notes.md`** to the bug index its 7 inbound `Resolved_Issues.md`
+  links resolve against, dropping the 2026-07-02 improvement backlog after checking which items
+  shipped. Keep every `bug N` label — those are the link targets.
+
+**Out of Scope:**
+* **The other four archived records.** `deployment-research-plan.md` (beyond its banner),
+  `data-ingestion-stage.md`, `pre-deploy-refinement-plan.md`, and
+  `agent-behavior-question-bank.md` stay at full length — decided 2026-08-11.
+* **Harvesting the two unharvested records into `Decision_Log.md`** — T0022.12 owns that.
+* **Rewording any finding.** Collapse removes whole sections; it never rewrites a surviving
+  sentence. Dates, evidence, and wording are frozen.
+* **Editing the citing documents.** If a citation and a section genuinely cannot both survive,
+  stop and raise it — do not rewrite a dated record in `Completion_Reports.md` or
+  `archive/Tickets_Archive.md` to fit the collapse.
+* Structural work on live docs (T0022.13) and lint changes (T0022.14).
+
+**Manual verification:**
+1. `uv run python scripts/docs_lint.py` exits **0** — necessary but *not* sufficient here, since
+   `link-path` cannot see a broken section citation.
+2. **The citation check that actually matters:** for every section in the enumerated set, confirm
+   a heading with that number still exists in the collapsed file. A scripted pass is fine; record
+   the count checked in the completion report.
+3. Open three `Decision_Log.md` entries at random, follow each link, and confirm the named
+   section is present and still supports the decision.
+4. `git diff --word-diff` on each collapsed file shows **deletions only** — no reworded prose.
+5. Confirm each collapsed file still answers one "why not" question: pick a rejected alternative
+   from each and find it in under 30 seconds.
+6. `Resolved_Issues.md`'s 7 `Code_Review_Notes.md` "bug N" references still resolve to a
+   surviving label.
+7. Record the before/after line counts per file; the total should land near 700-900, not 450.
 
 ### T0022.12: Harvest the gaps and rebuild `Known_Issues.md` — 📋 Planned
 Harvest `data-ingestion-stage.md` and `pre-deploy-refinement-plan.md` into `Decision_Log.md`,

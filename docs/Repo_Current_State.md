@@ -5,7 +5,7 @@
 
 ## Current branch
 
-- Working branch: feature/t0022.11-collapse-research-archives (a git branch, not a directory).
+- Working branch: feature/t0022.10-12-phase2-prune-collapse-registers (a branch, not a directory).
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).

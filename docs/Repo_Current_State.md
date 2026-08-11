@@ -38,7 +38,7 @@ Completed ticket plans are preserved in the [ticket archive](archive/Tickets_Arc
 M21 has T0021.1 and T0021.2 complete; T0021.3 and T0021.4 remain unscoped.
 M22 - Docs Hygiene & Documentation System has phase 1 (T0022.1-.9) merged to `main` on
 2026-08-11 via PR #41.
-T0022.10 and T0022.11 are complete; T0022.12-.14 remain scoped and not started.
+T0022.10 through T0022.12 are complete; T0022.13 and T0022.14 remain scoped and not started.
 
 ## Archive tags
 
@@ -108,5 +108,5 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0022.12 - harvest the gaps and rebuild `Known_Issues.md`. T0023, the v1.0 release cut,
+T0022.13 - restructure the surviving documentation. T0023, the v1.0 release cut,
 follows M22.

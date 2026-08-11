@@ -14,7 +14,7 @@ original register entry (omitted where none was assigned).
 
 ## Categories
 - [Documentation drift](#documentation-drift) — 3
-- [Config, startup & deployment](#config-startup--deployment) — 5
+- [Config, startup & deployment](#config-startup--deployment) — 8
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
@@ -59,6 +59,23 @@ original register entry (omitted where none was assigned).
     matching reality).
 
 ## Config, startup & deployment
+- **`[HIGH · RESOLVED · T0021.1, 2026-08-09]` The serving path lacked a pre-flight schema guard.**
+  - **Resolution:** `8787495` added `assert_serving_schema()` before checkpointer startup.
+    Missing, extra, or unreadable `clean_jobs` columns now fail FastAPI boot.
+  - **Verified:** `tests/api/test_schema_guard.py` covers matching, missing, unexpected,
+    absent-table, and inspection-failure cases.
+
+- **`[LOW · RESOLVED · T0022.12]` Schema documentation called live lifecycle columns future work.**
+  - **Resolution:** `65e1629` updated [Schema Contract](Schema_Contract.md) to describe 16 visible
+    and 22 physical columns, including the hidden lifecycle fields.
+  - **Verified:** `docs/Schema_Contract.md` lines 98-108 describe the current contract and the
+    T0019.10 projection boundary.
+
+- **`[MED · RESOLVED · T0022.12, 2026-08-11]` The CI gate was recorded as absent from `main`.**
+  - **Resolution:** `f6cbec0` is reachable from `main`; `.github/workflows/ci.yml` now runs ruff,
+    mypy, pytest, and documentation checks for pull requests targeting `main`.
+  - **Verified:** [Repo Current State](Repo_Current_State.md) records the passing PR #39 CI gate.
+
 - **`[RESOLVED · T0014.1, 2026-07-12]` Import-time config loading made startup fragile.**
   - `src/core/config.py` no longer runs `settings = load_settings()` at import; it resolves `.env`
     and all four YAMLs from the repo root, wraps missing/invalid env or YAML in a clear

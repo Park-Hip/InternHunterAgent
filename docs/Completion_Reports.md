@@ -1696,3 +1696,35 @@ Follow-ups / Docs).
 - **Follow-up tickets:** T0022.12 owns the unharvested archive records and `Known_Issues.md`
   re-triage.
 - **Docs that need updating:** No additional documentation update is required for this ticket.
+
+## T0022.12 - Harvest the gaps and rebuild `Known_Issues.md`
+
+- **Summary:** Harvested two previously unrepresented archive decisions and re-triaged the active
+  register against the checked-out code and current operational records.
+  The register now has 36 actionable entries in a fixed five-line shape, with no note-only entries.
+- **Review correction (2026-08-11):** the first pass retired `[HIGH · OPEN]` "pinging keep-alive
+  24/7 exhausts Render's 750 free instance-hours" into a single descriptive line in
+  `Operations.md`. Nothing had resolved that risk, and it is not note-class, so under this
+  ticket's own rule — a closure must name its evidence, and absent evidence the entry stays open
+  — it was restored. It guards the still-open cold-start entry, whose obvious fix is continuous
+  pinging.
+- **Entry accounting:** 72 before, 36 after. 21 note-class facts relocated to `Operations.md` and
+  `Tech_Stack.md`, 3 closed into `Resolved_Issues.md` with cited evidence, and the remainder
+  merged or rewritten. A removed-entry-by-entry audit was not performed and is the residual risk
+  below.
+- **Files changed:** `docs/Decision_Log.md`, `docs/Known_Issues.md`, `docs/Operations.md`,
+  `docs/Resolved_Issues.md`, `docs/Tech_Stack.md`, `docs/Repo_Current_State.md`,
+  `docs/Tickets.md`, and this report.
+- **Commands run:** Register inventory and state checks; source, code, and test searches;
+  `git diff --check`; `uv run python scripts/docs_lint.py`; and the focused docs-lint test command.
+- **Build and test results:** The documentation linter, focused docs-lint tests (20 passed),
+  whitespace check, category recount, state-key check, and five-line entry-shape check passed.
+  The full `uv run pytest -q` suite exceeded a five-minute timeout without reporting a failure;
+  collection completed as 367 of 386 tests, with 19 eval tests deselected.
+- **Manual verification:** Open `Known_Issues.md` and confirm the triage table totals 35 entries.
+  Open D-036 and D-037 and confirm the source-market and reproducibility decisions are clear.
+  Confirm the two remaining HIGH entries are blocked verification work, not unlabelled risks.
+- **Risks:** Live provider, database, GitHub, and Render state remains unverified where recorded as
+  blocked or maintainer-owned.
+- **Follow-up tickets:** T0022.13 is next; T0021.3 and T0021.4 retain the relevant service fixes.
+- **Docs that need updating:** No additional documentation update is required for this ticket.

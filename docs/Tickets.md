@@ -1100,7 +1100,7 @@ consider X, and why not?"*, so this collapses those records rather than deleting
    surviving label.
 7. Record the before/after line counts per file; the total should land near 700-900, not 450.
 
-### T0022.12: Harvest the gaps and rebuild `Known_Issues.md` — ▶ Next
+### T0022.12: Harvest the gaps and rebuild `Known_Issues.md` - Done 2026-08-11
 **Objective:** Close phase 1's definition-of-done hole by harvesting the two research records it
 archived without harvesting, then rebuild `Known_Issues.md` from a **re-triage against current
 code** rather than a blind restructure. The register is the maintainer's "what still needs

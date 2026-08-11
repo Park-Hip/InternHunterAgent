@@ -28,7 +28,7 @@ Ticket specs and delivery sequence for the MVP. Each entry is the **plan** for o
 | 19 | T0019 | Ingestion Deploy Readiness (live-DB) | ✅ | .1–.10 done; landed on `main` via PR #29 |
 | 20 | T0020 | Reconciliation & Activation | ✅ ⚠ | `main` reconciled, Render pinned to `main`, CI gate live, cron runbook — **2 maintainer actions open** |
 | 21 | T0021 | Serving-Path Hardening & Honesty Baseline | 🔨 | .1 schema assertion + .2 error logging done · .3/.4 named, unscoped |
-| 22 | T0022 | **Docs Hygiene & Documentation System** | ✅ | Complete 2026-08-10: lint gate, front door, Decision Log, research prune (.1-.9) |
+| 22 | T0022 | **Docs Hygiene & Documentation System** | 🔨 | Phase 1 (.1-.9) complete 2026-08-10: lint gate, front door, Decision Log, research prune · Phase 2 (.10-.14) prune & structure, scoped 2026-08-11 |
 | 23 | T0023 | v1.0 Release Cut | 📋 | DoD sweep, ToS posture, tag — renumbered from T0022 on 2026-08-09 |
 | — | Backlog | `is_active` honesty hedge, custom domain | 📋 | unscheduled; seeds future tickets |
 
@@ -147,7 +147,7 @@ explicitly not in scope.**
   discarded exception at a catch site.
 * Any Langfuse/tracing-layer change, and the real `mypy [arg-type]` fix baselined by T0020.3.
 
-## T0022: Milestone 22 - Docs Hygiene & Documentation System - Complete 2026-08-10
+## T0022 Phase 1: Docs Hygiene & Documentation System (T0022.1-.9) - Complete 2026-08-10
 **Scoped 2026-08-09** from
 [`research/docs-hygiene-and-system-plan.md`](../research/docs-hygiene-and-system-plan.md),
 which carries the measured baseline, the full disposition of all 46 tracked `.md` files, and
@@ -906,6 +906,159 @@ of this and the milestone decays exactly as the 2026-07 pass did. **Edit both fi
    surviving live research. Confirm `AGENTS.md` says the same thing byte-for-byte.
 8. Re-run the T0022.3 review standard on the reflow commits: `git diff --word-diff` shows
    whitespace only.
+
+## T0022 Phase 2: Prune & Per-File Structure (T0022.10-.14) — 🔨 In progress
+**Scoped 2026-08-11** from
+[`research/docs-prune-and-structure-plan.md`](../research/docs-prune-and-structure-plan.md),
+which carries the measured baselines, the per-file disposition of all 53 tracked `.md` files,
+and the per-ticket risk notes. **Read that plan before executing any block below** — it is not
+restated here.
+
+**Why the milestone reopened.** Phase 1 built the enforcement system but pruned nothing: 53
+tracked `.md` files and not one removed on merit. It also left two caps breached on the day
+they were written — `Known_Issues.md` at **1,199 lines against its own 150-line cap** and
+`MVP_Technical_Design.md` at **1,019 against 400** — because the `size-cap` check was never
+shipped. And its own definition of done ("each archived doc has at least one decision
+harvested") is false for `data-ingestion-stage.md` and `pre-deploy-refinement-plan.md`, the two
+*most* cross-linked files in the archive.
+
+**Phase 2 is deletion and shape, not systems.** Phase 1 asked *"who owns this fact?"*; phase 2
+asks *"should this file exist?"* — every surviving document must name a reader and the trigger
+that makes them open it (plan §2). A file matching no reader is deleted; a file a reader cannot
+finish is restructured. Target: 53 → 46 files, 19,755 → ~14,000 lines, and the part a person
+actually reads down from ~6,700 to ~2,400.
+
+> **Scoping note.** Only **T0022.10** is fully specified below. Blocks **.11–.14** are
+> summarized for sequencing and authored as each is picked up, per the phase-1 pattern.
+> Maintainer decisions settled **2026-08-11**: delete all of plan §3.1; **keep**
+> `Tickets_Archive.md` and `Manual_Verification_Archive.md` as-is; collapse only the **5**
+> fully-superseded research archives and leave the other 4; **re-triage** `Known_Issues.md`
+> against real code rather than restructuring it blind; delete `infra/`.
+
+> **Ordering constraint.** Prune (**.10**) precedes restructure (**.13**) so no file is reshaped
+> and then deleted. Enforcement (**.14**) lands last, against an already-clean tree, so the new
+> checks never have to start warn-only the way T0022.1's did.
+
+### T0022.10: Prune the dead documentation surface — ▶ Next
+**Objective:** Delete the seven documents no reader has a trigger to open, remove the unused
+self-hosted Langfuse stack, and reconcile the three documents that describe `infra/` three
+different ways. This is first in phase 2 because every later block reshapes files — deleting
+after restructuring throws the restructuring away.
+
+**In Scope:**
+* **Tag before deleting.** `archive/docs-pre-prune`, at the commit immediately preceding the
+  first deletion. Everything below stays recoverable from that tag; nothing is lost, only
+  removed from the working surface.
+* **Delete seven documents** (956 lines; 53 → **46** tracked `.md` files):
+  * `docs/archive/Claude_Code_Review_Skeleton.md` (198) — a blank template whose own banner says
+    not to record findings in it until the review pass begins. The pass happened and wrote
+    `Code_Review_Notes.md` free-form instead. **Zero inbound links.**
+  * `docs/archive/Documentation_Hygiene_Review_T0016.md` (187) — the 2026-07 hygiene pass that
+    M22 supersedes and cites only as the cleanup that decayed.
+  * `docs/archive/Repo_State_History.md` (272) — old branch snapshots; its own banner states the
+    authoritative history is git.
+  * `research/experiments/deployment-research-fill-prompt.md` (49) — a prompt to *fill* a
+    document that is now filled and archived.
+  * `research/experiments/topdev-scraping-spike-prompt.md` (181) — a prompt to *run* a spike
+    that ran; its results are `job-site-comparison.md` Candidate 3.
+  * `docs/Prompt_Playbook.md` (63) — duplicated by `skills/generate-ticket-prompt/SKILL.md`,
+    which names it as its own base structure.
+  * `infra/langfuse/README.md` (6) — six lines asserting the directory is empty.
+* **Delete `infra/`.** `infra/docker-compose.yaml` is a six-service self-hosted Langfuse stack
+  (`langfuse-web`, `langfuse-worker`, `clickhouse`, `minio`, `redis`, `postgres`) superseded by
+  **D-029** (Langfuse Cloud). The root `docker-compose.yml` is a **different file** serving
+  local app Postgres — it stays untouched.
+* **Absorb the playbook into the skill.** `skills/generate-ticket-prompt/SKILL.md` names
+  `docs/Prompt_Playbook.md` as its base structure; inline that structure before deleting the
+  playbook. **Apply the identical edit to `.claude/skills/generate-ticket-prompt/SKILL.md`** —
+  that path is gitignored, so CI cannot see a divergence, but
+  `test_shared_skill_instructions_match` fails locally the moment the two differ.
+* **Repair every inbound reference — 18 across 12 files**, by class:
+
+| Class | Where | Treatment |
+|---|---|---|
+| States a **current** fact | `Tech_Stack.md`, `Full_Design_Document.md` §5 | Rewrite the claim |
+| Live index row | `docs/README.md` (Prompt Playbook), `Repo_Current_State.md` (Repo State History) | Remove the row |
+| Dated historical record | `Completion_Reports.md`, `Resolved_Issues.md`, `docs/archive/**`, `research/archive/**`, closed ticket blocks in this file | **`<!-- archived-on-tag -->`, never rewrite** — they are point-in-time records, and the file now lives on the tag |
+
+* **Reconcile the `infra/` contradiction.** `Full_Design_Document.md` §5 says the self-hosted
+  stack "lives under `infra/langfuse/`" — the wrong path *and* a decision D-029 reversed. State
+  that tracing is Langfuse Cloud. `Tech_Stack.md`'s "Deliberately not used" entry then becomes
+  simply true rather than technically-true-about-a-subdirectory.
+* **Close the security entry.** `Known_Issues.md`'s `[OPEN]` deploy-secret checklist exists only
+  because that compose file ships upstream `CHANGEME` defaults. Move it to `Resolved_Issues.md`
+  as resolved by removal, naming the tag.
+* **Record the `skills/` reversal in `Decision_Log.md`.** T0022.2 noted that `.claude/skills/`
+  is canonical and the root copy should be deleted. `.claude/` is **gitignored**, so the tracked
+  `skills/` copy is the only one in version control and must **not** be deleted — proven by CI
+  on PR #41 (plan §3.1.1). Log it so the stale note is never acted on.
+
+**Out of Scope:**
+* **Collapsing any `research/archive/` document**, and trimming `docs/archive/Code_Review_Notes.md`
+  — T0022.11.
+* **Re-triaging `Known_Issues.md`** — T0022.12. This ticket closes exactly one entry: the one the
+  `infra/` deletion resolves.
+* **Splitting `Tickets.md` or `MVP_Technical_Design.md`**, and every other structural change —
+  T0022.13.
+* **New lint checks or cap changes** (`size-cap`, `eviction-rule`, `amendment`, `orphan`) —
+  T0022.14.
+* **`Tickets_Archive.md` and `Manual_Verification_Archive.md`** — decided 2026-08-11 to keep
+  as-is; they were archived one ticket ago and re-litigating them is churn.
+* **Rewording any archived finding.** Archive text is dated evidence: it gets a marker, never an
+  edit.
+
+**Manual verification:**
+1. `git show archive/docs-pre-prune:docs/Prompt_Playbook.md` prints the deleted file — confirm
+   the tag is real *before* checking anything else.
+2. Run `uv run python scripts/docs_lint.py --check link-path` **before** the deletions as well as
+   after, so a pre-existing break is not mistaken for one this ticket caused. The full run must
+   exit **0**.
+3. `docker compose up -d` still starts local Postgres and `/api/v1/health` returns 200 — proves
+   the root compose file was untouched by the `infra/` removal.
+4. `git grep -n "infra/" -- '*.md'` returns only lines carrying `<!-- archived-on-tag -->` or
+   describing Langfuse Cloud.
+5. `uv run pytest tests/test_docs_lint.py` reports **20 passed** locally, not 19 passed + 1
+   skipped — the skip would mean the `.claude/` copy was missed.
+6. Run `/generate-ticket-prompt` and confirm it still produces a usable prompt with the
+   playbook's structure absorbed.
+7. `Known_Issues.md` no longer holds the deploy-secret entry; `Resolved_Issues.md` does, naming
+   the tag. `docs/README.md` has no dead Prompt Playbook row.
+
+### T0022.11: Collapse the executed research archives — 📋 Planned
+Collapse the **5** fully-superseded records (`deepeval-sql-agent-eval-planning.md`,
+`ingestion-milestone-plan.md`, `demo-ui-and-golive-plan.md`, `streaming-implementation-plan.md`,
+`schema-enrichment-plan.md`) from 2,241 lines to ~450, using the uniform decision-record shape
+in plan §4.1. Leave the other 4 at full length. Also fixes `deployment-research-plan.md`'s stale
+banner and trims `docs/archive/Code_Review_Notes.md` to the bug index its 7 inbound links need.
+**Risk:** `Decision_Log.md` cites sections in *link text*, not URL anchors, so dropping a cited
+section leaves `link-path` green while making the citation nonsense. Enumerate cited sections
+first.
+
+### T0022.12: Harvest the gaps and rebuild `Known_Issues.md` — 📋 Planned
+Harvest `data-ingestion-stage.md` and `pre-deploy-refinement-plan.md` into `Decision_Log.md`,
+closing phase 1's DoD hole. Then re-triage all 46 `OPEN` entries **against current code**,
+close the ones quietly fixed, relocate the ~21 `NOTE`-class by-design facts to the documents
+that own them, and rebuild the register at ≤6 lines per entry behind a severity triage table:
+1,199 → ~250 lines. **Highest risk in phase 2** — it reads code, not just documents; a fix
+discovered during triage becomes a follow-up ticket, never an inline change.
+
+### T0022.13: Restructure the surviving documents — 📋 Planned
+`Tickets.md` 945 → ~200 (the completed T0022 blocks move to `Tickets_Archive.md`; the redundant
+20-bullet archived-milestone list goes). `MVP_Technical_Design.md` splits along the layer
+boundary `Full_Design_Document.md` §3 already declares — ingestion and evaluation move to a new
+`Offline_Pipelines_Design.md`. Plus the seven smaller fixes in plan §6.3 and the two stale
+canonical claims in §6.4.
+
+### T0022.14: Enforce the caps — 📋 Planned
+Ship `size-cap`, `eviction-rule`, `amendment`, and `orphan`; raise the T2 cap from 400 to 650,
+which is the honest number for a blueprint covering eleven subsystems. Give every capped
+document a stated eviction rule, and write plan §2.1's two rules into `Docs_Conventions.md`.
+Lands **last**, against an already-clean tree, so no check starts warn-only.
+Also owns a `link-path` false positive found on 2026-08-11: a backticked git branch name whose
+first segment matches a real directory — a branch under docs/, for instance — is reported as a
+missing path. Branch names are written without backticks today to avoid it. Note that a naive
+fix trips over this file: naming the offending branch in backticks re-triggers the check, the
+same self-reference trap the `encoding` rule hit in T0022.1.
 
 ## Backlog — unscheduled milestones (removed 2026-07-12; to be named & scoped) — 📋 Backlog
 Removed the placeholder milestones **Deploy Hardening**, **Demo UI**, and **Ingestion Deploy

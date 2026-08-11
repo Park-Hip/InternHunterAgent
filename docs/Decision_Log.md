@@ -1,11 +1,34 @@
 # Decision Log
 
-> **Last verified:** 2026-08-10.
+> **Last verified:** 2026-08-11.
 > This is the compact index of durable project decisions harvested from executed research.
 > It records the choice and points to the preserved reasoning.
 > Current operational facts belong in the document that owns them.
 
 ## Active decisions
+
+### D-037 - Evaluation baselines freeze fixture data with the agent-visible contract
+
+- **Decided:** 2026-07-03 - **Status:** Active.
+- Baseline evaluation uses the frozen agent-visible schema and seeded fixture data together so
+  prompt changes can be measured independently of corpus churn.
+- **Full record:** [pre-deployment refinement](../research/archive/pre-deploy-refinement-plan.md),
+  section 1.
+
+### D-036 - The source market is Vietnamese job boards, not global ATS aggregators
+
+- **Decided:** 2026-06 - **Status:** Active.
+- The product targets Vietnam AI/Data roles, so global ATS APIs are out of scope; VietnamWorks is
+  the selected initial source under D-034.
+- **Full record:** [data ingestion stage §0](../research/archive/data-ingestion-stage.md).
+
+### D-035 - The tracked `skills/` copy is canonical
+
+- **Decided:** 2026-08-11 - **Status:** Active.
+- `.claude/` is gitignored, so `skills/generate-ticket-prompt/` is the only version-controlled
+  copy and must remain tracked.
+- CI on PR #41 exposed the invalid deletion premise when the ignored local copy was absent.
+- **Full record:** [documentation prune plan §3.1.1](../research/docs-prune-and-structure-plan.md).
 
 ### D-034 - VietnamWorks automation passed the robots.txt and terms gate
 

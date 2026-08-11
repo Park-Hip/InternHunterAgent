@@ -1,6 +1,6 @@
 # Tech Stack
 
-> **Last verified:** 2026-08-10 against `pyproject.toml`, `config/settings.yaml`, and
+> **Last verified:** 2026-08-11 against `pyproject.toml`, `config/settings.yaml`, and
 > `render.yaml`. This document is the **single owner** of "what is this built with" — versions,
 > runtime choices, and hosted services. Other docs link here rather than restating.
 > `scripts/docs_lint.py --check stack` fails the build if the dependency list below drifts from
@@ -44,6 +44,10 @@
 
 Two model profiles are deliberately separate — the outer ReAct loop reasons, while SQL
 generation is pinned to `temperature: 0.0` and `reasoning_effort: none` for determinism.
+`load_sql_generation_prompt()` intentionally returns text because SQL-generation prompt and schema
+context are combined before the model call.
+Conversation memory limits only the messages sent on each turn; persisted thread history is not
+pruned in this MVP.
 
 ## Data
 
@@ -83,6 +87,10 @@ allowlist. The frozen v1 column contract lives in [`Schema_Contract.md`](Schema_
 | `ruff` | Lint and format. `scripts/` is excluded — throwaway spikes live there. |
 | `deepeval` | Evaluation harness for the golden-dataset and three-seam metric runs. |
 
+On Windows, invoke live DeepEval checks with `PYTHONUTF8=1` and `-m eval`.
+The fixture count tests skip when the eval database is unavailable, and the current trace extractor
+expects the nested SQL-generation span to be a sibling of its tool span.
+
 <!-- deps:end -->
 
 ## Hosted services
@@ -112,8 +120,7 @@ Recorded so these choices are not re-litigated:
 
 - **CORS** — the demo UI is served same-origin from FastAPI, so `api.cors.allowed_origins`
   stays `[]`. Adding a cross-origin front end is the only reason to revisit.
-- **Self-hosted Langfuse** — `infra/langfuse/` has no Compose service; Cloud Hobby won on
-  operational cost.
+- **Self-hosted Langfuse** - deliberately not used; Langfuse Cloud Hobby won on operational cost.
 - **A JavaScript framework** — the demo UI is vanilla HTML/CSS/JS consuming SSE via
   `fetch()` + `ReadableStream`. No build step, nothing to keep patched.
 - **Celery / Redis / a task queue** — ingestion runs as a scheduled GitHub Action, not a

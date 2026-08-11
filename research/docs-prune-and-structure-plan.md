@@ -18,13 +18,13 @@
 | # | Move | Effect |
 |---|---|---|
 | 1 | **Delete 7 dead files** and the unused self-hosted Langfuse stack | -956 doc lines; closes 1 open security issue |
-| 2 | **Collapse 5 executed research archives** into decision records | 2,241 → ~450 lines, every inbound link intact |
+| 2 | **Collapse 5 executed research archives** into decision records | 2,241 → ~700-900 lines, every inbound link and section citation intact |
 | 3 | **Re-triage and rebuild `Known_Issues.md`** | 1,199 → ~250 lines; the register stops being partly fiction |
 | 4 | **Restructure 6 living/canonical docs** for scannability | `Tickets.md` 945 → ~200; blueprint split along the layer boundary |
-| 5 | **Close the M22 harvest gap** and fix 3 factual contradictions | 2 unharvested archives; `infra/` claims that disagree three ways |
+| 5 | **Close the M22 harvest gap** and fix 3 factual contradictions | 2 unharvested archives; `infra/` claims that disagree three ways | <!-- archived-on-tag -->
 | 6 | **Give every capped doc an eviction rule, and lint the caps** | The reason phase 1's caps were already breached |
 
-**Live surface:** 19,755 lines today → **~14,000**, of which the part a person actually reads
+**Live surface:** 19,755 lines today → **~14,400**, of which the part a person actually reads
 drops from ~6,700 to **~2,400**.
 
 ### Decisions locked 2026-08-10
@@ -35,7 +35,7 @@ drops from ~6,700 to **~2,400**.
 | `Tickets_Archive.md` / `Manual_Verification_Archive.md` | **Keep as-is** — archived one ticket ago; churn to touch again |
 | `research/archive/` | **Collapse the 5 fully-superseded; leave the 4 with live or unharvested content** |
 | `Known_Issues.md` | **Collapse *and* re-triage** every open entry against current code |
-| `infra/` (self-hosted Langfuse) | **Delete** — superseded by D-029 (Langfuse Cloud) |
+| `infra/` (self-hosted Langfuse) | **Delete** — superseded by D-029 (Langfuse Cloud) | <!-- archived-on-tag -->
 | Milestone placement | **T0022.10-.14** — extend M22 rather than renumber; T0023 stays the release cut |
 
 ---
@@ -114,13 +114,13 @@ recoverable from that tag and from git history.
 
 | File | Lines | Verdict |
 |---|---:|---|
-| `docs/archive/Claude_Code_Review_Skeleton.md` | 198 | Blank template whose own banner says "do not record findings here until the review pass begins." The pass happened and wrote `Code_Review_Notes.md` free-form. Zero inbound links |
-| `docs/archive/Documentation_Hygiene_Review_T0016.md` | 187 | The 2026-07 hygiene pass M22 supersedes, and cites only as the cleanup that decayed |
-| `docs/archive/Repo_State_History.md` | 272 | Old branch snapshots; own banner: "the authoritative history is git." Holds the repo's worst line (5,424 chars) |
-| `research/experiments/deployment-research-fill-prompt.md` | 49 | A prompt to *fill* a document that is filled (892 lines) and archived |
-| `research/experiments/topdev-scraping-spike-prompt.md` | 181 | A prompt to *run* a spike that ran; results are `job-site-comparison.md` Candidate 3 |
-| `docs/Prompt_Playbook.md` | 63 | Duplicated by `skills/generate-ticket-prompt/SKILL.md`, which names it as its base structure. Two homes, one template |
-| `infra/langfuse/README.md` | 6 | Six lines asserting the directory is empty — see §3.2 |
+| `docs/archive/Claude_Code_Review_Skeleton.md` | 198 | Blank template whose own banner says "do not record findings here until the review pass begins." The pass happened and wrote `Code_Review_Notes.md` free-form. Zero inbound links | <!-- archived-on-tag -->
+| `docs/archive/Documentation_Hygiene_Review_T0016.md` | 187 | The 2026-07 hygiene pass M22 supersedes, and cites only as the cleanup that decayed | <!-- archived-on-tag -->
+| `docs/archive/Repo_State_History.md` | 272 | Old branch snapshots; own banner: "the authoritative history is git." Holds the repo's worst line (5,424 chars) | <!-- archived-on-tag -->
+| `research/experiments/deployment-research-fill-prompt.md` | 49 | A prompt to *fill* a document that is filled (892 lines) and archived | <!-- archived-on-tag -->
+| `research/experiments/topdev-scraping-spike-prompt.md` | 181 | A prompt to *run* a spike that ran; results are `job-site-comparison.md` Candidate 3 | <!-- archived-on-tag -->
+| `docs/Prompt_Playbook.md` | 63 | Duplicated by `skills/generate-ticket-prompt/SKILL.md`, which names it as its base structure. Two homes, one template | <!-- archived-on-tag -->
+| `infra/langfuse/README.md` | 6 | Six lines asserting the directory is empty — see §3.2 | <!-- archived-on-tag -->
 | **Total** | **956** | 53 → **46** Markdown files |
 
 **Inbound links to repair:** `docs/README.md` (Prompt Playbook row),
@@ -143,19 +143,19 @@ unconditionally and raised `FileNotFoundError` on the clean checkout. The test n
 local copy is absent. **Actions for T0022.10:** keep `skills/` tracked, and record the reversal in
 `Decision_Log.md` so the "delete the root copy" note is not acted on later.
 
-### 3.2 `infra/` — one dead directory, three disagreeing claims
+### 3.2 `infra/` — one dead directory, three disagreeing claims <!-- archived-on-tag -->
 
-`infra/docker-compose.yaml` is a complete six-service self-hosted Langfuse stack
+`infra/docker-compose.yaml` is a complete six-service self-hosted Langfuse stack <!-- archived-on-tag -->
 (`langfuse-web`, `langfuse-worker`, `clickhouse`, `minio`, `redis`, `postgres`). D-029 chose
 Langfuse Cloud. The remains generate three claims that cannot all be true:
 
 | Doc | Claim |
 |---|---|
-| `docs/Tech_Stack.md` | "Self-hosted Langfuse — `infra/langfuse/` has no Compose service" |
-| `docs/Full_Design_Document.md` §5 | "The self-hosted Langfuse stack lives under `infra/langfuse/`" — wrong path *and* wrong decision |
+| `docs/Tech_Stack.md` | "Self-hosted Langfuse — `infra/langfuse/` has no Compose service" | <!-- archived-on-tag -->
+| `docs/Full_Design_Document.md` §5 | "The self-hosted Langfuse stack lives under `infra/langfuse/`" — wrong path *and* wrong decision | <!-- archived-on-tag -->
 | `docs/Known_Issues.md` | An **open** `[OPEN]` entry about that stack's `CHANGEME` secrets |
 
-Delete `infra/`. That makes `Tech_Stack.md` simply true, lets `Full_Design_Document.md` §5 say
+Delete `infra/`. That makes `Tech_Stack.md` simply true, lets `Full_Design_Document.md` §5 say <!-- archived-on-tag -->
 tracing is Cloud-hosted, and closes the security entry as *"resolved by removal"* in
 `Resolved_Issues.md`.
 
@@ -164,13 +164,22 @@ tracing is Cloud-hosted, and closes the security entry as *"resolved by removal"
 | File | Reader it serves |
 |---|---|
 | `research/experiments/vietnamworks_tos_excerpt_2026-07-16.md` | The legal-gate evidence behind D-034. Dated, unreproducible — the page carries no version |
-| `docs/archive/Code_Review_Notes.md` | Cited 7× from `Resolved_Issues.md` as the "bug N" detail behind closed entries |
+| `docs/archive/Code_Review_Notes.md` | **Reversed 2026-08-11 — now retired in T0022.13.** See below |
 | `docs/archive/Completion_Reports_Archive.md`, `Manual_Verification_History.md` | 83 and 86 lines. Below the cost of touching |
 | `docs/archive/Tickets_Archive.md`, `Manual_Verification_Archive.md` | Archived by T0022.6 one ticket ago. Re-litigating is churn (**decided 2026-08-10**) |
 | `guides/Streaming_And_SSE_Explained.md` | A deliberate learning walkthrough, correctly outside `docs/`. Needs indexing, not pruning |
 
-**`Code_Review_Notes.md` gets one edit, not deletion:** keep the bug index the 7 links resolve
-against; drop the 2026-07-02 improvement backlog after checking which items shipped.
+**`Code_Review_Notes.md` is retired, not trimmed — revised 2026-08-11.** This section originally
+kept it, reasoning that 7 `Resolved_Issues.md` links needed its bug index. Executing the trim in
+T0022.11 disproved that: with the per-module analysis gone, **8 of the 9 pointers return less
+than the sentence citing them** — `Resolved_Issues.md` states the bug, the fix, the test, and
+the false-positive class, then links to a one-line struck-through restatement.
+
+A pointer that returns less than its own citation is worse than no pointer. **T0022.13 retires
+the file**: fold `Doc insight 3` (the only content it uniquely holds) into the entry that cites
+it, delete the rest, and mark the remaining citations `<!-- archived-on-tag -->`. The full
+203-line original is preserved at `archive/docs-pre-prune`, so the pointers resolve to *more*
+detail than they do today, not less.
 
 ---
 
@@ -201,7 +210,7 @@ ticket breakdowns for shipped tickets, and "open decisions for the user" that we
 | `demo-ui-and-golive-plan.md` | 397 | `MVP_Technical_Design.md` §11, D-002/3/4 | §6 sub-ticket split; §7 "open decisions" all answered |
 | `streaming-implementation-plan.md` | 313 | `MVP_Technical_Design.md` §9, D-005…D-009 | §8 T0017 sub-ticket implications |
 | `schema-enrichment-plan.md` | 310 | `Schema_Contract.md`, D-010…D-015 | §5 sequencing and ticket implications |
-| **Total** | **2,241** | | **→ ~450** |
+| **Total** | **2,241** | | **→ ~700-900** |
 
 **The uniform decision-record shape** each collapses to:
 
@@ -217,10 +226,17 @@ ticket breakdowns for shipped tickets, and "open decisions for the user" that we
 
 **Two constraints on the collapse:**
 
-1. **Section identity is a link target.** `Decision_Log.md` names the section inside the *link
-   text* — "DeepEval planning §4" — rather than as a URL anchor, so removing a section makes the
-   citation nonsense while `link-path` stays green. Every cited section number must survive, or
-   the citing entry is updated in the same commit.
+1. **Section identity is a link target.** Citations name the section inside the *link text* —
+   "DeepEval planning §4" — rather than as a URL anchor, so removing a section makes the
+   citation nonsense while `link-path` stays green. **Every cited section number must survive as
+   a heading**, even when its body collapses to one line.
+
+   The 2026-08-11 audit found the citing surface is far wider than `Decision_Log.md`:
+   `MVP_Technical_Design.md`, `Known_Issues.md`, `Completion_Reports.md`, `Resolved_Issues.md`,
+   and `archive/Tickets_Archive.md` all cite these records by section, and several cited
+   sections are exactly the scaffolding this section proposed to drop. That is why the target
+   is ~700-900 lines rather than the ~450 first estimated. The enumerated starting set lives in
+   `docs/Tickets.md` → T0022.11.
 2. **Do not reword findings.** Phase 1's non-goal holds: prose, dates, and evidence are moved or
    dropped verbatim, never rewritten.
 
@@ -361,11 +377,11 @@ above are what this pass proves it needs.
 | Surface | Before | After |
 |---|---:|---:|
 | Markdown files | 53 | **46** |
-| Total lines | 19,755 | **~14,000** |
+| Total lines | 19,755 | **~14,400** |
 | Lines a person actually reads (T1-T3 + live research) | ~6,700 | **~2,400** |
 | `Known_Issues.md` | 1,199 | ~250 |
 | `Tickets.md` | 945 | ~200 |
-| `research/archive/` | 4,925 | ~3,100 |
+| `research/archive/` | 4,925 | ~3,500 |
 | Docs over their tier cap | 4 | **0** |
 
 ---
@@ -378,10 +394,10 @@ paid the cost of one renumbering (M22 → M23) whose correction banners §2.1 no
 
 | Ticket | Scope | Depends on | Risk |
 |---|---|---|---|
-| **T0022.10** | **Prune (§3).** Tag, delete 7 files + `infra/`, repair 4 inbound links, close the Langfuse security entry, reconcile `Full_Design_Document.md` §5 and `Tech_Stack.md`, record the `skills/` reversal (§3.1.1) | .9 merged | Low |
+| **T0022.10** | **Prune (§3).** Tag, delete 7 files + `infra/`, repair 4 inbound links, close the Langfuse security entry, reconcile `Full_Design_Document.md` §5 and `Tech_Stack.md`, record the `skills/` reversal (§3.1.1) | .9 merged | Low | <!-- archived-on-tag -->
 | **T0022.11** | **Archive collapse (§4).** Collapse 5 research docs to decision records; fix `deployment-research-plan.md`'s stale banner; trim `Code_Review_Notes.md` | .10 | **Medium** — section identity is a citation target |
 | **T0022.12** | **Registers (§5).** Harvest the 2 gaps into `Decision_Log.md`; re-triage 46 open entries against code; rebuild `Known_Issues.md` | .11 | **Highest** — needs code reading, not just doc editing |
-| **T0022.13** | **Structure (§6).** `Tickets.md` split; `MVP_Technical_Design.md` split; the 7 smaller fixes; 2 stale canonical claims | .10 | Medium |
+| **T0022.13** | **Structure (§6).** `Tickets.md` split; `MVP_Technical_Design.md` split; the 7 smaller fixes; 2 stale canonical claims; retire `Code_Review_Notes.md` (§3.3) | .10 | Medium |
 | **T0022.14** | **Enforcement (§7).** Ship `size-cap`, `eviction-rule`, `amendment`, `orphan`; raise the T2 cap to 650; update `Docs_Conventions.md` with Rules A and B | all | Low |
 
 **Order matters:** prune first so nothing is restructured and then deleted; enforcement last so
@@ -393,13 +409,13 @@ the new checks land against an already-clean tree and never start warn-only.
 
 **After T0022.10**
 - [ ] `git tag` shows `archive/docs-pre-prune`, and
-      `git show archive/docs-pre-prune:docs/Prompt_Playbook.md` prints the deleted file.
+      `git show archive/docs-pre-prune:docs/Prompt_Playbook.md` prints the deleted file. <!-- archived-on-tag -->
 - [ ] `python scripts/docs_lint.py` exits 0 — especially `link-path` and `index`.
 - [ ] `skills/generate-ticket-prompt/SKILL.md` is **still tracked** (§3.1.1), and
-      `/generate-ticket-prompt` still runs after `Prompt_Playbook.md` is absorbed into it.
-- [ ] `docker compose up -d` still starts app Postgres with `infra/` deleted — it is a
+      `/generate-ticket-prompt` still runs after `Prompt_Playbook.md` is absorbed into it. <!-- archived-on-tag -->
+- [ ] `docker compose up -d` still starts app Postgres with `infra/` deleted — it is a <!-- archived-on-tag -->
       separate compose file.
-- [ ] Grep for `infra/langfuse` across live docs returns nothing.
+- [ ] Grep for `infra/langfuse` across live docs returns nothing. <!-- archived-on-tag -->
 
 **After T0022.11**
 - [ ] Every `Decision_Log.md` section citation still names a section that exists in the
@@ -429,7 +445,7 @@ the new checks land against an already-clean tree and never start warn-only.
 |---|---|---|
 | **Collapsing an archive drops a cited section** | **Medium-high** | Citations live in link *text*, so `link-path` cannot catch this. Enumerate every cited section before editing; §4.1 constraint 1 |
 | **Re-triage mislabels an open issue as fixed** | Medium | Every closure names the commit or test that fixed it; when evidence is absent the entry stays open |
-| **Deleting `infra/` removes a wanted local Langfuse** | Low | Tagged; D-029 already chose Cloud; app Postgres is a separate compose file |
+| **Deleting `infra/` removes a wanted local Langfuse** | Low | Tagged; D-029 already chose Cloud; app Postgres is a separate compose file | <!-- archived-on-tag -->
 | **Splitting `MVP_Technical_Design.md` breaks inbound links** | Medium | 6 live docs cite it by section; rewrite in the same commit, `link-path` green before and after |
 | **T0022.12 grows into code changes** | Medium | Re-triage *reads* code and *records*. A fix found during triage becomes a follow-up ticket (CLAUDE.md §1) |
 | **A fifth cleanup milestone** | Medium | §7 is the answer. Phase 1 decayed nothing because it enforced; the caps it did not enforce are exactly what breached |

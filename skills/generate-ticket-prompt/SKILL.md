@@ -54,7 +54,7 @@ describe-as-unavailable / follow-literally). Silently obeying the ticket would s
 misleading prompt or a query against an empty column.
 
 ## Step 3 — Draft the prompt (tightened style)
-Base structure = `docs/Prompt_Playbook.md`, but optimize for a cheap coder's context:
+Use the following prompt structure, but optimize for a cheap coder's context:
 - **Trim the read list to 2–4 items with exact line ranges.** Mark anything else
   "reference only if stuck." A long "review these docs" list makes the coder full-read
   every file (~25k wasted tokens per ticket — measured).
@@ -65,6 +65,75 @@ Base structure = `docs/Prompt_Playbook.md`, but optimize for a cheap coder's con
 - **Keep the spec full.** Field mappings, acceptance criteria, non-goals, and manual
   verification stay complete and inline — that accuracy is the deliverable; do not trim it
   to save tokens. (Tokens are cheap; a wrong implementation + rework is not.)
+
+### Prompt structure
+
+```markdown
+## Ticket Implementation Prompt
+
+We are working on [PROJECT].
+
+Before coding, review:
+- AGENTS.md
+- docs/Full_Design_Document.md
+- docs/MVP_Technical_Design.md
+- docs/Tickets.md
+- docs/Repo_Current_State.md
+- docs/Manual_Verification_Guide.md
+- docs/Known_Issues.md
+
+Implement this ticket only.
+
+Ticket:
+[Ticket ID - Title]
+
+Branch:
+[Suggested branch name]
+
+Goal:
+[Goal]
+
+Dependencies:
+[Dependencies]
+
+Allowed areas:
+[Allowed files/folders]
+
+Do not touch:
+[Files/folders/systems to avoid]
+
+Requirements:
+[Requirements]
+
+Non-goals:
+[Non-goals]
+
+Acceptance criteria:
+[Acceptance criteria]
+
+Manual verification:
+[Manual steps]
+
+Project rules:
+- Implement the requested ticket only.
+- Do not implement future-ticket features.
+- Do not refactor unrelated code.
+- Do not introduce new architecture unless required.
+- Avoid unnecessary dependencies.
+- Keep changes small and testable.
+- Do not fix unrelated issues inline. When you encounter a risk, bug, sharp edge, or
+  deferred/out-of-scope item, append it as a bullet to docs/Known_Issues.md (note where
+  it was found and a candidate follow-up) rather than fixing it here.
+
+After implementation, provide:
+- Summary of what changed
+- Files changed
+- Commands run
+- Build/test results
+- Manual verification steps
+- Whether docs need updating
+- Any risks or follow-up tickets - and confirm each was appended to docs/Known_Issues.md
+```
 
 Include these sections:
 - Project one-liner + "read only these" list (line-ranged) + "Implement this ticket only."

@@ -6,7 +6,7 @@
 > **groups of questions** we must answer about how "Resumi" should behave — *before* we write
 > scenarios or touch a prompt. The next pass **populates** each group with (a) concrete
 > scenarios, (b) the desired-behavior option(s), and (c) the prompt lever we'd pull. It feeds
-> the §2a scenario matrix and the future `docs/Prompt_Playbook.md`.
+> the §2a scenario matrix and the future `docs/Prompt_Playbook.md`. <!-- archived-on-tag -->
 > Grounded in the current `config/prompts.yaml`, `evals/goldens/golden_dataset.json` (A1–E2),
 > `evals/fixtures/seed_eval_db.sql` (the 22-row fixture), and `docs/Known_Issues.md`.
 >
@@ -657,7 +657,7 @@ column at all* (genuinely absent); (3) *No column, but the term may appear in fr
 **Core question:** What are the exact reusable sentences, so behavior is consistent and gradeable?
 - The negotiable/undisclosed-salary line; the freshness refusal; the remote/free-text hedge; the cross-currency "can't rank" line; the off-topic redirect; the resume/coaching "coming later" line; the truncation "narrow your search" notice; the injection refusal.
 - These become the answer-key phrases the Honesty/Task-Completion GEvals grade against and the few-shot targets.
-- Cross-refs: **feeds `docs/Prompt_Playbook.md`** (plan §3a); G05, G07, G08, G09, G17, G24, G28.
+- Cross-refs: **feeds `docs/Prompt_Playbook.md`** (plan §3a); G05, G07, G08, G09, G17, G24, G28. <!-- archived-on-tag -->
 
 **Draft canonical phrases** (wording to be finalized during prompt-v2; these are the single
 source of truth quoted by every few-shot example *and* the GEval answer key):
@@ -684,7 +684,7 @@ source of truth quoted by every few-shot example *and* the GEval answer key):
 quote these strings verbatim, so "acted the way we want" is a *string-checkable* target, not a vibe.
 **Prompt lever:** store the glossary in `config/prompts.yaml` (or a small new config block) so
 the agent prompt *and* the eval `evaluation_steps` reference the same source (plan §5c, §5e);
-graduate to `docs/Prompt_Playbook.md`.
+graduate to `docs/Prompt_Playbook.md`. <!-- archived-on-tag -->
 
 ---
 
@@ -732,7 +732,7 @@ prompt-v2 so the few-shots encode a fixed target:
 4. **"Show me the SQL you ran" (G27/G35):** allow a plain-language description of the query
    (recommended) vs decline entirely. Never surface raw internal SQL either way.
 5. **Canonical phrasings (G47):** sign off the draft wordings, then decide where they live —
-   inline in `prompts.yaml` few-shots, a new `config/` glossary block, or `Prompt_Playbook.md`.
+   inline in `prompts.yaml` few-shots, a new `config/` glossary block, or `Prompt_Playbook.md`. <!-- archived-on-tag -->
 6. **Priority ladder (G46):** confirm the four-rung order (safety > honesty > helpfulness >
    style) as the explicit SP tie-breaker.
 7. **Location synonyms (G12):** add a Saigon→Ho Chi Minh City (and similar) synonym nudge to SG,

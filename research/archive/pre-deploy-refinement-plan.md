@@ -183,7 +183,7 @@ in `Known_Issues.md` and map to existing goldens.
 - **`reasoning_format: hidden` + `max_tokens: 2048`.** Already tuned (T0012.2 fixed the
   `<think>` leak and the empty-answer-from-reasoning-exhaustion bug). Leave as-is unless a
   scenario shows truncation.
-- **Author a real Prompt Playbook.** `docs/Prompt_Playbook.md` today is a *ticket-prompt
+- **Author a real Prompt Playbook.** `docs/Prompt_Playbook.md` today is a *ticket-prompt <!-- archived-on-tag -->
   template*, not an agent-behavior playbook. Consider a short doc capturing the desired
   behavior per scenario category + the canonical phrasings (the negotiable-salary line, the
   freshness refusal, the remote hedge) so prompt edits have a reference spec.
@@ -413,7 +413,7 @@ ID** against the full tool loop (`Known_Issues.md` [LOW]). A wrong ID is a *runt
 baseline, so the baseline measures the shipping model.
 
 ### 6f. Langfuse stack secrets (blocking if self-hosting)
-`infra/docker-compose.yaml` ships upstream `CHANGEME` defaults for `SALT`,
+`infra/docker-compose.yaml` ships upstream `CHANGEME` defaults for `SALT`, <!-- archived-on-tag -->
 `ENCRYPTION_KEY`, `NEXTAUTH_SECRET`, and DB/Redis/ClickHouse/MinIO passwords — safe locally,
 **unsafe on a public host**. If you self-host Langfuse, a secret checklist is mandatory. The
 cheaper path (`deployment-research-plan.md §6`) is **Langfuse Cloud Hobby ($0)**, which sidesteps this entirely.

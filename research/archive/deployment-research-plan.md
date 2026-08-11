@@ -1,9 +1,9 @@
 # Deployment Research Plan — InternHunterAgent
 
-> **Status:** Research **skeleton** / pre-design. This is an *outline of what to research*,
-> not the findings. Each section states the question, what to search the web for, and the
-> decision it will drive. Fill the "Findings" / "Decision" blanks as the research is done.
-> Output feeds a future deployment design doc and `docs/Tickets.md` deploy tickets.
+> **Status:** Completed research record. This document preserves the live-checked findings,
+> decisions, and rejected alternatives that informed the deployed topology and its operations.
+> Current implementation guidance is owned by `docs/Operations.md`,
+> `docs/MVP_Technical_Design.md`, and `docs/Decision_Log.md`.
 >
 > **Constraint (standing):** hosting cost must be **free or minimal** — prefer free tiers;
 > flag anything that risks a recurring bill.

@@ -14,7 +14,7 @@ original register entry (omitted where none was assigned).
 
 ## Categories
 - [Documentation drift](#documentation-drift) — 3
-- [Config, startup & deployment](#config-startup--deployment) — 4
+- [Config, startup & deployment](#config-startup--deployment) — 8
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
@@ -59,6 +59,23 @@ original register entry (omitted where none was assigned).
     matching reality).
 
 ## Config, startup & deployment
+- **`[HIGH · RESOLVED · T0021.1, 2026-08-09]` The serving path lacked a pre-flight schema guard.**
+  - **Resolution:** `8787495` added `assert_serving_schema()` before checkpointer startup.
+    Missing, extra, or unreadable `clean_jobs` columns now fail FastAPI boot.
+  - **Verified:** `tests/api/test_schema_guard.py` covers matching, missing, unexpected,
+    absent-table, and inspection-failure cases.
+
+- **`[LOW · RESOLVED · T0022.12]` Schema documentation called live lifecycle columns future work.**
+  - **Resolution:** `65e1629` updated [Schema Contract](Schema_Contract.md) to describe 16 visible
+    and 22 physical columns, including the hidden lifecycle fields.
+  - **Verified:** `docs/Schema_Contract.md` lines 98-108 describe the current contract and the
+    T0019.10 projection boundary.
+
+- **`[MED · RESOLVED · T0022.12, 2026-08-11]` The CI gate was recorded as absent from `main`.**
+  - **Resolution:** `f6cbec0` is reachable from `main`; `.github/workflows/ci.yml` now runs ruff,
+    mypy, pytest, and documentation checks for pull requests targeting `main`.
+  - **Verified:** [Repo Current State](Repo_Current_State.md) records the passing PR #39 CI gate.
+
 - **`[RESOLVED · T0014.1, 2026-07-12]` Import-time config loading made startup fragile.**
   - `src/core/config.py` no longer runs `settings = load_settings()` at import; it resolves `.env`
     and all four YAMLs from the repo root, wraps missing/invalid env or YAML in a clear
@@ -117,6 +134,13 @@ original register entry (omitted where none was assigned).
   - **Generalisable lesson:** a CI/CD trigger's dormancy is a property of the *platform*, not of the
     docs. Verify with `gh run list --workflow=<name>` rather than reading the workflow file's
     comments.
+
+- **`[RESOLVED · T0022.10, 2026-08-11]` Deploy-secret checklist for the self-hosted Langfuse
+  stack.**
+  - **Resolved by removal:** T0022.10 deleted the unused self-hosted stack and its upstream default
+    secrets from the active repository surface.
+    `archive/docs-pre-prune` preserves `infra/docker-compose.yaml` for the historical record. <!-- archived-on-tag -->
+  - **Verified:** the root `docker-compose.yml` remains the separate local app Postgres definition.
 
 ## API layer
 - **`[RESOLVED · T0012.4, 2026-07-06]` `trace_url` always returned `None` in
@@ -575,7 +599,7 @@ original register entry (omitted where none was assigned).
     `/agent/query`; renamed to `/agent/chat` (owner decision — "chat" is canonical for the coming
     UI) and updated `test_query.py`, `MVP_Technical_Design.md`, `Manual_Verification_Guide.md`. (b)
     **Doc drift:** corrected the Langfuse compose path (the obsolete Langfuse-specific location to
-    `infra/docker-compose.yaml`) in `Repo_Current_State.md`; added missing runtime deps
+    `infra/docker-compose.yaml`) in `Repo_Current_State.md`; added missing runtime deps <!-- archived-on-tag -->
     (`cloudscraper`, `beautifulsoup4`, `lxml`, `httpx`) + dev deps (`ruff`, `mypy`); fixed the stale
     schema-evolution header in `MVP_Technical_Design.md`. (c) **Static analysis stood up:** added
     `ruff` + `mypy` (+ `pydantic.mypy`) and `[tool.ruff]`/`[tool.mypy]` config; `ruff check .`
@@ -595,7 +619,7 @@ original register entry (omitted where none was assigned).
   RemoteSigned…Activate.ps1`) — no longer on disk or in `git ls-files`.
 
 - **`[RESOLVED · 2026-07-01]` Doc drift: `Manual_Verification_Guide.md` pointed at
-  `docker/docker-compose.yaml`** — corrected to `infra/docker-compose.yaml` in both T0003/T0004
+  `docker/docker-compose.yaml`** — corrected to `infra/docker-compose.yaml` in both T0003/T0004 <!-- archived-on-tag -->
    steps. (The register had also mis-stated it as a Langfuse-specific compose location; corrected
   too.)
 

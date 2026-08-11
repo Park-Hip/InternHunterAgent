@@ -26,7 +26,7 @@
 
 Moves 1–7 are the cleanup and consolidation. **Moves 8–9 are what stop the mess from coming
 back** — without them this plan is a one-off tidy that decays within a month, exactly as the
-2026-07 hygiene pass (`docs/archive/Documentation_Hygiene_Review_T0016.md`) did.
+2026-07 hygiene pass (`docs/archive/Documentation_Hygiene_Review_T0016.md`) did. <!-- archived-on-tag -->
 
 > **Two agents, one repo.** This project is worked by **both Claude Code and Codex**.
 > `AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) must both stay complete — they are
@@ -86,7 +86,7 @@ so is the prose.
 
 | File | Longest line | Lines >200 chars | Bytes/line |
 |---|---:|---:|---:|
-| `docs/archive/Repo_State_History.md` | **5,424** | 55 | 164 |
+| `docs/archive/Repo_State_History.md` | **5,424** | 55 | 164 | <!-- archived-on-tag -->
 | `evals/v1_scenario_matrix.md` | **4,231** | 31 | **497** |
 | `docs/Repo_Current_State.md` | **2,790** | 55 | 140 |
 | `docs/MVP_Technical_Design.md` | 1,990 | 126 | 155 |
@@ -96,7 +96,7 @@ so is the prose.
 | `docs/Manual_Verification_Guide.md` | 785 | 132 | 74 |
 
 **The key insight: this repo already knows how to wrap.** `docs/README.md` (max 189),
-`docs/Prompt_Playbook.md` (88), `docs/Schema_Contract.md` (93), and
+`docs/Prompt_Playbook.md` (88), `docs/Schema_Contract.md` (93), and <!-- archived-on-tag -->
 `guides/Streaming_And_SSE_Explained.md` (156) are all well-formed. The standard exists
 implicitly in the best files — it was simply never written down or enforced. **We are
 propagating an internal convention, not importing an external one.**
@@ -110,7 +110,7 @@ propagating an internal convention, not importing an external one.**
 | Broken reference | Verdict |
 |---|---|
 | `docs/Code_Review_Notes.md` | **Stale** — moved to `docs/archive/`; 4 docs still point at the old path |
-| `infra/langfuse/docker-compose.yaml` | **Stale** — `infra/langfuse/` contains only a 5-line README |
+| `infra/langfuse/docker-compose.yaml` | **Stale** — `infra/langfuse/` contains only a 5-line README | <!-- archived-on-tag -->
 | `scripts/init_clean_jobs.sql` | **Stale** — actual file is `scripts/init_db.sql` |
 | `src/services/query/schema_context.py`, `obligations.py` | **Stale** — never existed / renamed |
 | `src/core/event_loop.py`, `scripts/run_scenario_matrix.py`, `evals/scenarios_v1.yaml`, `evals/test_scenarios_v1_load.py` | **Legitimately archived-on-tag** — must be *annotated*, not "fixed" |
@@ -147,7 +147,7 @@ is at M21).
 | **The ticket-prompt skill exists twice and has diverged** | `skills/generate-ticket-prompt/SKILL.md` (93 lines) vs `.claude/skills/…` (94 lines) — `diff` shows a full-file rewrite |
 | **`milestone/` is a self-declared temporary folder that was never deleted** | Its own banner: "**DISPOSABLE / temporary working doc** … then this file is deleted" |
 | **Filename collision** | `milestone/data-ingestion-stage.md` vs `research/archive/data-ingestion-stage.md` — different content, same name |
-| **Orphan README** | `infra/langfuse/README.md` — 5 lines, points to a nonexistent compose file |
+| **Orphan README** | `infra/langfuse/README.md` — 5 lines, points to a nonexistent compose file | <!-- archived-on-tag -->
 
 ### 2.4.1 Two agents, two instruction files — a constraint, not a duplicate
 
@@ -329,7 +329,7 @@ the boundary.
 | `docs/MVP_Technical_Design.md` | REFLOW + **split check** (126 lines >200; 435 lines) |
 | `docs/Schema_Contract.md` | **KEEP AS-IS** — already conformant (max 93). Use as the model |
 | `docs/Agent_Behavior_Spec.md` | REFLOW + register in `docs/README.md` |
-| `docs/Prompt_Playbook.md` | **KEEP AS-IS** — conformant (max 88) |
+| `docs/Prompt_Playbook.md` | **KEEP AS-IS** — conformant (max 88) | <!-- archived-on-tag -->
 
 **Living (T3) — the heavy lifting**
 
@@ -366,7 +366,7 @@ the boundary.
 | `AGENTS.md` / `CLAUDE.md` | **KEEP BOTH COMPLETE — do not dedupe.** `AGENTS.md` is Codex's instruction file, `CLAUDE.md` is Claude Code's (§2.4.1). Enforce byte-parity in lint instead. Both gain the same `Docs_Conventions.md` pointer |
 | `skills/` vs `.claude/skills/` | **`.claude/skills/` is canonical** (decided, §9.2). Tag the root `skills/` copy as `archive/skills-root-copy`, then delete it. Verify the skill still loads afterwards |
 | `milestone/data-ingestion-stage.md` | **DELETE the folder** per the file's own banner. Confirm its content reached the design docs; tag before deleting |
-| `infra/langfuse/README.md` | **FIX or DELETE** — points to a nonexistent compose file |
+| `infra/langfuse/README.md` | **FIX or DELETE** — points to a nonexistent compose file | <!-- archived-on-tag -->
 | `guides/Streaming_And_SSE_Explained.md` | **KEEP AS-IS** — conformant (max 156) and correctly placed outside `docs/` |
 | `evals/v1_scenario_matrix.md` | **REFLOW** — worst density in the repo (497 bytes/line, 4,231-char line) |
 | `data/vendor/README.md` | Leave (14 lines) |
@@ -641,7 +641,7 @@ measurable pass/fail target rather than a subjective one.
 | Ticket | Scope | Depends on | Risk |
 |---|---|---|---|
 | **T0022.1** | `docs_lint.py` + `Docs_Conventions.md` + CI job in **warn-only** mode. Ships the §2 baseline as `--stat` output | — | Low |
-| **T0022.2** | **Encoding + parity:** fix `Completion_Reports.md` mojibake; confirm `AGENTS.md`/`CLAUDE.md` byte-identical and **both complete** (no collapsing — §2.4.1); tag+delete root `skills/` and `milestone/`; fix or drop `infra/langfuse/README.md` | .1 | Low — all inputs now decided |
+| **T0022.2** | **Encoding + parity:** fix `Completion_Reports.md` mojibake; confirm `AGENTS.md`/`CLAUDE.md` byte-identical and **both complete** (no collapsing — §2.4.1); tag+delete root `skills/` and `milestone/`; fix or drop `infra/langfuse/README.md` | .1 | Low — all inputs now decided | <!-- archived-on-tag -->
 | **T0022.3** | **Mechanical reflow, no content change.** ~40 files to the 100-char standard — T1/T2/T3, `research/**`, `Completion_Reports.md`, `Resolved_Issues.md`, `evals/v1_scenario_matrix.md`. **`docs/archive/**` excluded** (§5.2.1). Separate commits per group | .1 | Low, high volume — review as "no semantic diff" |
 | **T0022.4** | **Front door:** rewrite `README.md`; add `Tech_Stack.md`; wire `--check-stack` | .1 | Medium — quickstart must be verified on a clean clone |
 | **T0022.5** | **Operations consolidation:** new `Operations.md`; absorb the T0020.4 runbook (leave a pointer); single-source the topology | .4 | **Medium-high** — cron activation is live work; do not break the runbook |

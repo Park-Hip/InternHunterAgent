@@ -9,7 +9,7 @@
 ## 1. System Overview & Strategic Intent
 
 InternHunterAgent is a FastAPI service that turns a chat request into a traced, tool-augmented
-LangChain ReAct agent response, backed by a self-hosted Langfuse observability stack.
+LangChain ReAct agent response, backed by Langfuse Cloud observability.
 
 Every request follows one fixed pipeline, with no branch points or alternate paths:
 
@@ -128,12 +128,9 @@ rule.
 
 ## 5. Observability Contract
 
-Two Postgres instances exist and must never be conflated: the app's own `DATABASE_URL` Postgres
-holds domain data (e.g. `clean_jobs`) queried by tools — and, where session memory is persisted, its
-checkpoint state — while Langfuse's internal Postgres holds Langfuse's own trace/project metadata.
-They have different lifecycles, different owners, and no schema overlap. The self-hosted Langfuse
-stack lives under `infra/langfuse/`; its operational composition is an infrastructure concern, not
-part of this contract.
+The app's `DATABASE_URL` Postgres holds domain data (e.g. `clean_jobs`) queried by tools and, where
+session memory is persisted, checkpoint state. Langfuse Cloud owns its trace and project metadata;
+the stores have different owners, lifecycles, and no schema overlap.
 
 Tracing integration follows one pattern: a single `CallbackHandler` is built once in
 `src/agents/tracing/langfuse.py` and injected into the agent invocation through

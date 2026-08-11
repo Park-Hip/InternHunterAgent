@@ -26,14 +26,14 @@ This is distinct from [Manual_Verification_History.md](Manual_Verification_Histo
 
 ## Milestone 3 — Self-Hosted Langfuse
 
-* Run `docker compose -f infra/docker-compose.yaml up --build` to start the local observability stack.
+* Run `docker compose -f infra/docker-compose.yaml up --build` to start the local observability stack. <!-- archived-on-tag -->
 * Open the Langfuse UI in a browser at the local web port.
 * Confirm the stack starts successfully and the Langfuse UI is reachable locally.
 
 ## Milestone 4 — Tracing Integration
 
 * Start the app with `uv run uvicorn src.api.app:app --reload`.
-* Start the Langfuse stack with `docker compose -f infra/docker-compose.yaml up`.
+* Start the Langfuse stack with `docker compose -f infra/docker-compose.yaml up`. <!-- archived-on-tag -->
 * Send one `POST /api/v1/agent/chat` request to the API.
 * Open the Langfuse UI and confirm the request appears as a trace.
 * Confirm the API response includes trace metadata when it is available.

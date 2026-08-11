@@ -107,7 +107,7 @@
   the disposable milestone scratchpad after tagging it, and replaced the stale Langfuse README.
 - **Files:** `docs/Completion_Reports.md`, `AGENTS.md`/`CLAUDE.md` (verified only),
   `skills/generate-ticket-prompt/SKILL.md`, `skills/generate-ticket-prompt/agents/openai.yaml`
-  (retained), deleted `milestone/data-ingestion-stage.md`, `infra/langfuse/README.md`,
+  (retained), deleted `milestone/data-ingestion-stage.md`, `infra/langfuse/README.md`, <!-- archived-on-tag -->
   `scripts/docs_lint.py`, `tests/test_docs_lint.py`, `docs/Tickets.md`, and this report.
 - **Commands:** verified exact repair counts before replacement; ran `uv run pytest
   tests/test_docs_lint.py -q`, `uv run ruff check scripts/docs_lint.py tests/test_docs_lint.py`,
@@ -119,7 +119,7 @@
   its most recent attempt in T0022.1 exceeded the 120-second command limit.
 - **Follow-up:** T0022.3 handles mechanical reflow; T0022.6 handles broader archive structure.
 - **Docs updated:** `docs/Completion_Reports.md`, `docs/Repo_Current_State.md`,
-  `docs/Tickets.md`, and `infra/langfuse/README.md`.
+  `docs/Tickets.md`, and `infra/langfuse/README.md`. <!-- archived-on-tag -->
 
 ## T0022.1 - Docs lint harness, conventions, and warn-only CI gate
 
@@ -1640,3 +1640,91 @@ Follow-ups / Docs).
 - **Follow-up tickets:** T0023 scopes and executes the v1.0 release cut.
   M20's branch-protection follow-up remains open.
 - **Docs that need updating:** None for this ticket.
+
+## T0022.10 - Prune the dead documentation surface
+
+- **Summary:** Removed the seven obsolete documentation artifacts and the unused self-hosted
+  Langfuse stack.
+  The tracked ticket-prompt skill now owns the playbook structure, and active records consistently
+  describe Langfuse Cloud.
+- **Files deleted:** `docs/Prompt_Playbook.md`, three obsolete documents in `docs/archive/`, two <!-- archived-on-tag -->
+  completed experiment prompts, and the former `infra/` stack. <!-- archived-on-tag -->
+- **Files changed:** `skills/generate-ticket-prompt/SKILL.md` and its local Claude mirror;
+  active documentation, indexes, issue registers, historical records, and this report.
+- **Commands:** Baseline and final documentation link checks; recovery-tag verification;
+  `git grep -n "infra/" -- '*.md'`; `git diff --check`; docs-lint tests; and root Compose health <!-- archived-on-tag -->
+  verification.
+- **Build and test results:** Documentation checks, skill parity, docs-lint tests, and the full
+  documentation linter passed.
+  Root Compose health verification was not run because Docker was unavailable in this environment.
+- **Manual verification:** Confirm `archive/docs-pre-prune` can display the deleted playbook.
+  Run `docker compose up -d`, then request `/api/v1/health` and confirm a `200` response.
+  Confirm no live documentation claims a self-hosted Langfuse deployment.
+- **Risks:** The recovery tag must remain retained while any historical record references it.
+- **Follow-up tickets:** T0022.11 remains next; no new issue-register entry was needed.
+- **Docs updated:** `Decision_Log.md`, `Known_Issues.md`, `Resolved_Issues.md`,
+  `Repo_Current_State.md`, `Tickets.md`, and documentation indexes and records.
+
+## T0022.11 - Collapse the executed research archives
+
+- **Summary:** Collapsed the five fully superseded research records into compact archive decision
+  records while retaining every genuine cited section heading.
+  Corrected the stale deployment-research banner and reduced the code-review record to its cited
+  bug and doc-insight index.
+- **Files changed:** `research/archive/deepeval-sql-agent-eval-planning.md`,
+  `research/archive/ingestion-milestone-plan.md`,
+  `research/archive/demo-ui-and-golive-plan.md`,
+  `research/archive/streaming-implementation-plan.md`,
+  `research/archive/schema-enrichment-plan.md`,
+  `research/archive/deployment-research-plan.md`, `docs/archive/Code_Review_Notes.md`,
+  `docs/Tickets.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** Citation-heading inventory, inbound-reference search, line-count comparison,
+  `python scripts/docs_lint.py`, and `git diff --check`.
+- **Build and test results:** The direct documentation linter and diff whitespace check passed.
+  `uv run` could not execute in this environment because its configured cache path is invalid.
+- **Manual verification:** Open D-016, D-020, and D-014 in `Decision_Log.md` and confirm their
+  named archive sections remain present.
+  Confirm the eight `Code_Review_Notes.md` bug labels and doc insight 3 remain discoverable.
+  Run `uv run python scripts/docs_lint.py`.
+- **Citation audit:** Checked 39 cited section headings, all present.
+  The inventory's ingestion sections 4.2 and 11 were confirmed as false positives because they
+  refer to `deployment-research-plan.md` rather than this record.
+- **Risks:** Historical research prose was reduced from 2,241 to 955 total lines across the five
+  records (700 excluding blank lines), so readers needing removed planning scaffolding must use
+  Git history. The comparable T0022.11 target was ~700-900 total lines; 955 is modestly over,
+  because every genuine cited section was retained as a heading.
+- **Follow-up tickets:** T0022.12 owns the unharvested archive records and `Known_Issues.md`
+  re-triage.
+- **Docs that need updating:** No additional documentation update is required for this ticket.
+
+## T0022.12 - Harvest the gaps and rebuild `Known_Issues.md`
+
+- **Summary:** Harvested two previously unrepresented archive decisions and re-triaged the active
+  register against the checked-out code and current operational records.
+  The register now has 36 actionable entries in a fixed five-line shape, with no note-only entries.
+- **Review correction (2026-08-11):** the first pass retired `[HIGH · OPEN]` "pinging keep-alive
+  24/7 exhausts Render's 750 free instance-hours" into a single descriptive line in
+  `Operations.md`. Nothing had resolved that risk, and it is not note-class, so under this
+  ticket's own rule — a closure must name its evidence, and absent evidence the entry stays open
+  — it was restored. It guards the still-open cold-start entry, whose obvious fix is continuous
+  pinging.
+- **Entry accounting:** 72 before, 36 after. 21 note-class facts relocated to `Operations.md` and
+  `Tech_Stack.md`, 3 closed into `Resolved_Issues.md` with cited evidence, and the remainder
+  merged or rewritten. A removed-entry-by-entry audit was not performed and is the residual risk
+  below.
+- **Files changed:** `docs/Decision_Log.md`, `docs/Known_Issues.md`, `docs/Operations.md`,
+  `docs/Resolved_Issues.md`, `docs/Tech_Stack.md`, `docs/Repo_Current_State.md`,
+  `docs/Tickets.md`, and this report.
+- **Commands run:** Register inventory and state checks; source, code, and test searches;
+  `git diff --check`; `uv run python scripts/docs_lint.py`; and the focused docs-lint test command.
+- **Build and test results:** The documentation linter, focused docs-lint tests (20 passed),
+  whitespace check, category recount, state-key check, and five-line entry-shape check passed.
+  The full `uv run pytest -q` suite exceeded a five-minute timeout without reporting a failure;
+  collection completed as 367 of 386 tests, with 19 eval tests deselected.
+- **Manual verification:** Open `Known_Issues.md` and confirm the triage table totals 35 entries.
+  Open D-036 and D-037 and confirm the source-market and reproducibility decisions are clear.
+  Confirm the two remaining HIGH entries are blocked verification work, not unlabelled risks.
+- **Risks:** Live provider, database, GitHub, and Render state remains unverified where recorded as
+  blocked or maintainer-owned.
+- **Follow-up tickets:** T0022.13 is next; T0021.3 and T0021.4 retain the relevant service fixes.
+- **Docs that need updating:** No additional documentation update is required for this ticket.

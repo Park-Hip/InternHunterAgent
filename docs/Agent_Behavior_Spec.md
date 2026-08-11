@@ -35,8 +35,8 @@
 > `G01`–`G47`; settled decisions in §12; final glossary in §10).
 > - Machine source of truth for the canonical strings: the `behavior_glossary` block in
 > [`config/prompts.yaml`](../config/prompts.yaml).
-> - This doc does **not** replace `docs/Prompt_Playbook.md` (a separate ticket-template artifact,
-> left untouched).
+> - This doc does **not** replace `skills/generate-ticket-prompt/SKILL.md`, the separate
+> ticket-template artifact.
 
 ---
 

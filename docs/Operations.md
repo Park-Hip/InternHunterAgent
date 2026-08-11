@@ -1,6 +1,6 @@
 # Operations
 
-> **Last verified:** 2026-08-10 against `render.yaml`, `.env.example`,
+> **Last verified:** 2026-08-11 against `render.yaml`, `.env.example`,
 > `.github/workflows/ingestion.yml`, and the active migration/runbook records.
 > This document is the single owner of deploy topology, operational configuration, database
 > procedures, cron status, and incident response.
@@ -96,6 +96,27 @@ The activation gates, their evidence, order, and sign-off state are maintained i
 [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md).
 The workflow's `DATABASE_URL` must use Neon's direct, non-pooled host because it writes data
 and runs schema safety checks against production.
+
+## Operational gotchas
+
+- Runtime settings require `DATABASE_URL` and the required provider and tracing variables before the
+  API can start.
+- The ingestion workflow deliberately supplies literal unused provider and tracing placeholders,
+  because ingestion needs configuration validation but makes no provider or tracing call.
+- Rebuild the API image with `docker compose build --no-cache api` after changing copied YAML
+  configuration so Docker cannot reuse a stale configuration layer.
+- On native Windows, run the API through Docker rather than `uv run uvicorn`; the async checkpointer
+  pool is incompatible with the default Proactor event loop.
+- `pages_failed` is an operator-visible ingestion summary field, but it does not yet alter exit
+  status; a page exhausted after retries is retried by the next scheduled run.
+- The 2026-07-16 VietnamWorks robots and terms review is point-in-time evidence; repeat it if the
+  source behavior changes or before a material ingestion change.
+- Serving and ingestion deliberately maintain separate exact `clean_jobs` column lists to preserve
+  layer isolation; update both with every migration or the startup guard will fail safely.
+- `render.yaml` is the tracked deployment record, while the existing Render service remains
+  dashboard-managed unless the maintainer deliberately performs a Blueprint sync.
+- A failed Langfuse initialization logs a startup warning and disables tracing for that process;
+  serving continues and the incident response table is the recovery path.
 
 ## Keep-alive and idle pools
 

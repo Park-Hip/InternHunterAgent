@@ -5,7 +5,7 @@
 
 ## Current branch
 
-- Working branch: docs/t0022-phase2-scoping (a git branch, not a directory).
+- Working branch: feature/t0022.10-12-phase2-prune-collapse-registers (a branch, not a directory).
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -37,7 +37,8 @@ Completed ticket plans are preserved in the [ticket archive](archive/Tickets_Arc
 
 M21 has T0021.1 and T0021.2 complete; T0021.3 and T0021.4 remain unscoped.
 M22 - Docs Hygiene & Documentation System has phase 1 (T0022.1-.9) merged to `main` on
-2026-08-11 via PR #41; phase 2 (T0022.10-.14) is scoped and not started.
+2026-08-11 via PR #41.
+T0022.10 through T0022.12 are complete; T0022.13 and T0022.14 remain scoped and not started.
 
 ## Archive tags
 
@@ -49,6 +50,7 @@ The branches these tags replaced no longer exist.
 | `archive/t0015.4-scenario-matrix` | `eba3e1f` | The 29-scenario matrix, runner, fixture, and observed results for re-measurement. |
 | `archive/t0015.6-provider-ab` | `45d333c` | The deferred provider/reasoning A/B phase and Windows event-loop factory. |
 | `archive/stash-t0019.6-docs` | `b7a291e` | The former T0019.6 documentation stash and its original ten files. |
+| `archive/docs-pre-prune` | `cb9ee2b` | The dead documentation surface and self-hosted Langfuse stack. |
 
 ## Carried work
 
@@ -56,8 +58,6 @@ The branches these tags replaced no longer exist.
   line by line.
 - M15's spec and 29-scenario matrix are restored; its runner remains on the archive tag.
 - `behavior_glossary` is still absent from `config/prompts.yaml`; landing it changes agent output.
-- Historical branch topology and past measurements are in
-  [Repo State History](archive/Repo_State_History.md).
 
 ## Folder structure
 
@@ -65,8 +65,8 @@ The branches these tags replaced no longer exist.
 alembic/       database migrations
 config/        runtime, ingestion, prompt, and vocabulary configuration
 docs/          living documentation and archives
+docker/        application container image definition
 evals/         DeepEval harness, fixtures, and scenario data
-infra/         local Langfuse stack
 scripts/       local maintenance and documentation checks
 src/           API, application service, agent runtime, tracing, and ingestion services
 tests/         automated tests
@@ -92,7 +92,7 @@ The authoritative package declarations are in `pyproject.toml`.
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Passed locally on 2026-08-10 (all checks) |
+| `python scripts/docs_lint.py` | Passed locally on 2026-08-11 (all checks) |
 | `uv run pytest -q` | 346 passed, 1 skipped, 19 deselected, 4 subtests passed |
 | `uv run ruff check src tests` | Passed |
 | `uv run mypy src` | Success: no issues in 43 source files |
@@ -108,4 +108,5 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0022.10 - prune the dead documentation surface. T0023, the v1.0 release cut, follows M22.
+T0022.13 - restructure the surviving documentation. T0023, the v1.0 release cut,
+follows M22.

@@ -84,7 +84,12 @@ def test_shared_skill_instructions_match() -> None:
     if not claude_skill.exists():
         pytest.skip(".claude/ is gitignored, so the Claude Code copy is local-only")
 
-    assert codex_skill.read_bytes() == claude_skill.read_bytes()
+    # Compare lines, not bytes. The tracked copy is newline-normalized on checkout when
+    # core.autocrlf is set, while the untracked .claude/ copy is never touched by git.
+    codex_lines = codex_skill.read_text(encoding="utf-8").splitlines()
+    claude_lines = claude_skill.read_text(encoding="utf-8").splitlines()
+
+    assert codex_lines == claude_lines
 
 
 def test_reflow_preserves_blockquote_prefix(tmp_path: Path) -> None:

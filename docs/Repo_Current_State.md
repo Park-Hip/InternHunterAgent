@@ -1,11 +1,11 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-10 against the checked-out commit, active registers, and
+> **Last verified:** 2026-08-11 against the checked-out commit, active registers, and
 > [`Operations.md`](Operations.md).
 
 ## Current branch
 
-- Working branch: `feature/t0022.9-index-ledger-enforcement`.
+- Working branch: docs/t0022-phase2-scoping (a git branch, not a directory).
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -36,7 +36,8 @@ Completed ticket plans are preserved in the [ticket archive](archive/Tickets_Arc
 - M20 - Reconciliation and activation.
 
 M21 has T0021.1 and T0021.2 complete; T0021.3 and T0021.4 remain unscoped.
-M22 - Docs Hygiene & Documentation System is complete through T0022.9 and pending review.
+M22 - Docs Hygiene & Documentation System has phase 1 (T0022.1-.9) merged to `main` on
+2026-08-11 via PR #41; phase 2 (T0022.10-.14) is scoped and not started.
 
 ## Archive tags
 
@@ -107,4 +108,4 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0023 - scope and execute the v1.0 release cut.
+T0022.10 - prune the dead documentation surface. T0023, the v1.0 release cut, follows M22.

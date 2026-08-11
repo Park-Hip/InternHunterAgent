@@ -1100,13 +1100,83 @@ consider X, and why not?"*, so this collapses those records rather than deleting
    surviving label.
 7. Record the before/after line counts per file; the total should land near 700-900, not 450.
 
-### T0022.12: Harvest the gaps and rebuild `Known_Issues.md` — 📋 Planned
-Harvest `data-ingestion-stage.md` and `pre-deploy-refinement-plan.md` into `Decision_Log.md`,
-closing phase 1's DoD hole. Then re-triage all 46 `OPEN` entries **against current code**,
-close the ones quietly fixed, relocate the ~21 `NOTE`-class by-design facts to the documents
-that own them, and rebuild the register at ≤6 lines per entry behind a severity triage table:
-1,199 → ~250 lines. **Highest risk in phase 2** — it reads code, not just documents; a fix
-discovered during triage becomes a follow-up ticket, never an inline change.
+### T0022.12: Harvest the gaps and rebuild `Known_Issues.md` — ▶ Next
+**Objective:** Close phase 1's definition-of-done hole by harvesting the two research records it
+archived without harvesting, then rebuild `Known_Issues.md` from a **re-triage against current
+code** rather than a blind restructure. The register is the maintainer's "what still needs
+work?" surface; at 1,191 lines with entries that record their own edit history, it cannot serve
+that reader, and some of what it claims is no longer true.
+
+**This is the highest-risk ticket in phase 2** — the only one that reads source code rather than
+documents. Budget accordingly.
+
+**Measured baseline (2026-08-11, post-T0022.10):**
+
+| Metric | Value |
+|---|---|
+| Lines / entries | **1,191 / 72** |
+| Entries over the 6-line target | **65 of 72** — the defect in one number |
+| Longest entries | 55, 42, 38, 37, 35, 33 lines |
+| `OPEN`-class | 43 (25 `LOW`, 15 `MED`, 2 `HIGH`, 1 mis-tagged `MEDIUM`) |
+| `NOTE`-class (no action) | **21** — by-design facts sitting in an open-issues register |
+| `BLOCKED` / `DECISION` | 5 / 2 |
+| Category counts | Consistent at 72 — T0022.10 corrected the drift; keep them correct |
+
+**In Scope:**
+* **Harvest the two unharvested records into `Decision_Log.md`**, closing the phase-1 DoD hole.
+  Named candidates — confirm each against its source before writing:
+
+| Record | Candidate decisions |
+|---|---|
+| `data-ingestion-stage.md` | §0 source market is **Vietnamese boards** (TopCV, ITviec, TopDev, VietnamWorks, LinkedIn), with global ATS aggregators explicitly out of scope · §4 the legality/ToS posture · §5 the `tech_stack` architectural fork |
+| `pre-deploy-refinement-plan.md` | §1 the schema **can** be frozen for the v1 agent-only deploy — the precondition `Schema_Contract.md` already cites · §5 metric-discipline ordering before tuning |
+
+* **Re-triage all 48 actionable entries** (43 `OPEN` + 5 `BLOCKED`) **against current code.**
+  For each: is the claim still true? Entries fixed by a later ticket without the register being
+  updated move to `Resolved_Issues.md`, and **each closure must name the commit, test, or file
+  that closed it.** Where no evidence is found, the entry **stays open** — absence of evidence
+  closes nothing.
+* **Relocate the 21 `NOTE`-class entries** to the document that owns the fact — `Operations.md`,
+  `Tech_Stack.md`, or `Docs_Conventions.md`. A by-design gotcha is not an issue; keeping it here
+  is what made the register unreadable.
+* **Normalize the state vocabulary.** The header declares `OPEN · BLOCKED · PLANNED · DECISION ·
+  NOTE`, but the body also uses `PARTIALLY RESOLVED` (×2), `MOSTLY RESOLVED` (×1), a bare
+  `[HIGH]` with no state, and `[MEDIUM · OPEN]` where the scheme says `MED`. Either add the
+  partial states to the declared set or resolve them into a declared one — do not leave the
+  register violating its own key.
+* **Rebuild every surviving entry to ≤6 lines** in the fixed shape from plan §5.2 — headline,
+  `Found`, `Impact`, `Next`, `History` — with the accumulated *"Found → Fixed in sandbox →
+  Owned → Fixed → Remaining gap"* narrative moved to `Resolved_Issues.md` or a completion
+  report and linked, never deleted.
+* **Lead with a triage table** (severity × state) so the register is triageable from the first
+  screenful, and **state the eviction rule** in the header per plan §2.1 Rule A: an entry leaves
+  when fixed, superseded, or reclassified as a by-design note.
+* Target: **1,191 → ~250 lines**, category counts recomputed from the rebuilt entries.
+
+**Out of Scope:**
+* **Fixing anything the triage uncovers.** CLAUDE.md §1 is binding: a bug found while reading
+  code becomes a new register entry or a follow-up ticket, never an inline fix in this ticket.
+* **The other archived research records.** Only the two named above are harvested.
+* **Re-triaging `Resolved_Issues.md`.** Closed entries keep their historical wording; this
+  ticket only appends to it.
+* Structural work on other documents (T0022.13) and any lint change, including `size-cap`
+  (T0022.14) — this ticket must hit ~250 lines by hand, with nothing enforcing it yet.
+
+**Manual verification:**
+1. `uv run python scripts/docs_lint.py` exits **0**, and `Known_Issues.md` is **≤250 lines**.
+2. **No entry exceeds 6 lines** — script it; the count is the ticket's headline result.
+3. **Every entry closed during triage names its evidence** — walk each new `Resolved_Issues.md`
+   entry and confirm it cites a commit, test, or file. An entry closed on reasoning alone is a
+   defect, not a pass.
+4. Category counts match a fresh recount of the rebuilt register.
+5. No `NOTE`-class entry remains; spot-check three relocated facts and confirm each now lives in
+   the document that owns it and is discoverable there.
+6. Every tag in the body uses a state the header declares — grep the distinct tags and diff
+   against the key.
+7. Open `Decision_Log.md` cold and answer *"why Vietnamese job boards, and why not Greenhouse or
+   Adzuna?"* in under 30 seconds without opening another file.
+8. Pick three rebuilt entries and confirm the removed narrative is still reachable through the
+   `History` link — nothing was deleted, only moved.
 
 ### T0022.13: Restructure the surviving documents — 📋 Planned
 `Tickets.md` 945 → ~200 (the completed T0022 blocks move to `Tickets_Archive.md`; the redundant

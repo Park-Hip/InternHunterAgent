@@ -107,7 +107,7 @@
   the disposable milestone scratchpad after tagging it, and replaced the stale Langfuse README.
 - **Files:** `docs/Completion_Reports.md`, `AGENTS.md`/`CLAUDE.md` (verified only),
   `skills/generate-ticket-prompt/SKILL.md`, `skills/generate-ticket-prompt/agents/openai.yaml`
-  (retained), deleted `milestone/data-ingestion-stage.md`, `infra/langfuse/README.md`,
+  (retained), deleted `milestone/data-ingestion-stage.md`, `infra/langfuse/README.md`, <!-- archived-on-tag -->
   `scripts/docs_lint.py`, `tests/test_docs_lint.py`, `docs/Tickets.md`, and this report.
 - **Commands:** verified exact repair counts before replacement; ran `uv run pytest
   tests/test_docs_lint.py -q`, `uv run ruff check scripts/docs_lint.py tests/test_docs_lint.py`,
@@ -119,7 +119,7 @@
   its most recent attempt in T0022.1 exceeded the 120-second command limit.
 - **Follow-up:** T0022.3 handles mechanical reflow; T0022.6 handles broader archive structure.
 - **Docs updated:** `docs/Completion_Reports.md`, `docs/Repo_Current_State.md`,
-  `docs/Tickets.md`, and `infra/langfuse/README.md`.
+  `docs/Tickets.md`, and `infra/langfuse/README.md`. <!-- archived-on-tag -->
 
 ## T0022.1 - Docs lint harness, conventions, and warn-only CI gate
 
@@ -1640,3 +1640,27 @@ Follow-ups / Docs).
 - **Follow-up tickets:** T0023 scopes and executes the v1.0 release cut.
   M20's branch-protection follow-up remains open.
 - **Docs that need updating:** None for this ticket.
+
+## T0022.10 - Prune the dead documentation surface
+
+- **Summary:** Removed the seven obsolete documentation artifacts and the unused self-hosted
+  Langfuse stack.
+  The tracked ticket-prompt skill now owns the playbook structure, and active records consistently
+  describe Langfuse Cloud.
+- **Files deleted:** `docs/Prompt_Playbook.md`, three obsolete documents in `docs/archive/`, two <!-- archived-on-tag -->
+  completed experiment prompts, and the former `infra/` stack. <!-- archived-on-tag -->
+- **Files changed:** `skills/generate-ticket-prompt/SKILL.md` and its local Claude mirror;
+  active documentation, indexes, issue registers, historical records, and this report.
+- **Commands:** Baseline and final documentation link checks; recovery-tag verification;
+  `git grep -n "infra/" -- '*.md'`; `git diff --check`; docs-lint tests; and root Compose health <!-- archived-on-tag -->
+  verification.
+- **Build and test results:** Documentation checks, skill parity, docs-lint tests, and the full
+  documentation linter passed.
+  Root Compose health verification was not run because Docker was unavailable in this environment.
+- **Manual verification:** Confirm `archive/docs-pre-prune` can display the deleted playbook.
+  Run `docker compose up -d`, then request `/api/v1/health` and confirm a `200` response.
+  Confirm no live documentation claims a self-hosted Langfuse deployment.
+- **Risks:** The recovery tag must remain retained while any historical record references it.
+- **Follow-up tickets:** T0022.11 remains next; no new issue-register entry was needed.
+- **Docs updated:** `Decision_Log.md`, `Known_Issues.md`, `Resolved_Issues.md`,
+  `Repo_Current_State.md`, `Tickets.md`, and documentation indexes and records.

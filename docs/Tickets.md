@@ -184,7 +184,7 @@ decisions out of nine executed research plans before they are archived.
 **Objective:** Make docs hygiene machine-checkable before any doc is touched, so the eight
 tickets that follow have an objective target instead of a subjective one. This ticket changes
 **no existing documentation content** — it adds the checker, writes down the standard the repo
-already follows in its best files (`Schema_Contract.md`, `Prompt_Playbook.md`), and wires a
+already follows in its best files (`Schema_Contract.md`, `Prompt_Playbook.md`), and wires a <!-- archived-on-tag -->
 **non-blocking** CI job. Blocking is deliberately deferred to T0022.9, because flipping it on
 against a 3,101-line backlog would redden every unrelated PR.
 
@@ -243,8 +243,8 @@ check ignores intentional mojibake examples inside backticked code spans, as doc
   `Full_Design_Document.md` / `MVP_Technical_Design.md` / `Tickets.md`, tag as
   `archive/milestone-scratchpad`, then remove. It also collides by filename with
   `research/archive/data-ingestion-stage.md`.
-* **Fix `infra/langfuse/README.md`** — 5 lines instructing the reader to run
-  `docker compose -f infra/langfuse/docker-compose.yaml up -d` against a file that does not
+* **Fix `infra/langfuse/README.md`** — 5 lines instructing the reader to run <!-- archived-on-tag -->
+  `docker compose -f infra/langfuse/docker-compose.yaml up -d` against a file that does not <!-- archived-on-tag -->
   exist; the folder contains only the README. The deploy uses **Langfuse Cloud Hobby**, not
   self-host (decided 2026-07-12), so the instruction is unreachable. Either restore the compose
   file or replace the README with a pointer to the Cloud decision. **Prefer the pointer** —
@@ -672,7 +672,7 @@ the moves land, not before.
   (four tags — the branches they replaced no longer exist, so these are the only recovery
   handles), the unverified **`stash@{0}`**, and the **M15 behavior track's** partial reclamation
   (`behavior_glossary` still absent from `config/prompts.yaml`). Everything historical goes to
-  `archive/Repo_State_History.md`, which already exists for exactly this.
+  `archive/Repo_State_History.md`, which already exists for exactly this. <!-- archived-on-tag -->
 * **Topology and operational facts become links to `Operations.md`**, not restatements — the Fact
   Ledger already assigns them there.
 * **Move the 3 class-A entries** to `Resolved_Issues.md` under matching categories, preserving
@@ -933,15 +933,15 @@ actually reads down from ~6,700 to ~2,400.
 > Maintainer decisions settled **2026-08-11**: delete all of plan §3.1; **keep**
 > `Tickets_Archive.md` and `Manual_Verification_Archive.md` as-is; collapse only the **5**
 > fully-superseded research archives and leave the other 4; **re-triage** `Known_Issues.md`
-> against real code rather than restructuring it blind; delete `infra/`.
+> against real code rather than restructuring it blind; delete `infra/`. <!-- archived-on-tag -->
 
 > **Ordering constraint.** Prune (**.10**) precedes restructure (**.13**) so no file is reshaped
 > and then deleted. Enforcement (**.14**) lands last, against an already-clean tree, so the new
 > checks never have to start warn-only the way T0022.1's did.
 
-### T0022.10: Prune the dead documentation surface — ▶ Next
+### T0022.10: Prune the dead documentation surface - Complete 2026-08-11
 **Objective:** Delete the seven documents no reader has a trigger to open, remove the unused
-self-hosted Langfuse stack, and reconcile the three documents that describe `infra/` three
+self-hosted Langfuse stack, and reconcile the three documents that describe `infra/` three <!-- archived-on-tag -->
 different ways. This is first in phase 2 because every later block reshapes files — deleting
 after restructuring throws the restructuring away.
 
@@ -950,26 +950,26 @@ after restructuring throws the restructuring away.
   first deletion. Everything below stays recoverable from that tag; nothing is lost, only
   removed from the working surface.
 * **Delete seven documents** (956 lines; 53 → **46** tracked `.md` files):
-  * `docs/archive/Claude_Code_Review_Skeleton.md` (198) — a blank template whose own banner says
+  * `docs/archive/Claude_Code_Review_Skeleton.md` (198) — a blank template whose own banner says <!-- archived-on-tag -->
     not to record findings in it until the review pass begins. The pass happened and wrote
     `Code_Review_Notes.md` free-form instead. **Zero inbound links.**
-  * `docs/archive/Documentation_Hygiene_Review_T0016.md` (187) — the 2026-07 hygiene pass that
+  * `docs/archive/Documentation_Hygiene_Review_T0016.md` (187) — the 2026-07 hygiene pass that <!-- archived-on-tag -->
     M22 supersedes and cites only as the cleanup that decayed.
-  * `docs/archive/Repo_State_History.md` (272) — old branch snapshots; its own banner states the
+  * `docs/archive/Repo_State_History.md` (272) — old branch snapshots; its own banner states the <!-- archived-on-tag -->
     authoritative history is git.
-  * `research/experiments/deployment-research-fill-prompt.md` (49) — a prompt to *fill* a
+  * `research/experiments/deployment-research-fill-prompt.md` (49) — a prompt to *fill* a <!-- archived-on-tag -->
     document that is now filled and archived.
-  * `research/experiments/topdev-scraping-spike-prompt.md` (181) — a prompt to *run* a spike
+  * `research/experiments/topdev-scraping-spike-prompt.md` (181) — a prompt to *run* a spike <!-- archived-on-tag -->
     that ran; its results are `job-site-comparison.md` Candidate 3.
-  * `docs/Prompt_Playbook.md` (63) — duplicated by `skills/generate-ticket-prompt/SKILL.md`,
+  * `docs/Prompt_Playbook.md` (63) — duplicated by `skills/generate-ticket-prompt/SKILL.md`, <!-- archived-on-tag -->
     which names it as its own base structure.
-  * `infra/langfuse/README.md` (6) — six lines asserting the directory is empty.
-* **Delete `infra/`.** `infra/docker-compose.yaml` is a six-service self-hosted Langfuse stack
+  * `infra/langfuse/README.md` (6) — six lines asserting the directory is empty. <!-- archived-on-tag -->
+* **Delete `infra/`.** `infra/docker-compose.yaml` is a six-service self-hosted Langfuse stack <!-- archived-on-tag -->
   (`langfuse-web`, `langfuse-worker`, `clickhouse`, `minio`, `redis`, `postgres`) superseded by
   **D-029** (Langfuse Cloud). The root `docker-compose.yml` is a **different file** serving
   local app Postgres — it stays untouched.
 * **Absorb the playbook into the skill.** `skills/generate-ticket-prompt/SKILL.md` names
-  `docs/Prompt_Playbook.md` as its base structure; inline that structure before deleting the
+  `docs/Prompt_Playbook.md` as its base structure; inline that structure before deleting the <!-- archived-on-tag -->
   playbook. **Apply the identical edit to `.claude/skills/generate-ticket-prompt/SKILL.md`** —
   that path is gitignored, so CI cannot see a divergence, but
   `test_shared_skill_instructions_match` fails locally the moment the two differ.
@@ -981,8 +981,8 @@ after restructuring throws the restructuring away.
 | Live index row | `docs/README.md` (Prompt Playbook), `Repo_Current_State.md` (Repo State History) | Remove the row |
 | Dated historical record | `Completion_Reports.md`, `Resolved_Issues.md`, `docs/archive/**`, `research/archive/**`, closed ticket blocks in this file | **`<!-- archived-on-tag -->`, never rewrite** — they are point-in-time records, and the file now lives on the tag |
 
-* **Reconcile the `infra/` contradiction.** `Full_Design_Document.md` §5 says the self-hosted
-  stack "lives under `infra/langfuse/`" — the wrong path *and* a decision D-029 reversed. State
+* **Reconcile the `infra/` contradiction.** `Full_Design_Document.md` §5 says the self-hosted <!-- archived-on-tag -->
+  stack "lives under `infra/langfuse/`" — the wrong path *and* a decision D-029 reversed. State <!-- archived-on-tag -->
   that tracing is Langfuse Cloud. `Tech_Stack.md`'s "Deliberately not used" entry then becomes
   simply true rather than technically-true-about-a-subdirectory.
 * **Close the security entry.** `Known_Issues.md`'s `[OPEN]` deploy-secret checklist exists only
@@ -997,7 +997,7 @@ after restructuring throws the restructuring away.
 * **Collapsing any `research/archive/` document**, and trimming `docs/archive/Code_Review_Notes.md`
   — T0022.11.
 * **Re-triaging `Known_Issues.md`** — T0022.12. This ticket closes exactly one entry: the one the
-  `infra/` deletion resolves.
+  `infra/` deletion resolves. <!-- archived-on-tag -->
 * **Splitting `Tickets.md` or `MVP_Technical_Design.md`**, and every other structural change —
   T0022.13.
 * **New lint checks or cap changes** (`size-cap`, `eviction-rule`, `amendment`, `orphan`) —
@@ -1008,14 +1008,14 @@ after restructuring throws the restructuring away.
   edit.
 
 **Manual verification:**
-1. `git show archive/docs-pre-prune:docs/Prompt_Playbook.md` prints the deleted file — confirm
+1. `git show archive/docs-pre-prune:docs/Prompt_Playbook.md` prints the deleted file — confirm <!-- archived-on-tag -->
    the tag is real *before* checking anything else.
 2. Run `uv run python scripts/docs_lint.py --check link-path` **before** the deletions as well as
    after, so a pre-existing break is not mistaken for one this ticket caused. The full run must
    exit **0**.
 3. `docker compose up -d` still starts local Postgres and `/api/v1/health` returns 200 — proves
-   the root compose file was untouched by the `infra/` removal.
-4. `git grep -n "infra/" -- '*.md'` returns only lines carrying `<!-- archived-on-tag -->` or
+   the root compose file was untouched by the `infra/` removal. <!-- archived-on-tag -->
+4. `git grep -n "infra/" -- '*.md'` returns only lines carrying `<!-- archived-on-tag -->` or <!-- archived-on-tag -->
    describing Langfuse Cloud.
 5. `uv run pytest tests/test_docs_lint.py` reports **20 passed** locally, not 19 passed + 1
    skipped — the skip would mean the `.claude/` copy was missed.

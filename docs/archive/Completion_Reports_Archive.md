@@ -12,7 +12,7 @@ in the live file.
 - **T0000** — Foundation (FastAPI, logging, health endpoint).
 - **T0001** — Runnable request flow (`POST /api/v1/agent/chat`).
 - **T0002** — ReAct agent runtime.
-- **T0003** — Self-hosted Langfuse (Docker Compose, under `infra/langfuse/`).
+- **T0003** — Self-hosted Langfuse (Docker Compose, under `infra/langfuse/`). <!-- archived-on-tag -->
 - **T0004** — Tracing integration.
 - **T0005** — Hardening (error handling, timeouts, integration tests).
 

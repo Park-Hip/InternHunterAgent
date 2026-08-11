@@ -28,7 +28,6 @@ Link to that owner instead of restating its facts elsewhere.
 | Concern | Owner |
 |---|---|
 | Languages, frameworks, services, and versions | [Tech Stack](Tech_Stack.md) |
-| Prompt design and conventions | [Prompt Playbook](Prompt_Playbook.md) |
 | Durable decision rationale | [Decision Log](Decision_Log.md) |
 | Documentation rules and lint exemptions | [Documentation Conventions](Docs_Conventions.md) |
 | Cron activation gates while activation remains pending | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) |

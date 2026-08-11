@@ -112,8 +112,7 @@ Recorded so these choices are not re-litigated:
 
 - **CORS** — the demo UI is served same-origin from FastAPI, so `api.cors.allowed_origins`
   stays `[]`. Adding a cross-origin front end is the only reason to revisit.
-- **Self-hosted Langfuse** — `infra/langfuse/` has no Compose service; Cloud Hobby won on
-  operational cost.
+- **Self-hosted Langfuse** - deliberately not used; Langfuse Cloud Hobby won on operational cost.
 - **A JavaScript framework** — the demo UI is vanilla HTML/CSS/JS consuming SSE via
   `fetch()` + `ReadableStream`. No build step, nothing to keep patched.
 - **Celery / Redis / a task queue** — ingestion runs as a scheduled GitHub Action, not a

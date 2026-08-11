@@ -14,7 +14,7 @@ original register entry (omitted where none was assigned).
 
 ## Categories
 - [Documentation drift](#documentation-drift) — 3
-- [Config, startup & deployment](#config-startup--deployment) — 4
+- [Config, startup & deployment](#config-startup--deployment) — 5
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
@@ -117,6 +117,13 @@ original register entry (omitted where none was assigned).
   - **Generalisable lesson:** a CI/CD trigger's dormancy is a property of the *platform*, not of the
     docs. Verify with `gh run list --workflow=<name>` rather than reading the workflow file's
     comments.
+
+- **`[RESOLVED · T0022.10, 2026-08-11]` Deploy-secret checklist for the self-hosted Langfuse
+  stack.**
+  - **Resolved by removal:** T0022.10 deleted the unused self-hosted stack and its upstream default
+    secrets from the active repository surface.
+    `archive/docs-pre-prune` preserves `infra/docker-compose.yaml` for the historical record. <!-- archived-on-tag -->
+  - **Verified:** the root `docker-compose.yml` remains the separate local app Postgres definition.
 
 ## API layer
 - **`[RESOLVED · T0012.4, 2026-07-06]` `trace_url` always returned `None` in
@@ -575,7 +582,7 @@ original register entry (omitted where none was assigned).
     `/agent/query`; renamed to `/agent/chat` (owner decision — "chat" is canonical for the coming
     UI) and updated `test_query.py`, `MVP_Technical_Design.md`, `Manual_Verification_Guide.md`. (b)
     **Doc drift:** corrected the Langfuse compose path (the obsolete Langfuse-specific location to
-    `infra/docker-compose.yaml`) in `Repo_Current_State.md`; added missing runtime deps
+    `infra/docker-compose.yaml`) in `Repo_Current_State.md`; added missing runtime deps <!-- archived-on-tag -->
     (`cloudscraper`, `beautifulsoup4`, `lxml`, `httpx`) + dev deps (`ruff`, `mypy`); fixed the stale
     schema-evolution header in `MVP_Technical_Design.md`. (c) **Static analysis stood up:** added
     `ruff` + `mypy` (+ `pydantic.mypy`) and `[tool.ruff]`/`[tool.mypy]` config; `ruff check .`
@@ -595,7 +602,7 @@ original register entry (omitted where none was assigned).
   RemoteSigned…Activate.ps1`) — no longer on disk or in `git ls-files`.
 
 - **`[RESOLVED · 2026-07-01]` Doc drift: `Manual_Verification_Guide.md` pointed at
-  `docker/docker-compose.yaml`** — corrected to `infra/docker-compose.yaml` in both T0003/T0004
+  `docker/docker-compose.yaml`** — corrected to `infra/docker-compose.yaml` in both T0003/T0004 <!-- archived-on-tag -->
    steps. (The register had also mis-stated it as a Langfuse-specific compose location; corrected
   too.)
 

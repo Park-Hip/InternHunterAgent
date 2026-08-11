@@ -35,7 +35,7 @@ report. If an open item still cross-references the resolved one, leave a short p
 the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.md` (closed).
 
 ## Categories
-- [Config, startup & deployment](#config-startup--deployment) — 31
+- [Config, startup & deployment](#config-startup--deployment) — 30
 - [Agent runtime & prompts](#agent-runtime--prompts) — 12
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 3
 - [Evaluation harness](#evaluation-harness) — 15 (across T0011.1–T0012.10 + cost/rate-limit)
@@ -47,14 +47,6 @@ the archive. `Repo_Current_State.md` links here (open) and to `Resolved_Issues.m
 ---
 
 ## Config, startup & deployment
-
-- **`[OPEN]` Deploy-secret checklist required before any non-local deploy.**
-  - **Found:** confirmed 2026-07-02.
-  - **Impact:** `infra/docker-compose.yaml` (the Langfuse stack) ships upstream `CHANGEME` defaults
-    for `SALT`, `ENCRYPTION_KEY`, `NEXTAUTH_SECRET`, Postgres/Redis/ClickHouse/MinIO passwords, and
-    S3 keys — all `${VAR:-default}` env-overridable, safe locally, **unsafe on a public host**.
-  - **Follow-up** (own ticket at deploy time): author a required-env `.env`/secret checklist and set
-    every one before exposing the stack.
 
 - **`[NOTE]` `DATABASE_URL` must be set in the runtime environment before starting the app.**
 

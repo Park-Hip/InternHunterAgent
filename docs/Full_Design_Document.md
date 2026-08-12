@@ -6,6 +6,9 @@
 > walkthroughs. For how it relates to the other docs and what belongs where, see the [documentation
 > map](README.md).
 
+> **Eviction:** An invariant leaves only when an accepted architecture decision replaces it and all
+> affected owner documents are updated.
+
 ## 1. System Overview & Strategic Intent
 
 InternHunterAgent is a FastAPI service that turns a chat request into a traced, tool-augmented

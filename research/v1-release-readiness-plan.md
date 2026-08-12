@@ -1,32 +1,8 @@
-# v1.0 Release Readiness Plan — Gap Analysis & M20–M22 Shape
+# v1.0 Release Readiness Plan - Gap Analysis and M20-M23 Shape
 
-> **Status:** Research / pre-design (2026-07-19). Scopes what stands between the current
-> deployed state (https://internhunteragent.onrender.com, T0018.4 stack + T0019.1–.5/.7
-> landed) and a **v1.0 release of the existing MVP** — fork A: *hardening*, not the
-> `MVP_Spec.md` §6 future features. It audits the §4 Definition of Done and the §3 quality
-> bar against recorded evidence, separates release-blockers from quality debt, and proposes
-> a three-milestone shape (M20–M22) ready to graduate into `docs/Tickets.md` **after
-> maintainer approval — this document deliberately does not touch `Tickets.md`**.
->
-> **⚠ Final IDs assigned 2026-08-09 — the release cut is now M23, not M22.** M20 and M21
-> graduated under their proposed numbers, but **M22 was taken by Docs Hygiene &
-> Documentation System** (see [`docs-hygiene-and-system-plan.md`](docs-hygiene-and-system-plan.md)),
-> which was promoted ahead of the release cut: this plan's §2 lists "docs conformance" as a
-> single DoD bullet of the cut, and the measured state of the docs — a root `README.md` still
-> describing the T0002 Postgres bootstrap, 15 broken path references, committed mojibake —
-> is far past what one bullet can absorb. **Read every "M22" below as "M23"**; the section
-> headings are left at their original numbers because §2 states the numbering is illustrative
-> and `Tickets.md` is the authority. Live roadmap: `docs/Tickets.md` → T0022, T0023.
->
-> **Decisions taken as fixed (not re-litigated here):** `main` reconciliation is the
-> maintainer's call; T0019's sequencing is fixed as scoped 2026-07-16; `is_active` agent
-> exposure stays gated behind T0011.5 → prompt-v2 → recalibration and is therefore
-> **post-1.0 by construction**.
->
-> **Read first:** `docs/MVP_Spec.md` §3–§4; `docs/Repo_Current_State.md`;
-> `docs/Known_Issues.md`; `docs/Tickets.md` T0019 + Backlog;
-> `research/archive/pre-deploy-refinement-plan.md` §6;
-> `research/archive/ingestion-milestone-plan.md` §1/§5.
+> **Status:** Historical release-readiness analysis, updated 2026-08-12 for the active roadmap.
+> M20 shipped, M21 is in progress, M22 is documentation hygiene, and M23 is the v1.0 release cut.
+> `docs/Tickets.md` is the authority for current ticket scope and status.
 
 ---
 
@@ -167,7 +143,7 @@ for the release. None contradict a DoD bullet.
 
 ---
 
-## 2. Proposed milestone shape — M20–M22
+## 2. Milestone status - M20-M23
 
 Numbering is illustrative (next free milestone numbers); the maintainer assigns final IDs
 in `Tickets.md`. Ticket-level splits are indicative, not scoped to house depth yet.
@@ -176,7 +152,7 @@ in `Tickets.md`. Ticket-level splits are indicative, not scoped to house depth y
 > below → T0023**, because **T0022 went to Docs Hygiene & Documentation System**. See the
 > status banner at the top of this file.
 
-### M20 — Release Integrity (branch reunification + T0019 closeout + CI gate)
+### M20 - Release Integrity (shipped)
 
 **Objective:** one trusted `main` that a CI gate protects and that both deploy paths
 (Render web service, GitHub Actions cron) hang off — with T0019 actually finished, not
@@ -205,7 +181,7 @@ half-landed in a working tree.
 The cron *cannot* fire before reconciliation (default-branch rule); everything else in
 M20 is independent of M21.
 
-### M21 — Serving-Path Hardening & Honesty Baseline
+### M21 - Serving-Path Hardening and Honesty Baseline (in progress)
 
 **Objective:** close the two classes of gap in the thing users actually touch — the
 read path's structural holes, and DoD bullet 6's evidence gap — via the sanctioned
@@ -238,7 +214,12 @@ pre-baseline checks → v1 baseline → prompt-v2 → v2 re-measure. Nothing in 
 M20 *except* that the eventual prompt-v2 merge should go through M20's CI gate if it
 lands first.
 
-### M22 — v1.0 Release Cut  *(graduated as **T0023**, 2026-08-09)*
+### M22 - Documentation Hygiene (in progress)
+
+**Objective:** complete documentation hygiene before the release cut: preserve active
+documentation, enforce its conventions, and leave release evidence to M23.
+
+### M23 - v1.0 Release Cut
 
 **Objective:** turn "the deploy works" into a versioned, defensible release: every DoD
 bullet verified and recorded against the shipped artifact, the legal posture decided and
@@ -284,7 +265,7 @@ not block the tag — it changes config, not the artifact.
 - Chasing the individual model-behavior LOW items outside what the designed prompt-v2
   pass covers.
 
-**M22 defers:**
+**M23 defers:**
 - Everything in `MVP_Spec.md` §6: resume upload, embeddings/RAG similarity, charts,
   larger/live data expansion beyond the nightly VietnamWorks refresh, accounts/auth.
 - A second job board (ITviec/TopDev/TopCV/LinkedIn) and the multi-source orchestrator

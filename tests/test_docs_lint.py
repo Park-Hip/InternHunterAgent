@@ -145,6 +145,13 @@ def test_missing_repo_path_is_reported(tmp_path: Path) -> None:
     assert findings[0].check == "link-path"
 
 
+def test_branch_name_is_not_treated_as_a_missing_repo_path(tmp_path: Path) -> None:
+    document = tmp_path / "guide.md"
+    document.write_text("Use branch `docs/some-branch`.\n", encoding="utf-8")
+
+    assert docs_lint.check_link_path([document]) == []
+
+
 PYPROJECT_SAMPLE = b"""
 [project]
 dependencies = ["fastapi>=0.136.3", "psycopg[binary,pool]>=3.2"]
@@ -199,3 +206,88 @@ def test_stamp_check_reports_missing_stamp(tmp_path: Path) -> None:
 
 def test_required_living_documents_have_stamps() -> None:
     assert docs_lint.check_stamps() == []
+
+
+def write_caps_map(tmp_path: Path, capped_body: str, cap: int = 10) -> tuple[Path, Path]:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    document = docs / "capped.md"
+    document.write_text(capped_body, encoding="utf-8")
+    map_path = docs / "README.md"
+    map_path.write_text(
+        f"{docs_lint.CAPS_BEGIN}\n"
+        "| Doc | Owns | Tier | Cap | Reader |\n"
+        "|---|---|---:|---:|---|\n"
+        "| [Map](README.md) | Map | T3 | Uncapped | Maintainers |\n"
+        f"| [Capped](capped.md) | Test | T3 | {cap} | Maintainers |\n"
+        f"{docs_lint.CAPS_END}\n",
+        encoding="utf-8",
+    )
+    return map_path, document
+
+
+def test_documented_caps_parses_the_marked_table(tmp_path: Path) -> None:
+    map_path, document = write_caps_map(tmp_path, "one\n")
+
+    entries = docs_lint.documented_caps(map_path.read_text(encoding="utf-8"), map_path)
+
+    assert entries[document.resolve()].cap == 10
+    assert entries[map_path.resolve()].cap is None
+
+
+def test_size_cap_reports_an_overage_and_an_unindexed_document(tmp_path: Path) -> None:
+    map_path, document = write_caps_map(tmp_path, "one\ntwo\n", cap=1)
+
+    findings = docs_lint.check_size_cap([map_path, document], map_path)
+
+    assert any(finding.path == document and "exceeds cap" in finding.message for finding in findings)
+
+    document.write_text("one\n", encoding="utf-8")
+    assert docs_lint.check_size_cap([map_path, document], map_path) == []
+
+    map_path.write_text(
+        map_path.read_text(encoding="utf-8").replace(
+            "| [Capped](capped.md) | Test | T3 | 1 | Maintainers |\n", ""
+        ),
+        encoding="utf-8",
+    )
+    findings = docs_lint.check_size_cap([map_path, document], map_path)
+
+    assert any("missing from caps table" in finding.message for finding in findings)
+
+
+def test_eviction_rule_reports_a_missing_header_and_accepts_one(tmp_path: Path) -> None:
+    map_path, document = write_caps_map(tmp_path, "# Capped\n")
+
+    findings = docs_lint.check_eviction_rule([], map_path)
+
+    assert len(findings) == 1
+    document.write_text("# Capped\n\n> **Eviction:** Test content leaves when retired.\n", encoding="utf-8")
+    assert docs_lint.check_eviction_rule([], map_path) == []
+
+
+def test_amendment_reports_a_phrase_and_allows_a_marked_exception(tmp_path: Path) -> None:
+    map_path, document = write_caps_map(tmp_path, "This is no longer accurate.\n")
+
+    findings = docs_lint.check_amendment([], map_path)
+
+    assert len(findings) == 1
+    document.write_text(
+        "This is no longer accurate. <!-- lint-allow-amendment -->\n", encoding="utf-8"
+    )
+    assert docs_lint.check_amendment([], map_path) == []
+
+
+def test_orphan_reports_an_unlinked_document_and_clears_after_linking(tmp_path: Path) -> None:
+    entry = tmp_path / "entry.md"
+    index = tmp_path / "index.md"
+    orphan = tmp_path / "orphan.md"
+    entry.write_text("[Index](index.md)\n", encoding="utf-8")
+    index.write_text("[Entry](entry.md)\n", encoding="utf-8")
+    orphan.write_text("# Orphan\n", encoding="utf-8")
+
+    findings = docs_lint.check_orphan([entry, index, orphan])
+
+    assert [finding.path for finding in findings] == [orphan]
+    index.write_text("[Entry](entry.md)\n[Orphan](orphan.md)\n", encoding="utf-8")
+    assert docs_lint.check_orphan([entry, index, orphan]) == []

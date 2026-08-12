@@ -1,5 +1,8 @@
 # `research/` - Pre-Design Research
 
+> **Eviction:** A live research record leaves when its decision is harvested into the decision log
+> or its open question is retired.
+
 This folder holds live research and pre-design evidence for work that has not yet shipped.
 Read the relevant record before designing, planning, or implementing a covered stage.
 

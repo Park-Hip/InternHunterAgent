@@ -1,42 +1,38 @@
 # Documentation Map
 
-This index assigns one owner to each class of project fact.
-Link to that owner instead of restating its facts elsewhere.
+Each document below has one owner, tier, cap, and intended reader.
+Link to the owner instead of restating its facts elsewhere.
 
-## Canonical docs
+Caps are per-document and set from the measured length plus headroom, never from an aspiration.
+A document over its cap means either the cap or the document is wrong; decide which, and say so.
 
-| Concern | Owner | Altitude |
-|---|---|---|
-| What the MVP must do | [MVP Spec](MVP_Spec.md) | Product capability |
-| Permanent system laws and layer boundaries | [Full Design](Full_Design_Document.md) | Constitution |
-| How the MVP realizes those laws | [Technical Design](MVP_Technical_Design.md) | Build blueprint |
-| Frozen v1 `clean_jobs` columns | [Schema Contract](Schema_Contract.md) | Data contract |
-| Agent behavior requirements | [Agent Behavior Spec](Agent_Behavior_Spec.md) | Behavior contract |
+> **Eviction:** A map entry leaves when its owned document is retired or ownership moves elsewhere.
 
-## Living and operational docs
-
-| Concern | Owner |
-|---|---|
-| Current branch, completed work, and next ticket | [Repository Current State](Repo_Current_State.md) |
-| Open risks and follow-ups | [Known Issues](Known_Issues.md) |
-| Active ticket plans and delivery sequence | [Tickets](Tickets.md) |
-| Deployment, configuration, cron, and incident procedures | [Operations](Operations.md) |
-| Re-runnable developer checks | [Manual Verification Guide](Manual_Verification_Guide.md) |
-
-## Reference and documentation-system docs
-
-| Concern | Owner |
-|---|---|
-| Languages, frameworks, services, and versions | [Tech Stack](Tech_Stack.md) |
-| Durable decision rationale | [Decision Log](Decision_Log.md) |
-| Documentation rules and lint exemptions | [Documentation Conventions](Docs_Conventions.md) |
-| Cron activation gates while activation remains pending | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) |
-
-## Archives
-
-The append-only record of completed work is [Completion Reports](Completion_Reports.md).
-Closed risks are in [Resolved Issues](Resolved_Issues.md).
-Historical ticket plans, checklists, reviews, and state snapshots live in [archive](archive/).
+<!-- caps:begin -->
+| Doc | Owns | Tier | Cap | Reader |
+|---|---|---:|---:|---|
+| [Documentation Map](README.md) | Document ownership, caps, and readers | T3 | 150 | All contributors |
+| [MVP Spec](MVP_Spec.md) | Product capabilities and quality bar | T2 | 650 | Product and engineering |
+| [Full Design](Full_Design_Document.md) | Permanent system laws and layer boundaries | T2 | 650 | Engineering |
+| [Technical Design](MVP_Technical_Design.md) | Serving-path build blueprint | T2 | 750 | Engineering |
+| [Offline Pipelines Design](Offline_Pipelines_Design.md) | Ingestion and evaluation build blueprint | T2 | 650 | Engineering |
+| [Schema Contract](Schema_Contract.md) | Frozen v1 `clean_jobs` columns | T2 | 650 | Engineering and evaluation |
+| [Agent Behavior Spec](Agent_Behavior_Spec.md) | Frozen agent behavior requirements | T2 | 650 | Agent and evaluation work |
+| [Tech Stack](Tech_Stack.md) | Languages, services, versions, and dependencies | T1 | 150 | New contributors |
+| [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | 350 | Decision makers |
+| [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
+| [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 150 | All contributors |
+| [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 250 | Maintainers |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 320 | Delivery planning |
+| [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
+| [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T3 | 150 | Developers |
+| [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |
+| [Streaming and SSE Explained](../guides/Streaming_And_SSE_Explained.md) | Streaming learning walkthrough | T4 | Uncapped | New contributors |
+| [Research index](../research/README.md) | Live pre-design research | T3 | 250 | Designers and maintainers |
+| [Completion Reports](Completion_Reports.md) | Completed-ticket outcomes | T4 | Uncapped | Project history |
+| [Resolved Issues](Resolved_Issues.md) | Closed risk and fix records | T4 | Uncapped | Project history |
+| [Archives](archive/) | Historical plans, checklists, and snapshots | T4 | Uncapped | Project history |
+<!-- caps:end -->
 
 ## Fact Ledger
 
@@ -44,7 +40,8 @@ Historical ticket plans, checklists, reviews, and state snapshots live in [archi
 |---|---|
 | What the product must do | `MVP_Spec.md` |
 | Permanent laws and layer boundaries | `Full_Design_Document.md` |
-| How a capability is built | `MVP_Technical_Design.md` |
+| How the serving path is built | `MVP_Technical_Design.md` |
+| How the offline pipelines are built | `Offline_Pipelines_Design.md` |
 | Languages, frameworks, versions, and services | `Tech_Stack.md` |
 | `clean_jobs` column contract | `Schema_Contract.md` |
 | Deploy topology, environment variables, runbooks, and cron | `Operations.md` |
@@ -61,6 +58,7 @@ Historical ticket plans, checklists, reviews, and state snapshots live in [archi
 
 1. [MVP Spec](MVP_Spec.md) - understand the product.
 2. [Full Design](Full_Design_Document.md) - learn the permanent laws and boundaries.
-3. [Technical Design](MVP_Technical_Design.md) - see the implementation blueprint.
-4. [Repository Current State](Repo_Current_State.md) - find the active state and next work.
-5. [Tickets](Tickets.md) - select an active ticket.
+3. [Technical Design](MVP_Technical_Design.md) - see the serving-path blueprint.
+4. [Offline Pipelines Design](Offline_Pipelines_Design.md) - see ingestion and evaluation.
+5. [Repository Current State](Repo_Current_State.md) - find the active state and next work.
+6. [Tickets](Tickets.md) - select an active ticket.

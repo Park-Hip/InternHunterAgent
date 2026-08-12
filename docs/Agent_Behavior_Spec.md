@@ -1,42 +1,14 @@
 # Agent Behavior Spec — InternHunterAgent (Resumi)
+> **Status**
+> - Frozen: 2026-07-11 under T0015.2.
+> - `behavior_glossary` is not landed in `config/prompts.yaml`.
+> - Recover the 18 canonical strings from `archive/t0015.2-behavior-glossary`.
 
-> **Provenance (restored 2026-07-22).** Recovered from `archive/t0015.4-scenario-matrix`
-> (`eba3e1f`) during a branch-cleanup pass. It had been stranded on an unmerged branch since
-> T0015.2 — `docs/Tickets.md` marks that ticket *(done)*, but neither this file nor the
-> `behavior_glossary` it names had ever reached the mainline.
->
-> **⚠️ The "machine source of truth" referenced below is frozen but NOT LANDED.**
-> `config/prompts.yaml` on this branch has **no `behavior_glossary` block** — none of the
-> canonical phrase IDs appear in it, and the live prompts express a subset of these behaviors
-> as **prose instruction** instead (e.g. "if a user asks about salary and the value is missing
-> or negotiable, say so plainly"). The glossary itself is **complete and recoverable** — 18
-> strings, committed 2026-07-11 in `62f2089`, preserved at tag
-> **`archive/t0015.2-behavior-glossary`**:
->
-> ```bash
-> git show archive/t0015.2-behavior-glossary:config/prompts.yaml
-> ```
->
-> So treat the phrase IDs below as **specified and written, but not yet what the system
-> emits**. Landing them is owned work, tracked in `docs/Known_Issues.md` → Repo state &
-> version control. Note the ID spelling differs: this doc hyphenates (`NEGOTIABLE-SALARY`),
-> the config uses underscores (`NEGOTIABLE_SALARY`).
->
-> **Status:** Spec of record — **frozen 2026-07-11 (T0015.2)**. This is the human-readable
-> single source of truth for *how Resumi should behave*, scenario by scenario, against the frozen
-> 16-column v1 schema ([`Schema_Contract.md`](Schema_Contract.md)) and the `internhunter_eval`
-> fixture. It is the target the T0015.4 manual matrix measures against and the T0015.5 few-shots
-> optimize toward.
->
-> **Companion artifacts:**
-> - Research/rationale + the full behavioral question catalog:
-> [`research/archive/agent-behavior-question-bank.md`](../research/archive/agent-behavior-question-bank.md)
-> (groups
-> `G01`–`G47`; settled decisions in §12; final glossary in §10).
-> - Machine source of truth for the canonical strings: the `behavior_glossary` block in
-> [`config/prompts.yaml`](../config/prompts.yaml).
-> - This doc does **not** replace `skills/generate-ticket-prompt/SKILL.md`, the separate
-> ticket-template artifact.
+The [v1 scenario matrix](../evals/v1_scenario_matrix.md) preserves the measured behavior record
+that informs this specification.
+
+> **Eviction:** A behavior requirement leaves when an approved replacement is measured against the
+> evaluation baseline and adopted into the prompt contract.
 
 ---
 
@@ -170,3 +142,43 @@ rows is acceptable. If probes stay flaky after the T0015.5 few-shots, record the
   decisions #6/#7/#9/#10 (T0015.5).
 - Adding any of the §4b gap scenarios to `golden_dataset.json` (harness-track follow-up).
 - Any schema/DDL/API change (frozen at T0013.5) and the automated judge harness (separate track).
+
+## Provenance
+
+> **Provenance (restored 2026-07-22).** Recovered from `archive/t0015.4-scenario-matrix`
+> (`eba3e1f`) during a branch-cleanup pass. It had been stranded on an unmerged branch since
+> T0015.2 — `docs/Tickets.md` marks that ticket *(done)*, but neither this file nor the
+> `behavior_glossary` it names had ever reached the mainline.
+>
+> **⚠️ The "machine source of truth" referenced below is frozen but NOT LANDED.**
+> `config/prompts.yaml` on this branch has **no `behavior_glossary` block** — none of the
+> canonical phrase IDs appear in it, and the live prompts express a subset of these behaviors
+> as **prose instruction** instead (e.g. "if a user asks about salary and the value is missing
+> or negotiable, say so plainly"). The glossary itself is **complete and recoverable** — 18
+> strings, committed 2026-07-11 in `62f2089`, preserved at tag
+> **`archive/t0015.2-behavior-glossary`**:
+>
+> ```bash
+> git show archive/t0015.2-behavior-glossary:config/prompts.yaml
+> ```
+>
+> So treat the phrase IDs below as **specified and written, but not yet what the system
+> emits**. Landing them is owned work, tracked in `docs/Known_Issues.md` → Repo state &
+> version control. Note the ID spelling differs: this doc hyphenates (`NEGOTIABLE-SALARY`),
+> the config uses underscores (`NEGOTIABLE_SALARY`).
+>
+> **Status:** Spec of record — **frozen 2026-07-11 (T0015.2)**. This is the human-readable
+> single source of truth for *how Resumi should behave*, scenario by scenario, against the frozen
+> 16-column v1 schema ([`Schema_Contract.md`](Schema_Contract.md)) and the `internhunter_eval`
+> fixture. It is the target the T0015.4 manual matrix measures against and the T0015.5 few-shots
+> optimize toward.
+>
+> **Companion artifacts:**
+> - Research/rationale + the full behavioral question catalog:
+> [`research/archive/agent-behavior-question-bank.md`](../research/archive/agent-behavior-question-bank.md)
+> (groups
+> `G01`–`G47`; settled decisions in §12; final glossary in §10).
+> - Machine source of truth for the canonical strings: the `behavior_glossary` block in
+> [`config/prompts.yaml`](../config/prompts.yaml).
+> - This doc does **not** replace `skills/generate-ticket-prompt/SKILL.md`, the separate
+> ticket-template artifact.

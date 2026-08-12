@@ -4,6 +4,9 @@
 
 Use these conventions for every Markdown document in this repository.
 
+> **Eviction:** A convention leaves when a replacement convention is adopted and every affected
+> document is brought into compliance.
+
 ## Readability
 
 - Wrap prose at 100 characters or fewer. Table rows, fenced code, link-only lines, and long
@@ -34,3 +37,16 @@ add a BOM. Use an editor configured for UTF-8, or an explicit UTF-8-safe tool in
 
 The linter detects known mojibake signatures. When a document must quote one literally, put it
 inside a backticked code span or add `<!-- lint-allow-encoding -->` on that line.
+
+## Documentation lifecycle
+
+- **Rule A - state the exit.** Every capped document has a header `> **Eviction:**` line that says
+  what content leaves and when.
+- **Rule B - collapse corrections.** Rewrite against current truth instead of appending a
+  correction.
+  Git retains the superseded version. The amendment check flags `no longer`, `read every`,
+  `correcting an earlier`, and `superseded above` outside code spans. Use
+  `<!-- lint-allow-amendment -->` only for a necessary historical reference.
+
+The [ticket-writing skill](../skills/generate-ticket-prompt/SKILL.md) applies these conventions
+when it generates a ticket prompt.

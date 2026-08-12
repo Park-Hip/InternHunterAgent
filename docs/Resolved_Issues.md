@@ -156,7 +156,8 @@ original register entry (omitted where none was assigned).
     (non-dict response, missing/empty messages, non-str/empty/whitespace final content) instead of
     raising `ValueError`. `service.py`'s existing `if answer is None or not answer.strip()` guard
     now actually fires, coercing `""` to `FALLBACK_ANSWER` — a `200` instead of the generic `500` in
-    `query.py`. No change to `service.py`/`query.py`. Detail: `Code_Review_Notes.md` doc-insight 3.
+    query.py. Before this fix, _extract_answer raised before service.py could coerce an empty
+    answer, so the fallback branch was unreachable. No change to service.py/query.py.
 
 ## Agent runtime & prompts
 - **`[HIGH · RESOLVED · 2026-07-15]` `generate_sql` returned empty content when qwen spent the whole
@@ -225,7 +226,7 @@ original register entry (omitted where none was assigned).
   - **Verified:** new `tests/services/ingestion/test_transform.py::NormalizeLocationTests`
     (free-form address, short-alias-inside-address, short-alias-false-positive-guard, multi-city
     order, dedup) + existing `test_normalize_vietnamworks.py` location tests. Detail:
-    `Code_Review_Notes.md` bug 6.
+    `Code_Review_Notes.md` bug 6. <!-- archived-on-tag -->
 
 - **`[LOW · RESOLVED · 2026-07-02]` `replace_clean_jobs` would crash on intra-batch duplicate keys**
   (latent).
@@ -233,7 +234,7 @@ original register entry (omitted where none was assigned).
     one batch. `replace_clean_jobs` now dedups `rows` by `(source, external_id)` (last-write-wins)
     before the insert, and the returned count reflects the deduped rows. Verified:
     `tests/services/ingestion/test_clean_store.py::ReplaceCleanJobsTests::test_intra_batch_duplicate_key_is_deduped_last_wins`.
-    Detail: `Code_Review_Notes.md` bug 8.
+    Detail: `Code_Review_Notes.md` bug 8. <!-- archived-on-tag -->
 
 - **`[HIGH · RESOLVED · D6, 2026-08-09]` Neon production was still at the Alembic baseline — the
   T0019.3 lifecycle migration had never run against it.**
@@ -297,14 +298,14 @@ original register entry (omitted where none was assigned).
     (source, external_id)`). Now masks string-literal contents, then requires every `FROM`/`JOIN`
     reference to equal `clean_jobs` and rejects a comma-separated `FROM` list; a bare `SELECT 1` (no
     table) remains valid. The string-literal masking was later reused to fix the denylist-keyword
-    false-positive class (bug 4). Detail: `Code_Review_Notes.md` bug 1.
+    false-positive class (bug 4). Detail: `Code_Review_Notes.md` bug 1. <!-- archived-on-tag -->
 
 - **`[MED-HIGH · RESOLVED · T0010.4, 2026-07-02]` Blocking LLM call on the async event loop.**
   - `query_clean_jobs` (async) offloaded the DB call via `asyncio.to_thread` but ran
     `generate_sql`'s `model.invoke(...)` synchronously on the loop, so each Groq SQL-gen round-trip
     blocked every concurrent request and the health probe. Now `sql = await
     asyncio.to_thread(generate_sql, question)` — scheduling-only, generated SQL unchanged. Detail:
-    `Code_Review_Notes.md` bug 2. (Superseded by the T0012.8 native-async change below.)
+    `Code_Review_Notes.md` bug 2. <!-- archived-on-tag --> (Superseded by the T0012.8 native-async change below.)
 
 - **`[MED · RESOLVED · T0010.5, 2026-07-02]` "Showing N of M" could understate the true match
   count.**
@@ -319,7 +320,7 @@ original register entry (omitted where none was assigned).
     total is computed for list queries (rejected Option B: a separate `COUNT(*)`). Scalar/`COUNT(*)`
     queries unaffected.
   - **Verified:** `tests/services/query/test_row_bound.py`, updated `test_table_formatter.py` +
-    `test_query_clean_jobs.py`. Detail: `Code_Review_Notes.md` bug 5.
+    `test_query_clean_jobs.py`. Detail: `Code_Review_Notes.md` bug 5. <!-- archived-on-tag -->
 
 - **`[LOW · RESOLVED · T0012.8, 2026-07-06]` Nested SQL-generation call used thread-offloaded sync
   `invoke`, not native async.**
@@ -369,7 +370,7 @@ original register entry (omitted where none was assigned).
     on the async path that stalled concurrent requests. Now offloaded via `await
     asyncio.to_thread(client.flush)`, matching the existing `asyncio.to_thread(...)` pattern;
     per-request flush semantics preserved, it just no longer blocks the event loop. Detail:
-    `Code_Review_Notes.md` bug 7.
+    `Code_Review_Notes.md` bug 7. <!-- archived-on-tag -->
 
 ## Evaluation harness
 

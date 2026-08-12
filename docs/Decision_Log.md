@@ -5,6 +5,51 @@
 > It records the choice and points to the preserved reasoning.
 > Current operational facts belong in the document that owns them.
 
+> **Eviction:** A decision entry leaves when it is revoked or superseded, with its historical record
+> retained in the decision archive.
+
+## Decision index
+
+| ID | Decision | Status |
+|---|---|---|
+| D-037 | Evaluation baselines freeze fixture data with the agent-visible contract | Active |
+| D-036 | The source market is Vietnamese job boards, not global ATS aggregators | Active |
+| D-035 | The tracked `skills/` copy is canonical | Active |
+| D-034 | VietnamWorks automation passed the robots.txt and terms gate | Active |
+| D-033 | Render hosts the portfolio demo | Active |
+| D-032 | Production uses a slim, non-root Python Docker image | Active |
+| D-031 | Production Postgres uses Neon directly, not the pooler | Active |
+| D-030 | Production secrets are Render runtime environment variables | Active |
+| D-029 | Langfuse Cloud Hobby in Japan provides tracing | Active |
+| D-028 | The demo uses the Render subdomain and same-origin serving | Active |
+| D-027 | Render auto-deploys pushes to main | Active |
+| D-026 | Liveness and readiness are separate endpoints | Active |
+| D-025 | The demo has a 10 USD monthly cost ceiling | Active |
+| D-024 | Ingestion runs externally through GitHub Actions | Active |
+| D-023 | Schema changes use Alembic migrations | Active |
+| D-022 | Ingestion accumulates records instead of truncating clean jobs | Active |
+| D-021 | Lifecycle data is hidden until honesty behavior is measured | Active |
+| D-020 | Production ingestion needs a yield floor, rollback path, and schema assertion | Active |
+| D-019 | Keep-alive is windowed and must be measured against Neon compute use | Active |
+| D-018 | Offline evaluation precedes online monitoring | Active |
+| D-017 | Gemini judges evaluation while Groq serves the agent | Active |
+| D-016 | Evaluation covers outcome, trajectory, and component layers | Active |
+| D-015 | V1 schema changes are decided before the schema freeze | Active |
+| D-014 | Tech stack uses an external vocabulary, not a hardcoded allowlist | Active |
+| D-013 | Tech stack includes AI and data techniques as well as technologies | Active |
+| D-012 | Job level is agent-visible in v1 | Active |
+| D-011 | Listing expiry comes from the truthful source expiry field | Active |
+| D-010 | Created-on is preserved, while posted date is never synthesized | Active |
+| D-009 | Stream extraction tries event v3 and keeps a message fallback | Active |
+| D-008 | Streaming uses a two-gate filter to prevent internal token leakage | Active |
+| D-007 | Streaming uses FastAPI's native SSE response | Active |
+| D-006 | The stream has typed terminal events | Active |
+| D-005 | Mid-stream failures are in-band error events | Active |
+| D-004 | The demo is an editorial vanilla front end | Active |
+| D-003 | The demo UI is static and same-origin with FastAPI | Active |
+| D-002 | Browser SSE over POST uses fetch and ReadableStream | Active |
+| D-001 | The behavior question bank is exploratory, not a product commitment | Active |
+
 ## Active decisions
 
 ### D-037 - Evaluation baselines freeze fixture data with the agent-visible contract

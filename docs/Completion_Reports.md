@@ -1,5 +1,23 @@
 # Completion Reports
 
+Per-ticket outcome records (`CLAUDE.md §5`). Append-only: each entry captures what changed,
+files touched, test results, and follow-ups for one ticket. This is the durable record;
+`Repo_Current_State.md` holds only the milestone-level snapshot and links here.
+
+Entries are kept to the durable summary — full implementation detail lives in the code and
+git. **Older milestones (M0–M14) are archived** in
+[`archive/Completion_Reports_Archive.md`](archive/Completion_Reports_Archive.md); this file
+holds the current deploy-era stack (M16+).
+
+## Entry format
+One entry per ticket: **Did** (what changed) · **Files** (key paths) · **Tests** (result) ·
+**Follow-up** (where it went). Longer standalone entries may use the full `CLAUDE.md §5`
+field list (Summary / Files / Commands / Build & test / Manual verification / Risks /
+Follow-ups / Docs).
+
+---
+
+
 ## T0022.7 - Rebuild repository state and true up registers
 
 - **Summary:** Rebuilt `Repo_Current_State.md` as an 85-line current-facts sheet. It retains the
@@ -144,23 +162,6 @@
 - **Follow-up:** T0022.2 repairs the current encoding/parity/orphan findings. T0022.3 handles
   mechanical reflow. T0022.9 turns the job into a blocking CI gate.
 - **Docs updated:** `docs/Docs_Conventions.md`, `docs/Repo_Current_State.md`, and this report.
-
-Per-ticket outcome records (`CLAUDE.md §5`). Append-only: each entry captures what changed,
-files touched, test results, and follow-ups for one ticket. This is the durable record;
-`Repo_Current_State.md` holds only the milestone-level snapshot and links here.
-
-Entries are kept to the durable summary — full implementation detail lives in the code and
-git. **Older milestones (M0–M14) are archived** in
-[`archive/Completion_Reports_Archive.md`](archive/Completion_Reports_Archive.md); this file
-holds the current deploy-era stack (M16+).
-
-## Entry format
-One entry per ticket: **Did** (what changed) · **Files** (key paths) · **Tests** (result) ·
-**Follow-up** (where it went). Longer standalone entries may use the full `CLAUDE.md §5`
-field list (Summary / Files / Commands / Build & test / Manual verification / Risks /
-Follow-ups / Docs).
-
----
 
 ## Milestone 16 — Security Posture (Public-Endpoint Hardening)
 - **T0016.1 — CORS middleware (config-driven, credential-less).**
@@ -1676,7 +1677,7 @@ Follow-ups / Docs).
   `research/archive/demo-ui-and-golive-plan.md`,
   `research/archive/streaming-implementation-plan.md`,
   `research/archive/schema-enrichment-plan.md`,
-  `research/archive/deployment-research-plan.md`, `docs/archive/Code_Review_Notes.md`,
+  `research/archive/deployment-research-plan.md`, `docs/archive/Code_Review_Notes.md`, <!-- archived-on-tag -->
   `docs/Tickets.md`, `docs/Repo_Current_State.md`, and this report.
 - **Commands run:** Citation-heading inventory, inbound-reference search, line-count comparison,
   `python scripts/docs_lint.py`, and `git diff --check`.
@@ -1727,4 +1728,51 @@ Follow-ups / Docs).
 - **Risks:** Live provider, database, GitHub, and Render state remains unverified where recorded as
   blocked or maintainer-owned.
 - **Follow-up tickets:** T0022.13 is next; T0021.3 and T0021.4 retain the relevant service fixes.
+- **Docs that need updating:** No additional documentation update is required for this ticket.
+## T0022.13 - Restructure the surviving documents
+
+- **Summary:** Split the serving-path and offline-pipeline designs, moved completed M22 ticket plans
+  into the archive, and reshaped the surviving documentation around its reader and owner.
+- **Files changed:** `docs/Tickets.md`, `docs/archive/Tickets_Archive.md`,
+  `docs/MVP_Technical_Design.md`, `docs/Offline_Pipelines_Design.md`, `docs/README.md`, the seven
+  smaller structural targets, both project registers, and this report.
+  `docs/archive/Code_Review_Notes.md` was retired; the unique fallback insight now lives in <!-- archived-on-tag -->
+  `Resolved_Issues.md`.
+- **Commands run:** Baseline and final `python scripts/docs_lint.py`, citation and stale-reference
+  searches, line counts, and `git diff --check`.
+  The citation audit checked 16 references to design sections 7-8 against the retained headings.
+- **Build and test results:** The final documentation linter and whitespace check passed.
+  The serving design is 709 lines and `Tickets.md` is 179 lines, inputs to T0022.14's cap decision.
+- **Manual verification:** Open `Tickets.md` and confirm active work is visible immediately.
+  Open `Offline_Pipelines_Design.md` and verify sections 7-8 retain their numbering.
+  Follow the three cron-runbook section-7 references, and use the Decision Log index to find D-014.
+- **Risks:** The 709-line serving design remains above the proposed 650-line T2 cap.
+  The 179-line Tickets register remains above the prior 150-line T3 cap.
+- **Follow-up tickets:** T0022.14 owns the cap decision and enforcement.
+- **Docs that need updating:** No additional documentation update is required for this ticket.
+
+## T0022.14 - Enforce the caps
+
+- **Summary:** Added ten blocking documentation checks, with per-document caps parsed from the
+  marked documentation map. Capped documents now declare an eviction rule; correction banners,
+  orphaned documents, and cap-table drift fail the gate. The link-path check now distinguishes a
+  branch name from a missing repository path.
+- **Files changed:** `scripts/docs_lint.py`, `tests/test_docs_lint.py`, the documentation map,
+  capped-document headers, `Docs_Conventions.md`, project registers, and this report.
+- **Commands run:** Baseline and final `uv run python scripts/docs_lint.py`, focused docs-lint
+  tests, focused Ruff, and `git diff --check`.
+- **Build and test results:** The full documentation linter passed with all ten checks active.
+  `uv run pytest tests/test_docs_lint.py -q` passed with 26 tests, and focused Ruff passed.
+  `uv run pytest -q` exceeded the 60-second execution window without a result; the ticket changed
+  documentation tooling only, so its focused suite is the completed automated coverage.
+- **Manual verification:** Add 200 lines to `Known_Issues.md`, remove an `Eviction:` header, add an
+  unmarked amendment phrase to a capped document, and create an unlinked `docs/scratch.md`; each <!-- lint-allow-link-path -->
+  must fail the matching check and clear when reverted. Change or remove a caps-table row and
+  confirm `size-cap` immediately reports the affected document. Confirm a backticked
+  `docs/some-branch` stays silent while a missing `docs/example.md` still fails link-path. <!-- lint-allow-link-path -->
+- **Risks:** Caps depend on maintainers keeping the documentation map honest. The blocking
+  unindexed-document check covers the living `docs/` surface; live research remains governed by
+  its index and the orphan check.
+- **Follow-up tickets:** Scope a freshness check for `Last verified:` stamps, including the
+  trade-off that comparing a stamp with git mtime would require a bump after whitespace-only edits.
 - **Docs that need updating:** No additional documentation update is required for this ticket.

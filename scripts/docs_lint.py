@@ -26,7 +26,19 @@ ENCODING_MARKER = "<!-- lint-allow-encoding -->"
 LINK_PATH_MARKER = "<!-- lint-allow-link-path -->"
 LINK_PATH_BLOCK_BEGIN = "<!-- lint-allow-link-path:begin -->"
 LINK_PATH_BLOCK_END = "<!-- lint-allow-link-path:end -->"
+AMENDMENT_MARKER = "<!-- lint-allow-amendment -->"
 TECH_STACK = ROOT / "docs" / "Tech_Stack.md"
+DOCS_MAP = ROOT / "docs" / "README.md"
+CAPS_BEGIN = "<!-- caps:begin -->"
+CAPS_END = "<!-- caps:end -->"
+EVICTION_RULE = re.compile(r"^> \*\*Eviction:\*\* \S.+")
+AMENDMENT_PHRASES = (
+    "no longer",
+    "read every",
+    "correcting an earlier",
+    "superseded above",
+)
+ORPHAN_EXEMPTIONS = frozenset({ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "CLAUDE.md"})
 STAMPED_DOCS = (
     ROOT / "docs" / "Repo_Current_State.md",
     ROOT / "docs" / "Known_Issues.md",
@@ -78,6 +90,13 @@ class Finding:
             location = self.path.as_posix()
         suffix = f":{self.line}" if self.line else ""
         return f"{location}{suffix}: {self.check}: {self.message}"
+
+
+@dataclass(frozen=True)
+class CapEntry:
+    path: Path
+    tier: str
+    cap: int | None
 
 
 def markdown_files(root: Path = ROOT) -> list[Path]:
@@ -168,7 +187,10 @@ def is_repo_path(value: str) -> bool:
         "src/",
         "tests/",
     )
-    return value.startswith(top_level) and " " not in value
+    if not value.startswith(top_level) or " " in value:
+        return False
+    candidate = ROOT / value
+    return Path(value).suffix != "" or candidate.is_dir()
 
 
 def check_link_path(files: list[Path]) -> list[Finding]:
@@ -298,6 +320,128 @@ def check_stamps(paths: tuple[Path, ...] = STAMPED_DOCS) -> list[Finding]:
     return findings
 
 
+def documented_caps(text: str, source: Path = DOCS_MAP) -> dict[Path, CapEntry]:
+    """Return the documented per-file caps from the marked documentation-map table."""
+    start, end = text.find(CAPS_BEGIN), text.find(CAPS_END)
+    if start == -1 or end == -1 or end < start:
+        return {}
+    entries: dict[Path, CapEntry] = {}
+    for line in text[start + len(CAPS_BEGIN) : end].splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != 5 or cells[0] == "Doc" or set(cells[0]) == {"-", ":"}:
+            continue
+        match = re.fullmatch(r"\[[^]]+\]\(([^)]+)\)", cells[0])
+        if match is None:
+            continue
+        path = path_from_link(match.group(1), source)
+        if path is None or path.suffix != ".md":
+            continue
+        cap_text = cells[3]
+        cap = None if cap_text == "Uncapped" else int(cap_text)
+        entries[path] = CapEntry(path=path, tier=cells[2], cap=cap)
+    return entries
+
+
+def cap_entries(map_path: Path = DOCS_MAP) -> dict[Path, CapEntry]:
+    """Load the documentation-map cap register, or return no entries when it is absent."""
+    if not map_path.exists():
+        return {}
+    return documented_caps(map_path.read_text(encoding="utf-8"), map_path)
+
+
+def managed_documentation_files(files: list[Path], docs_root: Path = ROOT / "docs") -> set[Path]:
+    """Return living documents owned by the documentation map's primary surface."""
+    return {
+        path.resolve()
+        for path in files
+        if path.is_relative_to(docs_root) and not is_archive(path)
+    }
+
+
+def check_size_cap(files: list[Path], map_path: Path = DOCS_MAP) -> list[Finding]:
+    """Keep each documentation-map cap current and every managed document indexed."""
+    if not map_path.exists():
+        return [Finding("size-cap", map_path, 0, "docs/README.md is missing")]
+    map_text = map_path.read_text(encoding="utf-8")
+    if CAPS_BEGIN not in map_text or CAPS_END not in map_text:
+        return [Finding("size-cap", map_path, 0, f"missing {CAPS_BEGIN} / {CAPS_END} markers")]
+    entries = documented_caps(map_text, map_path)
+    if not entries:
+        return [Finding("size-cap", map_path, 0, "caps table has no document rows")]
+    findings: list[Finding] = []
+    for entry in entries.values():
+        if entry.cap is None:
+            continue
+        if not entry.path.exists():
+            findings.append(Finding("size-cap", entry.path, 0, "indexed document is missing"))
+            continue
+        lines = len(entry.path.read_text(encoding="utf-8").splitlines())
+        if lines > entry.cap:
+            findings.append(Finding("size-cap", entry.path, 0, f"{lines} lines exceeds cap {entry.cap}"))
+    indexed = set(entries)
+    for path in sorted(managed_documentation_files(files, map_path.parent) - indexed):
+        findings.append(Finding("size-cap", path, 0, "living document is missing from caps table"))
+    return findings
+
+
+def check_eviction_rule(_: list[Path], map_path: Path = DOCS_MAP) -> list[Finding]:
+    """Require every capped document to explain which content is removed and when."""
+    findings: list[Finding] = []
+    for entry in cap_entries(map_path).values():
+        if entry.cap is None or not entry.path.exists():
+            continue
+        header = entry.path.read_text(encoding="utf-8").splitlines()[:20]
+        if not any(EVICTION_RULE.match(line) for line in header):
+            findings.append(Finding("eviction-rule", entry.path, 0, "missing header eviction rule"))
+    return findings
+
+
+def check_amendment(_: list[Path], map_path: Path = DOCS_MAP) -> list[Finding]:
+    """Prevent correction banners in capped living documents."""
+    findings: list[Finding] = []
+    for entry in cap_entries(map_path).values():
+        if entry.tier not in {"T1", "T2", "T3"} or not entry.path.exists():
+            continue
+        for number, line in enumerate(entry.path.read_text(encoding="utf-8").splitlines(), 1):
+            if AMENDMENT_MARKER in line:
+                continue
+            visible = code_spans_removed(line).lower()
+            for phrase in AMENDMENT_PHRASES:
+                if phrase in visible:
+                    findings.append(
+                        Finding("amendment", entry.path, number, f"contains correction phrase {phrase!r}")
+                    )
+    return findings
+
+
+def check_orphan(files: list[Path]) -> list[Finding]:
+    """Require every living Markdown document to have an inbound documentation link."""
+    live = {path.resolve() for path in files if not is_archive(path)}
+    linked: set[Path] = set()
+    link_pattern = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
+    code_pattern = re.compile(r"`([^`]+)`")
+    for source in live:
+        in_fence = False
+        for line in source.read_text(encoding="utf-8").splitlines():
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            targets = [(target, False) for target in link_pattern.findall(line)]
+            targets.extend((value, True) for value in code_pattern.findall(line) if is_repo_path(value))
+            for target, repo_rooted in targets:
+                candidate = path_from_link(target, source, repo_rooted=repo_rooted)
+                if candidate in live and candidate != source:
+                    linked.add(candidate)
+    return [
+        Finding("orphan", path, 0, "living document has no inbound link")
+        for path in sorted(live - linked - ORPHAN_EXEMPTIONS)
+    ]
+
+
 CHECKS = {
     "line-length": check_line_length,
     "link-path": check_link_path,
@@ -305,6 +449,10 @@ CHECKS = {
     "agent-parity": check_agent_parity,
     "stack": check_stack,
     "stamp": lambda _: check_stamps(),
+    "size-cap": check_size_cap,
+    "eviction-rule": check_eviction_rule,
+    "amendment": check_amendment,
+    "orphan": check_orphan,
 }
 
 

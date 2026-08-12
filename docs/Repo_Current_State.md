@@ -1,11 +1,15 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-11 against the checked-out commit, active registers, and
+> **Last verified:** 2026-08-12 against the checked-out commit, active registers, and
 > [`Operations.md`](Operations.md).
+
+> **Eviction:** A current-state fact leaves when the checked-out repository or active operational
+> register changes; replace it with the verified current fact.
 
 ## Current branch
 
-- Working branch: feature/t0022.10-12-phase2-prune-collapse-registers (a branch, not a directory).
+- Repository baseline: `main` at `410c628`.
+- The active ticket branch is intentionally not recorded here because it changes per ticket.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -38,11 +42,11 @@ Completed ticket plans are preserved in the [ticket archive](archive/Tickets_Arc
 M21 has T0021.1 and T0021.2 complete; T0021.3 and T0021.4 remain unscoped.
 M22 - Docs Hygiene & Documentation System has phase 1 (T0022.1-.9) merged to `main` on
 2026-08-11 via PR #41.
-T0022.10 through T0022.12 are complete; T0022.13 and T0022.14 remain scoped and not started.
+T0022.10 through T0022.14 are complete.
 
 ## Archive tags
 
-The branches these tags replaced no longer exist.
+These tags preserve branches that are no longer active. <!-- lint-allow-amendment -->
 
 | Tag | Commit | What it preserves |
 |---|---|---|
@@ -64,7 +68,7 @@ The branches these tags replaced no longer exist.
 ```text
 alembic/       database migrations
 config/        runtime, ingestion, prompt, and vocabulary configuration
-docs/          living documentation and archives
+docs/          living documentation, serving design, offline-pipeline design, and archives
 docker/        application container image definition
 evals/         DeepEval harness, fixtures, and scenario data
 scripts/       local maintenance and documentation checks
@@ -92,7 +96,7 @@ The authoritative package declarations are in `pyproject.toml`.
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Passed locally on 2026-08-11 (all checks) |
+| `python scripts/docs_lint.py` | Passed locally on 2026-08-12 (all ten checks) |
 | `uv run pytest -q` | 346 passed, 1 skipped, 19 deselected, 4 subtests passed |
 | `uv run ruff check src tests` | Passed |
 | `uv run mypy src` | Success: no issues in 43 source files |
@@ -108,5 +112,4 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0022.13 - restructure the surviving documentation. T0023, the v1.0 release cut,
-follows M22.
+T0023 - cut the v1.0 release, following the completed M22 documentation system.

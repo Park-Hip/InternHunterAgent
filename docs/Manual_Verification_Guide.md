@@ -6,6 +6,9 @@ Completed-ticket checklists are preserved in
 Dated live-pass logs remain in
 [`archive/Manual_Verification_History.md`](archive/Manual_Verification_History.md).
 
+> **Eviction:** A checklist leaves when its verification is recorded in the archive or its owning
+> ticket is superseded by a replacement checklist.
+
 ## Current and unrun checklists
 
 ### T0021.1: API read-path startup schema assertion
@@ -74,73 +77,7 @@ docker compose exec -T postgres psql -U internhunter -d postgres -c "DROP DATABA
 > session (Docker unavailable). The six automated cases prove the diff/exception logic
 > against a patched `session_factory` but not the live-DB boot end-to-end.
 
-## Archived checklist index
+## Archived checklists
 
-- T0000
-- T0001
-- T0002
-- T0003
-- T0004
-- T0005
-- T0006.1
-- T0006.2
-- T0006.3
-- T0006.4
-- T0006.5
-- T0006.6
-- T0006.7
-- T0006.8
-- T0006.9
-- T0006.10
-- T0007.1
-- T0007.2
-- T0007.3
-- T0007.4
-- T0008.1
-- T0008.2
-- T0009.1
-- T0009.2
-- T0009.3
-- T0009.4
-- T0009.5
-- T0009.6
-- T0009.7
-- T0009.9
-- T0010.1
-- T0010.2
-- T0010.3
-- T0010.4
-- T0010.5
-- T0010.6
-- T0010.7
-- T0011.1
-- T0011.2
-- T0011.3
-- T0011.4
-- T0011.6
-- T0012.4
-- T0012.5
-- T0012.6
-- T0012.7
-- T0012.8
-- T0012.10
-- T0014.1
-- T0014.2
-- T0016.1
-- T0016.2
-- T0016.3
-- T0016.4
-- T0017.1
-- T0017.2
-- T0018.1
-- T0018.2
-- T0018.3
-- T0019.2
-- T0019.3
-- T0019.4
-- T0019.5
-- T0019.6
-- T0019.7
-- T0019.8
-- T0019.9
-- T0019.10
+Completed-ticket checklists are indexed in the
+[`Manual Verification Archive`](archive/Manual_Verification_Archive.md).

@@ -4,6 +4,9 @@
 > the implementation. Technical mechanism and ticket sequencing live elsewhere (see §7). If a line
 > here starts describing *how* something is built, it belongs in another doc.
 
+> **Eviction:** A requirement leaves when an accepted product decision replaces it or the MVP no
+> longer needs it.
+
 ## 1. Purpose & Vision
 
 InternHunterAgent helps a job seeker find and understand **AI/Data job opportunities — internships
@@ -75,14 +78,13 @@ reads as "forgotten":
 - **Resume understanding and personalised matching** → future phase.
 - **Similarity / semantic search over postings** → future phase.
 - **Accounts, authentication, and multi-user management** → future phase.
-- **Live or large-scale job data** → the MVP runs on a small, fixed sample dataset; larger and live
-  data are future phases.
+- **Live, real-time job data** → the MVP has scheduled VietnamWorks ingestion, but a continuously
+  updated multi-source corpus is a future phase.
 
 **Known limitations we accept for the MVP:**
 
 - Answers are **text-only** — no tables, charts, or downloadable results yet.
-- The dataset is a **small fixed sample**, sufficient to prove the experience, not to be
-  comprehensive.
+- The corpus is limited to the current VietnamWorks ingestion scope and is not comprehensive.
 
 ## 6. Future Direction
 
@@ -91,8 +93,8 @@ priority within each track.
 
 - **Product experience:** resume upload → retrieval of similar postings via embeddings → charting
   and visual answers from the underlying data.
-- **Data:** replace the sample dataset with a larger one → real-time ingestion of current AI/Data
-  job postings.
+- **Data:** expand beyond the current VietnamWorks source → more frequent ingestion of current
+  AI/Data job postings.
 - **Platform & operations:** evaluation harness for answer quality → a user-facing UI → managed
   deployment environments → ongoing prompt refinement.
 

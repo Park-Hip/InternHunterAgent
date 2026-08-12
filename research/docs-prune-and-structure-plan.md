@@ -164,7 +164,7 @@ tracing is Cloud-hosted, and closes the security entry as *"resolved by removal"
 | File | Reader it serves |
 |---|---|
 | `research/experiments/vietnamworks_tos_excerpt_2026-07-16.md` | The legal-gate evidence behind D-034. Dated, unreproducible — the page carries no version |
-| `docs/archive/Code_Review_Notes.md` | **Reversed 2026-08-11 — now retired in T0022.13.** See below |
+| `docs/archive/Code_Review_Notes.md` | **Reversed 2026-08-11 - now retired in T0022.13.** See below | <!-- archived-on-tag -->
 | `docs/archive/Completion_Reports_Archive.md`, `Manual_Verification_History.md` | 83 and 86 lines. Below the cost of touching |
 | `docs/archive/Tickets_Archive.md`, `Manual_Verification_Archive.md` | Archived by T0022.6 one ticket ago. Re-litigating is churn (**decided 2026-08-10**) |
 | `guides/Streaming_And_SSE_Explained.md` | A deliberate learning walkthrough, correctly outside `docs/`. Needs indexing, not pruning |

@@ -3,7 +3,7 @@
 > **Last verified:** 2026-08-11 against checked-out code, tests, configuration, and active runbooks.
 
 This register holds actionable risks that are open, blocked, or awaiting a maintainer decision.
-An entry leaves when it is fixed, superseded, or reclassified in its owning document.
+> **Eviction:** An entry leaves when fixed, superseded, or reclassified in its owning document.
 Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 
 ## Triage

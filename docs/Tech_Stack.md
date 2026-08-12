@@ -6,6 +6,12 @@
 > `scripts/docs_lint.py --check stack` fails the build if the dependency list below drifts from
 > `pyproject.toml`, so this file cannot go stale silently.
 
+> **Eviction:** A stack entry leaves when its dependency, service, or runtime is removed from the
+> deployed system and its configuration is deleted.
+
+The [vendored technology vocabulary sources](../data/vendor/README.md) record the inputs to the
+technology-vocabulary builder.
+
 ## At a glance
 
 | Layer | Choice | Version | Where configured |

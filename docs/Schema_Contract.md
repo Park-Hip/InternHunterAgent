@@ -1,5 +1,8 @@
 # Schema Contract
 
+> **Eviction:** A contract entry leaves when an Alembic migration changes the schema and its
+> agent-visible mapping is updated with that migration.
+
 ## Purpose
 
 This document records the frozen v1 deployed schema and API contract for InternHunterAgent.
@@ -89,9 +92,9 @@ ticket explicitly declares a recalibration.
 questions apart: *does the column exist* (yes, since T0019.3) versus *can the agent see it*
 (no).
 
-Exposure remains the single known future agent-visible addition. The gate is **no longer
-T0014**: it is now T0011.5 baseline calibration → a prompt-v2 few-shot pass → a targeted
-recalibration delta. T0019 cut the exposure from its own scope precisely because the
+Exposure remains the single known future agent-visible addition. Its required gate is T0011.5
+baseline calibration, then a prompt-v2 few-shot pass and targeted recalibration delta. T0019 cut
+the exposure from its own scope precisely because the
 calibration evidence needed to justify an honesty hedge does not yet exist. It is an
 additive change and not a reason to delay or weaken this v1 freeze.
 

@@ -6,6 +6,9 @@
 > procedures, cron status, and incident response.
 > For service selections and their rationale, see [Tech_Stack.md](Tech_Stack.md).
 
+> **Eviction:** An operational procedure leaves when the deployed configuration or provider workflow
+> it governs is retired and the replacement runbook is verified.
+
 ## Topology
 
 | Surface | Current operation | Configuration / check |

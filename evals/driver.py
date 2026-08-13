@@ -131,6 +131,12 @@ def _git_sha() -> str:
         return "unknown"
 
 
+def load_turn_pacing_seconds() -> float:
+    """Seconds to idle before each turn so it meets an unspent per-minute window."""
+    settings = yaml.safe_load((ROOT / "config" / "settings.yaml").read_text(encoding="utf-8"))
+    return float(settings["eval"]["driver"]["turn_pacing_seconds"])
+
+
 def _worktree_state() -> str:
     """Return whether the source used for this run is reproducible from Git."""
     try:
@@ -228,6 +234,7 @@ def build_manifest() -> dict[str, Any]:
             "honors_provider_retry_hint": True,
             "provider_sdk_max_retries": SDK_MAX_RETRIES,
         },
+        "turn_pacing_seconds": load_turn_pacing_seconds(),
         "tracing": {"langfuse_enabled": _tracing_enabled()},
         "retry_events": [],
         "scorer_version": SCORER_VERSION,
@@ -309,20 +316,26 @@ def _seam_dict(run: harness.SeamRun) -> dict[str, Any]:
     }
 
 
-async def _capture_case(case: dict[str, Any]) -> list[harness.SeamRun]:
+async def _capture_case(
+    case: dict[str, Any], pause: Callable[[], Awaitable[None]] | None = None
+) -> list[harness.SeamRun]:
     with _native_provider_environment():
         if case["type"] == "single":
             return [await harness.run_single_turn_case(case)]
-        runs, _ = await harness.run_conversational_case(case)
+        runs, _ = await harness.run_conversational_case(case, pause=pause)
         return runs
 
 
 async def _capture_with_retry(
-    case: dict[str, Any], manifest: dict[str, Any], repeat_index: int, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
+    case: dict[str, Any],
+    manifest: dict[str, Any],
+    repeat_index: int,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    pause: Callable[[], Awaitable[None]] | None = None,
 ) -> list[harness.SeamRun]:
     for attempt in range(MAX_RETRIES + 1):
         try:
-            return await _capture_case(case)
+            return await _capture_case(case, pause=pause)
         except Exception as exc:  # noqa: BLE001 - persisted as infrastructure evidence
             if attempt >= MAX_RETRIES:
                 raise
@@ -352,11 +365,19 @@ async def run(
     capture_only: bool = True,
     resume: bool = False,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    pacing_seconds: float | None = None,
 ) -> dict[str, Any]:
     artifact = load_run(output) if resume and output.exists() else _new_run(build_manifest())
     manifest = artifact["manifest"]
     if not resume and output.exists():
         raise FileExistsError(f"Refusing to overwrite existing run: {output}")
+
+    pacing = load_turn_pacing_seconds() if pacing_seconds is None else pacing_seconds
+    spent_a_window = False
+
+    async def pause() -> None:
+        if pacing:
+            await sleep(pacing)
 
     for scenario_index, case in enumerate(scenarios):
         scenario_id = case["id"]
@@ -372,7 +393,12 @@ async def run(
             artifact["checkpoint"] = {"scenario_id": scenario_id, "scenario_index": scenario_index, "repeat": repeat_index + 1}
             _write_json(output, artifact)
             try:
-                runs = await _capture_with_retry(case, manifest, repeat_index + 1, sleep=sleep)
+                if spent_a_window:
+                    await pause()
+                spent_a_window = True
+                runs = await _capture_with_retry(
+                    case, manifest, repeat_index + 1, sleep=sleep, pause=pause
+                )
                 for turn_index, seam in enumerate(runs):
                     repeat_record["turns"].append(
                         {

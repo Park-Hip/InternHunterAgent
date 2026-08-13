@@ -12,6 +12,7 @@ this module is the only place that knows about DeepEval metrics/spans.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
@@ -305,9 +306,16 @@ async def run_single_turn_case(case: dict) -> SeamRun:
     )
 
 
-async def run_conversational_case(case: dict) -> tuple[list[SeamRun], ConversationalTestCase]:
+async def run_conversational_case(
+    case: dict, pause: Callable[[], Awaitable[None]] | None = None
+) -> tuple[list[SeamRun], ConversationalTestCase]:
     """Run every turn against one persistent thread; return each turn's
-    SeamRun plus a ConversationalTestCase transcript of the whole exchange."""
+    SeamRun plus a ConversationalTestCase transcript of the whole exchange.
+
+    `pause` runs before every turn after the first. A conversational case
+    would otherwise spend a second turn's token budget inside the per-minute
+    window its first turn just filled.
+    """
     agent = agent_factory(checkpointer=InMemorySaver())
     thread_id = case["id"]
     config = {"configurable": {"thread_id": thread_id}}
@@ -315,6 +323,8 @@ async def run_conversational_case(case: dict) -> tuple[list[SeamRun], Conversati
     runs: list[SeamRun] = []
     turns: list[Turn] = []
     for turn_index, message in enumerate(case["turns"]):
+        if turn_index and pause is not None:
+            await pause()
         handler = CallbackHandler(thread_id=thread_id)
         seam_run = await _run_turn(
             agent,

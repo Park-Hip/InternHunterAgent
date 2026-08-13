@@ -54,7 +54,7 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
 ) -> None:
     calls = 0
 
-    async def fake_capture(case: dict) -> list[SeamRun]:
+    async def fake_capture(case: dict, pause=None) -> list[SeamRun]:
         nonlocal calls
         calls += 1
         return [
@@ -72,8 +72,8 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
     output = tmp_path / "run.json"
     case = _case()
 
-    first = asyncio.run(driver.run([case], output, sleep=lambda _: asyncio.sleep(0)))
-    second = asyncio.run(driver.run([case], output, resume=True, sleep=lambda _: asyncio.sleep(0)))
+    first = asyncio.run(driver.run([case], output, sleep=lambda _: asyncio.sleep(0), pacing_seconds=0))
+    second = asyncio.run(driver.run([case], output, resume=True, sleep=lambda _: asyncio.sleep(0), pacing_seconds=0))
 
     assert calls == 2
     assert first["status"] == "COMPLETE"
@@ -87,14 +87,14 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
 def test_quota_exhaustion_marks_remaining_scenarios_unrun(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def quota_capture(case: dict) -> list[SeamRun]:
+    async def quota_capture(case: dict, pause=None) -> list[SeamRun]:
         raise RuntimeError("429 quota exceeded")
 
     monkeypatch.setattr(driver, "_capture_case", quota_capture)
     output = tmp_path / "run.json"
     cases = [_case("HLP-TEST-1"), _case("HLP-TEST-2")]
 
-    result = asyncio.run(driver.run(cases, output, sleep=lambda _: asyncio.sleep(0)))
+    result = asyncio.run(driver.run(cases, output, sleep=lambda _: asyncio.sleep(0), pacing_seconds=0))
 
     assert result["status"] == "PARTIAL_QUOTA"
     assert result["scenarios"]["HLP-TEST-1"]["status"] == "INFRA"
@@ -140,14 +140,14 @@ def test_quota_retry_records_the_delay_it_actually_waited(
 ) -> None:
     slept: list[float] = []
 
-    async def quota_capture(case: dict) -> list[SeamRun]:
+    async def quota_capture(case: dict, pause=None) -> list[SeamRun]:
         raise RuntimeError("429 tokens per minute. Please try again in 12s.")
 
     async def record(delay: float) -> None:
         slept.append(delay)
 
     monkeypatch.setattr(driver, "_capture_case", quota_capture)
-    result = asyncio.run(driver.run([_case()], tmp_path / "run.json", sleep=record))
+    result = asyncio.run(driver.run([_case()], tmp_path / "run.json", sleep=record, pacing_seconds=0))
 
     assert slept == [13.0, 13.0]
     assert [event["delay_seconds"] for event in result["manifest"]["retry_events"]] == [13.0, 13.0]
@@ -185,6 +185,67 @@ def test_dirty_worktree_is_not_baseline_eligible_or_comparable(monkeypatch: pyte
     assert manifest["baseline_eligible"] is False
     with pytest.raises(ValueError, match="dirty or unknown"):
         driver._assert_comparable({"manifest": manifest}, {"manifest": manifest})
+
+
+def test_turns_are_paced_so_each_meets_an_unspent_quota_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One turn asks for more than a per-minute window holds alongside its
+    predecessor, so every turn after the first waits the window out."""
+    waited: list[float] = []
+
+    async def fake_capture(case: dict, pause=None) -> list[SeamRun]:
+        return [SeamRun(question="q", answer="a", tools_called=[], tool_output=None, sql_text=None)]
+
+    async def record(delay: float) -> None:
+        waited.append(delay)
+
+    monkeypatch.setattr(driver, "_capture_case", fake_capture)
+    monkeypatch.setattr(driver, "repeat_count", lambda case: 3)
+    asyncio.run(
+        driver.run([_case()], tmp_path / "run.json", sleep=record, pacing_seconds=60.0)
+    )
+
+    assert waited == [60.0, 60.0]
+
+
+def test_conversational_turns_pace_between_themselves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The pause reaches inside a multi-turn case; its second turn would
+    otherwise spend the window its first turn just filled."""
+    waited: list[float] = []
+    paused_before_turn: list[int] = []
+
+    async def fake_conversational(case: dict, pause=None):
+        for turn_index in range(2):
+            if turn_index and pause is not None:
+                await pause()
+                paused_before_turn.append(turn_index)
+        return [
+            SeamRun(question="q", answer="a", tools_called=[], tool_output=None, sql_text=None)
+        ], None
+
+    async def record(delay: float) -> None:
+        waited.append(delay)
+
+    monkeypatch.setattr(driver.harness, "run_conversational_case", fake_conversational)
+    monkeypatch.setattr(driver, "repeat_count", lambda case: 1)
+    case = {**_case(), "type": "conversational", "turns": ["first", "second"]}
+    asyncio.run(driver.run([case], tmp_path / "run.json", sleep=record, pacing_seconds=60.0))
+
+    assert paused_before_turn == [1]
+    assert waited == [60.0]
+
+
+def test_pacing_is_recorded_in_the_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(driver, "_git_sha", lambda: "abc123")
+    monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
+    monkeypatch.setattr(
+        driver, "_database_fingerprint", lambda url: ("d" * 64, "internhunter_eval", 22)
+    )
+
+    assert driver.build_manifest()["turn_pacing_seconds"] == driver.load_turn_pacing_seconds()
 
 
 def test_provider_telemetry_preserves_reported_usage_and_finish_reason() -> None:

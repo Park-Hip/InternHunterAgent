@@ -317,7 +317,12 @@ def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
     """Grade one turn, stopping at the first failing or unavailable tier."""
     rule = _rule_for(scenario_id)
     if not evidence.answer:
-        return Grade(scenario_id, UNRUN, "structural", [Check("answer_present", None, "answer is absent", "structural")])
+        return Grade(
+            scenario_id,
+            INFRA,
+            "structural",
+            [Check("answer_present", None, "completed turn has no answer", "structural")],
+        )
 
     structural = _structural_checks(rule, evidence)
     if any(check.passed is False for check in structural):
@@ -375,6 +380,10 @@ def summarize(grades: list[Grade]) -> dict[str, Any]:
     return {
         "total": len(grades),
         "counts": dict(sorted(Counter(grade.status for grade in grades).items())),
+        "empty_answer_count": sum(
+            any(check.name == "answer_present" and check.passed is None for check in grade.checks)
+            for grade in grades
+        ),
         "by_class": {name: class_summary(items) for name, items in sorted(by_class.items())},
     }
 

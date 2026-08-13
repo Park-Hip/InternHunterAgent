@@ -8,7 +8,6 @@ from evals.grader import (
     FAIL,
     INFRA,
     PASS,
-    UNRUN,
     grade_evidence,
     grade_observed_answers,
     grade_persisted_run,
@@ -79,11 +78,37 @@ def test_four_outcomes_and_denominator_exclusion_are_preserved() -> None:
         )
     )
 
-    assert [grade.status for grade in grades] == [PASS, UNRUN, INFRA, FAIL]
+    assert [grade.status for grade in grades] == [PASS, INFRA, INFRA, FAIL]
     summary = summarize(grades)
-    assert summary["counts"] == {"FAIL": 1, "INFRA": 1, "PASS": 1, "UNRUN": 1}
+    assert summary["counts"] == {"FAIL": 1, "INFRA": 2, "PASS": 1}
+    assert summary["empty_answer_count"] == 1
     assert summary["by_class"]["HLP"]["measured"] == 1
     assert summary["by_class"]["SAF"]["pass_rate"] == 1.0
+
+
+def test_persisted_empty_answer_is_infra_and_counted_explicitly() -> None:
+    report = grade_persisted_run(
+        {
+            "manifest": {"run_id": "empty-answer-run"},
+            "scenarios": {
+                "HLP-COUNT-1": {
+                    "status": "COMPLETE",
+                    "repeats": [
+                        {
+                            "repeat": 1,
+                            "status": "COMPLETE",
+                            "turns": [{"turn": 1, "status": "COMPLETE", "seams": {"answer": ""}}],
+                        }
+                    ],
+                }
+            },
+        }
+    )
+
+    grade = report["scenarios"]["HLP-COUNT-1"][0]
+    assert grade["status"] == INFRA
+    assert grade["checks"][0]["name"] == "answer_present"
+    assert report["summary"]["empty_answer_count"] == 1
 
 
 def test_persisted_run_joins_execution_accuracy_by_repeat_and_turn() -> None:

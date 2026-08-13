@@ -405,6 +405,25 @@ original register entry (omitted where none was assigned).
 
 ## Evaluation harness
 
+- **`[HIGH · RESOLVED · T0025.7, 2026-08-13]` Execution-accuracy artifacts could not serialize
+  real date or decimal query results.**
+  - **Found:** Current-configuration acceptance verification.
+    `HON-CREATED-ON-1` compared correctly against the frozen fixture, but the CLI failed while
+    serializing its `created_on` date.
+  - **Resolution:** `evals.execution_accuracy` now serializes report-only result values with
+    `default=str`.
+    Comparison remains type-aware and unchanged before report serialization.
+  - **Verified:** The real `HON-CREATED-ON-1` CLI invocation returns `PASS` and prints its date.
+    Focused execution-accuracy tests cover date and decimal CLI output.
+
+- **`[MED · RESOLVED · T0025.7, 2026-08-13]` A completed empty-answer turn was indistinguishable
+  from an uncollected scenario in outcome summaries.**
+  - **Found:** Current-configuration acceptance verification.
+  - **Resolution:** Completed turns without an answer are now `INFRA` rather than `UNRUN`.
+    Grader summaries now include `empty_answer_count` explicitly.
+  - **Verified:** A persisted completed empty-answer turn produces `INFRA`,
+    `answer_present`, and `empty_answer_count: 1`.
+
 ### T0011.1
 - **`[RESOLVED · T0012.9, 2026-07-06 — obsolete]` `gpt-oss-120b` GEval score looked low relative to
   its reasoning.**

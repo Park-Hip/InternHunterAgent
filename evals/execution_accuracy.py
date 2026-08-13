@@ -110,13 +110,13 @@ def grade_run(run: dict[str, Any], database_url: str | None = None) -> dict[str,
     return {"run_id": run.get("manifest", {}).get("run_id"), "scenarios": results}
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Grade persisted runs by SQL execution accuracy.")
     parser.add_argument("run", type=Path)
     parser.add_argument("--database-url")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     run = json.loads(args.run.read_text(encoding="utf-8"))
-    print(json.dumps(grade_run(run, args.database_url), ensure_ascii=False, indent=2))
+    print(json.dumps(grade_run(run, args.database_url), ensure_ascii=False, default=str, indent=2))
 
 
 if __name__ == "__main__":

@@ -2282,3 +2282,24 @@ Follow-ups / Docs).
   T0025.9 remains blocked on the completed real-output sample.
 - **Docs that need updating:** Update the current-state sheet and Known Issues entry after the
   replacement capture completes.
+
+## T0025.7 follow-up - Gradeable acceptance artifacts
+
+- **Summary:** Made execution-accuracy CLI reports safe for date and decimal result values.
+  Completed empty-answer turns are now `INFRA`, and the deterministic grade summary carries an
+  explicit `empty_answer_count`.
+- **Files changed:** `evals/execution_accuracy.py`, `evals/grader.py`, their focused tests,
+  `docs/Resolved_Issues.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** Ran the real `HON-CREATED-ON-1` reference query through the CLI.
+  Ran the persisted-run grader against a completed empty-answer record.
+  Ran focused tests, Ruff, full evaluation tests, mypy, documentation lint, and `git diff --check`.
+- **Build and test results:** The real CLI returned `PASS` and printed `created_on` as JSON text.
+  The completed empty-answer record returned `INFRA` with `empty_answer_count: 1`.
+- **Manual verification:** Run execution accuracy over a real current-configuration capture that
+  returns date or decimal fields.
+  Confirm the output can be supplied to `evals.grader --execution-accuracy` without a JSON error.
+  Confirm a captured empty answer is counted as `INFRA`, not `UNRUN`.
+- **Risks:** T0025.7 acceptance remains blocked by provider TPM headroom, not these local paths.
+- **Follow-up tickets:** Resume T0025.7 acceptance from a clean worktree after quota recovery.
+- **Docs that need updating:** The current-state sheet and risk register remain current until the
+  replacement live capture finishes.

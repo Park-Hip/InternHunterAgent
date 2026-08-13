@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+from datetime import date
+from decimal import Decimal
+
 from evals.execution_accuracy import compare_result_sets, grade_turn
 
 
@@ -103,3 +107,23 @@ def test_conversational_turns_can_use_turn_specific_references(monkeypatch) -> N
     result = grade_run(run)
 
     assert [turn["status"] for turn in result["scenarios"]["HLP-CONTEXT-1"][0]["turns"]] == ["PASS", "PASS"]
+
+
+def test_cli_serializes_date_and_decimal_results(tmp_path, monkeypatch, capsys) -> None:
+    import evals.execution_accuracy as accuracy
+
+    run_path = tmp_path / "run.json"
+    run_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        accuracy,
+        "grade_run",
+        lambda run, database_url=None: {
+            "rows": [{"created_on": date(2026, 8, 13), "salary_max": Decimal("40000000")}]
+        },
+    )
+
+    accuracy.main([str(run_path)])
+
+    assert json.loads(capsys.readouterr().out) == {
+        "rows": [{"created_on": "2026-08-13", "salary_max": "40000000"}]
+    }

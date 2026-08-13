@@ -176,13 +176,13 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **History:** [evaluation cost research](../research/eval-cost-and-rate-limits.md).
 
 - **`[MED · BLOCKED]` Current-configuration acceptance has no measured turns after a TPM stop.**
-  - **Found:** T0025.7 live attempt on 2026-08-13.
-  - **Impact:** The artifact records zero completed turns, zero empty answers, and no provider
+  - **Found:** T0025.7 live attempts on 2026-08-13.
+  - **Impact:** The two artifacts record zero completed turns, zero empty answers, and no provider
     telemetry, so it cannot establish recurrence, determinism, or a root cause.
   - **Next:** Wait for Groq TPM headroom, then start a new clean-worktree capture without changing
     the prompt, model, or sampling configuration.
-  - **History:** Ignored `evals/runs/t0025.7-current-config.json` has the clean Git SHA, scenario
-    registry hash, prompt hash, config hash, fixture hash, and the persisted `PARTIAL_QUOTA` error.
+  - **History:** Ignored `evals/runs/t0025.7-current-config*.json` files preserve clean Git SHA,
+    scenario registry, prompt, config, and fixture hashes with their `PARTIAL_QUOTA` errors.
 
 - **`[MED · OPEN]` The grader lacks validation against a committed real three-seam replay.**
   - **Found:** M25 milestone rescope on 2026-08-13.

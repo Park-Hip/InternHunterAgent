@@ -49,7 +49,7 @@ answer artifact.
 The 18-entry behavior glossary and `prompt_version: v1` are now loaded from `config/prompts.yaml`.
 T0025.7 now captures the scenario-registry hash, clean or dirty worktree state, per-turn latency,
 provider telemetry, and finish reasons without changing the current configuration.
-Its first clean-worktree live attempt stopped at the Groq TPM limit before a completed turn, so M25
+Two clean-worktree live attempts stopped at the Groq TPM limit before a completed turn, so M25
 remains open and T0025.7 must be rerun before T0025.9's real-output grader audit and replay gate.
 The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
 custom-domain follow-up remains intentionally deferred until after v1.0.

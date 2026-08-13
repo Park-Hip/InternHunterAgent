@@ -2256,9 +2256,10 @@ Follow-ups / Docs).
   Dirty and unknown worktrees are ineligible as baselines and cannot be compared.
   The harness now records latency, provider-reported token usage, and finish reasons per completed
   turn, using `unavailable` instead of inferring missing values.
-  The first unchanged-current-configuration live attempt stopped before its first turn when Groq
-  rejected the requested token budget at the TPM limit.
-- **Files created:** Ignored `evals/runs/t0025.7-current-config.json` and its local viewer HTML.
+  Two unchanged-current-configuration live attempts stopped before their first turns when Groq
+  rejected the requested token budgets at the TPM limit.
+- **Files created:** Ignored `evals/runs/t0025.7-current-config*.json` artifacts and a local
+  viewer HTML file.
 - **Files changed:** `evals/driver.py`, `evals/harness.py`, `evals/test_driver.py`,
   `evals/viewer.py`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, and this report.
 - **Commands run:** Rebuilt the 22-row fixture through `python -m evals.fixtures.loader`.
@@ -2267,7 +2268,7 @@ Follow-ups / Docs).
   persisted artifact.
   Ran focused pytest, Ruff, and `git diff --check`.
 - **Build and test results:** Focused tests passed 22 of 22 and Ruff passed.
-  The live run is `PARTIAL_QUOTA`, with one `INFRA` repeat and six `UNRUN` scenarios.
+  Both live runs are `PARTIAL_QUOTA`, with one `INFRA` repeat and six `UNRUN` scenarios each.
   The deterministic grader reported 1 `INFRA`, 6 `UNRUN`, and zero measured turns.
   No empty-answer recurrence or provider telemetry was observed because no provider call completed.
 - **Manual verification:** After TPM headroom recovers, begin a new capture from a clean worktree.

@@ -10,26 +10,20 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
-| HIGH | 0 | 2 | 0 |
-| MED | 8 | 2 | 2 |
+| HIGH | 0 | 1 | 0 |
+| MED | 9 | 1 | 2 |
 | LOW | 18 | 3 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
 
-## Config, startup & deployment (15)
+## Config, startup & deployment (14)
 
 - **`[LOW · BLOCKED]` The serving-model pin still lacks its final live baseline confirmation.**
   - **Found:** T0011.5 preparation.
   - **Impact:** A retired or incompatible Groq model ID would fail the tool loop at runtime.
   - **Next:** Before the baseline, run a tool-using query with the configured qwen model.
   - **History:** [Resolved Issues](Resolved_Issues.md) records the retired-model replacement.
-
-- **`[HIGH · BLOCKED]` Ingestion safety checks have not been exercised against live Postgres.**
-  - **Found:** T0019.5.
-  - **Impact:** The abort-before-write safeguards remain proven only by mocked unit tests.
-  - **Next:** Run checks B through E in [Manual Verification Guide](Manual_Verification_Guide.md).
-  - **History:** `tests/services/ingestion/test_safety.py` covers the isolated logic.
 
 - **`[MED · OPEN]` Render Free cold starts can delay the public demo by about a minute.**
   - **Found:** T0018.4 public deployment.
@@ -88,11 +82,12 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Add a psycopg pool health check and preserve pool provenance in error classification.
   - **History:** `src/core/checkpointer.py` and `src/core/errors.py`.
 
-- **`[MED · BLOCKED]` The ingestion schedule is disabled pending its activation gates.**
+- **`[MED · OPEN]` The ingestion schedule is disabled, with only two gates left to clear.**
   - **Found:** T0020.4.
-  - **Impact:** Production listings do not refresh automatically while the schedule stays parked.
-  - **Next:** Complete a green manual dispatch and signed gates before uncommenting the cron.
-  - **History:** [Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md).
+  - **Impact:** Refresh is manual-only, and D-038 makes an automatic refresh a release requirement.
+  - **Next:** Confirm 4b concurrency, then uncomment the two `cron:` lines. Every decision gate is
+    signed and the 2026-08-13 dispatch was green, leaving only these two in-repo steps.
+  - **History:** [Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) §7.
 
 - **`[MED · OPEN]` `/ready` can silently fall back to a snapshot date after a DB error.**
   - **Found:** D6 production migration.

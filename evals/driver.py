@@ -131,6 +131,20 @@ def _git_sha() -> str:
         return "unknown"
 
 
+def _worktree_state() -> str:
+    """Return whether the source used for this run is reproducible from Git."""
+    try:
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+            cwd=ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return "clean" if not status.strip() else "dirty"
+
+
 def _database_fingerprint(database_url: str) -> tuple[str, str, int]:
     """Fingerprint the resolved database contents, not the seed file on disk.
 
@@ -171,8 +185,10 @@ def build_manifest() -> dict[str, Any]:
     settings_path = ROOT / "config" / "settings.yaml"
     prompts_path = ROOT / "config" / "prompts.yaml"
     fixture_path = ROOT / "evals" / "fixtures" / "seed_eval_db.sql"
+    scenarios_path = ROOT / "evals" / "scenarios_v1.yaml"
     settings = yaml.safe_load(settings_path.read_text(encoding="utf-8"))
     agent = settings["agent"]
+    worktree_state = _worktree_state()
     database_hash, database_name, database_row_count = _database_fingerprint(
         _fixture_database_url()
     )
@@ -183,6 +199,9 @@ def build_manifest() -> dict[str, Any]:
         "git_sha": _git_sha(),
         "fixture_hash": database_hash,
         "fixture_seed_hash": _sha256(fixture_path),
+        "scenario_registry_hash": _sha256(scenarios_path),
+        "worktree_state": worktree_state,
+        "baseline_eligible": worktree_state == "clean",
         "database_name": database_name,
         "database_row_count": database_row_count,
         "prompt_hash": _sha256(prompts_path),
@@ -234,12 +253,15 @@ def load_run(path: Path) -> dict[str, Any]:
 
 
 def _assert_comparable(left: dict[str, Any], right: dict[str, Any]) -> None:
+    if left["manifest"].get("worktree_state") != "clean" or right["manifest"].get("worktree_state") != "clean":
+        raise ValueError("Runs are incomparable: dirty or unknown worktree state")
     fields = (
         "fixture_hash",
         "database_name",
         "database_row_count",
         "prompt_hash",
         "config_hash",
+        "scenario_registry_hash",
     )
     differences = [field for field in fields if left["manifest"].get(field) != right["manifest"].get(field)]
     if differences:
@@ -352,7 +374,14 @@ async def run(
             try:
                 runs = await _capture_with_retry(case, manifest, repeat_index + 1, sleep=sleep)
                 for turn_index, seam in enumerate(runs):
-                    repeat_record["turns"].append({"turn": turn_index + 1, "status": "COMPLETE", "seams": _seam_dict(seam)})
+                    repeat_record["turns"].append(
+                        {
+                            "turn": turn_index + 1,
+                            "status": "COMPLETE",
+                            "seams": _seam_dict(seam),
+                            "telemetry": seam.telemetry,
+                        }
+                    )
                     artifact["checkpoint"]["turn"] = turn_index + 1
                     _write_json(output, artifact)
                 if not capture_only:

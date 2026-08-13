@@ -126,6 +126,11 @@ def flatten_turns(run: dict[str, Any], scenarios: list[dict[str, Any]] | None = 
                         "rows": _rows(seams.get("tool_output")),
                         "answer": _text(seams.get("answer")),
                         "trace_id": _text(seams.get("trace_id"), "No trace id"),
+                        "telemetry": json.dumps(
+                            turn_record.get("telemetry", "unavailable"),
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        ),
                     }
                 )
     return turns
@@ -217,7 +222,7 @@ def build_viewer_html(run: dict[str, Any], scenarios: list[dict[str, Any]] | Non
       const noteKey = storageKey + t.key;
       root.innerHTML = `<div class="toolbar"><div class="turn-meta"><button id="prev">← Previous</button><button id="next">Next →</button><span class="progress">Turn ${index + 1} of ${turns.length} · ${esc(t.scenario_id)} · repeat ${esc(t.repeat)}</span></div><select id="jump" aria-label="Jump to turn">${turns.map((item, i) => `<option value="${i}">${i + 1}. ${esc(item.scenario_id)} / r${esc(item.repeat)} / t${esc(item.turn)}</option>`).join('')}</select></div>
       <div class="rule"><strong>Review rule:</strong> mark the earliest wrong seam only, then stop. Downstream symptoms of an upstream defect are not separate labels.</div>
-      <section class="question"><h3>${esc(t.scenario_name)}</h3>${block('Question', t.question)}<div class="trace">Trace ID: ${esc(t.trace_id)} · Turn status: ${esc(t.status)}</div></section>
+      <section class="question"><h3>${esc(t.scenario_name)}</h3>${block('Question', t.question)}${block('Telemetry', t.telemetry)}<div class="trace">Trace ID: ${esc(t.trace_id)} · Turn status: ${esc(t.status)}</div></section>
       <section class="grid"><article class="card"><div class="card-head"><h2 class="seam">1 · Routing</h2></div>${block('Routing decision / tools called', t.routing)}</article><article class="card"><div class="card-head"><h2 class="seam">2 · NL → SQL</h2></div>${block('Generated SQL', t.sql, 'answer')} ${block('Rows returned', t.rows, 'answer')}</article><article class="card"><div class="card-head"><h2 class="seam">3 · Synthesis</h2></div>${block('Final answer', t.answer, 'answer')}</article></section>
       <section class="notes"><h2>Operator note</h2><textarea id="note" placeholder="Record the first wrong seam and evidence. Stop after the earliest failure."></textarea><div class="saved" id="saved">Notes are stored in this browser for this run.</div></section>`;
       document.getElementById('jump').value = index;

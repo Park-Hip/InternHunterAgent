@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from evals import driver
-from evals.harness import SeamRun
+from evals.harness import ProviderTelemetryCallback, SeamRun
 
 
 def _case(scenario_id: str = "HLP-TEST-1", probe: bool = False) -> dict:
@@ -23,6 +24,7 @@ def _case(scenario_id: str = "HLP-TEST-1", probe: bool = False) -> dict:
 def test_manifest_records_reproducibility_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LANGFUSE_ENABLED", "false")
     monkeypatch.setattr(driver, "_git_sha", lambda: "abc123")
+    monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
     monkeypatch.setattr(
         driver,
         "_database_fingerprint",
@@ -39,6 +41,9 @@ def test_manifest_records_reproducibility_inputs(monkeypatch: pytest.MonkeyPatch
     assert manifest["tracing"]["langfuse_enabled"] is False
     assert len(manifest["prompt_hash"]) == 64
     assert len(manifest["config_hash"]) == 64
+    assert len(manifest["scenario_registry_hash"]) == 64
+    assert manifest["worktree_state"] == "clean"
+    assert manifest["baseline_eligible"] is True
     assert manifest["models"]["react"]
     assert manifest["sampling"]["sql_generation"]["temperature"] == 0.0
     assert manifest["scorer_version"] == driver.SCORER_VERSION
@@ -75,6 +80,7 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
     assert second["scenarios"][case["id"]]["status"] == "COMPLETE"
     turn = first["scenarios"][case["id"]]["repeats"][0]["turns"][0]
     assert turn["seams"]["sql_text"] == "SELECT COUNT(*) FROM clean_jobs"
+    assert turn["telemetry"] == {}
     assert json.loads(output.read_text(encoding="utf-8"))["manifest"]["run_id"] == first["manifest"]["run_id"]
 
 
@@ -150,7 +156,16 @@ def test_quota_retry_records_the_delay_it_actually_waited(
 def test_diff_refuses_different_inputs(tmp_path: Path) -> None:
     left = tmp_path / "left.json"
     right = tmp_path / "right.json"
-    payload = driver._new_run({"run_id": "a", "fixture_hash": "same", "prompt_hash": "one", "config_hash": "same"})
+    payload = driver._new_run(
+        {
+            "run_id": "a",
+            "fixture_hash": "same",
+            "prompt_hash": "one",
+            "config_hash": "same",
+            "scenario_registry_hash": "same",
+            "worktree_state": "clean",
+        }
+    )
     left.write_text(json.dumps(payload), encoding="utf-8")
     payload["manifest"]["run_id"] = "b"
     payload["manifest"]["prompt_hash"] = "two"
@@ -158,3 +173,56 @@ def test_diff_refuses_different_inputs(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="prompt_hash"):
         driver.compare_runs(left, right)
+
+
+def test_dirty_worktree_is_not_baseline_eligible_or_comparable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(driver, "_worktree_state", lambda: "dirty")
+    monkeypatch.setattr(
+        driver, "_database_fingerprint", lambda url: ("d" * 64, "internhunter_eval", 22)
+    )
+    manifest = driver.build_manifest()
+
+    assert manifest["baseline_eligible"] is False
+    with pytest.raises(ValueError, match="dirty or unknown"):
+        driver._assert_comparable({"manifest": manifest}, {"manifest": manifest})
+
+
+def test_provider_telemetry_preserves_reported_usage_and_finish_reason() -> None:
+    callback = ProviderTelemetryCallback()
+    message = SimpleNamespace(
+        usage_metadata={"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
+        response_metadata={"finish_reason": "stop"},
+    )
+    callback.on_llm_end(
+        SimpleNamespace(
+            llm_output={"token_usage": {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18}},
+            generations=[[SimpleNamespace(message=message, generation_info={})]],
+        )
+    )
+
+    telemetry = callback.snapshot(latency_ms=42)
+
+    assert telemetry["latency_ms"] == 42
+    assert telemetry["provider_token_usage"]["aggregate"] == {
+        "input_tokens": 11,
+        "output_tokens": 7,
+        "total_tokens": 18,
+    }
+    assert telemetry["finish_reasons"] == ["stop"]
+
+
+def test_provider_telemetry_marks_missing_provider_fields_unavailable() -> None:
+    callback = ProviderTelemetryCallback()
+    callback.on_llm_end(SimpleNamespace(llm_output=None, generations=[]))
+
+    telemetry = callback.snapshot(latency_ms=1)
+
+    assert telemetry["provider_token_usage"]["calls"] == [
+        {
+            "input_tokens": "unavailable",
+            "output_tokens": "unavailable",
+            "total_tokens": "unavailable",
+            "finish_reason": "unavailable",
+        }
+    ]
+    assert telemetry["finish_reasons"] == ["unavailable"]

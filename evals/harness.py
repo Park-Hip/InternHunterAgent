@@ -13,7 +13,10 @@ this module is the only place that knows about DeepEval metrics/spans.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from time import perf_counter
+from typing import Any
 
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
@@ -136,6 +139,65 @@ class SeamRun:
     tool_output: str | None = None
     sql_text: str | None = None
     trace_id: str | None = None
+    telemetry: dict[str, Any] = field(default_factory=dict)
+
+
+_UNAVAILABLE = "unavailable"
+_TOKEN_FIELDS = {
+    "input_tokens": ("input_tokens", "prompt_tokens"),
+    "output_tokens": ("output_tokens", "completion_tokens"),
+    "total_tokens": ("total_tokens",),
+}
+
+
+class ProviderTelemetryCallback(BaseCallbackHandler):
+    """Collect provider-reported usage for every LLM call in one agent turn."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def on_llm_end(self, response: Any, **_: Any) -> None:
+        llm_output = getattr(response, "llm_output", None)
+        llm_output = llm_output if isinstance(llm_output, dict) else {}
+        generations = getattr(response, "generations", None)
+        generation = (
+            generations[0][0]
+            if isinstance(generations, list) and generations and isinstance(generations[0], list) and generations[0]
+            else None
+        )
+        message = getattr(generation, "message", None)
+        message_usage = getattr(message, "usage_metadata", None)
+        response_metadata = getattr(message, "response_metadata", None)
+        response_metadata = response_metadata if isinstance(response_metadata, dict) else {}
+        usage = llm_output.get("token_usage") or llm_output.get("usage") or message_usage
+        usage = usage if isinstance(usage, dict) else {}
+
+        record: dict[str, Any] = {}
+        for token_field, aliases in _TOKEN_FIELDS.items():
+            value = next((usage[key] for key in aliases if isinstance(usage.get(key), int)), None)
+            record[token_field] = value if value is not None else _UNAVAILABLE
+
+        finish_reason = response_metadata.get("finish_reason")
+        generation_info = getattr(generation, "generation_info", None)
+        if not isinstance(finish_reason, str) or not finish_reason:
+            finish_reason = generation_info.get("finish_reason") if isinstance(generation_info, dict) else None
+        record["finish_reason"] = finish_reason if isinstance(finish_reason, str) and finish_reason else _UNAVAILABLE
+        self.calls.append(record)
+
+    def snapshot(self, latency_ms: int) -> dict[str, Any]:
+        aggregate: dict[str, int | str] = {}
+        for token_field in _TOKEN_FIELDS:
+            values = [call[token_field] for call in self.calls]
+            aggregate[token_field] = (
+                sum(values)
+                if values and all(isinstance(value, int) for value in values)
+                else _UNAVAILABLE
+            )
+        return {
+            "latency_ms": latency_ms,
+            "provider_token_usage": {"calls": self.calls, "aggregate": aggregate},
+            "finish_reasons": [call["finish_reason"] for call in self.calls] or [_UNAVAILABLE],
+        }
 
 
 def _find_span(spans: list[dict], **matches) -> dict | None:
@@ -188,23 +250,29 @@ async def _run_turn(agent, message: str, config: dict, span_name: str) -> SeamRu
     trace_testing_manager.test_dict = None
     lf_handler = get_langfuse_handler()
     trace_id: str | None = None
+    telemetry_handler = ProviderTelemetryCallback()
+    run_config = {**config, "callbacks": [*config.get("callbacks", []), telemetry_handler]}
     try:
         if lf_handler is not None:
             lf = get_langfuse_client()
             with lf.start_as_current_observation(name=span_name) as span:
                 trace_id = span.trace_id
-                run_config = {**config, "callbacks": [*config.get("callbacks", []), lf_handler]}
+                run_config = {**run_config, "callbacks": [*run_config["callbacks"], lf_handler]}
+                started_at = perf_counter()
                 response = await agent.ainvoke(
                     {"messages": [HumanMessage(content=message)]},
                     config=run_config,
                 )
+                latency_ms = round((perf_counter() - started_at) * 1000)
                 trace_dict = await trace_testing_manager.wait_for_test_dict()
         else:
             # unchanged existing path — DeepEval handler only, no Langfuse
+            started_at = perf_counter()
             response = await agent.ainvoke(
                 {"messages": [HumanMessage(content=message)]},
-                config=config,
+                config=run_config,
             )
+            latency_ms = round((perf_counter() - started_at) * 1000)
             trace_dict = await trace_testing_manager.wait_for_test_dict()
     finally:
         trace_testing_manager.test_name = None
@@ -225,6 +293,7 @@ async def _run_turn(agent, message: str, config: dict, span_name: str) -> SeamRu
         tool_output=str(tool_output) if tool_output is not None else None,
         sql_text=_llm_output_text(sql_span),
         trace_id=trace_id,
+        telemetry=telemetry_handler.snapshot(latency_ms),
     )
 
 

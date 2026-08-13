@@ -36,7 +36,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 22 | T0022 | **Docs Hygiene & Documentation System** | ✅ | Phase 1 (.1-.9) complete 2026-08-10: lint gate, front door, Decision Log, research prune · Phase 2 (.10-.14) complete 2026-08-12: prune, archive collapse, register rebuild, restructure, enforcement |
 | 23 | T0023 | v1.0 Release Cut | 📋 | DoD sweep, ToS posture, **live cron (D-038)**, tag — renumbered from T0022 on 2026-08-09 |
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
-| 25 | T0025 | **Evaluation Instrument** | 🔨 | .0-.6 and .8 done; .7 closed partial 2026-08-13 (13 of 19 turns; 2 scenarios need a paid tier); .9 replay gate, .10 closeout remain |
+| 25 | T0025 | **Evaluation Instrument** | 🔨 | .0-.6, .8, .9 done; .7 closed partial 2026-08-13 (13 of 19 turns; 2 scenarios need a paid tier); .10 closeout remains |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -120,10 +120,10 @@ Every later honesty claim rests on an instrument that can be re-run cheaply and 
 >
 > **Remaining sequence.** T0025.7 closed partial on 2026-08-13: provenance and telemetry are done
 > and the capture path is accepted, but the acceptance set measured 13 of 19 turns because two
-> scenarios exceed the free tier's per-minute ceiling inside a single turn. T0025.9 audits the
-> grader against those real outputs and adds a committed replay gate to CI. T0025.10 consolidates
-> the records and closes the milestone. T0024.4 then uses the accepted instrument for its full
-> behavior remeasurement, which needs the tier decision resolved first.
+> scenarios exceed the free tier's per-minute ceiling inside a single turn. T0025.9 closed the
+> same day: the grader agrees with all 13 human labels and CI now replays committed evidence.
+> T0025.10 consolidates the records and closes the milestone. T0024.4 then uses the accepted
+> instrument for its full behavior remeasurement, which needs the tier decision resolved first.
 >
 > **Shared dependency.** T0025.6 needs the `behavior_glossary` tokens that **T0024.1** lands.
 > T0024.1 has no blockers of its own and should be pulled ahead of the rest of its milestone.
@@ -410,6 +410,15 @@ T0025.1 deleted the golden set; `D` means the refusal category in `D2` and decis
 **Blockers:** T0025.2; run before **T0025.3** so the driver and viewer get the final shape.
 
 ### T0025.9: Grader audit and committed replay CI gate
+> **Closed 2026-08-13.** All 29 tool expectations now come from the registry, all 29 rules are
+> audited in [`evals/grader_audit.md`](../evals/grader_audit.md), and the regrade of the 13
+> completed T0025.7 turns agrees with every human label: 7 `PASS`, 6 `FAIL`.
+> A five-turn sanitized replay and a blocking CI gate execute the recorded SQL against the frozen
+> fixture and grade it with no model, judge, or outbound call.
+> Two caveats are carried to [`Known_Issues.md`](Known_Issues.md) rather than closed here: the
+> `SAF-INJECTION-RESILIENCE-1` no-tool rule flipped on registry text with no capture behind it,
+> and the 13-turn sample lives in an ignored capture that a clean checkout cannot reproduce.
+
 **Objective:** Establish that the grader measures the frozen behavior target on real captured
 evidence, and make future capture or grader drift fail in CI without spending provider quota.
 The six crafted holdout cases are valuable contract tests, but their 1.00 precision and recall do

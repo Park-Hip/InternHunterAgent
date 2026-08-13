@@ -405,6 +405,21 @@ original register entry (omitted where none was assigned).
 
 ## Evaluation harness
 
+- **`[MED · RESOLVED · T0025.9, 2026-08-13]` The deterministic grader imposed an implicit tool
+  expectation on every scenario not named in a hardcoded no-tool set.**
+  - **Found:** T0025.7's real capture labelled all three `HON-SQL-DESCRIBE-1` answers correct, but
+    the grader marked each one failed for not calling `query_clean_jobs`.
+  - **Resolution:** The frozen scenario registry now owns `expected_tools` for all 29 scenarios.
+    This covers deliberate no-tool and mixed-intent cases, and removes the grader default.
+  - **Verified:** The T0025.7 regrade agrees with all 13 human turn labels.
+    `HON-SQL-DESCRIBE-1` now passes with `tools_called: []`.
+
+- **`[MED · RESOLVED · T0025.9, 2026-08-13]` CI did not replay recorded three-seam evidence.**
+  - **Found:** M25 instrument rescope on 2026-08-13.
+  - **Resolution:** The committed replay validates its sanitized schema, rebuilds the frozen
+    fixture, executes generated and reference SQL, and invokes the deterministic grader.
+  - **Verified:** The replay gate passes locally without a serving-model or judge call.
+
 - **`[HIGH · RESOLVED · T0025.7, 2026-08-13]` Execution-accuracy artifacts could not serialize
   real date or decimal query results.**
   - **Found:** Current-configuration acceptance verification.

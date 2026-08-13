@@ -2388,3 +2388,48 @@ Follow-ups / Docs).
 - **Follow-up tickets:** T0025.9 is unblocked and starts with the confirmed tool-expectation gap.
   T0024.4 meets the same per-minute ceiling and needs the same tier decision.
 - **Docs that need updating:** T0025.10 archives this plan and marks M25 complete once .9 lands.
+
+## T0025.9 - Grader audit and committed replay CI gate
+
+- **Summary:** The grader now reads `expected_tools` from all 29 registry scenarios.
+  The human audit of 13 completed T0025.7 turns has zero disagreements after fixing the
+  `HON-SQL-DESCRIBE-1` no-tool rule.
+  A committed sanitized replay validates its schema, pins each question to the registry, compares
+  expected execution and grade outcomes, executes generated and reference SQL against the frozen
+  fixture, and invokes the deterministic grader in CI without a model, judge, or outbound call.
+  Retiring the hardcoded no-tool set flipped two scenarios, not one; the audit now names both and
+  marks `SAF-INJECTION-RESILIENCE-1` as asserted without a capture behind it.
+- **Files changed:** `.github/workflows/ci.yml`, `evals/scenarios_v1.yaml`, `evals/scenarios.py`,
+  `evals/grader.py`, `evals/replay.py`, `evals/replays/t0025.9-committed.json`,
+  `evals/grader_audit.md`, `evals/test_scenarios.py`, `evals/test_grader.py`,
+  `evals/test_replay.py`, `docs/Known_Issues.md`, `docs/Resolved_Issues.md`,
+  `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** Rebuilt the fixture with `uv run python -m evals.fixtures.loader`.
+  Regraded the T0025.7 capture using `evals.execution_accuracy` and `evals.grader`.
+  Ran focused tests, the full suite, Ruff, mypy, documentation lint, and
+  `uv run python -m evals.replay` against the frozen fixture.
+- **Build and test results:** Focused grader, scenario, and replay tests passed 25 of 25.
+  The full suite passed 438 tests with 1 environmental skip.
+  The committed replay passed locally with four `PASS` turns and one intentional cross-currency
+  `FAIL` turn.
+  Six deliberate breaks each blocked the gate: wrong generated SQL, a compliant refusal answer, an
+  unexpected tool call, a leaked `SELECT`, an injected connection string, and an extra schema key.
+- **Manual verification:** Run `uv run python -m evals.fixtures.loader`.
+  Run `uv run python -m evals.replay` and confirm generated and reference SQL are graded with no
+  provider credentials or network call.
+  Replace one replay query with `SELECT 0`, confirm the execution-accuracy result fails, then
+  restore it.
+  Change the `HON-SQL-DESCRIBE-1` answer so it exposes a `SELECT ... FROM` query, confirm the
+  deterministic grade fails, then restore it.
+- **Risks:** The empirical agreement sample is 13 selected completed turns, not production-wide
+  calibration, and it lives in an ignored capture that a clean checkout cannot reproduce.
+  T0025.7 did not capture a safety or conversational turn because quota ended first, so three of
+  the five replay turns are hand-written from the registry and prove the schema, not the behavior.
+  `SAF-INJECTION-RESILIENCE-1` now requires no tool on registry text alone.
+  Both risks are open entries in [`Known_Issues.md`](Known_Issues.md).
+- **Follow-up tickets:** M24 owns the observed currency, location-synonym, and abstraction behavior
+  failures.
+  T0025.10 owns M25 record consolidation, the paid-tier decision behind the two open audit
+  caveats, and closeout.
+- **Docs that need updating:** T0025.10 should archive this completed ticket body and fold the
+  durable evaluation acceptance facts into the active strategy record.

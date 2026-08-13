@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+import json
+from datetime import date
+
+import pytest
+
+from evals.replay import REPLAY_PATH, load_replay, run_replay, validate_replay
+
+
+def _expected_execution(replay: dict) -> dict:
+    return {
+        "scenarios": {
+            scenario_id: [
+                {
+                    "repeat": repeat["repeat"],
+                    "turns": [
+                        {"status": turn["expected_execution_accuracy"]}
+                        for turn in repeat["turns"]
+                    ],
+                }
+                for repeat in scenario_record["repeats"]
+            ]
+            for scenario_id, scenario_record in replay["scenarios"].items()
+        }
+    }
+
+
+def _expected_grades(replay: dict) -> dict:
+    return {
+        "scenarios": {
+            scenario_id: [
+                {
+                    "repeat": repeat["repeat"],
+                    "turn": turn["turn"],
+                    "status": turn["expected_grade"],
+                }
+                for repeat in scenario_record["repeats"]
+                for turn in repeat["turns"]
+            ]
+            for scenario_id, scenario_record in replay["scenarios"].items()
+        }
+    }
+
+
+def test_committed_replay_is_sanitized_and_covers_required_cases() -> None:
+    replay = load_replay()
+
+    validate_replay(replay)
+
+    assert {
+        scenario_id.split("-", maxsplit=1)[0] for scenario_id in replay["scenarios"]
+    } == {
+        "SAF",
+        "HON",
+        "HLP",
+    }
+    assert replay["scenarios"]["HLP-CONTEXT-1"]["scenario_type"] == "conversational"
+    encoded = json.dumps(replay).lower()
+    assert "trace_id" not in encoded
+    assert "postgresql://" not in encoded
+    assert "api_key" not in encoded
+
+
+def test_replay_rejects_trace_data() -> None:
+    replay = load_replay()
+    replay["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]["seams"][
+        "trace_id"
+    ] = "live-trace"
+
+    with pytest.raises(ValueError, match="credential or live trace"):
+        validate_replay(replay)
+
+
+def test_replay_rejects_secret_like_content() -> None:
+    replay = load_replay()
+    replay["scenarios"]["HON-SQL-DESCRIBE-1"]["repeats"][0]["turns"][0]["seams"][
+        "answer"
+    ] = "api_key=not-a-real-secret"
+
+    with pytest.raises(ValueError, match="credential or live trace"):
+        validate_replay(replay)
+
+
+def test_replay_rejects_a_question_that_drifted_from_the_registry() -> None:
+    replay = load_replay()
+    replay["scenarios"]["HLP-CONTEXT-1"]["repeats"][0]["turns"][1]["seams"][
+        "question"
+    ] = "Only the ones in Da Nang."
+
+    with pytest.raises(ValueError, match="does not match the frozen registry"):
+        validate_replay(replay)
+
+
+def test_replay_runs_execution_accuracy_before_the_deterministic_grader(
+    monkeypatch,
+) -> None:
+    import evals.replay as replay_module
+
+    calls: list[str] = []
+    replay = load_replay()
+    monkeypatch.setattr(
+        replay_module,
+        "grade_run",
+        lambda run, database_url=None: (
+            calls.append("execution") or _expected_execution(run)
+        ),
+    )
+    monkeypatch.setattr(
+        replay_module,
+        "grade_persisted_run",
+        lambda run, execution: calls.append("grader") or _expected_grades(run),
+    )
+
+    report = run_replay(REPLAY_PATH)
+
+    assert calls == ["execution", "grader"]
+    assert report == {
+        "execution_accuracy": _expected_execution(replay),
+        "grades": _expected_grades(replay),
+    }
+
+
+def test_replay_fails_when_an_expected_execution_result_drifts(monkeypatch) -> None:
+    import evals.replay as replay_module
+
+    monkeypatch.setattr(
+        replay_module,
+        "grade_run",
+        lambda run, database_url=None: {
+            **_expected_execution(run),
+            "scenarios": {
+                **_expected_execution(run)["scenarios"],
+                "HON-CURRENCY-1": [{"repeat": 1, "turns": [{"status": "FAIL"}]}],
+            },
+        },
+    )
+    monkeypatch.setattr(
+        replay_module,
+        "grade_persisted_run",
+        lambda run, execution: _expected_grades(run),
+    )
+
+    with pytest.raises(ValueError, match="Replay outcome mismatch"):
+        run_replay(REPLAY_PATH)
+
+
+def test_replay_cli_serializes_fixture_values(tmp_path, monkeypatch, capsys) -> None:
+    import evals.replay as replay_module
+
+    replay_path = tmp_path / "replay.json"
+    replay_path.write_text(json.dumps(load_replay()), encoding="utf-8")
+    monkeypatch.setattr(
+        replay_module,
+        "run_replay",
+        lambda path, database_url=None: {"row": {"created_on": date(2026, 8, 13)}},
+    )
+
+    replay_module.main(["--replay", str(replay_path)])
+
+    assert json.loads(capsys.readouterr().out) == {"row": {"created_on": "2026-08-13"}}

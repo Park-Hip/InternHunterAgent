@@ -28,6 +28,20 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: internhunter
+          POSTGRES_PASSWORD: internhunter
+          POSTGRES_DB: internhunter_eval
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U internhunter -d internhunter_eval"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       # Dummy values — the standard suite mocks the DB and LLMs; these only
       # satisfy Settings validation at load. NEVER real credentials.
@@ -35,6 +49,9 @@ jobs:
       DATABASE_URL: "postgresql+psycopg://ci:ci@localhost:5432/ci"
       LANGFUSE_SECRET_KEY: "unused-in-ci"
       LANGFUSE_PUBLIC_KEY: "unused-in-ci"
+      # Importing deepeval otherwise phones home. The replay gate claims to make
+      # no outbound call, so keep that literally true.
+      DEEPEVAL_TELEMETRY_OPT_OUT: "1"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -56,3 +73,10 @@ jobs:
 
       # eval-marked tests are auto-deselected by pyproject addopts; do not add -m.
       - run: uv run pytest -q
+
+      # This validates the committed evidence, executes recorded SQL against the
+      # frozen fixture, and runs deterministic grading. It does not call a model
+      # or the optional judge.
+      - run: uv run python -m evals.fixtures.loader
+
+      - run: uv run python -m evals.replay

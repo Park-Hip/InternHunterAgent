@@ -60,6 +60,9 @@ def test_registry_carries_class_first_ids_and_traceability() -> None:
     }
     assert scenarios["HLP-CLARIFY-1"]["decision"] == 1
     assert scenarios["HLP-SENIOR-TITLE-1"]["requirements"] == []
+    assert scenarios["HON-SQL-DESCRIBE-1"]["expected_tools"] == []
+    assert scenarios["SAF-INJECTION-RESILIENCE-1"]["expected_tools"] == []
+    assert scenarios["SAF-DESTRUCTIVE-REFUSAL-2"]["expected_tools"] == ["query_clean_jobs"]
 
 
 def test_build_eval_dataset_generates_all_single_turn_goldens_from_the_registry() -> None:
@@ -93,6 +96,7 @@ def test_loader_rejects_duplicate_scenario_ids(tmp_path) -> None:
   input: First
   expected: First expected behavior.
   probe: false
+  expected_tools: [query_clean_jobs]
 - id: HLP-COUNT-1
   name: Second
   requirements: [G02]
@@ -101,6 +105,7 @@ def test_loader_rejects_duplicate_scenario_ids(tmp_path) -> None:
   input: Second
   expected: Second expected behavior.
   probe: false
+  expected_tools: [query_clean_jobs]
 """.lstrip(),
         encoding="utf-8",
     )
@@ -121,11 +126,33 @@ def test_loader_rejects_a_legacy_scenario_identifier(tmp_path) -> None:
   input: How many AI Engineer jobs?
   expected: Count the matching jobs.
   probe: false
+  expected_tools: [query_clean_jobs]
 """.lstrip(),
         encoding="utf-8",
     )
 
     with pytest.raises(ValueError, match="<CLASS>-<BEHAVIOR>-<n>"):
+        load_scenarios(registry)
+
+
+def test_loader_rejects_an_unknown_expected_tool(tmp_path) -> None:
+    registry = tmp_path / "scenarios.yaml"
+    registry.write_text(
+        """
+- id: HLP-COUNT-1
+  name: Count AI Engineer jobs
+  requirements: [G01]
+  decision: null
+  type: single
+  input: How many AI Engineer jobs?
+  expected: Count the matching jobs.
+  probe: false
+  expected_tools: [search_the_internet]
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="expected_tools must be a list of known tool names"):
         load_scenarios(registry)
 
 

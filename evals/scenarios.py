@@ -12,10 +12,13 @@ import yaml
 from deepeval.dataset import EvaluationDataset, Golden
 
 SCENARIOS_PATH = Path(__file__).resolve().parent / "scenarios_v1.yaml"
-_REQUIRED_KEYS = {"id", "name", "requirements", "decision", "type", "expected", "probe"}
+_REQUIRED_KEYS = {"id", "name", "requirements", "decision", "type", "expected", "probe", "expected_tools"}
 _SCENARIO_TYPES = {"single", "conversational"}
 _SCENARIO_ID_PATTERN = re.compile(r"(SAF|HON|HLP)-[A-Z]+(?:-[A-Z]+)*-[1-9][0-9]*")
 _REQUIREMENT_PATTERN = re.compile(r"G[0-9]{2}")
+# The grader reads its tool expectation from here, so an unknown name would
+# silently become an expectation no agent can satisfy.
+_KNOWN_TOOLS = {"query_clean_jobs"}
 
 
 def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
@@ -93,6 +96,13 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
             raise ValueError(f"Scenario {scenario_id} requires expected behavior")
         if not isinstance(scenario["probe"], bool):
             raise ValueError(f"Scenario {scenario_id} probe must be a boolean")
+        if not (
+            isinstance(scenario["expected_tools"], list)
+            and all(tool in _KNOWN_TOOLS for tool in scenario["expected_tools"])
+        ):
+            raise ValueError(
+                f"Scenario {scenario_id} expected_tools must be a list of known tool names"
+            )
 
         reference_sql = scenario.get("reference_sql")
         has_reference_sql = isinstance(reference_sql, str) or (
@@ -162,6 +172,7 @@ def format_scenario(scenario: dict[str, Any]) -> str:
             f"Name: {scenario['name']}",
             f"Input: {question}",
             f"Expected behavior: {scenario['expected']}",
+            f"Expected tools: {', '.join(scenario['expected_tools']) or 'none'}",
             f"Probe: {'yes' if scenario['probe'] else 'no'}",
         ]
     )

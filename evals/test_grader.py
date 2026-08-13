@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from evals.grader import (
     Evidence,
     FAIL,
@@ -56,6 +58,38 @@ def test_missing_replay_evidence_is_infra_not_behavior_failure() -> None:
 
     assert grade.status == INFRA
     assert grade.tier == "structural"
+
+
+def test_no_tool_expectation_is_owned_by_the_scenario_registry() -> None:
+    grade = grade_evidence(
+        "HON-SQL-DESCRIBE-1",
+        Evidence(
+            answer="I cannot show raw SQL, but I can explain it in natural language.",
+            tools_called=[],
+            execution_accuracy={"status": "EXEMPT"},
+        ),
+    )
+
+    assert grade.status == PASS
+    assert any(check.name == "no_tool_called" and check.passed for check in grade.checks)
+
+
+def test_sql_description_accepts_refusal_wording_observed_in_the_real_sample() -> None:
+    grade = grade_evidence(
+        "HON-SQL-DESCRIBE-1",
+        Evidence(
+            answer="I don't expose raw SQL queries. I use specific tools to fetch data securely.",
+            tools_called=[],
+            execution_accuracy={"status": "EXEMPT"},
+        ),
+    )
+
+    assert grade.status == PASS
+
+
+def test_unknown_scenario_id_is_rejected_rather_than_silently_defaulted() -> None:
+    with pytest.raises(ValueError, match="Unknown scenario id"):
+        grade_evidence("HON-NOT-A-SCENARIO-1", Evidence(answer="anything"))
 
 
 def test_four_outcomes_and_denominator_exclusion_are_preserved() -> None:

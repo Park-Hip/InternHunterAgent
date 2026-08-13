@@ -145,6 +145,23 @@ or maintainer action, and `DECISION` needs a product or operational choice.
 
 ## Evaluation harness (7)
 
+- **`[MED · OPEN]` `SAF-INJECTION-RESILIENCE-1` asserts a no-tool rule no capture has tested.**
+  - **Found:** T0025.9 audit on 2026-08-13.
+  - **Impact:** Retiring the grader's hardcoded no-tool set flipped two scenarios, not one.
+    `HON-SQL-DESCRIBE-1` rests on three human-labelled turns; this one rests on registry text,
+    because T0025.7 exhausted quota first. The posting is supplied inline, so no-tool is
+    defensible, but an agent that queries to check it exists now fails on an untested judgement.
+  - **Next:** Capture the scenario when a tier decision lands, then confirm or relax the rule.
+  - **History:** [`evals/grader_audit.md`](../evals/grader_audit.md) records both flips.
+
+- **`[MED · OPEN]` The 13-turn label sample cannot be reproduced from a clean checkout.**
+  - **Found:** T0025.9 audit on 2026-08-13.
+  - **Impact:** `evals/runs/` is ignored because its turns carry latency, token usage, and finish
+    reasons, so the capture behind the audit table is not committed. Two of the 13 turns survive
+    in the replay; the other 11 are attested by the audit alone.
+  - **Next:** Re-measure on a paid tier, or commit a sanitized full capture. T0025.10 decides.
+  - **History:** `.gitignore` line 9 and [`evals/grader_audit.md`](../evals/grader_audit.md).
+
 - **`[LOW · OPEN]` DeepEval live commands require UTF-8 output and an explicit `-m eval`.**
   - **Found:** T0011.1, T0011.6, and T0012.7.
   - **Impact:** Native Windows runs can crash or silently select no eval cases.
@@ -197,15 +214,6 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **History:** Ignored `evals/runs/t0025.7-acceptance.json` carries latency, token usage, and
     finish reasons per turn.
 
-- **`[MED · OPEN]` The grader fails correct no-tool behavior on `HON-SQL-DESCRIBE-1`.**
-  - **Found:** T0025.7 paced capture on 2026-08-13, confirming the rescope's predicted rule gap.
-  - **Impact:** Three of nine graded failures are spurious, so class pass rates understate real
-    behavior. The agent declined to disclose raw SQL in plain language as the registry specifies,
-    but [`grader.py`](../evals/grader.py) gives every scenario outside a hardcoded six-id `no_tool`
-    set the default `query_clean_jobs` expectation, and omits this one.
-  - **Next:** T0025.9 derives tool expectations from the registry, then regrades this artifact.
-  - **History:** `_rule_for` in [`grader.py`](../evals/grader.py).
-
 - **`[MED · OPEN]` Three agent behaviors failed under the frozen configuration.**
   - **Found:** T0025.7 paced capture on 2026-08-13.
   - **Impact:** `HON-CURRENCY-1` named one highest-paid job across mixed VND and USD listings in all
@@ -214,14 +222,6 @@ or maintainer action, and `DECISION` needs a product or operational choice.
     for 8 rows, the other matched Saigon alone, returned none, and reported no postings.
   - **Next:** M24 owns these; T0025.7 measures them and changes no prompt or runtime behavior.
   - **History:** Ignored `evals/runs/t0025.7-acceptance.json` and its grade report.
-
-- **`[MED · OPEN]` The grader lacks validation against a committed real three-seam replay.**
-  - **Found:** M25 milestone rescope on 2026-08-13.
-  - **Impact:** The crafted holdout proves assertion contracts, but not agreement with human labels
-    on real model outputs or deterministic end-to-end replay in CI.
-  - **Next:** T0025.9 audits all scenario rules, labels the T0025.7 sample, and commits a sanitized
-    replay fixture that CI grades without model or judge calls.
-  - **History:** `evals/holdout.py`, `evals/grader.py`, and the current CI configuration.
 
 ## Demo UI (4)
 

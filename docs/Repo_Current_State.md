@@ -8,7 +8,7 @@
 ## Current branch
 
 - Repository baseline: `main` at `410c628`.
-- Active ticket branch: `codex/t0025.7-instrument-acceptance` at `eb44936`.
+- Active ticket branch: `codex/t0025.9-grader-audit-replay-ci`.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -52,7 +52,13 @@ Its execution-accuracy CLI writes UTF-8 reports via `--output`, and the grader c
 Turns are paced so each meets an unspent per-minute window, as the 8000 TPM free tier requires.
 Two scenarios still exceed that ceiling inside one turn, so the capture measured 13 of 19 turns.
 T0025.7 closed partial on 2026-08-13 with no empty answer found; those two scenarios wait on a tier
-decision, and T0025.9 is now unblocked to audit the grader against the 13-turn real sample.
+decision.
+T0025.9 moved every tool expectation into the registry and audited all 29 deterministic rules.
+It agrees with all 13 human labels - 7 `PASS`, 6 `FAIL` - with the two quota-ended scenarios held
+out of the denominator as repeat-level `INFRA`.
+It added a committed sanitized replay, schema and registry-drift validation, and a blocking CI gate
+that rebuilds the fixture, executes SQL, and grades with no provider or outbound call.
+Two audit caveats stay open in [`Known_Issues.md`](Known_Issues.md).
 The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
 custom-domain follow-up remains intentionally deferred until after v1.0.
 
@@ -109,6 +115,7 @@ The authoritative package declarations are in `pyproject.toml`.
 - `uv run python -m evals.viewer --sample` - generate a two-turn viewer sample without model quota.
 - `uv run python -m evals.execution_accuracy evals/runs/run.json` - grade persisted SQL seams.
   The command uses frozen fixture references.
+- `uv run python -m evals.replay` - replay committed evidence with no model or judge call.
 - `uv run ruff check .` - lint the repository.
 - `uv run mypy` - type-check `src`.
 - `uv run alembic current` and `uv run alembic upgrade head` - inspect or migrate a database.
@@ -120,18 +127,11 @@ The authoritative package declarations are in `pyproject.toml`.
 | Check | Most recent recorded result |
 |---|---|
 | `python scripts/docs_lint.py` | Passed locally on 2026-08-13 (all ten checks) |
-| `pytest -q evals/test_scenarios.py` | 7 passed on 2026-08-13 |
-| `uv run pytest -q` | 427 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-13 |
-| `uv run ruff check src tests` | Passed on 2026-08-13 |
-| `uv run python -m pytest evals/test_driver.py evals/test_viewer.py -q` | 22 passed on 2026-08-13 |
-| `uv run pytest -q evals/test_scenarios.py evals/test_execution_accuracy.py evals/test_driver.py` | 16 passed on 2026-08-13 |
-| `uv run ruff check evals/execution_accuracy.py evals/scenarios.py evals/test_execution_accuracy.py` | Passed on 2026-08-13 |
-| `python -m py_compile evals/driver.py src/agents/runtime/provider.py src/agents/tracing/langfuse.py` | Passed on 2026-08-13 |
-| `uv run ruff check evals/driver.py evals/harness.py evals/viewer.py evals/test_driver.py` | Passed on 2026-08-13 |
-| `uv run ruff check evals/driver.py evals/test_driver.py` | Passed on 2026-08-13 |
-| `uv run python -m pytest -q evals` | 65 passed, 30 live eval tests deselected on 2026-08-13 |
+| `uv run pytest -q` | 438 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-13 |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
 | `uv run ruff check evals/grader.py evals/holdout.py evals/test_grader.py evals/driver.py evals/execution_accuracy.py evals/scenarios.py` | Passed on 2026-08-13 |
+| `uv run pytest -q evals/test_scenarios.py evals/test_grader.py evals/test_replay.py` | 25 passed on 2026-08-13 |
+| `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-13 |
 | `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |
 | `uv run mypy src` | Success: no issues in 43 source files on 2026-08-13 |
 | CI gate, PR #39 | Passed in 44 seconds |
@@ -147,4 +147,4 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0025.7 - rerun the clean current-configuration capture after Groq TPM headroom recovers.
+T0025.10 - consolidate the evaluation records and close M25.

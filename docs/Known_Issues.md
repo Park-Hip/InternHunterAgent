@@ -10,7 +10,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 3 | 1 |
-| MED | 5 | 1 | 1 |
+| MED | 4 | 2 | 1 |
 | LOW | 16 | 3 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
@@ -175,13 +175,14 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Retain zero or choose a small nonzero budget after the blocked comparison.
   - **History:** [evaluation cost research](../research/eval-cost-and-rate-limits.md).
 
-- **`[MED · OPEN]` Evaluation run provenance cannot identify dirty or untracked source state.**
-  - **Found:** M25 milestone rescope on 2026-08-13.
-  - **Impact:** A persisted run can name the current commit while executing different local code,
-    so it cannot serve as a reproducible baseline.
-  - **Next:** T0025.7 adds the scenario-registry hash and clean or dirty worktree state, and rejects
-    dirty runs as baselines.
-  - **History:** `evals/driver.py` currently builds the run manifest.
+- **`[MED · BLOCKED]` Current-configuration acceptance has no measured turns after a TPM stop.**
+  - **Found:** T0025.7 live attempt on 2026-08-13.
+  - **Impact:** The artifact records zero completed turns, zero empty answers, and no provider
+    telemetry, so it cannot establish recurrence, determinism, or a root cause.
+  - **Next:** Wait for Groq TPM headroom, then start a new clean-worktree capture without changing
+    the prompt, model, or sampling configuration.
+  - **History:** Ignored `evals/runs/t0025.7-current-config.json` has the clean Git SHA, scenario
+    registry hash, prompt hash, config hash, fixture hash, and the persisted `PARTIAL_QUOTA` error.
 
 - **`[MED · OPEN]` The grader lacks validation against a committed real three-seam replay.**
   - **Found:** M25 milestone rescope on 2026-08-13.

@@ -8,7 +8,7 @@
 ## Current branch
 
 - Repository baseline: `main` at `410c628`.
-- Active ticket branch: `codex/t0025.6-three-tier-grader`.
+- Active ticket branch: `codex/t0025.7-instrument-acceptance` at `83e1ce7`.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -47,11 +47,10 @@ T0025.6 added deterministic structural and textual grading, a judge-score adapte
 handling, class-split summaries, a six-scenario holdout, and no-model replay of the historical
 answer artifact.
 The 18-entry behavior glossary and `prompt_version: v1` are now loaded from `config/prompts.yaml`.
-M25 remains open because its instrument components are present in the current worktree, but the
-only live persisted smoke contains one scenario and predates the current prompt hash.
-T0025.7 owns current-configuration acceptance and provenance hardening, T0025.9 owns the real-output
-grader audit and committed replay CI gate, and T0025.10 owns consolidation and closeout; sampling
-selection and behavior fixes belong to M24.
+T0025.7 now captures the scenario-registry hash, clean or dirty worktree state, per-turn latency,
+provider telemetry, and finish reasons without changing the current configuration.
+Its first clean-worktree live attempt stopped at the Groq TPM limit before a completed turn, so M25
+remains open and T0025.7 must be rerun before T0025.9's real-output grader audit and replay gate.
 The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
 custom-domain follow-up remains intentionally deferred until after v1.0.
 
@@ -122,11 +121,11 @@ The authoritative package declarations are in `pyproject.toml`.
 | `pytest -q evals/test_scenarios.py` | 7 passed on 2026-08-13 |
 | `uv run pytest -q` | 418 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-13 |
 | `uv run ruff check src tests` | Passed on 2026-08-13 |
-| `uv run pytest -q evals/test_driver.py` | 4 passed on 2026-08-13 |
+| `uv run python -m pytest evals/test_driver.py evals/test_viewer.py -q` | 22 passed on 2026-08-13 |
 | `uv run pytest -q evals/test_scenarios.py evals/test_execution_accuracy.py evals/test_driver.py` | 16 passed on 2026-08-13 |
 | `uv run ruff check evals/execution_accuracy.py evals/scenarios.py evals/test_execution_accuracy.py` | Passed on 2026-08-13 |
 | `python -m py_compile evals/driver.py src/agents/runtime/provider.py src/agents/tracing/langfuse.py` | Passed on 2026-08-13 |
-| `uv run pytest -q evals/test_viewer.py` | Focused suite unavailable after the local uv interpreter/cache failure; direct viewer checks passed |
+| `uv run ruff check evals/driver.py evals/harness.py evals/viewer.py evals/test_driver.py` | Passed on 2026-08-13 |
 | `uv run ruff check evals/driver.py evals/test_driver.py` | Passed on 2026-08-13 |
 | `uv run pytest -q evals` | 47 passed, 30 live eval tests deselected on 2026-08-13 |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
@@ -146,5 +145,4 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0025.7 - accept the instrument against the unchanged current configuration, harden run
-provenance, and verify whether the historical empty-answer symptom recurs with usable telemetry.
+T0025.7 - rerun the clean current-configuration capture after Groq TPM headroom recovers.

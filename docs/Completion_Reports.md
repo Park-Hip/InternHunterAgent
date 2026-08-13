@@ -2249,3 +2249,35 @@ Follow-ups / Docs).
 - **Docs that need updating:** T0025.10 must fold the durable cost record into the evaluation
   strategy, archive completed M25 ticket bodies, and mark the milestone complete after its gates
   pass.
+
+## T0025.7 - Partial instrument acceptance attempt
+
+- **Summary:** Added scenario-registry and worktree provenance to the run manifest.
+  Dirty and unknown worktrees are ineligible as baselines and cannot be compared.
+  The harness now records latency, provider-reported token usage, and finish reasons per completed
+  turn, using `unavailable` instead of inferring missing values.
+  The first unchanged-current-configuration live attempt stopped before its first turn when Groq
+  rejected the requested token budget at the TPM limit.
+- **Files created:** Ignored `evals/runs/t0025.7-current-config.json` and its local viewer HTML.
+- **Files changed:** `evals/driver.py`, `evals/harness.py`, `evals/test_driver.py`,
+  `evals/viewer.py`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** Rebuilt the 22-row fixture through `python -m evals.fixtures.loader`.
+  Ran the seven required scenario IDs with `python -m evals.driver`.
+  Ran the no-model execution-accuracy grader, deterministic grader, and local viewer against the
+  persisted artifact.
+  Ran focused pytest, Ruff, and `git diff --check`.
+- **Build and test results:** Focused tests passed 22 of 22 and Ruff passed.
+  The live run is `PARTIAL_QUOTA`, with one `INFRA` repeat and six `UNRUN` scenarios.
+  The deterministic grader reported 1 `INFRA`, 6 `UNRUN`, and zero measured turns.
+  No empty-answer recurrence or provider telemetry was observed because no provider call completed.
+- **Manual verification:** After TPM headroom recovers, begin a new capture from a clean worktree.
+  Confirm its manifest is baseline eligible and contains Git, fixture, scenario, prompt, and config
+  hashes.
+  Then run execution accuracy and deterministic grading, open the viewer, and record only each
+  turn's first wrong seam.
+- **Risks:** The historical empty-answer symptom remains unmeasured under the current configuration.
+  This partial artifact is inspectable but is not a baseline or behavioral result.
+- **Follow-up tickets:** Continue T0025.7 with a new clean live capture after quota recovery.
+  T0025.9 remains blocked on the completed real-output sample.
+- **Docs that need updating:** Update the current-state sheet and Known Issues entry after the
+  replacement capture completes.

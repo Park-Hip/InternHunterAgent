@@ -1,6 +1,6 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-12 against the checked-out commit, active registers, and
+> **Last verified:** 2026-08-13 against the checked-out commit, active registers, and
 > [`Operations.md`](Operations.md).
 
 > **Eviction:** A current-state fact leaves when the checked-out repository or active operational
@@ -112,4 +112,8 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0023 - cut the v1.0 release, following the completed M22 documentation system.
+Cron activation, which D-038 makes a prerequisite for the T0023 release tag. Every decision gate
+is now signed; what remains is maintainer execution in
+[the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 - rotate the exposed Neon
+password, set the two Actions secrets from the rotated value, run a green `workflow_dispatch`,
+then uncomment `schedule:` last.

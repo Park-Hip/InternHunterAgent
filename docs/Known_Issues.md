@@ -47,7 +47,9 @@ or maintainer action, and `DECISION` needs a product or operational choice.
 - **`[MED · DECISION]` VietnamWorks terms leave public listing display unresolved.**
   - **Found:** T0019.1 terms review.
   - **Impact:** The public portfolio demo may exceed an internal-use content restriction.
-  - **Next:** Choose attribution, restricted access, accepted risk, or permission before rearming.
+  - **Next:** Choose attribution, restricted access, accepted risk, or permission for the demo.
+    The maintainer ruled on 2026-08-13 that this does **not** gate cron activation: §7 restricts
+    republishing, which is a question about what the demo displays today, not what the cron fetches.
   - **History:** [deployment research §11](../research/archive/deployment-research-plan.md).
 
 - **`[LOW · OPEN]` Native Windows `uvicorn` startup is incompatible with the checkpointer pool.**

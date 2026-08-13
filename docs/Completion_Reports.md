@@ -1776,3 +1776,35 @@ Follow-ups / Docs).
 - **Follow-up tickets:** Scope a freshness check for `Last verified:` stamps, including the
   trade-off that comparing a stamp with git mtime would require a bump after whitespace-only edits.
 - **Docs that need updating:** No additional documentation update is required for this ticket.
+
+
+## T0020.4 - Cron gate ratification pass (activation still open)
+
+- **Summary:** Cleared the two cron-activation gates that were decisions rather than executions,
+  and reconciled the runbook with what is actually signed. D2 is ratified: the maintainer accepted
+  the favorable robots/ToS verdict on 2026-08-13 and ruled that the separate ToS §7 republishing
+  restriction does **not** gate activation, because it governs what the demo displays rather than
+  what the cron fetches. D10 is recorded as cron-live-for-v1.0 per D-038. **Activation itself is
+  untouched** - no secret was set, no workflow was dispatched, and `schedule:` remains commented
+  out.
+- **Files created, changed, or modified:** `docs/T0020.4_Cron_Activation_Runbook.md`,
+  `docs/Decision_Log.md`, `docs/Known_Issues.md`, `docs/Offline_Pipelines_Design.md`,
+  `docs/Repo_Current_State.md`, and this report.
+- **Commands executed:** `git ls-tree -r origin/main .github/` and `gh secret list` as read-only
+  pre-flight checks; `uv run python scripts/docs_lint.py`;
+  `uv run pytest -q tests/test_docs_lint.py`.
+- **Build and test results:** The documentation linter passed all ten checks. The docs-lint suite
+  passed with 25 tests and one environmental skip. No source code changed.
+- **Manual verification:** Re-verified that `.github/workflows/ingestion.yml` is on `origin/main`
+  (P1 holds) and that `gh secret list` still returns nothing, so neither Actions secret has been
+  added since the 2026-08-09 check. Both results are recorded in the runbook §4.
+- **Risks:** Two corrections were applied to documents that had been contradicting each other, so
+  the reconciled version is only as good as the reading behind it: §5 previously claimed a
+  parked-cron v1.0 was spec-compliant, which D-038 reversed, and the register told the reader to
+  settle the terms question "before rearming", which the runbook denied. Both now agree.
+- **Follow-up tickets:** Activation remains maintainer-only and is now four rows in §7: rotate the
+  exposed `neondb_owner` password, set the two Actions secrets from the rotated value, run a green
+  `workflow_dispatch`, then uncomment `schedule:` last. The rotation was added as a sign-off row
+  because setting `DATABASE_URL` copies a known-exposed credential into a second system.
+- **Docs that need updating:** `Tickets.md` still describes T0020.4 as having two open maintainer
+  actions; one of those - the gated decisions - is now closed, leaving execution only.

@@ -12,12 +12,12 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 |---|---:|---:|---:|
 | HIGH | 0 | 1 | 0 |
 | MED | 9 | 1 | 2 |
-| LOW | 18 | 3 | 0 |
+| LOW | 19 | 3 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
 
-## Config, startup & deployment (14)
+## Config, startup & deployment (15)
 
 - **`[LOW · BLOCKED]` The serving-model pin still lacks its final live baseline confirmation.**
   - **Found:** T0011.5 preparation.
@@ -82,12 +82,18 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Add a psycopg pool health check and preserve pool provenance in error classification.
   - **History:** `src/core/checkpointer.py` and `src/core/errors.py`.
 
-- **`[MED · OPEN]` The ingestion schedule is disabled, with only two gates left to clear.**
+- **`[MED · OPEN]` The re-armed ingestion schedule has not yet fired on its own.**
   - **Found:** T0020.4.
-  - **Impact:** Refresh is manual-only, and D-038 makes an automatic refresh a release requirement.
-  - **Next:** Confirm 4b concurrency, then uncomment the two `cron:` lines. Every decision gate is
-    signed and the 2026-08-13 dispatch was green, leaving only these two in-repo steps.
+  - **Impact:** Every gate is signed, but an unattended run is proven only once one has happened.
+  - **Next:** Merge to `main` — GitHub reads `schedule:` from the default branch, so the merge is
+    the activation — then confirm the next 02:00 UTC run.
   - **History:** [Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) §7.
+
+- **`[LOW · OPEN]` `expired_count` reports rows matching the stale predicate, not newly expired.**
+  - **Found:** T0020.4, when three consecutive runs all logged exactly `expired_count: 47`.
+  - **Impact:** Nightly logs cannot distinguish fresh expiries from long-expired rows.
+  - **Next:** Add `AND is_active` to the `UPDATE` so `rowcount` counts state changes only.
+  - **History:** `src/services/ingestion/clean_store.py::expire_stale_clean_jobs`.
 
 - **`[MED · OPEN]` `/ready` can silently fall back to a snapshot date after a DB error.**
   - **Found:** D6 production migration.

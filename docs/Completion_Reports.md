@@ -1789,11 +1789,14 @@ Follow-ups / Docs).
   logging `ingestion.schema_ok {"columns": 22}` before any write and
   `{"fetched": 113, "raw_upserted": 113, "clean_loaded": 113, "skipped": 0, "expired_count": 47,
   "pages_failed": 0}` on completion, followed by `ingestion.ping_sent`. `/api/v1/ready` moved from
-  `2026-07-01` to `2026-08-13`, confirming the write reached the read path. **`schedule:` is still
-  commented out** - re-arming waits on the 4b concurrency check.
-- **Files created, changed, or modified:** `docs/T0020.4_Cron_Activation_Runbook.md`,
-  `docs/Decision_Log.md`, `docs/Known_Issues.md`, `docs/Resolved_Issues.md`,
-  `docs/Offline_Pipelines_Design.md`, `docs/Repo_Current_State.md`, and this report.
+  `2026-07-01` to `2026-08-13`, confirming the write reached the read path. Two further
+  back-to-back dispatches proved the concurrency guard (4b), and `schedule:` is restored. **The
+  schedule begins firing when this branch merges to `main`**, since GitHub reads `schedule:` from
+  the default branch only.
+- **Files created, changed, or modified:** `.github/workflows/ingestion.yml` (the `schedule:`
+  restore), `docs/T0020.4_Cron_Activation_Runbook.md`, `docs/Decision_Log.md`,
+  `docs/Known_Issues.md`, `docs/Resolved_Issues.md`, `docs/Offline_Pipelines_Design.md`,
+  `docs/Repo_Current_State.md`, and this report.
 - **Commands executed:** `git ls-tree -r origin/main .github/` and `gh secret list` as read-only
   pre-flight checks; `gh run list` and `gh run view --log` to read the dispatch result;
   `curl /api/v1/ready`; `uv run python scripts/docs_lint.py`;
@@ -1803,13 +1806,13 @@ Follow-ups / Docs).
 - **Manual verification:** The runbook §4 carries the run id, the six-number completion line, the
   ping, and the `/ready` transition. Results were read from the run log rather than transcribed,
   so the recorded numbers are the workflow's own output.
-- **Risks:** 4b is unverified - only one dispatch has ever run, so the declared
-  `concurrency.group: ingestion` has never been observed queueing a second run. The daily schedule
-  cannot itself produce an overlap given `timeout-minutes: 15`, so the exposure is a manual
-  dispatch fired mid-write. Separately, two documents that had contradicted each other were
-  reconciled, and the reconciled version is only as good as the reading behind it.
-- **Follow-up tickets:** Confirm 4b, then uncomment the two `cron:` lines and watch the first
-  scheduled run - the last three rows of §7. The password-rotation row is signed by the maintainer
-  having rotated before setting the secret.
+- **Risks:** No unattended run has happened yet, so the schedule itself is still unproven - that is
+  the single remaining §7 row and it resolves on the first 02:00 UTC firing after merge. Separately,
+  two documents that had contradicted each other were reconciled, and the reconciled version is
+  only as good as the reading behind it.
+- **Follow-up tickets:** `expire_stale_clean_jobs` reports `rowcount` from an `UPDATE` with no
+  `AND is_active` guard, so `expired_count` counts rows *matching* the stale predicate rather than
+  newly expired ones. All three runs logged exactly 47, which is how it surfaced. Registered as a
+  LOW issue; the fix is one clause, and it belongs to whoever next owns that file.
 - **Docs that need updating:** `Tickets.md` still describes T0020.4 as having two open maintainer
-  actions; the decisions are closed and the dispatch is green, leaving only the re-arm.
+  actions; both are now closed, leaving only the first scheduled run to observe.

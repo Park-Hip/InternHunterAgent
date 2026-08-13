@@ -112,8 +112,9 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-Finish cron activation, which D-038 makes a prerequisite for the T0023 release tag. The pipeline
-ran green against production on 2026-08-13 (run `31693930488`: 113 loaded, 47 expired, 0 pages
-failed) and `/api/v1/ready` now reports a measured `2026-08-13`. Three rows remain in
-[the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 - confirm 4b concurrency,
-uncomment the two `cron:` lines, then watch the first scheduled run.
+Merge this branch, then watch the first scheduled run - the last open row in
+[the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7. The pipeline ran green against
+production three times on 2026-08-13 (113 loaded, 0 pages failed each), the concurrency guard was
+observed queueing rather than overlapping, and `/api/v1/ready` reports a measured `2026-08-13`.
+`schedule:` is restored and starts firing on merge, because GitHub reads it from the default
+branch only. After that, T0023 can cut the release tag that D-038 coupled to a live cron.

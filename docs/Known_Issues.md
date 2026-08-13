@@ -175,14 +175,45 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Retain zero or choose a small nonzero budget after the blocked comparison.
   - **History:** [evaluation cost research](../research/eval-cost-and-rate-limits.md).
 
-- **`[MED · BLOCKED]` Current-configuration acceptance has no measured turns after a TPM stop.**
-  - **Found:** T0025.7 live attempts on 2026-08-13.
-  - **Impact:** The two artifacts record zero completed turns, zero empty answers, and no provider
-    telemetry, so it cannot establish recurrence, determinism, or a root cause.
-  - **Next:** Wait for Groq TPM headroom, then start a new clean-worktree capture without changing
-    the prompt, model, or sampling configuration.
-  - **History:** Ignored `evals/runs/t0025.7-current-config*.json` files preserve clean Git SHA,
-    scenario registry, prompt, config, and fixture hashes with their `PARTIAL_QUOTA` errors.
+- **`[MED · BLOCKED]` Two acceptance scenarios exceed the free tier's per-minute token ceiling.**
+  - **Found:** T0025.7 paced capture on 2026-08-13.
+  - **Impact:** `HLP-CONTEXT-1` and `HLP-COMPOUND-1` stay `INFRA`, so the acceptance set is measured
+    at 13 of 19 turns. Groq admits a call when window usage plus the request's `max_tokens` reserve
+    stays under 8000 TPM, and both scenarios pass that inside a single turn: `HLP-CONTEXT-1` peaks
+    at 10231 on its synthesis call, and `HLP-COMPOUND-1` spends 7653 on routing alone. Pacing
+    between turns cannot clear a window that one turn fills by itself.
+  - **Next:** Capture both on a paid tier. Reducing `max_tokens` or `query.max_rows` would fit them
+    but changes what the instrument measures, so neither is an acceptable workaround.
+  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` holds each rejection with its
+    reported usage.
+
+- **`[MED · OPEN]` No empty answer recurred, on evidence too small to close the question.**
+  - **Found:** T0025.7 paced capture on 2026-08-13.
+  - **Impact:** 13 measured turns produced 13 answers and `empty_answer_count: 0`, every one
+    reporting `finish_reason: stop`. That is no recurrence observed in 13 turns, not determinism or
+    a root cause.
+  - **Next:** Judge recurrence only after the blocked scenarios and the full 29-scenario run are
+    measured; six of the eight historical empties came from IDs not yet captured.
+  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` carries latency, token usage, and
+    finish reasons per turn.
+
+- **`[MED · OPEN]` The grader fails correct no-tool behavior on `HON-SQL-DESCRIBE-1`.**
+  - **Found:** T0025.7 paced capture on 2026-08-13, confirming the rescope's predicted rule gap.
+  - **Impact:** Three of nine graded failures are spurious, so class pass rates understate real
+    behavior. The agent declined to disclose raw SQL in plain language as the registry specifies,
+    but [`grader.py`](../evals/grader.py) gives every scenario outside a hardcoded six-id `no_tool`
+    set the default `query_clean_jobs` expectation, and omits this one.
+  - **Next:** T0025.9 derives tool expectations from the registry, then regrades this artifact.
+  - **History:** `_rule_for` in [`grader.py`](../evals/grader.py).
+
+- **`[MED · OPEN]` Three agent behaviors failed under the frozen configuration.**
+  - **Found:** T0025.7 paced capture on 2026-08-13.
+  - **Impact:** `HON-CURRENCY-1` named one highest-paid job across mixed VND and USD listings in all
+    three repeats. `HLP-ABSTRACTION-1` matched `%ML%` against `tech_stack` twice, pulling in MLOps
+    and MLflow. `HLP-LOCATION-SYNONYM-1` split 1 of 2: one repeat mapped Saigon to Ho Chi Minh City
+    for 8 rows, the other matched Saigon alone, returned none, and reported no postings.
+  - **Next:** M24 owns these; T0025.7 measures them and changes no prompt or runtime behavior.
+  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` and its grade report.
 
 - **`[MED · OPEN]` The grader lacks validation against a committed real three-seam replay.**
   - **Found:** M25 milestone rescope on 2026-08-13.

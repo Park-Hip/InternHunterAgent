@@ -8,7 +8,7 @@
 ## Current branch
 
 - Repository baseline: `main` at `410c628`.
-- Active ticket branch: `codex/t0025.7-instrument-acceptance` at `83e1ce7`.
+- Active ticket branch: `codex/t0025.7-instrument-acceptance` at `eb44936`.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -47,12 +47,11 @@ T0025.6 added deterministic structural and textual grading, a judge-score adapte
 handling, class-split summaries, a six-scenario holdout, and no-model replay of the historical
 answer artifact.
 The 18-entry behavior glossary and `prompt_version: v1` are now loaded from `config/prompts.yaml`.
-T0025.7 now captures the scenario-registry hash, clean or dirty worktree state, per-turn latency,
-provider telemetry, and finish reasons without changing the current configuration.
-Its execution-accuracy CLI serializes date and decimal values and writes UTF-8 reports via
-`--output`, while the grader records completed empty answers as `INFRA` and counts them explicitly.
-Two clean-worktree live attempts stopped at the Groq TPM limit before a completed turn, so M25
-remains open and T0025.7 must be rerun before T0025.9's real-output grader audit and replay gate.
+T0025.7 captures the registry hash, worktree state, latency, provider telemetry, and finish reasons.
+Its execution-accuracy CLI writes UTF-8 reports via `--output`, and the grader counts empty answers.
+Turns are paced so each meets an unspent per-minute window, as the 8000 TPM free tier requires.
+Two scenarios still exceed that ceiling inside one turn, so the capture measured 13 of 19 turns.
+It found no empty answer, so M25 stays open and T0025.9 audits the grader against that real sample.
 The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
 custom-domain follow-up remains intentionally deferred until after v1.0.
 
@@ -121,7 +120,7 @@ The authoritative package declarations are in `pyproject.toml`.
 |---|---|
 | `python scripts/docs_lint.py` | Passed locally on 2026-08-13 (all ten checks) |
 | `pytest -q evals/test_scenarios.py` | 7 passed on 2026-08-13 |
-| `uv run pytest -q` | 424 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-13 |
+| `uv run pytest -q` | 427 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-13 |
 | `uv run ruff check src tests` | Passed on 2026-08-13 |
 | `uv run python -m pytest evals/test_driver.py evals/test_viewer.py -q` | 22 passed on 2026-08-13 |
 | `uv run pytest -q evals/test_scenarios.py evals/test_execution_accuracy.py evals/test_driver.py` | 16 passed on 2026-08-13 |
@@ -129,7 +128,7 @@ The authoritative package declarations are in `pyproject.toml`.
 | `python -m py_compile evals/driver.py src/agents/runtime/provider.py src/agents/tracing/langfuse.py` | Passed on 2026-08-13 |
 | `uv run ruff check evals/driver.py evals/harness.py evals/viewer.py evals/test_driver.py` | Passed on 2026-08-13 |
 | `uv run ruff check evals/driver.py evals/test_driver.py` | Passed on 2026-08-13 |
-| `uv run python -m pytest -q evals` | 62 passed, 30 live eval tests deselected on 2026-08-13 |
+| `uv run python -m pytest -q evals` | 65 passed, 30 live eval tests deselected on 2026-08-13 |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
 | `uv run ruff check evals/grader.py evals/holdout.py evals/test_grader.py evals/driver.py evals/execution_accuracy.py evals/scenarios.py` | Passed on 2026-08-13 |
 | `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |

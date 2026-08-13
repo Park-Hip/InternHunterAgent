@@ -2332,3 +2332,35 @@ Follow-ups / Docs).
   text or database rows, so no report can carry the fixture's non-ASCII values.
 - **Follow-up tickets:** None. T0025.7 acceptance still waits only on provider TPM headroom.
 - **Docs that need updating:** None beyond this report and the registers updated here.
+
+## T0025.7 follow-up - Paced capture and partial acceptance
+
+- **Summary:** Three acceptance attempts captured zero turns, all stopping on TPM before a first
+  turn. Comparing a completed probe turn against the failures established how the ceiling actually
+  binds: Groq admits a call when window usage plus the request's own `max_tokens` reserve stays
+  under 8000, so a turn's later calls compete with the tokens its earlier calls just spent.
+  Retrying re-ran the whole turn inside the window it had filled, which could never recover.
+  The driver now idles `eval.driver.turn_pacing_seconds` before every turn after the first and
+  passes the same pause into the conversational path, whose turns would otherwise run back-to-back
+  inside one window. The paced capture measured 13 of 19 turns across 5 of 7 scenarios.
+- **Files changed:** `config/settings.yaml`, `evals/driver.py`, `evals/harness.py`,
+  `evals/test_driver.py`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** Ran the driver over the seven required ids, resuming onto one artifact as the
+  quota allowed. Ran execution accuracy through `--output`, the deterministic grader over the
+  result, and the viewer. Ran focused tests, the full suite, Ruff, mypy, documentation lint, and
+  `git diff --check`.
+- **Build and test results:** Evaluation tests passed 65 of 65 and the full suite passed 427 with 1
+  skipped. The capture graded 4 `PASS`, 9 `FAIL`, and 2 `INFRA`, with `empty_answer_count: 0`.
+  Three of those failures are the grader's default tool expectation rejecting correct no-tool
+  behavior, not agent behavior.
+- **Manual verification:** Open `evals/runs/t0025.7-acceptance-viewer.html` and confirm each
+  completed turn shows routing, generated SQL, rows, an answer, and populated telemetry.
+  Confirm the manifest records a clean worktree, `baseline_eligible: true`, and the pacing value.
+  Confirm `HON-PREMISE-CORRECTION-1` passes all three repeats as the regression control.
+- **Risks:** The measured set is partial and its class pass rates understate real behavior until the
+  grader rule gap is fixed. No conclusion about the historical empty answers is available from 13
+  turns, and six of the eight historical empties came from ids this run never reached.
+- **Follow-up tickets:** T0025.9 owns the rule audit and the regrade. M24 owns the three measured
+  behavior failures. Capturing the two blocked scenarios needs a paid tier.
+- **Docs that need updating:** None beyond the registers updated here; T0025.10 folds the durable
+  cost mechanics into the evaluation strategy.

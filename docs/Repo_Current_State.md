@@ -49,8 +49,8 @@ answer artifact.
 The 18-entry behavior glossary and `prompt_version: v1` are now loaded from `config/prompts.yaml`.
 T0025.7 now captures the scenario-registry hash, clean or dirty worktree state, per-turn latency,
 provider telemetry, and finish reasons without changing the current configuration.
-Its execution-accuracy CLI serializes date and decimal report values, while the deterministic grader
-records completed empty answers as `INFRA` and exposes their count explicitly.
+Its execution-accuracy CLI serializes date and decimal values and writes UTF-8 reports via
+`--output`, while the grader records completed empty answers as `INFRA` and counts them explicitly.
 Two clean-worktree live attempts stopped at the Groq TPM limit before a completed turn, so M25
 remains open and T0025.7 must be rerun before T0025.9's real-output grader audit and replay gate.
 The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
@@ -121,7 +121,7 @@ The authoritative package declarations are in `pyproject.toml`.
 |---|---|
 | `python scripts/docs_lint.py` | Passed locally on 2026-08-13 (all ten checks) |
 | `pytest -q evals/test_scenarios.py` | 7 passed on 2026-08-13 |
-| `uv run pytest -q` | 418 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-13 |
+| `uv run pytest -q` | 424 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-13 |
 | `uv run ruff check src tests` | Passed on 2026-08-13 |
 | `uv run python -m pytest evals/test_driver.py evals/test_viewer.py -q` | 22 passed on 2026-08-13 |
 | `uv run pytest -q evals/test_scenarios.py evals/test_execution_accuracy.py evals/test_driver.py` | 16 passed on 2026-08-13 |
@@ -129,7 +129,7 @@ The authoritative package declarations are in `pyproject.toml`.
 | `python -m py_compile evals/driver.py src/agents/runtime/provider.py src/agents/tracing/langfuse.py` | Passed on 2026-08-13 |
 | `uv run ruff check evals/driver.py evals/harness.py evals/viewer.py evals/test_driver.py` | Passed on 2026-08-13 |
 | `uv run ruff check evals/driver.py evals/test_driver.py` | Passed on 2026-08-13 |
-| `uv run python -m pytest -q evals` | 61 passed, 30 live eval tests deselected on 2026-08-13 |
+| `uv run python -m pytest -q evals` | 62 passed, 30 live eval tests deselected on 2026-08-13 |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
 | `uv run ruff check evals/grader.py evals/holdout.py evals/test_grader.py evals/driver.py evals/execution_accuracy.py evals/scenarios.py` | Passed on 2026-08-13 |
 | `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |

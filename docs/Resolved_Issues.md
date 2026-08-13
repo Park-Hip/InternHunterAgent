@@ -416,6 +416,19 @@ original register entry (omitted where none was assigned).
   - **Verified:** The real `HON-CREATED-ON-1` CLI invocation returns `PASS` and prints its date.
     Focused execution-accuracy tests cover date and decimal CLI output.
 
+- **`[HIGH · RESOLVED · T0025.7, 2026-08-13]` The execution-accuracy report could not be captured
+  to a file on Windows.**
+  - **Found:** Current-configuration acceptance verification, immediately behind the date and
+    decimal serialization fix.
+    The CLI printed `ensure_ascii=False` JSON, so a redirected stdout raised `UnicodeEncodeError`
+    under cp1252 for every report carrying the fixture's Vietnamese company names.
+    Redirection was the only way to produce the grader's `--execution-accuracy` input.
+  - **Resolution:** `evals.execution_accuracy` accepts `--output` and writes the report as UTF-8,
+    matching the trace viewer's convention. Printing to stdout is unchanged.
+  - **Verified:** A real fixture-backed run covering `NGÂN HÀNG TMCP QUÂN ĐỘI – MBBANK`, a
+    `created_on` date, and decimal salaries writes a report the grader then consumes, with no
+    `PYTHONUTF8` override.
+
 - **`[MED · RESOLVED · T0025.7, 2026-08-13]` A completed empty-answer turn was indistinguishable
   from an uncollected scenario in outcome summaries.**
   - **Found:** Current-configuration acceptance verification.

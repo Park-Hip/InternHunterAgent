@@ -114,9 +114,18 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Grade persisted runs by SQL execution accuracy.")
     parser.add_argument("run", type=Path)
     parser.add_argument("--database-url")
+    # Reported rows carry the fixture's Vietnamese company names, so stdout cannot
+    # be redirected into the grader's --execution-accuracy input on a cp1252
+    # console. Writing the file directly keeps the report UTF-8 on every platform.
+    parser.add_argument("--output", type=Path, help="Write the report as UTF-8 JSON instead of printing it")
     args = parser.parse_args(argv)
     run = json.loads(args.run.read_text(encoding="utf-8"))
-    print(json.dumps(grade_run(run, args.database_url), ensure_ascii=False, default=str, indent=2))
+    report = json.dumps(grade_run(run, args.database_url), ensure_ascii=False, default=str, indent=2)
+    if args.output is None:
+        print(report)
+        return
+    args.output.write_text(report, encoding="utf-8")
+    print(args.output)
 
 
 if __name__ == "__main__":

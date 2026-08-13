@@ -127,3 +127,27 @@ def test_cli_serializes_date_and_decimal_results(tmp_path, monkeypatch, capsys) 
     assert json.loads(capsys.readouterr().out) == {
         "rows": [{"created_on": "2026-08-13", "salary_max": "40000000"}]
     }
+
+
+def test_cli_writes_a_utf8_report_the_grader_can_consume(tmp_path, monkeypatch, capsys) -> None:
+    """Redirected stdout is cp1252 on Windows, so the report needs its own file."""
+    import evals.execution_accuracy as accuracy
+
+    run_path = tmp_path / "run.json"
+    run_path.write_text("{}", encoding="utf-8")
+    output_path = tmp_path / "accuracy.json"
+    company = "NGÂN HÀNG TMCP QUÂN ĐỘI – MBBANK"
+    monkeypatch.setattr(
+        accuracy,
+        "grade_run",
+        lambda run, database_url=None: {
+            "rows": [{"company": company, "created_on": date(2026, 8, 13)}]
+        },
+    )
+
+    accuracy.main([str(run_path), "--output", str(output_path)])
+
+    assert capsys.readouterr().out.strip() == str(output_path)
+    assert json.loads(output_path.read_text(encoding="utf-8")) == {
+        "rows": [{"company": company, "created_on": "2026-08-13"}]
+    }

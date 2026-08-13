@@ -2303,3 +2303,32 @@ Follow-ups / Docs).
 - **Follow-up tickets:** Resume T0025.7 acceptance from a clean worktree after quota recovery.
 - **Docs that need updating:** The current-state sheet and risk register remain current until the
   replacement live capture finishes.
+
+## T0025.7 follow-up - UTF-8 execution-accuracy reports
+
+- **Summary:** The date and decimal fix exposed the next failure on the same command.
+  The CLI printed `ensure_ascii=False` JSON, so redirecting it into the grader's
+  `--execution-accuracy` input raised `UnicodeEncodeError` under Windows cp1252 whenever a report
+  carried the fixture's Vietnamese company names, and redirection was the only way to produce that
+  file.
+  `evals.execution_accuracy` now takes `--output` and writes UTF-8 directly, matching the trace
+  viewer's convention. The stdout path is unchanged.
+- **Files changed:** `evals/execution_accuracy.py`, `evals/test_execution_accuracy.py`,
+  `docs/Resolved_Issues.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** Built a fixture-backed run whose rows carry a Vietnamese company name, a
+  `created_on` date, and decimal salaries, then wrote its report through `--output` and graded it
+  with `evals.grader --execution-accuracy`.
+  Ran the full evaluation tests, the whole suite, Ruff, mypy, documentation lint, and
+  `git diff --check`.
+- **Build and test results:** The report was written and consumed with no `PYTHONUTF8` override.
+  Evaluation tests passed 62 of 62 and the full suite passed 424 with 1 skipped.
+- **Manual verification:** Run
+  `uv run python -m evals.execution_accuracy <run>.json --output <accuracy>.json`, confirm it
+  prints the output path and that the file opens as UTF-8 with company names intact.
+  Then pass that file to `uv run python -m evals.grader --run <run>.json --execution-accuracy
+  <accuracy>.json` and confirm the accuracy checks join.
+- **Risks:** The deterministic grader's own CLI still prints to stdout, which is safe only while its
+  report stays ASCII. It is built from registry tokens and fixed strings today, and echoes no answer
+  text or database rows, so no report can carry the fixture's non-ASCII values.
+- **Follow-up tickets:** None. T0025.7 acceptance still waits only on provider TPM headroom.
+- **Docs that need updating:** None beyond this report and the registers updated here.

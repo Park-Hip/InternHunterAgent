@@ -1,6 +1,5 @@
 # Known Issues & Risks
-
-> **Last verified:** 2026-08-11 against checked-out code, tests, configuration, and active runbooks.
+> **Last verified:** 2026-08-13 against checked-out code, tests, configuration, and active runbooks.
 
 This register holds actionable risks that are open, blocked, or awaiting a maintainer decision.
 > **Eviction:** An entry leaves when fixed, superseded, or reclassified in its owning document.
@@ -10,14 +9,14 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
-| HIGH | 0 | 2 | 0 |
-| MED | 8 | 2 | 2 |
-| LOW | 18 | 3 | 0 |
+| HIGH | 1 | 3 | 1 |
+| MED | 5 | 1 | 1 |
+| LOW | 16 | 3 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
 
-## Config, startup & deployment (15)
+## Config, startup & deployment (12)
 
 - **`[LOW · BLOCKED]` The serving-model pin still lacks its final live baseline confirmation.**
   - **Found:** T0011.5 preparation.
@@ -44,9 +43,9 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Keep the ping windowed — that is the whole mitigation, not a preference.
   - **History:** Cliff detail on `archive/docs-pre-prune`; see [Operations](Operations.md).
 
-- **`[MED · DECISION]` VietnamWorks terms leave public listing display unresolved.**
+- **`[HIGH · DECISION]` VietnamWorks terms leave public listing display unresolved.**
   - **Found:** T0019.1 terms review.
-  - **Impact:** The public portfolio demo may exceed an internal-use content restriction.
+  - **Impact:** The demo may exceed an internal-use restriction, and this gates rearming the cron.
   - **Next:** Choose attribution, restricted access, accepted risk, or permission before rearming.
   - **History:** [deployment research §11](../research/archive/deployment-research-plan.md).
 
@@ -55,12 +54,6 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Impact:** Local API development hangs on Windows while Docker and Render continue to work.
   - **Next:** Use Docker today; scope a fix if native development is needed.
   - **History:** [Operations](Operations.md) records the current workaround.
-
-- **`[LOW · OPEN]` `scripts/init_db.sql` is behind the Alembic head for lifecycle columns.**
-  - **Found:** T0019.3.
-  - **Impact:** A database made only with the script cannot use lifecycle ingestion functions.
-  - **Next:** Move fixture setup to Alembic or explicitly retain and document the limited script.
-  - **History:** [Operations](Operations.md) defines Alembic as the production migration path.
 
 - **`[LOW · BLOCKED]` The `max_jobs: 150` ceiling has not been remeasured against VietnamWorks.**
   - **Found:** T0019.9.
@@ -80,23 +73,11 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Investigate only if failures recur; the operating window and cadence are documented.
   - **History:** [Operations](Operations.md) records the observed first-wake behavior.
 
-- **`[MED · OPEN]` Dead checkpointer connections can be reported as provider pressure.**
-  - **Found:** T0019.7 live Render investigation.
-  - **Impact:** A Neon pool failure can reach a visitor as the generic busy message.
-  - **Next:** Add a psycopg pool health check and preserve pool provenance in error classification.
-  - **History:** `src/core/checkpointer.py` and `src/core/errors.py`.
-
-- **`[MED · BLOCKED]` The ingestion schedule is disabled pending its activation gates.**
+- **`[HIGH · BLOCKED]` The ingestion schedule is disabled pending its activation gates.**
   - **Found:** T0020.4.
-  - **Impact:** Production listings do not refresh automatically while the schedule stays parked.
+  - **Impact:** Scheduled refresh is a Definition-of-Done capability, so v1.0 cannot be tagged.
   - **Next:** Complete a green manual dispatch and signed gates before uncommenting the cron.
   - **History:** [Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md).
-
-- **`[MED · OPEN]` `/ready` can silently fall back to a snapshot date after a DB error.**
-  - **Found:** D6 production migration.
-  - **Impact:** A future schema or database failure could make the demo overstate corpus freshness.
-  - **Next:** Expose whether the readiness date is measured or fallback-derived.
-  - **History:** [Resolved Issues](Resolved_Issues.md) records the prior production occurrence.
 
 - **`[MED · BLOCKED]` CI runs on pull requests, but branch protection needs maintainer setup.**
   - **Found:** T0020.3.
@@ -154,13 +135,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Run the archived SQL probe, stream curl, and fixture checks with credentials.
   - **History:** [Manual Verification Archive](archive/Manual_Verification_Archive.md).
 
-- **`[MED · OPEN]` The frozen `behavior_glossary` is absent from `config/prompts.yaml`.**
-  - **Found:** T0020.1 recovery audit.
-  - **Impact:** The behavior specification has no machine-readable canonical phrase source.
-  - **Next:** Land the archived 18 entries and re-run goldens before honesty enforcement work.
-  - **History:** `archive/t0015.2-behavior-glossary` preserves the source block.
-
-## Query tooling & SQL safety (2)
+## Query tooling & SQL safety (1)
 
 - **`[LOW · OPEN]` An honored explicit result count does not state that further matches exist.**
   - **Found:** T0010.7.
@@ -168,13 +143,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Fetch one additional row for explicit limits and add a soft more-results hint.
   - **History:** `src/services/query/row_bound.py` owns result limits.
 
-- **`[LOW · OPEN]` Rejected generated SQL has no structured rejection log.**
-  - **Found:** T0021.2 follow-up.
-  - **Impact:** Repeated malformed SQL generation is invisible to operators.
-  - **Next:** Log the validation reason without returning it to the user.
-  - **History:** `src/agents/tools/query_clean_jobs.py`.
-
-## Evaluation harness (5)
+## Evaluation harness (7)
 
 - **`[LOW · OPEN]` DeepEval live commands require UTF-8 output and an explicit `-m eval`.**
   - **Found:** T0011.1, T0011.6, and T0012.7.
@@ -206,6 +175,22 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Retain zero or choose a small nonzero budget after the blocked comparison.
   - **History:** [evaluation cost research](../research/eval-cost-and-rate-limits.md).
 
+- **`[MED · OPEN]` Evaluation run provenance cannot identify dirty or untracked source state.**
+  - **Found:** M25 milestone rescope on 2026-08-13.
+  - **Impact:** A persisted run can name the current commit while executing different local code,
+    so it cannot serve as a reproducible baseline.
+  - **Next:** T0025.7 adds the scenario-registry hash and clean or dirty worktree state, and rejects
+    dirty runs as baselines.
+  - **History:** `evals/driver.py` currently builds the run manifest.
+
+- **`[MED · OPEN]` The grader lacks validation against a committed real three-seam replay.**
+  - **Found:** M25 milestone rescope on 2026-08-13.
+  - **Impact:** The crafted holdout proves assertion contracts, but not agreement with human labels
+    on real model outputs or deterministic end-to-end replay in CI.
+  - **Next:** T0025.9 audits all scenario rules, labels the T0025.7 sample, and commits a sanitized
+    replay fixture that CI grades without model or judge calls.
+  - **History:** `evals/holdout.py`, `evals/grader.py`, and the current CI configuration.
+
 ## Demo UI (4)
 
 - **`[LOW · OPEN]` The mid-stream error bubble has no deterministic end-to-end test hook.**
@@ -231,17 +216,3 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Impact:** Model lists and emphasis do not render as readable rich text.
   - **Next:** Add a safe lightweight renderer if formatted answers become a product need.
   - **History:** `src/api/static/app.js::appendToken`.
-
-## Error-handling honesty (2)
-
-- **`[MED · OPEN]` Every streaming failure still tells the user that the demo is busy.**
-  - **Found:** T0021.2 follow-up.
-  - **Impact:** Database and internal failures are presented as transient provider pressure.
-  - **Next:** T0021.4 should add an honest generic message for non-provider failures.
-  - **History:** [Resolved Issues](Resolved_Issues.md) records the logging fix.
-
-- **`[MED · OPEN]` Empty synchronous agent answers are replaced without an operator signal.**
-  - **Found:** 2026-07-22 error-handling audit.
-  - **Impact:** Repeated model or graph failures can look like legitimate fallback responses.
-  - **Next:** Log `generate_agent_response.empty_answer_fallback` at warning level.
-  - **History:** `src/agents/service.py::generate_agent_response`.

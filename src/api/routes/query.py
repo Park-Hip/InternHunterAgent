@@ -3,7 +3,12 @@ import json
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from src.api.schemas import QueryRequest, QueryResponse
-from src.core.errors import BUSY_MESSAGE, InvalidQueryError, ProviderBusyError
+from src.core.errors import (
+    BUSY_MESSAGE,
+    GENERIC_ERROR_MESSAGE,
+    InvalidQueryError,
+    ProviderBusyError,
+)
 from src.core.logger import logger
 from src.agents.service import generate_agent_response, stream_agent_response
 
@@ -68,7 +73,7 @@ async def query_agent(payload: QueryRequest, request: Request):
             session_id=payload.session_id,
             error=str(e),
         )
-        raise HTTPException(status_code=500, detail="Failed to process query")
+        raise HTTPException(status_code=500, detail=GENERIC_ERROR_MESSAGE) from e
 
 
 async def stream_query_agent(payload: QueryRequest, request: Request):

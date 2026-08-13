@@ -17,6 +17,70 @@ Follow-ups / Docs).
 
 ---
 
+## T0025.4 follow-up fixes
+
+- **Summary:** Hardened the local viewer against missing or corrupt run artifacts, browser storage
+  failures, and unreadable row dumps.
+  Added `--sample` so the viewer can be demonstrated and manually verified without serving-model
+  quota.
+- **Files:** `evals/viewer.py`, `evals/test_viewer.py`, `docs/Manual_Verification_Guide.md`,
+  `docs/Completion_Reports.md`, and `docs/Repo_Current_State.md`.
+- **Commands:** Ran Ruff, `git diff --check`, direct sample-generation assertions, and the
+  missing-file CLI path with the available system Python.
+- **Build/test:** Direct checks passed.
+  The repository pytest environment remains unavailable because its uv-managed interpreter cannot
+  be started.
+- **Manual verification:** Run `uv run python -m evals.viewer --sample`, open the generated
+- `trace-viewer-sample.html`, navigate between both turns, and verify the table rows and
+  note-storage fallback behavior.
+- **Risks:** Browser storage remains best-effort by design; notes cannot persist when site data is
+  blocked, but navigation remains available and the page reports the limitation.
+- **Follow-ups:** T0025.5 remains the next evaluation ticket.
+- **Docs:** Updated the manual checklist and available-script snapshot.
+
+## T0025.4 - Trace viewer and first-upstream-failure rule
+
+- **Summary:** Added a dependency-free local HTML viewer for persisted scenario-driver records.
+  It presents one turn at a time with routing, generated SQL, rows, final answer, trace id, and
+  an operator note field whose contents persist in browser local storage.
+  The viewer and manual checklist state the first-upstream-failure rule: annotate the earliest
+  wrong seam only and stop.
+- **Files:** `evals/viewer.py`, `evals/test_viewer.py`, `docs/Manual_Verification_Guide.md`,
+  `docs/Completion_Reports.md`, and `docs/Repo_Current_State.md`.
+- **Commands:** Ran the focused viewer test and Ruff checks through the repository Python tooling.
+  A later repeat was blocked by the known local uv interpreter/cache process failure.
+- **Build/test:** Three focused viewer tests passed before the uv environment failure was triggered.
+  Ruff passed for `evals/viewer.py` and `evals/test_viewer.py`.
+- **Manual verification:** Generate the viewer from a recorded run, open the HTML locally, inspect
+  all three seams, annotate one turn, reload, and confirm the note survives.
+- **Risks:** Browser local storage is scoped to the local file/browser profile.
+  Clearing browser data
+  removes notes.
+  The viewer intentionally does not score or grade records.
+- **Follow-ups:** T0025.5 owns deterministic reference-SQL execution accuracy.
+- **Docs:** Added the T0025.4 checklist and updated the repository state snapshot.
+
+## T0025.3 - Scenario driver over the existing harness
+
+- **Summary:** Added an in-process scenario driver with frozen-registry loading, probe repeat
+  counts, capture-only execution, per-turn three-seam persistence, manifests, retry events,
+  checkpoint/resume, quota-safe partial runs, and comparable-run checks.
+- **Files:** `evals/driver.py`, `evals/test_driver.py`, `.gitignore`, `docs/Repo_Current_State.md`,
+  and this report.
+- **Commands:** Ran `uv run pytest -q evals/test_driver.py`, `uv run ruff check
+  evals/driver.py evals/test_driver.py`, and attempted `uv run python -m evals.driver --help`.
+- **Build/test:** Four focused driver tests passed and Ruff passed.
+  The CLI help attempt was blocked by a pre-existing local uv cache permission conflict.
+- **Manual verification:** Run two selected scenarios with `uv run python -m evals.driver --ids
+  SAF-...,... --output evals/runs/run.json` and confirm the manifest and `sql_text` fields.
+  Interrupt a run, then use `--resume` and confirm completed records are skipped.
+  Change `config/prompts.yaml`, create a second run, and confirm `diff` rejects it as
+  incomparable.
+- **Risks:** Live provider quota, fixture Postgres availability, and the existing local uv cache
+  permission issue remain environmental risks.
+- **Follow-ups:** T0025.4 should build the local viewer over these records.
+- **Docs:** `Repo_Current_State.md` now points to the driver and the next ticket.
+
 
 ## T0022.7 - Rebuild repository state and true up registers
 
@@ -1729,6 +1793,7 @@ Follow-ups / Docs).
   blocked or maintainer-owned.
 - **Follow-up tickets:** T0022.13 is next; T0021.3 and T0021.4 retain the relevant service fixes.
 - **Docs that need updating:** No additional documentation update is required for this ticket.
+
 ## T0022.13 - Restructure the surviving documents
 
 - **Summary:** Split the serving-path and offline-pipeline designs, moved completed M22 ticket plans
@@ -1776,3 +1841,411 @@ Follow-ups / Docs).
 - **Follow-up tickets:** Scope a freshness check for `Last verified:` stamps, including the
   trade-off that comparing a stamp with git mtime would require a bump after whitespace-only edits.
 - **Docs that need updating:** No additional documentation update is required for this ticket.
+
+## T0021.2 - Agent-path error logging at swallowed catch sites
+
+- **Summary:** Logged the original exception cause at both job-query tool catch sites and logged
+  streaming failures with their provider-busy classification.
+  Public response wording remained unchanged, as intended for this observability-only ticket.
+- **Files created:** None.
+- **Files changed:** `src/agents/service.py`, `src/agents/tools/query_clean_jobs.py`,
+  `src/agents/tools/get_job_details.py`, `tests/agents/test_service.py`,
+  `tests/agents/tools/test_query_clean_jobs.py`, `tests/agents/tools/test_get_job_details.py`,
+  `docs/Known_Issues.md`, `docs/Resolved_Issues.md`, and `docs/Tickets.md`.
+- **Commands run:** Historical implementation: `git show 6ae9941` confirms the completed changes.
+  Recovery verification on 2026-08-12: `uv run pytest -q tests/agents/test_service.py
+  tests/agents/tools/test_query_clean_jobs.py tests/agents/tools/test_get_job_details.py`,
+  `uv run ruff check src tests`, and `uv run mypy src`.
+- **Build and test results:** Recovery verification passed: 24 tests, Ruff, and mypy were green.
+- **Manual verification:** Cause a tool `ExecutorError` and a streaming runtime failure.
+  Confirm that the public response remains safe while structlog contains the true cause on
+  `query_clean_jobs.db_error`, `get_job_details.db_error`, or `stream_agent_response.failed`.
+- **Risks:** The ticket deliberately retained one blanket public busy message.
+  T0021.4 subsequently replaced it with distinct provider-pressure and unattributed-failure text.
+- **Follow-up tickets:** T0021.3 owned accurate provider classification and residual operator
+  signals.
+  T0021.4 owned visitor-facing error and freshness wording.
+- **Docs that need updating:** None.
+
+## T0021.3 - Truthful failure classification and remaining operator signals
+
+- **Summary:** Prevented `psycopg` and `psycopg_pool` failures from being classified as provider
+  pressure.
+  The checkpointer pool now validates idle connections before borrowing them.
+  Added warning signals for synchronous and streaming empty-answer fallbacks and rejected SQL.
+- **Files created:** `tests/core/test_errors.py`.
+- **Files changed:** `src/core/checkpointer.py`, `src/core/errors.py`,
+  `src/agents/service.py`, `src/agents/tools/query_clean_jobs.py`,
+  `tests/core/test_checkpointer.py`, `tests/agents/test_service.py`,
+  `tests/agents/tools/test_query_clean_jobs.py`, `docs/Known_Issues.md`,
+  `docs/Resolved_Issues.md`, `docs/Repo_Current_State.md`, `docs/Tickets.md`, and this report.
+- **Commands run:** Reproduced the original defect with
+  `uv run python -c "... classify_provider_busy_error(PoolTimeout(...)) ..."`.
+  Ran focused pytest, Ruff, mypy, documentation lint, and `git diff --check`.
+  The full `uv run pytest -q` run exceeded the 124-second command limit without output.
+- **Build and test results:** Focused tests passed, 24 passed.
+  `uv run ruff check src tests` and `uv run mypy src` passed before the documentation updates.
+  Final documentation and whitespace validation passed.
+- **Manual verification:** Start the stack, stop Postgres, and submit a demo question.
+  Confirm the `stream_agent_response.failed` structlog event contains the pool cause with
+  `reclassified_busy=false`.
+  Force empty synchronous and streaming responses with a stub runtime and confirm the two warning
+  event names while the fallback text remains unchanged.
+  Submit a prompt that generates rejected SQL and confirm `query_clean_jobs.sql_rejected` includes
+  the validator reason while the tool response keeps its existing wording.
+- **Risks:** A live Neon connection-drop scenario remains manual verification because this ticket
+  uses deterministic pool and classifier tests rather than a production database fault.
+- **Follow-up tickets:** T0021.4 owns visitor-facing failure and freshness wording.
+- **Docs that need updating:** No additional documentation update is required for this ticket.
+
+## T0021.4 - Honest failure and freshness messages
+
+- **Summary:** Added a generic public message for unattributed service failures while retaining the
+  busy message exclusively for classified provider pressure.
+  Added readiness-date provenance so the demo presents a snapshot date only when it is measured.
+- **Files changed:** `src/core/errors.py`, `src/agents/service.py`,
+  `src/api/routes/query.py`, `src/api/routes/health.py`, `src/api/static/app.js`,
+  `src/api/static/index.html`, `tests/agents/test_service.py`,
+  `tests/api/test_query.py`, `tests/api/test_stream.py`, `tests/api/test_ready.py`,
+  `tests/api/test_static_serving.py`, `docs/Tickets.md`, `docs/Known_Issues.md`,
+  `docs/Resolved_Issues.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** Focused pytest, Ruff, mypy, documentation lint, the default pytest suite, and
+  `git diff --check`.
+- **Build and test results:** Focused tests passed with 36 tests.
+  The default test roots passed when run individually: 362 passed, 1 skipped, and 4 subtests passed.
+  Ruff, mypy, documentation lint, and `git diff --check` passed.
+- **Manual verification:** Stop Postgres, submit a demo question, and confirm the generic failure
+  message appears.
+  Restore Postgres and confirm a healthy answer streams.
+  Simulate a 429-shaped provider failure and confirm the busy message appears instead.
+  Call `/api/v1/ready` with a healthy database and after a date-query failure, then confirm that
+  `data_snapshot_date_provenance` changes and the browser only calls measured data a snapshot.
+- **Risks:** Browser-driven verification could not connect to the local Uvicorn process in this
+  workspace, so the user-visible checks retain the listed manual steps in addition to deterministic
+  route and static-asset coverage.
+- **Follow-up tickets:** T0023 remains the next release ticket once the ingestion schedule is live.
+- **Docs that need updating:** No additional documentation update is required for this ticket.
+
+## T0025.0 - Build the evaluation fixture from Alembic, not the snapshot script
+
+- **Summary:** The evaluation fixture now applies Alembic through head before loading its unchanged
+  22 seed rows.
+  Fixture resets also clear the Alembic version marker, ensuring the next rebuild creates the full
+  serving schema.
+- **Files created:** `evals/fixtures/test_loader.py`.
+- **Files changed:** `evals/fixtures/loader.py`, `evals/fixtures/test_fixture_counts.py`,
+  `scripts/init_db.sql`, `scripts/reset_db.sql`, `README.md`, `docs/Operations.md`,
+  `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, `docs/MVP_Technical_Design.md`,
+  `research/v1-release-readiness-plan.md`, and this report.
+- **Commands run:** `uv run --no-sync pytest -q evals/fixtures/test_loader.py
+  tests/api/test_schema_guard.py`, `uv run --no-sync python -m evals.fixtures.loader`, fixture
+  schema-guard and lifecycle-default checks, `uv run --no-sync pytest -q
+  evals/fixtures/test_fixture_counts.py`, Ruff, mypy, documentation lint, and `git diff --check`.
+  The full default pytest suite was also attempted but exceeded the 124-second command limit.
+- **Build and test results:** Focused loader and schema-guard tests passed: 8 passed.
+  Database-backed fixture tests passed: 8 passed.
+  The rebuild printed `COUNT(*) = 22`, the API guard logged `api.schema_ok`, and the lifecycle
+  query returned `(22, True, 0)` for total rows, active rows, and NULL active rows.
+  Ruff, mypy, documentation lint, and `git diff --check` passed.
+- **Manual verification:** Start local Postgres, run `uv run python -m evals.fixtures.loader`, then
+  boot the API with `DATABASE_URL` pointing at `internhunter_eval`.
+  Confirm startup logs `api.schema_ok`, the loader prints `COUNT(*) = 22`, and every
+  `clean_jobs.is_active` value is true rather than NULL.
+- **Risks:** The full default pytest suite exceeded the local 124-second command limit without
+  output; focused and database-backed checks passed.
+  The FastAPI lifespan reached `api.schema_ok` against the fixture, then hit the existing Windows
+  `ProactorEventLoop` incompatibility in the asynchronous psycopg checkpointer pool.
+- **Follow-up tickets:** None.
+- **Docs that need updating:** None.
+
+## T0025.1 - Harvest the archived instrument and delete the duplicate case list
+
+- **Summary:** Restored the archived 29-scenario registry and 2026-07-14 observed-answer artifact.
+  The registry is now the only case list.
+  The stale 18-case JSON dataset and duplicate loader are removed, while DeepEval goldens are
+  generated in memory from the YAML.
+  The live harness now reads the registry's native expected-behavior field.
+- **Files created:** `evals/scenarios.py`, `evals/scenarios_v1.yaml`,
+  `evals/v1_scenario_matrix.observed.json`, and `evals/test_scenarios.py`.
+- **Files changed:** `evals/harness.py`, `evals/test_three_seams.py`, `evals/test_judge.py`,
+  `evals/fixtures/seed_eval_db.sql`, `docs/Repo_Current_State.md`, and this report.
+- **Files deleted:** <!-- lint-allow-link-path:begin -->
+  `evals/goldens/golden_dataset.json`, `evals/goldens/__init__.py`,
+  `evals/test_goldens_load.py`, and `evals/test_judge_scaffold.py`.
+  <!-- lint-allow-link-path:end -->
+- **Commands run:** Restored the two archived artifacts from `archive/t0015.4-scenario-matrix`.
+  Ran `uv run python -m evals.scenarios --scenario A2`, focused pytest, Ruff, mypy,
+  `uv run pytest -q`, `git diff --check`, and the documentation linter.
+- **Build and test results:** The no-model dry run reported A2's corrected AI Engineer input and
+  expected behavior.
+  Focused evaluation tests passed: 6 passed and 30 live tests deselected.
+  The default suite passed: 384 passed, 1 skipped, 30 live tests deselected, and 4 subtests passed.
+  Ruff and mypy passed.
+- **Manual verification:** Run `uv run python -m evals.scenarios --scenario A2`.
+  Confirm the output says `List the AI Engineer jobs.` and shows the expected behavior without a
+  model call.
+  Then run `uv run pytest -q evals/test_scenarios.py` and confirm all 15 probe flags match
+  `docs/Agent_Behavior_Spec.md` section 4.
+- **Risks:** The historical observed answers are evidence for analysis, not a current agent result.
+  The legacy HTTP runner remains intentionally archived; T0025.3 will build over the in-process
+  harness instead.
+- **Follow-up tickets:** T0025.2 analyzes the restored answers before any new model calls.
+- **Docs that need updating:** No additional documentation update is required for this ticket.
+
+## T0025.5 follow-up - Projection-safe execution accuracy
+
+- **Summary:** Fixed execution-accuracy comparison so listing queries compare the unordered multiset
+  of `id` values when both sides project `id`.
+  Extra listing columns and column aliases no longer create false failures.
+  Aggregate and non-`id` results compare positional values, so aggregate aliases are ignored while
+  different value projections still fail.
+  Updated references to follow the SQL-generation prompt's `ILIKE` rule and corrected the ML
+  abstraction reference to use `machine learning` rather than `%ML%`.
+- **Files created:** None.
+- **Files changed:** `evals/execution_accuracy.py`, `evals/test_execution_accuracy.py`,
+  `evals/scenarios_v1.yaml`, and this report.
+- **Commands run:** Focused pytest and Ruff reruns were attempted with both the default and
+  task-local uv cache paths.
+  Both were blocked before Python startup by the broken uv-managed interpreter.
+  `git diff --check` completed without findings.
+  The local database port was probed and Docker connectivity was blocked by Docker config access
+  permissions.
+- **Build and test results:** The new projection and aggregate-alias regression tests were added.
+  The prior focused suite had passed before the uv interpreter became unavailable.
+  Post-fix execution against the real fixture could not be completed in this environment.
+- **Manual verification:** Run the focused execution-accuracy tests once uv is repaired.
+  Run the persisted-run grader against the seeded fixture.
+  Confirm an `id` query with an extra `tech_stack` column passes, reordered rows pass, and
+  `COUNT(*)` aliases pass.
+- **Risks:** ID-based comparison intentionally treats all other listing columns as explanatory
+  projection and does not grade their completeness.
+  Reference SQL remains coupled to the frozen fixture and scenario intent.
+- **Follow-up tickets:** T0025.6 must assert the cross-currency caveat at the answer seam rather
+  than relying on execution accuracy to reject a ranking query.
+- **Docs that need updating:** No additional documentation update is required for this follow-up.
+
+## T0025.5 follow-up - Native driver fixture binding and provenance
+
+- **Summary:** Native `python -m evals.driver` runs now bind `DATABASE_URL` to the configured eval
+  fixture before importing the harness.
+  Manifest `fixture_hash` now fingerprints resolved `clean_jobs` contents and records the database
+  name and row count, preventing a seed-file hash from certifying a production run.
+  Native eval runs disable Langfuse and set serving and judge provider SDK retries to zero so the
+  driver's retry policy owns retry accounting.
+  The stale `evals/runs/run.json` artifact was removed.
+- **Files created:** None.
+- **Files changed:** `evals/driver.py`, `evals/test_driver.py`, `src/agents/runtime/provider.py`,
+  `src/agents/tracing/langfuse.py`, `docs/Completion_Reports.md`, and `docs/Repo_Current_State.md`.
+- **Commands run:** Python syntax compilation, repository diff validation, and local database/Docker
+  connectivity checks.
+- **Build and test results:** Syntax compilation passed.
+  Pytest could not start because the uv-managed interpreter is unavailable.
+  The fixture port responded, but Docker inspection was blocked by Docker config permissions.
+- **Manual verification:** Run `uv run python -m evals.driver --ids HLP-COUNT-1 --output
+  evals/runs/fixture-smoke.json` and verify the manifest reports `database_name` as
+  `internhunter_eval`, `database_row_count` as 22, and the answer count as 5.
+  Confirm `manifest.fixture_hash` changes when fixture data changes, while
+  `manifest.fixture_seed_hash` tracks only the seed file.
+- **Risks:** A full database-content fingerprint adds one read-only scan of `clean_jobs` when a run
+  starts.
+  Langfuse trace IDs are unavailable for native eval runs by design.
+- **Follow-up tickets:** Restore a deliberately enabled tracing mode only after a reachable Langfuse
+  endpoint is available.
+- **Docs that need updating:** No additional documentation update is required for this follow-up.
+
+## T0025.8 - Rename the registry onto a class-first taxonomy
+
+- **Summary:** Renamed all 29 evaluation scenarios to self-describing `SAF`, `HON`, and `HLP`
+  identifiers, without changing inputs, expected behavior, or probe flags.
+  Registry scenarios now carry explicit `name`, `requirements`, and nullable `decision` fields.
+  The 2026-07-14 matrix remains a dated record and now carries a complete old-to-new map.
+- **Files changed:** `evals/scenarios.py`, `evals/scenarios_v1.yaml`,
+  `evals/test_scenarios.py`, `evals/v1_scenario_matrix.observed.json`,
+  `evals/v1_error_analysis.md`, `evals/v1_scenario_matrix.md`,
+  `docs/Agent_Behavior_Spec.md`, `docs/Decision_Log.md`, `docs/Repo_Current_State.md`,
+  `docs/Tickets.md`, `research/evaluation-strategy.md`, `research/prompt-refinement-methods.md`,
+  and this report.
+- **Commands run:** `uv run --no-sync python -m evals.scenarios --scenario HON-CURRENCY-1`,
+  `uv run --no-sync pytest -q evals/test_scenarios.py`, Ruff, mypy, documentation lint,
+  `git diff --check`, and a full `pytest -q` run.
+- **Build and test results:** The no-model dry run resolved HON-CURRENCY-1 and displayed its
+  class-first name and unchanged expected behavior.
+  The focused registry suite passed: 7 passed.
+  Ruff, mypy, documentation lint, and whitespace validation passed.
+  The full suite exceeded the local 64-second limit without output.
+- **Manual verification:** Run `uv run python -m evals.scenarios --scenario HON-CURRENCY-1`.
+  Confirm 29 scenarios and 15 probes with `uv run pytest -q evals/test_scenarios.py`.
+  Compare every legacy identifier in the dated matrix with its one-to-one map.
+- **Risks:** The full repository suite exceeded the local 64-second limit without output.
+  This working tree includes earlier uncommitted tickets, so this change was not isolated on a
+  dedicated ticket branch.
+- **Follow-up tickets:** T0025.3 can now use the stable scenario taxonomy for persisted runs.
+- **Docs that need updating:** None.
+
+## T0025.2 - Error analysis on the recovered answers
+
+- **Summary:** Open-coded all 73 final answers in the recovered 2026-07-14 artifact and grouped the
+  visible failures into ranked modes.
+  The analysis confirms eight empty-answer `INFRA` outcomes across B1, C2, M-G03, M-D4, M-D7, and
+  M-D8, plus C3's distinct database-error outcome.
+  M-D7 is now correctly recorded as under-measured rather than an unqualified behavior failure.
+  The report makes no claim about routing or SQL generation because the historical artifact contains
+  final answers only.
+- **Files created:** `evals/v1_error_analysis.md`.
+- **Files changed:** `research/evaluation-strategy.md`, `docs/Repo_Current_State.md`, and this
+  report.
+- **Commands run:** Read-only corpus reconciliation against the YAML registry and observed JSON,
+  documentation lint, and `git diff --check`.
+- **Build and test results:** No application code changed and no model or judge quota was spent.
+  Documentation validation passed.
+- **Manual verification:** Follow the four-item checklist in `evals/v1_error_analysis.md`.
+  Confirm its ledger has 29 rows, its empty-answer set has 8 turns, C3's error is separate, and no
+  upstream attribution appears.
+- **Risks:** The artifact proves answer-level failures only.
+  The causes of `INFRA` outcomes and visible answer defects remain unassigned until T0025.3 captures
+  all three seams.
+- **Follow-up tickets:** T0025.3 captures the evidence needed to attribute the ranked modes.
+- **Docs that need updating:** No additional documentation update is required for this ticket.
+
+## T0025.5 - Reference SQL and execution accuracy
+
+- **Summary:** Added hand-authored reference SQL for every single-result-set scenario and explicit
+  reasons for non-query exemptions.
+  Added a fixture-backed comparator that executes generated and reference SQL read-only and compares
+  unordered row multisets, preserving duplicate rows.
+  Added persisted-run grading with `PASS`, `FAIL`, `INFRA`, `UNRUN`, and `EXEMPT` outcomes.
+- **Files created:** `evals/execution_accuracy.py`, `evals/test_execution_accuracy.py`.
+- **Files changed:** `evals/scenarios.py`, `evals/scenarios_v1.yaml`, `docs/Completion_Reports.md`,
+  and `docs/Repo_Current_State.md`.
+- **Commands run:** `uv run pytest -q evals/test_scenarios.py evals/test_execution_accuracy.py
+  evals/test_driver.py`, `uv run ruff check evals/execution_accuracy.py evals/scenarios.py
+  evals/test_execution_accuracy.py`, and `git diff --check`.
+- **Build and test results:** Focused evaluation and driver tests passed: 16 passed.
+  Ruff passed.
+  The fixture-backed live database check was not run because the local uv interpreter cache became
+  unavailable after the focused suite completed.
+- **Manual verification:** Run `uv run python -m evals.execution_accuracy evals/runs/run.json`.
+  Change one reference query temporarily and confirm its scenario becomes `FAIL` while its persisted
+  answer remains unchanged.
+  Reorder equivalent `WHERE` terms and confirm the scenario remains `PASS`.
+  Confirm every `EXEMPT` result includes a non-empty reason.
+- **Risks:** Reference SQL expresses the intended fixture result sets and must be reviewed when the
+  frozen fixture or scenario behavior changes.
+  Live fixture execution remains environment-dependent on local Postgres.
+- **Follow-up tickets:** T0025.6 can consume execution accuracy as its structural seam-2 assertion.
+- **Docs that need updating:** No additional documentation update is required for this ticket.
+
+## T0025.6 - The three-tier grader
+
+- **Summary:** Added deterministic structural and textual grading over persisted seam evidence.
+  Structural checks run first, including tool usage, execution accuracy, answer counts, and the
+  cross-currency no-winner rule.
+  Textual checks then validate caveat substance and forbidden phrasing.
+  Existing harness judge scores can be consumed at tier 3 without adding new judge metrics.
+  Results preserve `PASS`, `FAIL`, `INFRA`, and `UNRUN`, and class summaries exclude the last two
+  statuses from pass-rate denominators.
+- **Files created:** `evals/grader.py`, `evals/holdout.py`, `evals/test_grader.py`, and
+  `evals/holdout_report.md`.
+- **Files changed:** `config/prompts.yaml`, `src/agents/runtime/prompts.py`, `evals/driver.py`,
+  `docs/Tickets.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** Focused grader, scenario, driver, execution-accuracy, and viewer pytest
+  commands.
+  Also ran `uv run pytest -q evals`,
+  `uv run pytest -q tests/agents/runtime/test_prompts.py`, Ruff for the changed evaluation files,
+  the glossary loader smoke check, and the documentation lint.
+- **Build and test results:** The focused evaluation suite passed 30 tests.
+  The full evaluation suite passed 47 tests with 30 live eval tests deselected.
+  The prompt loader suite passed 10 tests.
+  Ruff passed.
+  The holdout reported 1.00 overall accuracy and 1.00 precision and recall for structural and
+  textual failure detection.
+  No provider or judge calls were made.
+- **Manual verification:** Run `uv run python -m evals.grader --observed
+  evals/v1_scenario_matrix.observed.json` and confirm the answer-only artifact remains explicitly
+  under-measured rather than being scored as behavior.
+  Run the persisted-run grader with a T0025.3 artifact and its T0025.5 execution-accuracy result.
+  Feed an answer containing the cross-currency caveat that also names a highest-paid job and
+  confirm tier 1 returns `FAIL` without a model call.
+  Break a deterministic assertion and confirm `evals/test_grader.py` fails.
+- **Risks:** The historical 2026-07-14 artifact contains answers only, so structural grading of
+  that artifact remains `INFRA` until a persisted three-seam run is available.
+  Live fixture execution and credentialed judge scoring remain environment-dependent.
+- **Follow-up tickets:** T0025.7 diagnoses the empty-answer fallback.
+  The later judge-fidelity and release-policy decisions remain governed by the evaluation strategy.
+- **Docs that need updating:** None beyond this completion report, the current-state sheet, the
+  ticket roadmap, and the Known Issues register updated here.
+
+## Backlog reconciliation - 2026-08-13
+
+- **Summary:** Reconciled the stale backlog in `Tickets.md` against the numbered roadmap and the
+  current operational source of truth.
+  Promoted or completed items now point to T0016, T0017, T0018, T0019, T0020, T0022.5, or T0024.
+  The custom-domain follow-up remains explicitly deferred because it is cosmetic and requires a
+  domain decision.
+- **Files changed:** `docs/Tickets.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py`, `python scripts/docs_lint.py`,
+  `python -m pytest -q tests/test_docs_lint.py`, and `git diff --check`.
+- **Build and test results:** The configured uv command could not start because its local cache and
+  managed interpreter are unavailable.
+  The system-Python documentation lint passed, and `git diff --check` completed without whitespace
+  errors.
+  The system Python has no pytest module, so the focused test suite could not run.
+- **Manual verification:** Open `docs/Tickets.md` and confirm the first-screen milestone index
+  shows only the custom domain as deferred backlog.
+  Confirm every former backlog row has an owner or explicit disposition.
+  Follow the `Operations.md` link and verify it is the operational source of truth.
+- **Risks:** The custom-domain decision remains outside this ticket and has no effect on the v1.0
+  release path.
+- **Follow-up tickets:** None required for backlog reconciliation.
+  A future post-v1.0 ticket may scope a custom domain if the maintainer supplies the domain choice.
+- **Docs that need updating:** None.
+
+## M25 evaluation milestone rescope - 2026-08-13
+
+- **Summary:** Reframed M25 as an evaluation-instrument milestone with an evidence-based closure
+  gate, rather than a behavior-improvement or sampling-selection milestone.
+  Replaced the confounded T0025.7 sampling A/B with current-configuration acceptance, provenance
+  hardening, and instrumented empty-answer verification.
+  Rescoped T0025.9 as the real-output grader audit and committed no-model replay CI gate.
+  Narrowed the completed T0025.6 wording to the deterministic grader and crafted contract suite
+  that were actually delivered.
+  Added T0025.10 for record consolidation and milestone closeout.
+  Assigned behavior fixes and any evidence-triggered single-variable sampling experiment to M24.
+- **Files created:** `.lavish/evaluation-milestone-review.html`.
+- **Files changed:** `docs/Tickets.md`, `research/evaluation-strategy.md`,
+  `docs/Decision_Log.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** Inspected the milestone registry, evaluation strategy, decision log, current
+  state, known issues, evaluation code, scenarios, persisted artifacts, CI workflow, and Git state.
+  Ran `uv run --no-sync --cache-dir .uv-cache pytest -q evals/test_scenarios.py
+  evals/test_driver.py evals/test_viewer.py evals/test_execution_accuracy.py evals/test_grader.py`.
+  Ran `uv run --no-sync --cache-dir .uv-cache ruff check evals`,
+  `uv run --no-sync --cache-dir .uv-cache mypy src`,
+  `uv run --no-sync --cache-dir .uv-cache python scripts/docs_lint.py`, and `git diff --check`.
+- **Build and test results:** The focused evaluation suite passed 39 tests.
+  Ruff passed for `evals`.
+  Mypy reported no issues in 43 source files.
+  Documentation lint passed after keeping `Repo_Current_State.md` at its 150-line cap.
+  `git diff --check` passed.
+  The default uv cache remains unusable with Windows error 183, while the task-local `.uv-cache`
+  completed all validation successfully.
+- **Manual verification:** Open `.lavish/evaluation-milestone-review.html` and review the milestone
+  closure gate, evidence matrix, ticket sequence, and risk register.
+  Read the M25 block in `docs/Tickets.md` and confirm the remaining order is T0025.7, T0025.9,
+  then T0025.10.
+  Confirm no remaining live document requires the bundled sampling A/B or treats the crafted
+  holdout as empirical grader calibration.
+  Confirm `docs/Repo_Current_State.md` points to T0025.7 and the two new evaluation risks are in
+  `docs/Known_Issues.md`.
+- **Risks:** The current worktree is dirty and includes untracked M25 implementation files, so no
+  run from it can yet qualify as a reproducible baseline.
+  The only persisted live smoke contains one scenario and its prompt hash predates the current
+  prompt.
+  No provider call was made during this documentation rescope, and token or finish telemetry may
+  remain unavailable for some provider responses.
+- **Follow-up tickets:** Execute T0025.7 for current-configuration instrument acceptance.
+  Execute T0025.9 for rule audit, real-output labels, and committed replay CI.
+  Execute T0025.10 to consolidate records and close M25.
+  M24 then owns behavior improvement, including any justified single-variable sampling experiment.
+- **Docs that need updating:** T0025.10 must fold the durable cost record into the evaluation
+  strategy, archive completed M25 ticket bodies, and mark the milestone complete after its gates
+  pass.

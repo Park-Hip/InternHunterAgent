@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from src.agents.service import FALLBACK_ANSWER, generate_agent_response
 from src.api.app import app
 from src.api.schemas import DEFAULT_MAX_QUERY_CHARS
-from src.core.errors import BUSY_MESSAGE, ProviderBusyError
+from src.core.errors import BUSY_MESSAGE, GENERIC_ERROR_MESSAGE, ProviderBusyError
 
 
 class QueryRouteTests(unittest.TestCase):
@@ -136,7 +136,7 @@ class QueryRouteTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.json(), {"detail": "Failed to process query"})
+        self.assertEqual(response.json(), {"detail": GENERIC_ERROR_MESSAGE})
 
     def test_query_route_returns_friendly_429_when_provider_is_rate_limited(self) -> None:
         with patch(

@@ -52,11 +52,12 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("No matching internship job postings", result)
 
+    @patch("src.agents.tools.query_clean_jobs.logger")
     @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
     @patch("src.agents.tools.query_clean_jobs.validate_sql")
     @patch("src.agents.tools.query_clean_jobs.generate_sql")
     async def test_validator_rejection_returns_refusal_string_without_executing(
-        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql
+        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql, mock_logger
     ) -> None:
         from src.agents.tools.query_clean_jobs import query_clean_jobs
 
@@ -70,6 +71,10 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("I can't run that query", result)
         self.assertIn("Only SELECT statements are allowed", result)
         mock_execute_validated_sql.assert_not_called()
+        mock_logger.warning.assert_called_once_with(
+            "query_clean_jobs.sql_rejected",
+            reason="Only SELECT statements are allowed",
+        )
 
     @patch("src.agents.tools.query_clean_jobs.logger")
     @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")

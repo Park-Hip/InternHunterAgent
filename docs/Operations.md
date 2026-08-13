@@ -55,11 +55,11 @@ It does not create or update secret values in Render.
 
 ### Initialise a local database
 
-Start local Postgres, then apply the idempotent schema script:
+Start local Postgres, then apply the idempotent Alembic migration chain:
 
 ```bash
 docker compose up -d postgres
-docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
+uv run alembic upgrade head
 ```
 
 ### Reset local development data
@@ -69,6 +69,7 @@ Never point this command at Neon or any production database.
 
 ```bash
 docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/reset_db.sql
+uv run alembic upgrade head
 uv run python -m src.services.ingestion.loader
 ```
 
@@ -93,6 +94,9 @@ The guarded production adoption sequence remains in
 The schedule is currently disabled: the two `schedule:` / `cron:` lines in
 `.github/workflows/ingestion.yml` remain commented out.
 Manual `workflow_dispatch` is available.
+This is a gated pause, not the intended steady state: an active schedule is a required MVP
+capability under [MVP Spec](MVP_Spec.md) section 2, so the demo runs below specification until the
+gates clear.
 
 Do not enable the schedule or set its secrets from this document.
 The activation gates, their evidence, order, and sign-off state are maintained in

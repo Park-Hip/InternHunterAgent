@@ -6,6 +6,12 @@ Link to the owner instead of restating its facts elsewhere.
 Caps are per-document and set from the measured length plus headroom, never from an aspiration.
 A document over its cap means either the cap or the document is wrong; decide which, and say so.
 
+`Tickets.md` moved 420 → 500 on 2026-08-13, measured at 420 with headroom for the open plan. M25
+grew from eight blocks to ten when the registry rename and the record consolidation were scoped,
+and the register still carries three open milestones. Eviction is available and unused: the
+completed M25 blocks belong in [the archive](archive/Tickets_Archive.md), which is the cheaper fix
+when this cap next binds.
+
 > **Eviction:** A map entry leaves when its owned document is retired or ownership moves elsewhere.
 
 <!-- caps:begin -->
@@ -23,7 +29,7 @@ A document over its cap means either the cap or the document is wrong; decide wh
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 150 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 250 | Maintainers |
-| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 320 | Delivery planning |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 500 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T3 | 150 | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |

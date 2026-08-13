@@ -875,6 +875,30 @@ Design and decisions are recorded in `MVP_Technical_Design.md` §8 and `research
 * Fixing any deploy-hardening item (the unscheduled §6 milestone; see Backlog) or behavior item (M15).
 * The deploy-doc drift in `research/deployment-research-plan.md` §11 — that is deploy-doc work for the unscheduled deploy-hardening milestone, not register hygiene.
 
+## T0015: Milestone 15 - Agent Behavior Spec & Scenario Matrix - Closed 2026-08-12
+
+Archived from [`../Tickets.md`](../Tickets.md) when its remaining work was absorbed by M24 and M25.
+The milestone ran as the **prompt-behavior track**, a parallel sibling of T0014 forked from the
+T0013.5 schema freeze, on its own `feature/t0015.x-*` branches. Its objective was to define, freeze,
+and measure Resumi's intended per-scenario behavior against the frozen 16-column schema.
+
+Sub-tickets were indexed rather than fully specified, at the user's request; the per-ticket scope and
+verification live in the sub-ticket commits and [`../Completion_Reports.md`](../Completion_Reports.md).
+
+| Ticket | Plan | Disposition |
+|---|---|---|
+| T0015.1 | Reconcile the behavior spec to the frozen 16-column schema. | Done. |
+| T0015.2 | Settle the 10 open behavior decisions; freeze the scenario set and canonical phrasings (the `behavior_glossary`); author `Agent_Behavior_Spec.md`. | Done. The spec is live; the glossary stayed on `archive/t0015.2-behavior-glossary` and is landed by T0024.1. |
+| T0015.3 | Prompt-versioning mechanism: `prompt_version` in `config/prompts.yaml` to runtime to Langfuse trace metadata to eval output. | Done. |
+| T0015.4 | Run the v1 scenario matrix against the `internhunter_eval` fixture database and grade it. | Ran 2026-07-14: 29 of 29 scenarios collected and graded at `prompt_version: v1`. The record is `evals/v1_scenario_matrix.md`; the runner stayed on `archive/t0015.4-scenario-matrix`. Reproducing the run is T0025. |
+| T0015.5 | Wire the `behavior_glossary` canonical strings into the prompt few-shots as the fix for the C1-C5 probe failures. | Never executed; superseded. [`../../research/honesty-enforcement-design.md`](../../research/honesty-enforcement-design.md) §7 rejects few-shots as the locus for mechanically detectable hedges and moves them to the T0024 detector. |
+| T0015.6-.7 | Provider A/B phase. | Dumped during the T0018.4 deploy prep and parked at `45d333c` / `archive/t0015.6-provider-ab`. Never in the numbered index. |
+
+**Why it closed rather than resumed.** The milestone's two live halves now have separate owners with
+their own blockers: **T0024** owns agent behavior, including the glossary land and the honesty
+mechanism that replaced the .5 few-shot plan, and **T0025** owns the measurement instrument that
+.4 proved the project lacks. Splitting them removed the shared quota blocker that held M15 open.
+
 ## T0016: Milestone 16 - Security Posture (Public-Endpoint Hardening) — ✅ Done
 **Objective:** Implement the minimum responsible security posture for a *public* portfolio-demo deploy — the `research/pre-deploy-refinement-plan.md` §6b body plus its tightly-coupled §6k (graceful 429) and §6l (input cap) siblings — carved out of the (unscheduled) §6 deploy-hardening milestone into its own named track at the user's request (the Backlog note anticipated this: "to be named & scoped"). Scope is calibrated to the real threat model of a **$0-quota, read-only demo**: with no accounts, no PII, no write path, and Groq free-tier billing, "security" here collapses almost entirely into **availability** — keep the demo clickable and stop a script from draining the token quota (8k TPM / 200k TPD). Confidentiality/integrity controls that guard nothing here, and over-engineering (API keys, WAF, full header suites, distributed limiting), are explicitly excluded per CLAUDE.md §1. The §6f Langfuse-secrets item is **moot** — the deploy uses **Langfuse Cloud Hobby**, not the self-hosted stack (user decision 2026-07-12). Cross-refs: `research/pre-deploy-refinement-plan.md` §6b/§6k/§6l, `research/deployment-research-plan.md` §11, `docs/Known_Issues.md`.
 **In Scope:** see sub-tickets below — CORS, per-IP rate limiting + friendly 429 degradation, input length cap, and the `/docs` + minimal-headers decision.
@@ -1227,6 +1251,55 @@ ingestion:
 * **D10** — decision record on whether v1.0 ships with the cron live or parked.
 **Out of Scope:**
 * Any pipeline/ingestion code change (this milestone changes zero behavior); ingestion-coverage widening (T0019.9 re-measure, D8-gated); the 60-day GitHub Actions inactivity auto-disable mitigation (tracked in T0022.3).
+
+## T0021: Milestone 21 - Serving-Path Hardening - Complete 2026-08-12
+
+Archived from [`../Tickets.md`](../Tickets.md) after all four ticket completion reports were
+recorded. The milestone made the running service truthful to operators and visitors while leaving
+model-answer honesty to T0024.
+
+### T0021.1: Read-path schema assertion
+
+- **Objective:** Fail application startup when the `clean_jobs` shape diverges from the serving
+  path's 22-column contract, rather than returning a misleading database error mid-answer.
+- **Scope:** Add the startup assertion and its schema-shape tests.
+- **Out of scope:** Runtime agent changes and database migration work.
+
+### T0021.2: Agent-path error logging at swallowed catch sites
+
+- **Objective:** Make the three swallowed-exception sites observable to operators without changing
+  public message wording.
+- **Scope:** Log `ExecutorError` causes in `query_clean_jobs` and `get_job_details`; bind and log
+  `classify_provider_busy_error` in the streaming catch-all; add regression tests; move the three
+  resolved audit entries to `Resolved_Issues.md`.
+- **Out of scope:** Cause-specific visitor messages, SQL-validation rejection logging,
+  empty-answer signals, pool-timeout classification, Langfuse changes, and the deferred mypy fixes.
+- **Manual verification:** Force a tool `ExecutorError` and a streaming runtime error, then confirm
+  the structured log contains the true cause without exposing it in the response.
+
+### T0021.3: Truthful failure classification and operator signals
+
+- **Objective:** Prevent database failures from being recorded as provider pressure and expose the
+  remaining silent operator signals.
+- **Scope:** Validate checkpointer connections before borrow; exempt `psycopg` exception chains from
+  provider-busy classification; log both empty-answer fallbacks and rejected SQL; test each branch;
+  move resolved register entries.
+- **Out of scope:** Visitor-facing wording, retry or pool-size tuning, the existing mypy ignores,
+  and tracing-layer changes.
+- **Manual verification:** Stop Postgres and verify `reclassified_busy=false`; force empty sync and
+  streaming answers; then submit rejected SQL and inspect the validator-reason warning.
+
+### T0021.4: Honest failure and freshness messages
+
+- **Objective:** Limit the busy message to classified provider pressure and stop the demo from
+  presenting an unmeasured configured date as a snapshot.
+- **Scope:** Add a generic public error message; branch streaming and one-shot failures on the
+  classification; return readiness-date provenance; show snapshot text only for measured dates;
+  cover both message branches and all date-provenance outcomes; move resolved register entries.
+- **Out of scope:** A visitor-visible internal-failure taxonomy, retries, error-bubble redesign,
+  Markdown rendering, and model-answer honesty.
+- **Manual verification:** Stop Postgres and confirm the generic message; simulate provider pressure
+  and confirm the busy message; compare measured and fallback `/ready` provenance in the demo.
 
 # M22 - Docs Hygiene and Documentation System
 
@@ -1990,7 +2063,7 @@ of this and the milestone decays exactly as the 2026-07 pass did. **Edit both fi
 8. Re-run the T0022.3 review standard on the reflow commits: `git diff --word-diff` shows
    whitespace only.
 
-## T0022 Phase 2: Prune & Per-File Structure (T0022.10-.14) — 🔨 In progress
+## T0022 Phase 2: Prune & Per-File Structure (T0022.10-.14) - Complete 2026-08-12
 **Scoped 2026-08-11** from
 [`research/docs-prune-and-structure-plan.md`](../research/docs-prune-and-structure-plan.md),
 which carries the measured baselines, the per-file disposition of all 53 tracked `.md` files,
@@ -2414,3 +2487,127 @@ tree that is already the right shape.
     with the offline pipelines now one link away rather than inline.
 12. Record before/after line counts for all eleven targets, and the two over-cap numbers
     (`MVP_Technical_Design.md`, `Tickets.md`) as the hand-off to T0022.14.
+
+### T0022.14: Enforce the caps - Complete 2026-08-12
+**Objective:** Make the documentation system hold by machine rather than by good intentions.
+Phase 1 wrote caps and shipped no check, so both were breached the day they were written; phase 2
+has spent four tickets restoring the shape by hand. This block ships the four checks that keep it,
+closing M22.
+
+**It lands last, against a clean tree, so no check starts warn-only** - the failure mode that made
+T0022.1's gate advisory for a milestone. Every check here must be **blocking on the day it merges**.
+
+**Measured preconditions (2026-08-12):**
+
+| Fact | Value |
+|---|---|
+| Capped rows in `docs/README.md` passing | **19 of 19** - the table was reconciled to measurement 2026-08-12 |
+| Existing checks | 5, all blocking, all one severity: `line-length`, `link-path`, `encoding`, `agent-parity`, `stack`, plus `stamp` |
+| Test suite | 20 tests in `tests/test_docs_lint.py` |
+| CI | `.github/workflows/ci.yml` already runs the **full** lint and blocks - no workflow change needed |
+| `amendment` as plan §7 specifies it | **20 hits outside archives, ~2 genuine** - unusable unscoped (see below) |
+| `orphan` | **2 real orphans** by a link-based definition |
+
+**In Scope:**
+
+* **`size-cap` - and the caps come from `docs/README.md`, not the script.** Wrap the tier table in
+  `<!-- caps:begin -->` / `<!-- caps:end -->` and parse the `Doc` and `Cap` columns, exactly the way
+  `check_stack` parses the `deps`-marked region of `Tech_Stack.md`. Report **both directions**, as
+  `stack` does: a document over its cap, *and* a tracked live document missing from the table.
+  Rows reading `Uncapped` are skipped for length but still count as indexed.
+  * **Rejected: a `TIER_CAPS` dict in `docs_lint.py`.** That splits one fact across two files, which
+    is the exact failure the Fact Ledger exists to prevent. The register is the document; the check
+    only enforces it.
+  * Caps are **per-document**, not per-tier - the `Tier` column is a character label, the `Cap`
+    column carries the number. Do not reintroduce a tier-to-cap lookup.
+* **`eviction-rule` - the ticket's largest content job.** Every row with a numeric cap states, in
+  its header, what leaves the document and when (plan §2.1 Rule A). Detect it the way `stamp`
+  detects `Last verified:` - a fixed `> **Eviction:** ...` line matched by regex. That is roughly
+  **15 headers to write**, and each rule must be honest and specific: *"an entry leaves when fixed,
+  superseded, or reclassified"* is a rule; *"prune when large"* is not. `Known_Issues.md` already
+  carries one from T0022.12 - reuse its wording pattern rather than inventing a second shape.
+* **`amendment` - narrow it, or it is pure noise.** Plan §7's four phrases over the whole live
+  surface produce **20 findings, of which about 2 are genuine**. `Resolved_Issues.md` alone accounts
+  for 8, and every one is correct usage: describing what a fix changed is exactly what a
+  closed-issue register is for. Two constraints make the check work:
+  * **Scope it to T1-T3 rows of the caps table.** T4 registers are excluded by construction, and so
+    are `research/**` plans, which are dated pre-design. Measured effect: **20 findings drop to 5.**
+  * **Strip code spans before matching**, as `check_encoding` does. This is what lets
+    `Docs_Conventions.md` document the rule without tripping it - the same self-reference trap the
+    `encoding` rule hit in T0022.1, solved the same way.
+  * Escape hatch `<!-- lint-allow-amendment -->` for the legitimate residue.
+  * **The 5 surviving findings, pre-triaged:** `Schema_Contract.md` (*"the gate is `no longer`
+    T0014"*) and `Tickets.md` (*"that state `no longer` holds"*) are the genuine article -
+    **collapse them against current truth** per Rule B. `MVP_Technical_Design.md` ×2 and
+    `Repo_Current_State.md` ×1 are ordinary prose about postings, HTTP status, and deleted
+    branches - **mark them**.
+  * **Blocking, not warning** - a deliberate departure from plan §7. The harness has one severity
+    and five checks that use it; adding a severity system for a single check is the
+    over-engineering CLAUDE.md §1 forbids. The marker is the pressure valve.
+* **`orphan` - define it on links, not mentions.** A tracked live `.md` is an orphan when no other
+  **live** document links to it by Markdown link or repo-rooted code span. Mentions from
+  `archive/**` do not rescue a file - that is precisely how something stays hidden. Exempt the three
+  entry points that need no inbound link: root `README.md`, `AGENTS.md`, `CLAUDE.md`.
+  * **The 2 orphans this finds today**, both of which this ticket resolves:
+    `evals/v1_scenario_matrix.md` (reachable only from `Completion_Reports.md` and research
+    plans) and `data/vendor/README.md`
+    (mentioned once, in a research table). Index each in the owning document or record why it is
+    exempt - do not delete either.
+* **Write Rules A and B into `Docs_Conventions.md`.** Rule A: a capped document states what leaves
+  it. Rule B: correct by collapsing, never by appending - git holds the superseded version. Name the
+  four trigger phrases **in code spans** so the file describing the rule does not violate it.
+* **Fix the `link-path` false positive.** A backticked git branch name whose first segment matches a
+  tracked top-level directory - a branch under `docs/`, for instance - is reported as a missing
+  path, which is why branch names are written without backticks today. Constrain `is_repo_path`
+  so a value only counts as a repo path when it plausibly is one - a file extension, or an
+  existing directory.
+  **This ticket's own text is the test case**: naming such a branch in backticks anywhere in
+  `Tickets.md` must stop being a finding.
+* **Tests.** One per new check, in both directions - a finding, and the marker or table row that
+  clears it - plus a parse test for the caps table. Expect the suite to go from **20 to roughly
+  30**.
+
+**Out of Scope:**
+* **A warning severity.** Decided above; the whole point of landing last is that nothing needs one.
+* **Making `stamp` verify freshness.** It checks presence only, which is how `Tickets.md` carried a
+  `Last verified: 2026-08-10` stamp through a rewrite that cut it from 1,381 lines to 179. A real
+  gap - but comparing stamps against git mtime forces a stamp bump on every whitespace edit. Record
+  it as a follow-up ticket with that trade-off stated; do not build it here.
+* **`duplicate-heading`.** Deferred from phase 1 and still deferred - the four above are what this
+  pass proved it needs.
+* **Trimming any document to fit its cap.** The caps were set from measurement on 2026-08-12. If one
+  is wrong, change the number in the table and say why in the same commit.
+* **Re-tiering documents** beyond what a new check actually forces.
+* **Auto-fixing amendments.** `--fix` stays a whitespace-only reflow tool. Collapsing a correction
+  is a judgement call.
+
+**Preconditions from T0022.13:** two defects found in review must land before or with this block -
+`MVP_Technical_Design.md` needs a forwarding line where §7-§8 were (four references inside the file
+itself now point into a void), and `Tickets.md` needs its stamp and its M22 index row brought to
+current. If .13 merges without them, this ticket inherits them.
+
+**Manual verification:**
+1. `uv run python scripts/docs_lint.py` exits **0** with all ten checks active. Run it once before
+   any edit so a pre-existing finding is not attributed here.
+2. **Each new check fires, then clears.** Four times: add 200 lines to `Known_Issues.md` →
+   `size-cap` blocks; delete an `Eviction:` line → `eviction-rule` blocks; add *"this is `no longer`
+   true"* to a living doc → `amendment` blocks; add an unlinked `docs/scratch.md` → `orphan` <!-- lint-allow-link-path -->
+   blocks. Revert each and confirm the lint returns to 0. **A check that cannot be made to fail
+   is not enforcing anything.**
+3. Change a cap number in `docs/README.md` and confirm `size-cap` immediately enforces the new value
+   with no script edit - the proof the table is the source of truth.
+4. Delete a row from the caps table and confirm `size-cap` reports the now-unindexed document.
+5. `uv run pytest tests/test_docs_lint.py` reports **~30 passed**, none skipped. A skip means the
+   gitignored `.claude/` skill copy was missed, as in T0022.10.
+6. Confirm `Docs_Conventions.md` documents all four trigger phrases and that the lint stays green on
+   that file - the self-reference test.
+7. Write a branch name like `docs/some-branch` in backticks in a live document; `link-path` stays
+   silent. Then confirm a genuinely missing `docs/` path is **still** reported - step 2's
+   scratch file still needs its marker, because a suffixed path that does not exist remains a
+   real finding.
+8. Read three eviction rules cold and answer, for each, *"what would make me remove an entry
+   tomorrow?"* If the answer is "nothing specific", the rule is decoration - rewrite it.
+9. Open a PR touching only documentation and confirm CI blocks on a seeded violation, without a
+   workflow edit.
+10. Record the final check count, test count, and the resolution of both orphans in the completion
+    report. **M22 closes with this ticket** - state the end-state numbers against plan §8.

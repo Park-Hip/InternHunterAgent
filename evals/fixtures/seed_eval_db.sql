@@ -1,5 +1,5 @@
 -- Seed data for the InternHunterAgent evaluation fixture DB.
--- 22 rows engineered for deterministic golden-dataset assertions (see evals/goldens/golden_dataset.json).
+-- 22 rows engineered for deterministic scenario assertions (see evals/scenarios_v1.yaml).
 -- title/company/description are trimmed real text from research/experiments/vietnamworks_ai_data_sample.json;
 -- role/tech_stack/location/salary/is_internship are engineered to a fixed distribution.
 -- source/external_id mirror production (source='vietnamworks'; external_id keeps a 'vnw-eval-NNN'

@@ -79,7 +79,7 @@ tracing and the eval harness respectively.
 Initialise the schema (idempotent — safe to re-run):
 
 ```bash
-docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
+uv run alembic upgrade head
 ```
 
 Load postings and start the app:

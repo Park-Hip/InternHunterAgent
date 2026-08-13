@@ -3,6 +3,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
 from evals.fixtures.loader import _fixture_database_url, load_fixture
+from src.api.schema_guard import EXPECTED_COLUMNS
 
 
 @pytest.fixture(scope="module")
@@ -26,6 +27,18 @@ def _scalar(engine, sql: str):
 
 def test_total_row_count(eval_engine) -> None:
     assert _scalar(eval_engine, "SELECT COUNT(*) FROM clean_jobs") == 22
+
+
+def test_schema_matches_serving_contract(eval_engine) -> None:
+    with eval_engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'clean_jobs' AND table_schema = 'public'"
+            )
+        ).all()
+
+    assert {row[0] for row in rows} == EXPECTED_COLUMNS
 
 
 def test_role_distribution(eval_engine) -> None:

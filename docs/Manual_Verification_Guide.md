@@ -11,6 +11,21 @@ Dated live-pass logs remain in
 
 ## Current and unrun checklists
 
+### T0025.4: Trace viewer and first-upstream-failure review
+
+Generate a zero-quota sample with `uv run python -m evals.viewer --sample`, or generate a viewer
+from a scenario-driver artifact with `uv run python -m evals.viewer evals/runs/run.json
+--output evals/runs/run-viewer.html`.
+
+- Open the generated HTML file locally and verify each turn shows the question, routing decision,
+  generated SQL, rows returned, and final answer without expanding raw JSON.
+- Use Previous/Next, the turn selector, and keyboard arrow keys to move between turns.
+- Enter a note, reload the file, return to the same turn, and confirm the note remains.
+- If browser site data is blocked, confirm a visible note-storage warning appears while Previous,
+  Next, and the turn selector continue to work.
+- Mark the earliest wrong seam only, then stop; downstream symptoms are not additional failures.
+- Confirm the viewer is a local artifact and makes no request to `src/api/` or an external host.
+
 ### T0021.1: API read-path startup schema assertion
 
 T0019.5 gave the **write** path a pre-flight `clean_jobs` contract check; the **serving**

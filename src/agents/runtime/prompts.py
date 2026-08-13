@@ -37,3 +37,26 @@ def load_sql_generation_prompt() -> str:
         raise ValueError("Missing or empty 'prompts.sql_generation' in config/prompts.yaml")
 
     return sql_generation_prompt.strip()
+
+
+def load_prompt_version() -> str:
+    prompt_version = settings.prompts_yaml.get("prompt_version")
+    if not isinstance(prompt_version, str) or not prompt_version.strip():
+        raise ValueError("Missing or empty 'prompt_version' in config/prompts.yaml")
+
+    return prompt_version.strip()
+
+
+def load_behavior_glossary() -> dict[str, str]:
+    """Load the canonical behavior phrasings as a validated artifact."""
+    glossary = settings.prompts_yaml.get("behavior_glossary")
+    if not isinstance(glossary, dict) or not glossary:
+        raise ValueError("Missing or empty 'behavior_glossary' in config/prompts.yaml")
+
+    for token, phrasing in glossary.items():
+        if not isinstance(token, str) or not token.strip():
+            raise ValueError("Every 'behavior_glossary' token must be a non-empty string")
+        if not isinstance(phrasing, str) or not phrasing.strip():
+            raise ValueError(f"Empty 'behavior_glossary' phrasing for token: {token}")
+
+    return {token: phrasing.strip() for token, phrasing in glossary.items()}

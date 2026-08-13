@@ -3,6 +3,7 @@ class InvalidQueryError(ValueError):
 
 
 BUSY_MESSAGE = "The demo is busy right now. Please try again in a moment."
+GENERIC_ERROR_MESSAGE = "I couldn't complete that request right now. Please try again later."
 
 
 class ProviderBusyError(RuntimeError):
@@ -16,7 +17,11 @@ class ProviderBusyError(RuntimeError):
 def classify_provider_busy_error(exc: Exception) -> ProviderBusyError | None:
     """Return a public-safe busy error for known provider pressure failures."""
 
-    for current in _walk_exception_chain(exc):
+    chain = _walk_exception_chain(exc)
+    if any(_is_psycopg_error(current) for current in chain):
+        return None
+
+    for current in chain:
         status_code = getattr(current, "status_code", None)
         if status_code is None:
             response = getattr(current, "response", None)
@@ -33,6 +38,12 @@ def classify_provider_busy_error(exc: Exception) -> ProviderBusyError | None:
             return ProviderBusyError(status_code=503)
 
     return None
+
+
+def _is_psycopg_error(exc: BaseException) -> bool:
+    """Return whether an exception originated in psycopg or its connection pool."""
+
+    return type(exc).__module__.startswith(("psycopg", "psycopg_pool"))
 
 
 def _walk_exception_chain(exc: Exception) -> list[BaseException]:

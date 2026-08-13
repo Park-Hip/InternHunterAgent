@@ -33,17 +33,19 @@ let toastTimer = null;
 // Never crash, never show "undefined": fall back to the dateless sentence.
 // ===========================================================================
 async function loadDateline() {
-  const dateless = "Demo data · public listings, may be inaccurate.";
+  const unknownFreshness =
+    "Demo data · refresh date unavailable · public listings, may be inaccurate.";
   try {
     const res = await fetch("/api/v1/ready");
     if (!res.ok) return;                       // 503 if DB down — keep fallback
     const data = await res.json();
     const date = data && data.data_snapshot_date;
-    if (date) {
+    const isMeasured = data && data.data_snapshot_date_provenance === "measured";
+    if (date && isMeasured) {
       dateline.textContent =
         `Demo data · snapshot ${date} · public listings, may be inaccurate.`;
     } else {
-      dateline.textContent = dateless;
+      dateline.textContent = unknownFreshness;
     }
   } catch {
     // network error — the fallback text is already in the markup
@@ -117,7 +119,7 @@ function showErrorBubble(ctx, message) {
   ctx.agent.classList.add("is-error");
   ctx.answer.classList.remove("turn__answer--pending");
   ctx.answer.textContent =
-    message || "The demo is busy right now — please try again in a moment.";
+    message || "I couldn't complete that request right now. Please try again later.";
 }
 
 // Finish a turn: drop the streaming cursor.

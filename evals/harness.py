@@ -295,7 +295,7 @@ def build_seam3_case(case: dict, run: SeamRun) -> LLMTestCase:
     return LLMTestCase(
         input=run.question,
         actual_output=run.answer,
-        expected_output=case.get("expected_output"),
+        expected_output=case["expected"],
         retrieval_context=[run.tool_output] if run.tool_output else [],
     )
 

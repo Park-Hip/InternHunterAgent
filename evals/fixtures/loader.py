@@ -4,15 +4,18 @@ Offline tooling for the eval harness — kept entirely separate from the live
 ingestion path and the `internhunter` production database.
 """
 
+import os
+from contextlib import contextmanager
 from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
 from src.core.config import settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCHEMA_SQL_PATH = REPO_ROOT / "scripts" / "init_db.sql"
 SEED_SQL_PATH = Path(__file__).resolve().parent / "seed_eval_db.sql"
 
 
@@ -88,6 +91,40 @@ def _run_sql_file(dsn: str, path: Path) -> None:
         engine.dispose()
 
 
+@contextmanager
+def _fixture_migration_url(dsn: str):
+    """Temporarily direct Alembic at the offline fixture database."""
+    previous_url = os.environ.get("ALEMBIC_DATABASE_URL")
+    os.environ["ALEMBIC_DATABASE_URL"] = dsn
+    try:
+        yield
+    finally:
+        if previous_url is None:
+            os.environ.pop("ALEMBIC_DATABASE_URL", None)
+        else:
+            os.environ["ALEMBIC_DATABASE_URL"] = previous_url
+
+
+def _upgrade_schema(dsn: str) -> None:
+    """Apply the production migration chain to the fixture database."""
+    alembic_cfg = Config(str(REPO_ROOT / "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", str(REPO_ROOT / "alembic"))
+    with _fixture_migration_url(dsn):
+        command.upgrade(alembic_cfg, "head")
+
+
+def _drop_fixture_schema(dsn: str) -> None:
+    """Clear the dedicated fixture schema before recreating its pinned dataset."""
+    engine = create_engine(dsn)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DROP TABLE IF EXISTS clean_jobs, raw_jobs, alembic_version CASCADE")
+            )
+    finally:
+        engine.dispose()
+
+
 def _ensure_database_exists(dsn: str) -> None:
     url = make_url(dsn)
     target_db = url.database
@@ -107,22 +144,16 @@ def _ensure_database_exists(dsn: str) -> None:
 
 
 def load_fixture() -> None:
-    """Ensure internhunter_eval exists, then (re)apply schema + seed data."""
+    """Rebuild the dedicated fixture schema through Alembic and load seed data."""
     dsn = _fixture_database_url()
     _ensure_database_exists(dsn)
-    _run_sql_file(dsn, SCHEMA_SQL_PATH)
+    _drop_fixture_schema(dsn)
+    _upgrade_schema(dsn)
     _run_sql_file(dsn, SEED_SQL_PATH)
 
 
 def reset_fixture() -> None:
     """Drop the fixture tables and rebuild them from scratch."""
-    dsn = _fixture_database_url()
-    engine = create_engine(dsn)
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS clean_jobs, raw_jobs CASCADE"))
-    finally:
-        engine.dispose()
     load_fixture()
 
 

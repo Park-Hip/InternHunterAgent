@@ -2433,3 +2433,54 @@ Follow-ups / Docs).
   caveats, and closeout.
 - **Docs that need updating:** T0025.10 should archive this completed ticket body and fold the
   durable evaluation acceptance facts into the active strategy record.
+
+## T0025.10 - Consolidate the evaluation records and close M25
+
+- **Summary:** M25 is closed. The evaluation strategy is now the single live evaluation record: the
+  quota and cost record was folded into its sections 4a and 4b and archived, and section 4a was
+  rewritten to state the serving-side admission ceiling T0025.7 measured, which supersedes the
+  earlier judge-side reading that tokens-per-minute was never the constraint.
+  Settled decisions D-1 through D-7 were harvested into the Decision Log as D-041 through D-044,
+  with D-7 and the milestone boundary already recorded as D-040.
+  All ten M25 ticket bodies moved to the ticket archive, leaving the active register with a
+  completed-milestone summary that names M24 as the owner of behavior improvement and the release
+  gate as the owner of ship thresholds and judge calibration.
+- **Files changed:** `research/evaluation-strategy.md`, `research/README.md`,
+  `research/archive/README.md`, `research/archive/eval-cost-and-rate-limits.md` (moved),
+  `research/docs-hygiene-and-system-plan.md`, `docs/Decision_Log.md`, `docs/Tickets.md`,
+  `docs/archive/Tickets_Archive.md`, `docs/README.md`, `docs/Known_Issues.md`,
+  `docs/Repo_Current_State.md`, `docs/Tech_Stack.md`, `scripts/docs_lint.py`, and this report.
+- **Commands run:** `uv run pytest -q`, `uv run ruff check .`, `uv run mypy`,
+  `uv run python scripts/docs_lint.py`, `uv run python -m evals.fixtures.loader`,
+  `uv run python -m evals.replay`, and `git diff --check`.
+- **Build and test results:** 438 passed, 1 skipped, 30 live eval tests deselected, 4 subtests
+  passed. Ruff, mypy, and all ten documentation checks passed. The replay gate passed against the
+  rebuilt fixture with no provider call. `git diff --check` is clean.
+- **Caps moved, both measured after the change.** `Tickets.md` 500 to 300, measured at 131 once the
+  M25 bodies were evicted - the fix `docs/README.md` had already named. `Decision_Log.md` 350 to
+  450, measured at 368; harvesting is that document's purpose, and a decision leaves only by being
+  revoked, so the cap is the only lever. Both are recorded in the documentation map with reasons.
+- **Registers trued up:** counting the register found three stale tallies, two of them predating
+  this ticket - `Agent runtime & prompts` claimed 8 with 7 entries, `Evaluation harness` claimed 7
+  with 10, and the MED triage row was understated. All are now measured values.
+- **Manual verification:**
+  1. `docs/Tickets.md` contains no M25 ticket body, and its ownership table names M24, T0024.4, and
+     the release gate. Confirm the ten bodies are in `docs/archive/Tickets_Archive.md`.
+  2. `research/README.md` lists the evaluation strategy and the still-live M24 honesty design, with
+     no cost record. Confirm `research/archive/eval-cost-and-rate-limits.md` exists and that no live
+     document links to the old path.
+  3. From a clean checkout: `docker compose up -d`, `uv run python -m evals.fixtures.loader`, then
+     `uv run python -m evals.replay`. It must pass with no provider credential.
+  4. `uv run python scripts/docs_lint.py`, `uv run pytest -q`, `uv run ruff check .`,
+     `uv run mypy`, and `git diff --check` all pass.
+- **Risks:** The instrument is accepted on a 13-turn sample that is attested rather than
+  reproducible, and two scenarios have never been measured. Neither is resolved here, and neither is
+  resolvable without a paid tier, so both stay open in `Known_Issues.md` as a maintainer decision
+  rather than being closed to make the milestone look finished.
+  Folding the cost record required overriding one of its conclusions; the archived original is
+  preserved verbatim and now disagrees with section 4a on purpose.
+- **Follow-up tickets:** T0023 is the next recommended ticket. M24 owns the currency,
+  location-synonym, and abstraction failures the instrument found. T0024.4 owns the full
+  29-scenario remeasurement and meets the same tier decision.
+- **Docs that need updating:** None outstanding. The strategy record's section 10 states the
+  remaining limits, and the release gate still owns D-A, D-B, and D-C.

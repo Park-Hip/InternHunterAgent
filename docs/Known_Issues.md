@@ -10,7 +10,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 3 | 1 |
-| MED | 4 | 2 | 1 |
+| MED | 6 | 2 | 2 |
 | LOW | 16 | 3 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
@@ -91,7 +91,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Resolve the pool and LangChain message generic types in a dedicated typing pass.
   - **History:** `src/core/checkpointer.py` and `src/agents/runtime/middleware.py`.
 
-## Agent runtime & prompts (8)
+## Agent runtime & prompts (7)
 
 - **`[LOW · OPEN]` The agent can call `query_clean_jobs` twice with identical arguments.**
   - **Found:** T0006.10 verification.
@@ -143,23 +143,23 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Fetch one additional row for explicit limits and add a soft more-results hint.
   - **History:** `src/services/query/row_bound.py` owns result limits.
 
-## Evaluation harness (7)
+## Evaluation harness (10)
 
 - **`[MED · OPEN]` `SAF-INJECTION-RESILIENCE-1` asserts a no-tool rule no capture has tested.**
   - **Found:** T0025.9 audit on 2026-08-13.
   - **Impact:** Retiring the grader's hardcoded no-tool set flipped two scenarios, not one.
-    `HON-SQL-DESCRIBE-1` rests on three human-labelled turns; this one rests on registry text,
-    because T0025.7 exhausted quota first. The posting is supplied inline, so no-tool is
-    defensible, but an agent that queries to check it exists now fails on an untested judgement.
+    `HON-SQL-DESCRIBE-1` rests on three human-labelled turns; this one rests on registry text alone,
+    because T0025.7 exhausted quota first. An agent that queries to check the inline posting exists
+    now fails on an untested judgement.
   - **Next:** Capture the scenario when a tier decision lands, then confirm or relax the rule.
   - **History:** [`evals/grader_audit.md`](../evals/grader_audit.md) records both flips.
 
-- **`[MED · OPEN]` The 13-turn label sample cannot be reproduced from a clean checkout.**
+- **`[MED · DECISION]` The 13-turn label sample cannot be reproduced from a clean checkout.**
   - **Found:** T0025.9 audit on 2026-08-13.
   - **Impact:** `evals/runs/` is ignored because its turns carry latency, token usage, and finish
-    reasons, so the capture behind the audit table is not committed. Two of the 13 turns survive
-    in the replay; the other 11 are attested by the audit alone.
-  - **Next:** Re-measure on a paid tier, or commit a sanitized full capture. T0025.10 decides.
+    reasons, so the capture is uncommitted. Two turns survive in the replay; 11 are attested only.
+  - **Next:** Maintainer call, left open by T0025.10: commit a sanitized full capture, or supersede
+    the sample with a paid-tier re-measurement under T0024.4 - the same decision as the entry below.
   - **History:** `.gitignore` line 9 and [`evals/grader_audit.md`](../evals/grader_audit.md).
 
 - **`[LOW · OPEN]` DeepEval live commands require UTF-8 output and an explicit `-m eval`.**
@@ -190,7 +190,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Found:** T0012.10.
   - **Impact:** The cost-saving default might weaken difficult honesty evaluations.
   - **Next:** Retain zero or choose a small nonzero budget after the blocked comparison.
-  - **History:** [evaluation cost research](../research/eval-cost-and-rate-limits.md).
+  - **History:** [evaluation strategy](../research/evaluation-strategy.md), section 4b.
 
 - **`[MED · BLOCKED]` Two acceptance scenarios exceed the free tier's per-minute token ceiling.**
   - **Found:** T0025.7 paced capture on 2026-08-13.

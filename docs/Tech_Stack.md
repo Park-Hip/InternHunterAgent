@@ -118,7 +118,7 @@ This keeps evaluation work off the serving provider's quota.
 The current evaluation run is expected to cost zero on those free tiers.
 The paid-equivalent estimate is about 0.50 USD per run and is primarily judge-output driven.
 For the measured derivation and rate-limit caveats, see
-[`research/eval-cost-and-rate-limits.md`](../research/eval-cost-and-rate-limits.md).
+[`research/evaluation-strategy.md`](../research/evaluation-strategy.md), sections 4a and 4b.
 
 ## Deliberately not used
 

@@ -124,6 +124,7 @@ The lint rule in §8 therefore needs an explicit **`<!-- archived-on-tag -->`** 
 
 **Index drift — 8 files exist but appear in no index:**
 
+<!-- lint-allow-link-path:begin -->
 | Unlisted file | Should appear in |
 |---|---|
 | `docs/Agent_Behavior_Spec.md` | `docs/README.md` |
@@ -132,6 +133,7 @@ The lint rule in §8 therefore needs an explicit **`<!-- archived-on-tag -->`** 
 | `research/honesty-enforcement-design.md` | `research/README.md` |
 | `research/archive/ingestion-milestone-plan.md` | `research/README.md` |
 | `research/experiments/*.md` (3 files) | `research/README.md` |
+<!-- lint-allow-link-path:end -->
 
 **Content drift in `research/README.md`** — it describes
 `research/archive/deployment-research-plan.md` as a

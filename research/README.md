@@ -20,8 +20,7 @@ Completed research is historical evidence, not current implementation guidance, 
 | [Documentation hygiene and system plan](docs-hygiene-and-system-plan.md) | Evidence and decisions behind M22 documentation hygiene, including the Fact Ledger and enforcement model. |
 | [Documentation prune and structure plan](docs-prune-and-structure-plan.md) | Measured file-level prune and per-file restructuring plan for M22 phase 2 (T0022.10-.14). |
 | [Prompt refinement methods](prompt-refinement-methods.md) | How production teams refine prompts, the tradeoffs of prompt length and instruction count, and the decision on where the `behavior_glossary` belongs. |
-| [Honesty enforcement design](honesty-enforcement-design.md) | Unimplemented design for keeping generated job-search answers faithful to available evidence. |
-| [Evaluation cost and rate limits](eval-cost-and-rate-limits.md) | Current quota and cost analysis for the Groq serving path and Gemini evaluation judge. |
+| [Honesty enforcement design](honesty-enforcement-design.md) | M24's unimplemented design for keeping generated job-search answers faithful to available evidence. |
 | [Job-site comparison](job-site-comparison.md) | Source-market scorecard. VietnamWorks is decided; competing sources remain candidates for future spikes. |
 
 ## Evidence captures

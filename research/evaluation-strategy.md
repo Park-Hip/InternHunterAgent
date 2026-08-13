@@ -204,7 +204,46 @@ the coverage audit in phase 6 is an audit rather than a re-authoring.
 | Judge fidelity | `thinking_budget: 0` | Set for cost, never validated. Every score it would produce is provisional |
 | Corpus size | 29 scenarios | Gross regressions only; cannot resolve a 3–5% change (§5a) |
 
-Full arithmetic: [`eval-cost-and-rate-limits.md`](eval-cost-and-rate-limits.md).
+### 4a. The serving ceiling is admission, not throughput
+
+Measured on 2026-08-13 by T0025.7's paced capture, and it overrides the earlier reading that
+tokens-per-minute was never the problem. That conclusion was drawn on the judge side; the serving
+side behaves differently.
+
+Groq admits a call only when `window_used + input + the call's max_tokens reserve` stays under
+8000. The reserve is charged whether or not the model spends it. One agent turn issues three
+sequential calls - routing, SQL generation, synthesis - totalling roughly 9.2K reserved tokens, so
+a turn completes only from a near-idle window. Retrying inside a window the previous turn just
+filled can never succeed, which is why the driver paces turns (`eval.driver.turn_pacing_seconds`)
+instead of retrying them.
+
+Two scenarios cannot run on this tier at any pacing. `HLP-CONTEXT-1` peaks at 10,231 tokens in a
+single call, above the ceiling outright. `HLP-COMPOUND-1` reserves 7,653 on its routing call
+alone, leaving too little of the window for the SQL and synthesis calls that must follow it.
+Lowering `max_tokens` or `agent.query.max_rows` would admit both, and both were rejected: they
+change what the instrument measures. This needs a paid tier, not a workaround.
+
+### 4b. Judge cost, and why call count is the only lever worth pulling
+
+Per full run the judge fires roughly 119 sequential calls at about 2,700 tokens each - ~325K
+tokens, of which ~90% is output because Gemini 2.5 Flash bills hidden reasoning as output.
+Actual money cost is **$0** on the free tier; the paid equivalent would be ~$0.50 per run.
+Dollars are not the constraint. Requests-per-day and wall-clock are: ~119 calls against a
+250-1,500 RPD allowance is ~1-2 runs per day, and ~15 minutes each is too slow for a tuning loop.
+
+Trimming input context therefore buys nothing - input is ~15% of cost and the judge's TPM
+allowance is never approached. Cutting **call count** and **thinking output** is what helps.
+Ranked, with only the first applied:
+
+| Lever | Effect | State |
+|---|---|---|
+| Disable the judge's thinking budget | ~5-10x less output, better JSON reliability, no metric loss | **Applied** - `eval.judge.thinking_budget: 0` |
+| Drop `FaithfulnessMetric`, keep `GEval("Honesty")` | Both check drift from `retrieval_context`; removes ~40 calls per run | Available, unapplied |
+| Pre-supply `evaluation_steps` instead of `criteria` | Skips a step-generation call per GEval; makes scoring deterministic | Available, unapplied |
+| Swap to `gemini-2.5-flash-lite` | Cheaper and non-thinking, but a weaker judge | Only if the above are insufficient |
+
+The last three are unapplied because no scenario rule reaches the judge tier yet (§6a), so the
+judge run is not on the critical path. Judge fidelity is unvalidated either way (D-C).
 
 ---
 
@@ -406,7 +445,10 @@ Operating rules, several of them learned the expensive way on 2026-07-16:
 
 ## 8. Decisions
 
-**Settled 2026-08-12**
+**Settled 2026-08-12.** All seven were harvested into the
+[Decision Log](../docs/Decision_Log.md) at M25 close: D-1 and D-5 as D-041, D-2 and D-3 as D-042,
+D-4 as D-043, D-6 as D-044, and D-7 with the milestone boundary as D-040. The reasoning below is
+the preserved record behind those entries.
 
 - **D-1 — The golden dataset is a derived artifact.** The scenario registry is the single source of
   truth; goldens are generated from it, ending the probe-flag drift structurally.
@@ -443,7 +485,7 @@ Operating rules, several of them learned the expensive way on 2026-07-16:
 |---|---|---|
 | **This document** | Strategy, failure taxonomy, phased plan, bars | Becomes the single live evaluation record; harvest decisions into `Decision_Log.md` |
 | [`honesty-enforcement-design.md`](honesty-enforcement-design.md) | The obligation-seam mechanism | Stays live under M24 until the behavior design ships; this strategy links to it without duplication |
-| [`eval-cost-and-rate-limits.md`](eval-cost-and-rate-limits.md) | Quota and cost arithmetic | Fold in as §4 |
+| `eval-cost-and-rate-limits.md` | Quota and cost arithmetic | **Done (T0025.10).** Folded into §4a and §4b, then archived |
 | [`evals/v1_scenario_matrix.md`](../evals/v1_scenario_matrix.md) | The 2026-07-14 raw measurement | Keep as a dated measurement record; evidence, not guidance |
 | [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md) | The frozen behavior target and glossary | **Stays.** It owns the target; this record owns how the target is measured |
 | [`docs/Offline_Pipelines_Design.md`](../docs/Offline_Pipelines_Design.md) §8 | How the harness is built | **Stays.** It owns the build blueprint per the Fact Ledger |
@@ -457,16 +499,23 @@ versions to git.
 
 ## 10. Limits of this record
 
-The historical outcome numbers still come from the 2026-07-14 run.
-The current worktree contains the phase 1 and phase 3 components, but current-configuration live
-acceptance and a committed real-output replay remain open.
-**Class 2 is an inference from answer text**, not observed SQL in the historical artifact.
-**Grader fidelity on real outputs is unproven.** The crafted holdout proves deterministic contracts,
-not empirical calibration.
-**The model's relay fidelity for an explicit caveat block is unmeasured**; truncation in two of two
-runs is the only in-repo analog.
-**Quota headroom is budgeted, not verified.** And **29 scenarios detect gross regressions only**;
-no statement here resolves a small quality difference.
+Updated 2026-08-13 at M25 close.
+
+The instrument is accepted: the driver, viewer, execution accuracy, grader, and a committed
+no-model replay gate all ship, and the grader agrees with all 13 human labels from the real
+capture. What remains unproven is behavior measurement at scale.
+
+**The measured sample is 13 turns across 5 of 7 attempted scenarios**, captured under the free
+tier's admission ceiling (§4a). It is a targeted assertion check, not a production-wide accuracy
+estimate, and the capture itself is not committed - `evals/runs/` is ignored, so 11 of those 13
+turns are attested by [`evals/grader_audit.md`](../evals/grader_audit.md) rather than reproducible.
+**Two scenarios have never been measured at all** and need a paid tier.
+
+**The historical outcome numbers in §3 still come from the 2026-07-14 run**, and class 2 there is
+an inference from answer text, not observed SQL. **Judge fidelity is still unvalidated** (D-C), and
+no scenario rule reaches the judge tier. **The model's relay fidelity for an explicit caveat block
+is unmeasured.** And **29 scenarios detect gross regressions only**; no statement here resolves a
+small quality difference.
 
 ---
 
@@ -516,5 +565,11 @@ while the answer text is unchanged.
   2023)](https://aclanthology.org/2023.emnlp-main.99.pdf)
 - [Agent-agnostic evaluation of SQL accuracy in production](https://arxiv.org/html/2604.28049)
 - [Qwen3.6-27B sampling parameter guidance](https://huggingface.co/Qwen/Qwen3.6-27B/discussions/10)
+- [Google Gemini API rate limits (official)](https://ai.google.dev/gemini-api/docs/rate-limits)
+- [Gemini API pricing (official)](https://ai.google.dev/gemini-api/docs/pricing)
+- [Gemini free-tier limits 2026
+  guide](https://www.aifreeapi.com/en/posts/gemini-api-free-tier-rate-limits)
+- [Gemini 2.5 Flash pricing
+  (pricepertoken)](https://pricepertoken.com/pricing-page/model/google-gemini-2.5-flash)
 - [Qwen quickstart - best practices and decoding
   guidance](https://qwen.readthedocs.io/en/latest/getting_started/quickstart.html)

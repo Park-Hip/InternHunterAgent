@@ -8,7 +8,8 @@
 ## Current branch
 
 - Repository baseline: `main` at `410c628`.
-- Active ticket branch: `codex/t0025.9-grader-audit-replay-ci`.
+- Active ticket branch: `codex/t0025.10-close-m25`, stacked on
+  `codex/t0025.9-grader-audit-replay-ci` (PR #47).
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -25,40 +26,15 @@ The same pass carved the model-honesty work out of M21 into M24 - Honesty Enforc
 M22 - Docs Hygiene & Documentation System has phase 1 (T0022.1-.9) merged to `main` on
 2026-08-11 via PR #41.
 T0022.10 through T0022.14 are complete.
-T0025.0 now builds the frozen evaluation fixture through Alembic, keeping its schema aligned with
-the serving contract.
-T0025.1 restored the 29-scenario registry and 2026-07-14 observed-answer artifact.
-It also removed the stale 18-case golden dataset in favor of in-memory generation from the registry.
-T0025.2 open-coded all 73 recovered final answers and recorded the ranked failure modes in
-[`evals/v1_error_analysis.md`](../evals/v1_error_analysis.md).
-It confirmed eight empty-answer `INFRA` outcomes across six IDs and the separate
-HON-ZERO-RESULTS-1 database-error outcome without assigning any failure to routing or SQL
-generation.
-T0025.8 renamed the registry onto the self-describing `SAF`, `HON`, and `HLP` taxonomy.
-The registry now keeps requirements, settled decisions, and viewer names in explicit fields.
-T0025.3 added the in-process scenario driver with persisted three-seam records, manifests,
-retry events, quota-safe partial runs, and resume support.
-T0025.4 added the dependency-free local trace viewer with persistent operator notes and the
-first-upstream-failure review rule.
-T0025.5 added reference SQL, explicit non-query exemptions, and deterministic fixture-backed
-execution-accuracy grading over persisted seam records.
-The native driver fingerprints the fixture, disables Langfuse, and owns provider retries.
-T0025.6 added deterministic structural and textual grading, a judge-score adapter, four-outcome
-handling, class-split summaries, a six-scenario holdout, and no-model replay of the historical
-answer artifact.
-The 18-entry behavior glossary and `prompt_version: v1` are now loaded from `config/prompts.yaml`.
-T0025.7 captures the registry hash, worktree state, latency, provider telemetry, and finish reasons.
-Its execution-accuracy CLI writes UTF-8 reports via `--output`, and the grader counts empty answers.
-Turns are paced so each meets an unspent per-minute window, as the 8000 TPM free tier requires.
-Two scenarios still exceed that ceiling inside one turn, so the capture measured 13 of 19 turns.
-T0025.7 closed partial on 2026-08-13 with no empty answer found; those two scenarios wait on a tier
-decision.
-T0025.9 moved every tool expectation into the registry and audited all 29 deterministic rules.
-It agrees with all 13 human labels - 7 `PASS`, 6 `FAIL` - with the two quota-ended scenarios held
-out of the denominator as repeat-level `INFRA`.
-It added a committed sanitized replay, schema and registry-drift validation, and a blocking CI gate
-that rebuilds the fixture, executes SQL, and grades with no provider or outbound call.
-Two audit caveats stay open in [`Known_Issues.md`](Known_Issues.md).
+
+M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10).
+The repository now holds a frozen Alembic-built fixture, a 29-scenario registry owning probe flags,
+reference SQL and tool expectations, an in-process driver with manifests and resume, a local trace
+viewer, execution accuracy by executing generated against reference SQL, and a deterministic
+three-tier grader. CI replays committed three-seam evidence with no model, judge, or outbound call.
+Acceptance is partial by design: the free tier's admission ceiling left 13 of 19 attempted turns
+measured, and the grader agrees with all 13 human labels.
+`HLP-CONTEXT-1` and `HLP-COMPOUND-1` remain unmeasured pending a paid-tier decision.
 The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
 custom-domain follow-up remains intentionally deferred until after v1.0.
 
@@ -78,11 +54,12 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
 
 - `stash@{0}` is unverified and retained. It is believed superseded but has not been compared
   line by line.
-- The M15 scenario registry and observed answers are restored.
-  The legacy HTTP runner remains archived because T0025.3 will use its orchestration only as a
-  pattern around the in-process harness.
-- The historical answer artifact is answer-only, so structural grading remains `INFRA` until a
-  T0025.3 run provides tools, SQL, and T0025.5 execution results.
+- The legacy HTTP runner stays archived. The driver took its orchestration as a pattern only and
+  runs the agent in-process (D-043).
+- The 2026-07-14 answer artifact is answer-only, so replaying it still grades `INFRA` at the
+  structural tier. Only a driver capture carries tools, SQL, and execution results.
+- `evals/runs/` is ignored, so the 13-turn labelled capture behind
+  [`evals/grader_audit.md`](../evals/grader_audit.md) is not reproducible from a clean checkout.
 
 ## Folder structure
 
@@ -129,8 +106,9 @@ The authoritative package declarations are in `pyproject.toml`.
 | `python scripts/docs_lint.py` | Passed locally on 2026-08-13 (all ten checks) |
 | `uv run pytest -q` | 438 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-13 |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
-| `uv run ruff check evals/grader.py evals/holdout.py evals/test_grader.py evals/driver.py evals/execution_accuracy.py evals/scenarios.py` | Passed on 2026-08-13 |
+| `uv run ruff check .` | Passed on 2026-08-13 |
 | `uv run pytest -q evals/test_scenarios.py evals/test_grader.py evals/test_replay.py` | 25 passed on 2026-08-13 |
+| `git diff --check` | Clean on 2026-08-13 |
 | `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-13 |
 | `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |
 | `uv run mypy src` | Success: no issues in 43 source files on 2026-08-13 |
@@ -147,4 +125,5 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0025.10 - consolidate the evaluation records and close M25.
+T0023 - v1.0 release cut. Its DoD sweep, terms posture, and live-cron gate (D-038) are the
+remaining release blockers; M24 follows and owns the behavior failures M25 measured.

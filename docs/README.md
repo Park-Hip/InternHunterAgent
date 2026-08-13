@@ -6,11 +6,14 @@ Link to the owner instead of restating its facts elsewhere.
 Caps are per-document and set from the measured length plus headroom, never from an aspiration.
 A document over its cap means either the cap or the document is wrong; decide which, and say so.
 
-`Tickets.md` moved 420 → 500 on 2026-08-13, measured at 420 with headroom for the open plan. M25
-grew from eight blocks to ten when the registry rename and the record consolidation were scoped,
-and the register still carries three open milestones. Eviction is available and unused: the
-completed M25 blocks belong in [the archive](archive/Tickets_Archive.md), which is the cheaper fix
-when this cap next binds.
+Two caps moved on 2026-08-13 when T0025.10 closed M25, both measured after the change:
+
+- `Tickets.md` 500 → 300, measured at 131. The eviction this register anticipated has happened -
+  the ten completed M25 blocks are now in [the archive](archive/Tickets_Archive.md). The headroom
+  is for M23 and M24, which are indexed but not yet scoped into ticket bodies.
+- `Decision_Log.md` 350 → 450, measured at 368. Harvesting is what this document is for, so it
+  grows by design each time a milestone closes; M25 contributed D-041 through D-044. Evicting a
+  decision requires revoking it, so the cap is the only lever that moves.
 
 > **Eviction:** A map entry leaves when its owned document is retired or ownership moves elsewhere.
 
@@ -25,11 +28,11 @@ when this cap next binds.
 | [Schema Contract](Schema_Contract.md) | Frozen v1 `clean_jobs` columns | T2 | 650 | Engineering and evaluation |
 | [Agent Behavior Spec](Agent_Behavior_Spec.md) | Frozen agent behavior requirements | T2 | 650 | Agent and evaluation work |
 | [Tech Stack](Tech_Stack.md) | Languages, services, versions, and dependencies | T1 | 150 | New contributors |
-| [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | 350 | Decision makers |
+| [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | 450 | Decision makers |
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 150 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 250 | Maintainers |
-| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 500 | Delivery planning |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 300 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T3 | 150 | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |

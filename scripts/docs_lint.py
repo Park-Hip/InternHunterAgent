@@ -66,7 +66,6 @@ REFLOW_TARGETS = frozenset(
         "docs/T0020.4_Cron_Activation_Runbook.md",
         "docs/Tickets.md",
         "evals/v1_scenario_matrix.md",
-        "research/eval-cost-and-rate-limits.md",
         "research/docs-hygiene-and-system-plan.md",
         "research/honesty-enforcement-design.md",
         "research/v1-release-readiness-plan.md",

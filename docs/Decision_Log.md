@@ -12,6 +12,10 @@
 
 | ID | Decision | Status |
 |---|---|---|
+| D-044 | Temperature 0 is rejected for the ReAct seam | Active |
+| D-043 | Keep the DeepEval harness, discard its HTTP transport | Active |
+| D-042 | Grader authority passes from human to grader at calibration | Active |
+| D-041 | The scenario registry is the single source of truth for evaluation cases | Active |
 | D-040 | M25 closes on instrument acceptance, not behavior quality | Active |
 | D-039 | Evaluation scenario identifiers are class-first and self-describing | Active |
 | D-038 | Scheduled ingestion is a required MVP capability, not an optional refresh | Active |
@@ -54,6 +58,46 @@
 | D-001 | The behavior question bank is exploratory, not a product commitment | Active |
 
 ## Active decisions
+
+### D-044 - Temperature 0 is rejected for the ReAct seam
+
+- **Decided:** 2026-08-12 - **Status:** Active. Harvested at M25 close from settled decision D-6.
+- Greedy decoding degrades the tool-choice loop for this model family, so the ReAct seam keeps its
+  tuned sampling values. SQL generation stays at 0.0, where determinism is wanted.
+- The earlier "0.0 fallback" plan is withdrawn. Any sampling experiment changes one variable at a
+  time and belongs to M24, per D-040 below.
+- **Full record:** [evaluation strategy](../research/evaluation-strategy.md), section 5c.
+
+### D-043 - Keep the DeepEval harness, discard its HTTP transport
+
+- **Decided:** 2026-08-12 - **Status:** Active. Harvested at M25 close from settled decision D-4.
+- The instrumentation half is the valuable one: DeepEval's LangChain callback and trace manager are
+  what make the three seams observable at all.
+- The archived HTTP runner contributes orchestration logic as a pattern only; the driver runs the
+  agent in-process.
+- **Full record:** [evaluation strategy](../research/evaluation-strategy.md), section 2a.
+
+### D-042 - Grader authority passes from human to grader at calibration
+
+- **Decided:** 2026-08-12 - **Status:** Active. Harvested at M25 close from settled decisions D-2
+  and D-3.
+- During calibration the human label wins and the assertion is amended. After calibration the
+  grader wins, and each disagreement becomes a new labeled case.
+- Where a structural check and the judge disagree, the structural check wins.
+- A six-scenario holdout spanning all three classes has assertions authored without reference to
+  recorded answers. It proves contracts, never empirical calibration.
+- **Full record:** [evaluation strategy](../research/evaluation-strategy.md), section 6a, and
+  [`evals/grader_audit.md`](../evals/grader_audit.md).
+
+### D-041 - The scenario registry is the single source of truth for evaluation cases
+
+- **Decided:** 2026-08-12 - **Status:** Active. Harvested at M25 close from settled decisions D-1
+  and D-5.
+- `evals/scenarios_v1.yaml` owns the cases, their probe flags, reference SQL, and tool
+  expectations. Goldens are generated from it, ending probe-flag drift structurally.
+- The 29-scenario set is kept as authored: it matches the frozen schema and is requirement-seeded.
+  Coverage is audited, not re-authored.
+- **Full record:** [evaluation strategy](../research/evaluation-strategy.md), sections 2b and 3b.
 
 ### D-040 - M25 closes on instrument acceptance, not behavior quality
 

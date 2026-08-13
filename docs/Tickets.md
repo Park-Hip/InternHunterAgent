@@ -36,7 +36,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 22 | T0022 | **Docs Hygiene & Documentation System** | ✅ | Phase 1 (.1-.9) complete 2026-08-10: lint gate, front door, Decision Log, research prune · Phase 2 (.10-.14) complete 2026-08-12: prune, archive collapse, register rebuild, restructure, enforcement |
 | 23 | T0023 | v1.0 Release Cut | 📋 | DoD sweep, ToS posture, **live cron (D-038)**, tag — renumbered from T0022 on 2026-08-09 |
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
-| 25 | T0025 | **Evaluation Instrument** | 🔨 | .0-.6 and .8 done; .7 acceptance, .9 replay gate, .10 closeout remain |
+| 25 | T0025 | **Evaluation Instrument** | 🔨 | .0-.6 and .8 done; .7 closed partial 2026-08-13 (13 of 19 turns; 2 scenarios need a paid tier); .9 replay gate, .10 closeout remain |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -118,10 +118,12 @@ Every later honesty claim rests on an instrument that can be re-run cheaply and 
 > deterministic graders without a model call. It does not own behavior fixes, production sampling
 > selection, judge calibration, release thresholds, or the full post-change behavior matrix.
 >
-> **Remaining sequence.** T0025.7 hardens provenance and accepts the live capture path against the
-> current configuration. T0025.9 audits the grader against those real outputs and adds a committed
-> replay gate to CI. T0025.10 consolidates the records and closes the milestone. T0024.4 then uses
-> the accepted instrument for its full behavior remeasurement.
+> **Remaining sequence.** T0025.7 closed partial on 2026-08-13: provenance and telemetry are done
+> and the capture path is accepted, but the acceptance set measured 13 of 19 turns because two
+> scenarios exceed the free tier's per-minute ceiling inside a single turn. T0025.9 audits the
+> grader against those real outputs and adds a committed replay gate to CI. T0025.10 consolidates
+> the records and closes the milestone. T0024.4 then uses the accepted instrument for its full
+> behavior remeasurement, which needs the tier decision resolved first.
 >
 > **Shared dependency.** T0025.6 needs the `behavior_glossary` tokens that **T0024.1** lands.
 > T0024.1 has no blockers of its own and should be pulled ahead of the rest of its milestone.
@@ -324,6 +326,16 @@ grader can be audited against real captured outputs.
 **Blockers:** cleared by T0025.3, T0025.5, and the T0024.1 glossary landing.
 
 ### T0025.7: Instrument acceptance, provenance hardening, and empty-answer verification
+> **Closed partial 2026-08-13.** Provenance, telemetry, and the capture path are accepted: one
+> clean-worktree run captured, graded, and rendered real turns under the frozen configuration.
+> The acceptance set measured 13 of 19 turns across 5 of 7 scenarios with `empty_answer_count: 0`,
+> recorded as no recurrence observed in 13 turns.
+> `HLP-CONTEXT-1` and `HLP-COMPOUND-1` were **not** captured: each exceeds the free tier's 8000 TPM
+> ceiling inside a single turn, which no pacing can clear, and the `max_tokens` and `query.max_rows`
+> workarounds would change what the instrument measures. That capture is deferred to a paid-tier
+> decision and tracked in [`Known_Issues.md`](Known_Issues.md), not reopened here.
+> The run also confirmed a grader rule gap and three agent behaviors; T0025.9 and M24 own those.
+
 **Objective:** Prove that the assembled instrument can capture, inspect, and grade real turns from
 the current prompt and model configuration, with enough provenance to reproduce the evidence.
 The existing live smoke contains one scenario and predates the current prompt hash. The historical
@@ -433,7 +445,9 @@ not estimate performance on model outputs.
 4. Run the full local CI command set and confirm the committed replay contains no secret or live
    trace identifier.
 
-**Blockers:** T0025.7. Spends no provider or judge quota.
+**Blockers:** cleared 2026-08-13 by T0025.7's partial close, which leaves a 13-turn real
+sample in `evals/runs/t0025.7-acceptance.json` to audit and label. Spends no provider or
+judge quota.
 
 ### T0025.10: Consolidate the evaluation records and close M25
 **Objective:** Make the accepted instrument the sole current evaluation path, move completed plans
@@ -465,4 +479,4 @@ out of the active register, and leave M24 and the release gate with clear owners
 3. A clean checkout can run the committed replay gate using documented commands.
 4. Documentation lint, the full test suite, Ruff, mypy, and `git diff --check` pass.
 
-**Blockers:** T0025.7 and T0025.9. Spends no provider or judge quota.
+**Blockers:** T0025.9; T0025.7 closed partial. Spends no provider or judge quota.

@@ -179,13 +179,13 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Found:** T0025.7 paced capture on 2026-08-13.
   - **Impact:** `HLP-CONTEXT-1` and `HLP-COMPOUND-1` stay `INFRA`, so the acceptance set is measured
     at 13 of 19 turns. Groq admits a call when window usage plus the request's `max_tokens` reserve
-    stays under 8000 TPM, and both scenarios pass that inside a single turn: `HLP-CONTEXT-1` peaks
-    at 10231 on its synthesis call, and `HLP-COMPOUND-1` spends 7653 on routing alone. Pacing
-    between turns cannot clear a window that one turn fills by itself.
-  - **Next:** Capture both on a paid tier. Reducing `max_tokens` or `query.max_rows` would fit them
-    but changes what the instrument measures, so neither is an acceptable workaround.
-  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` holds each rejection with its
-    reported usage.
+    stays under 8000 TPM, and both scenarios pass that inside one turn: `HLP-CONTEXT-1` peaks at
+    10231 on synthesis, `HLP-COMPOUND-1` spends 7653 on routing. Pacing between turns cannot clear
+    a window one turn fills by itself.
+  - **Next:** Decide the tier; T0025.7 closed partial rather than hold for this, so the capture is
+    deferred, not pending. Reducing `max_tokens` or `query.max_rows` would fit them but changes what
+    the instrument measures. T0024.4's 29-scenario run meets the same ceiling and the same decision.
+  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` holds each rejection and its usage.
 
 - **`[MED · OPEN]` No empty answer recurred, on evidence too small to close the question.**
   - **Found:** T0025.7 paced capture on 2026-08-13.

@@ -2364,3 +2364,27 @@ Follow-ups / Docs).
   behavior failures. Capturing the two blocked scenarios needs a paid tier.
 - **Docs that need updating:** None beyond the registers updated here; T0025.10 folds the durable
   cost mechanics into the evaluation strategy.
+
+## T0025.7 - Closed partial
+
+- **Summary:** Closed on 2026-08-13 with its instrument scope met and its acceptance scope partly
+  met, by explicit decision rather than by running out of options.
+  Delivered: registry and worktree provenance with baseline eligibility, per-turn latency, token
+  usage and finish reasons, turn pacing, and one clean-worktree run that captured, graded, and
+  rendered real turns under the frozen configuration.
+  Not delivered: `HLP-CONTEXT-1` and `HLP-COMPOUND-1`, which exceed 8000 TPM inside a single turn.
+  Both remaining `max_tokens` and `query.max_rows` workarounds would change what the instrument
+  measures, so the capture is deferred to a tier decision instead of being forced.
+- **Files changed:** `docs/Tickets.md`, `docs/Known_Issues.md`, `docs/Repo_Current_State.md`, and
+  this report. No code changed at closure.
+- **Commands run:** Documentation lint and `git diff --check`.
+- **Build and test results:** Unchanged from the capture entry above; no code was touched.
+- **Manual verification:** Confirm the milestone index, the T0025.7 plan header, and the state sheet
+  all describe the same partial outcome, and that T0025.9's blocker line names the 13-turn sample it
+  inherits.
+- **Risks:** A partial baseline invites over-reading. Every register states the measured count, the
+  two absent scenarios, and the three spurious grader failures, so no reader should take the class
+  pass rates as the agent's real quality.
+- **Follow-up tickets:** T0025.9 is unblocked and starts with the confirmed tool-expectation gap.
+  T0024.4 meets the same per-minute ceiling and needs the same tier decision.
+- **Docs that need updating:** T0025.10 archives this plan and marks M25 complete once .9 lands.

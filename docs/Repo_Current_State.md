@@ -51,7 +51,8 @@ T0025.7 captures the registry hash, worktree state, latency, provider telemetry,
 Its execution-accuracy CLI writes UTF-8 reports via `--output`, and the grader counts empty answers.
 Turns are paced so each meets an unspent per-minute window, as the 8000 TPM free tier requires.
 Two scenarios still exceed that ceiling inside one turn, so the capture measured 13 of 19 turns.
-It found no empty answer, so M25 stays open and T0025.9 audits the grader against that real sample.
+T0025.7 closed partial on 2026-08-13 with no empty answer found; those two scenarios wait on a tier
+decision, and T0025.9 is now unblocked to audit the grader against the 13-turn real sample.
 The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
 custom-domain follow-up remains intentionally deferred until after v1.0.
 

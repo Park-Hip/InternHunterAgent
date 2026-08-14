@@ -204,7 +204,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Decide the tier; T0025.7 closed partial rather than hold for this, so the capture is
     deferred, not pending. Reducing `max_tokens` or `query.max_rows` would fit them but changes what
     the instrument measures. T0024.4's 29-scenario run meets the same ceiling and the same decision.
-  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` holds each rejection and its usage.
+  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` holds each rejection and its usage. <!-- lint-allow-link-path -->
 
 - **`[MED · OPEN]` No empty answer recurred, on evidence too small to close the question.**
   - **Found:** T0025.7 paced capture on 2026-08-13.
@@ -213,8 +213,8 @@ or maintainer action, and `DECISION` needs a product or operational choice.
     a root cause.
   - **Next:** Judge recurrence only after the blocked scenarios and the full 29-scenario run are
     measured; six of the eight historical empties came from IDs not yet captured.
-  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` carries latency, token usage, and
-    finish reasons per turn.
+  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` <!-- lint-allow-link-path -->
+    carries latency, token usage, and finish reasons per turn.
 
 - **`[MED · OPEN]` Three agent behaviors failed under the frozen configuration.**
   - **Found:** T0025.7 paced capture on 2026-08-13.
@@ -223,7 +223,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
     and MLflow. `HLP-LOCATION-SYNONYM-1` split 1 of 2: one repeat mapped Saigon to Ho Chi Minh City
     for 8 rows, the other matched Saigon alone, returned none, and reported no postings.
   - **Next:** M24 owns these; T0025.7 measures them and changes no prompt or runtime behavior.
-  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` and its grade report.
+  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` and its grade report. <!-- lint-allow-link-path -->
 
 ## Demo UI (4)
 

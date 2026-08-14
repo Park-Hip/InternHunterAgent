@@ -60,6 +60,13 @@ The provider is already isolated behind one class, so the blast radius is small.
 | `pyproject.toml` | Add `langchain-deepseek>=1.1.0` (pulls `langchain-openai>=1.1.0`) |
 | `tests/agents/runtime/test_provider.py` | Mirror the existing Groq assertions for the new branch |
 
+One sharp edge in that table: `GROQ_API_KEY` is `Field(..., min_length=1)` in
+[`src/core/config.py`](../src/core/config.py), so it is required at startup no matter which
+provider is selected. Add `DEEPSEEK_API_KEY` as optional, the way `GOOGLE_API_KEY` already is,
+and validate it inside its own branch. Whether Groq's key stops being required is a question for
+the day the default flips, and it has a Render consequence: `render.yaml` declares
+`GROQ_API_KEY` and deliberately omits `GOOGLE_API_KEY`.
+
 Two things deliberately do **not** change.
 `src/core/errors.py` classifies provider pressure by HTTP status and message text, not by
 provider, so DeepSeek 429s already map to `ProviderBusyError` unchanged.
@@ -164,7 +171,64 @@ Do not promote any configuration until all five pass.
 
 Record the results in this document before writing a ticket.
 
-## 7. Open questions
+## 7. The procedure this repo already has for adding a provider
+
+This is not the first second provider. **T0015.6 wired Google Gemini as a second arm beside
+Groq**, and the work was deferred rather than merged when the live comparison could not run.
+It survives on the tag `archive/t0015.6-provider-ab`, and it is the procedure M27 should follow:
+
+```bash
+git show archive/t0015.6-provider-ab:src/agents/runtime/provider.py
+git show archive/t0015.6-provider-ab:research/provider-ab-plan.md
+```
+
+**The code shape it settled on.** `build_model()` read `agent.<profile>.provider` with the
+top-level `agent.provider` as its fallback, so one profile could move providers while the other
+stayed put. Shared arguments lived in a single `common_kwargs` dict, each provider branch added
+only its own native keys, the second provider's package was imported **inside** its branch, and a
+missing key raised an error naming the profile. That shape is what `provider.py` should return to.
+
+**The discipline the plan pinned**, from `provider-ab-plan.md` §2, §7, and §10:
+
+| Rule | Why it exists | M27 consequence |
+|---|---|---|
+| Change exactly one variable | Anything else that differs invalidates the comparison | Scenarios, fixture, prompts, temperature, `max_tokens`, timeout, tools, graph, judge, and replicate counts stay pinned across arms |
+| Each arm runs with its native reasoning knob **off** | Neither arm gets a hidden reasoning advantage | Groq keeps `reasoning_effort: none`; DeepSeek runs `{"thinking": {"type": "disabled"}}`, which §3 shows it needs anyway |
+| The judge may not come from a contestant's family | Self-preference bias can flip the winner | The Gemini judge is neutral here: neither arm is Google, so the bias that blocked T0015.6 does not apply |
+| Never let an arm hit quota mid-run | A truncated arm looks worse for reasons unrelated to quality | Run arms sequentially against the same fixture in one session, using the driver's checkpoint and resume |
+| Tokens and latency from provider-reported usage only | Estimates are not measurements | Read `usage_metadata`; label free-tier latency indicative, never an SLA |
+| Pre-register the decision rule before the numbers exist | Stops the winner being rationalized after the fact | Safety probes 100% first, then honesty, then task and tool quality, then operational tie-break |
+| Never invent an unobserved result | `provider_ab_results.md` recorded its blocker instead of a number | A blocked arm is reported as blocked |
+
+## 8. What M25 made obsolete, and what still binds
+
+The archived plan proposed building an A/B harness (its T0015.6a) because the runner then drove
+the **HTTP endpoint**, which read provider config at server startup. M25 replaced that: the
+driver runs the agent in-process, emits a manifest, checkpoints, resumes, and grades
+deterministically. Its gaps G1 through G6 are closed, so **M27 must not rebuild that harness**.
+Switching arms is a `config/settings.yaml` edit plus a driver run, and the manifest's
+`config_hash` records exactly which configuration produced the artifact.
+
+Four things in the current instrument still need attention, and they are ticket scope rather than
+open questions:
+
+1. **The manifest records models, not providers.** `build_manifest()` in
+   [`evals/driver.py`](../evals/driver.py) writes `models.react` and `models.sql_generation` with
+   no provider field, and its `sampling` block captures only the Groq-native `reasoning_effort`
+   and `reasoning_format`. A DeepSeek run would therefore not record its provider or whether
+   thinking was disabled - the single most behavior-determining knob in this swap.
+2. **`_assert_comparable()` will refuse to diff the two arms, and that is correct.** It compares
+   `config_hash`, which necessarily differs once the provider changes. Do not relax it to make
+   arms diff; compare graded outcomes per scenario and state the intended configuration delta.
+   The guard exists to stop exactly the cross-configuration comparison an A/B invites.
+3. **The driver owns retry accounting.** It sets `EVAL_DRIVER_DISABLE_PROVIDER_RETRIES=1`, which
+   only the Groq branch reads today. A DeepSeek branch that ignores it retries underneath the
+   driver and corrupts the retry ledger.
+4. **Quota classification is Groq-flavored.** `_is_quota_error()` matches `tpm` and
+   `tokens per minute` alongside `429`; DeepSeek's 429 means concurrency, not tokens per minute,
+   and its backoff ladder was tuned to Groq's 14-17 second hints.
+
+## 9. Open questions
 
 - Does `langchain-deepseek` 1.1.0 forward `extra_body` unmodified? Inherited from
   `BaseChatOpenAI`, so expected, but check 2 above is the proof.

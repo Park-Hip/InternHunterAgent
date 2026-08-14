@@ -38,7 +38,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
 | 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
-| 27 | T0027 | DeepSeek Provider Integration | 📋 | Named 2026-08-14: spike, a second provider branch behind config, then a measured decision on the default |
+| 27 | T0027 | DeepSeek Provider Integration | 📋 | Scoped 2026-08-14 (.1-.4): spike, a second provider branch behind config, the measured arm comparison, then the default decision. Follows the deferred T0015.6 procedure |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -102,36 +102,9 @@ for the honesty Definition-of-Done bullet is decision **D9** in the readiness pl
 T0023's sweep, not here. A v1.0 tag that records a measured honesty limitation is a legitimate
 outcome; this milestone is how the limitation gets closed afterward.
 
-## T0025: Milestone 25 - Evaluation Instrument - Complete 2026-08-13
-
-Plans are archived in [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md), outcomes are in
-[Completion Reports](Completion_Reports.md), durable choices are D-040 through D-044 in the
-[Decision Log](Decision_Log.md), and open risks stay in [Known Issues](Known_Issues.md).
-
-**What still routes forward.** T0025.7 closed partial - 13 of 19 turns measured, with
-`HLP-CONTEXT-1` and `HLP-COMPOUND-1` never captured - so the grader agreeing with all 13 human
-labels is an assertion check, not an accuracy estimate. Full remeasurement is **T0024.4**;
-thresholds and judge calibration belong to the release gate (D-A, D-B, D-C); the paid-tier decision
-those two scenarios need is in [Known Issues](Known_Issues.md), and **T0027** is its other answer.
-
 ---
 
-## T0026: Milestone 26 - Evaluation Workspace Hygiene - Complete 2026-08-14
-
-Plans are archived in [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md) and outcomes
-are in [Completion Reports](Completion_Reports.md). `evals/` went from 33 flat entries to an
-indexed directory: a README, one owner for the fixture database URL, the deterministic tests
-under `tests/evals/`, and 24 scenarios carrying their grading rules as registry data.
-**No verdict changed** - the regrade of the acceptance capture is byte-identical, and the
-replay CI gate is what proves it.
-
-**What still constrains `evals/`.** `evals/writeback.py` stays while
-[`harness.py`](../evals/harness.py) imports it, and `test_judge.py` and `test_three_seams.py`
-stay put because `deepeval test run` addresses them by path.
-
----
-
-## T0027: Milestone 27 - DeepSeek Provider Integration - 📋 Named 2026-08-14, not scoped
+## T0027: Milestone 27 - DeepSeek Provider Integration - 📋 Scoped 2026-08-14
 
 The agent has run on one provider since M0, and Groq's free tier is now the binding constraint on
 measurement: 8K TPM is what forces `eval.driver.turn_pacing_seconds: 75` and spreads a
@@ -147,18 +120,129 @@ rejected with HTTP 400, and `reasoning_content` must be echoed back on every too
 which `ChatDeepSeek` does not do, in an upstream issue closed as not planned. Disabling thinking
 mitigates all three, and proving that is what .1 is for.
 
-* **T0027.1** - a throwaway spike under `scripts/` running the five checks in the research §6:
-  reachability, `extra_body` reaching the wire, a two-leg tool loop with no 400, determinism at
-  `temperature: 0.0`, streaming with no reasoning chunks. Record results there. **Go/no-go.**
-* **T0027.2** - a `deepseek` branch in [`provider.py`](../src/agents/runtime/provider.py) with its
-  own per-profile config keys, `DEEPSEEK_API_KEY` plumbed through `src/core/config.py`,
-  `.env.example`, and `render.yaml`, and the Groq tests mirrored. Groq stays `agent.provider`;
-  this ticket only makes the alternative selectable. Blocked on .1.
-* **T0027.3** - run the full 29-scenario matrix on DeepSeek against the fixture, compare per-turn
-  against the recorded baseline, and only then decide the default and write the Decision Log entry
-  beside D-017. A provider swap invalidates the baseline, so the delta is the deliverable, not the
-  pass rate. Blocked on .2.
+**This is not the first second provider.** T0015.6 wired Gemini beside Groq and was deferred, not
+merged; it survives on `archive/t0015.6-provider-ab` and research §7 harvests its procedure. The
+blocks below follow it: one variable changes, each arm runs with its native reasoning knob off,
+the judge comes from neither contestant's family, and no unobserved result is ever written down.
 
 **Not release-blocking.** M23 and M24 come first, and this stays a provider *option* until .3
 decides otherwise. **Out of scope for the whole milestone:** changing any scenario, threshold,
-grader rule, or prompt; removing the Groq branch; moving the judge off the Gemini free tier.
+grader rule, prompt, or agent behavior; removing the Groq branch; moving the judge off Gemini;
+rebuilding an A/B harness, which research §8 shows M25 already made unnecessary.
+
+### T0027.1: Spike DeepSeek before committing to it
+
+**Objective:** Decide whether the swap is viable at all, for the price of a few cents, before any
+production file changes. The three thinking-mode landmines in research §3 are unproven against
+this account until a live call says otherwise.
+
+**In Scope:**
+* A throwaway script under `scripts/` (Ruff-excluded, per the research-spike convention) running
+  the five checks in [research §6](../research/deepseek-provider-evaluation.md): reachability,
+  `extra_body` reaching the wire, a two-leg tool loop that does not 400, determinism at
+  `temperature: 0.0`, and streaming that emits no reasoning chunks.
+* Record every result in the research record, including a failure. A blocked check is reported as
+  blocked, never inferred from the documentation.
+
+**Out of Scope:**
+* Any change to `src/`, `config/`, or `pyproject.toml`. The spike proves a claim; it ships nothing.
+* Running any scenario from the registry. This is a provider probe, not a measurement.
+
+**Manual verification:**
+1. Run the script with `DEEPSEEK_API_KEY` set; all five checks report a live outcome.
+2. Check 3 is the gate: if the second tool leg 400s on `reasoning_content`, stop and say so in the
+   research record. The milestone does not proceed on a workaround invented at this point.
+3. Confirm the spend on the DeepSeek dashboard matches the cents-scale estimate.
+
+**Blockers:** none, beyond a funded API key. **Go/no-go for the milestone.**
+
+### T0027.2: A second provider branch, behind configuration
+
+**Objective:** Make DeepSeek selectable without making it the default, restoring the per-profile
+provider seam that `archive/t0015.6-provider-ab` already settled.
+
+**In Scope:**
+* Restore that shape in [`provider.py`](../src/agents/runtime/provider.py): read
+  `agent.<profile>.provider` with `agent.provider` as fallback, hoist shared arguments into one
+  `common_kwargs`, keep each provider's native keys inside its own branch, import the DeepSeek
+  package inside that branch, and raise an error naming the profile when its key is missing.
+  Widen the return type to `BaseChatModel`.
+* Read `EVAL_DRIVER_DISABLE_PROVIDER_RETRIES` in the new branch exactly as the Groq branch does.
+  A branch that retries underneath the driver corrupts its retry ledger (research §8).
+* Add `DEEPSEEK_API_KEY` to `src/core/config.py` as **optional**, matching `GOOGLE_API_KEY`, plus
+  `.env.example`. Do not touch `render.yaml`: the deployed default is still Groq.
+* Carry the DeepSeek thinking switch as configuration, not a literal, so .3 can move it.
+* Record provenance in `build_manifest()`: the provider per profile, and the native knob each one
+  used. A run that cannot say which provider produced it is not evidence.
+* Mirror the existing Groq assertions in `tests/agents/runtime/test_provider.py`. The lazy import
+  means the new branch is patched at its import site, not as a module attribute.
+
+**Out of Scope:**
+* Changing `agent.provider`, any deploy configuration, or the Groq branch's behavior.
+* Relaxing `_assert_comparable()`. It is *supposed* to refuse two arms (research §8).
+
+**Manual verification:**
+1. `uv run pytest -q`, Ruff, mypy, and documentation lint pass with `agent.provider` still `groq`.
+2. Flip one profile to `deepseek` in a scratch config, build the model, confirm the DeepSeek class
+   is constructed and the other profile still builds Groq.
+3. Unset `DEEPSEEK_API_KEY` with that profile selected: the error names the profile.
+4. Start a driver run against the fixture and confirm the manifest names the provider per profile.
+5. Boot the API unchanged and answer one question, proving the default path is untouched.
+
+**Blockers:** T0027.1. Spends no quota beyond one hand-run model build.
+
+### T0027.3: Measure DeepSeek on the matrix, then decide
+
+**Objective:** Produce the arm comparison T0015.6 never got to run, under its pre-registered rule.
+
+**In Scope:**
+* Run the 29-scenario registry on the DeepSeek arm against the same fixture, in one session,
+  sequentially with the Groq arm, using the driver's checkpoint and resume. Write it to its own
+  artifact; **never overwrite the frozen baseline**.
+* Hold everything else pinned: scenarios, fixture, prompts, temperature, `max_tokens`, timeout,
+  tools, graph, judge, and replicate counts. Only provider, model, and each arm's native
+  reasoning knob may differ, each set to its behavior-off value.
+* Compare **graded outcomes per scenario**, not manifests, and state the intended configuration
+  delta. `driver diff` will call the arms incomparable, correctly.
+* Apply the pre-registered rule in research §7, in order: safety probes at 100% or the arm is
+  disqualified, then honesty, then task and tool quality, then latency, tokens, and quota
+  headroom. Write the outcome up as dated evidence with tokens and latency taken from
+  `usage_metadata`, never estimated.
+* Answer the two scenarios the free tier could never capture. If `HLP-CONTEXT-1` and
+  `HLP-COMPOUND-1` land here, say so and update their [Known Issues](Known_Issues.md) entry.
+
+**Out of Scope:**
+* Flipping the default, which is .4, and any fix for a behavior this run exposes, which is M24's.
+* Declaring a winner from a sub-significant aggregate delta. The rule is lexicographic precisely
+  because 29 scenarios cannot resolve small quality differences.
+
+**Manual verification:**
+1. Both arms' manifests are `baseline_eligible` with a clean worktree.
+2. The baseline artifact's hash is unchanged after the run.
+3. Every reported number traces to a captured turn; blocked scenarios appear as blocked.
+4. The decision follows the pre-registered order, and the write-up says which step decided it.
+
+**Blockers:** T0027.2, a funded key, and one uninterrupted session for both arms.
+
+### T0027.4: Flip the default, or record why not
+
+**Objective:** Land the .3 decision as configuration and durable rationale, or close the milestone
+with DeepSeek as a proven, unselected option.
+
+**In Scope:**
+* If .3 selects DeepSeek: move `agent.provider`, declare `DEEPSEEK_API_KEY` in `render.yaml`,
+  resolve whether `GROQ_API_KEY` stays required in `src/core/config.py`, and revisit
+  `eval.driver.turn_pacing_seconds`, which exists only to survive Groq's per-minute ceiling.
+* Either way: a Decision Log entry beside **D-017** recording the measured basis, and rows in
+  [Operations](Operations.md) for the key and [Tech Stack](Tech_Stack.md) for the dependency.
+* Re-verify the deployed demo end to end after any deploy-affecting change.
+
+**Out of Scope:**
+* Removing the Groq branch. Two working branches are what keep the seam honest.
+
+**Manual verification:**
+1. A clean checkout boots with only the selected provider's key present.
+2. The live demo answers a question and returns a `trace_url`.
+3. The replay CI gate still passes untouched; it calls no model and must be indifferent to this.
+
+**Blockers:** T0027.3.

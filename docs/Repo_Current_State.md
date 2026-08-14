@@ -49,9 +49,10 @@ and none of what a scenario expects.
 Its three ticket plans joined M25's ten in the archive on 2026-08-14, taking
 [`Tickets.md`](Tickets.md) from its 300-line cap back to 163.
 
-M27 - DeepSeek Provider Integration is named and researched, not started.
+M27 - DeepSeek Provider Integration is scoped (T0027.1-.4) and not started.
 [`research/deepseek-provider-evaluation.md`](../research/deepseek-provider-evaluation.md) holds the
-pricing, the change surface, and the thinking-mode tool-calling landmines a spike must clear first.
+pricing, the change surface, the thinking-mode landmines a spike must clear first, and the provider
+procedure harvested from the deferred T0015.6 arm on `archive/t0015.6-provider-ab`.
 
 ## Archive tags
 

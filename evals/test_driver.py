@@ -11,6 +11,27 @@ from evals import driver
 from evals.harness import ProviderTelemetryCallback, SeamRun
 
 
+def test_resolving_the_fixture_url_never_freezes_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The driver discovers the fixture DSN *before* it binds DATABASE_URL.
+
+    src.core.config caches Settings() on first construction, reading DATABASE_URL
+    from the environment and .env. If resolving the fixture URL constructed
+    Settings, the cache would freeze against the serving database and the
+    driver's later bind would be silently ignored - running a capture against
+    production data. Keep this resolution free of src.core.config.
+    """
+    import src.core.config as config
+
+    def fail_if_called() -> None:
+        raise AssertionError("resolving the fixture URL must not construct Settings()")
+
+    monkeypatch.setattr(config, "load_settings", fail_if_called)
+
+    assert driver.fixture_database_url().startswith("postgresql")
+
+
 def _case(scenario_id: str = "HLP-TEST-1", probe: bool = False) -> dict:
     return {
         "id": scenario_id,

@@ -8,8 +8,8 @@
 ## Current branch
 
 - Repository baseline: `main` at `410c628`.
-- Active ticket branch: `codex/t0025.10-close-m25`, stacked on
-  `codex/t0025.9-grader-audit-replay-ci` (PR #47).
+- Active ticket branch: `codex/t0026.1-evals-front-door`, stacked on `codex/t0025.10-close-m25`
+  and `codex/t0025.9-grader-audit-replay-ci` (PR #47).
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -68,7 +68,7 @@ alembic/       database migrations
 config/        runtime, ingestion, prompt, and vocabulary configuration
 docs/          living documentation, serving design, offline-pipeline design, and archives
 docker/        application container image definition
-evals/         DeepEval harness, fixtures, and scenario data
+evals/         DeepEval harness, fixtures, and scenario data (see evals/README.md)
 scripts/       local maintenance and documentation checks
 src/           API, application service, agent runtime, tracing, and ingestion services
 tests/         automated tests
@@ -104,7 +104,7 @@ The authoritative package declarations are in `pyproject.toml`.
 | Check | Most recent recorded result |
 |---|---|
 | `python scripts/docs_lint.py` | Passed locally on 2026-08-13 (all ten checks) |
-| `uv run pytest -q` | 438 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-13 |
+| `uv run pytest -q` | 439 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
 | `uv run ruff check .` | Passed on 2026-08-13 |
 | `uv run pytest -q evals/test_scenarios.py evals/test_grader.py evals/test_replay.py` | 25 passed on 2026-08-13 |
@@ -125,8 +125,8 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0026.1 - give `evals/` a front door and one fixture-URL owner. It is cheap, spends no quota, and
-unblocks the rest of M26.
+T0026.2 - move the deterministic eval tests under `tests/`, or T0026.3 - move the grader's rule
+table into the registry. Both are independent of each other and spend no quota.
 
 T0023 remains the release path: its DoD sweep, terms posture, and live-cron gate (D-038) are the
 remaining blockers, and M24 owns the behavior failures M25 measured. M26 is hygiene, not

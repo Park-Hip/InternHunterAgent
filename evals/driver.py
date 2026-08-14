@@ -22,6 +22,10 @@ from typing import Any, Awaitable, Callable
 
 import yaml
 
+# Safe to import above the environment bind below: the loader reads the YAML
+# directly and never touches src.core.config, so it cannot freeze Settings().
+from evals.fixtures.loader import fixture_database_url
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "evals" / "runs"
 SCORER_VERSION = "harness-score-v1"
@@ -68,21 +72,9 @@ SEEDED_COLUMNS = (
 )
 
 
-def _fixture_database_url() -> str:
-    settings_path = ROOT / "config" / "settings.yaml"
-    settings = yaml.safe_load(settings_path.read_text(encoding="utf-8"))
-    try:
-        database_url = settings["eval"]["fixture"]["database_url"]
-    except (KeyError, TypeError) as exc:
-        raise RuntimeError("Missing eval.fixture.database_url in config/settings.yaml") from exc
-    if not isinstance(database_url, str) or not database_url.strip():
-        raise RuntimeError("Missing or empty eval.fixture.database_url in config/settings.yaml")
-    return database_url
-
-
 def _bind_fixture_environment() -> None:
     """Bind native driver runs before any src module can freeze Settings()."""
-    os.environ["DATABASE_URL"] = _fixture_database_url()
+    os.environ["DATABASE_URL"] = fixture_database_url()
     # Default tracing off so a capture costs no Langfuse quota, but let an operator
     # opt in with LANGFUSE_ENABLED=true. Forcing it off unconditionally made every
     # captured trace_id None, so the viewer's trace field was structurally dead.
@@ -196,7 +188,7 @@ def build_manifest() -> dict[str, Any]:
     agent = settings["agent"]
     worktree_state = _worktree_state()
     database_hash, database_name, database_row_count = _database_fingerprint(
-        _fixture_database_url()
+        fixture_database_url()
     )
     return {
         "run_id": str(uuid.uuid4()),

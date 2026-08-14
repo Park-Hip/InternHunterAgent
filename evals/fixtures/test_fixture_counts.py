@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
-from evals.fixtures.loader import _fixture_database_url, load_fixture
+from evals.fixtures.loader import fixture_database_url, load_fixture
 from src.api.schema_guard import EXPECTED_COLUMNS
 
 
@@ -13,7 +13,7 @@ def eval_engine():
     except OperationalError as exc:
         pytest.skip(f"eval Postgres not reachable: {exc}")
 
-    engine = create_engine(_fixture_database_url())
+    engine = create_engine(fixture_database_url())
     try:
         yield engine
     finally:

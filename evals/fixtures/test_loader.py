@@ -31,7 +31,7 @@ def test_load_fixture_migrates_before_seeding() -> None:
     fixture_dsn = "postgresql+psycopg://fixture-user:fixture-pass@localhost/fixture"
 
     with (
-        patch("evals.fixtures.loader._fixture_database_url", return_value=fixture_dsn),
+        patch("evals.fixtures.loader.fixture_database_url", return_value=fixture_dsn),
         patch("evals.fixtures.loader._ensure_database_exists") as ensure_database,
         patch("evals.fixtures.loader._drop_fixture_schema") as drop_fixture_schema,
         patch("evals.fixtures.loader._upgrade_schema") as upgrade_schema,

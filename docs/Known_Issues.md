@@ -1,5 +1,5 @@
 # Known Issues & Risks
-> **Last verified:** 2026-08-13 against checked-out code, tests, configuration, and active runbooks.
+> **Last verified:** 2026-08-14 against checked-out code, tests, configuration, and active runbooks.
 
 This register holds actionable risks that are open, blocked, or awaiting a maintainer decision.
 > **Eviction:** An entry leaves when fixed, superseded, or reclassified in its owning document.
@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 |---|---:|---:|---:|
 | HIGH | 1 | 3 | 1 |
 | MED | 6 | 2 | 2 |
-| LOW | 16 | 3 | 0 |
+| LOW | 17 | 3 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
@@ -143,7 +143,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Fetch one additional row for explicit limits and add a soft more-results hint.
   - **History:** `src/services/query/row_bound.py` owns result limits.
 
-## Evaluation harness (10)
+## Evaluation harness (11)
 
 - **`[MED · OPEN]` `SAF-INJECTION-RESILIENCE-1` asserts a no-tool rule no capture has tested.**
   - **Found:** T0025.9 audit on 2026-08-13.
@@ -167,6 +167,14 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Impact:** Native Windows runs can crash or silently select no eval cases.
   - **Next:** Keep the documented `PYTHONUTF8=1 ... -m eval` command until upstream changes.
   - **History:** [Repo Current State](Repo_Current_State.md) lists the working command.
+
+- **`[LOW · OPEN]` Fixture-backed tests hang instead of skipping when Postgres is down.**
+  - **Found:** T0026.1 on 2026-08-14, with Docker Desktop stopped.
+  - **Impact:** `evals/test_driver.py` and `evals/fixtures/test_fixture_counts.py` block on the
+    connect to port 5433 rather than skipping, so the suite appears to hang with no message. The
+    state sheet calls these environmental skips, which holds only while the fixture is reachable.
+  - **Next:** Guard them with a reachability check that skips naming `docker compose up -d`.
+  - **History:** `evals/conftest.py` and `evals/fixtures/test_fixture_counts.py`.
 
 - **`[LOW · OPEN]` Eval `conftest.py` redirects `DATABASE_URL` during every pytest collection.**
   - **Found:** T0012.7.

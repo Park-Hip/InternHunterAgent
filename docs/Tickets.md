@@ -37,7 +37,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 23 | T0023 | v1.0 Release Cut | 📋 | DoD sweep, ToS posture, **live cron (D-038)**, tag — renumbered from T0022 on 2026-08-09 |
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
-| 26 | T0026 | Evaluation Workspace Hygiene | 📋 | Scoped 2026-08-14: `evals/` front door, tests into `tests/`, grader rule table into the registry — hygiene only, not release-blocking |
+| 26 | T0026 | Evaluation Workspace Hygiene | 🔨 | Scoped 2026-08-14; .1 complete (front door, one fixture-URL owner, docs registered); .2 tests into `tests/`, .3 grader rule table into the registry remain — not release-blocking |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -152,6 +152,14 @@ a prompt, or the agent; new metrics; judge work; deleting `evals/writeback.py`, 
 [`harness.py`](../evals/harness.py) line 34 still imports.
 
 ### T0026.1: A front door for `evals/`, and one owner for the fixture URL
+> **Complete 2026-08-14.** `evals/README.md` lands, `fixture_database_url()` is the single owner,
+> and five `evals/` documents are registered in the map.
+> The dedupe went the opposite way from what the plan assumed: the driver's copy was load-bearing,
+> not redundant. Resolving through `src.core.config.settings` freezes `Settings()` against the
+> serving database before the driver can bind `DATABASE_URL`, so a capture would have run the agent
+> against production data. The shared function reads the YAML directly, and a regression test that
+> was proven to fail on the hazard now pins it.
+
 **Objective:** Make the directory legible to someone who did not build it, and stop two modules
 disagreeing about how to find the fixture database.
 

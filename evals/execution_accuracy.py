@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from evals.fixtures.loader import _fixture_database_url
+from evals.fixtures.loader import fixture_database_url
 from evals.scenarios import load_scenarios
 
 
@@ -29,7 +29,7 @@ def _result_key(row: dict[str, Any], compare_ids: bool) -> str:
 
 def execute_query(sql: str, database_url: str | None = None) -> list[dict[str, Any]]:
     """Execute one read-only reference or generated query against the fixture."""
-    engine = create_engine(database_url or _fixture_database_url())
+    engine = create_engine(database_url or fixture_database_url())
     try:
         with engine.begin() as connection:
             connection.execute(text("SET TRANSACTION READ ONLY"))

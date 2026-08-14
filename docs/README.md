@@ -17,6 +17,17 @@ Two caps moved on 2026-08-13 when T0025.10 closed M25, both measured after the c
 
 > **Eviction:** A map entry leaves when its owned document is retired or ownership moves elsewhere.
 
+T0026.1 registered five `evals/` documents that this map had never listed. The two dated
+measurement records are `T4 · Uncapped` like every other historical artifact here: they record what
+was true on 2026-07-14 and will be replaced by a re-measurement rather than edited, so a line
+budget on them would measure nothing. The three living ones carry caps set from their measured
+length.
+
+`Known_Issues.md` moved 250 → 275 on 2026-08-14, measured at 258. It sat exactly at its cap while
+T0025.9, T0025.10, and T0026.1 each found something real, so the next true entry had nowhere to go.
+Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries say in substance
+"address only if this recurs", which is a deferred preference rather than an open risk.
+
 <!-- caps:begin -->
 | Doc | Owns | Tier | Cap | Reader |
 |---|---|---:|---:|---|
@@ -31,13 +42,18 @@ Two caps moved on 2026-08-13 when T0025.10 closed M25, both measured after the c
 | [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | 450 | Decision makers |
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 150 | All contributors |
-| [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 250 | Maintainers |
+| [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 275 | Maintainers |
 | [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 300 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T3 | 150 | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |
 | [Streaming and SSE Explained](../guides/Streaming_And_SSE_Explained.md) | Streaming learning walkthrough | T4 | Uncapped | New contributors |
 | [Research index](../research/README.md) | Live pre-design research | T3 | 250 | Designers and maintainers |
+| [Evaluation instrument](../evals/README.md) | `evals/` layout, pipeline order, and which commands spend quota | T1 | 150 | Anyone touching `evals/` |
+| [Grader audit](../evals/grader_audit.md) | The 29-rule audit and the human turn labels behind the grader | T3 | 200 | Evaluation work |
+| [Holdout report](../evals/holdout_report.md) | Holdout calibration output | T3 | 50 | Evaluation work |
+| [v1 scenario matrix](../evals/v1_scenario_matrix.md) | The 2026-07-14 measurement, as dated evidence | T4 | Uncapped | Project history |
+| [v1 error analysis](../evals/v1_error_analysis.md) | Open-coded failure modes from the recovered answers | T4 | Uncapped | Project history |
 | [Completion Reports](Completion_Reports.md) | Completed-ticket outcomes | T4 | Uncapped | Project history |
 | [Resolved Issues](Resolved_Issues.md) | Closed risk and fix records | T4 | Uncapped | Project history |
 | [Archives](archive/) | Historical plans, checklists, and snapshots | T4 | Uncapped | Project history |

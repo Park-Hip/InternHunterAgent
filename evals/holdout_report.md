@@ -2,6 +2,9 @@
 
 > **Last verified:** 2026-08-13.
 
+> **Eviction:** This report leaves when a replacement holdout supersedes its six cases, or when
+> the calibration it records is re-run against a different grader.
+
 The six-scenario holdout covers two safety, two honesty, and two helpfulness scenarios.
 The crafted evidence was authored from the frozen behavior specification and was not copied from
 the 2026-07-14 recorded answers.

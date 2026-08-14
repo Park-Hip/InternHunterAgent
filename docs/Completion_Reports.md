@@ -2484,3 +2484,56 @@ Follow-ups / Docs).
   29-scenario remeasurement and meets the same tier decision.
 - **Docs that need updating:** None outstanding. The strategy record's section 10 states the
   remaining limits, and the release gate still owns D-A, D-B, and D-C.
+
+## T0026.1 - A front door for `evals/`, and one owner for the fixture URL
+
+- **Summary:** `evals/README.md` now states the pipeline order, what each module owns, and which
+  two commands spend provider quota. `fixture_database_url()` in `evals/fixtures/loader.py` is the
+  single resolver, replacing two implementations that raised different error types and one private
+  cross-module import. Five `evals/` documents that the documentation map had never listed now
+  have an owner, tier, cap, and reader.
+- **The dedupe went the opposite way from the plan.** The ticket assumed the driver's copy was
+  redundant. It was load-bearing. `src.core.config.load_settings()` constructs and *caches*
+  `Settings()`, taking `DATABASE_URL` from the environment and `.env`. `evals/driver.py` resolves
+  the fixture DSN and only then writes it into `DATABASE_URL`, so resolving through `settings`
+  would freeze the cache against the serving database and make the bind a silent no-op - a capture
+  would have run the agent against production data. The shared function therefore reads
+  `config/settings.yaml` directly and never imports `src.core.config`, which is documented at the
+  function and in the README.
+- **Files changed:** `evals/README.md` (new), `evals/fixtures/loader.py`, `evals/driver.py`,
+  `evals/execution_accuracy.py`, `evals/fixtures/test_fixture_counts.py`,
+  `evals/fixtures/test_loader.py`, `evals/test_driver.py`, `evals/holdout_report.md`,
+  `docs/README.md`, `docs/Known_Issues.md`, `docs/Tickets.md`, `docs/Repo_Current_State.md`,
+  and this report.
+- **Commands run:** `uv run pytest -q`, `uv run ruff check .`, `uv run mypy`,
+  `uv run python scripts/docs_lint.py`, `uv run python -m evals.fixtures.loader`,
+  `uv run python -m evals.replay`, and a scripted driver-bind check.
+- **Build and test results:** 439 passed, 1 skipped, 30 live eval tests deselected, 4 subtests
+  passed - one more than before, the new regression test. Ruff, mypy, and all ten documentation
+  checks passed. The replay gate passed against the rebuilt fixture.
+- **The regression test was proven to fail.** The new test in `evals/test_driver.py`
+  patches `load_settings` to raise. Reintroducing the settings-based resolution made it fail with
+  the expected assertion; restoring the direct read made it pass. A pin that has never been seen
+  red is not a pin.
+- **Caps moved:** `Known_Issues.md` 250 to 275, measured at 258. It sat exactly at its cap while
+  three consecutive tickets each found something real. The map records eviction of the stale
+  `LOW · OPEN` entries as the cheaper fix next time.
+- **Manual verification:**
+  1. `uv run python -m evals.fixtures.loader` prints `COUNT(*) = 22`, then
+     `uv run python -m evals.replay` exits 0.
+  2. `python -c "import os; from evals import driver; print(os.environ['DATABASE_URL'])"` prints the
+     `internhunter_eval` DSN, not the serving URL from `.env`.
+  3. In the same process, `src.core.config._settings_cache` is still `None` after importing the
+     driver - proof the bind happened before anything froze `Settings()`.
+  4. `uv run python scripts/docs_lint.py` passes, including the caps check on the five new entries.
+  5. Open `evals/README.md` and confirm the quota table names exactly `evals.driver` and the
+     `eval`-marked tests as the paid paths.
+- **Risks:** `fixture_database_url()` now reads YAML directly rather than through the project's
+  settings loader. That is a deliberate exception to the usual configuration path, justified by the
+  freeze hazard and documented at the call site; a future refactor that "tidies" it back onto
+  `settings` would reintroduce the bug, which is what the regression test exists to catch.
+- **Follow-up tickets:** T0026.2 and T0026.3 remain and are independent of each other. One new
+  `[LOW · OPEN]` entry was appended to `docs/Known_Issues.md`: fixture-backed tests hang rather
+  than skip when Postgres is down, which is how the missing Docker engine presented during this
+  ticket.
+- **Docs that need updating:** None outstanding.

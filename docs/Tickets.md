@@ -149,8 +149,8 @@ No verdict, threshold, or scenario expectation changed.
 
 ## T0028: Milestone 28 - Evaluation Documentation Ownership - 📋 Scoped 2026-08-14
 
-The evaluation documentation passes all ten checks in `scripts/docs_lint.py`, so hygiene is not the
-failure here. Ownership is.
+The evaluation documentation passed every check in `scripts/docs_lint.py` when this milestone was
+scoped, so hygiene is not the failure here. Ownership is.
 
 Measured on 2026-08-14: the 29-scenario matrix is hand-written in **five** files - the registry
 `evals/scenarios_v1.yaml`, `docs/Agent_Behavior_Spec.md` §4a-4c, `evals/v1_scenario_matrix.md`,
@@ -204,7 +204,7 @@ add a `scripts/docs_lint.py` check that every scenario ID named in tracked Markd
 
 **Manual verification**
 1. `uv run python scripts/docs_lint.py` exits 0.
-2. Temporarily add `HLP-NOT-A-SCENARIO-9` to a tracked Markdown file and re-run the linter; it
+2. Temporarily add `HLP-NOT-A-SCENARIO-9` to a tracked Markdown file and re-run the linter; it <!-- lint-allow-scenario-id -->
    fails, naming both the file and the ID. Revert the edit.
 3. `docs/README.md` shows the three new Fact Ledger rows and stays under its cap.
 

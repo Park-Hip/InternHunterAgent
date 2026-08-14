@@ -1,6 +1,6 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-13; see [`Operations.md`](Operations.md).
+> **Last verified:** 2026-08-14; see [`Operations.md`](Operations.md).
 
 > **Eviction:** A current-state fact leaves when the checked-out repository or active operational
 > register changes; replace it with the verified current fact.
@@ -8,9 +8,11 @@
 ## Current branch
 
 - Repository baseline: `main` at `410c628`.
-- Active ticket branch: `codex/t0026.3-registry-owned-grading`, stacked on
-  `codex/t0026.2-eval-tests-under-tests`, `codex/t0026.1-evals-front-door`,
-  `codex/t0025.10-close-m25`, and `codex/t0025.9-grader-audit-replay-ci` (PR #47).
+- Active ticket branch: `codex/t0028-evals-docs-ownership`, stacked on
+  `codex/t0026.3-registry-owned-grading`, `codex/t0026.2-eval-tests-under-tests`,
+  `codex/t0026.1-evals-front-door`, `codex/t0025.10-close-m25`, and
+  `codex/t0025.9-grader-audit-replay-ci` (PR #47).
+- The M28 branch is checked out in the worktree `.claude/worktrees/t0028-evals-docs`.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -44,6 +46,13 @@ M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changes no verdi
 `tests/evals/`, and [`evals/README.md`](../evals/README.md) is the entry point.
 The scenario registry owns every grading expectation, so the grader holds how a rule is applied
 and none of what a scenario expects.
+
+M28 - Evaluation Documentation Ownership is scoped and open (T0028.1-.4); see
+[`Tickets.md`](Tickets.md).
+T0028.1 is complete: the Fact Ledger in [`README.md`](README.md) now names an owner for scenario
+definitions, behavior requirements, and dated graded outcomes, and an eleventh lint check
+(`scenario-id`) fails on any `HLP-`, `HON-`, or `SAF-` identifier in tracked Markdown that
+`evals/scenarios_v1.yaml` does not define.
 
 ## Archive tags
 
@@ -132,6 +141,9 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0023 - the release path. Its DoD sweep, terms posture, and live-cron gate (D-038) are the
-remaining blockers, and M24 owns the behavior failures M25 measured. M26 is closed, so no hygiene
-work stands between here and the release sequence.
+T0028.2 - cut the duplicated scenario table out of the
+[behavior spec](Agent_Behavior_Spec.md), now that T0028.1 can prove no ID is dropped in the process.
+
+T0023 remains the release path once M28 closes or is preempted. Its DoD sweep, terms posture, and
+live-cron gate (D-038) are the remaining blockers, and M24 owns the behavior failures M25 measured.
+M28 is documentation ownership only and blocks nothing in that sequence.

@@ -1,6 +1,6 @@
 # Documentation Conventions
 
-> **Last verified:** 2026-08-10
+> **Last verified:** 2026-08-14
 
 Use these conventions for every Markdown document in this repository.
 
@@ -28,6 +28,16 @@ Use these conventions for every Markdown document in this repository.
 - A historical audit may list paths that were intentionally missing when it was measured.
   Keep that evidence intact and wrap the measured region in
   `<!-- lint-allow-link-path:begin -->` and `<!-- lint-allow-link-path:end -->`.
+
+## Evaluation scenario IDs
+
+`evals/scenarios_v1.yaml` owns every scenario definition, so a scenario ID written in documentation
+is a reference to that registry rather than a fact of its own. The `scenario-id` check reads every
+`HLP-`, `HON-`, and `SAF-` identifier in tracked Markdown and fails on any the registry does not
+define, which catches a renamed or deleted scenario that left a stale name behind.
+
+Add `<!-- lint-allow-scenario-id -->` to a line that must name an ID on purpose, such as an example
+of what the check rejects.
 
 ## Encoding safety
 

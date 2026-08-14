@@ -61,6 +61,11 @@ Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries
 
 ## Fact Ledger
 
+T0028.1 added the three evaluation rows. The ledger assigned an owner to fourteen fact classes and
+to no evaluation fact, which is how the 29-scenario matrix came to be hand-written in five files
+with nothing able to detect drift between the copies. The `scenario-id` lint check enforces the
+first row: a scenario ID named anywhere in documentation must exist in the registry.
+
 | Fact class | Sole owner |
 |---|---|
 | What the product must do | `MVP_Spec.md` |
@@ -75,6 +80,9 @@ Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries
 | What a ticket did | `Completion_Reports.md` |
 | Open risks | `Known_Issues.md` |
 | Closed risks | `Resolved_Issues.md` |
+| Scenario definitions, inputs, expected behavior, and grading rules | `evals/scenarios_v1.yaml` |
+| Agent behavior requirements and the probe protocol | `Agent_Behavior_Spec.md` |
+| Graded outcomes of one dated evaluation run | The dated record under `evals/` |
 | Why a durable choice was made | `Decision_Log.md` |
 | Documentation rules and conventions | `Docs_Conventions.md` |
 | Agent working rules | `AGENTS.md` and `CLAUDE.md` |

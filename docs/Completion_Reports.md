@@ -2662,4 +2662,48 @@ link-path check under the historical-audit rule in
 - **Docs that need updating:** None outstanding. D-041 already records the registry as the single
   source of truth for scenario data; this ticket completes it rather than changing it.
 
+---
+
+## T0028.1 - Give evaluation facts an owner, and a check that enforces it
+
+- **Summary:** The Fact Ledger in `docs/README.md` assigned an owner to fourteen fact classes and
+  none of them was an evaluation fact, which is how the 29-scenario matrix came to be hand-written
+  in five files with nothing able to detect drift between the copies. Added three ledger rows:
+  scenario definitions and expectations (`evals/scenarios_v1.yaml`), behavior requirements and the
+  probe protocol (`docs/Agent_Behavior_Spec.md`), and the graded outcomes of a dated run (that
+  dated record under `evals/`). Added an eleventh `scripts/docs_lint.py` check, `scenario-id`, that
+  scans tracked Markdown for `HLP-`, `HON-`, and `SAF-` identifiers and fails on any absent from the
+  registry, using the same `lint-allow-*` escape-hatch style as the existing ten checks.
+- **The check reads the registry as text, not YAML.** `registered_scenario_ids` pulls `- id: NAME`
+  lines with a regular expression instead of parsing `evals/scenarios_v1.yaml`, matching how the
+  rest of `docs_lint.py` avoids adding a dependency to a script whose contract is "no dependencies."
+- **ID existence only, no text comparison.** The check catches a renamed or deleted scenario that
+  left a stale name behind in documentation; it does not compare a scenario's expected text across
+  the five files that duplicate it. Cutting that duplication is `T0028.2` and `T0028.3`.
+- **Files changed:** `docs/README.md`, `docs/Docs_Conventions.md`, `docs/Tickets.md`,
+  `docs/Repo_Current_State.md`, `scripts/docs_lint.py`, `tests/test_docs_lint.py`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py`, `uv run pytest -q`,
+  `uv run ruff check .`, `uv run mypy`.
+- **Build and test results:** Docs lint passed with zero findings across all eleven checks. Ruff
+  reported no issues. Mypy found no issues in 43 source files. `pytest -q` ran 447 passed, 2
+  skipped, 30 deselected (live eval tests needing API keys or a paid tier), 4 subtests passed. Two
+  failures in `tests/evals/test_driver.py`
+  (`test_driver_persists_all_seams_and_resumes_completed_scenario` and
+  `test_quota_exhaustion_marks_remaining_scenarios_unrun`) are environmental, not caused by this
+  change: both need a local Postgres fixture database on `localhost:5433`, which was not running in
+  this session, and neither test touches documentation or the scenario registry.
+- **Manual verification:**
+  1. `uv run python scripts/docs_lint.py` exits 0.
+  2. Temporarily add `HLP-NOT-A-SCENARIO-9` to a tracked Markdown file and re-run the linter; it <!-- lint-allow-scenario-id -->
+     fails, naming both the file and the ID. Revert the edit.
+  3. `docs/README.md` shows the three new Fact Ledger rows and stays under its 150-line cap, which
+     the `size-cap` check enforces and which passed above.
+- **Risks:** the `scenario-id` pattern matches any `HLP-`/`HON-`/`SAF-` token shape, so prose that
+  names an example ID on purpose (as this ticket's own manual-verification step does) needs the
+  `<!-- lint-allow-scenario-id -->` marker or the check reports a false positive. The marker is
+  already applied where that happens in `docs/Tickets.md`.
+- **Follow-up tickets:** `T0028.2` - cut the duplicated scenario table out of the behavior spec, now
+  unblocked because this check can prove no scenario ID is dropped in the process.
+- **Docs that need updating:** None outstanding.
+
 <!-- lint-allow-link-path:end -->

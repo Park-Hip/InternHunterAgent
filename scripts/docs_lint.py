@@ -123,6 +123,17 @@ def is_archive(path: Path) -> bool:
     )
 
 
+DATED_RECORDS = frozenset({ROOT / "docs" / "Completion_Reports.md"})
+
+
+def is_dated_record(path: Path) -> bool:
+    """Link-path exemption for a living file whose entries name paths as they were on the day
+    they shipped, not as a live index. Deliberately narrower than is_archive(): unlike a true
+    archive, docs/Completion_Reports.md still owes the line-length, reflow, orphan, and
+    scenario-id checks - only its historical links get a pass."""
+    return is_archive(path) or path in DATED_RECORDS
+
+
 def is_line_length_exempt(line: str, in_fence: bool, in_frontmatter: bool = False) -> bool:
     stripped = line.strip()
     return (
@@ -203,7 +214,7 @@ def check_link_path(files: list[Path]) -> list[Finding]:
     link_pattern = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
     code_pattern = re.compile(r"`([^`]+)`")
     for path in files:
-        if is_archive(path):
+        if is_dated_record(path):
             continue
         in_fence = False
         link_path_allowed = False

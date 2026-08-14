@@ -1,6 +1,6 @@
 # Offline Pipelines Design
 
-> **Last verified:** 2026-08-12.
+> **Last verified:** 2026-08-14.
 > This document owns the offline ingestion and evaluation pipelines.
 > It retains sections 7-8 so historical citations continue to resolve after the serving-path split.
 
@@ -294,10 +294,12 @@ DeepEval test case (research §11.5).
 
 ### 8.6 How it runs, and its boundaries
 
-- **On-demand, local-first.** T0011 delivers a runnable `deepeval test run` (pytest-integrated) plus
-  the dataset, metrics, and writeback. It is **not** wired into CI — the first `.github/workflows/`
-  PR gate is a deliberate **fast-follow ticket**, matching the deferred-deploy posture and avoiding
-  standing up CI + Groq-in-CI rate-limit handling before it is needed.
+- **On-demand, local-first, and wired into CI.** T0011 delivered a runnable `deepeval test run`
+  (pytest-integrated) plus the dataset, metrics, and writeback. T0025.9 shipped the fast-follow: the
+  `checks` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs
+  `uv run python -m evals.replay` on every pull request, replaying the committed evidence in
+  [`evals/replays/`](../evals/replays/) with no model or judge call — see
+  [`evals/Operating_Manual.md`](../evals/Operating_Manual.md).
 - **Layer isolation.** The harness treats the agent as a black box via its public entrypoint plus
   the injected `CallbackHandler`; the only touch inside the agent boundary is the config seam that
   lets the `generate_sql` span be observed (§8.1), which carries no eval logic and is inert in
@@ -307,12 +309,12 @@ DeepEval test case (research §11.5).
 
 ### 8.7 Prerequisite & deferred
 
-- **Prerequisite (not owned here):** the agent must run on a **non-retired model** for the baseline
-  to mean anything — `config/settings.yaml` still pins the agent to `llama-3.3-70b-versatile`, which
-  Groq shuts down 2026-08-16 (`Known_Issues.md`, F1). That migration is a **separate** follow-up,
-  deliberately not folded into T0011.
-- **Deferred:** the CI gate, online/production eval, `DAGMetric`, Phase-2 chart metrics,
-  production-sampled goldens, and any judge-matrix / Confident-AI cloud. And, by design, **fixing**
-  a measured behavior — T0011 *measures*; remediation is separate work.
+- **Prerequisite, resolved.** The agent must run on a non-retired model for the baseline to mean
+  anything. `config/settings.yaml` pins the agent to `qwen/qwen3.6-27b` on Groq, not the
+  `llama-3.3-70b-versatile` this section originally named before that model's retirement.
+- **Deferred:** online/production eval, `DAGMetric`, Phase-2 chart metrics, production-sampled
+  goldens, and any judge-matrix / Confident-AI cloud. The CI gate shipped under T0025.9 - see §8.6.
+  And, by design, **fixing** a measured behavior — this harness *measures*; remediation is separate
+  work.
 
 ---

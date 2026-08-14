@@ -7,7 +7,9 @@
 
 How agent behavior is measured. The strategy behind it is
 [`research/evaluation-strategy.md`](../research/evaluation-strategy.md); the frozen target it
-measures against is [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md).
+measures against is [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md); why the
+instrument is built the way it is, and what it can't yet tell you, is
+[`Operating_Manual.md`](Operating_Manual.md).
 
 ## Read this first: what costs quota
 

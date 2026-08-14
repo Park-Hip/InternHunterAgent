@@ -16,11 +16,11 @@ field list (Summary / Files / Commands / Build & test / Manual verification / Ri
 Follow-ups / Docs).
 
 Every entry records the paths a ticket touched **on the day it shipped**. Later tickets move files,
-so those paths are dated evidence rather than a live index, and the whole file is exempt from the
-link-path check under the historical-audit rule in
-[Documentation Conventions](Docs_Conventions.md).
-
-<!-- lint-allow-link-path:begin -->
+so those paths are dated evidence rather than a live index. `scripts/docs_lint.py`'s `link-path`
+check exempts this file by name (`is_dated_record()`), the same historical-audit rule
+[Documentation Conventions](Docs_Conventions.md) states for `docs/archive/` and
+`research/archive/` - narrower than a true archive, since this file still owes the line-length,
+reflow, orphan, and scenario-id checks.
 
 ---
 
@@ -2809,4 +2809,73 @@ link-path check under the historical-audit rule in
   and is independent of this ticket per the milestone scoping.
 - **Docs that need updating:** None outstanding.
 
-<!-- lint-allow-link-path:end -->
+---
+
+## T0028.4 - Promote an operating manual, and sweep the stale claims
+
+- **Summary:** `evals/` had no narrative explainer - `README.md` covers layout and quota cost, not
+  why the instrument is built the way it is. Added
+  [`evals/Operating_Manual.md`](../evals/Operating_Manual.md), registered at a 400-line cap in
+  `docs/README.md`: why seam-level capture beats grading final answers alone, the three seams, the
+  three scenario classes with their measured counts, the run-to-artifact path including the
+  manifest and `baseline_eligible`, `--resume` and `PARTIAL_QUOTA`'s exact checkpoint/resume
+  behavior, the three grading tiers and four outcomes, and the stated limits. Corrected
+  `docs/Offline_Pipelines_Design.md` §8.6-8.7, which said the replay gate was "not wired into CI"
+  and pinned `llama-3.3-70b-versatile` - both stale since T0025.9. Closed the two M26 follow-ups:
+  `research/evaluation-strategy.md` no longer describes `test_judge_scaffold.py` as a separate
+  module, and `scripts/docs_lint.py`'s `link-path` check exempts `docs/Completion_Reports.md` by
+  name instead of via a whole-file marker comment.
+- **A `.lavish/how-the-evaluation-works.html` draft existed but was not the source.** Per the
+  ticket's own instruction, every claim in it was re-verified against the current tree rather than
+  copied: scenario counts against `scenarios_v1.yaml` (29 total, 6/9/14 by class, 15 probes, 2
+  conversational, 18 with reference SQL - all confirmed by script), the 8,000 TPM ceiling and the
+  10,231/7,653-token peaks against `config/settings.yaml` and `docs/Known_Issues.md`, the three
+  tools against `src/agents/tools/`, the grading tiers and outcome set against `evals/grader.py`,
+  and the driver's checkpoint/resume/`PARTIAL_QUOTA` behavior by reading `evals/driver.py` line by
+  line. Two claims in the draft were stale and were not promoted: it listed the grader's hardcoded
+  tool-expectation bug and the absence of a CI replay gate as open defects, and both were fixed by
+  T0025.9 before this ticket started - the manual states the current, fixed state instead.
+- **The `Completion_Reports.md` follow-up needed a narrower fix than "treat it like
+  `docs/archive/`."** `is_archive()` also gates the `line-length`, `reflow`, `orphan`, and
+  `scenario-id` checks, and `research/docs-hygiene-and-system-plan.md` §5.2.1 records a deliberate
+  2026-08-09 decision that `Completion_Reports.md` stays in the reflow/line-length regime despite
+  being archive-tiered, because it is appended to on every ticket. Making it archive-exempt outright
+  would have silently reversed that decision. Added a narrower `is_dated_record()` - `is_archive()`
+  plus this one file by name - and used it only in `check_link_path`, so the other four checks are
+  unaffected. Removed the whole-file `<!-- lint-allow-link-path:begin/end -->` wrapper this
+  replaces and updated the file's own header to describe the new mechanism.
+- **M28 closed.** All four tickets are complete and no scenario, grading rule, threshold, or
+  replay artifact changed across the milestone. The four ticket plans moved verbatim into
+  `docs/archive/Tickets_Archive.md` per the register's eviction rule, each subticket gaining a
+  `> **Complete 2026-08-14.**` outcome summary above its original objective text; `docs/Tickets.md`
+  keeps the collapsed milestone summary in their place, matching the M25/M26 precedent.
+- **Files changed:** `evals/Operating_Manual.md` (new), `docs/README.md`, `evals/README.md`,
+  `docs/Offline_Pipelines_Design.md`, `research/evaluation-strategy.md`, `scripts/docs_lint.py`,
+  `tests/test_docs_lint.py`, `docs/Tickets.md`, `docs/archive/Tickets_Archive.md`,
+  `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py`,
+  `uv run pytest -q tests/test_docs_lint.py`, `uv run ruff check .`, `uv run mypy`,
+  `uv run pytest -q` (full suite), and a scripted count of scenario classes, probes, conversational
+  cases, and reference-SQL coverage against the registry.
+- **Build and test results:** Docs lint passed with zero findings across all eleven checks. Ruff
+  and mypy reported no issues. `uv run pytest -q` (full suite): 450 passed, 2 skipped
+  (environmental - one needs `SCRATCH_DATABASE_URL`, one needs the gitignored `.claude/` skill
+  copy), 30 deselected (live eval tests), 4 subtests passed - including the one new test for
+  `is_dated_record`.
+- **Manual verification:**
+  1. A reader who has never run the evaluation can follow `evals/Operating_Manual.md` end to end
+     and reach a graded artifact - it walks fixture, manifest, checkpointing, execution accuracy,
+     and grading in that order.
+  2. Every command quoted in the manual (`uv run python -m evals.driver --output ...`,
+     `uv run python -m evals.driver diff`, the CI's `evals.fixtures.loader` / `evals.replay` pair)
+     matches an `argparse` flag or a command already documented in `evals/README.md`; none was
+     executed live here since the driver command spends Groq quota.
+  3. `uv run python scripts/docs_lint.py` exits 0.
+  4. `docs/Offline_Pipelines_Design.md` §8.6-8.7 names the shipped CI gate
+     (`.github/workflows/ci.yml`'s `checks` job) and the configured model (`qwen/qwen3.6-27b`).
+- **Risks:** none identified. The operating manual restates facts already owned elsewhere
+  (registry counts, grader outcomes); if those drift, the manual can drift with them since no lint
+  check compares its prose against the source it describes - the same residual risk the milestone's
+  own scoping text names for the pre-existing duplication.
+- **Follow-up tickets:** none new. M28 is complete.
+- **Docs that need updating:** None outstanding.

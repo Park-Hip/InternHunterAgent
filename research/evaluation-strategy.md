@@ -104,7 +104,7 @@ Judge coverage is consolidated in `evals/test_judge.py`.
 |---|---|---|
 | `evals/goldens/golden_dataset.json` | An 18-case stale subset of the 29. Probe flags disagree on `C1`/`D1`/`D2`/`D3`, and content has drifted — golden `A2` asks "List the data scientist roles", scenario `A2` asks "List the AI Engineer jobs" | **Delete; generate from the registry** (D-1) |
 | `evals/goldens/__init__.py` + `test_goldens_load.py` vs the archived `test_scenarios_v1_load.py` | Two loaders and two load tests for two case lists | Collapse to one loader over the YAML registry |
-| `evals/test_judge.py` + `evals/test_judge_scaffold.py` | Two judge test modules | Review and merge |
+| `evals/test_judge.py` + `evals/test_judge_scaffold.py` | Two judge test modules | Review and merge - **done**: `test_judge_scaffold` is one `eval`-marked function inside `evals/test_judge.py`; the separate module no longer exists |
 
 <!-- lint-allow-link-path:end -->
 

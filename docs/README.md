@@ -50,6 +50,7 @@ Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries
 | [Streaming and SSE Explained](../guides/Streaming_And_SSE_Explained.md) | Streaming learning walkthrough | T4 | Uncapped | New contributors |
 | [Research index](../research/README.md) | Live pre-design research | T3 | 250 | Designers and maintainers |
 | [Evaluation instrument](../evals/README.md) | `evals/` layout, pipeline order, and which commands spend quota | T1 | 150 | Anyone touching `evals/` |
+| [Evaluation operating manual](../evals/Operating_Manual.md) | Why the instrument exists, the seams, grading, and its stated limits | T2 | 400 | Evaluation work |
 | [Instrument report](../evals/Instrument_Report.md) | The grader audit and the holdout calibration, merged | T3 | 250 | Evaluation work |
 | [v1 scenario matrix](../evals/archive/v1_scenario_matrix.md) | The 2026-07-14 measurement, sealed as dated evidence | T4 | Uncapped | Project history |
 | [v1 error analysis](../evals/archive/v1_error_analysis.md) | Open-coded failure modes from the recovered answers, sealed | T4 | Uncapped | Project history |

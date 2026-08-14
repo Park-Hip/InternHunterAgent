@@ -15,6 +15,12 @@ sys.modules[SPEC.name] = docs_lint
 SPEC.loader.exec_module(docs_lint)
 
 
+def test_is_dated_record_covers_completion_reports_and_archive_dirs() -> None:
+    assert docs_lint.is_dated_record(docs_lint.ROOT / "docs" / "Completion_Reports.md")
+    assert docs_lint.is_dated_record(docs_lint.ROOT / "docs" / "archive" / "x.md")
+    assert not docs_lint.is_dated_record(docs_lint.ROOT / "docs" / "Tickets.md")
+
+
 def test_archived_on_tag_reference_is_allowed(tmp_path: Path) -> None:
     document = tmp_path / "guide.md"
     document.write_text("See `src/core/event_loop.py`. <!-- archived-on-tag -->\n", encoding="utf-8")

@@ -47,13 +47,12 @@ M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changes no verdi
 The scenario registry owns every grading expectation, so the grader holds how a rule is applied
 and none of what a scenario expects.
 
-M28 - Evaluation Documentation Ownership is scoped and open (T0028.1-.4); see
-[`Tickets.md`](Tickets.md).
-T0028.1-.3 are complete: the Fact Ledger names an owner for evaluation facts with a lint check
-enforcing scenario-ID existence; [`Agent_Behavior_Spec.md`](Agent_Behavior_Spec.md) §4a-4c links to
-the registry instead of duplicating it; and the two dated snapshots moved into `evals/archive/`
-while the grader audit and holdout report merged into
-[`evals/Instrument_Report.md`](../evals/Instrument_Report.md).
+M28 - Evaluation Documentation Ownership is complete (T0028.1-.4) and changes no verdict, rule, or
+threshold. The Fact Ledger names an owner for evaluation facts, enforced by a `scenario-id` lint
+check; [`Agent_Behavior_Spec.md`](Agent_Behavior_Spec.md) §4a-4c links to the registry instead of
+duplicating it; the two dated snapshots sealed into `evals/archive/` and the grader audit and
+holdout report merged into [`evals/Instrument_Report.md`](../evals/Instrument_Report.md); and
+[`evals/Operating_Manual.md`](../evals/Operating_Manual.md) now explains the instrument end to end.
 
 ## Archive tags
 
@@ -121,14 +120,14 @@ The authoritative package declarations are in `pyproject.toml`.
 | Check | Most recent recorded result |
 |---|---|
 | `python scripts/docs_lint.py` | Passed locally on 2026-08-14 (all eleven checks) |
-| `uv run pytest -q` | 447 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
+| `uv run pytest -q` | 450 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
-| `uv run ruff check .` | Passed on 2026-08-13 |
+| `uv run ruff check .` | Passed on 2026-08-14 |
 | `uv run pytest -q tests/evals` | 82 passed on 2026-08-14 |
 | `git diff --check` | Clean on 2026-08-13 |
 | `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-13 |
 | `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |
-| `uv run mypy src` | Success: no issues in 43 source files on 2026-08-13 |
+| `uv run mypy src` | Success: no issues in 43 source files on 2026-08-14 |
 | CI gate, PR #39 | Passed in 44 seconds |
 
 Every skip is environmental. One migration round-trip test requires `SCRATCH_DATABASE_URL`, and
@@ -142,9 +141,6 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0028.4 - promote an operating manual for `evals/` and correct the stale CI-gate and model claims
-in `Offline_Pipelines_Design.md` §8.6-8.7; the last open block in M28.
-
-T0023 remains the release path once M28 closes or is preempted. Its DoD sweep, terms posture, and
-live-cron gate (D-038) are the remaining blockers, and M24 owns the behavior failures M25 measured.
-M28 is documentation ownership only and blocks nothing in that sequence.
+T0023 - the release path. Its DoD sweep, terms posture, and live-cron gate (D-038) are the
+remaining blockers, and M24 owns the behavior failures M25 measured. M28 is closed and
+documentation-only, so no hygiene work stands between here and the release sequence.

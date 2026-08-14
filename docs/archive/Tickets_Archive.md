@@ -3003,3 +3003,155 @@ out of the active register, and leave M24 and the release gate with clear owners
 4. Documentation lint, the full test suite, Ruff, mypy, and `git diff --check` pass.
 
 **Blockers:** T0025.9; T0025.7 closed partial. Spends no provider or judge quota.
+
+---
+
+## T0026: Milestone 26 - Evaluation Workspace Hygiene (T0026.1-.3) - Complete 2026-08-14
+
+M25 built the instrument ticket by ticket, and `evals/` accumulated the shape of that sequence
+rather than a designed one. Measured on 2026-08-14: **33 flat entries**, of which **8 are test
+modules** and **4 are Markdown records that no index owns**, plus **no `README.md`** explaining
+what any of it is or which commands cost quota.
+
+This milestone is hygiene only. **It changes no verdict.** Every ticket below must leave the
+committed replay and the 13-turn regrade producing byte-identical outcomes, and the CI gate is what
+proves it.
+
+> **Not release-blocking.** M23 and M24 come first. Pull this in when `evals/` gets in the way,
+> or run T0026.1 alone as a cheap standalone win.
+
+**Out of scope for the whole milestone:** any change to a scenario, a threshold, a grader verdict,
+a prompt, or the agent; new metrics; judge work; deleting `evals/writeback.py`, which
+[`harness.py`](../../evals/harness.py) line 34 still imports.
+
+### T0026.1: A front door for `evals/`, and one owner for the fixture URL
+> **Complete 2026-08-14.** `evals/README.md` lands, `fixture_database_url()` is the single owner,
+> and five `evals/` documents are registered in the map.
+> The dedupe went the opposite way from what the plan assumed: the driver's copy was load-bearing,
+> not redundant. Resolving through `src.core.config.settings` freezes `Settings()` against the
+> serving database before the driver can bind `DATABASE_URL`, so a capture would have run the agent
+> against production data. The shared function reads the YAML directly, and a regression test that
+> was proven to fail on the hazard now pins it.
+
+**Objective:** Make the directory legible to someone who did not build it, and stop two modules
+disagreeing about how to find the fixture database.
+
+**In Scope:**
+* Add a README at evals/README.md covering: what each module does, the order the pipeline runs in
+  (registry → driver → execution accuracy → grader → replay), which commands spend provider quota
+  and which do not, and where run artifacts land. Link it from [`docs/README.md`](../README.md).
+* Collapse the two `_fixture_database_url` implementations into one exported function owned by
+  [`evals/fixtures/loader.py`](../../evals/fixtures/loader.py). `driver.py` line 71 re-reads
+  `config/settings.yaml` itself and raises `RuntimeError`; `loader.py` line 34 raises `ValueError`;
+  `execution_accuracy.py` line 14 imports the private name across a module boundary. Pick one
+  public function and one error type, and have all three call sites use it.
+* Register the four unowned records - `grader_audit.md`, `v1_scenario_matrix.md`,
+  `v1_error_analysis.md`, `holdout_report.md` - in the [documentation map](../README.md) caps table
+  with an owner, tier, cap, and reader. Set each cap from its measured length, per the map's rule.
+
+**Out of Scope:**
+* Moving or renaming any Python module. Rewriting the content of the four records.
+
+**Notes for the implementer:**
+* `driver.py` calls `_bind_fixture_environment()` at import time, which is why lines 113-114 carry
+  `# noqa: E402`. `src/core/config.py` line 122 exposes `settings` as a lazy proxy, so importing
+  `evals.fixtures.loader` before the bind is safe - but verify that the driver still binds the
+  environment before `evals.harness` is imported, because `harness` pulls in the agent factory.
+
+**Manual verification:**
+1. `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` still pass.
+2. `uv run python -m evals.driver --resume --output evals/runs/run.json` starts and binds the
+   fixture database, with no `DATABASE_URL` leakage to the serving database.
+3. `uv run python scripts/docs_lint.py` passes, including the caps check on the four new entries.
+4. A reader who has never opened the directory can name, from the new README alone, which two
+   commands spend Groq quota.
+
+**Blockers:** none. Spends no provider or judge quota.
+
+### T0026.2: Move the deterministic eval tests under `tests/`
+> **Complete 2026-08-14.** Nine modules moved to `tests/evals/`; `evals/` keeps the two that call
+> a provider. The suite reports the same 439 passed, 1 skipped, 30 deselected, 4 subtests.
+> Two corrections to the plan below. It counted eight test modules and listed six deterministic
+> ones, missing `test_writeback.py`, which meets the same criterion and moved with them. And
+> The fixture loader's test had to be renamed `test_fixture_loader.py`: `tests/` is not a package,
+> so pytest derives module names from basenames, and the ingestion loader's test already owns the
+> name `test_loader`.
+> Narrowing the redirect took two changes, not one. Importing `evals/driver.py` binds
+> `DATABASE_URL` process-wide, so moving the driver test into `tests/` would have carried the
+> leak with it; `tests/evals/conftest.py` restores the environment once collection finishes.
+
+**Objective:** Leave `evals/` holding the instrument, not the instrument plus its test suite.
+Over half its entries are currently tests.
+
+**In Scope:**
+* Move the six deterministic modules - `test_driver.py`, `test_execution_accuracy.py`,
+  `test_grader.py`, `test_replay.py`, `test_scenarios.py`, `test_viewer.py` - and the two under
+  `evals/fixtures/` into `tests/evals/`, preserving their contents.
+* **Keep `test_judge.py` and `test_three_seams.py` where they are.** They are the only
+  `eval`-marked modules, and `deepeval test run evals/test_three_seams.py` addresses them by path.
+* Narrow [`evals/conftest.py`](../../evals/conftest.py) so its `DATABASE_URL` redirect applies to the
+  eval tests that need it rather than to every pytest collection. This closes the standing
+  `[LOW · OPEN]` entry in [Known Issues](../Known_Issues.md); move it to
+  [Resolved Issues](../Resolved_Issues.md) with the evidence.
+
+**Out of Scope:**
+* Rewriting any assertion. Changing what the suite covers. Touching the two `eval`-marked modules.
+
+**Manual verification:**
+1. `uv run pytest -q` reports the same pass count as before the move, with the same single
+   environmental skip.
+2. `uv run pytest -q tests/` alone now collects the moved modules.
+3. `uv run pytest -m eval --collect-only` still finds both `eval`-marked modules at their old paths.
+4. Run a non-eval test in isolation and confirm collection leaves `DATABASE_URL` untouched.
+
+**Blockers:** T0026.1, so the README describes the final layout. Spends no quota.
+
+### T0026.3: Move the grader's rule table into the scenario registry
+> **Complete 2026-08-14.** 24 scenarios carry a `grading:` block; `_rule_for` is a registry
+> lookup. The regrade of the acceptance capture is **byte-identical** to the pre-change output,
+> which is stronger than the per-turn invariant this ticket asked for: every check name and detail
+> string is unchanged too.
+> The blocks were generated from the in-code table rather than retyped. 99 literal strings copied
+> by hand is how a migration that must change nothing changes something.
+> One field could not move as data. `HON-CURRENCY-1` quoted the behavior glossary, so the registry
+> carries a `{glossary: NAME}` reference that the grader resolves. Its *name* is checked in
+> `grader.py`, not in the registry loader: resolving it there would pull `src.core.config` into a
+> module that must not construct and cache `Settings()` before the fixture database is bound.
+
+**Objective:** Finish the migration T0025.9 started. `expected_tools` now comes from the registry;
+the rest of each scenario's expectations still do not.
+
+[`grader.py::_rule_for`](../../evals/grader.py) is 71 lines holding **24 hardcoded scenario ids** and
+roughly **99 literal match strings** - answer counts, required phrasings, forbidden phrasings, and
+one bespoke structural flag. That is behavior data living in code, which is the same defect that
+made the grader fail `HON-SQL-DESCRIBE-1` for three captured turns, and it contradicts the
+project rule that parameters belong in configuration.
+
+**In Scope:**
+* Move `expected_answer_count`, the `TextRule` contents, and `forbid_single_salary_winner` into
+  per-scenario fields in [`scenarios_v1.yaml`](../../evals/scenarios_v1.yaml), alongside
+  `expected_tools`. Extend the loader's validation to reject an unknown or malformed rule field the
+  way it already rejects an unknown tool name.
+* Reduce `_rule_for` to a registry lookup. Keep `ScenarioRule`, the three tiers, and the four
+  outcomes exactly as they are.
+* Keep the six-scenario holdout meaningful: its assertions must still be authored independently of
+  the registry, or the contract test becomes circular. State in `holdout.py` how that is preserved.
+
+**Out of Scope:**
+* Changing any rule's content, adding a rule, relaxing a rule, or touching the judge tier.
+* Re-authoring scenarios.
+
+**The invariant, and how it is proven:** the regrade of
+`evals/runs/t0025.7-acceptance.json` must stay 7 `PASS` / 6 `FAIL` / 2 `INFRA` with per-turn
+statuses unchanged, and `uv run python -m evals.replay` must pass unmodified. A verdict that moves
+means the migration changed a rule, which is out of scope - revert rather than update the expected
+outcome.
+
+**Manual verification:**
+1. Diff the regrade output against the pre-change run; it must be identical turn for turn.
+2. `uv run python -m evals.replay` passes with the committed artifact untouched.
+3. Break one migrated rule in the YAML, confirm the grader disagrees with its recorded human label,
+   then restore it.
+4. `uv run pytest -q`, Ruff, mypy, and documentation lint pass.
+
+**Blockers:** T0026.1. Independent of T0026.2. Spends no provider or judge quota.

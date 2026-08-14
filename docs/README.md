@@ -8,9 +8,11 @@ A document over its cap means either the cap or the document is wrong; decide wh
 
 Two caps moved on 2026-08-13 when T0025.10 closed M25, both measured after the change:
 
-- `Tickets.md` 500 → 300, measured at 131. The eviction this register anticipated has happened -
-  the ten completed M25 blocks are now in [the archive](archive/Tickets_Archive.md). The headroom
-  is for M23 and M24, which are indexed but not yet scoped into ticket bodies.
+- `Tickets.md` 500 → 300, measured at 163 on 2026-08-14 after M26's three completed blocks joined
+  M25's ten in [the archive](archive/Tickets_Archive.md). That second eviction was not optional:
+  scoping M27 pushed the document to its cap exactly, and the cap is what surfaced the plans that
+  had already earned their exit. The headroom is for M23, M24, and M27, indexed but not yet scoped
+  into ticket bodies.
 - `Decision_Log.md` 350 → 450, measured at 368. Harvesting is what this document is for, so it
   grows by design each time a milestone closes; M25 contributed D-041 through D-044. Evicting a
   decision requires revoking it, so the cap is the only lever that moves.

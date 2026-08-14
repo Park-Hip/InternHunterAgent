@@ -1,6 +1,6 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-13; see [`Operations.md`](Operations.md).
+> **Last verified:** 2026-08-14; see [`Operations.md`](Operations.md).
 
 > **Eviction:** A current-state fact leaves when the checked-out repository or active operational
 > register changes; replace it with the verified current fact.
@@ -8,9 +8,11 @@
 ## Current branch
 
 - Repository baseline: `main` at `410c628`.
-- Active ticket branch: `codex/t0026.3-registry-owned-grading`, stacked on
-  `codex/t0026.2-eval-tests-under-tests`, `codex/t0026.1-evals-front-door`,
-  `codex/t0025.10-close-m25`, and `codex/t0025.9-grader-audit-replay-ci` (PR #47).
+- Active ticket branch: `feature/t0027-deepseek-provider`, in the worktree
+  `.claude/worktrees/t0027-deepseek-provider`, stacked on
+  `codex/t0026.3-registry-owned-grading`, `codex/t0026.2-eval-tests-under-tests`,
+  `codex/t0026.1-evals-front-door`, `codex/t0025.10-close-m25`, and
+  `codex/t0025.9-grader-audit-replay-ci` (PR #47).
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -44,6 +46,12 @@ M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changes no verdi
 `tests/evals/`, and [`evals/README.md`](../evals/README.md) is the entry point.
 The scenario registry owns every grading expectation, so the grader holds how a rule is applied
 and none of what a scenario expects.
+Its three ticket plans joined M25's ten in the archive on 2026-08-14, taking
+[`Tickets.md`](Tickets.md) from its 300-line cap back to 163.
+
+M27 - DeepSeek Provider Integration is named and researched, not started.
+[`research/deepseek-provider-evaluation.md`](../research/deepseek-provider-evaluation.md) holds the
+pricing, the change surface, and the thinking-mode tool-calling landmines a spike must clear first.
 
 ## Archive tags
 
@@ -67,6 +75,9 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
   structural tier. Only a driver capture carries tools, SQL, and execution results.
 - `evals/runs/` is ignored, so the 13-turn labelled capture behind
   [`evals/grader_audit.md`](../evals/grader_audit.md) is not reproducible from a clean checkout.
+  The four documentation references to that ignored artifact now carry
+  `<!-- lint-allow-link-path -->`, because they resolved on a developer machine and failed the
+  documentation gate in CI, which lints a bare checkout.
 
 ## Folder structure
 
@@ -110,16 +121,13 @@ The authoritative package declarations are in `pyproject.toml`.
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Passed locally on 2026-08-13 (all ten checks) |
+| `python scripts/docs_lint.py` | Passed on 2026-08-14 (all ten checks), in a clean worktree |
 | `uv run pytest -q` | 445 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
-| `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
 | `uv run ruff check .` | Passed on 2026-08-13 |
 | `uv run pytest -q tests/evals` | 82 passed on 2026-08-14 |
-| `git diff --check` | Clean on 2026-08-13 |
+| `git diff --check` | Clean on 2026-08-14 |
 | `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-13 |
-| `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |
 | `uv run mypy src` | Success: no issues in 43 source files on 2026-08-13 |
-| CI gate, PR #39 | Passed in 44 seconds |
 
 Every skip is environmental. One migration round-trip test requires `SCRATCH_DATABASE_URL`, and
 eight evaluation fixture tests require the local fixture Postgres on port 5433.
@@ -135,3 +143,5 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 T0023 - the release path. Its DoD sweep, terms posture, and live-cron gate (D-038) are the
 remaining blockers, and M24 owns the behavior failures M25 measured. M26 is closed, so no hygiene
 work stands between here and the release sequence.
+T0027.1 is the cheap parallel option: a throwaway spike costing cents that decides whether the
+provider swap is viable, and it blocks nothing in the release path.

@@ -90,6 +90,9 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
         ]
 
     monkeypatch.setattr(driver, "_capture_case", fake_capture)
+    monkeypatch.setattr(
+        driver, "_database_fingerprint", lambda url: ("d" * 64, "internhunter_eval", 22)
+    )
     output = tmp_path / "run.json"
     case = _case()
 

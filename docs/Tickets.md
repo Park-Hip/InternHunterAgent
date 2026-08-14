@@ -86,7 +86,7 @@ carry no other change:
 * **T0024.6** — apply settled decision **#10** to `config/prompts.yaml`. The persona line still
   opens "helps users explore internship and job postings", and the T0015.5 edit that was to correct
   it never landed. T0025.2 measured the cost in
-  [`evals/v1_error_analysis.md`](../evals/v1_error_analysis.md): six turns of
+  [`evals/archive/v1_error_analysis.md`](../evals/archive/v1_error_analysis.md): six turns of
   `INTERNSHIP_SCOPE_NARROWING` and `INTERNSHIP_PERSONA_WORDING` across HON-ZERO-RESULTS-1,
   HON-FREE-TEXT-1, HLP-LOCATION-SYNONYM-1, and HLP-REFERENT-2. Decide
   explicitly whether the sibling decline line inherits the fix — decision #10 names the persona line
@@ -153,8 +153,8 @@ The evaluation documentation passed every check in `scripts/docs_lint.py` when t
 scoped, so hygiene is not the failure here. Ownership is.
 
 Measured on 2026-08-14: the 29-scenario matrix is hand-written in **five** files - the registry
-`evals/scenarios_v1.yaml`, `docs/Agent_Behavior_Spec.md` §4a-4c, `evals/v1_scenario_matrix.md`,
-`evals/grader_audit.md`, and `evals/v1_error_analysis.md`.
+`evals/scenarios_v1.yaml`, `docs/Agent_Behavior_Spec.md` §4a-4c, `evals/v1_scenario_matrix.md`, <!-- lint-allow-link-path -->
+`evals/grader_audit.md`, and `evals/v1_error_analysis.md`. <!-- lint-allow-link-path -->
 Four of those five also carry each scenario's input and expected behavior.
 `HLP-COUNT-1`'s expected sentence is character-identical, modulo backticks and the arrow glyph,
 across the registry, the behavior spec, and the scenario matrix.
@@ -240,9 +240,9 @@ confirmed on 2026-08-14 that the file is editable on those terms. Roughly 49 lin
 ### T0028.3 - Seal the frozen records, and merge the two instrument reports
 
 **Objective.** Move the two dated snapshots out of the living document set, and fold
-`evals/holdout_report.md` into `evals/grader_audit.md` as a single instrument report.
+`evals/holdout_report.md` into `evals/grader_audit.md` as a single instrument report. <!-- lint-allow-link-path -->
 
-**Notes.** `evals/v1_scenario_matrix.md` and `evals/v1_error_analysis.md` legitimately restate the
+**Notes.** `evals/v1_scenario_matrix.md` and `evals/v1_error_analysis.md` legitimately restate the <!-- lint-allow-link-path -->
 matrix, because a snapshot has to carry its subject. The defect is that they sit beside living docs
 with nothing marking them sealed. `is_archive()` in `scripts/docs_lint.py` already exempts
 `docs/archive/` and `research/archive/`.

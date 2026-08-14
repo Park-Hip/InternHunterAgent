@@ -50,10 +50,9 @@ Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries
 | [Streaming and SSE Explained](../guides/Streaming_And_SSE_Explained.md) | Streaming learning walkthrough | T4 | Uncapped | New contributors |
 | [Research index](../research/README.md) | Live pre-design research | T3 | 250 | Designers and maintainers |
 | [Evaluation instrument](../evals/README.md) | `evals/` layout, pipeline order, and which commands spend quota | T1 | 150 | Anyone touching `evals/` |
-| [Grader audit](../evals/grader_audit.md) | The 29-rule audit and the human turn labels behind the grader | T3 | 200 | Evaluation work |
-| [Holdout report](../evals/holdout_report.md) | Holdout calibration output | T3 | 50 | Evaluation work |
-| [v1 scenario matrix](../evals/v1_scenario_matrix.md) | The 2026-07-14 measurement, as dated evidence | T4 | Uncapped | Project history |
-| [v1 error analysis](../evals/v1_error_analysis.md) | Open-coded failure modes from the recovered answers | T4 | Uncapped | Project history |
+| [Instrument report](../evals/Instrument_Report.md) | The grader audit and the holdout calibration, merged | T3 | 250 | Evaluation work |
+| [v1 scenario matrix](../evals/archive/v1_scenario_matrix.md) | The 2026-07-14 measurement, sealed as dated evidence | T4 | Uncapped | Project history |
+| [v1 error analysis](../evals/archive/v1_error_analysis.md) | Open-coded failure modes from the recovered answers, sealed | T4 | Uncapped | Project history |
 | [Completion Reports](Completion_Reports.md) | Completed-ticket outcomes | T4 | Uncapped | Project history |
 | [Resolved Issues](Resolved_Issues.md) | Closed risk and fix records | T4 | Uncapped | Project history |
 | [Archives](archive/) | Historical plans, checklists, and snapshots | T4 | Uncapped | Project history |

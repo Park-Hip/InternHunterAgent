@@ -69,7 +69,6 @@ REFLOW_TARGETS = frozenset(
         "docs/Resolved_Issues.md",
         "docs/T0020.4_Cron_Activation_Runbook.md",
         "docs/Tickets.md",
-        "evals/v1_scenario_matrix.md",
         "research/docs-hygiene-and-system-plan.md",
         "research/honesty-enforcement-design.md",
         "research/v1-release-readiness-plan.md",
@@ -117,8 +116,10 @@ def markdown_files(root: Path = ROOT) -> list[Path]:
 
 
 def is_archive(path: Path) -> bool:
-    return path.is_relative_to(ROOT / "docs" / "archive") or path.is_relative_to(
-        ROOT / "research" / "archive"
+    return (
+        path.is_relative_to(ROOT / "docs" / "archive")
+        or path.is_relative_to(ROOT / "research" / "archive")
+        or path.is_relative_to(ROOT / "evals" / "archive")
     )
 
 

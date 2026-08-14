@@ -49,12 +49,11 @@ and none of what a scenario expects.
 
 M28 - Evaluation Documentation Ownership is scoped and open (T0028.1-.4); see
 [`Tickets.md`](Tickets.md).
-T0028.1 and T0028.2 are complete: the Fact Ledger in [`README.md`](README.md) names an owner for
-scenario definitions, behavior requirements, and dated graded outcomes; an eleventh lint check
-(`scenario-id`) fails on any `HLP-`, `HON-`, or `SAF-` identifier absent from the registry; and
-[`Agent_Behavior_Spec.md`](Agent_Behavior_Spec.md) §4a-4c now links to
-[`evals/scenarios_v1.yaml`](../evals/scenarios_v1.yaml) instead of duplicating its fixture rows,
-input, and expected behavior.
+T0028.1-.3 are complete: the Fact Ledger names an owner for evaluation facts with a lint check
+enforcing scenario-ID existence; [`Agent_Behavior_Spec.md`](Agent_Behavior_Spec.md) §4a-4c links to
+the registry instead of duplicating it; and the two dated snapshots moved into `evals/archive/`
+while the grader audit and holdout report merged into
+[`evals/Instrument_Report.md`](../evals/Instrument_Report.md).
 
 ## Archive tags
 
@@ -76,7 +75,8 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
 - The 2026-07-14 answer artifact is answer-only, so replaying it still grades `INFRA` at the
   structural tier. Only a driver capture carries tools, SQL, and execution results.
 - `evals/runs/` is ignored, so the 13-turn labelled capture behind
-  [`evals/grader_audit.md`](../evals/grader_audit.md) is not reproducible from a clean checkout.
+  [`evals/Instrument_Report.md`](../evals/Instrument_Report.md) is not reproducible from a clean
+  checkout.
 
 ## Folder structure
 
@@ -142,8 +142,8 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0028.3 - seal the two dated eval snapshots into `evals/archive/` and merge the two instrument
-reports; independent of T0028.4 and blocks nothing else.
+T0028.4 - promote an operating manual for `evals/` and correct the stale CI-gate and model claims
+in `Offline_Pipelines_Design.md` §8.6-8.7; the last open block in M28.
 
 T0023 remains the release path once M28 closes or is preempted. Its DoD sweep, terms posture, and
 live-cron gate (D-038) are the remaining blockers, and M24 owns the behavior failures M25 measured.

@@ -8,8 +8,8 @@
 > - `behavior_glossary` is not landed in `config/prompts.yaml`.
 > - Recover the 18 canonical strings from `archive/t0015.2-behavior-glossary`.
 
-The [v1 scenario matrix](../evals/v1_scenario_matrix.md) preserves the measured behavior record
-that informs this specification.
+The [v1 scenario matrix](../evals/archive/v1_scenario_matrix.md) preserves the measured behavior
+record that informs this specification.
 
 > **Eviction:** A behavior requirement leaves when an approved replacement is measured against the
 > evaluation baseline and adopted into the prompt contract.

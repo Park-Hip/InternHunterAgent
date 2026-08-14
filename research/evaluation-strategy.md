@@ -154,7 +154,7 @@ HON-SQL-DESCRIBE-1 r3, HLP-LOCATION-SYNONYM-1 r1, and HLP-ABSTRACTION-1 r2.
 HON-ZERO-RESULTS-1 r1 is a separate database-error response.
 HLP-LOCATION-SYNONYM-1 is under-measured, not an unqualified behavior failure.
 The full turn-level coding and ranked modes are in
-[`evals/v1_error_analysis.md`](../evals/v1_error_analysis.md).
+[`evals/archive/v1_error_analysis.md`](../evals/archive/v1_error_analysis.md).
 
 ### 3a. Three failure classes, three different fixes
 
@@ -486,7 +486,7 @@ the preserved record behind those entries.
 | **This document** | Strategy, failure taxonomy, phased plan, bars | Becomes the single live evaluation record; harvest decisions into `Decision_Log.md` |
 | [`honesty-enforcement-design.md`](honesty-enforcement-design.md) | The obligation-seam mechanism | Stays live under M24 until the behavior design ships; this strategy links to it without duplication |
 | `eval-cost-and-rate-limits.md` | Quota and cost arithmetic | **Done (T0025.10).** Folded into §4a and §4b, then archived |
-| [`evals/v1_scenario_matrix.md`](../evals/v1_scenario_matrix.md) | The 2026-07-14 raw measurement | Keep as a dated measurement record; evidence, not guidance |
+| [`evals/archive/v1_scenario_matrix.md`](../evals/archive/v1_scenario_matrix.md) | The 2026-07-14 raw measurement | Keep as a dated measurement record; evidence, not guidance |
 | [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md) | The frozen behavior target and glossary | **Stays.** It owns the target; this record owns how the target is measured |
 | [`docs/Offline_Pipelines_Design.md`](../docs/Offline_Pipelines_Design.md) §8 | How the harness is built | **Stays.** It owns the build blueprint per the Fact Ledger |
 | `Known_Issues.md` evaluation entries | Open evaluation risks | **Stays.** The register owns open risks; link, do not restate |
@@ -508,7 +508,8 @@ capture. What remains unproven is behavior measurement at scale.
 **The measured sample is 13 turns across 5 of 7 attempted scenarios**, captured under the free
 tier's admission ceiling (§4a). It is a targeted assertion check, not a production-wide accuracy
 estimate, and the capture itself is not committed - `evals/runs/` is ignored, so 11 of those 13
-turns are attested by [`evals/grader_audit.md`](../evals/grader_audit.md) rather than reproducible.
+turns are attested by [`evals/Instrument_Report.md`](../evals/Instrument_Report.md) rather than
+reproducible.
 **Two scenarios have never been measured at all** and need a paid tier.
 
 **The historical outcome numbers in §3 still come from the 2026-07-14 run**, and class 2 there is

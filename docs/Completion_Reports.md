@@ -2749,4 +2749,64 @@ link-path check under the historical-audit rule in
   this ticket per the milestone scoping.
 - **Docs that need updating:** None outstanding.
 
+---
+
+## T0028.3 - Seal the frozen records, and merge the two instrument reports
+
+- **Summary:** `evals/v1_scenario_matrix.md` (the 2026-07-14 raw measurement) and
+  `evals/v1_error_analysis.md` (its open-coded failure modes) sat beside the living evaluation
+  docs with nothing marking them sealed. Moved both, unchanged, into a new `evals/archive/` and
+  extended `scripts/docs_lint.py::is_archive()` to exempt it the same way `docs/archive/` and
+  `research/archive/` already are. Merged `evals/grader_audit.md` and `evals/holdout_report.md`
+  into a single `evals/Instrument_Report.md`, and updated the caps rows in `docs/README.md` and
+  every inbound link across the tree to the new paths.
+- **Neither dated record's content changed, and neither merged report's numbers were
+  re-derived.** A line-by-line diff against the pre-move content of all four files - stripping
+  only headings and the status/eviction blockquotes that had to change shape for the merge -
+  shows the only additions are the merged eviction rule and a one-sentence note that the merge
+  changed no content or numbers.
+- **Historical prose that named the old paths as fact, not as a live pointer, was left as
+  written and marked, not rewritten.** `docs/Tickets.md`'s own "Measured on 2026-08-14" scoping
+  paragraph and this ticket's Objective/Notes text describe the pre-move state; so does a
+  2026-08-09-dated reflow decision in `research/docs-hygiene-and-system-plan.md` and a
+  2026-07-16 design record in `research/honesty-enforcement-design.md`. Each got
+  `<!-- lint-allow-link-path -->` rather than an edit, matching the convention `Docs_Conventions.md`
+  already sets for a historical audit's stale paths. Functional pointers meant to keep resolving
+  - `docs/README.md`, `evals/README.md`, `docs/Decision_Log.md`, `docs/Known_Issues.md`,
+  `docs/Agent_Behavior_Spec.md`, `docs/Repo_Current_State.md`, `docs/Tickets.md`'s T0024.6 entry,
+  and `research/evaluation-strategy.md` - were updated to the new paths instead.
+  `docs/Completion_Reports.md` needed no change: its historical entries already sit inside the
+  file's existing `lint-allow-link-path:begin/end` region.
+- **The stale `REFLOW_TARGETS` entry for `evals/v1_scenario_matrix.md` was removed, not
+  renamed.** Once the file lives under `evals/archive/`, `is_archive()` exempts it from reflow the
+  same way `docs/archive/**` is exempt (documented rationale: archived files are read rarely and
+  edited never), so keeping a now-unreachable string in the whitelist would be dead configuration.
+- **Files changed:** `evals/v1_scenario_matrix.md` and `evals/v1_error_analysis.md` (moved to
+  `evals/archive/`), `evals/grader_audit.md` and `evals/holdout_report.md` (removed, merged into
+  the new `evals/Instrument_Report.md`), `scripts/docs_lint.py`, `docs/README.md`,
+  `evals/README.md`, `docs/Decision_Log.md`, `docs/Known_Issues.md`, `docs/Agent_Behavior_Spec.md`,
+  `docs/Repo_Current_State.md`, `docs/Tickets.md`, `research/docs-hygiene-and-system-plan.md`,
+  `research/evaluation-strategy.md`, `research/honesty-enforcement-design.md`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py`,
+  `uv run pytest -q tests/test_docs_lint.py`, `uv run ruff check .`, `uv run mypy`, a tree-wide
+  search for every moved or renamed filename, and a scripted diff of the merged report's content
+  against the pre-merge files.
+- **Build and test results:** Docs lint passed with zero findings across all eleven checks. Ruff
+  and mypy reported no issues. `tests/test_docs_lint.py` passed 30, skipped 1 (environmental,
+  unrelated). This ticket touches documentation and one lint script only; no other test suite
+  covers its content.
+- **Manual verification:**
+  1. `uv run python scripts/docs_lint.py` exits 0.
+  2. No Markdown file in the tree links to a moved or renamed path (verified by the passing
+     `link-path` check plus a manual `grep` for each old filename, confirming every remaining
+     mention is either inside `docs/archive/`, inside `docs/Completion_Reports.md`'s exempted
+     region, or carries a `lint-allow-link-path` marker).
+  3. `docs/README.md` lists `evals/Instrument_Report.md` and no longer lists `grader_audit.md` or
+     `holdout_report.md` separately.
+- **Risks:** none identified. The merged report's cap (250 lines) gives the same rough headroom
+  as the sum of the two caps it replaces (200 + 50); the file is 162 lines today.
+- **Follow-up tickets:** none new. `T0028.4` (operating manual, stale-claim sweep) remains open
+  and is independent of this ticket per the milestone scoping.
+- **Docs that need updating:** None outstanding.
+
 <!-- lint-allow-link-path:end -->

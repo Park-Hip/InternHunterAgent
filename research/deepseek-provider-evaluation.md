@@ -150,6 +150,12 @@ calls, on `deepseek-v4-flash` at cache-miss rates.
 | Full v1 matrix (29 scenarios x 3) | 87 | ~800K | **~$0.15** |
 | A busy demo day (50 sessions x 3 turns) | 150 | ~1.4M | ~$0.25 |
 
+**Measured 2026-08-14 (T0027.3), and the estimates above are high.** A full 29-scenario capture ran
+77 turns for 264,290 input and 23,014 output tokens: ~3.7K tokens per turn, not ~9.2K, and about
+**$0.04** rather than $0.15. The gap is not caching. The 9.2K figure counts what Groq *reserves* to
+admit a call, which is inputs plus each call's `max_tokens`, and reserved tokens are not spent
+tokens. Read 9.2K as an admission cost on a metered tier and 3.7K as the real consumption.
+
 Prompt caching cuts the input side by 50x on repeat system prompts and schema context, which is
 most of the payload here, so sustained runs should land well under these figures.
 This sits inside the recorded $10/month ceiling with a very large margin.

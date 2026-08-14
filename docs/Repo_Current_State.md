@@ -32,25 +32,25 @@ T0022.10 through T0022.14 are complete.
 
 M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10), and
 [`evals/README.md`](../evals/README.md) is its entry point. CI replays committed three-seam
-evidence with no model, judge, or outbound call. Acceptance is partial by design: the free tier's
-admission ceiling left 13 of 19 attempted turns measured, and `HLP-CONTEXT-1` and
-`HLP-COMPOUND-1` remain unmeasured pending a paid-tier decision.
+evidence with no model, judge, or outbound call. Its acceptance run was partial by design: the free
+tier's admission ceiling left 13 of 19 attempted turns measured. T0027.3 has since measured all 29
+scenarios, `HLP-CONTEXT-1` and `HLP-COMPOUND-1` included.
 Only the cosmetic custom-domain follow-up stays deferred until after v1.0.
 
 M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changed no verdict.
 Its deterministic tests live in `tests/evals/`, the scenario registry owns every grading
 expectation, and its three ticket plans joined M25's ten in the archive on 2026-08-14.
 
-M27 - DeepSeek Provider Integration is scoped (T0027.1-.4) and in progress.
-T0027.1 completed on 2026-08-14: all five spike checks pass against `deepseek-v4-flash` for
-$0.0003, and the `reasoning_content` tool-loop defect the research warned about did not reproduce.
-T0027.2 completed the same day: `agent.<profile>.provider` selects a provider per profile,
-DeepSeek is reachable behind it with thinking disabled, and the driver manifest now records the
-provider and thinking mode per profile. `agent.provider` remains `groq` and the deployed default
-is unchanged. Next is T0027.3, the measured arm comparison.
-[`research/deepseek-provider-evaluation.md`](../research/deepseek-provider-evaluation.md) holds the
-pricing, the change surface, the thinking-mode landmines a spike must clear first, and the provider
-procedure harvested from the deferred T0015.6 arm on `archive/t0015.6-provider-ab`.
+M27 - DeepSeek Provider Integration is complete through T0027.3, all on 2026-08-14.
+The spike cleared all five checks for $0.0003, `agent.<profile>.provider` now selects a provider per
+profile with the manifest recording which one produced a run, and the measured arm captured 29 of 29
+scenarios and 77 turns in 5 minutes 20 seconds with zero retries for about $0.04.
+It ran as **one** arm, not two: the Groq arm costs roughly four days of rationed free-tier quota,
+and its frozen baseline managed 13 turns in 21 minutes. DeepSeek is selected on operational grounds
+at step 4 of the pre-registered rule, steps 1-3 finding no quality difference the evidence can
+support. See [the arm record](../evals/t0027_deepseek_arm.md) and
+[`research/deepseek-provider-evaluation.md`](../research/deepseek-provider-evaluation.md).
+`agent.provider` remains `groq` and the deployed default is unchanged. Next is T0027.4, the flip.
 
 ## Archive tags
 
@@ -122,11 +122,11 @@ The authoritative package declarations are in `pyproject.toml`.
 |---|---|
 | `python scripts/docs_lint.py` | Passed on 2026-08-14 (all ten checks), in a clean worktree |
 | `uv run pytest -q` | 453 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
-| `uv run ruff check .` | Passed on 2026-08-13 |
+| `uv run ruff check .` | Passed on 2026-08-14 |
 | `uv run pytest -q tests/evals` | 82 passed on 2026-08-14 |
 | `git diff --check` | Clean on 2026-08-14 |
 | `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-13 |
-| `uv run mypy src` | Success: no issues in 43 source files on 2026-08-13 |
+| `uv run mypy` | Success: no issues in 43 source files on 2026-08-14 |
 
 Every skip is environmental. One migration round-trip test requires `SCRATCH_DATABASE_URL`, and
 eight evaluation fixture tests require the local fixture Postgres on port 5433.
@@ -140,7 +140,9 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 ## Next recommended ticket
 
 T0023 - the release path. Its DoD sweep, terms posture, and live-cron gate (D-038) are the
-remaining blockers, and M24 owns the behavior failures M25 measured. M26 is closed, so no hygiene
-work stands between here and the release sequence.
-T0027.1 is the cheap parallel option: a throwaway spike costing cents that decides whether the
-provider swap is viable, and it blocks nothing in the release path.
+remaining blockers, and M24 owns the behavior failures M25 and T0027.3 measured. M26 is closed, so
+no hygiene work stands between here and the release sequence.
+T0027.4 is the cheap parallel option: it lands the .3 decision as configuration and a Decision Log
+entry, and blocks nothing in the release path.
+T0027.3 also hands M24 a triaged failure list: of 33 failing turns, 23 are real behavior and 10 are
+grader phrasing artifacts recorded in [Known Issues](Known_Issues.md).

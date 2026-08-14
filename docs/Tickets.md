@@ -38,7 +38,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
 | 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
-| 27 | T0027 | DeepSeek Provider Integration | 🔨 | Scoped 2026-08-14 (.1-.4), following the deferred T0015.6 procedure · **.1 and .2 complete**: spike passes, DeepSeek is selectable with Groq still the default · next is .3, the measured arm comparison |
+| 27 | T0027 | DeepSeek Provider Integration | 🔨 | Scoped 2026-08-14 (.1-.4), following the deferred T0015.6 procedure · **.1-.3 complete**: spike passes, DeepSeek is selectable, and the measured arm selects it on operational grounds (29/29 scenarios in 5m20s for ~$0.04) · next is .4, the default flip |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -209,6 +209,19 @@ provider seam that `archive/t0015.6-provider-ab` already settled.
 **Blockers:** T0027.1. Spends no quota beyond one hand-run model build.
 
 ### T0027.3: Measure DeepSeek on the matrix, then decide
+> **Complete 2026-08-14, one arm instead of two. Outcome: select DeepSeek, decided at step 4.**
+> The Groq arm was dropped on the maintainer's call: it costs roughly four days of rationed
+> free-tier quota, which is the constraint this milestone exists to remove. So this block measured
+> the DeepSeek arm in full and compared it against the frozen T0025.7 capture where the two overlap,
+> which is 5 scenarios of 29. That is indicative, not the bake-off this ticket specified.
+> The full registry captured in **5 minutes 20 seconds**, 29 of 29 scenarios and 77 of 77 turns,
+> zero retries, ~$0.04. The Groq baseline managed 13 turns in 21 minutes before quota killed it.
+> **`HLP-CONTEXT-1` and `HLP-COMPOUND-1` are measured for the first time**, so their Known Issues
+> entry moved to [Resolved Issues](Resolved_Issues.md).
+> Safety needs reading rather than quoting: graded 11/18, but all 18 turns refuse correctly on
+> inspection, and the 7 failures are substring whitelists missing "I'm not able to delete" and one
+> rule failing an answer for quoting the injection it refused. 10 of 33 failures are rule artifacts;
+> 23 are real behavior for M24. Evidence: [T0027.3 DeepSeek arm](../evals/t0027_deepseek_arm.md).
 
 **Objective:** Produce the arm comparison T0015.6 never got to run, under its pre-registered rule.
 

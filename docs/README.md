@@ -56,6 +56,7 @@ Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries
 | [Holdout report](../evals/holdout_report.md) | Holdout calibration output | T3 | 50 | Evaluation work |
 | [v1 scenario matrix](../evals/v1_scenario_matrix.md) | The 2026-07-14 measurement, as dated evidence | T4 | Uncapped | Project history |
 | [v1 error analysis](../evals/v1_error_analysis.md) | Open-coded failure modes from the recovered answers | T4 | Uncapped | Project history |
+| [T0027.3 DeepSeek arm](../evals/t0027_deepseek_arm.md) | The 2026-08-14 measured arm and the provider decision taken from it | T4 | Uncapped | Project history |
 | [Completion Reports](Completion_Reports.md) | Completed-ticket outcomes | T4 | Uncapped | Project history |
 | [Resolved Issues](Resolved_Issues.md) | Closed risk and fix records | T4 | Uncapped | Project history |
 | [Archives](archive/) | Historical plans, checklists, and snapshots | T4 | Uncapped | Project history |

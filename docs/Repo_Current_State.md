@@ -125,5 +125,9 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0023 - v1.0 release cut. Its DoD sweep, terms posture, and live-cron gate (D-038) are the
-remaining release blockers; M24 follows and owns the behavior failures M25 measured.
+T0026.1 - give `evals/` a front door and one fixture-URL owner. It is cheap, spends no quota, and
+unblocks the rest of M26.
+
+T0023 remains the release path: its DoD sweep, terms posture, and live-cron gate (D-038) are the
+remaining blockers, and M24 owns the behavior failures M25 measured. M26 is hygiene, not
+release-blocking, so run it when `evals/` gets in the way.

@@ -155,8 +155,11 @@
 
 ### D-034 - VietnamWorks automation passed the robots.txt and terms gate
 
-- **Decided:** 2026-07-16 - **Status:** Active.
-- The scheduled VietnamWorks path is permitted under the recorded, dated review.
+- **Decided:** 2026-07-16 - **Status:** Active. **Ratified:** 2026-08-13.
+- The scheduled VietnamWorks path is permitted under the recorded, dated review. The maintainer
+  ratified the favorable verdict on 2026-08-13, clearing gate D2 of the cron activation runbook.
+- Scope: automated *access*. The separate ToS §7 *republishing* restriction concerns what the
+  public demo displays and stays open in [Known Issues](Known_Issues.md); it does not gate the cron.
 - **Full record:** [deployment research §11](../research/archive/deployment-research-plan.md).
 
 ### D-033 - Render hosts the portfolio demo

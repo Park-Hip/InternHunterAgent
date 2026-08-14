@@ -1,6 +1,7 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-13; see [`Operations.md`](Operations.md).
+> **Last verified:** 2026-08-14 against the checked-out commit, active registers, and
+> [`Operations.md`](Operations.md).
 
 > **Eviction:** A current-state fact leaves when the checked-out repository or active operational
 > register changes; replace it with the verified current fact.
@@ -132,6 +133,10 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0023 - the release path. Its DoD sweep, terms posture, and live-cron gate (D-038) are the
-remaining blockers, and M24 owns the behavior failures M25 measured. M26 is closed, so no hygiene
-work stands between here and the release sequence.
+T0023 - the release path. Two threads run into it. `schedule:` is restored on `main` as of
+T0020.4, so the last open row in [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7
+is to watch the first unattended 02:00 UTC run; the pipeline ran green against production three
+times on 2026-08-13 (113 loaded, 0 pages failed each), the concurrency guard was observed queueing
+rather than overlapping, and `/api/v1/ready` reports a measured `2026-08-13`. Alongside that,
+T0023 still owes its DoD sweep and terms posture, and M24 owns the behavior failures M25 measured.
+M26 is closed, so no hygiene work stands between here and the release sequence.

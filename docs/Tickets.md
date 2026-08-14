@@ -269,7 +269,7 @@ project rule that parameters belong in configuration.
 * Re-authoring scenarios.
 
 **The invariant, and how it is proven:** the regrade of
-`evals/runs/t0025.7-acceptance.json` must stay 7 `PASS` / 6 `FAIL` / 2 `INFRA` with per-turn
+`evals/runs/t0025.7-acceptance.json` must stay 7 `PASS` / 6 `FAIL` / 2 `INFRA` with per-turn <!-- lint-allow-link-path -->
 statuses unchanged, and `uv run python -m evals.replay` must pass unmodified. A verdict that moves
 means the migration changed a rule, which is out of scope - revert rather than update the expected
 outcome.

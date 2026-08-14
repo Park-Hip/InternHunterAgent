@@ -38,7 +38,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
 | 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
-| 27 | T0027 | DeepSeek Provider Integration | 📋 | Scoped 2026-08-14 (.1-.4): spike, a second provider branch behind config, the measured arm comparison, then the default decision. Follows the deferred T0015.6 procedure |
+| 27 | T0027 | DeepSeek Provider Integration | 🔨 | Scoped 2026-08-14 (.1-.4), following the deferred T0015.6 procedure · **.1 complete**: all five spike checks pass · next is .2, the provider branch behind config |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -131,10 +131,15 @@ grader rule, prompt, or agent behavior; removing the Groq branch; moving the jud
 rebuilding an A/B harness, which research §8 shows M25 already made unnecessary.
 
 ### T0027.1: Spike DeepSeek before committing to it
-> **Blocked 2026-08-14 on account balance.** The spike is written and ran;
-> `scripts/deepseek_provider_spike.py` reached the API and every check returned `BLOCKED` behind
-> a `402 Insufficient Balance`. The key authenticated, so this is DeepSeek's no-free-tier row
-> arriving as an operational fact. Fund the account and re-run; no verdict is inferable from it.
+> **Complete 2026-08-14. All five checks pass, the gate included.**
+> `deepseek-v4-flash` on `langchain-deepseek` 1.1.0, 7 calls, $0.0003 provider-reported.
+> The thinking switch demonstrably removes `reasoning_content`, the two-leg tool loop completes,
+> `temperature: 0.0` returns byte-identical SQL, and streaming carries no reasoning chunks.
+> The run corrects research §3: the `reasoning_content` passback failure **did not reproduce**,
+> even with thinking left on and 75 chars of reasoning in flight. `tool_choice="required"` stays
+> untested because nothing in this repo's agent path forces a tool - probe it before relying on it.
+> An earlier attempt returned `402 Insufficient Balance` and was recorded as blocked, not failed;
+> the account was funded and the spike re-run.
 
 **Objective:** Decide whether the swap is viable at all, for the price of a few cents, before any
 production file changes. The three thinking-mode landmines in research §3 are unproven against

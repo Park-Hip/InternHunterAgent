@@ -94,13 +94,15 @@ V4 models return HTTP 400 `Thinking mode does not support this tool_choice` for
 `with_structured_output()` and any forced-tool path emit.
 Only `auto` or omitting the field works.
 
-**Thinking mode requires `reasoning_content` to be echoed back, and LangChain does not do it.**
-Once a request carries `tools`, every later turn must resend the assistant's `reasoning_content`
-or the API answers 400.
-`ChatDeepSeek._get_request_payload()` drops it, which breaks multi-turn agent loops - exactly the
-shape of `agent_factory()` with its three tools.
-The upstream report (`langchain-ai/langchain` #37174) was **closed as not planned**, so treat this
-as a standing defect, not a bug awaiting a release.
+**Thinking mode requires `reasoning_content` to be echoed back, and LangChain reportedly does not
+do it.** Once a request carries `tools`, every later turn must resend the assistant's
+`reasoning_content` or the API answers 400.
+`ChatDeepSeek._get_request_payload()` was reported to drop it, breaking multi-turn agent loops -
+exactly the shape of `agent_factory()` with its three tools - and the upstream report
+(`langchain-ai/langchain` #37174) was **closed as not planned**.
+**The 2026-08-14 spike did not reproduce this** on `langchain-deepseek` 1.1.0 with
+`deepseek-v4-flash`: a tool loop whose first leg carried 75 chars of `reasoning_content`
+completed its second leg with no 400. See §6.
 
 All three collapse into one mitigation: disable thinking.
 The documented control in the OpenAI-compatible format is the request body field
@@ -171,30 +173,40 @@ Do not promote any configuration until all five pass.
 
 Record the results in this document before writing a ticket.
 
-### Run of 2026-08-14: blocked, not failed
+### Run of 2026-08-14: all five pass, the gate included
 
-`scripts/deepseek_provider_spike.py` ran against `deepseek-v4-flash` and reached the API. All
-five checks are **BLOCKED**; none produced a behavioral result.
+`scripts/deepseek_provider_spike.py` against `deepseek-v4-flash`, `langchain-deepseek` 1.1.0.
+Provider-reported: **7 calls, 1681 prompt + 206 completion tokens, $0.0003**.
 
-| Check | Status | Evidence |
+| Check | Status | Observed |
 |---|---|---|
-| 1. Model reachable | BLOCKED | `402 Insufficient Balance` |
-| 2. Thinking switch reaches the wire | BLOCKED | not attempted |
-| 3. Multi-turn tool loop (gate) | BLOCKED | not attempted |
-| 4. Determinism at `temperature: 0.0` | BLOCKED | not attempted |
-| 5. Streaming without reasoning chunks | BLOCKED | not attempted |
+| 1. Model reachable | PASS | answered `ready`, 90 in / 10 out |
+| 2. Thinking switch reaches the wire | PASS | thinking on returned 53 chars of `reasoning_content`; with `{"thinking": {"type": "disabled"}}`, 0 |
+| 3. Multi-turn tool loop (gate) | PASS | both legs completed, tool called, correct answer |
+| 4. Determinism at `temperature: 0.0` | PASS | two runs returned byte-identical SQL |
+| 5. Streaming without reasoning chunks | PASS | 9 chunks, 6 carrying text, 0 carrying reasoning |
 
-The key authenticated: a 402 is a billing refusal, which means the request was accepted,
-identified, and priced. An unfunded account returns it on the first call, so nothing downstream
-was exercised. **No conclusion about DeepSeek's behavior may be drawn from this run**, and in
-particular the gate is not failed - §3's landmines remain neither confirmed nor cleared here.
+An earlier run on the same day returned `402 Insufficient Balance` on the first call and was
+recorded as **BLOCKED**, not failed: the key authenticated, so nothing about the model had been
+exercised. The account was funded and the run above is the result. The spike still exits `3` on a
+billing refusal, distinct from `1` for a real check failure, so the two can never be confused.
 
-This is §1's "no free tier" row arriving as an operational fact rather than a documentation note.
-DeepSeek bills prepaid balance, so T0027.1 needs a funded account before it can produce evidence.
-Spend to date: **$0.00**, 0 calls, provider-reported.
+**Check 2's control is what makes it evidence.** Absence of `reasoning_content` proves nothing on
+its own, so the check calls twice: the default produced reasoning, the disabled call produced
+none. The switch is what removed it.
 
-The spike exits `3` when blocked, distinct from `1` for a real check failure, so a billing state
-can never be mistaken for a behavioral verdict.
+**Check 3 revises §3's third landmine.** The loop was also run with thinking left **on**, where
+leg 1 carried **75 chars of `reasoning_content`** - and the second leg still completed, with no
+400. The documented `reasoning_content` passback failure did not reproduce on this stack, so
+`langchain-deepseek` 1.1.0 either serializes the field now or `deepseek-v4-flash` no longer
+demands it. One run is not a guarantee, but the defect that looked like a blocker is not one here.
+
+**Still untested:** `tool_choice="required"`, because nothing in this repo's agent path forces a
+tool. If T0027.2 or a later ticket introduces `with_structured_output()` or a forced tool, §3's
+second landmine has to be probed before relying on it.
+
+Thinking stays disabled anyway, on the two grounds this run did confirm: thinking mode ignores
+`temperature`, which check 4's determinism depends on, and reasoning tokens are billed as output.
 
 ## 7. The procedure this repo already has for adding a provider
 

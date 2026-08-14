@@ -179,10 +179,17 @@ def _tool_loop(api_key: str, *, thinking_disabled: bool) -> tuple[bool, str]:
     messages.append(AIMessage(content=first.content, additional_kwargs=first.additional_kwargs, tool_calls=tool_calls))
     messages.append(ToolMessage(content="22", tool_call_id=tool_calls[0]["id"]))
 
+    # Surviving the second leg only says something about the reasoning_content defect if
+    # leg one produced reasoning_content for the integration to drop. Report it either way.
+    carried = len(reasoning_of(first))
+
     second = model.invoke(messages)  # the leg that 400s when reasoning_content is dropped
     record_usage(second)
     answer = str(second.content).strip().replace("\n", " ")
-    return True, f"two legs completed, tool {tool_calls[0]['name']!r}, answered {answer[:70]!r}"
+    return True, (
+        f"two legs completed, tool {tool_calls[0]['name']!r}, "
+        f"leg 1 carried {carried} chars of reasoning, answered {answer[:60]!r}"
+    )
 
 
 def check_3_tool_loop(api_key: str) -> tuple[bool, str]:
@@ -191,11 +198,8 @@ def check_3_tool_loop(api_key: str) -> tuple[bool, str]:
 
     try:
         control_passed, control_detail = _tool_loop(api_key, thinking_disabled=False)
-        control = (
-            "thinking on ALSO survived the second leg"
-            if control_passed
-            else f"thinking on failed differently: {control_detail}"
-        )
+        verdict = "survived" if control_passed else "failed"
+        control = f"thinking on {verdict} the second leg ({control_detail})"
     except Exception as exc:  # noqa: BLE001 - the documented 400 is the interesting outcome
         control = f"thinking on raised {type(exc).__name__}: {str(exc)[:110]}"
 

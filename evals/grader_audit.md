@@ -72,7 +72,7 @@ The other 27 expectations restate what the grader already enforced.
 
 ## Human labels on real captured turns
 
-The 13 labels below were reviewed from `evals/runs/t0025.7-acceptance.json`.
+The 13 labels below were reviewed from `evals/runs/t0025.7-acceptance.json`. <!-- lint-allow-link-path -->
 The two quota-ended scenarios are not labels because they produced no completed turn.
 They still appear in the regrade summary as two repeat-level `INFRA` records.
 

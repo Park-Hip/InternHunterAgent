@@ -6,16 +6,20 @@ from pathlib import Path
 import pytest
 
 from evals.grader import (
+    BEHAVIOR_GLOSSARY,
     Evidence,
     FAIL,
     INFRA,
     PASS,
+    _rule_for,
+    _term,
     grade_evidence,
     grade_observed_answers,
     grade_persisted_run,
     summarize,
 )
 from evals.holdout import HOLDOUT, calibrate_holdout
+from evals.scenarios import load_scenarios
 
 
 def test_holdout_covers_all_classes_and_calibrates_each_deterministic_tier() -> None:
@@ -85,6 +89,30 @@ def test_sql_description_accepts_refusal_wording_observed_in_the_real_sample() -
     )
 
     assert grade.status == PASS
+
+
+def test_every_glossary_reference_in_the_registry_resolves() -> None:
+    """The registry loader checks the shape of a glossary reference, not the name.
+
+    Resolving the name there would pull `src.core.config` into the registry loader,
+    which must stay out of it. This is where the name is checked instead, so a typo
+    fails the suite rather than one scenario's grade.
+    """
+    for scenario in load_scenarios():
+        # _rule_for resolves every reference eagerly and raises on an unknown name.
+        assert _rule_for(scenario["id"]).expected_tools == tuple(scenario["expected_tools"])
+
+
+def test_a_glossary_reference_resolves_to_the_live_prompt_phrasing() -> None:
+    rule = _rule_for("HON-CURRENCY-1")
+
+    assert rule.text is not None
+    assert BEHAVIOR_GLOSSARY["CROSS_CURRENCY"] in rule.text.required_any[0]
+
+
+def test_an_unknown_glossary_reference_is_rejected() -> None:
+    with pytest.raises(ValueError, match="unknown glossary term"):
+        _term("HON-CURRENCY-1", {"glossary": "NOT_A_GLOSSARY_KEY"})
 
 
 def test_unknown_scenario_id_is_rejected_rather_than_silently_defaulted() -> None:

@@ -159,6 +159,48 @@ def test_loader_rejects_an_unknown_expected_tool(tmp_path) -> None:
         load_scenarios(registry)
 
 
+def _registry_with_grading(tmp_path, grading: str):
+    registry = tmp_path / "scenarios.yaml"
+    registry.write_text(
+        """
+- id: HLP-COUNT-1
+  name: Count AI Engineer jobs
+  requirements: [G01]
+  decision: null
+  type: single
+  input: How many AI Engineer jobs?
+  expected: Count the matching jobs.
+  probe: false
+  expected_tools: [query_clean_jobs]
+  grading:
+""".lstrip()
+        + grading,
+        encoding="utf-8",
+    )
+    return registry
+
+
+def test_loader_rejects_an_unknown_grading_field(tmp_path) -> None:
+    registry = _registry_with_grading(tmp_path, "    expected_answer_counts: 5\n")
+
+    with pytest.raises(ValueError, match="unknown grading fields"):
+        load_scenarios(registry)
+
+
+def test_loader_rejects_a_required_group_that_cannot_match(tmp_path) -> None:
+    registry = _registry_with_grading(tmp_path, "    required_any:\n      - []\n")
+
+    with pytest.raises(ValueError, match="required_any group must be a non-empty list"):
+        load_scenarios(registry)
+
+
+def test_loader_rejects_a_forbidden_pattern_that_does_not_compile(tmp_path) -> None:
+    registry = _registry_with_grading(tmp_path, '    forbidden_patterns: ["(unclosed"]\n')
+
+    with pytest.raises(ValueError, match="does not compile"):
+        load_scenarios(registry)
+
+
 def test_observed_answers_join_the_renamed_registry() -> None:
     observed_answers = json.loads(OBSERVED_ANSWERS_PATH.read_text(encoding="utf-8"))
     scenarios = load_scenarios()

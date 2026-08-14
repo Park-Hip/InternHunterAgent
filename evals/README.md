@@ -48,14 +48,14 @@ against recorded turns, not by paying for a new capture.
 
 | File | Role |
 |---|---|
-| `scenarios_v1.yaml` | **The registry.** 29 scenarios with probe flags, requirements, reference SQL, and `expected_tools`. The single source of truth (D-041) |
-| `scenarios.py` | Loads and validates the registry; generates DeepEval goldens from it; no-model CLI |
+| `scenarios_v1.yaml` | **The registry.** 29 scenarios with probe flags, requirements, reference SQL, `expected_tools`, and a `grading:` block holding what each answer must and must not say. The single source of truth (D-041) |
+| `scenarios.py` | Loads and validates the registry, rejecting an unknown tool or grading field; generates DeepEval goldens from it; no-model CLI |
 | `harness.py` | Three-seam capture and the DeepEval metrics. Owns the seam definitions so pytest and recorded runs cannot diverge |
 | `driver.py` | Orchestration: runs the registry over the harness, paces turns to fit the quota window, owns retries, writes a manifest, checkpoints and resumes |
 | `viewer.py` | Single-file HTML viewer - one turn per screen, all three seams, operator notes |
 | `execution_accuracy.py` | Executes generated and reference SQL against the fixture and compares result sets as unordered multisets |
-| `grader.py` | Deterministic three-tier grading (structural, textual, judge) with `PASS`/`FAIL`/`INFRA`/`UNRUN`. The last two are excluded from denominators |
-| `holdout.py` | Six-scenario contract suite, authored without reference to recorded answers |
+| `grader.py` | Deterministic three-tier grading (structural, textual, judge) with `PASS`/`FAIL`/`INFRA`/`UNRUN`. The last two are excluded from denominators. Owns how a rule is applied, never what a scenario expects |
+| `holdout.py` | Six-scenario contract suite, authored against the behavior spec rather than from the registry or the recorded answers |
 | `replay.py` | Validates the committed artifact, executes its SQL, grades it. What CI runs |
 | `replays/` | The committed sanitized evidence the gate replays |
 | `judge.py` | `DeepEvalBaseLLM` adapter with an RPM throttle. No scenario rule reaches the judge tier yet |
@@ -63,6 +63,24 @@ against recorded turns, not by paying for a new capture.
 | `fixtures/loader.py` | Builds and resets the frozen fixture through Alembic plus `seed_eval_db.sql`. Owns `fixture_database_url()` |
 | `runs/` | Capture artifacts. **Git-ignored** - turns carry latency, token usage, and finish reasons |
 | `conftest.py` | Binds the two live test modules below to the fixture database, for the duration of each test |
+
+## Changing what a scenario expects
+
+Edit that scenario's `grading:` block in the registry, not `grader.py`.
+
+```yaml
+  grading:
+    expected_answer_count: 5          # the answer must state this number
+    required_any:                     # every group must match; a group is an OR
+      - ["recorded", "created_on"]
+    forbidden_any: ["posted on"]      # plain substrings, case-insensitive
+    forbidden_patterns: ["\\bselect\\b.+\\bfrom\\b"]
+```
+
+A term may be `{"glossary": "NAME"}` instead of a literal, which resolves to the canonical
+phrasing in `config/prompts.yaml`. Reference the glossary rather than pasting its sentence, so the
+prompt and the rule cannot drift apart. The loader rejects an unknown field, an empty required
+group, and a pattern that does not compile.
 
 ## Where the tests are
 

@@ -19,6 +19,91 @@ _REQUIREMENT_PATTERN = re.compile(r"G[0-9]{2}")
 # The grader reads its tool expectation from here, so an unknown name would
 # silently become an expectation no agent can satisfy.
 _KNOWN_TOOLS = {"query_clean_jobs"}
+# The rest of each scenario's grading expectations. Same reasoning as the tool
+# names: a misspelled field would be silently ignored and quietly weaken a rule.
+_GRADING_KEYS = {
+    "expected_answer_count",
+    "forbid_single_salary_winner",
+    "required_any",
+    "forbidden_any",
+    "forbidden_patterns",
+}
+
+
+def _validate_term(scenario_id: str, field: str, term: Any) -> None:
+    """Accept a literal answer substring or a reference into the behavior glossary.
+
+    The glossary *name* is checked in ``evals/grader.py``, which already owns the
+    glossary. Resolving it here would pull ``src.core.config`` into the registry
+    loader, and the loader is imported on paths that must not construct and cache
+    ``Settings()`` before the fixture database is bound.
+    """
+    if isinstance(term, str):
+        if not term.strip():
+            raise ValueError(f"Scenario {scenario_id} {field} contains an empty term")
+        return
+    if isinstance(term, dict) and set(term) == {"glossary"}:
+        if isinstance(term["glossary"], str) and term["glossary"].strip():
+            return
+    raise ValueError(
+        f"Scenario {scenario_id} {field} terms must be strings or {{glossary: NAME}}: {term!r}"
+    )
+
+
+def _validate_term_list(scenario_id: str, field: str, value: Any) -> None:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"Scenario {scenario_id} {field} must be a non-empty list")
+    for term in value:
+        _validate_term(scenario_id, field, term)
+
+
+def _validate_grading(scenario_id: str, grading: Any) -> None:
+    """Reject an unknown or malformed grading field before it can weaken a rule."""
+    if not isinstance(grading, dict) or not grading:
+        raise ValueError(f"Scenario {scenario_id} grading must be a non-empty mapping")
+
+    unknown = grading.keys() - _GRADING_KEYS
+    if unknown:
+        raise ValueError(f"Scenario {scenario_id} has unknown grading fields: {sorted(unknown)}")
+
+    if "expected_answer_count" in grading:
+        count = grading["expected_answer_count"]
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise ValueError(
+                f"Scenario {scenario_id} expected_answer_count must be a non-negative integer"
+            )
+
+    if "forbid_single_salary_winner" in grading and not isinstance(
+        grading["forbid_single_salary_winner"], bool
+    ):
+        raise ValueError(f"Scenario {scenario_id} forbid_single_salary_winner must be a boolean")
+
+    if "required_any" in grading:
+        groups = grading["required_any"]
+        if not isinstance(groups, list) or not groups:
+            raise ValueError(f"Scenario {scenario_id} required_any must be a non-empty list")
+        # Each group is an OR of alternatives, and all groups must match. An empty
+        # group would be unsatisfiable rather than permissive.
+        for group in groups:
+            _validate_term_list(scenario_id, "required_any group", group)
+
+    if "forbidden_any" in grading:
+        _validate_term_list(scenario_id, "forbidden_any", grading["forbidden_any"])
+
+    if "forbidden_patterns" in grading:
+        patterns = grading["forbidden_patterns"]
+        _validate_term_list(scenario_id, "forbidden_patterns", patterns)
+        for pattern in patterns:
+            if not isinstance(pattern, str):
+                raise ValueError(
+                    f"Scenario {scenario_id} forbidden_patterns must be regular-expression strings"
+                )
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(
+                    f"Scenario {scenario_id} forbidden pattern {pattern!r} does not compile: {exc}"
+                ) from exc
 
 
 def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
@@ -103,6 +188,9 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
             raise ValueError(
                 f"Scenario {scenario_id} expected_tools must be a list of known tool names"
             )
+
+        if "grading" in scenario:
+            _validate_grading(scenario_id, scenario["grading"])
 
         reference_sql = scenario.get("reference_sql")
         has_reference_sql = isinstance(reference_sql, str) or (

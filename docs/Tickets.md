@@ -37,7 +37,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 23 | T0023 | v1.0 Release Cut | 📋 | DoD sweep, ToS posture, **live cron (D-038)**, tag — renumbered from T0022 on 2026-08-09 |
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
-| 26 | T0026 | Evaluation Workspace Hygiene | 🔨 | Scoped 2026-08-14; .1 complete (front door, one fixture-URL owner, docs registered); .2 tests into `tests/`, .3 grader rule table into the registry remain — not release-blocking |
+| 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -234,6 +234,17 @@ Over half its entries are currently tests.
 **Blockers:** T0026.1, so the README describes the final layout. Spends no quota.
 
 ### T0026.3: Move the grader's rule table into the scenario registry
+> **Complete 2026-08-14.** 24 scenarios carry a `grading:` block; `_rule_for` is a registry
+> lookup. The regrade of the acceptance capture is **byte-identical** to the pre-change output,
+> which is stronger than the per-turn invariant this ticket asked for: every check name and detail
+> string is unchanged too.
+> The blocks were generated from the in-code table rather than retyped. 99 literal strings copied
+> by hand is how a migration that must change nothing changes something.
+> One field could not move as data. `HON-CURRENCY-1` quoted the behavior glossary, so the registry
+> carries a `{glossary: NAME}` reference that the grader resolves. Its *name* is checked in
+> `grader.py`, not in the registry loader: resolving it there would pull `src.core.config` into a
+> module that must not construct and cache `Settings()` before the fixture database is bound.
+
 **Objective:** Finish the migration T0025.9 started. `expected_tools` now comes from the registry;
 the rest of each scenario's expectations still do not.
 

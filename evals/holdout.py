@@ -3,6 +3,14 @@
 These examples are authored from ``docs/Agent_Behavior_Spec.md`` and the settled evaluation
 decisions, not copied from the recorded answer artifact. The labels are human review labels for
 the crafted evidence and are used only to calibrate the deterministic assertions.
+
+**Why this is not circular now that the rules live in the registry.** The holdout asks one
+question: does the grader agree with a human reading of the frozen behavior spec? That only
+means something while the two sides are authored independently. The registry supplies what the
+grader asserts; every answer string and every label below is written against the spec, by hand,
+with the ``grading:`` block closed. Deriving either from a scenario's rule - or widening a rule
+until a holdout case passes - would make the suite agree with itself and measure nothing. When a
+case and a rule disagree, exactly one of them is wrong, and deciding which is the point.
 """
 
 from __future__ import annotations

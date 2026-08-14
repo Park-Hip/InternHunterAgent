@@ -2604,4 +2604,62 @@ link-path check under the historical-audit rule in
   `docs/Resolved_Issues.md` said 10 against 16 measured entries and was corrected to the measured
   value while adding the entry.
 
+---
+
+## T0026.3 - Move the grader's rule table into the scenario registry
+
+- **Summary:** 24 scenarios now carry a `grading:` block holding `expected_answer_count`, the
+  required and forbidden answer terms, and the one bespoke structural flag. `grader.py::_rule_for`
+  is a registry lookup. The grader keeps how a rule is applied - the three tiers, the four
+  outcomes, and the two regexes that are logic rather than data - and owns nothing about what a
+  given scenario expects. This finishes the migration T0025.9 started with `expected_tools`.
+- **The blocks were generated, not retyped.** A migration whose entire contract is "change no
+  verdict" cannot be carried out by copying 99 literal strings by hand. A throwaway script read the
+  in-code table through `_rule_for` and emitted each block; the script is not committed.
+- **One field could not move as plain data.** `HON-CURRENCY-1` quoted the behavior glossary, so the
+  registry carries `{glossary: CROSS_CURRENCY}` and the grader resolves it against
+  `config/prompts.yaml`. Pasting the sentence into the registry would let the prompt's wording and
+  the grader's expectation drift apart with neither file looking wrong.
+- **Where the glossary name is checked, and why it is not the loader.** The registry loader
+  validates the *shape* of a reference; `grader.py` validates the *name*. Resolving the name in
+  `evals/scenarios.py` would pull `src.core.config` into the registry loader, and that module is
+  imported on paths that must not construct and cache `Settings()` before the driver binds the
+  fixture database - the T0026.1 hazard. A test asserts every reference in the registry resolves,
+  so a typo fails the suite rather than one scenario's grade.
+- **Files changed:** `evals/scenarios_v1.yaml`, `evals/scenarios.py`, `evals/grader.py`,
+  `evals/holdout.py`, `evals/README.md`, `tests/evals/test_scenarios.py`,
+  `tests/evals/test_grader.py`, `docs/Tickets.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** `uv run python -m evals.grader --run evals/runs/t0025.7-acceptance.json
+  --execution-accuracy evals/runs/t0025.7-acceptance-accuracy.json` before and after,
+  `uv run python -m evals.replay`, `uv run pytest -q`, `uv run ruff check .`, `uv run mypy`, and
+  `uv run python scripts/docs_lint.py`.
+- **Build and test results:** 445 passed, 1 skipped, 30 live eval tests deselected, 4 subtests
+  passed - six more than before, all of them new. Ruff, mypy, and all ten documentation checks
+  passed. The replay gate passed against the committed artifact, unmodified.
+- **The invariant held more strictly than it was written.** The ticket required the regrade to stay
+  7 `PASS` / 6 `FAIL` / 2 `INFRA` with per-turn statuses unchanged. The regrade output is
+  **byte-identical** to the pre-change run, so every check name and every detail string is
+  unchanged as well.
+- **The migrated rules were proven load-bearing.** Replacing `SAF-DESTRUCTIVE-REFUSAL-1`'s required
+  phrases with a phrase no refusal contains dropped holdout agreement from 1.0 to 0.833 - the
+  grader called `FAIL` where the recorded human label says `PASS` - and two tests failed. Restoring
+  the rule restored both.
+- **Manual verification:**
+  1. Regrade the acceptance capture and diff it against the pre-change output. It is identical.
+  2. `uv run python -m evals.replay` exits 0 with the committed artifact untouched.
+  3. Break one migrated rule in `scenarios_v1.yaml`, then run
+     `uv run pytest -q tests/evals/test_grader.py` and confirm the holdout disagrees with its
+     recorded human label. Restore it.
+  4. Add `expected_answer_counts: 5` to any scenario's `grading:` block and confirm
+     `uv run python -m evals.scenarios` refuses to load the registry.
+- **Risks:** the registry can now express a rule that the loader accepts and no scenario intends -
+  an over-broad `required_any` group weakens a check without failing anything. The holdout is the
+  guard, and it only guards the six scenarios it covers. The independence rule that keeps it
+  meaningful is stated in `evals/holdout.py`: its answers and labels are authored against the
+  behavior spec with the `grading:` block closed, and widening a rule until a holdout case passes
+  makes the suite agree with itself.
+- **Follow-up tickets:** none. M26 is complete.
+- **Docs that need updating:** None outstanding. D-041 already records the registry as the single
+  source of truth for scenario data; this ticket completes it rather than changing it.
+
 <!-- lint-allow-link-path:end -->

@@ -30,28 +30,24 @@ M22 - Docs Hygiene & Documentation System has phase 1 (T0022.1-.9) merged to `ma
 2026-08-11 via PR #41.
 T0022.10 through T0022.14 are complete.
 
-M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10).
-The repository now holds a frozen Alembic-built fixture, a 29-scenario registry owning probe flags,
-reference SQL and tool expectations, an in-process driver with manifests and resume, a local trace
-viewer, execution accuracy by executing generated against reference SQL, and a deterministic
-three-tier grader. CI replays committed three-seam evidence with no model, judge, or outbound call.
-Acceptance is partial by design: the free tier's admission ceiling left 13 of 19 attempted turns
-measured, and the grader agrees with all 13 human labels.
-`HLP-CONTEXT-1` and `HLP-COMPOUND-1` remain unmeasured pending a paid-tier decision.
-The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
-custom-domain follow-up remains intentionally deferred until after v1.0.
+M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10), and
+[`evals/README.md`](../evals/README.md) is its entry point. CI replays committed three-seam
+evidence with no model, judge, or outbound call. Acceptance is partial by design: the free tier's
+admission ceiling left 13 of 19 attempted turns measured, and `HLP-CONTEXT-1` and
+`HLP-COMPOUND-1` remain unmeasured pending a paid-tier decision.
+Only the cosmetic custom-domain follow-up stays deferred until after v1.0.
 
-M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changes no verdict.
-`evals/` now holds the instrument plus the two live test modules, its deterministic tests live in
-`tests/evals/`, and [`evals/README.md`](../evals/README.md) is the entry point.
-The scenario registry owns every grading expectation, so the grader holds how a rule is applied
-and none of what a scenario expects.
-Its three ticket plans joined M25's ten in the archive on 2026-08-14, taking
-[`Tickets.md`](Tickets.md) from its 300-line cap back to 163.
+M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changed no verdict.
+Its deterministic tests live in `tests/evals/`, the scenario registry owns every grading
+expectation, and its three ticket plans joined M25's ten in the archive on 2026-08-14.
 
 M27 - DeepSeek Provider Integration is scoped (T0027.1-.4) and in progress.
 T0027.1 completed on 2026-08-14: all five spike checks pass against `deepseek-v4-flash` for
 $0.0003, and the `reasoning_content` tool-loop defect the research warned about did not reproduce.
+T0027.2 completed the same day: `agent.<profile>.provider` selects a provider per profile,
+DeepSeek is reachable behind it with thinking disabled, and the driver manifest now records the
+provider and thinking mode per profile. `agent.provider` remains `groq` and the deployed default
+is unchanged. Next is T0027.3, the measured arm comparison.
 [`research/deepseek-provider-evaluation.md`](../research/deepseek-provider-evaluation.md) holds the
 pricing, the change surface, the thinking-mode landmines a spike must clear first, and the provider
 procedure harvested from the deferred T0015.6 arm on `archive/t0015.6-provider-ab`.
@@ -125,7 +121,7 @@ The authoritative package declarations are in `pyproject.toml`.
 | Check | Most recent recorded result |
 |---|---|
 | `python scripts/docs_lint.py` | Passed on 2026-08-14 (all ten checks), in a clean worktree |
-| `uv run pytest -q` | 445 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
+| `uv run pytest -q` | 453 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
 | `uv run ruff check .` | Passed on 2026-08-13 |
 | `uv run pytest -q tests/evals` | 82 passed on 2026-08-14 |
 | `git diff --check` | Clean on 2026-08-14 |

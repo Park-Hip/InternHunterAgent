@@ -44,7 +44,8 @@ technology-vocabulary builder.
 | Package | Role |
 |---|---|
 | `langchain` | ReAct agent runtime and tool binding. |
-| `langchain-groq` | Serving provider. Two profiles: `react` and `sql_generation`. |
+| `langchain-groq` | Serving provider, and the default for both profiles. |
+| `langchain-deepseek` | Second selectable serving provider (T0027). Reached only when `agent.provider` or a profile names `deepseek`; thinking is disabled so `temperature` applies. |
 | `langchain-google-genai` | Gemini, used **only** as the eval judge — never on the serving path. |
 | `langgraph-checkpoint-postgres` | Short-term conversation memory, `session_id → thread_id`. |
 

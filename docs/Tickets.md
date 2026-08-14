@@ -38,7 +38,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
 | 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
-| 27 | T0027 | DeepSeek Provider Integration | 🔨 | Scoped 2026-08-14 (.1-.4), following the deferred T0015.6 procedure · **.1 complete**: all five spike checks pass · next is .2, the provider branch behind config |
+| 27 | T0027 | DeepSeek Provider Integration | 🔨 | Scoped 2026-08-14 (.1-.4), following the deferred T0015.6 procedure · **.1 and .2 complete**: spike passes, DeepSeek is selectable with Groq still the default · next is .3, the measured arm comparison |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -166,6 +166,14 @@ this account until a live call says otherwise.
 **Blockers:** none, beyond a funded API key. **Go/no-go for the milestone.**
 
 ### T0027.2: A second provider branch, behind configuration
+> **Complete 2026-08-14.** `agent.provider` is still `groq` and both profiles still build
+> `ChatGroq`; flipping one profile to `deepseek` builds `ChatDeepSeek` with
+> `extra_body={"thinking": {"type": "disabled"}}` while the other stays on Groq. The manifest now
+> carries `providers` per profile and `thinking` in `sampling`. Nine tests added, 453 pass.
+> `uv add langchain-deepseek` also pulled `langchain-openai` and moved `langchain-core`
+> 1.4.8 to 1.5.4 and `openai` 2.44 to 2.54. The suite, Ruff, and mypy are green on the new
+> resolution, but that transitive bump is wider than this ticket asked for and is worth knowing
+> before the next lockfile change.
 
 **Objective:** Make DeepSeek selectable without making it the default, restoring the per-profile
 provider seam that `archive/t0015.6-provider-ab` already settled.

@@ -11,9 +11,16 @@ api:
     allowed_headers: ["*"]
 
 agent:
+  # Default provider for every profile. A profile may override it with its own
+  # `provider:` key, which is how one profile moves arms while the other stays put.
+  # Change `provider` and `model` together - a model name belongs to one provider.
+  # Native knobs below are read only by their own provider's branch:
+  #   groq     -> reasoning_format, reasoning_effort
+  #   deepseek -> thinking (disabled | enabled; enabled means the provider default, on)
   provider: groq
 
   react:
+    provider: groq
     model: qwen/qwen3.6-27b
     temperature: 0.2
     max_tokens: 2048
@@ -22,8 +29,10 @@ agent:
     streaming: true
     reasoning_format: hidden
     reasoning_effort: null
+    thinking: disabled  # deepseek ignores temperature while thinking is on (T0027.1)
 
   sql_generation:
+    provider: groq
     model: qwen/qwen3.6-27b
     temperature: 0.0
     max_tokens: 1024
@@ -32,6 +41,7 @@ agent:
     streaming: false
     reasoning_format: hidden
     reasoning_effort: none
+    thinking: disabled  # this profile's determinism depends on temperature: 0.0
 
   memory:
     max_messages: 20

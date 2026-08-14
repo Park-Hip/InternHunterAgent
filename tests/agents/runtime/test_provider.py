@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import unittest
 from unittest.mock import patch
 
@@ -10,8 +11,10 @@ def _agent_config(
     *,
     react_reasoning_effort: str | None = None,
     sql_reasoning_effort: str | None = "none",
+    react_provider: str | None = None,
+    react_thinking: str | None = None,
 ) -> dict:
-    return {
+    config = {
         "agent": {
             "provider": "groq",
             "react": {
@@ -36,6 +39,11 @@ def _agent_config(
             },
         }
     }
+    if react_provider is not None:
+        config["agent"]["react"]["provider"] = react_provider
+    if react_thinking is not None:
+        config["agent"]["react"]["thinking"] = react_thinking
+    return config
 
 
 class AgentProviderTests(unittest.TestCase):
@@ -135,6 +143,141 @@ class AgentProviderTests(unittest.TestCase):
         self.assertEqual(sql_kwargs["max_tokens"], 1024)
         self.assertIs(sql_kwargs["streaming"], False)
         self.assertEqual(sql_kwargs["reasoning_effort"], "none")
+
+
+class DeepSeekProviderTests(unittest.TestCase):
+    """The DeepSeek branch imports lazily, so it is patched at its import site."""
+
+    @patch("langchain_deepseek.ChatDeepSeek")
+    @patch("src.agents.runtime.provider.settings")
+    def test_profile_provider_overrides_the_agent_default(
+        self, mock_settings, mock_chat_deepseek
+    ) -> None:
+        mock_settings.config_yaml = _agent_config(react_provider="deepseek")
+        mock_settings.DEEPSEEK_API_KEY = "fake-deepseek-key"
+
+        AgentProvider().build_model("react")
+
+        _, kwargs = mock_chat_deepseek.call_args
+        self.assertEqual(kwargs["model"], "react-model")
+        self.assertEqual(kwargs["temperature"], 0.2)
+        self.assertEqual(kwargs["max_tokens"], 2048)
+        self.assertEqual(kwargs["timeout"], 30)
+        self.assertEqual(kwargs["max_retries"], 2)
+        self.assertIs(kwargs["streaming"], True)
+        self.assertEqual(kwargs["api_key"], "fake-deepseek-key")
+        self.assertNotIn("reasoning_format", kwargs)
+        self.assertNotIn("groq_api_key", kwargs)
+
+    @patch("src.agents.runtime.provider.ChatGroq")
+    @patch("langchain_deepseek.ChatDeepSeek")
+    @patch("src.agents.runtime.provider.settings")
+    def test_one_profile_moves_while_the_other_stays(
+        self, mock_settings, mock_chat_deepseek, mock_chat_groq
+    ) -> None:
+        mock_settings.config_yaml = _agent_config(react_provider="deepseek")
+        mock_settings.GROQ_API_KEY = "fake-key"
+        mock_settings.DEEPSEEK_API_KEY = "fake-deepseek-key"
+
+        provider = AgentProvider()
+        provider.build_model("react")
+        provider.build_model("sql_generation")
+
+        self.assertEqual(mock_chat_deepseek.call_count, 1)
+        self.assertEqual(mock_chat_groq.call_count, 1)
+        self.assertEqual(provider.provider_for("react"), "deepseek")
+        self.assertEqual(provider.provider_for("sql_generation"), "groq")
+
+    @patch("langchain_deepseek.ChatDeepSeek")
+    @patch("src.agents.runtime.provider.settings")
+    def test_thinking_disabled_is_sent_as_extra_body(
+        self, mock_settings, mock_chat_deepseek
+    ) -> None:
+        mock_settings.config_yaml = _agent_config(
+            react_provider="deepseek", react_thinking="disabled"
+        )
+        mock_settings.DEEPSEEK_API_KEY = "fake-deepseek-key"
+
+        AgentProvider().build_model("react")
+
+        _, kwargs = mock_chat_deepseek.call_args
+        self.assertEqual(kwargs["extra_body"], {"thinking": {"type": "disabled"}})
+
+    @patch("langchain_deepseek.ChatDeepSeek")
+    @patch("src.agents.runtime.provider.settings")
+    def test_thinking_defaults_to_disabled_when_unset(
+        self, mock_settings, mock_chat_deepseek
+    ) -> None:
+        """Thinking on is the provider default, and it ignores temperature (T0027.1)."""
+        mock_settings.config_yaml = _agent_config(react_provider="deepseek")
+        mock_settings.DEEPSEEK_API_KEY = "fake-deepseek-key"
+
+        AgentProvider().build_model("react")
+
+        _, kwargs = mock_chat_deepseek.call_args
+        self.assertEqual(kwargs["extra_body"], {"thinking": {"type": "disabled"}})
+
+    @patch("langchain_deepseek.ChatDeepSeek")
+    @patch("src.agents.runtime.provider.settings")
+    def test_thinking_enabled_sends_no_extra_body(
+        self, mock_settings, mock_chat_deepseek
+    ) -> None:
+        mock_settings.config_yaml = _agent_config(
+            react_provider="deepseek", react_thinking="enabled"
+        )
+        mock_settings.DEEPSEEK_API_KEY = "fake-deepseek-key"
+
+        AgentProvider().build_model("react")
+
+        _, kwargs = mock_chat_deepseek.call_args
+        self.assertNotIn("extra_body", kwargs)
+
+    @patch("src.agents.runtime.provider.settings")
+    def test_unknown_thinking_value_is_rejected(self, mock_settings) -> None:
+        mock_settings.config_yaml = _agent_config(
+            react_provider="deepseek", react_thinking="hidden"
+        )
+        mock_settings.DEEPSEEK_API_KEY = "fake-deepseek-key"
+
+        with self.assertRaises(ValueError) as caught:
+            AgentProvider().build_model("react")
+
+        self.assertIn("agent.react.thinking", str(caught.exception))
+
+    @patch("src.agents.runtime.provider.settings")
+    def test_missing_key_names_the_profile(self, mock_settings) -> None:
+        mock_settings.config_yaml = _agent_config(react_provider="deepseek")
+        mock_settings.DEEPSEEK_API_KEY = None
+
+        with self.assertRaises(ValueError) as caught:
+            AgentProvider().build_model("react")
+
+        self.assertIn("agent.react.provider", str(caught.exception))
+        self.assertIn("DEEPSEEK_API_KEY", str(caught.exception))
+
+    @patch("langchain_deepseek.ChatDeepSeek")
+    @patch("src.agents.runtime.provider.settings")
+    def test_driver_retry_suppression_reaches_the_deepseek_branch(
+        self, mock_settings, mock_chat_deepseek
+    ) -> None:
+        """A branch that retries underneath the driver corrupts its retry ledger."""
+        mock_settings.config_yaml = _agent_config(react_provider="deepseek")
+        mock_settings.DEEPSEEK_API_KEY = "fake-deepseek-key"
+
+        with patch.dict(os.environ, {"EVAL_DRIVER_DISABLE_PROVIDER_RETRIES": "1"}):
+            AgentProvider().build_model("react")
+
+        _, kwargs = mock_chat_deepseek.call_args
+        self.assertEqual(kwargs["max_retries"], 0)
+
+    @patch("src.agents.runtime.provider.settings")
+    def test_unsupported_provider_is_rejected(self, mock_settings) -> None:
+        mock_settings.config_yaml = _agent_config(react_provider="mistral")
+
+        with self.assertRaises(ValueError) as caught:
+            AgentProvider().build_model("react")
+
+        self.assertIn("mistral", str(caught.exception))
 
 
 if __name__ == "__main__":

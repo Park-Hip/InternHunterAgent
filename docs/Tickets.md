@@ -131,6 +131,10 @@ grader rule, prompt, or agent behavior; removing the Groq branch; moving the jud
 rebuilding an A/B harness, which research §8 shows M25 already made unnecessary.
 
 ### T0027.1: Spike DeepSeek before committing to it
+> **Blocked 2026-08-14 on account balance.** The spike is written and ran;
+> `scripts/deepseek_provider_spike.py` reached the API and every check returned `BLOCKED` behind
+> a `402 Insufficient Balance`. The key authenticated, so this is DeepSeek's no-free-tier row
+> arriving as an operational fact. Fund the account and re-run; no verdict is inferable from it.
 
 **Objective:** Decide whether the swap is viable at all, for the price of a few cents, before any
 production file changes. The three thinking-mode landmines in research §3 are unproven against

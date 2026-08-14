@@ -171,6 +171,31 @@ Do not promote any configuration until all five pass.
 
 Record the results in this document before writing a ticket.
 
+### Run of 2026-08-14: blocked, not failed
+
+`scripts/deepseek_provider_spike.py` ran against `deepseek-v4-flash` and reached the API. All
+five checks are **BLOCKED**; none produced a behavioral result.
+
+| Check | Status | Evidence |
+|---|---|---|
+| 1. Model reachable | BLOCKED | `402 Insufficient Balance` |
+| 2. Thinking switch reaches the wire | BLOCKED | not attempted |
+| 3. Multi-turn tool loop (gate) | BLOCKED | not attempted |
+| 4. Determinism at `temperature: 0.0` | BLOCKED | not attempted |
+| 5. Streaming without reasoning chunks | BLOCKED | not attempted |
+
+The key authenticated: a 402 is a billing refusal, which means the request was accepted,
+identified, and priced. An unfunded account returns it on the first call, so nothing downstream
+was exercised. **No conclusion about DeepSeek's behavior may be drawn from this run**, and in
+particular the gate is not failed - §3's landmines remain neither confirmed nor cleared here.
+
+This is §1's "no free tier" row arriving as an operational fact rather than a documentation note.
+DeepSeek bills prepaid balance, so T0027.1 needs a funded account before it can produce evidence.
+Spend to date: **$0.00**, 0 calls, provider-reported.
+
+The spike exits `3` when blocked, distinct from `1` for a real check failure, so a billing state
+can never be mistaken for a behavioral verdict.
+
 ## 7. The procedure this repo already has for adding a provider
 
 This is not the first second provider. **T0015.6 wired Google Gemini as a second arm beside

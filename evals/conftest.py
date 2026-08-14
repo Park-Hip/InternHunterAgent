@@ -1,19 +1,38 @@
-"""Redirect the agent's DB access to the fixture database before src.core loads.
+"""Point the agent at the fixture database, for the live eval tests only.
 
-``src/core/config.py`` instantiates a module-level ``Settings()`` (reading
-``DATABASE_URL`` from the environment) the moment it is imported, and
-``src/services/query/executor.py`` binds its SQLAlchemy session factory to
-that value at import time too. Pytest imports conftest.py before any test
-module, so setting the env var here — read straight from the YAML, not via
-the settings singleton (that would import src.core.config and freeze
-DATABASE_URL to whatever's already in the environment first) — is what makes
-the harness hit the seeded fixture DB instead of prod.
+The tests left in this directory are the two that call a provider, and they must
+run against the frozen fixture rather than the serving database. Everything they
+touch resolves lazily: ``src/core/config.py`` exposes ``settings`` as a proxy that
+constructs ``Settings()`` on first attribute access, and ``src/core/db.py`` builds
+its engine and session factory on first use. So the redirect only has to be in
+place before a test body runs, not before this module is imported.
+
+That distinction is the point. This file used to write ``os.environ`` at import
+time, which meant collecting these two modules redirected ``DATABASE_URL`` for
+every test in the session, including the ones under ``tests/`` that have nothing
+to do with the fixture. The autouse fixture below applies the redirect during the
+setup of a test in this directory and undoes it afterwards.
+
+Clearing the two caches is what makes the redirect effective rather than
+decorative: if an earlier test has already read ``settings.DATABASE_URL`` or
+opened the engine, the cached objects hold the serving database and setting the
+environment variable would change nothing.
 """
 
-import os
-from pathlib import Path
+from __future__ import annotations
 
-import yaml
+import pytest
 
-_cfg = yaml.safe_load(Path("config/settings.yaml").read_text(encoding="utf-8"))
-os.environ["DATABASE_URL"] = _cfg["eval"]["fixture"]["database_url"]
+from evals.fixtures.loader import fixture_database_url
+
+
+@pytest.fixture(autouse=True)
+def use_fixture_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bind DATABASE_URL, and the objects derived from it, to the fixture database."""
+    import src.core.config as config
+    import src.core.db as db
+
+    monkeypatch.setenv("DATABASE_URL", fixture_database_url())
+    monkeypatch.setattr(config, "_settings_cache", None)
+    monkeypatch.setattr(db, "_engine", None)
+    monkeypatch.setattr(db, "_session_factory", None)

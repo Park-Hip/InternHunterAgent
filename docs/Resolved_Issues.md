@@ -20,7 +20,7 @@ original register entry (omitted where none was assigned).
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 7
 - [Capacity & performance](#capacity--performance) — 1
-- [Evaluation harness](#evaluation-harness) — 10 (T0011.1–T0012.2)
+- [Evaluation harness](#evaluation-harness) — 16
 - [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 4
   (T0021.2-T0021.4)
 - [Earlier resolved (pre-register)](#earlier-resolved-pre-register--chronological) — 12
@@ -404,6 +404,21 @@ original register entry (omitted where none was assigned).
     `Code_Review_Notes.md` bug 7. <!-- archived-on-tag -->
 
 ## Evaluation harness
+
+- **`[LOW · RESOLVED · T0026.2, 2026-08-14]` Eval `conftest.py` redirected `DATABASE_URL` during
+  every pytest collection.**
+  - **Found:** T0012.7. The redirect was a module-level `os.environ` write, so importing the two
+    eval modules pointed the whole session at the fixture database, `tests/` included.
+  - **Resolution:** `evals/conftest.py` applies the redirect as an autouse fixture during the setup
+    of a test in that directory, and undoes it afterwards. It also clears the cached `Settings()`
+    and SQLAlchemy engine, without which an earlier test's cached objects would keep the serving
+    DSN and make the redirect decorative. `tests/evals/conftest.py` restores the environment once
+    collection is finished, containing the separate process-wide bind that importing
+    `evals/driver.py` performs.
+  - **Verified:** After the full suite, `DATABASE_URL` ends on the serving DSN rather than
+    `internhunter_eval`, and an isolated non-eval module never sees the fixture DSN at all.
+    Disabling the autouse fixture makes an eval-side probe fail on the serving DSN, so the
+    redirect that remains is load-bearing.
 
 - **`[MED · RESOLVED · T0025.9, 2026-08-13]` The deterministic grader imposed an implicit tool
   expectation on every scenario not named in a hardcoded no-tool set.**

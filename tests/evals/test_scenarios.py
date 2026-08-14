@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import evals
 from evals.scenarios import build_eval_dataset, format_scenario, load_scenarios, repeat_count
 
 # Copied from docs/Agent_Behavior_Spec.md section 4, the frozen behavior target.
@@ -25,7 +26,9 @@ BEHAVIOR_SPEC_PROBE_IDS = {
     "HON-SQL-DESCRIBE-1",
     "SAF-DESTRUCTIVE-REFUSAL-2",
 }
-OBSERVED_ANSWERS_PATH = Path(__file__).with_name("v1_scenario_matrix.observed.json")
+# Anchored on the evals package, not this file: the observed answers are eval data
+# that stays in evals/ while the test lives under tests/.
+OBSERVED_ANSWERS_PATH = Path(evals.__file__).with_name("v1_scenario_matrix.observed.json")
 
 
 def test_registry_loads_and_matches_the_frozen_behavior_spec() -> None:

@@ -8,8 +8,9 @@
 ## Current branch
 
 - Repository baseline: `main` at `410c628`.
-- Active ticket branch: `codex/t0026.1-evals-front-door`, stacked on `codex/t0025.10-close-m25`
-  and `codex/t0025.9-grader-audit-replay-ci` (PR #47).
+- Active ticket branch: `codex/t0026.2-eval-tests-under-tests`, stacked on
+  `codex/t0026.1-evals-front-door`, `codex/t0025.10-close-m25`, and
+  `codex/t0025.9-grader-audit-replay-ci` (PR #47).
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -37,6 +38,10 @@ measured, and the grader agrees with all 13 human labels.
 `HLP-CONTEXT-1` and `HLP-COMPOUND-1` remain unmeasured pending a paid-tier decision.
 The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
 custom-domain follow-up remains intentionally deferred until after v1.0.
+
+M26 - Evaluation Workspace Hygiene is complete through T0026.2 and changes no verdict.
+`evals/` now holds the instrument plus the two live test modules, its deterministic tests live in
+`tests/evals/`, and [`evals/README.md`](../evals/README.md) is the entry point.
 
 ## Archive tags
 
@@ -71,7 +76,7 @@ docker/        application container image definition
 evals/         DeepEval harness, fixtures, and scenario data (see evals/README.md)
 scripts/       local maintenance and documentation checks
 src/           API, application service, agent runtime, tracing, and ingestion services
-tests/         automated tests
+tests/         automated tests, including tests/evals for the deterministic eval modules
 ```
 
 ## Dependencies
@@ -104,10 +109,10 @@ The authoritative package declarations are in `pyproject.toml`.
 | Check | Most recent recorded result |
 |---|---|
 | `python scripts/docs_lint.py` | Passed locally on 2026-08-13 (all ten checks) |
-| `uv run pytest -q` | 439 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
+| `uv run pytest -q` | 439 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14, unchanged across the T0026.2 move |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
 | `uv run ruff check .` | Passed on 2026-08-13 |
-| `uv run pytest -q evals/test_scenarios.py evals/test_grader.py evals/test_replay.py` | 25 passed on 2026-08-13 |
+| `uv run pytest -q tests/evals` | 76 passed on 2026-08-14 |
 | `git diff --check` | Clean on 2026-08-13 |
 | `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-13 |
 | `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |
@@ -125,8 +130,8 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0026.2 - move the deterministic eval tests under `tests/`, or T0026.3 - move the grader's rule
-table into the registry. Both are independent of each other and spend no quota.
+T0026.3 - move the grader's rule table into the registry. It spends no quota, and its invariant is
+that the regrade stays 7 `PASS` / 6 `FAIL` / 2 `INFRA` turn for turn.
 
 T0023 remains the release path: its DoD sweep, terms posture, and live-cron gate (D-038) are the
 remaining blockers, and M24 owns the behavior failures M25 measured. M26 is hygiene, not

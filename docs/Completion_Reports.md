@@ -15,6 +15,13 @@ One entry per ticket: **Did** (what changed) · **Files** (key paths) · **Tests
 field list (Summary / Files / Commands / Build & test / Manual verification / Risks /
 Follow-ups / Docs).
 
+Every entry records the paths a ticket touched **on the day it shipped**. Later tickets move files,
+so those paths are dated evidence rather than a live index, and the whole file is exempt from the
+link-path check under the historical-audit rule in
+[Documentation Conventions](Docs_Conventions.md).
+
+<!-- lint-allow-link-path:begin -->
+
 ---
 
 ## T0025.4 follow-up fixes
@@ -1969,10 +1976,8 @@ Follow-ups / Docs).
   `evals/v1_scenario_matrix.observed.json`, and `evals/test_scenarios.py`.
 - **Files changed:** `evals/harness.py`, `evals/test_three_seams.py`, `evals/test_judge.py`,
   `evals/fixtures/seed_eval_db.sql`, `docs/Repo_Current_State.md`, and this report.
-- **Files deleted:** <!-- lint-allow-link-path:begin -->
-  `evals/goldens/golden_dataset.json`, `evals/goldens/__init__.py`,
+- **Files deleted:** `evals/goldens/golden_dataset.json`, `evals/goldens/__init__.py`,
   `evals/test_goldens_load.py`, and `evals/test_judge_scaffold.py`.
-  <!-- lint-allow-link-path:end -->
 - **Commands run:** Restored the two archived artifacts from `archive/t0015.4-scenario-matrix`.
   Ran `uv run python -m evals.scenarios --scenario A2`, focused pytest, Ruff, mypy,
   `uv run pytest -q`, `git diff --check`, and the documentation linter.
@@ -2537,3 +2542,66 @@ Follow-ups / Docs).
   than skip when Postgres is down, which is how the missing Docker engine presented during this
   ticket.
 - **Docs that need updating:** None outstanding.
+
+---
+
+## T0026.2 - Move the deterministic eval tests under `tests/`
+
+- **Summary:** Nine test modules moved from `evals/` and `evals/fixtures/` into `tests/evals/`.
+  `evals/` now holds the instrument plus the two modules that call a provider. The redirect in
+  `evals/conftest.py` became an autouse fixture scoped to that directory instead of a module-level
+  `os.environ` write that fired on every pytest collection.
+- **The plan under-counted, in two ways.** It listed six deterministic modules and missed
+  `test_writeback.py`, which is deterministic, carries no `eval` marker, and meets the same
+  criterion; it moved with the others. It also assumed the two `eval`-marked modules were whole
+  modules: `evals/test_judge.py` marks a single test, and its other case runs in the default suite.
+  It stays where the ticket put it, since a live case lives there.
+- **One rename was forced.** `tests/` has no `__init__.py`, so pytest derives module names from
+  basenames and `tests/services/ingestion/test_loader.py` already owns `test_loader`. The fixture
+  loader's test is now `tests/evals/test_fixture_loader.py`, which also says what it tests.
+- **Narrowing the redirect took two changes, not one.** `evals/driver.py` binds `DATABASE_URL`
+  process-wide at import, deliberately. Moving the driver test into `tests/` would have carried
+  that bind into the general suite as a collection side effect, so `tests/evals/conftest.py`
+  restores the environment on `pytest_collection_finish`. No test there reads `DATABASE_URL`; the
+  ones that need the fixture ask `fixture_database_url()` for it by name.
+- **The remaining redirect also clears two caches.** Setting the environment variable alone would
+  be decorative: if an earlier test has read `settings.DATABASE_URL` or opened the engine, the
+  cached `Settings()` and SQLAlchemy engine still hold the serving DSN. The fixture resets both,
+  and `monkeypatch` restores them afterwards.
+- **Files changed:** `evals/conftest.py`, `evals/README.md`, `tests/evals/conftest.py` (new), the
+  nine moved modules under `tests/evals/`, `docs/Known_Issues.md`, `docs/Resolved_Issues.md`,
+  `docs/Tickets.md`, `docs/Repo_Current_State.md`, and this report. One line changed inside a moved
+  module: `tests/evals/test_scenarios.py` anchors the observed-answers artifact on the `evals`
+  package rather than on its own location, since the data stayed behind.
+- **Commands run:** `uv run pytest -q` before and after, `uv run pytest -q tests/evals`,
+  `uv run pytest -q evals/`, `uv run pytest -m eval --collect-only -q`, `uv run ruff check .`,
+  `uv run mypy`, `uv run python scripts/docs_lint.py`, `uv run python -m evals.replay`, and a
+  scripted harness that reports `DATABASE_URL` after a run.
+- **Build and test results:** 439 passed, 1 skipped, 30 live eval tests deselected, 4 subtests
+  passed - identical to the pre-move baseline. `tests/evals` alone reports 76 passed. Ruff, mypy,
+  and all ten documentation checks passed. The replay gate passed.
+- **The narrowing was proven load-bearing.** With the autouse fixture set to `autouse=False`, a
+  probe test inside `evals/` failed on the serving DSN; restoring it made the probe pass. The probe
+  was temporary and is not committed.
+- **Manual verification:**
+  1. `uv run pytest -q` reports 439 passed, 1 skipped, 30 deselected, 4 subtests - the same as
+     before the move, with the same single `SCRATCH_DATABASE_URL` skip.
+  2. `uv run pytest -q tests/evals` collects and passes the moved modules on their own.
+  3. `uv run pytest -m eval --collect-only -q` still lists `evals/test_three_seams.py` and
+     `evals/test_judge.py` at their old paths.
+  4. Run one non-eval module in a process that clears `DATABASE_URL` first, then read the variable
+     back: it holds the serving DSN, not `internhunter_eval`. The same check after the full suite
+     now also holds the serving DSN, where before it held the fixture.
+- **Risks:** the two live eval modules cannot be run without provider quota, so the autouse fixture
+  is verified by a deterministic probe and by `evals/test_judge.py`'s unmarked case rather than by
+  a live capture. The mechanism is the same one those tests use.
+- **Follow-up tickets:** T0026.3 remains. Two follow-ups were recorded rather than fixed here: the
+  linter's `link-path` check treats `docs/Completion_Reports.md` as a live index when it is a dated
+  record, so the file now carries a whole-file exemption where treating it like `docs/archive/`
+  in `scripts/docs_lint.py` would be the real fix; and `research/evaluation-strategy.md` still
+  names `evals/test_judge_scaffold.py`, a module deleted when the goldens were retired.
+- **Docs that need updating:** None outstanding. The `Evaluation harness` index count in
+  `docs/Resolved_Issues.md` said 10 against 16 measured entries and was corrected to the measured
+  value while adding the entry.
+
+<!-- lint-allow-link-path:end -->

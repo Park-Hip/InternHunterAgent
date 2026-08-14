@@ -62,6 +62,16 @@ against recorded turns, not by paying for a new capture.
 | `writeback.py` | Langfuse score writeback. Called by `harness.py`; not part of the deterministic path |
 | `fixtures/loader.py` | Builds and resets the frozen fixture through Alembic plus `seed_eval_db.sql`. Owns `fixture_database_url()` |
 | `runs/` | Capture artifacts. **Git-ignored** - turns carry latency, token usage, and finish reasons |
+| `conftest.py` | Binds the two live test modules below to the fixture database, for the duration of each test |
+
+## Where the tests are
+
+The deterministic tests for every module above live in
+[`tests/evals/`](../tests/evals) and run in the default `uv run pytest -q` suite.
+
+Two modules stay here because they call a provider: `test_three_seams.py`, which
+`deepeval test run` addresses by path, and `test_judge.py`, whose live case is `eval`-marked.
+Both are deselected by default.
 
 ## Records
 
@@ -81,7 +91,7 @@ Findings, not guidance. Each has an owner and a cap in the
 `src.core.config.settings`.** `load_settings()` caches `Settings()` from the environment and
 `.env`. The driver reads the fixture DSN *before* it writes `DATABASE_URL`, so resolving through
 `settings` would freeze the cache against the serving database and make the bind a no-op - a
-capture would silently run against production data. `evals/test_driver.py` pins this.
+capture would silently run against production data. `tests/evals/test_driver.py` pins this.
 
 **The free tier cannot run every scenario.** `HLP-CONTEXT-1` and `HLP-COMPOUND-1` exceed the
 8000 TPM admission ceiling inside a single turn. Lowering `max_tokens` or `agent.query.max_rows`

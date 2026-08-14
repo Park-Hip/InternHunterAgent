@@ -196,6 +196,17 @@ disagreeing about how to find the fixture database.
 **Blockers:** none. Spends no provider or judge quota.
 
 ### T0026.2: Move the deterministic eval tests under `tests/`
+> **Complete 2026-08-14.** Nine modules moved to `tests/evals/`; `evals/` keeps the two that call
+> a provider. The suite reports the same 439 passed, 1 skipped, 30 deselected, 4 subtests.
+> Two corrections to the plan below. It counted eight test modules and listed six deterministic
+> ones, missing `test_writeback.py`, which meets the same criterion and moved with them. And
+> The fixture loader's test had to be renamed `test_fixture_loader.py`: `tests/` is not a package,
+> so pytest derives module names from basenames, and the ingestion loader's test already owns the
+> name `test_loader`.
+> Narrowing the redirect took two changes, not one. Importing `evals/driver.py` binds
+> `DATABASE_URL` process-wide, so moving the driver test into `tests/` would have carried the
+> leak with it; `tests/evals/conftest.py` restores the environment once collection finishes.
+
 **Objective:** Leave `evals/` holding the instrument, not the instrument plus its test suite.
 Over half its entries are currently tests.
 

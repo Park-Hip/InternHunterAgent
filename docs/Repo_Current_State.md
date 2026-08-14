@@ -49,10 +49,12 @@ and none of what a scenario expects.
 
 M28 - Evaluation Documentation Ownership is scoped and open (T0028.1-.4); see
 [`Tickets.md`](Tickets.md).
-T0028.1 is complete: the Fact Ledger in [`README.md`](README.md) now names an owner for scenario
-definitions, behavior requirements, and dated graded outcomes, and an eleventh lint check
-(`scenario-id`) fails on any `HLP-`, `HON-`, or `SAF-` identifier in tracked Markdown that
-`evals/scenarios_v1.yaml` does not define.
+T0028.1 and T0028.2 are complete: the Fact Ledger in [`README.md`](README.md) names an owner for
+scenario definitions, behavior requirements, and dated graded outcomes; an eleventh lint check
+(`scenario-id`) fails on any `HLP-`, `HON-`, or `SAF-` identifier absent from the registry; and
+[`Agent_Behavior_Spec.md`](Agent_Behavior_Spec.md) §4a-4c now links to
+[`evals/scenarios_v1.yaml`](../evals/scenarios_v1.yaml) instead of duplicating its fixture rows,
+input, and expected behavior.
 
 ## Archive tags
 
@@ -68,8 +70,7 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
 
 ## Carried work
 
-- `stash@{0}` is unverified and retained. It is believed superseded but has not been compared
-  line by line.
+- `stash@{0}` is unverified and retained; believed superseded, not compared line by line.
 - The legacy HTTP runner stays archived. The driver took its orchestration as a pattern only and
   runs the agent in-process (D-043).
 - The 2026-07-14 answer artifact is answer-only, so replaying it still grades `INFRA` at the
@@ -119,8 +120,8 @@ The authoritative package declarations are in `pyproject.toml`.
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Passed locally on 2026-08-13 (all ten checks) |
-| `uv run pytest -q` | 445 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
+| `python scripts/docs_lint.py` | Passed locally on 2026-08-14 (all eleven checks) |
+| `uv run pytest -q` | 447 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
 | `uv run ruff check .` | Passed on 2026-08-13 |
 | `uv run pytest -q tests/evals` | 82 passed on 2026-08-14 |
@@ -141,8 +142,8 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0028.2 - cut the duplicated scenario table out of the
-[behavior spec](Agent_Behavior_Spec.md), now that T0028.1 can prove no ID is dropped in the process.
+T0028.3 - seal the two dated eval snapshots into `evals/archive/` and merge the two instrument
+reports; independent of T0028.4 and blocks nothing else.
 
 T0023 remains the release path once M28 closes or is preempted. Its DoD sweep, terms posture, and
 live-cron gate (D-038) are the remaining blockers, and M24 owns the behavior failures M25 measured.

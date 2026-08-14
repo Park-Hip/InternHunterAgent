@@ -2706,4 +2706,47 @@ link-path check under the historical-audit rule in
   unblocked because this check can prove no scenario ID is dropped in the process.
 - **Docs that need updating:** None outstanding.
 
+---
+
+## T0028.2 - Cut the duplicated scenario table out of the behavior spec
+
+- **Summary:** `docs/Agent_Behavior_Spec.md` §4a-4c (the registry, coverage-gap, and
+  decision-specific probe tables) carried six columns each - ID, requirements or decision, fixture
+  row IDs, input or turns, expected behavior, and probe status - and four of those columns
+  duplicated `evals/scenarios_v1.yaml`, which D-041 already names the sole owner of that data.
+  Reduced every table to the three columns the spec owns: scenario ID, the requirement (or decision)
+  under test, and probe status. The legend above §4a now states explicitly that the registry owns
+  the fixture rows, input, and expected behavior the tables used to restate.
+- **No scenario ID, requirement, decision, or probe flag changed.** A script compared the ID set in
+  the registry against the ID set matched in the spec by the same `HLP|HON|SAF` pattern
+  `scripts/docs_lint.py` uses; both sets are the 29 registry IDs, exactly.
+- **The freeze note now says what it protects.** The file's `Status` block said "Frozen:
+  2026-07-11" without saying what freezing meant for editability. Added one sentence: the freeze
+  protects the requirements under test, the probe protocol, and the settled decisions, not the
+  per-scenario expectations this ticket cut - matching the maintainer's 2026-08-14 confirmation
+  recorded in `docs/Tickets.md`. Added a `> **Last verified:** 2026-08-14` stamp per
+  `Docs_Conventions.md`; the file previously had none.
+- **Files changed:** `docs/Agent_Behavior_Spec.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py`, a one-off Python check comparing the
+  registry's ID set against the spec's referenced ID set, and a tree-wide search for
+  `COUNT(*) via query_clean_jobs`.
+- **Build and test results:** Docs lint passed with zero findings across all eleven checks. The ID
+  comparison found no ID missing from either side. The search for the retired expected-behavior
+  phrase returned the registry (`evals/scenarios_v1.yaml`), the sealed snapshot
+  (`evals/v1_scenario_matrix.md`), and this ticket's own text in `docs/Tickets.md` quoting the
+  search string - not the behavior spec. This ticket edits documentation only; no test suite covers
+  its content, and no code changed.
+- **Manual verification:**
+  1. Every ID in `evals/scenarios_v1.yaml` still appears in §4a-4c of the behavior spec.
+  2. `uv run python scripts/docs_lint.py` exits 0.
+  3. Searching the tree for `COUNT(*) via query_clean_jobs` returns the registry and the dated
+     records only, not the behavior spec.
+- **Risks:** none identified. The spec's requirement-to-scenario mapping is unchanged; a reader
+  now makes one hop through the registry link to see a scenario's input and expected behavior
+  instead of finding it inline.
+- **Follow-up tickets:** none new. `T0028.3` (seal the frozen records, merge the two instrument
+  reports) and `T0028.4` (operating manual, stale-claim sweep) remain open and are independent of
+  this ticket per the milestone scoping.
+- **Docs that need updating:** None outstanding.
+
 <!-- lint-allow-link-path:end -->

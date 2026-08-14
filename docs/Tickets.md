@@ -1,6 +1,6 @@
 # InternHunter — Tickets & Roadmap
 
-> **Last verified:** 2026-08-13 against the active ticket plan and completion records.
+> **Last verified:** 2026-08-14 against the active ticket plan and completion records.
 
 > **Eviction:** A ticket plan leaves when its completion report is recorded and its historical scope
 > is moved to the ticket archive.
@@ -38,6 +38,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
 | 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
+| 28 | T0028 | Evaluation Documentation Ownership | 📋 | Scoped 2026-08-14: give eval facts an owner in the Fact Ledger, cut the duplicated scenario tables, seal the frozen records, promote an operating manual |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -133,152 +134,165 @@ D-044 in the [Decision Log](Decision_Log.md).
 
 ---
 
-## T0026: Milestone 26 - Evaluation Workspace Hygiene - 📋 Scoped 2026-08-14
+## T0026: Milestone 26 - Evaluation Workspace Hygiene - Complete 2026-08-14
 
-M25 built the instrument ticket by ticket, and `evals/` accumulated the shape of that sequence
-rather than a designed one. Measured on 2026-08-14: **33 flat entries**, of which **8 are test
-modules** and **4 are Markdown records that no index owns**, plus **no `README.md`** explaining
-what any of it is or which commands cost quota.
+The three ticket plans are archived in
+[`archive/Tickets_Archive.md`](archive/Tickets_Archive.md); their outcomes are in
+[Completion Reports](Completion_Reports.md).
 
-This milestone is hygiene only. **It changes no verdict.** Every ticket below must leave the
-committed replay and the 13-turn regrade producing byte-identical outcomes, and the CI gate is what
-proves it.
+**What the milestone delivered.** A front door (`evals/README.md`) and one owner for the
+fixture-database URL, the eight test modules moved under `tests/evals/`, and the grader's rule
+table moved into `evals/scenarios_v1.yaml` so a grading rule now sits beside its expectation.
+No verdict, threshold, or scenario expectation changed.
 
-> **Not release-blocking.** M23 and M24 come first. Pull this in when `evals/` gets in the way,
-> or run T0026.1 alone as a cheap standalone win.
+---
 
-**Out of scope for the whole milestone:** any change to a scenario, a threshold, a grader verdict,
-a prompt, or the agent; new metrics; judge work; deleting `evals/writeback.py`, which
-[`harness.py`](../evals/harness.py) line 34 still imports.
+## T0028: Milestone 28 - Evaluation Documentation Ownership - 📋 Scoped 2026-08-14
 
-### T0026.1: A front door for `evals/`, and one owner for the fixture URL
-> **Complete 2026-08-14.** `evals/README.md` lands, `fixture_database_url()` is the single owner,
-> and five `evals/` documents are registered in the map.
-> The dedupe went the opposite way from what the plan assumed: the driver's copy was load-bearing,
-> not redundant. Resolving through `src.core.config.settings` freezes `Settings()` against the
-> serving database before the driver can bind `DATABASE_URL`, so a capture would have run the agent
-> against production data. The shared function reads the YAML directly, and a regression test that
-> was proven to fail on the hazard now pins it.
+The evaluation documentation passes all ten checks in `scripts/docs_lint.py`, so hygiene is not the
+failure here. Ownership is.
 
-**Objective:** Make the directory legible to someone who did not build it, and stop two modules
-disagreeing about how to find the fixture database.
+Measured on 2026-08-14: the 29-scenario matrix is hand-written in **five** files - the registry
+`evals/scenarios_v1.yaml`, `docs/Agent_Behavior_Spec.md` §4a-4c, `evals/v1_scenario_matrix.md`,
+`evals/grader_audit.md`, and `evals/v1_error_analysis.md`.
+Four of those five also carry each scenario's input and expected behavior.
+`HLP-COUNT-1`'s expected sentence is character-identical, modulo backticks and the arrow glyph,
+across the registry, the behavior spec, and the scenario matrix.
 
-**In Scope:**
-* Add a README at evals/README.md covering: what each module does, the order the pipeline runs in
-  (registry → driver → execution accuracy → grader → replay), which commands spend provider quota
-  and which do not, and where run artifacts land. Link it from [`docs/README.md`](README.md).
-* Collapse the two `_fixture_database_url` implementations into one exported function owned by
-  [`evals/fixtures/loader.py`](../evals/fixtures/loader.py). `driver.py` line 71 re-reads
-  `config/settings.yaml` itself and raises `RuntimeError`; `loader.py` line 34 raises `ValueError`;
-  `execution_accuracy.py` line 14 imports the private name across a module boundary. Pick one
-  public function and one error type, and have all three call sites use it.
-* Register the four unowned records - `grader_audit.md`, `v1_scenario_matrix.md`,
-  `v1_error_analysis.md`, `holdout_report.md` - in the [documentation map](README.md) caps table
-  with an owner, tier, cap, and reader. Set each cap from its measured length, per the map's rule.
+No lint check compares one file against another, so drift between those copies would be silent.
+That matters more here than elsewhere, because the behavior spec is what the grader is calibrated
+against, and D-041 already names the registry the single source of truth for scenario expectations.
+This milestone is the repo's own doctrine applied to its own evaluation docs -
+[`research/docs-hygiene-and-system-plan.md`](../research/docs-hygiene-and-system-plan.md) §5.3:
+"if you are about to write a fact into a doc that does not own it, write a link instead."
 
-**Out of Scope:**
-* Moving or renaming any Python module. Rewriting the content of the four records.
+A second gap sits beside the first. The Fact Ledger in [`README.md`](README.md) assigns an owner to
+fourteen fact classes and **none of them is an evaluation fact**, which is why the duplication was
+never caught by the system built to catch it.
 
-**Notes for the implementer:**
-* `driver.py` calls `_bind_fixture_environment()` at import time, which is why lines 113-114 carry
-  `# noqa: E402`. `src/core/config.py` line 122 exposes `settings` as a lazy proxy, so importing
-  `evals.fixtures.loader` before the bind is safe - but verify that the driver still binds the
-  environment before `evals.harness` is imported, because `harness` pulls in the agent factory.
+**This milestone changes no verdict and no rule.** No scenario expectation, grading rule,
+threshold, or committed replay artifact is edited. It moves facts to their owner, seals the frozen
+records, and teaches the linter to check what it currently cannot.
 
-**Manual verification:**
-1. `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` still pass.
-2. `uv run python -m evals.driver --resume --output evals/runs/run.json` starts and binds the
-   fixture database, with no `DATABASE_URL` leakage to the serving database.
-3. `uv run python scripts/docs_lint.py` passes, including the caps check on the four new entries.
-4. A reader who has never opened the directory can name, from the new README alone, which two
-   commands spend Groq quota.
+**Not release-blocking.** T0023 does not depend on it. It is sequenced before T0023 by maintainer
+choice on 2026-08-14 and can be preempted at any block boundary.
 
-**Blockers:** none. Spends no provider or judge quota.
+**Out of scope for the whole milestone**
+* Changing any scenario, expectation, grading rule, threshold, or replay artifact.
+* Re-running the evaluation, or producing any new measurement.
+* Building a documentation system separate from the M22 one - considered and rejected 2026-08-14.
+* M24 honesty work, and the paid-tier decision the last two uncaptured scenarios need.
 
-### T0026.2: Move the deterministic eval tests under `tests/`
-> **Complete 2026-08-14.** Nine modules moved to `tests/evals/`; `evals/` keeps the two that call
-> a provider. The suite reports the same 439 passed, 1 skipped, 30 deselected, 4 subtests.
-> Two corrections to the plan below. It counted eight test modules and listed six deterministic
-> ones, missing `test_writeback.py`, which meets the same criterion and moved with them. And
-> The fixture loader's test had to be renamed `test_fixture_loader.py`: `tests/` is not a package,
-> so pytest derives module names from basenames, and the ingestion loader's test already owns the
-> name `test_loader`.
-> Narrowing the redirect took two changes, not one. Importing `evals/driver.py` binds
-> `DATABASE_URL` process-wide, so moving the driver test into `tests/` would have carried the
-> leak with it; `tests/evals/conftest.py` restores the environment once collection finishes.
+### T0028.1 - Give evaluation facts an owner, and a check that enforces it
 
-**Objective:** Leave `evals/` holding the instrument, not the instrument plus its test suite.
-Over half its entries are currently tests.
+**Objective.** Add the missing evaluation rows to the Fact Ledger in [`README.md`](README.md), and
+add a `scripts/docs_lint.py` check that every scenario ID named in tracked Markdown exists in
+`evals/scenarios_v1.yaml`.
 
-**In Scope:**
-* Move the six deterministic modules - `test_driver.py`, `test_execution_accuracy.py`,
-  `test_grader.py`, `test_replay.py`, `test_scenarios.py`, `test_viewer.py` - and the two under
-  `evals/fixtures/` into `tests/evals/`, preserving their contents.
-* **Keep `test_judge.py` and `test_three_seams.py` where they are.** They are the only
-  `eval`-marked modules, and `deepeval test run evals/test_three_seams.py` addresses them by path.
-* Narrow [`evals/conftest.py`](../evals/conftest.py) so its `DATABASE_URL` redirect applies to the
-  eval tests that need it rather than to every pytest collection. This closes the standing
-  `[LOW · OPEN]` entry in [Known Issues](Known_Issues.md); move it to
-  [Resolved Issues](Resolved_Issues.md) with the evidence.
+**In Scope**
+* Three Fact Ledger rows: scenario definitions and expectations (owner `evals/scenarios_v1.yaml`),
+  behavior requirements and probe protocol (owner `docs/Agent_Behavior_Spec.md`), and the graded
+  outcomes of a dated run (owner that dated record under `evals/`).
+* A new check in `scripts/docs_lint.py` that scans tracked Markdown for `(HLP|HON|SAF)-[A-Z0-9-]+`
+  and fails on any ID absent from the registry, using the same `lint-allow-*` escape-hatch style as
+  the existing checks.
+* Test coverage for the new check, matching how the existing checks are covered.
 
-**Out of Scope:**
-* Rewriting any assertion. Changing what the suite covers. Touching the two `eval`-marked modules.
+**Out of Scope**
+* Editing the duplicated tables themselves - that is .2 and .3.
+* Any check that compares expectation *text* across files. ID existence only.
 
-**Manual verification:**
-1. `uv run pytest -q` reports the same pass count as before the move, with the same single
-   environmental skip.
-2. `uv run pytest -q tests/` alone now collects the moved modules.
-3. `uv run pytest -m eval --collect-only` still finds both `eval`-marked modules at their old paths.
-4. Run a non-eval test in isolation and confirm collection leaves `DATABASE_URL` untouched.
+**Manual verification**
+1. `uv run python scripts/docs_lint.py` exits 0.
+2. Temporarily add `HLP-NOT-A-SCENARIO-9` to a tracked Markdown file and re-run the linter; it
+   fails, naming both the file and the ID. Revert the edit.
+3. `docs/README.md` shows the three new Fact Ledger rows and stays under its cap.
 
-**Blockers:** T0026.1, so the README describes the final layout. Spends no quota.
+**Blockers.** None.
 
-### T0026.3: Move the grader's rule table into the scenario registry
-> **Complete 2026-08-14.** 24 scenarios carry a `grading:` block; `_rule_for` is a registry
-> lookup. The regrade of the acceptance capture is **byte-identical** to the pre-change output,
-> which is stronger than the per-turn invariant this ticket asked for: every check name and detail
-> string is unchanged too.
-> The blocks were generated from the in-code table rather than retyped. 99 literal strings copied
-> by hand is how a migration that must change nothing changes something.
-> One field could not move as data. `HON-CURRENCY-1` quoted the behavior glossary, so the registry
-> carries a `{glossary: NAME}` reference that the grader resolves. Its *name* is checked in
-> `grader.py`, not in the registry loader: resolving it there would pull `src.core.config` into a
-> module that must not construct and cache `Settings()` before the fixture database is bound.
+### T0028.2 - Cut the duplicated scenario table out of the behavior spec
 
-**Objective:** Finish the migration T0025.9 started. `expected_tools` now comes from the registry;
-the rest of each scenario's expectations still do not.
+**Objective.** Reduce `docs/Agent_Behavior_Spec.md` §4a-4c to what that spec owns - scenario ID,
+the requirement under test, and the probe protocol - and link to `evals/scenarios_v1.yaml` for
+inputs and expected outputs.
 
-[`grader.py::_rule_for`](../evals/grader.py) is 71 lines holding **24 hardcoded scenario ids** and
-roughly **99 literal match strings** - answer counts, required phrasings, forbidden phrasings, and
-one bespoke structural flag. That is behavior data living in code, which is the same defect that
-made the grader fail `HON-SQL-DESCRIBE-1` for three captured turns, and it contradicts the
-project rule that parameters belong in configuration.
+**Notes.** The spec's "frozen 2026-07-11" header protects its requirements from drifting
+mid-measurement; it does not protect the duplicated per-scenario expectations. The maintainer
+confirmed on 2026-08-14 that the file is editable on those terms. Roughly 49 lines are in range.
 
-**In Scope:**
-* Move `expected_answer_count`, the `TextRule` contents, and `forbid_single_salary_winner` into
-  per-scenario fields in [`scenarios_v1.yaml`](../evals/scenarios_v1.yaml), alongside
-  `expected_tools`. Extend the loader's validation to reject an unknown or malformed rule field the
-  way it already rejects an unknown tool name.
-* Reduce `_rule_for` to a registry lookup. Keep `ScenarioRule`, the three tiers, and the four
-  outcomes exactly as they are.
-* Keep the six-scenario holdout meaningful: its assertions must still be authored independently of
-  the registry, or the contract test becomes circular. State in `holdout.py` how that is preserved.
+**In Scope**
+* Rewrite §4a-4c down to the owned columns plus a link to the registry.
+* Keep every scenario ID present, so the .1 check and every inbound reference still resolve.
+* Refresh the verification stamp per [`Docs_Conventions.md`](Docs_Conventions.md).
 
-**Out of Scope:**
-* Changing any rule's content, adding a rule, relaxing a rule, or touching the judge tier.
-* Re-authoring scenarios.
+**Out of Scope**
+* §1-§3 and §5 onward.
+* Changing any requirement text, probe flag, or scenario ID.
 
-**The invariant, and how it is proven:** the regrade of
-`evals/runs/t0025.7-acceptance.json` must stay 7 `PASS` / 6 `FAIL` / 2 `INFRA` with per-turn
-statuses unchanged, and `uv run python -m evals.replay` must pass unmodified. A verdict that moves
-means the migration changed a rule, which is out of scope - revert rather than update the expected
-outcome.
+**Manual verification**
+1. Every ID in `evals/scenarios_v1.yaml` still appears in §4a-4c.
+2. `uv run python scripts/docs_lint.py` exits 0.
+3. Searching the tree for `COUNT(*) via query_clean_jobs` returns the registry and the dated
+   records only, not the behavior spec.
 
-**Manual verification:**
-1. Diff the regrade output against the pre-change run; it must be identical turn for turn.
-2. `uv run python -m evals.replay` passes with the committed artifact untouched.
-3. Break one migrated rule in the YAML, confirm the grader disagrees with its recorded human label,
-   then restore it.
-4. `uv run pytest -q`, Ruff, mypy, and documentation lint pass.
+**Blockers.** .1, for the check that proves no ID was dropped.
 
-**Blockers:** T0026.1. Independent of T0026.2. Spends no provider or judge quota.
+### T0028.3 - Seal the frozen records, and merge the two instrument reports
+
+**Objective.** Move the two dated snapshots out of the living document set, and fold
+`evals/holdout_report.md` into `evals/grader_audit.md` as a single instrument report.
+
+**Notes.** `evals/v1_scenario_matrix.md` and `evals/v1_error_analysis.md` legitimately restate the
+matrix, because a snapshot has to carry its subject. The defect is that they sit beside living docs
+with nothing marking them sealed. `is_archive()` in `scripts/docs_lint.py` already exempts
+`docs/archive/` and `research/archive/`.
+
+**In Scope**
+* Create `evals/archive/`, move both dated records into it, and extend `is_archive()` to cover it.
+* Merge `holdout_report.md` into `grader_audit.md`, renamed `evals/Instrument_Report.md`. <!-- lint-allow-link-path -->
+* Update the caps rows in [`README.md`](README.md) and every inbound link.
+
+**Out of Scope**
+* Editing the content of either dated record.
+* Re-deriving any number in the merged report.
+
+**Manual verification**
+1. `uv run python scripts/docs_lint.py` exits 0.
+2. No Markdown file in the tree links to a moved or renamed path.
+3. `docs/README.md` lists `evals/Instrument_Report.md` and drops the two merged rows. <!-- lint-allow-link-path -->
+
+**Blockers.** None. Independent of .1 and .2.
+
+### T0028.4 - Promote an operating manual, and sweep the stale claims
+
+**Objective.** Give `evals/` the operating manual the tracked tree does not have, and correct the
+two documented claims that measurement shows are wrong.
+
+**Notes.** A manual-grade explainer already exists at `.lavish/how-the-evaluation-works.html`,
+written 2026-08-13, but `.lavish/` is gitignored, so no reader of the repository can find it.
+Every claim in it must be re-verified against the tree before promotion. It is a draft, not a
+source.
+
+**In Scope**
+* A prose operating manual under `evals/`, registered with a cap in [`README.md`](README.md): why
+  the instrument exists, the three seams, the three scenario classes, the run-to-artifact path, the
+  three grading tiers and four outcomes, `--resume` and `PARTIAL_QUOTA`, and the stated limits.
+* Correct [`Offline_Pipelines_Design.md`](Offline_Pipelines_Design.md) §8.6-8.7, which says the
+  replay gate is "not wired into CI" and "Deferred" (T0025.9 shipped it, and `.github/workflows/`
+  runs it) and pins `llama-3.3-70b-versatile` (settings pin `qwen/qwen3.6-27b`).
+* The two M26 follow-ups: the stale `test_judge_scaffold.py` reference, and the
+  `Completion_Reports.md` lint exemption.
+
+**Out of Scope**
+* Writing the missing sanitizer that produces a committable replay artifact. Recorded as a
+  follow-up, not built here.
+* Any new measurement.
+
+**Manual verification**
+1. A reader who has never run the evaluation can follow the manual end to end and reach a graded
+   artifact.
+2. Every command quoted in the manual runs as written.
+3. `uv run python scripts/docs_lint.py` exits 0.
+4. `docs/Offline_Pipelines_Design.md` §8.6-8.7 names the shipped CI gate and the configured model.
+
+**Blockers.** None. Independent of .1-.3.

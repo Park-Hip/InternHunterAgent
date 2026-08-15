@@ -228,6 +228,19 @@ original register entry (omitted where none was assigned).
     profile.
 
 ## Data & ingestion / database schema
+- **`[HIGH · RESOLVED · T0020.4, 2026-08-13]` Ingestion safety checks had not been exercised
+  against live Postgres.**
+  - The abort-before-write safeguards were proven only by mocked unit tests when T0019.5 merged.
+    Gate D5 exercised all four checks against a live Docker Postgres on 2026-07-22: a green run,
+    a schema-drift abort that wrote nothing, a yield-floor abort, and both dead-man ping branches.
+    The runbook §2 carries the pasted output for each.
+  - **Verified against production 2026-08-13:** the first real `workflow_dispatch`
+    (run `31693930488`) ran `assert_clean_jobs_schema` against Neon and logged
+    `ingestion.schema_ok {"columns": 22}` before writing, then completed with
+    `fetched: 113, clean_loaded: 113, skipped: 0, expired_count: 47, pages_failed: 0`.
+  - **Scope of the evidence:** the *happy* path is now proven against Neon; the three *abort*
+    paths remain proven against Docker Postgres only, which is the correct place to exercise them
+    - deliberately breaking production to watch it abort is not a test worth running.
 - **`[LOW · RESOLVED · T0012.9, 2026-07-06]` Stale comment in `normalize/vietnamworks.py`.**
   - Found 2026-07-04: the `posted_date = None` comment (~line 99) cited a defunct T0009.8 ticket and
     implied a pending parse step. The comment now cites the reliability decision (VietnamWorks

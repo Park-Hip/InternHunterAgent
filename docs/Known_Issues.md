@@ -9,26 +9,20 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
-| HIGH | 1 | 3 | 1 |
-| MED | 6 | 2 | 2 |
-| LOW | 16 | 3 | 0 |
+| HIGH | 1 | 1 | 1 |
+| MED | 8 | 2 | 2 |
+| LOW | 17 | 3 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
 
-## Config, startup & deployment (12)
+## Config, startup & deployment (13)
 
 - **`[LOW · BLOCKED]` The serving-model pin still lacks its final live baseline confirmation.**
   - **Found:** T0011.5 preparation.
   - **Impact:** A retired or incompatible Groq model ID would fail the tool loop at runtime.
   - **Next:** Before the baseline, run a tool-using query with the configured qwen model.
   - **History:** [Resolved Issues](Resolved_Issues.md) records the retired-model replacement.
-
-- **`[HIGH · BLOCKED]` Ingestion safety checks have not been exercised against live Postgres.**
-  - **Found:** T0019.5.
-  - **Impact:** The abort-before-write safeguards remain proven only by mocked unit tests.
-  - **Next:** Run checks B through E in [Manual Verification Guide](Manual_Verification_Guide.md).
-  - **History:** `tests/services/ingestion/test_safety.py` covers the isolated logic.
 
 - **`[MED · OPEN]` Render Free cold starts can delay the public demo by about a minute.**
   - **Found:** T0018.4 public deployment.
@@ -45,8 +39,10 @@ or maintainer action, and `DECISION` needs a product or operational choice.
 
 - **`[HIGH · DECISION]` VietnamWorks terms leave public listing display unresolved.**
   - **Found:** T0019.1 terms review.
-  - **Impact:** The demo may exceed an internal-use restriction, and this gates rearming the cron.
-  - **Next:** Choose attribution, restricted access, accepted risk, or permission before rearming.
+  - **Impact:** The public portfolio demo may exceed an internal-use content restriction.
+  - **Next:** Choose attribution, restricted access, accepted risk, or permission for the demo.
+    The maintainer ruled on 2026-08-13 that this does **not** gate cron activation: §7 restricts
+    republishing, which is a question about what the demo displays today, not what the cron fetches.
   - **History:** [deployment research §11](../research/archive/deployment-research-plan.md).
 
 - **`[LOW · OPEN]` Native Windows `uvicorn` startup is incompatible with the checkpointer pool.**
@@ -73,11 +69,24 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Investigate only if failures recur; the operating window and cadence are documented.
   - **History:** [Operations](Operations.md) records the observed first-wake behavior.
 
-- **`[HIGH · BLOCKED]` The ingestion schedule is disabled pending its activation gates.**
+- **`[MED · OPEN]` Dead checkpointer connections can be reported as provider pressure.**
+  - **Found:** T0019.7 live Render investigation.
+  - **Impact:** A Neon pool failure can reach a visitor as the generic busy message.
+  - **Next:** Add a psycopg pool health check and preserve pool provenance in error classification.
+  - **History:** `src/core/checkpointer.py` and `src/core/errors.py`.
+
+- **`[MED · OPEN]` The re-armed ingestion schedule has not yet fired on its own.**
   - **Found:** T0020.4.
-  - **Impact:** Scheduled refresh is a Definition-of-Done capability, so v1.0 cannot be tagged.
-  - **Next:** Complete a green manual dispatch and signed gates before uncommenting the cron.
-  - **History:** [Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md).
+  - **Impact:** Every gate is signed, but an unattended run is proven only once one has happened.
+  - **Next:** Merge to `main` — GitHub reads `schedule:` from the default branch, so the merge is
+    the activation — then confirm the next 02:00 UTC run.
+  - **History:** [Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) §7.
+
+- **`[LOW · OPEN]` `expired_count` reports rows matching the stale predicate, not newly expired.**
+  - **Found:** T0020.4, when three consecutive runs all logged exactly `expired_count: 47`.
+  - **Impact:** Nightly logs cannot distinguish fresh expiries from long-expired rows.
+  - **Next:** Add `AND is_active` to the `UPDATE` so `rowcount` counts state changes only.
+  - **History:** `src/services/ingestion/clean_store.py::expire_stale_clean_jobs`.
 
 - **`[MED · BLOCKED]` CI runs on pull requests, but branch protection needs maintainer setup.**
   - **Found:** T0020.3.

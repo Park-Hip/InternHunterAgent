@@ -30,10 +30,11 @@ re-derive it.
 > `is_active`/`first_seen_at`/`last_seen_at` lifecycle columns and a time-based expiry pass
 > (**T0019.3**); (b) ⏳ an **external, out-of-band GitHub Actions cron** is intended to invoke the
 > same CLI nightly against the live Neon DB (**T0019.6**, hard-gated on a robots.txt/ToS check,
-> **T0019.1**, whose **recommended** verdict is favorable — *maintainer ratification in a tracked
-> document is still outstanding*, so the gate is not yet cleared). The cron's `schedule:` trigger
-> stays **dormant** regardless: GitHub only fires `schedule:` from the default branch, so it cannot
-> run until the branch chain merges to `main`. Coverage and detail-visibility follow-ups are scoped
+> **T0019.1**, whose favorable verdict the maintainer **ratified on 2026-08-13** — the gate is
+> cleared; see the cron activation runbook §1). The cron's `schedule:` trigger is **dormant**
+> because PR #33 commented it out on `main`. Note that reaching `main` does not merely permit a
+> schedule, it starts one: GitHub fires `schedule:` from the default branch automatically, which is
+> how this workflow ran un-gated for 19 nights. Coverage and detail-visibility follow-ups are scoped
 > as **T0019.9** and **T0019.10** (`docs/Tickets.md`); neither is implemented. This does **not**
 > relax the §7 layer law or the `Full_Design_Document.md` §2 no-schedulers exclusion — the cron runs
 > on GitHub's runner, never in the API process, and §2's exclusion is amended to name what it always

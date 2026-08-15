@@ -68,13 +68,14 @@ Requires **Python 3.12**, [uv](https://docs.astral.sh/uv/), and Docker.
 git clone https://github.com/Park-Hip/InternHunterAgent.git
 cd InternHunterAgent
 uv sync                                    # install dependencies
-cp .env.example .env                       # then add your GROQ_API_KEY
+cp .env.example .env                       # then add your DEEPSEEK_API_KEY
 docker compose up -d                       # Postgres on host port 5433
 ```
 
-`.env.example` already points `DATABASE_URL` at that container, so `GROQ_API_KEY` is the only
-value you must supply to run the agent. Langfuse and Gemini keys are optional — they enable
-tracing and the eval harness respectively.
+`.env.example` already points `DATABASE_URL` at that container, so `DEEPSEEK_API_KEY` is the only
+value you must supply to run the agent — it is the provider both profiles select in
+`config/settings.yaml`. Switching a profile back to `groq` needs `GROQ_API_KEY` instead; the
+Gemini key enables the eval harness.
 
 Initialise the schema (idempotent — safe to re-run):
 

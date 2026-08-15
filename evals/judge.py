@@ -97,6 +97,9 @@ def build_judge() -> DeepEvalJudge:
     max_retries = 0 if os.getenv("EVAL_DRIVER_DISABLE_PROVIDER_RETRIES") == "1" else 2
 
     if provider == "groq":
+        if not settings.GROQ_API_KEY:
+            raise ValueError("eval.judge.provider is 'groq' but GROQ_API_KEY is unset")
+
         chat_model: BaseChatModel = ChatGroq(
             model_name=model_name,
             temperature=temperature,

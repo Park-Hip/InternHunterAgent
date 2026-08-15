@@ -14,10 +14,12 @@ class ConfigLoadError(Exception):
 
 
 class Settings(BaseSettings):
-    GROQ_API_KEY: str = Field(..., min_length=1)
+    # Every provider key is optional here, and validated by the branch that needs it.
+    # Two providers can serve and a third judges, so no single key is required to boot:
+    # requiring one would break a checkout that holds only the selected provider's key.
+    # See D-045 in docs/Decision_Log.md.
+    GROQ_API_KEY: str | None = None
     GOOGLE_API_KEY: str | None = None
-    # Optional like GOOGLE_API_KEY: the serving default is Groq, and only the branch
-    # that needs this key validates it. See T0027 in docs/Tickets.md.
     DEEPSEEK_API_KEY: str | None = None
     DATABASE_URL: str = Field(..., min_length=1)
     HEALTHCHECKS_URL: str | None = None

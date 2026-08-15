@@ -144,6 +144,18 @@ class AgentProviderTests(unittest.TestCase):
         self.assertIs(sql_kwargs["streaming"], False)
         self.assertEqual(sql_kwargs["reasoning_effort"], "none")
 
+    @patch("src.agents.runtime.provider.settings")
+    def test_missing_groq_key_names_the_profile(self, mock_settings) -> None:
+        """GROQ_API_KEY is optional at boot, so the branch that needs it validates it."""
+        mock_settings.config_yaml = _agent_config()
+        mock_settings.GROQ_API_KEY = None
+
+        with self.assertRaises(ValueError) as caught:
+            AgentProvider().build_model("react")
+
+        self.assertIn("agent.react.provider", str(caught.exception))
+        self.assertIn("GROQ_API_KEY", str(caught.exception))
+
 
 class DeepSeekProviderTests(unittest.TestCase):
     """The DeepSeek branch imports lazily, so it is patched at its import site."""

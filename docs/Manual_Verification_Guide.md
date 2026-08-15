@@ -11,6 +11,21 @@ Dated live-pass logs remain in
 
 ## Current and unrun checklists
 
+### T0027.4: Deployed demo on the DeepSeek default
+
+The local half of this checklist passed on 2026-08-15. What remains needs a deploy, because the
+serving provider changed and the Render service reads its key from the dashboard.
+
+1. **Before merging to `main`,** add `DEEPSEEK_API_KEY` to the Render dashboard for the
+   `InternHunterAgent` service. `render.yaml` declares it `sync: false`, so the repository never
+   carries the value.
+2. After the auto-deploy, open <https://internhunteragent.onrender.com>, ask one question, and
+   confirm a real answer and a non-null `trace_url`. A healthy `/api/v1/health` proves nothing
+   here: no provider key is required at boot, so a missing key surfaces only on the first query.
+3. Confirm the Langfuse trace for that question records the DeepSeek model, not Groq.
+4. Check the DeepSeek dashboard afterwards. Serving is metered now, at a measured ~$0.0005 per
+   turn, so the spend should be cents-scale and should track demo traffic.
+
 ### T0025.4: Trace viewer and first-upstream-failure review
 
 Generate a zero-quota sample with `uv run python -m evals.viewer --sample`, or generate a viewer

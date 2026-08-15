@@ -71,6 +71,11 @@ class AgentProvider:
         }
 
         if provider == "groq":
+            if not settings.GROQ_API_KEY:
+                raise ValueError(
+                    f"agent.{profile}.provider is 'groq' but GROQ_API_KEY is unset"
+                )
+
             groq_kwargs: dict[str, Any] = {
                 "model_name": model_name,
                 **common_kwargs,

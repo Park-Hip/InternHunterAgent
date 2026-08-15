@@ -38,7 +38,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
 | 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
-| 27 | T0027 | DeepSeek Provider Integration | 🔨 | Scoped 2026-08-14 (.1-.4), following the deferred T0015.6 procedure · **.1-.3 complete**: spike passes, DeepSeek is selectable, and the measured arm selects it on operational grounds (29/29 scenarios in 5m20s for ~$0.04) · next is .4, the default flip |
+| 27 | T0027 | DeepSeek Provider Integration | ✅ | Complete 2026-08-15 (.1-.4), following the deferred T0015.6 procedure · the spike passed, the arm measured 29/29 scenarios in 5m20s for ~$0.04, and .4 flipped both profiles to DeepSeek (D-045) with pacing at 0 and no provider key required at boot · the Groq branch stays selectable |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -104,7 +104,7 @@ outcome; this milestone is how the limitation gets closed afterward.
 
 ---
 
-## T0027: Milestone 27 - DeepSeek Provider Integration - 📋 Scoped 2026-08-14
+## T0027: Milestone 27 - DeepSeek Provider Integration - ✅ Complete 2026-08-15
 
 The agent has run on one provider since M0, and Groq's free tier is now the binding constraint on
 measurement: 8K TPM is what forces `eval.driver.turn_pacing_seconds: 75` and spreads a
@@ -125,8 +125,9 @@ merged; it survives on `archive/t0015.6-provider-ab` and research §7 harvests i
 blocks below follow it: one variable changes, each arm runs with its native reasoning knob off,
 the judge comes from neither contestant's family, and no unobserved result is ever written down.
 
-**Not release-blocking.** M23 and M24 come first, and this stays a provider *option* until .3
-decides otherwise. **Out of scope for the whole milestone:** changing any scenario, threshold,
+**Not release-blocking.** M23 and M24 come first. The milestone kept DeepSeek a provider *option*
+through .3 and made it the default in .4, on the measured basis recorded in D-045.
+**Out of scope for the whole milestone:** changing any scenario, threshold,
 grader rule, prompt, or agent behavior; removing the Groq branch; moving the judge off Gemini;
 rebuilding an A/B harness, which research §8 shows M25 already made unnecessary.
 
@@ -255,6 +256,17 @@ provider seam that `archive/t0015.6-provider-ab` already settled.
 **Blockers:** T0027.2, a funded key, and one uninterrupted session for both arms.
 
 ### T0027.4: Flip the default, or record why not
+> **Complete 2026-08-15. The default flipped.** Both profiles select `deepseek` /
+> `deepseek-v4-flash`, `render.yaml` declares `DEEPSEEK_API_KEY`, and
+> `eval.driver.turn_pacing_seconds` is 0 - it existed only to survive Groq's per-minute ceiling.
+> `GROQ_API_KEY` stops being required at boot: every provider key is optional in
+> `src/core/config.py` and validated by the branch that needs it, naming the profile that selected
+> it, so a checkout runs with only the selected provider's key. The measured basis is **D-045**.
+> Verified end to end against the fixture corpus on DeepSeek alone: both endpoints answer, the
+> stream carries no reasoning tokens, and the replay gate still exits 0. 455 tests pass.
+> The deployed re-verification is the one step that cannot run pre-merge: **add
+> `DEEPSEEK_API_KEY` to the Render dashboard before merging to `main`**, or the first query after
+> the auto-deploy fails while `/api/v1/health` still reports healthy.
 
 **Objective:** Land the .3 decision as configuration and durable rationale, or close the milestone
 with DeepSeek as a proven, unselected option.

@@ -1,6 +1,6 @@
 # Tech Stack
 
-> **Last verified:** 2026-08-11 against `pyproject.toml`, `config/settings.yaml`, and
+> **Last verified:** 2026-08-15 against `pyproject.toml`, `config/settings.yaml`, and
 > `render.yaml`. This document is the **single owner** of "what is this built with" — versions,
 > runtime choices, and hosted services. Other docs link here rather than restating.
 > `scripts/docs_lint.py --check stack` fails the build if the dependency list below drifts from
@@ -20,7 +20,8 @@ technology-vocabulary builder.
 | Package manager | uv | lockfile `uv.lock` | `pyproject.toml` |
 | API | FastAPI + uvicorn | ≥0.136.3 / ≥0.48.0 | `src/api/app.py` |
 | Agent | LangChain ReAct | ≥1.3.1 | `src/agents/`, `config/prompts.yaml` |
-| LLM (serving) | Groq — `qwen/qwen3.6-27b` | — | `config/settings.yaml` → `agent` |
+| LLM (serving) | DeepSeek — `deepseek-v4-flash` | — | `config/settings.yaml` → `agent` |
+| LLM (second arm) | Groq — `qwen/qwen3.6-27b` | — | `config/settings.yaml` → `agent`, selectable |
 | Database | PostgreSQL | 17 (Neon) | `DATABASE_URL` |
 | ORM / driver | SQLAlchemy + psycopg | ≥2.0 / ≥3.2 | `src/services/query/` |
 | Migrations | Alembic | ≥1.14 | `alembic/`, `alembic.ini` |
@@ -44,8 +45,8 @@ technology-vocabulary builder.
 | Package | Role |
 |---|---|
 | `langchain` | ReAct agent runtime and tool binding. |
-| `langchain-groq` | Serving provider, and the default for both profiles. |
-| `langchain-deepseek` | Second selectable serving provider (T0027). Reached only when `agent.provider` or a profile names `deepseek`; thinking is disabled so `temperature` applies. |
+| `langchain-groq` | Second selectable serving provider, and the eval judge's alternate branch. Reached only when `agent.provider` or a profile names `groq`. |
+| `langchain-deepseek` | Serving provider, and the default for both profiles since D-045. Thinking is disabled so `temperature` applies. |
 | `langchain-google-genai` | Gemini, used **only** as the eval judge — never on the serving path. |
 | `langgraph-checkpoint-postgres` | Short-term conversation memory, `session_id → thread_id`. |
 
@@ -112,14 +113,22 @@ expects the nested SQL-generation span to be a sibling of its tool span.
 For the current cost position, topology, environment variables, deploy procedures, and cron
 operation, see [Operations.md](Operations.md).
 
-## Evaluation quotas
+## Provider quotas and cost
 
-The serving agent uses Groq's free tier, while the DeepEval judge uses Gemini's free tier.
-This keeps evaluation work off the serving provider's quota.
-The current evaluation run is expected to cost zero on those free tiers.
-The paid-equivalent estimate is about 0.50 USD per run and is primarily judge-output driven.
-For the measured derivation and rate-limit caveats, see
+The serving agent is metered and the DeepEval judge is on Gemini's free tier, which keeps
+evaluation work off the serving provider's account (D-017).
+
+DeepSeek has no free tier and publishes no TPM or TPD limit, only account concurrency.
+A full 29-scenario evaluation run measured **$0.043** at `deepseek-v4-flash` list rates on
+2026-08-14, spending ~3.7K tokens per turn across 77 turns.
+Serving traffic on the demo is the same per-turn shape.
+For the measured derivation, see [T0027.3 DeepSeek arm](../evals/t0027_deepseek_arm.md); for the
+judge-side rate-limit caveats, see
 [`research/evaluation-strategy.md`](../research/evaluation-strategy.md), sections 4a and 4b.
+
+The Groq arm remains selectable on its free tier, at 8000 TPM and 200K TPD.
+That ceiling is what `eval.driver.turn_pacing_seconds` exists for: restore it to 75 whenever a
+profile moves back to `groq`.
 
 ## Deliberately not used
 

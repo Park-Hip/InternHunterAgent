@@ -1,6 +1,6 @@
 # Operations
 
-> **Last verified:** 2026-08-11 against `render.yaml`, `.env.example`,
+> **Last verified:** 2026-08-15 against `render.yaml`, `.env.example`,
 > `.github/workflows/ingestion.yml`, and the active migration/runbook records.
 > This document is the single owner of deploy topology, operational configuration, database
 > procedures, cron status, and incident response.
@@ -27,7 +27,8 @@ It never contains secret values.
 
 | Variable | Where set | Render mode | Ingestion workflow | Notes |
 |---|---|---|---|---|
-| `GROQ_API_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; ingestion does not call an LLM. |
+| `DEEPSEEK_API_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Not used | Serves the agent (D-045). Required whenever a profile selects `deepseek`, which both do. |
+| `GROQ_API_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | The selectable second serving arm; unused while both profiles are `deepseek`. Ingestion does not call an LLM. |
 | `GOOGLE_API_KEY` | `.env` only | Deliberately undeclared | Not used | Optional Gemini eval key; not declared for Render. |
 | `DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | GitHub `DATABASE_URL` secret | Cron and migrations use Neon's direct, non-pooled host. |
 | `LANGFUSE_SECRET_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |
@@ -39,6 +40,11 @@ It never contains secret values.
 
 `sync: false` in `render.yaml` means Render must supply the value in its dashboard.
 It does not synchronize or store the value in the repository.
+
+No provider key is required to boot. `src/core/config.py` requires only `DATABASE_URL` and the
+two `LANGFUSE_*` keys; each provider branch validates its own key and names the profile that
+selected it. A deploy therefore fails on the first agent call, not at startup, if the key for the
+provider named in `config/settings.yaml` is missing.
 
 ## Deploy flow
 

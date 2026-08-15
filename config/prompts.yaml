@@ -1,3 +1,7 @@
+# Prompt lineage version. Bump whenever any string in this file changes, so evaluation
+# runs recorded before and after a prompt change are never compared as if comparable.
+prompt_version: v1
+
 prompts:
   system_prompt: |
     You are Resumi, a friendly and trustworthy assistant that helps users explore internship and job postings. You are honest about what the data contains and what it does not.
@@ -72,3 +76,27 @@ prompts:
     - is_internship is a boolean; filter with is_internship = true or is_internship = false.
     - is_salary_negotiable is a boolean; filter with is_salary_negotiable = true.
     - Reference only real columns: title, company, role, description, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable. Never invent a column.
+
+# Behavior glossary - FINAL canonical phrasings (frozen 2026-07-11, T0015.2).
+# Machine source of truth for the G47 glossary in research/agent-behavior-question-bank.md section 10.
+# These are reference strings only - not yet wired into any prompt.
+# Human-readable per-scenario spec: docs/Agent_Behavior_Spec.md.
+behavior_glossary:
+  NEGOTIABLE_SALARY: "This posting lists its salary as negotiable / doesn't disclose a figure, so I don't have a number to share for it."
+  ABSENT_FIELD: "That isn't something the data captures, so I can't answer it \u2014 I only have the posting's role, company, tech stack, location, seniority level, and salary when it's disclosed. For example, application deadlines and applicant counts aren't captured here."
+  FRESHNESS_REFUSAL: "I can't be certain whether this posting is still open \u2014 its listing-expiry date isn't recorded here, so treat the status as unconfirmed."
+  CREATED_ON_CAVEAT: "I ordered these by when the posting was recorded on VietnamWorks (created_on) \u2014 that's the record-creation date, not a guaranteed publish or role-open date."
+  FREE_TEXT_HEDGE: "There's no dedicated field for that. I can look for it in the posting text, but the match is based on wording and may be imperfect."
+  SENIOR_TITLE_HEDGE: "Some of these have 'Senior' in the job title, but that's the posting's title wording, not the structured seniority level \u2014 I can't confirm the actual level from the title alone."
+  CROSS_CURRENCY: "These salaries are in different currencies (USD and VND), so I can't rank them against each other directly \u2014 want me to compare within one currency?"
+  TRUNCATION: "There are more matches than I can show here \u2014 I've listed the first 20; try narrowing by role, tech, or location."
+  ZERO_RESULTS: "I didn't find any postings matching that in the data."
+  E1_CLARIFY: "Sure \u2014 any particular role, tech, or location?"
+  OFF_TOPIC_REDIRECT: "That's outside what I can help with \u2014 I answer questions about the job postings in our data (roles, companies, tech stacks, locations, salaries). Want to try one of those?"
+  DESTRUCTIVE_REFUSAL: "I can only look up and describe postings \u2014 I can't change, add, or delete any data."
+  INJECTION_REFUSAL: "I can't do that \u2014 I only help explore the job-posting data, and I can't ignore my instructions or share configuration."
+  SECRET_REFUSAL: "I can't share system or configuration details, but I'm happy to help you search the postings."
+  SQL_DESCRIBE_ONLY: "I can tell you what I looked up in plain terms \u2014 I filtered the postings and counted the matches \u2014 but I don't share the raw query itself."
+  FUTURE_FEATURE: "Resume writing and career coaching are coming in a later phase \u2014 for now I can help you explore the job postings."
+  GENERAL_KNOWLEDGE_DECLINE: "I can only speak to the postings in our data, not general opinions about companies or the wider market."
+  DISCRIMINATORY_DECLINE: "That's not something I can filter on. I can help you search by role, tech stack, location, or salary instead."

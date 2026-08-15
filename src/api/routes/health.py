@@ -40,17 +40,17 @@ def _select_max_last_seen() -> date | None:
         return result.scalar()
 
 
-def get_data_snapshot_date() -> str:
-    """Real refresh date from data state, falling back to the configured value."""
+def get_data_snapshot_date() -> tuple[str, str]:
+    """Return the refresh date and whether it was measured or configured."""
     try:
         max_last_seen = _select_max_last_seen()
     except Exception:
         logger.warning("snapshot_date_query_failed_using_config_fallback", exc_info=True)
-        return _configured_snapshot_date()
+        return _configured_snapshot_date(), "configured_fallback"
     if max_last_seen is None:
         logger.info("snapshot_date_empty_table_using_config_fallback")
-        return _configured_snapshot_date()
-    return max_last_seen.isoformat()
+        return _configured_snapshot_date(), "configured_fallback"
+    return max_last_seen.isoformat(), "measured"
 
 
 def _select_one() -> None:
@@ -64,5 +64,9 @@ async def readiness_check():
         await asyncio.to_thread(_select_one)
     except Exception:
         return JSONResponse(status_code=503, content={"status": "error"})
-    snapshot_date = await asyncio.to_thread(get_data_snapshot_date)
-    return {"status": "ok", "data_snapshot_date": snapshot_date}
+    snapshot_date, snapshot_date_provenance = await asyncio.to_thread(get_data_snapshot_date)
+    return {
+        "status": "ok",
+        "data_snapshot_date": snapshot_date,
+        "data_snapshot_date_provenance": snapshot_date_provenance,
+    }

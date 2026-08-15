@@ -1,5 +1,6 @@
--- Idempotent schema initialisation for InternHunterAgent
--- Run with: docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/init_db.sql
+-- Retired schema snapshot retained only for historical comparison.
+-- Do not use this file to initialize an application or evaluation fixture database.
+-- Apply the current schema with: uv run alembic upgrade head
 
 CREATE TABLE IF NOT EXISTS raw_jobs (
     id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

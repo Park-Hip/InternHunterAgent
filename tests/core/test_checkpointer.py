@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from psycopg_pool import AsyncConnectionPool
 
 from src.core.checkpointer import _checkpointer_dsn, build_checkpointer, build_checkpointer_pool
 
@@ -18,6 +19,7 @@ def test_build_checkpointer_pool_uses_required_kwargs() -> None:
     assert pool.kwargs["autocommit"] is True
     assert pool.kwargs["prepare_threshold"] == 0
     assert "+psycopg" not in pool.conninfo
+    assert pool._check is AsyncConnectionPool.check_connection
 
 
 @pytest.mark.asyncio

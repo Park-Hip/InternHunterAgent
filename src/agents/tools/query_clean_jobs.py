@@ -87,6 +87,7 @@ async def query_clean_jobs(question: str, config: RunnableConfig) -> str:
     validation = validate_sql(sql)
 
     if not validation.valid:
+        logger.warning("query_clean_jobs.sql_rejected", reason=validation.reason)
         return f"I can't run that query: {validation.reason}"
 
     max_rows = load_max_rows()

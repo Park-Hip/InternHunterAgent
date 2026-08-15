@@ -251,8 +251,9 @@ T0010.1 (see §5) — a blank/whitespace-only `query` returns a clean `400`, dis
 
 - **Dataset.** The MVP began on a small fixed sample of internship postings in the original 4-column
   `clean_jobs` table. *Status: real ingestion implemented (T0009)* — `clean_jobs` now lands live
-  VietnamWorks AI/Data postings (via `scripts/init_db.sql` + `src/services/ingestion/`) with the
-  enriched schema described in §7; the old fixture seed script and its 4-column shape are retired.
+  VietnamWorks AI/Data postings (schema via `alembic upgrade head`, rows via
+  `src/services/ingestion/`) with the enriched schema described in §7; the old fixture seed script
+  and its 4-column shape are retired.
 - **Database.** PostgreSQL via SQLAlchemy; the engine and session factory live in `src/core/db.py`
   (`pool_pre_ping=True`). This app database is entirely separate from Langfuse's internal Postgres —
   different owners, lifecycles, and schemas.

@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 from typing import TypedDict
 
 from src.agents.runtime.react_agent import AgentRuntime
-from src.core.errors import BUSY_MESSAGE, classify_provider_busy_error
+from src.core.errors import BUSY_MESSAGE, GENERIC_ERROR_MESSAGE, classify_provider_busy_error
 from src.core.logger import logger
 
 FALLBACK_ANSWER = "I couldn't produce an answer for that — please try rephrasing."
@@ -38,6 +38,10 @@ async def generate_agent_response(
 
     answer = response["answer"]
     if answer is None or not answer.strip():
+        logger.warning(
+            "generate_agent_response.empty_answer_fallback",
+            session_id=session_id,
+        )
         answer = FALLBACK_ANSWER
 
     return {
@@ -76,6 +80,10 @@ async def stream_agent_response(
             yield event
 
         if not saw_token:
+            logger.warning(
+                "stream_agent_response.empty_answer_fallback",
+                session_id=session_id,
+            )
             yield {"type": "token", "text": FALLBACK_ANSWER}
 
         yield metadata_event
@@ -87,6 +95,7 @@ async def stream_agent_response(
             error=str(exc),
             reclassified_busy=provider_busy is not None,
         )
-        yield {"type": "error", "message": BUSY_MESSAGE}
+        message = BUSY_MESSAGE if provider_busy is not None else GENERIC_ERROR_MESSAGE
+        yield {"type": "error", "message": message}
 
     yield {"type": "done"}

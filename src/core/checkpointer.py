@@ -12,6 +12,7 @@ def _checkpointer_dsn() -> str:
 def build_checkpointer_pool() -> AsyncConnectionPool:
     return AsyncConnectionPool(
         conninfo=_checkpointer_dsn(),
+        check=AsyncConnectionPool.check_connection,
         kwargs={
             "autocommit": True,
             "row_factory": dict_row,

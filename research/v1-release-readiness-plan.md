@@ -8,8 +8,10 @@
 
 ## 0. TL;DR
 
-- **The §4 DoD is *mostly* met, not met.** Seven of eight bullets are observably true on
-  the live deploy. Bullet 6 — *"refuses an unsafe or unanswerable request … instead of
+- **The §4 DoD is *mostly* met, not met.** Seven of the eight bullets audited here are
+  observably true on the live deploy. A ninth bullet — an automatically refreshing corpus —
+  was added to the spec on 2026-08-12 (D-038) and is unmet while the cron stays parked.
+  Bullet 6 — *"refuses an unsafe or unanswerable request … instead of
   failing or guessing"* — is only half-true: unsafe requests are deterministically refused
   (SQL validator), but on *unanswerable* requests the model measurably guesses (freshness
   fabrication 1/3, hidden-salary prohibited phrasing 2/2), and the instrument that would
@@ -128,8 +130,7 @@ for the release. None contradict a DoD bullet.
   No ticket owns it yet.
 - **Ingestion coverage:** `max_jobs: 50` below the measured ~50–112 yield + fixed query
   order starves later queries (KI, MED — the two combinable fixes are recorded);
-  `pages_failed` produced but unconsumed; no within-run re-queue of failed pages;
-  `init_db.sql` diverges from the Alembic head (eval-fixture path risk).
+  `pages_failed` produced but unconsumed; no within-run re-queue of failed pages.
 - **Model behavior (eval-milestone territory, post-baseline):** duplicate identical tool
   call; out-of-schema stall latency; salary-sort currency scoping; id-first nudge
   best-effort. These are measured *by* M21's baseline, fixed only where prompt-v2's
@@ -237,8 +238,9 @@ applied, the docs telling the truth, and a tag on `main`.
   mitigation (D11).
 - **Release notes + `v1.0.0` tag on `main`** (and the Render deploy pinned to it).
 
-**Dependency ordering:** hard-blocked on M20 (trusted `main` + CI) and on M21's release
-bar being met or explicitly waived (D9). The keep-alive measurement (D7) should be
+**Dependency ordering:** hard-blocked on M20 (trusted `main` + CI), on the cron activation
+sequence (D-038 makes a live schedule a DoD bullet, so D2/D5/D6 sit before the tag), and on
+M21's release bar being met or explicitly waived (D9). The keep-alive measurement (D7) should be
 *recorded* by M22 but its outcome (shed-idle-connections / shrink window / $7 tier) does
 not block the tag — it changes config, not the artifact.
 
@@ -311,10 +313,9 @@ Decisions (a call to make):
   qualitative standard) counts as "refuses reliably enough for v1.0"? Alternatively:
   accept measured imperfection, document it as a known limitation in the release notes,
   and ship — that is a legitimate fork-A outcome, but it is yours to take.
-- **D10 — Does v1.0 require the nightly cron live?** The MVP spec explicitly accepts a
-  static snapshot (§5), so a parked-cron v1.0 is spec-compliant; the live refresh is
-  strictly better but couples the tag to D1/D2/D5/D6. Decide which side of the tag the
-  cron activation sits on.
+- **D10 — Does v1.0 require the nightly cron live? — settled 2026-08-12: yes.** `MVP_Spec.md`
+  §2 and §4 now make a self-refreshing corpus a required capability and a DoD bullet, so the
+  tag is coupled to D2/D5/D6 and the activation sequence. Recorded as `Decision_Log.md` D-038.
 - **D11 — 60-day Actions auto-disable mitigation.** The keepalive action the ticket named
   is defunct (ToS-blocked). Options: monthly manual no-op / a from-scratch self-ping
   workflow / accept-and-calendar it.

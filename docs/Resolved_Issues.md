@@ -14,15 +14,15 @@ original register entry (omitted where none was assigned).
 
 ## Categories
 - [Documentation drift](#documentation-drift) — 3
-- [Config, startup & deployment](#config-startup--deployment) — 8
+- [Config, startup & deployment](#config-startup--deployment) — 10
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
-- [Query tooling & SQL safety](#query-tooling--sql-safety) — 6
+- [Query tooling & SQL safety](#query-tooling--sql-safety) — 7
 - [Capacity & performance](#capacity--performance) — 1
-- [Evaluation harness](#evaluation-harness) — 10 (T0011.1–T0012.2)
-- [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 2
-  (T0021.2)
+- [Evaluation harness](#evaluation-harness) — 16
+- [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 4
+  (T0021.2-T0021.4)
 - [Earlier resolved (pre-register)](#earlier-resolved-pre-register--chronological) — 12
 
 ---
@@ -59,6 +59,14 @@ original register entry (omitted where none was assigned).
     matching reality).
 
 ## Config, startup & deployment
+- **`[MED · RESOLVED · T0021.4, 2026-08-12]` `/ready` could label a configured fallback date
+  as a measured snapshot after its date query failed.**
+  - **Found:** D6 production migration follow-up.
+  - **Resolution:** `/ready` returns `data_snapshot_date_provenance` as `measured` or
+    `configured_fallback`, and the demo labels a date as a snapshot only when it is measured.
+  - **Verified:** `tests/api/test_ready.py` covers measured, empty-table, and date-query-failure
+    provenance, while `tests/api/test_static_serving.py` verifies the client-side measured check.
+
 - **`[HIGH · RESOLVED · T0021.1, 2026-08-09]` The serving path lacked a pre-flight schema guard.**
   - **Resolution:** `8787495` added `assert_serving_schema()` before checkpointer startup.
     Missing, extra, or unreadable `clean_jobs` columns now fail FastAPI boot.
@@ -141,6 +149,20 @@ original register entry (omitted where none was assigned).
     secrets from the active repository surface.
     `archive/docs-pre-prune` preserves `infra/docker-compose.yaml` for the historical record. <!-- archived-on-tag -->
   - **Verified:** the root `docker-compose.yml` remains the separate local app Postgres definition.
+
+- **`[MED · RESOLVED · T0021.3, 2026-08-12]` Dead checkpointer connections could be recorded as
+  provider pressure.**
+  - **Found:** T0019.7 live Render investigation.
+  - **Resolution:** `build_checkpointer_pool` now passes
+    `check=AsyncConnectionPool.check_connection`, so invalid idle connections are recycled before
+    callers borrow them.
+    `classify_provider_busy_error` also detects a `psycopg` or `psycopg_pool` exception anywhere in
+    its chain before provider matching and leaves that failure unclassified.
+  - **Verified:** `tests/core/test_checkpointer.py` asserts the configured health callback.
+    `tests/core/test_errors.py` covers direct and chained `PoolTimeout` failures plus a provider
+    429 that remains classified as busy.
+  - **Residual:** Pool sizing, reconnect policy, and the existing third-party generic type ignores
+    are deliberately out of scope.
 
 ## API layer
 - **`[RESOLVED · T0012.4, 2026-07-06]` `trace_url` always returned `None` in
@@ -377,6 +399,15 @@ original register entry (omitted where none was assigned).
     of thing that recurs — the wildcard hid it, and the objective's illustrative list understated
     it.
 
+- **`[LOW · RESOLVED · T0021.3, 2026-08-12]` Rejected generated SQL had no structured operator
+  signal.**
+  - **Found:** T0021.2 follow-up.
+  - **Resolution:** `query_clean_jobs` now logs
+    `query_clean_jobs.sql_rejected` with the validator reason before returning the existing refusal
+    text.
+  - **Verified:** `tests/agents/tools/test_query_clean_jobs.py` asserts the warning event and
+    reason, while retaining the no-execution and return-text checks.
+
 ## Capacity & performance
 - **`[LOW · RESOLVED · 2026-07-02]` Per-request `client.flush()` on the event loop.**
   - `react_agent.ainvoke` flushed the Langfuse client synchronously on every request — blocking I/O
@@ -386,6 +417,68 @@ original register entry (omitted where none was assigned).
     `Code_Review_Notes.md` bug 7. <!-- archived-on-tag -->
 
 ## Evaluation harness
+
+- **`[LOW · RESOLVED · T0026.2, 2026-08-14]` Eval `conftest.py` redirected `DATABASE_URL` during
+  every pytest collection.**
+  - **Found:** T0012.7. The redirect was a module-level `os.environ` write, so importing the two
+    eval modules pointed the whole session at the fixture database, `tests/` included.
+  - **Resolution:** `evals/conftest.py` applies the redirect as an autouse fixture during the setup
+    of a test in that directory, and undoes it afterwards. It also clears the cached `Settings()`
+    and SQLAlchemy engine, without which an earlier test's cached objects would keep the serving
+    DSN and make the redirect decorative. `tests/evals/conftest.py` restores the environment once
+    collection is finished, containing the separate process-wide bind that importing
+    `evals/driver.py` performs.
+  - **Verified:** After the full suite, `DATABASE_URL` ends on the serving DSN rather than
+    `internhunter_eval`, and an isolated non-eval module never sees the fixture DSN at all.
+    Disabling the autouse fixture makes an eval-side probe fail on the serving DSN, so the
+    redirect that remains is load-bearing.
+
+- **`[MED · RESOLVED · T0025.9, 2026-08-13]` The deterministic grader imposed an implicit tool
+  expectation on every scenario not named in a hardcoded no-tool set.**
+  - **Found:** T0025.7's real capture labelled all three `HON-SQL-DESCRIBE-1` answers correct, but
+    the grader marked each one failed for not calling `query_clean_jobs`.
+  - **Resolution:** The frozen scenario registry now owns `expected_tools` for all 29 scenarios.
+    This covers deliberate no-tool and mixed-intent cases, and removes the grader default.
+  - **Verified:** The T0025.7 regrade agrees with all 13 human turn labels.
+    `HON-SQL-DESCRIBE-1` now passes with `tools_called: []`.
+
+- **`[MED · RESOLVED · T0025.9, 2026-08-13]` CI did not replay recorded three-seam evidence.**
+  - **Found:** M25 instrument rescope on 2026-08-13.
+  - **Resolution:** The committed replay validates its sanitized schema, rebuilds the frozen
+    fixture, executes generated and reference SQL, and invokes the deterministic grader.
+  - **Verified:** The replay gate passes locally without a serving-model or judge call.
+
+- **`[HIGH · RESOLVED · T0025.7, 2026-08-13]` Execution-accuracy artifacts could not serialize
+  real date or decimal query results.**
+  - **Found:** Current-configuration acceptance verification.
+    `HON-CREATED-ON-1` compared correctly against the frozen fixture, but the CLI failed while
+    serializing its `created_on` date.
+  - **Resolution:** `evals.execution_accuracy` now serializes report-only result values with
+    `default=str`.
+    Comparison remains type-aware and unchanged before report serialization.
+  - **Verified:** The real `HON-CREATED-ON-1` CLI invocation returns `PASS` and prints its date.
+    Focused execution-accuracy tests cover date and decimal CLI output.
+
+- **`[HIGH · RESOLVED · T0025.7, 2026-08-13]` The execution-accuracy report could not be captured
+  to a file on Windows.**
+  - **Found:** Current-configuration acceptance verification, immediately behind the date and
+    decimal serialization fix.
+    The CLI printed `ensure_ascii=False` JSON, so a redirected stdout raised `UnicodeEncodeError`
+    under cp1252 for every report carrying the fixture's Vietnamese company names.
+    Redirection was the only way to produce the grader's `--execution-accuracy` input.
+  - **Resolution:** `evals.execution_accuracy` accepts `--output` and writes the report as UTF-8,
+    matching the trace viewer's convention. Printing to stdout is unchanged.
+  - **Verified:** A real fixture-backed run covering `NGÂN HÀNG TMCP QUÂN ĐỘI – MBBANK`, a
+    `created_on` date, and decimal salaries writes a report the grader then consumes, with no
+    `PYTHONUTF8` override.
+
+- **`[MED · RESOLVED · T0025.7, 2026-08-13]` A completed empty-answer turn was indistinguishable
+  from an uncollected scenario in outcome summaries.**
+  - **Found:** Current-configuration acceptance verification.
+  - **Resolution:** Completed turns without an answer are now `INFRA` rather than `UNRUN`.
+    Grader summaries now include `empty_answer_count` explicitly.
+  - **Verified:** A persisted completed empty-answer turn produces `INFRA`,
+    `answer_present`, and `empty_answer_count: 1`.
 
 ### T0011.1
 - **`[RESOLVED · T0012.9, 2026-07-06 — obsolete]` `gpt-oss-120b` GEval score looked low relative to
@@ -519,11 +612,28 @@ original register entry (omitted where none was assigned).
 
 ## Error-handling honesty audit (2026-07-22)
 
-> The audit's two `[HIGH]` entries — the cases where a real exception was discarded at a catch site
-> — were closed by **T0021.2 (2026-08-09)**. T0021.2 was deliberately **log-only**: it makes
-> failures visible to operators and changes **no user-facing string**. The audit's other half — that
-> the user is told "the demo is busy" regardless of actual cause — is still open, deferred to
-> **T0021.4**, and remains tracked in `Known_Issues.md` under the same section header.
+> The audit's two `[HIGH]` entries - the cases where a real exception was discarded at a catch site
+> - were closed by **T0021.2 (2026-08-09)**. T0021.2 was deliberately **log-only**: it makes
+> failures visible to operators and changes **no user-facing string**. T0021.4 closed the other
+> half by separating classified provider pressure from unattributed service failures.
+
+- **`[MED · RESOLVED · T0021.4, 2026-08-12]` Streaming failures overstated their known cause.**
+  - **Found:** T0021.2 follow-up.
+  - **Resolution:** `BUSY_MESSAGE` now remains limited to classified provider pressure.
+    All unattributed failures use `GENERIC_ERROR_MESSAGE` on both query endpoints.
+  - **Verified:** Focused service and API tests cover both streaming message branches and one-shot
+    500 detail.
+
+- **`[MED · RESOLVED · T0021.3, 2026-08-12]` Empty agent answers fell back without an operator
+  signal on the synchronous and streaming paths.**
+  - **Found:** The synchronous path was registered by the 2026-07-22 error-handling audit.
+    T0021.3 found the matching streaming path while implementing the same signal.
+  - **Resolution:** Both fallback branches now emit distinct warning events with the session ID:
+    `generate_agent_response.empty_answer_fallback` and
+    `stream_agent_response.empty_answer_fallback`.
+    The fallback answer itself is unchanged.
+  - **Verified:** `tests/agents/test_service.py` asserts each event name and its session ID while
+    preserving the fallback text checks.
 
 - **`[HIGH · RESOLVED · T0021.2, 2026-08-09]` `get_job_details` swallowed `ExecutorError` with no
   logging — the same defect as the tracked `query_clean_jobs` one, never extended to the second
@@ -559,16 +669,10 @@ original register entry (omitted where none was assigned).
   - **Verified:** `tests/agents/test_service.py::StreamAgentResponseTests` — two cases, covering
     `reclassified_busy` false (a plain `RuntimeError`) and true (a message the classifier matches as
     provider pressure).
-  - **Deliberately only half-fixed.** The user-facing message is still `BUSY_MESSAGE` for **every**
-    failure, including non-provider ones. The entry's proposed `GENERIC_ERROR_MESSAGE` branch was
-    **not** taken: introducing a second user-facing string is honesty work, not observability work,
-    and belongs with T0021.4's prompt/messaging pass. So the "misreported to the user" half of this
-    entry's title is still true in production — closed here as an *observability* fix only, on the
-    reasoning that the log line was the load-bearing part and a silent failure cannot be diagnosed
-    at all, whereas a mislabelled one can at least be seen. **That remaining half is tracked as a
-    live `[MED · OPEN]` entry** in `Known_Issues.md` → Error-handling honesty audit ("Every
-    streaming failure is still reported to the user as 'the demo is busy'") — deliberately filed as
-    its own register entry rather than left as a caveat here, so a `· OPEN` sweep finds it.
+  - **Scope boundary:** This ticket intentionally left visitor-facing wording to T0021.4 so the
+    observability change could be evaluated independently.
+    T0021.4 later limited `BUSY_MESSAGE` to classified provider pressure and introduced the generic
+    message for unattributed failures.
 
 ## Earlier resolved (pre-register / chronological)
 - **`[MED · RESOLVED · T0010.7, 2026-07-02]` Explicit user-requested counts were silently overridden

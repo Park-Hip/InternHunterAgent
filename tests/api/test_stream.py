@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from src.agents.service import FALLBACK_ANSWER
 from src.api.app import create_app
-from src.core.errors import BUSY_MESSAGE
+from src.core.errors import GENERIC_ERROR_MESSAGE
 
 
 def _parse_sse_events(body: str) -> list[tuple[str, dict[str, str | None]]]:
@@ -105,7 +105,7 @@ class StreamQueryRouteTests(unittest.TestCase):
         self.assertNotIn("database password leaked", response.text)
         events = _parse_sse_events(response.text)
         self.assertEqual([event_type for event_type, _ in events], ["session", "token", "error", "done"])
-        self.assertEqual(events[2][1], {"message": BUSY_MESSAGE})
+        self.assertEqual(events[2][1], {"message": GENERIC_ERROR_MESSAGE})
         self.assertEqual(events[3][1], {})
 
     def test_stream_route_returns_uuid4_session_when_omitted(self) -> None:

@@ -4,20 +4,35 @@ Offline tooling for the eval harness — kept entirely separate from the live
 ingestion path and the `internhunter` production database.
 """
 
+import os
+from contextlib import contextmanager
 from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
-
-from src.core.config import settings
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCHEMA_SQL_PATH = REPO_ROOT / "scripts" / "init_db.sql"
 SEED_SQL_PATH = Path(__file__).resolve().parent / "seed_eval_db.sql"
+SETTINGS_PATH = REPO_ROOT / "config" / "settings.yaml"
 
 
-def _load_fixture_cfg() -> dict:
-    eval_cfg = settings.config_yaml.get("eval")
+def fixture_database_url() -> str:
+    """Resolve the fixture DSN. Sole owner: driver, loader, and grading all call this.
+
+    Reads the YAML directly instead of going through ``src.core.config.settings``,
+    and that is load-bearing rather than lazy. ``load_settings()`` constructs and
+    *caches* ``Settings()``, which takes ``DATABASE_URL`` from the environment and
+    ``.env``. ``evals/driver.py`` calls this to discover the fixture DSN and only
+    then writes it into ``DATABASE_URL``. Resolving through ``settings`` would
+    freeze the cache against the serving database first, and every later write
+    would be ignored - so a capture would silently run the agent against
+    production data instead of the frozen fixture.
+    """
+    settings_yaml = yaml.safe_load(SETTINGS_PATH.read_text(encoding="utf-8"))
+    eval_cfg = (settings_yaml or {}).get("eval")
     if not isinstance(eval_cfg, dict):
         raise ValueError("Missing 'eval' section in config/settings.yaml")
 
@@ -25,11 +40,6 @@ def _load_fixture_cfg() -> dict:
     if not isinstance(fixture_cfg, dict):
         raise ValueError("Missing 'eval.fixture' section in config/settings.yaml")
 
-    return fixture_cfg
-
-
-def _fixture_database_url() -> str:
-    fixture_cfg = _load_fixture_cfg()
     database_url = fixture_cfg.get("database_url")
     if not isinstance(database_url, str) or not database_url.strip():
         raise ValueError("Missing or empty 'eval.fixture.database_url' in config/settings.yaml")
@@ -88,6 +98,40 @@ def _run_sql_file(dsn: str, path: Path) -> None:
         engine.dispose()
 
 
+@contextmanager
+def _fixture_migration_url(dsn: str):
+    """Temporarily direct Alembic at the offline fixture database."""
+    previous_url = os.environ.get("ALEMBIC_DATABASE_URL")
+    os.environ["ALEMBIC_DATABASE_URL"] = dsn
+    try:
+        yield
+    finally:
+        if previous_url is None:
+            os.environ.pop("ALEMBIC_DATABASE_URL", None)
+        else:
+            os.environ["ALEMBIC_DATABASE_URL"] = previous_url
+
+
+def _upgrade_schema(dsn: str) -> None:
+    """Apply the production migration chain to the fixture database."""
+    alembic_cfg = Config(str(REPO_ROOT / "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", str(REPO_ROOT / "alembic"))
+    with _fixture_migration_url(dsn):
+        command.upgrade(alembic_cfg, "head")
+
+
+def _drop_fixture_schema(dsn: str) -> None:
+    """Clear the dedicated fixture schema before recreating its pinned dataset."""
+    engine = create_engine(dsn)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DROP TABLE IF EXISTS clean_jobs, raw_jobs, alembic_version CASCADE")
+            )
+    finally:
+        engine.dispose()
+
+
 def _ensure_database_exists(dsn: str) -> None:
     url = make_url(dsn)
     target_db = url.database
@@ -107,28 +151,22 @@ def _ensure_database_exists(dsn: str) -> None:
 
 
 def load_fixture() -> None:
-    """Ensure internhunter_eval exists, then (re)apply schema + seed data."""
-    dsn = _fixture_database_url()
+    """Rebuild the dedicated fixture schema through Alembic and load seed data."""
+    dsn = fixture_database_url()
     _ensure_database_exists(dsn)
-    _run_sql_file(dsn, SCHEMA_SQL_PATH)
+    _drop_fixture_schema(dsn)
+    _upgrade_schema(dsn)
     _run_sql_file(dsn, SEED_SQL_PATH)
 
 
 def reset_fixture() -> None:
     """Drop the fixture tables and rebuild them from scratch."""
-    dsn = _fixture_database_url()
-    engine = create_engine(dsn)
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS clean_jobs, raw_jobs CASCADE"))
-    finally:
-        engine.dispose()
     load_fixture()
 
 
 if __name__ == "__main__":
     load_fixture()
-    engine = create_engine(_fixture_database_url())
+    engine = create_engine(fixture_database_url())
     try:
         with engine.connect() as conn:
             count = conn.execute(text("SELECT COUNT(*) FROM clean_jobs")).scalar()

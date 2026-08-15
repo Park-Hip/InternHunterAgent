@@ -15,6 +15,7 @@ Use [the decision log](../../docs/Decision_Log.md) for the compact, current deci
 | [Streaming implementation](streaming-implementation-plan.md) | T0017 shipped. | MVP Technical Design. |
 | [Schema enrichment](schema-enrichment-plan.md) | M13 shipped. | Schema Contract and Decision Log. |
 | [Behavior question bank](agent-behavior-question-bank.md) | The behavior-design track is parked. | Agent Behavior Spec if that track resumes. |
+| [Eval cost and rate limits](eval-cost-and-rate-limits.md) | T0025.10 folded its durable mechanics into the evaluation strategy. | Evaluation strategy, sections 4a and 4b. |
 
 Archived documents are point-in-time records.
 Their historical links and prose are intentionally left unchanged, including paths that were valid

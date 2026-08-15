@@ -6,3 +6,5 @@ __pycache__/
 .uv-cache
 .deepeval/
 .deepeval-cache.json
+evals/runs/
+.lavish/

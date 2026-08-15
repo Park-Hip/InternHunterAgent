@@ -24,7 +24,11 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            {"status": "ok", "data_snapshot_date": "2026-07-19"},
+            {
+                "status": "ok",
+                "data_snapshot_date": "2026-07-19",
+                "data_snapshot_date_provenance": "measured",
+            },
         )
 
     def test_ready_returns_503_when_db_check_fails(self) -> None:
@@ -51,6 +55,7 @@ class ReadinessTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data_snapshot_date"], "2026-07-14")
+        self.assertEqual(response.json()["data_snapshot_date_provenance"], "configured_fallback")
 
     def test_ready_surfaces_max_last_seen_date(self) -> None:
         with patch("src.api.routes.health._select_one", return_value=None), patch(
@@ -60,6 +65,7 @@ class ReadinessTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data_snapshot_date"], "2026-07-19")
+        self.assertEqual(response.json()["data_snapshot_date_provenance"], "measured")
 
     def test_ready_falls_back_when_date_query_raises(self) -> None:
         with patch("src.api.routes.health._select_one", return_value=None), patch(
@@ -70,6 +76,7 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
         self.assertEqual(response.json()["data_snapshot_date"], "2026-07-14")
+        self.assertEqual(response.json()["data_snapshot_date_provenance"], "configured_fallback")
 
     def test_ready_skips_date_query_when_db_check_fails(self) -> None:
         with patch("src.api.routes.health._select_one", side_effect=RuntimeError("down")), patch(

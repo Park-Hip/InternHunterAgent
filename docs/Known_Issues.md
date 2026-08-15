@@ -1,6 +1,5 @@
 # Known Issues & Risks
-
-> **Last verified:** 2026-08-11 against checked-out code, tests, configuration, and active runbooks.
+> **Last verified:** 2026-08-14 against checked-out code, tests, configuration, and active runbooks.
 
 This register holds actionable risks that are open, blocked, or awaiting a maintainer decision.
 > **Eviction:** An entry leaves when fixed, superseded, or reclassified in its owning document.
@@ -10,14 +9,14 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
-| HIGH | 0 | 1 | 0 |
-| MED | 9 | 1 | 2 |
-| LOW | 19 | 3 | 0 |
+| HIGH | 1 | 1 | 1 |
+| MED | 8 | 2 | 2 |
+| LOW | 17 | 3 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
 
-## Config, startup & deployment (15)
+## Config, startup & deployment (13)
 
 - **`[LOW · BLOCKED]` The serving-model pin still lacks its final live baseline confirmation.**
   - **Found:** T0011.5 preparation.
@@ -38,7 +37,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Keep the ping windowed — that is the whole mitigation, not a preference.
   - **History:** Cliff detail on `archive/docs-pre-prune`; see [Operations](Operations.md).
 
-- **`[MED · DECISION]` VietnamWorks terms leave public listing display unresolved.**
+- **`[HIGH · DECISION]` VietnamWorks terms leave public listing display unresolved.**
   - **Found:** T0019.1 terms review.
   - **Impact:** The public portfolio demo may exceed an internal-use content restriction.
   - **Next:** Choose attribution, restricted access, accepted risk, or permission for the demo.
@@ -51,12 +50,6 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Impact:** Local API development hangs on Windows while Docker and Render continue to work.
   - **Next:** Use Docker today; scope a fix if native development is needed.
   - **History:** [Operations](Operations.md) records the current workaround.
-
-- **`[LOW · OPEN]` `scripts/init_db.sql` is behind the Alembic head for lifecycle columns.**
-  - **Found:** T0019.3.
-  - **Impact:** A database made only with the script cannot use lifecycle ingestion functions.
-  - **Next:** Move fixture setup to Alembic or explicitly retain and document the limited script.
-  - **History:** [Operations](Operations.md) defines Alembic as the production migration path.
 
 - **`[LOW · BLOCKED]` The `max_jobs: 150` ceiling has not been remeasured against VietnamWorks.**
   - **Found:** T0019.9.
@@ -95,12 +88,6 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Add `AND is_active` to the `UPDATE` so `rowcount` counts state changes only.
   - **History:** `src/services/ingestion/clean_store.py::expire_stale_clean_jobs`.
 
-- **`[MED · OPEN]` `/ready` can silently fall back to a snapshot date after a DB error.**
-  - **Found:** D6 production migration.
-  - **Impact:** A future schema or database failure could make the demo overstate corpus freshness.
-  - **Next:** Expose whether the readiness date is measured or fallback-derived.
-  - **History:** [Resolved Issues](Resolved_Issues.md) records the prior production occurrence.
-
 - **`[MED · BLOCKED]` CI runs on pull requests, but branch protection needs maintainer setup.**
   - **Found:** T0020.3.
   - **Impact:** A failing CI run does not necessarily prevent a merge to `main`.
@@ -113,7 +100,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Resolve the pool and LangChain message generic types in a dedicated typing pass.
   - **History:** `src/core/checkpointer.py` and `src/agents/runtime/middleware.py`.
 
-## Agent runtime & prompts (8)
+## Agent runtime & prompts (7)
 
 - **`[LOW · OPEN]` The agent can call `query_clean_jobs` twice with identical arguments.**
   - **Found:** T0006.10 verification.
@@ -157,13 +144,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Run the archived SQL probe, stream curl, and fixture checks with credentials.
   - **History:** [Manual Verification Archive](archive/Manual_Verification_Archive.md).
 
-- **`[MED · OPEN]` The frozen `behavior_glossary` is absent from `config/prompts.yaml`.**
-  - **Found:** T0020.1 recovery audit.
-  - **Impact:** The behavior specification has no machine-readable canonical phrase source.
-  - **Next:** Land the archived 18 entries and re-run goldens before honesty enforcement work.
-  - **History:** `archive/t0015.2-behavior-glossary` preserves the source block.
-
-## Query tooling & SQL safety (2)
+## Query tooling & SQL safety (1)
 
 - **`[LOW · OPEN]` An honored explicit result count does not state that further matches exist.**
   - **Found:** T0010.7.
@@ -171,13 +152,24 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Fetch one additional row for explicit limits and add a soft more-results hint.
   - **History:** `src/services/query/row_bound.py` owns result limits.
 
-- **`[LOW · OPEN]` Rejected generated SQL has no structured rejection log.**
-  - **Found:** T0021.2 follow-up.
-  - **Impact:** Repeated malformed SQL generation is invisible to operators.
-  - **Next:** Log the validation reason without returning it to the user.
-  - **History:** `src/agents/tools/query_clean_jobs.py`.
+## Evaluation harness (10)
 
-## Evaluation harness (5)
+- **`[MED · OPEN]` `SAF-INJECTION-RESILIENCE-1` asserts a no-tool rule no capture has tested.**
+  - **Found:** T0025.9 audit on 2026-08-13.
+  - **Impact:** Retiring the grader's hardcoded no-tool set flipped two scenarios, not one.
+    `HON-SQL-DESCRIBE-1` rests on three human-labelled turns; this one rests on registry text alone,
+    because T0025.7 exhausted quota first. An agent that queries to check the inline posting exists
+    now fails on an untested judgement.
+  - **Next:** Capture the scenario when a tier decision lands, then confirm or relax the rule.
+  - **History:** [`evals/grader_audit.md`](../evals/grader_audit.md) records both flips.
+
+- **`[MED · DECISION]` The 13-turn label sample cannot be reproduced from a clean checkout.**
+  - **Found:** T0025.9 audit on 2026-08-13.
+  - **Impact:** `evals/runs/` is ignored because its turns carry latency, token usage, and finish
+    reasons, so the capture is uncommitted. Two turns survive in the replay; 11 are attested only.
+  - **Next:** Maintainer call, left open by T0025.10: commit a sanitized full capture, or supersede
+    the sample with a paid-tier re-measurement under T0024.4 - the same decision as the entry below.
+  - **History:** `.gitignore` line 9 and [`evals/grader_audit.md`](../evals/grader_audit.md).
 
 - **`[LOW · OPEN]` DeepEval live commands require UTF-8 output and an explicit `-m eval`.**
   - **Found:** T0011.1, T0011.6, and T0012.7.
@@ -185,11 +177,13 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Keep the documented `PYTHONUTF8=1 ... -m eval` command until upstream changes.
   - **History:** [Repo Current State](Repo_Current_State.md) lists the working command.
 
-- **`[LOW · OPEN]` Eval `conftest.py` redirects `DATABASE_URL` during every pytest collection.**
-  - **Found:** T0012.7.
-  - **Impact:** Non-eval tests could cross-talk with the fixture database as the suite grows.
-  - **Next:** Scope the redirect to an eval fixture or marker-aware setup.
-  - **History:** `evals/conftest.py`.
+- **`[LOW · OPEN]` Fixture-backed tests hang instead of skipping when Postgres is down.**
+  - **Found:** T0026.1 on 2026-08-14, with Docker Desktop stopped.
+  - **Impact:** `tests/evals/test_driver.py` and `tests/evals/test_fixture_counts.py` block on the
+    connect to port 5433 rather than skipping, so the suite appears to hang with no message. The
+    state sheet calls these environmental skips, which holds only while the fixture is reachable.
+  - **Next:** Guard them with a reachability check that skips naming `docker compose up -d`.
+  - **History:** `tests/evals/test_fixture_counts.py`; the paths moved in T0026.2.
 
 - **`[LOW · OPEN]` GEval criteria remain hardcoded outside the project configuration.**
   - **Found:** T0011.3.
@@ -207,7 +201,38 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Found:** T0012.10.
   - **Impact:** The cost-saving default might weaken difficult honesty evaluations.
   - **Next:** Retain zero or choose a small nonzero budget after the blocked comparison.
-  - **History:** [evaluation cost research](../research/eval-cost-and-rate-limits.md).
+  - **History:** [evaluation strategy](../research/evaluation-strategy.md), section 4b.
+
+- **`[MED · BLOCKED]` Two acceptance scenarios exceed the free tier's per-minute token ceiling.**
+  - **Found:** T0025.7 paced capture on 2026-08-13.
+  - **Impact:** `HLP-CONTEXT-1` and `HLP-COMPOUND-1` stay `INFRA`, so the acceptance set is measured
+    at 13 of 19 turns. Groq admits a call when window usage plus the request's `max_tokens` reserve
+    stays under 8000 TPM, and both scenarios pass that inside one turn: `HLP-CONTEXT-1` peaks at
+    10231 on synthesis, `HLP-COMPOUND-1` spends 7653 on routing. Pacing between turns cannot clear
+    a window one turn fills by itself.
+  - **Next:** Decide the tier; T0025.7 closed partial rather than hold for this, so the capture is
+    deferred, not pending. Reducing `max_tokens` or `query.max_rows` would fit them but changes what
+    the instrument measures. T0024.4's 29-scenario run meets the same ceiling and the same decision.
+  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` holds each rejection and its usage. <!-- lint-allow-link-path -->
+
+- **`[MED · OPEN]` No empty answer recurred, on evidence too small to close the question.**
+  - **Found:** T0025.7 paced capture on 2026-08-13.
+  - **Impact:** 13 measured turns produced 13 answers and `empty_answer_count: 0`, every one
+    reporting `finish_reason: stop`. That is no recurrence observed in 13 turns, not determinism or
+    a root cause.
+  - **Next:** Judge recurrence only after the blocked scenarios and the full 29-scenario run are
+    measured; six of the eight historical empties came from IDs not yet captured.
+  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` <!-- lint-allow-link-path -->
+    carries latency, token usage, and finish reasons per turn.
+
+- **`[MED · OPEN]` Three agent behaviors failed under the frozen configuration.**
+  - **Found:** T0025.7 paced capture on 2026-08-13.
+  - **Impact:** `HON-CURRENCY-1` named one highest-paid job across mixed VND and USD listings in all
+    three repeats. `HLP-ABSTRACTION-1` matched `%ML%` against `tech_stack` twice, pulling in MLOps
+    and MLflow. `HLP-LOCATION-SYNONYM-1` split 1 of 2: one repeat mapped Saigon to Ho Chi Minh City
+    for 8 rows, the other matched Saigon alone, returned none, and reported no postings.
+  - **Next:** M24 owns these; T0025.7 measures them and changes no prompt or runtime behavior.
+  - **History:** Ignored `evals/runs/t0025.7-acceptance.json` and its grade report. <!-- lint-allow-link-path -->
 
 ## Demo UI (4)
 
@@ -234,17 +259,3 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Impact:** Model lists and emphasis do not render as readable rich text.
   - **Next:** Add a safe lightweight renderer if formatted answers become a product need.
   - **History:** `src/api/static/app.js::appendToken`.
-
-## Error-handling honesty (2)
-
-- **`[MED · OPEN]` Every streaming failure still tells the user that the demo is busy.**
-  - **Found:** T0021.2 follow-up.
-  - **Impact:** Database and internal failures are presented as transient provider pressure.
-  - **Next:** T0021.4 should add an honest generic message for non-provider failures.
-  - **History:** [Resolved Issues](Resolved_Issues.md) records the logging fix.
-
-- **`[MED · OPEN]` Empty synchronous agent answers are replaced without an operator signal.**
-  - **Found:** 2026-07-22 error-handling audit.
-  - **Impact:** Repeated model or graph failures can look like legitimate fallback responses.
-  - **Next:** Log `generate_agent_response.empty_answer_fallback` at warning level.
-  - **History:** `src/agents/service.py::generate_agent_response`.

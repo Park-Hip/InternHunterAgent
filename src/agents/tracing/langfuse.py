@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from langfuse import Langfuse, get_client
 from langfuse.langchain import CallbackHandler
 
@@ -9,13 +11,16 @@ from src.core.logger import logger
 _langfuse_handler: CallbackHandler | None = None
 
 try:
-    if settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY:
+    tracing_disabled = os.getenv("LANGFUSE_ENABLED", "true").lower() in {"0", "false", "no"}
+    if not tracing_disabled and settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY:
         _langfuse = Langfuse(
             public_key=settings.LANGFUSE_PUBLIC_KEY,
             secret_key=settings.LANGFUSE_SECRET_KEY,
             host=settings.LANGFUSE_BASE_URL,
         )
         _langfuse_handler = CallbackHandler()
+    elif tracing_disabled:
+        logger.info("Langfuse tracing disabled for this process")
     else:
         logger.warning("Langfuse tracing disabled: missing Langfuse credentials")
 except Exception as exc:

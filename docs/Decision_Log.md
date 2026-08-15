@@ -1,6 +1,6 @@
 # Decision Log
 
-> **Last verified:** 2026-08-11.
+> **Last verified:** 2026-08-13.
 > This is the compact index of durable project decisions harvested from executed research.
 > It records the choice and points to the preserved reasoning.
 > Current operational facts belong in the document that owns them.
@@ -12,45 +12,123 @@
 
 | ID | Decision | Status |
 |---|---|---|
-| D-037 | Evaluation baselines freeze fixture data with the agent-visible contract | Active |
-| D-036 | The source market is Vietnamese job boards, not global ATS aggregators | Active |
-| D-035 | The tracked `skills/` copy is canonical | Active |
-| D-034 | VietnamWorks automation passed the robots.txt and terms gate | Active |
-| D-033 | Render hosts the portfolio demo | Active |
-| D-032 | Production uses a slim, non-root Python Docker image | Active |
-| D-031 | Production Postgres uses Neon directly, not the pooler | Active |
-| D-030 | Production secrets are Render runtime environment variables | Active |
-| D-029 | Langfuse Cloud Hobby in Japan provides tracing | Active |
-| D-028 | The demo uses the Render subdomain and same-origin serving | Active |
-| D-027 | Render auto-deploys pushes to main | Active |
-| D-026 | Liveness and readiness are separate endpoints | Active |
-| D-025 | The demo has a 10 USD monthly cost ceiling | Active |
-| D-024 | Ingestion runs externally through GitHub Actions | Active |
-| D-023 | Schema changes use Alembic migrations | Active |
-| D-022 | Ingestion accumulates records instead of truncating clean jobs | Active |
-| D-021 | Lifecycle data is hidden until honesty behavior is measured | Active |
-| D-020 | Production ingestion needs a yield floor, rollback path, and schema assertion | Active |
-| D-019 | Keep-alive is windowed and must be measured against Neon compute use | Active |
-| D-018 | Offline evaluation precedes online monitoring | Active |
-| D-017 | Gemini judges evaluation while Groq serves the agent | Active |
-| D-016 | Evaluation covers outcome, trajectory, and component layers | Active |
-| D-015 | V1 schema changes are decided before the schema freeze | Active |
-| D-014 | Tech stack uses an external vocabulary, not a hardcoded allowlist | Active |
-| D-013 | Tech stack includes AI and data techniques as well as technologies | Active |
-| D-012 | Job level is agent-visible in v1 | Active |
-| D-011 | Listing expiry comes from the truthful source expiry field | Active |
-| D-010 | Created-on is preserved, while posted date is never synthesized | Active |
-| D-009 | Stream extraction tries event v3 and keeps a message fallback | Active |
-| D-008 | Streaming uses a two-gate filter to prevent internal token leakage | Active |
-| D-007 | Streaming uses FastAPI's native SSE response | Active |
-| D-006 | The stream has typed terminal events | Active |
-| D-005 | Mid-stream failures are in-band error events | Active |
-| D-004 | The demo is an editorial vanilla front end | Active |
-| D-003 | The demo UI is static and same-origin with FastAPI | Active |
-| D-002 | Browser SSE over POST uses fetch and ReadableStream | Active |
-| D-001 | The behavior question bank is exploratory, not a product commitment | Active |
+| D-044 | Temperature 0 is rejected for the ReAct seam | Active |
+| D-043 | Keep the DeepEval harness, discard its HTTP transport | Active |
+| D-042 | Grader authority passes from human to grader at calibration | Active |
+| D-041 | The scenario registry is the single source of truth for evaluation cases | Active |
+| D-040 | M25 closes on instrument acceptance, not behavior quality | Active |
+| D-039 | Evaluation scenario identifiers are class-first and self-describing | Active |
+| D-038 | Scheduled ingestion is a required MVP capability, not an optional refresh | Active |
+| D-037 | Evaluation baselines freeze fixture data with the agent-visible contract | Active |
+| D-036 | The source market is Vietnamese job boards, not global ATS aggregators | Active |
+| D-035 | The tracked `skills/` copy is canonical | Active |
+| D-034 | VietnamWorks automation passed the robots.txt and terms gate | Active |
+| D-033 | Render hosts the portfolio demo | Active |
+| D-032 | Production uses a slim, non-root Python Docker image | Active |
+| D-031 | Production Postgres uses Neon directly, not the pooler | Active |
+| D-030 | Production secrets are Render runtime environment variables | Active |
+| D-029 | Langfuse Cloud Hobby in Japan provides tracing | Active |
+| D-028 | The demo uses the Render subdomain and same-origin serving | Active |
+| D-027 | Render auto-deploys pushes to main | Active |
+| D-026 | Liveness and readiness are separate endpoints | Active |
+| D-025 | The demo has a 10 USD monthly cost ceiling | Active |
+| D-024 | Ingestion runs externally through GitHub Actions | Active |
+| D-023 | Schema changes use Alembic migrations | Active |
+| D-022 | Ingestion accumulates records instead of truncating clean jobs | Active |
+| D-021 | Lifecycle data is hidden until honesty behavior is measured | Active |
+| D-020 | Production ingestion needs a yield floor, rollback path, and schema assertion | Active |
+| D-019 | Keep-alive is windowed and must be measured against Neon compute use | Active |
+| D-018 | Offline evaluation precedes online monitoring | Active |
+| D-017 | Gemini judges evaluation while Groq serves the agent | Active |
+| D-016 | Evaluation covers outcome, trajectory, and component layers | Active |
+| D-015 | V1 schema changes are decided before the schema freeze | Active |
+| D-014 | Tech stack uses an external vocabulary, not a hardcoded allowlist | Active |
+| D-013 | Tech stack includes AI and data techniques as well as technologies | Active |
+| D-012 | Job level is agent-visible in v1 | Active |
+| D-011 | Listing expiry comes from the truthful source expiry field | Active |
+| D-010 | Created-on is preserved, while posted date is never synthesized | Active |
+| D-009 | Stream extraction tries event v3 and keeps a message fallback | Active |
+| D-008 | Streaming uses a two-gate filter to prevent internal token leakage | Active |
+| D-007 | Streaming uses FastAPI's native SSE response | Active |
+| D-006 | The stream has typed terminal events | Active |
+| D-005 | Mid-stream failures are in-band error events | Active |
+| D-004 | The demo is an editorial vanilla front end | Active |
+| D-003 | The demo UI is static and same-origin with FastAPI | Active |
+| D-002 | Browser SSE over POST uses fetch and ReadableStream | Active |
+| D-001 | The behavior question bank is exploratory, not a product commitment | Active |
 
 ## Active decisions
+
+### D-044 - Temperature 0 is rejected for the ReAct seam
+
+- **Decided:** 2026-08-12 - **Status:** Active. Harvested at M25 close from settled decision D-6.
+- Greedy decoding degrades the tool-choice loop for this model family, so the ReAct seam keeps its
+  tuned sampling values. SQL generation stays at 0.0, where determinism is wanted.
+- The earlier "0.0 fallback" plan is withdrawn. Any sampling experiment changes one variable at a
+  time and belongs to M24, per D-040 below.
+- **Full record:** [evaluation strategy](../research/evaluation-strategy.md), section 5c.
+
+### D-043 - Keep the DeepEval harness, discard its HTTP transport
+
+- **Decided:** 2026-08-12 - **Status:** Active. Harvested at M25 close from settled decision D-4.
+- The instrumentation half is the valuable one: DeepEval's LangChain callback and trace manager are
+  what make the three seams observable at all.
+- The archived HTTP runner contributes orchestration logic as a pattern only; the driver runs the
+  agent in-process.
+- **Full record:** [evaluation strategy](../research/evaluation-strategy.md), section 2a.
+
+### D-042 - Grader authority passes from human to grader at calibration
+
+- **Decided:** 2026-08-12 - **Status:** Active. Harvested at M25 close from settled decisions D-2
+  and D-3.
+- During calibration the human label wins and the assertion is amended. After calibration the
+  grader wins, and each disagreement becomes a new labeled case.
+- Where a structural check and the judge disagree, the structural check wins.
+- A six-scenario holdout spanning all three classes has assertions authored without reference to
+  recorded answers. It proves contracts, never empirical calibration.
+- **Full record:** [evaluation strategy](../research/evaluation-strategy.md), section 6a, and
+  [`evals/grader_audit.md`](../evals/grader_audit.md).
+
+### D-041 - The scenario registry is the single source of truth for evaluation cases
+
+- **Decided:** 2026-08-12 - **Status:** Active. Harvested at M25 close from settled decisions D-1
+  and D-5.
+- `evals/scenarios_v1.yaml` owns the cases, their probe flags, reference SQL, and tool
+  expectations. Goldens are generated from it, ending probe-flag drift structurally.
+- The 29-scenario set is kept as authored: it matches the frozen schema and is requirement-seeded.
+  Coverage is audited, not re-authored.
+- **Full record:** [evaluation strategy](../research/evaluation-strategy.md), sections 2b and 3b.
+
+### D-040 - M25 closes on instrument acceptance, not behavior quality
+
+- **Decided:** 2026-08-13 - **Status:** Active.
+- M25 closes when the clean current configuration produces a provenance-complete three-seam
+  artifact that a human can inspect and CI can replay without a model call.
+- M24 owns behavior fixes and production sampling selection.
+  Judge calibration and release thresholds remain separate release-gate work.
+- The bundled sampling A/B is withdrawn because it changes multiple variables and cannot identify
+  a cause.
+  A later experiment changes one variable at a time only if instrumented evidence supports it.
+- **Full record:** [evaluation strategy](../research/evaluation-strategy.md), sections 5c, 6, and 8.
+
+### D-039 - Evaluation scenario identifiers are class-first and self-describing
+
+- **Decided:** 2026-08-13 - **Status:** Active.
+- Scenario ids use `<CLASS>-<BEHAVIOR>-<n>`, with `SAF`, `HON`, and `HLP` marking the release-bar
+  class and behavior tokens taken from the frozen behavior specification.
+- Requirements, settled-decision traceability, and the display name are fields, not encoded into an
+  authoring-batch label.
+- This replaces D-5 in the evaluation strategy only for labels; the scenario set remains unchanged.
+- **Full record:** [evaluation strategy](../research/evaluation-strategy.md), settled decision D-5.
+
+### D-038 - Scheduled ingestion is a required MVP capability, not an optional refresh
+
+- **Decided:** 2026-08-12 - **Status:** Active.
+- A hand-loaded static corpus does not satisfy the MVP, so the nightly VietnamWorks schedule must be
+  active and observed before the `v1.0.0` tag is cut.
+- This settles D10 in the cron runbook and makes every activation gate release-blocking, including
+  the terms posture that gates rearming the schedule.
+- **Full record:** [MVP Spec](MVP_Spec.md), sections 2, 4, and 5.
 
 ### D-037 - Evaluation baselines freeze fixture data with the agent-visible contract
 

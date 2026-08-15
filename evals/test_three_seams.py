@@ -5,16 +5,16 @@ owns pass/fail calibration): tests always pass, they just report scores.
 
 import pytest
 
-from evals.goldens import load_goldens
 from evals.harness import run_case
+from evals.scenarios import load_scenarios
 
-GOLDENS = load_goldens()
+SCENARIOS = load_scenarios()
 
 pytestmark = pytest.mark.eval
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("case", GOLDENS, ids=[case["id"] for case in GOLDENS])
+@pytest.mark.parametrize("case", SCENARIOS, ids=[case["id"] for case in SCENARIOS])
 async def test_three_seams(case: dict) -> None:
     result = await run_case(case)
 

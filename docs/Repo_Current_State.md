@@ -1,6 +1,6 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-13 against the checked-out commit, active registers, and
+> **Last verified:** 2026-08-14 against the checked-out commit, active registers, and
 > [`Operations.md`](Operations.md).
 
 > **Eviction:** A current-state fact leaves when the checked-out repository or active operational
@@ -9,7 +9,9 @@
 ## Current branch
 
 - Repository baseline: `main` at `410c628`.
-- The active ticket branch is intentionally not recorded here because it changes per ticket.
+- Active ticket branch: `codex/t0026.3-registry-owned-grading`, stacked on
+  `codex/t0026.2-eval-tests-under-tests`, `codex/t0026.1-evals-front-door`,
+  `codex/t0025.10-close-m25`, and `codex/t0025.9-grader-audit-replay-ci` (PR #47).
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -18,31 +20,31 @@
 
 Completed ticket plans are preserved in the [ticket archive](archive/Tickets_Archive.md).
 
-- M0 - Foundation.
-- M1 - Runnable request flow.
-- M2 - ReAct agent runtime.
-- M3 - Self-hosted Langfuse.
-- M4 - Tracing integration.
-- M5 - Hardening.
-- M6 - First real SQL tool.
-- M7 - Conversation memory.
-- M8 - System prompt and persona refinement.
-- M9 - Data ingestion.
-- M10 - Pre-deploy hardening.
-- M11 - Model evaluation harness.
-- M12 - Hardening and known-issue fixes.
-- M13 - Schema enrichment and v1 freeze.
-- M14 - Pre-deploy known-issue fixes.
-- M16 - Security posture.
-- M17 - Streaming response delivery.
-- M18 - Clickable demo and first deploy.
-- M19 - Ingestion deploy readiness.
-- M20 - Reconciliation and activation.
+M0-M20 are complete, covering the foundation, agent runtime, data ingestion, evaluation harness,
+security, streaming, deployment, and reconciliation work.
 
-M21 has T0021.1 and T0021.2 complete; T0021.3 and T0021.4 remain unscoped.
+M21 is complete through T0021.4.
+The same pass carved the model-honesty work out of M21 into M24 - Honesty Enforcement.
 M22 - Docs Hygiene & Documentation System has phase 1 (T0022.1-.9) merged to `main` on
 2026-08-11 via PR #41.
 T0022.10 through T0022.14 are complete.
+
+M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10).
+The repository now holds a frozen Alembic-built fixture, a 29-scenario registry owning probe flags,
+reference SQL and tool expectations, an in-process driver with manifests and resume, a local trace
+viewer, execution accuracy by executing generated against reference SQL, and a deterministic
+three-tier grader. CI replays committed three-seam evidence with no model, judge, or outbound call.
+Acceptance is partial by design: the free tier's admission ceiling left 13 of 19 attempted turns
+measured, and the grader agrees with all 13 human labels.
+`HLP-CONTEXT-1` and `HLP-COMPOUND-1` remain unmeasured pending a paid-tier decision.
+The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
+custom-domain follow-up remains intentionally deferred until after v1.0.
+
+M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changes no verdict.
+`evals/` now holds the instrument plus the two live test modules, its deterministic tests live in
+`tests/evals/`, and [`evals/README.md`](../evals/README.md) is the entry point.
+The scenario registry owns every grading expectation, so the grader holds how a rule is applied
+and none of what a scenario expects.
 
 ## Archive tags
 
@@ -50,7 +52,7 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
 
 | Tag | Commit | What it preserves |
 |---|---|---|
-| `archive/t0015.2-behavior-glossary` | `62f2089` | The complete 18-string `behavior_glossary` that never reached `config/prompts.yaml`. |
+| `archive/t0015.2-behavior-glossary` | `62f2089` | The original complete 18-string `behavior_glossary` source. |
 | `archive/t0015.4-scenario-matrix` | `eba3e1f` | The 29-scenario matrix, runner, fixture, and observed results for re-measurement. |
 | `archive/t0015.6-provider-ab` | `45d333c` | The deferred provider/reasoning A/B phase and Windows event-loop factory. |
 | `archive/stash-t0019.6-docs` | `b7a291e` | The former T0019.6 documentation stash and its original ten files. |
@@ -60,8 +62,12 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
 
 - `stash@{0}` is unverified and retained. It is believed superseded but has not been compared
   line by line.
-- M15's spec and 29-scenario matrix are restored; its runner remains on the archive tag.
-- `behavior_glossary` is still absent from `config/prompts.yaml`; landing it changes agent output.
+- The legacy HTTP runner stays archived. The driver took its orchestration as a pattern only and
+  runs the agent in-process (D-043).
+- The 2026-07-14 answer artifact is answer-only, so replaying it still grades `INFRA` at the
+  structural tier. Only a driver capture carries tools, SQL, and execution results.
+- `evals/runs/` is ignored, so the 13-turn labelled capture behind
+  [`evals/grader_audit.md`](../evals/grader_audit.md) is not reproducible from a clean checkout.
 
 ## Folder structure
 
@@ -70,10 +76,10 @@ alembic/       database migrations
 config/        runtime, ingestion, prompt, and vocabulary configuration
 docs/          living documentation, serving design, offline-pipeline design, and archives
 docker/        application container image definition
-evals/         DeepEval harness, fixtures, and scenario data
+evals/         DeepEval harness, fixtures, and scenario data (see evals/README.md)
 scripts/       local maintenance and documentation checks
 src/           API, application service, agent runtime, tracing, and ingestion services
-tests/         automated tests
+tests/         automated tests, including tests/evals for the deterministic eval modules
 ```
 
 ## Dependencies
@@ -86,6 +92,15 @@ The authoritative package declarations are in `pyproject.toml`.
 - `uv run uvicorn src.api.app:app --reload` - run the API locally.
 - `uv run pytest -q` - run the default suite, excluding live eval tests.
 - `uv run pytest -m eval` - run the credentialed live eval tests.
+- `uv run python -m evals.driver --output evals/runs/run.json` - capture the scenario registry.
+- `uv run python -m evals.driver --resume --output evals/runs/run.json` - resume a partial run.
+- `uv run python -m evals.driver diff left.json right.json` - verify run comparability.
+- `uv run python -m evals.viewer evals/runs/run.json --output evals/runs/run-viewer.html` - generate
+  the local trace viewer.
+- `uv run python -m evals.viewer --sample` - generate a two-turn viewer sample without model quota.
+- `uv run python -m evals.execution_accuracy evals/runs/run.json` - grade persisted SQL seams.
+  The command uses frozen fixture references.
+- `uv run python -m evals.replay` - replay committed evidence with no model or judge call.
 - `uv run ruff check .` - lint the repository.
 - `uv run mypy` - type-check `src`.
 - `uv run alembic current` and `uv run alembic upgrade head` - inspect or migrate a database.
@@ -96,13 +111,19 @@ The authoritative package declarations are in `pyproject.toml`.
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Passed locally on 2026-08-12 (all ten checks) |
-| `uv run pytest -q` | 346 passed, 1 skipped, 19 deselected, 4 subtests passed |
-| `uv run ruff check src tests` | Passed |
-| `uv run mypy src` | Success: no issues in 43 source files |
+| `python scripts/docs_lint.py` | Passed locally on 2026-08-13 (all ten checks) |
+| `uv run pytest -q` | 445 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
+| `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
+| `uv run ruff check .` | Passed on 2026-08-13 |
+| `uv run pytest -q tests/evals` | 82 passed on 2026-08-14 |
+| `git diff --check` | Clean on 2026-08-13 |
+| `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-13 |
+| `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |
+| `uv run mypy src` | Success: no issues in 43 source files on 2026-08-13 |
 | CI gate, PR #39 | Passed in 44 seconds |
 
-The migration round-trip skip requires `SCRATCH_DATABASE_URL`.
+Every skip is environmental. One migration round-trip test requires `SCRATCH_DATABASE_URL`, and
+eight evaluation fixture tests require the local fixture Postgres on port 5433.
 The default suite deselects live eval tests by design.
 
 ## Registers
@@ -112,9 +133,10 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-Merge this branch, then watch the first scheduled run - the last open row in
-[the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7. The pipeline ran green against
-production three times on 2026-08-13 (113 loaded, 0 pages failed each), the concurrency guard was
-observed queueing rather than overlapping, and `/api/v1/ready` reports a measured `2026-08-13`.
-`schedule:` is restored and starts firing on merge, because GitHub reads it from the default
-branch only. After that, T0023 can cut the release tag that D-038 coupled to a live cron.
+T0023 - the release path. Two threads run into it. `schedule:` is restored on `main` as of
+T0020.4, so the last open row in [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7
+is to watch the first unattended 02:00 UTC run; the pipeline ran green against production three
+times on 2026-08-13 (113 loaded, 0 pages failed each), the concurrency guard was observed queueing
+rather than overlapping, and `/api/v1/ready` reports a measured `2026-08-13`. Alongside that,
+T0023 still owes its DoD sweep and terms posture, and M24 owns the behavior failures M25 measured.
+M26 is closed, so no hygiene work stands between here and the release sequence.

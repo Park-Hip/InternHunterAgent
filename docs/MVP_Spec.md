@@ -26,6 +26,10 @@ independent of how they are built.
 - **Answer real job questions.** The agent answers questions about AI/Data job postings (titles,
   companies, tech stacks, descriptions, counts, filters — including whether a posting is an
   internship) using actual stored data. It never fabricates a posting or a detail.
+- **Serve a corpus that refreshes itself.** The postings the agent answers from are re-collected
+  automatically on a schedule against the production database, with no human running anything. A
+  hand-loaded corpus does not satisfy this capability: a user asking today is answered from the
+  most recent completed run, not from a frozen extract.
 - **Hold a conversation.** A user can ask an initial question and then refine it naturally — "only
   the Python ones," "which of those are remote," "who posted the first one" — without restating
   earlier context. The agent follows the thread.
@@ -55,6 +59,8 @@ This is what "good" should *feel* like when the MVP is used — the bar each cap
 The MVP is done when all of the following are observably true:
 
 - A user can ask a job-data question and receive an answer grounded in real posting data.
+- The production corpus refreshes on its schedule without manual intervention, and a completed
+  scheduled run is observable in the run history.
 - A user can refine that question at least twice within one conversation and get consistent,
   context-aware answers.
 - Two separate conversations stay independent — neither sees the other's history.
@@ -68,7 +74,9 @@ The MVP is done when all of the following are observably true:
 
 ## 5. Scope — What's In and What's Deliberately Not
 
-**In scope (this MVP):** the five capabilities in §2, held to the bar in §3.
+**In scope (this MVP):** the six capabilities in §2, held to the bar in §3. Scheduled ingestion is
+one of them, so a manually loaded static corpus does not meet this specification, however current
+its contents happen to be on the day it is loaded.
 
 **Out of scope for now** — deferred on purpose, each mapped to a future phase so "not yet" never
 reads as "forgotten":
@@ -78,13 +86,15 @@ reads as "forgotten":
 - **Resume understanding and personalised matching** → future phase.
 - **Similarity / semantic search over postings** → future phase.
 - **Accounts, authentication, and multi-user management** → future phase.
-- **Live, real-time job data** → the MVP has scheduled VietnamWorks ingestion, but a continuously
-  updated multi-source corpus is a future phase.
+- **Continuous, multi-source job data** → scheduled VietnamWorks ingestion is required by §2 and §4;
+  a real-time feed spanning several job boards is a future phase.
 
 **Known limitations we accept for the MVP:**
 
 - Answers are **text-only** — no tables, charts, or downloadable results yet.
-- The corpus is limited to the current VietnamWorks ingestion scope and is not comprehensive.
+- The corpus covers the current VietnamWorks ingestion scope and is not comprehensive.
+- The corpus refreshes on a schedule rather than continuously, so between runs it is as current as
+  the last completed run — an accepted cadence limit, not an accepted freeze.
 
 ## 6. Future Direction
 

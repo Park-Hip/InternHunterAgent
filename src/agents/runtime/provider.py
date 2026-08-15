@@ -1,3 +1,5 @@
+import os
+
 from langchain_groq import ChatGroq
 
 from src.core.config import settings
@@ -38,7 +40,11 @@ class AgentProvider:
             "temperature": profile_cfg.get("temperature", 0.2),
             "max_tokens": profile_cfg.get("max_tokens", 1024),
             "timeout": profile_cfg.get("timeout", 30),
-            "max_retries": profile_cfg.get("max_retries", 2),
+            "max_retries": (
+                0
+                if os.getenv("EVAL_DRIVER_DISABLE_PROVIDER_RETRIES") == "1"
+                else profile_cfg.get("max_retries", 2)
+            ),
             "streaming": profile_cfg.get("streaming", False),
             "groq_api_key": settings.GROQ_API_KEY,
             "reasoning_format": profile_cfg.get("reasoning_format"),

@@ -1,4 +1,5 @@
 import asyncio
+import os
 import threading
 import time
 
@@ -93,6 +94,7 @@ def build_judge() -> DeepEvalJudge:
     temperature = judge_cfg.get("temperature", 0.0)
     rpm = judge_cfg.get("rpm", 0)
     thinking_budget = judge_cfg.get("thinking_budget", 0)
+    max_retries = 0 if os.getenv("EVAL_DRIVER_DISABLE_PROVIDER_RETRIES") == "1" else 2
 
     if provider == "groq":
         chat_model: BaseChatModel = ChatGroq(
@@ -100,7 +102,7 @@ def build_judge() -> DeepEvalJudge:
             temperature=temperature,
             max_tokens=1024,
             timeout=30,
-            max_retries=2,
+            max_retries=max_retries,
             streaming=False,
             groq_api_key=settings.GROQ_API_KEY,
         )
@@ -116,7 +118,7 @@ def build_judge() -> DeepEvalJudge:
             temperature=temperature,
             max_tokens=4096,
             timeout=30,
-            max_retries=2,
+            max_retries=max_retries,
             google_api_key=settings.GOOGLE_API_KEY,
             thinking_budget=thinking_budget,
         )

@@ -161,7 +161,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
     because T0025.7 exhausted quota first. An agent that queries to check the inline posting exists
     now fails on an untested judgement.
   - **Next:** Capture the scenario when a tier decision lands, then confirm or relax the rule.
-  - **History:** [`evals/grader_audit.md`](../evals/grader_audit.md) records both flips.
+  - **History:** [`evals/Instrument_Report.md`](../evals/Instrument_Report.md) records both flips.
 
 - **`[MED · DECISION]` The 13-turn label sample cannot be reproduced from a clean checkout.**
   - **Found:** T0025.9 audit on 2026-08-13.
@@ -169,7 +169,8 @@ or maintainer action, and `DECISION` needs a product or operational choice.
     reasons, so the capture is uncommitted. Two turns survive in the replay; 11 are attested only.
   - **Next:** Maintainer call, left open by T0025.10: commit a sanitized full capture, or supersede
     the sample with a paid-tier re-measurement under T0024.4 - the same decision as the entry below.
-  - **History:** `.gitignore` line 9 and [`evals/grader_audit.md`](../evals/grader_audit.md).
+  - **History:** `.gitignore` line 9 and
+    [`evals/Instrument_Report.md`](../evals/Instrument_Report.md).
 
 - **`[LOW · OPEN]` DeepEval live commands require UTF-8 output and an explicit `-m eval`.**
   - **Found:** T0011.1, T0011.6, and T0012.7.

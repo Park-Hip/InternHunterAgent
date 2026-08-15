@@ -7,7 +7,9 @@
 
 How agent behavior is measured. The strategy behind it is
 [`research/evaluation-strategy.md`](../research/evaluation-strategy.md); the frozen target it
-measures against is [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md).
+measures against is [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md); why the
+instrument is built the way it is, and what it can't yet tell you, is
+[`Operating_Manual.md`](Operating_Manual.md).
 
 ## Read this first: what costs quota
 
@@ -98,10 +100,9 @@ Findings, not guidance. Each has an owner and a cap in the
 
 | File | What it holds |
 |---|---|
-| [`grader_audit.md`](grader_audit.md) | The 29-rule audit and the 13 human turn labels behind the grader |
-| [`v1_scenario_matrix.md`](v1_scenario_matrix.md) | The 2026-07-14 measurement, kept as dated evidence |
-| [`v1_error_analysis.md`](v1_error_analysis.md) | Open-coded failure modes from those recovered answers |
-| [`holdout_report.md`](holdout_report.md) | The holdout's calibration output |
+| [`Instrument_Report.md`](Instrument_Report.md) | The 29-rule grader audit, the 13 human turn labels, and the six-case holdout calibration |
+| [`archive/v1_scenario_matrix.md`](archive/v1_scenario_matrix.md) | The 2026-07-14 measurement, sealed as dated evidence |
+| [`archive/v1_error_analysis.md`](archive/v1_error_analysis.md) | Open-coded failure modes from those recovered answers, sealed |
 
 ## Two constraints worth knowing before you change anything
 

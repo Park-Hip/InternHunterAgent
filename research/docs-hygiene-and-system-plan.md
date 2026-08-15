@@ -87,7 +87,7 @@ so is the prose.
 | File | Longest line | Lines >200 chars | Bytes/line |
 |---|---:|---:|---:|
 | `docs/archive/Repo_State_History.md` | **5,424** | 55 | 164 | <!-- archived-on-tag -->
-| `evals/v1_scenario_matrix.md` | **4,231** | 31 | **497** |
+| `evals/v1_scenario_matrix.md` | **4,231** | 31 | **497** | <!-- lint-allow-link-path -->
 | `docs/Repo_Current_State.md` | **2,790** | 55 | 140 |
 | `docs/MVP_Technical_Design.md` | 1,990 | 126 | 155 |
 | `docs/Tickets.md` | 1,577 | **327** | 149 |
@@ -370,11 +370,12 @@ the boundary.
 | `milestone/data-ingestion-stage.md` | **DELETE the folder** per the file's own banner. Confirm its content reached the design docs; tag before deleting |
 | `infra/langfuse/README.md` | **FIX or DELETE** — points to a nonexistent compose file | <!-- archived-on-tag -->
 | `guides/Streaming_And_SSE_Explained.md` | **KEEP AS-IS** — conformant (max 156) and correctly placed outside `docs/` |
-| `evals/v1_scenario_matrix.md` | **REFLOW** — worst density in the repo (497 bytes/line, 4,231-char line) |
+| `evals/v1_scenario_matrix.md` | **REFLOW** — worst density in the repo (497 bytes/line, 4,231-char line) | <!-- lint-allow-link-path -->
 | `data/vendor/README.md` | Leave (14 lines) |
 
 ### 5.2.1 Reflow scope — ✅ **decided 2026-08-09**
 
+<!-- lint-allow-link-path:begin -->
 **Reflow covers T1, T2, T3, `research/**`, `evals/v1_scenario_matrix.md`,
 `Completion_Reports.md`, and `Resolved_Issues.md`. It excludes `docs/archive/**` (6 files).**
 
@@ -384,6 +385,7 @@ keeping ~95% of the benefit. `Completion_Reports.md` and `Resolved_Issues.md` ar
 archive but are appended to every ticket, so they stay in scope.
 `evals/v1_scenario_matrix.md` stays in scope too: it has the worst density in the repo
 (497 bytes/line) and `research/honesty-enforcement-design.md` cites it as live evidence.
+<!-- lint-allow-link-path:end -->
 
 **Consequence for §8:** the `line-length` check needs a permanent `docs/archive/**` exclusion,
 not a temporary one. Encode it in the linter's config block, not as a TODO.
@@ -644,7 +646,7 @@ measurable pass/fail target rather than a subjective one.
 |---|---|---|---|
 | **T0022.1** | `docs_lint.py` + `Docs_Conventions.md` + CI job in **warn-only** mode. Ships the §2 baseline as `--stat` output | — | Low |
 | **T0022.2** | **Encoding + parity:** fix `Completion_Reports.md` mojibake; confirm `AGENTS.md`/`CLAUDE.md` byte-identical and **both complete** (no collapsing — §2.4.1); tag+delete root `skills/` and `milestone/`; fix or drop `infra/langfuse/README.md` | .1 | Low — all inputs now decided | <!-- archived-on-tag -->
-| **T0022.3** | **Mechanical reflow, no content change.** ~40 files to the 100-char standard — T1/T2/T3, `research/**`, `Completion_Reports.md`, `Resolved_Issues.md`, `evals/v1_scenario_matrix.md`. **`docs/archive/**` excluded** (§5.2.1). Separate commits per group | .1 | Low, high volume — review as "no semantic diff" |
+| **T0022.3** | **Mechanical reflow, no content change.** ~40 files to the 100-char standard — T1/T2/T3, `research/**`, `Completion_Reports.md`, `Resolved_Issues.md`, `evals/v1_scenario_matrix.md`. **`docs/archive/**` excluded** (§5.2.1). Separate commits per group | .1 | Low, high volume — review as "no semantic diff" | <!-- lint-allow-link-path -->
 | **T0022.4** | **Front door:** rewrite `README.md`; add `Tech_Stack.md`; wire `--check-stack` | .1 | Medium — quickstart must be verified on a clean clone |
 | **T0022.5** | **Operations consolidation:** new `Operations.md`; absorb the T0020.4 runbook (leave a pointer); single-source the topology | .4 | **Medium-high** — cron activation is live work; do not break the runbook |
 | **T0022.6** | **Archive split:** `Tickets.md` → `Tickets_Archive.md`; `docs/archive/Manual_Verification_Archive.md` → history. Living files keep open items + an index | .3 | Medium — mind inbound links |

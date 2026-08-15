@@ -87,7 +87,7 @@
 - A six-scenario holdout spanning all three classes has assertions authored without reference to
   recorded answers. It proves contracts, never empirical calibration.
 - **Full record:** [evaluation strategy](../research/evaluation-strategy.md), section 6a, and
-  [`evals/grader_audit.md`](../evals/grader_audit.md).
+  [`evals/Instrument_Report.md`](../evals/Instrument_Report.md).
 
 ### D-041 - The scenario registry is the single source of truth for evaluation cases
 

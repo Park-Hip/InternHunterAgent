@@ -1,6 +1,6 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-14 against the checked-out commit, active registers, and
+> **Last verified:** 2026-08-15 against the checked-out commit, active registers, and
 > [`Operations.md`](Operations.md).
 
 > **Eviction:** A current-state fact leaves when the checked-out repository or active operational
@@ -8,10 +8,11 @@
 
 ## Current branch
 
-- Repository baseline: `main` at `410c628`.
-- Active ticket branch: `codex/t0026.3-registry-owned-grading`, stacked on
-  `codex/t0026.2-eval-tests-under-tests`, `codex/t0026.1-evals-front-door`,
-  `codex/t0025.10-close-m25`, and `codex/t0025.9-grader-audit-replay-ci` (PR #47).
+- Repository baseline: `main` at `5ebbe33`, which merged M25 and M26 as PR #48 on 2026-08-15.
+  PR #47 was closed as superseded: every commit it carried was already contained in #48.
+- Active ticket branch: `codex/t0028-evals-docs-ownership`, merged up to that baseline rather than
+  stacked behind it.
+- The M28 branch is checked out in the worktree `.claude/worktrees/t0028-evals-docs`.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -46,6 +47,13 @@ M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changes no verdi
 The scenario registry owns every grading expectation, so the grader holds how a rule is applied
 and none of what a scenario expects.
 
+M28 - Evaluation Documentation Ownership is complete (T0028.1-.4) and changes no verdict, rule, or
+threshold. The Fact Ledger names an owner for evaluation facts, enforced by a `scenario-id` lint
+check; [`Agent_Behavior_Spec.md`](Agent_Behavior_Spec.md) §4a-4c links to the registry instead of
+duplicating it; the two dated snapshots sealed into `evals/archive/` and the grader audit and
+holdout report merged into [`evals/Instrument_Report.md`](../evals/Instrument_Report.md); and
+[`evals/Operating_Manual.md`](../evals/Operating_Manual.md) now explains the instrument end to end.
+
 ## Archive tags
 
 These tags preserve branches that are no longer active. <!-- lint-allow-amendment -->
@@ -60,14 +68,14 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
 
 ## Carried work
 
-- `stash@{0}` is unverified and retained. It is believed superseded but has not been compared
-  line by line.
+- `stash@{0}` is unverified and retained; believed superseded, not compared line by line.
 - The legacy HTTP runner stays archived. The driver took its orchestration as a pattern only and
   runs the agent in-process (D-043).
 - The 2026-07-14 answer artifact is answer-only, so replaying it still grades `INFRA` at the
   structural tier. Only a driver capture carries tools, SQL, and execution results.
 - `evals/runs/` is ignored, so the 13-turn labelled capture behind
-  [`evals/grader_audit.md`](../evals/grader_audit.md) is not reproducible from a clean checkout.
+  [`evals/Instrument_Report.md`](../evals/Instrument_Report.md) is not reproducible from a clean
+  checkout.
 
 ## Folder structure
 
@@ -111,16 +119,16 @@ The authoritative package declarations are in `pyproject.toml`.
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Passed locally on 2026-08-13 (all ten checks) |
-| `uv run pytest -q` | 445 passed, 1 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-14 |
+| `python scripts/docs_lint.py` | Passed locally on 2026-08-15 (all eleven checks) |
+| `uv run pytest -q` | 450 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-15 |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
-| `uv run ruff check .` | Passed on 2026-08-13 |
-| `uv run pytest -q tests/evals` | 82 passed on 2026-08-14 |
-| `git diff --check` | Clean on 2026-08-13 |
-| `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-13 |
+| `uv run ruff check .` | Passed on 2026-08-15 |
+| `uv run pytest -q tests/evals` | 82 passed on 2026-08-15 |
+| `git diff --check` | Clean on 2026-08-15 |
+| `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-15 |
 | `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |
-| `uv run mypy src` | Success: no issues in 43 source files on 2026-08-13 |
-| CI gate, PR #39 | Passed in 44 seconds |
+| `uv run mypy src` | Success: no issues in 43 source files on 2026-08-15 |
+| CI gate, PR #48 | Passed on 2026-08-15 in 1m07s (docs, checks) |
 
 Every skip is environmental. One migration round-trip test requires `SCRATCH_DATABASE_URL`, and
 eight evaluation fixture tests require the local fixture Postgres on port 5433.
@@ -133,10 +141,10 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0023 - the release path. Two threads run into it. `schedule:` is restored on `main` as of
-T0020.4, so the last open row in [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7
-is to watch the first unattended 02:00 UTC run; the pipeline ran green against production three
-times on 2026-08-13 (113 loaded, 0 pages failed each), the concurrency guard was observed queueing
-rather than overlapping, and `/api/v1/ready` reports a measured `2026-08-13`. Alongside that,
+T0023 - the release path. Two threads run into it. `schedule:` is restored on `main` as of T0020.4,
+so the last open row in [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 is to watch
+the first unattended 02:00 UTC run; the pipeline ran green against production three times on
+2026-08-13 (113 loaded, 0 pages failed each) and `/api/v1/ready` reports a measured `2026-08-13`.
 T0023 still owes its DoD sweep and terms posture, and M24 owns the behavior failures M25 measured.
-M26 is closed, so no hygiene work stands between here and the release sequence.
+M26 and M28 are both closed, and M28 was documentation-only, so no hygiene work stands between here
+and the release sequence.

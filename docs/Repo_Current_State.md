@@ -10,9 +10,9 @@
 
 - Repository baseline: `main` at `5ebbe33`, which merged M25 and M26 as PR #48 on 2026-08-15.
   PR #47 was closed as superseded: every commit it carried was already contained in #48.
-- Active ticket branch: `codex/t0028-evals-docs-ownership`, merged up to that baseline rather than
-  stacked behind it.
-- The M28 branch is checked out in the worktree `.claude/worktrees/t0028-evals-docs`.
+- Active ticket branch: `feature/t0029-viewer-readability`, branched from the merged M28 work.
+- The M29 branch is checked out in the worktree `.claude/worktrees/t0029-viewer-readability`; the
+  M28 branch remains in `.claude/worktrees/t0028-evals-docs`.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -30,22 +30,17 @@ M22 - Docs Hygiene & Documentation System has phase 1 (T0022.1-.9) merged to `ma
 2026-08-11 via PR #41.
 T0022.10 through T0022.14 are complete.
 
-M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10).
-The repository now holds a frozen Alembic-built fixture, a 29-scenario registry owning probe flags,
-reference SQL and tool expectations, an in-process driver with manifests and resume, a local trace
-viewer, execution accuracy by executing generated against reference SQL, and a deterministic
-three-tier grader. CI replays committed three-seam evidence with no model, judge, or outbound call.
-Acceptance is partial by design: the free tier's admission ceiling left 13 of 19 attempted turns
-measured, and the grader agrees with all 13 human labels.
-`HLP-CONTEXT-1` and `HLP-COMPOUND-1` remain unmeasured pending a paid-tier decision.
-The stale backlog in [`Tickets.md`](Tickets.md) was reconciled on 2026-08-13; only the cosmetic
-custom-domain follow-up remains intentionally deferred until after v1.0.
+M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10): the frozen Alembic-built
+fixture, the 29-scenario registry, the in-process driver with manifests and resume, the trace
+viewer, execution accuracy, the deterministic three-tier grader, and a CI replay that makes no
+model, judge, or outbound call.
+Acceptance is partial by design: 13 of 19 attempted turns measured, all 13 agreeing with the human
+labels, and two scenarios still await a paid-tier decision ([Known Issues](Known_Issues.md)).
 
 M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changes no verdict.
-`evals/` now holds the instrument plus the two live test modules, its deterministic tests live in
-`tests/evals/`, and [`evals/README.md`](../evals/README.md) is the entry point.
-The scenario registry owns every grading expectation, so the grader holds how a rule is applied
-and none of what a scenario expects.
+`evals/` holds the instrument plus the two live test modules, its deterministic tests live in
+`tests/evals/`, [`evals/README.md`](../evals/README.md) is the entry point, and the scenario
+registry owns every grading expectation rather than the grader.
 
 M28 - Evaluation Documentation Ownership is complete (T0028.1-.4) and changes no verdict, rule, or
 threshold. The Fact Ledger names an owner for evaluation facts, enforced by a `scenario-id` lint
@@ -53,6 +48,11 @@ check; [`Agent_Behavior_Spec.md`](Agent_Behavior_Spec.md) §4a-4c links to the r
 duplicating it; the two dated snapshots sealed into `evals/archive/` and the grader audit and
 holdout report merged into [`evals/Instrument_Report.md`](../evals/Instrument_Report.md); and
 [`evals/Operating_Manual.md`](../evals/Operating_Manual.md) now explains the instrument end to end.
+
+M29 - Evaluation Readability is complete through T0029.1 and changes no verdict, rule, or threshold.
+`evals/viewer.py` takes an optional `--grade` report and joins it per turn, so one screen carries
+the verdict and tier, each non-passing check beside the seam it judges, a grade filter kept distinct
+from capture status, a manifest-built run header, and telemetry as labelled fields.
 
 ## Archive tags
 
@@ -103,8 +103,8 @@ The authoritative package declarations are in `pyproject.toml`.
 - `uv run python -m evals.driver --output evals/runs/run.json` - capture the scenario registry.
 - `uv run python -m evals.driver --resume --output evals/runs/run.json` - resume a partial run.
 - `uv run python -m evals.driver diff left.json right.json` - verify run comparability.
-- `uv run python -m evals.viewer evals/runs/run.json --output evals/runs/run-viewer.html` - generate
-  the local trace viewer.
+- `uv run python -m evals.viewer evals/runs/run.json --grade evals/runs/run-grade.json` - generate
+  the local trace viewer, with each turn's verdict joined when `--grade` is given.
 - `uv run python -m evals.viewer --sample` - generate a two-turn viewer sample without model quota.
 - `uv run python -m evals.execution_accuracy evals/runs/run.json` - grade persisted SQL seams.
   The command uses frozen fixture references.
@@ -120,10 +120,10 @@ The authoritative package declarations are in `pyproject.toml`.
 | Check | Most recent recorded result |
 |---|---|
 | `python scripts/docs_lint.py` | Passed locally on 2026-08-15 (all eleven checks) |
-| `uv run pytest -q` | 450 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-15 |
+| `uv run pytest -q` | 461 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-15 |
 | `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
 | `uv run ruff check .` | Passed on 2026-08-15 |
-| `uv run pytest -q tests/evals` | 82 passed on 2026-08-15 |
+| `uv run pytest -q tests/evals` | 93 passed on 2026-08-15 |
 | `git diff --check` | Clean on 2026-08-15 |
 | `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-15 |
 | `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |
@@ -146,5 +146,5 @@ so the last open row in [the activation runbook](T0020.4_Cron_Activation_Runbook
 the first unattended 02:00 UTC run; the pipeline ran green against production three times on
 2026-08-13 (113 loaded, 0 pages failed each) and `/api/v1/ready` reports a measured `2026-08-13`.
 T0023 still owes its DoD sweep and terms posture, and M24 owns the behavior failures M25 measured.
-M26 and M28 are both closed, and M28 was documentation-only, so no hygiene work stands between here
-and the release sequence.
+M26, M28, and M29 are closed - M28 was documentation-only and M29 changed only how a recorded run
+is read - so no hygiene work stands between here and the release sequence.

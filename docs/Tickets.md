@@ -39,7 +39,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
 | 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
 | 28 | T0028 | Evaluation Documentation Ownership | ✅ | Complete 2026-08-14 (.1 Fact Ledger rows + `scenario-id` check, .2 dedupe the behavior spec, .3 seal + merge the instrument reports, .4 operating manual + stale-claim sweep). No verdict, rule, or threshold changed |
-| 29 | T0029 | Evaluation Readability | 📋 | Scoped 2026-08-15: the verdict, the run's identity, and telemetry rendered in the viewer. Spends no quota; changes no rule |
+| 29 | T0029 | Evaluation Readability | ✅ | .1 complete 2026-08-15: the verdict, the run's identity, and telemetry rendered in the viewer. Spent no quota; changed no rule |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -172,6 +172,12 @@ M28 gave every evaluation fact an owner. This milestone makes a *recorded run* r
 the step that still costs a person an afternoon now that capturing one costs four cents.
 
 ### T0029.1: Show the verdict, the run, and the telemetry in the viewer
+
+> **Complete 2026-08-15.** `--grade` joins a grader report per turn; each turn shows its verdict
+> and tier with every non-passing check drawn beside the seam it judges, the toolbar filters by
+> grade status separately from capture status, a manifest-built run header names provider, model,
+> and sampling per profile, and telemetry renders as labelled fields. No rule, threshold, verdict,
+> or replay artifact changed. Outcome in [Completion Reports](Completion_Reports.md).
 
 **Objective:** Make one capture answerable in the viewer alone - what failed, on which rule, under
 which provider and sampling.

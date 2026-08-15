@@ -2918,3 +2918,57 @@ reflow, orphan, and scenario-id checks.
   own scoping text names for the pre-existing duplication.
 - **Follow-up tickets:** none new. M28 is complete.
 - **Docs that need updating:** None outstanding.
+
+## T0029.1 - Show the verdict, the run, and the telemetry in the viewer
+
+- **Summary:** `evals/viewer.py` opened the driver artifact alone, so triaging a capture meant
+  pressing "Next" once per turn with the verdict in a separate file and the manifest never on
+  screen. Added an optional `--grade <path>` input joined per turn on the viewer's existing
+  `scenario/repeat/turn` key. Each turn now carries its `PASS`/`FAIL`/`INFRA`/`UNRUN` verdict and
+  tier, and every check that did not pass is drawn beside the seam it judges, carrying the grader's
+  `detail` - the field that says what the rule wanted against what it saw. A grade-status filter in
+  the toolbar narrows the run to one status and is named apart from the capture status
+  (`COMPLETE`, `PARTIAL_QUOTA`) it sits beside. A run header built from the manifest names the
+  provider, model, temperature, `max_tokens`, and reasoning knobs per profile plus `git_sha` and
+  `baseline_eligible`; reasoning knobs are read generically, so a provider-specific knob such as
+  DeepSeek's `thinking` reaches the screen without a viewer change. Telemetry renders as labelled
+  fields - latency, aggregate input/output/total tokens, finish reasons, and a per-call breakdown -
+  instead of one `json.dumps` blob in a text field. No grading rule, threshold, verdict, or replay
+  artifact changed; the viewer still reads evidence and never writes it.
+- **Files:** `evals/viewer.py`, `tests/evals/test_viewer.py`, `evals/README.md`,
+  `docs/Tickets.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands:** `uv run pytest -q` (full suite), `uv run pytest -q tests/evals/test_viewer.py`,
+  `uv run ruff check evals/viewer.py tests/evals/test_viewer.py`,
+  `uv run python -m evals.grader --run evals/replays/t0025.9-committed.json > <grade>.json`,
+  `uv run python -m evals.viewer evals/replays/t0025.9-committed.json --grade <grade>.json`,
+  `uv run python -m evals.viewer --sample`, and `uv run python -m evals.replay`.
+- **Build and test results:** Full suite 461 passed, 2 skipped (environmental - one needs
+  `SCRATCH_DATABASE_URL`, one needs the gitignored `.claude/` skill copy), 30 deselected (live
+  eval tests), 4 subtests passed. Ruff clean on the changed files. `uv run python -m evals.replay`
+  exits 0 and leaves the frozen evidence unchanged. Eleven new viewer tests cover the grade join,
+  the seam mapping, the ungraded default, the run header with and without a provider block, the
+  telemetry split, and the two `--grade` CLI errors.
+- **Manual verification:**
+  1. `uv run python -m evals.viewer --sample` renders with no run artifact and no grade file; every
+     turn reads `UNGRADED` and the tier field says "No grade file joined", proving the grade input
+     is optional.
+  2. Grade the committed replay evidence and view it:
+     `uv run python -m evals.grader --run evals/replays/t0025.9-committed.json > grade.json`, then
+     `uv run python -m evals.viewer evals/replays/t0025.9-committed.json --grade grade.json`.
+     The toolbar filter reports `FAIL (1)`, `PASS (2)`, `INFRA (2)`, matching
+     `summary.counts` in `grade.json`.
+  3. Filter to `FAIL` and open the turn. Seam 3 shows `no_single_cross_currency_winner` with the
+     detail "answer crowns a highest-paid job" next to the answer that crowned one, and seam 2
+     shows `execution_accuracy` as `UNAVAILABLE` rather than as a failure.
+  4. `uv run python -m evals.replay` still exits 0 and `git status` shows no change under
+     `evals/replays/`.
+- **Risks:** The check-to-seam map in `viewer.py` is keyed on grader check names; a renamed check
+  falls back to the run-level bucket and is still drawn, but beside the verdict rather than beside
+  its seam. `--grade` accepts any grader report, so joining a report from a different capture
+  silently matches only the turn keys the two share - the run header and run id are on screen to
+  make that visible.
+- **Follow-up tickets:** none new. The `providers` manifest block the header reads is written by
+  `evals/driver.py` on `feature/t0027-deepseek-provider`, which is not yet merged; until it lands,
+  a capture's header shows the models and sampling and reports the provider as not recorded.
+- **Docs that need updating:** None outstanding. `evals/README.md` now documents the real-artifact
+  invocation alongside `--sample`.

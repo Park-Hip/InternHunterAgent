@@ -17,6 +17,30 @@ from typing import Any
 # header end the same way, so one pattern covers both.
 _COLUMNS_PATTERN = re.compile(r"columns:\s*(.+?)\.\s*$", re.IGNORECASE)
 
+# Which seam a grader check judges, so a verdict is read beside the evidence that
+# produced it rather than in a list of its own. Names come from
+# `evals/grader.py::_structural_checks`, `_text_checks`, and `_judge_checks`.
+# `required_substance_N` is numbered per rule, so it is matched by prefix.
+_CHECK_SEAMS = {
+    "tools_recorded": "routing",
+    "no_tool_called": "routing",
+    "required_tool_called": "routing",
+    "execution_accuracy": "sql",
+    "answer_present": "answer",
+    "answer_count": "answer",
+    "no_single_cross_currency_winner": "answer",
+    "forbidden_phrase_absent": "answer",
+    "forbidden_pattern_absent": "answer",
+    "judge_metric": "answer",
+}
+_CHECK_SEAM_PREFIXES = (("required_substance_", "answer"),)
+
+# The manifest's sampling block carries these two under fixed names; every other key
+# in it is a reasoning knob, and knobs differ by provider (`reasoning_effort` on Groq,
+# `thinking` on DeepSeek). Reading them generically means a new knob reaches the screen
+# without a viewer change.
+_FIXED_SAMPLING = ("temperature", "max_tokens")
+
 
 def _text(value: Any, empty: str = "Not captured") -> str:
     if value is None or value == "":
@@ -103,34 +127,160 @@ def _rows(value: Any) -> dict[str, Any]:
     return {"kind": "table", "count": len(values), "headers": headers, "rows": values}
 
 
-def flatten_turns(run: dict[str, Any], scenarios: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+def _setting(value: Any) -> str:
+    """Render a manifest setting, distinguishing "not set" from a recorded value."""
+    return "not recorded" if value is None else _text(value)
+
+
+def _seam_for_check(name: str) -> str:
+    """Name the seam a check judges; scenario-level checks judge the run itself."""
+    if name in _CHECK_SEAMS:
+        return _CHECK_SEAMS[name]
+    for prefix, seam in _CHECK_SEAM_PREFIXES:
+        if name.startswith(prefix):
+            return seam
+    return "run"
+
+
+def index_grades(grade: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """Index a grader report by the viewer's `scenario/repeat/turn` key.
+
+    Scenario- and repeat-level verdicts (`UNRUN`, `INFRA`) carry no turn number
+    because they judge a turn that was never captured, so they join to nothing here.
+    """
+    index: dict[str, dict[str, Any]] = {}
+    for scenario_id, entries in (grade or {}).get("scenarios", {}).items():
+        for entry in entries:
+            if not isinstance(entry, dict) or entry.get("repeat") is None or entry.get("turn") is None:
+                continue
+            index[f"{scenario_id}/{entry['repeat']}/{entry['turn']}"] = entry
+    return index
+
+
+def _checks(grade: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Return the checks that did not pass, tagged with the seam each one judges.
+
+    `passed is None` is not a failure but an unavailable judgement - it is what makes
+    a turn `INFRA` rather than `FAIL` - so the two are carried separately.
+    """
+    return [
+        {
+            "name": str(check.get("name", "unnamed check")),
+            "detail": _text(check.get("detail"), "No detail recorded"),
+            "tier": str(check.get("tier", "unknown")),
+            "outcome": "FAILED" if check.get("passed") is False else "UNAVAILABLE",
+            "seam": _seam_for_check(str(check.get("name", ""))),
+        }
+        for check in (grade or {}).get("checks", [])
+        if isinstance(check, dict) and check.get("passed") is not True
+    ]
+
+
+def _telemetry(record: Any) -> dict[str, Any]:
+    """Split the turn's telemetry into labelled fields instead of one JSON blob."""
+    if not isinstance(record, dict):
+        return {"available": False}
+    usage = record.get("provider_token_usage")
+    usage = usage if isinstance(usage, dict) else {}
+    aggregate = usage.get("aggregate")
+    aggregate = aggregate if isinstance(aggregate, dict) else {}
+    calls = [call for call in usage.get("calls", []) if isinstance(call, dict)]
+    finish_reasons = record.get("finish_reasons")
+    return {
+        "available": True,
+        "latency_ms": _setting(record.get("latency_ms")),
+        "input_tokens": _setting(aggregate.get("input_tokens")),
+        "output_tokens": _setting(aggregate.get("output_tokens")),
+        "total_tokens": _setting(aggregate.get("total_tokens")),
+        "finish_reasons": ", ".join(map(str, finish_reasons)) if isinstance(finish_reasons, list) and finish_reasons else _setting(finish_reasons),
+        "calls": [
+            [
+                str(number),
+                _setting(call.get("input_tokens")),
+                _setting(call.get("output_tokens")),
+                _setting(call.get("total_tokens")),
+                _setting(call.get("finish_reason")),
+            ]
+            for number, call in enumerate(calls, start=1)
+        ],
+    }
+
+
+def run_header(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Describe what produced this capture: provider and sampling per profile.
+
+    Two arms of the same scenario set are only comparable if the screen can say what
+    each one ran, which is why `providers` is in the manifest (T0027.2).
+    """
+    providers = manifest.get("providers") if isinstance(manifest.get("providers"), dict) else {}
+    models = manifest.get("models") if isinstance(manifest.get("models"), dict) else {}
+    sampling = manifest.get("sampling") if isinstance(manifest.get("sampling"), dict) else {}
+    profiles = list(dict.fromkeys([*providers, *models, *sampling]))
+    knobs = [
+        key
+        for key in dict.fromkeys(k for profile in profiles for k in (sampling.get(profile) or {}))
+        if key not in _FIXED_SAMPLING
+    ]
+    rows = []
+    for profile in profiles:
+        knob_values = sampling.get(profile) or {}
+        rows.append(
+            [
+                profile,
+                _setting(providers.get(profile)),
+                _setting(models.get(profile)),
+                _setting(knob_values.get("temperature")),
+                _setting(knob_values.get("max_tokens")),
+                *(_setting(knob_values.get(knob)) for knob in knobs),
+            ]
+        )
+    return {
+        "headers": ["Profile", "Provider", "Model", "Temperature", "Max tokens", *(knob.replace("_", " ").capitalize() for knob in knobs)],
+        "rows": rows,
+        "facts": [
+            ["Git SHA", _setting(manifest.get("git_sha"))],
+            ["Baseline eligible", _setting(manifest.get("baseline_eligible"))],
+        ],
+    }
+
+
+def flatten_turns(
+    run: dict[str, Any],
+    scenarios: list[dict[str, Any]] | None = None,
+    grade: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Turn the driver's nested artifact into records suitable for the browser."""
     names = {scenario["id"]: scenario["name"] for scenario in scenarios or []}
+    grades = index_grades(grade)
     turns: list[dict[str, Any]] = []
     for scenario_id, scenario_record in run.get("scenarios", {}).items():
         for repeat_record in scenario_record.get("repeats", []):
             for turn_record in repeat_record.get("turns", []):
                 seams = turn_record.get("seams", {})
                 tools = seams.get("tools_called", [])
+                key = f"{scenario_id}/{repeat_record.get('repeat', '?')}/{turn_record.get('turn', '?')}"
+                turn_grade = grades.get(key)
                 turns.append(
                     {
-                        "key": f"{scenario_id}/{repeat_record.get('repeat', '?')}/{turn_record.get('turn', '?')}",
+                        "key": key,
                         "scenario_id": scenario_id,
                         "scenario_name": names.get(scenario_id, scenario_id),
                         "repeat": repeat_record.get("repeat"),
                         "turn": turn_record.get("turn"),
                         "status": turn_record.get("status", "UNKNOWN"),
+                        # Capture status and grade status answer different questions -
+                        # "was the turn recorded" against "was the behavior right" - so
+                        # they are named apart and never collapsed into one field.
+                        "grade_status": str(turn_grade.get("status", "UNKNOWN")) if turn_grade else "UNGRADED",
+                        "grade_tier": _cell(turn_grade.get("tier")) if turn_grade else "No grade file joined",
+                        "checks": _checks(turn_grade),
                         "question": _text(seams.get("question")),
                         "routing": ", ".join(map(str, tools)) if tools else "No tool call captured",
                         "sql": _text(seams.get("sql_text")),
                         "rows": _rows(seams.get("tool_output")),
                         "answer": _text(seams.get("answer")),
                         "trace_id": _text(seams.get("trace_id"), "No trace id"),
-                        "telemetry": json.dumps(
-                            turn_record.get("telemetry", "unavailable"),
-                            ensure_ascii=False,
-                            sort_keys=True,
-                        ),
+                        "telemetry": _telemetry(turn_record.get("telemetry")),
                     }
                 )
     return turns
@@ -144,7 +294,17 @@ def sample_run() -> dict[str, Any]:
     takes. An earlier Python-literal sample exercised a path production never hit.
     """
     return {
-        "manifest": {"run_id": "sample-run"},
+        "manifest": {
+            "run_id": "sample-run",
+            "git_sha": "0000000",
+            "baseline_eligible": False,
+            "providers": {"react": "sample-provider", "sql_generation": "sample-provider"},
+            "models": {"react": "sample-react-model", "sql_generation": "sample-sql-model"},
+            "sampling": {
+                "react": {"temperature": 0, "max_tokens": 1024, "reasoning_effort": None},
+                "sql_generation": {"temperature": 0, "max_tokens": 512, "reasoning_effort": None},
+            },
+        },
         "status": "COMPLETE",
         "scenarios": {
             "HLP-SAMPLE-1": {
@@ -152,7 +312,7 @@ def sample_run() -> dict[str, Any]:
                     {
                         "repeat": 1,
                         "turns": [
-                            {"turn": 1, "status": "COMPLETE", "seams": {"question": "How many jobs?", "tools_called": ["query_clean_jobs"], "sql_text": "SELECT COUNT(*) FROM clean_jobs", "tool_output": "Found 1 result(s) with columns: count.\n- count=2", "answer": "There are 2 jobs.", "trace_id": "sample-trace-1"}},
+                            {"turn": 1, "status": "COMPLETE", "seams": {"question": "How many jobs?", "tools_called": ["query_clean_jobs"], "sql_text": "SELECT COUNT(*) FROM clean_jobs", "tool_output": "Found 1 result(s) with columns: count.\n- count=2", "answer": "There are 2 jobs.", "trace_id": "sample-trace-1"}, "telemetry": {"latency_ms": 1200, "provider_token_usage": {"calls": [{"input_tokens": 900, "output_tokens": 40, "total_tokens": 940, "finish_reason": "stop"}], "aggregate": {"input_tokens": 900, "output_tokens": 40, "total_tokens": 940}}, "finish_reasons": ["stop"]}},
                             {"turn": 2, "status": "COMPLETE", "seams": {"question": "Which companies are listed?", "tools_called": ["query_clean_jobs"], "sql_text": "SELECT company FROM clean_jobs", "tool_output": "Found 2 result(s) with columns: company.\n- company=Acme\n- company=Beta", "answer": "The listed companies are Acme and Beta.", "trace_id": "sample-trace-2"}},
                         ],
                     }
@@ -162,10 +322,22 @@ def sample_run() -> dict[str, Any]:
     }
 
 
-def build_viewer_html(run: dict[str, Any], scenarios: list[dict[str, Any]] | None = None) -> str:
+def build_viewer_html(
+    run: dict[str, Any],
+    scenarios: list[dict[str, Any]] | None = None,
+    grade: dict[str, Any] | None = None,
+) -> str:
     """Build a self-contained HTML viewer with no API or external asset dependency."""
-    run_id = str(run.get("manifest", {}).get("run_id", "unknown-run"))
-    payload = {"run_id": run_id, "status": run.get("status", "UNKNOWN"), "turns": flatten_turns(run, scenarios)}
+    manifest = run.get("manifest", {})
+    manifest = manifest if isinstance(manifest, dict) else {}
+    run_id = str(manifest.get("run_id", "unknown-run"))
+    payload = {
+        "run_id": run_id,
+        "status": run.get("status", "UNKNOWN"),
+        "header": run_header(manifest),
+        "graded": grade is not None,
+        "turns": flatten_turns(run, scenarios, grade),
+    }
     serialized = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
     title = html.escape(f"Trace viewer - {run_id}")
     return '''<!doctype html>
@@ -188,11 +360,18 @@ def build_viewer_html(run: dict[str, Any], scenarios: list[dict[str, Any]] | Non
     pre,.answer,.rows-text { white-space:pre-wrap; overflow-wrap:anywhere; margin:0; background:#f3f6f8; border-radius:7px; padding:10px; min-height:42px; } .answer { background:#eef8f8; } .trace { color:var(--muted); font-size:12px; margin-top:14px; overflow-wrap:anywhere; } .row-count { color:var(--muted); font-size:12px; margin-bottom:6px; } .row-note { color:var(--warn); font-size:12px; font-weight:650; margin-bottom:6px; } .table-wrap { overflow-x:auto; } table { border-collapse:collapse; width:100%; font-size:13px; } th,td { border-bottom:1px solid var(--line); padding:7px 8px; text-align:left; vertical-align:top; } th { color:var(--muted); font-weight:650; white-space:nowrap; }
     .notes { margin-top:16px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; } textarea { width:100%; min-height:110px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:8px; } .saved { color:var(--muted); font-size:12px; margin-top:6px; }
     .empty { text-align:center; padding:70px 20px; color:var(--muted); } @media (max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:16px; } .header-row { align-items:flex-start; flex-direction:column; } }
+    .runbar { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px; } .facts { display:flex; flex-wrap:wrap; gap:18px; } .fact { font-size:13px; overflow-wrap:anywhere; } .fact label { color:var(--muted); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-right:6px; }
+    .badge { display:inline-block; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; letter-spacing:.04em; border:1px solid transparent; } .b-PASS { background:#e7f6ec; color:#11633a; border-color:#b6e0c6; } .b-FAIL { background:#fdeaea; color:#93231f; border-color:#f3c2c0; } .b-INFRA { background:#fff3df; color:#7c4a00; border-color:#f0d28c; } .b-UNRUN,.b-UNGRADED,.b-UNKNOWN { background:#eef1f5; color:#4a5769; border-color:var(--line); }
+    .verdict { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:14px; font-size:13px; color:var(--muted); }
+    .checks { margin-top:14px; display:grid; gap:10px; } .check { border:1px solid var(--line); border-left-width:4px; border-radius:8px; padding:10px 12px; background:#fcfdfe; } .check-fail { border-left-color:#c9403a; } .check-na { border-left-color:#c78b21; }
+    .check-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:13px; } .check-head .tier { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; } .check-detail { margin-top:6px; font-size:13px; overflow-wrap:anywhere; white-space:pre-wrap; }
+    .tele { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; } .tele div { background:#f3f6f8; border-radius:7px; padding:8px 10px; } .tele label { display:block; color:var(--muted); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; } .tele span { font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
   </style>
 </head>
 <body>
   <header><div class="header-row"><div><h1>Trace viewer</h1><div id="run-label"></div></div><div id="run-status"></div></div></header>
   <main>
+    <section class="runbar" id="run-header"></section>
     <div id="app"></div>
   </main>
   <script id="run-data" type="application/json">__DATA__</script>
@@ -200,35 +379,76 @@ def build_viewer_html(run: dict[str, Any], scenarios: list[dict[str, Any]] | Non
     const data = JSON.parse(document.getElementById('run-data').textContent);
     const turns = data.turns;
     const storageKey = 'internhunter-trace-notes/' + data.run_id + '/';
+    const GRADES = ['PASS', 'FAIL', 'INFRA', 'UNRUN', 'UNGRADED'];
+    let filter = 'ALL';
+    let view = turns;
     let index = 0;
     const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'} )[c]);
     const block = (label, value, cls='') => `<div class="field"><label>${label}</label><div class="${cls}">${label === 'Rows returned' ? rowsBlock(value) : esc(value)}</div></div>`;
+    const table = (headers, rows) => `<div class="table-wrap"><table><thead><tr>${headers.map(header => `<th scope="col">${esc(header)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    const badge = (status, label) => `<span class="badge b-${esc(status)}">${esc(label === undefined ? status : label)}</span>`;
+    const teleBlock = tele => {
+      if (!tele.available) return '<div class="rows-text">No telemetry was recorded for this turn.</div>';
+      const fields = [['Latency (ms)', tele.latency_ms], ['Input tokens', tele.input_tokens], ['Output tokens', tele.output_tokens], ['Total tokens', tele.total_tokens], ['Finish reasons', tele.finish_reasons]];
+      const grid = `<div class="tele">${fields.map(([label, value]) => `<div><label>${esc(label)}</label><span>${esc(value)}</span></div>`).join('')}</div>`;
+      if (!tele.calls.length) return grid + '<div class="row-count" style="margin-top:10px">No per-call usage was reported.</div>';
+      return `${grid}<div class="row-count" style="margin-top:12px">${tele.calls.length} model call${tele.calls.length === 1 ? '' : 's'} in this turn</div>${table(['Call', 'Input', 'Output', 'Total', 'Finish reason'], tele.calls)}`;
+    };
+    const checksFor = (turn, seam) => {
+      const items = turn.checks.filter(check => check.seam === seam);
+      if (!items.length) return '';
+      return `<div class="checks">${items.map(check => `<div class="check ${check.outcome === 'FAILED' ? 'check-fail' : 'check-na'}"><div class="check-head"><strong>${esc(check.name)}</strong>${badge(check.outcome === 'FAILED' ? 'FAIL' : 'INFRA', check.outcome)}<span class="tier">${esc(check.tier)} tier</span></div><div class="check-detail">${esc(check.detail)}</div></div>`).join('')}</div>`;
+    };
     const rowsBlock = rows => {
       if (rows.kind === 'text') return `<div class="rows-text">${esc(rows.text)}</div>`;
       const note = rows.note ? `<div class="row-note">${esc(rows.note)}</div>` : '';
       if (!rows.count) return note + '<div class="rows-text">No rows returned.</div>';
-      const head = rows.headers.map(header => `<th scope="col">${esc(header)}</th>`).join('');
-      const body = rows.rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join('')}</tr>`).join('');
-      return `${note}<div class="row-count">${rows.count} row${rows.count === 1 ? '' : 's'}</div><div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+      return `${note}<div class="row-count">${rows.count} row${rows.count === 1 ? '' : 's'}</div>${table(rows.headers, rows.rows)}`;
     };
     const storageRead = key => { try { return {value: window.localStorage.getItem(key) || '', error: ''}; } catch (_) { return {value: '', error: 'Notes are unavailable in this browser; navigation still works.'}; } };
     const storageWrite = (key, value) => { try { window.localStorage.setItem(key, value); return true; } catch (_) { return false; } };
+    function renderRunHeader() {
+      const header = data.header;
+      const facts = header.facts.map(([label, value]) => `<span class="fact"><label>${esc(label)}</label>${esc(value)}</span>`).join('');
+      const body = header.rows.length ? table(header.headers, header.rows) : '<div class="rows-text">This capture records no provider or sampling block.</div>';
+      document.getElementById('run-header').innerHTML = `<div class="card-head"><h2>What produced this capture</h2><div class="facts">${facts}</div></div>${body}`;
+    }
+    function applyFilter(next) {
+      const current = view[index];
+      filter = next;
+      view = filter === 'ALL' ? turns : turns.filter(turn => turn.grade_status === filter);
+      const kept = view.indexOf(current);
+      index = kept >= 0 ? kept : 0;
+    }
     function render() {
       document.getElementById('run-label').textContent = data.run_id + ' · ' + turns.length + ' captured turn' + (turns.length === 1 ? '' : 's');
-      document.getElementById('run-status').textContent = data.status;
+      document.getElementById('run-status').textContent = 'Capture: ' + data.status;
+      renderRunHeader();
       const root = document.getElementById('app');
       if (!turns.length) { root.innerHTML = '<div class="empty">No captured turns are available in this run.</div>'; return; }
-      const t = turns[index];
+      const counts = {};
+      GRADES.forEach(status => { counts[status] = turns.filter(turn => turn.grade_status === status).length; });
+      const options = ['ALL', ...GRADES.filter(status => counts[status])].map(status => `<option value="${status}"${status === filter ? ' selected' : ''}>Grade: ${status === 'ALL' ? 'all (' + turns.length + ')' : status + ' (' + counts[status] + ')'}</option>`).join('');
+      const gradeFilter = `<select id="grade-filter" aria-label="Filter turns by grade status">${options}</select>`;
+      if (!view.length) {
+        root.innerHTML = `<div class="toolbar"><div class="turn-meta">${gradeFilter}</div></div><div class="empty">No turn in this run is graded ${esc(filter)}.</div>`;
+        document.getElementById('grade-filter').onchange = event => { applyFilter(event.target.value); render(); };
+        return;
+      }
+      const t = view[index];
       const noteKey = storageKey + t.key;
-      root.innerHTML = `<div class="toolbar"><div class="turn-meta"><button id="prev">← Previous</button><button id="next">Next →</button><span class="progress">Turn ${index + 1} of ${turns.length} · ${esc(t.scenario_id)} · repeat ${esc(t.repeat)}</span></div><select id="jump" aria-label="Jump to turn">${turns.map((item, i) => `<option value="${i}">${i + 1}. ${esc(item.scenario_id)} / r${esc(item.repeat)} / t${esc(item.turn)}</option>`).join('')}</select></div>
+      root.innerHTML = `<div class="toolbar"><div class="turn-meta"><button id="prev">← Previous</button><button id="next">Next →</button><span class="progress">Turn ${index + 1} of ${view.length} · ${esc(t.scenario_id)} · repeat ${esc(t.repeat)}</span></div><div class="turn-meta">${gradeFilter}<select id="jump" aria-label="Jump to turn">${view.map((item, i) => `<option value="${i}">${i + 1}. ${esc(item.scenario_id)} / r${esc(item.repeat)} / t${esc(item.turn)} · ${esc(item.grade_status)}</option>`).join('')}</select></div></div>
       <div class="rule"><strong>Review rule:</strong> mark the earliest wrong seam only, then stop. Downstream symptoms of an upstream defect are not separate labels.</div>
-      <section class="question"><h3>${esc(t.scenario_name)}</h3>${block('Question', t.question)}${block('Telemetry', t.telemetry)}<div class="trace">Trace ID: ${esc(t.trace_id)} · Turn status: ${esc(t.status)}</div></section>
-      <section class="grid"><article class="card"><div class="card-head"><h2 class="seam">1 · Routing</h2></div>${block('Routing decision / tools called', t.routing)}</article><article class="card"><div class="card-head"><h2 class="seam">2 · NL → SQL</h2></div>${block('Generated SQL', t.sql, 'answer')} ${block('Rows returned', t.rows, 'answer')}</article><article class="card"><div class="card-head"><h2 class="seam">3 · Synthesis</h2></div>${block('Final answer', t.answer, 'answer')}</article></section>
+      <section class="question"><h3>${esc(t.scenario_name)}</h3>${block('Question', t.question)}
+      <div class="verdict">Verdict ${badge(t.grade_status)}<span>Grade tier: ${esc(t.grade_tier)}</span><span>Capture status: ${esc(t.status)}</span><span>Trace ID: ${esc(t.trace_id)}</span></div>${checksFor(t, 'run')}
+      <div class="field"><label>Telemetry</label>${teleBlock(t.telemetry)}</div></section>
+      <section class="grid"><article class="card"><div class="card-head"><h2 class="seam">1 · Routing</h2></div>${block('Routing decision / tools called', t.routing)}${checksFor(t, 'routing')}</article><article class="card"><div class="card-head"><h2 class="seam">2 · NL → SQL</h2></div>${block('Generated SQL', t.sql, 'answer')} ${block('Rows returned', t.rows, 'answer')}${checksFor(t, 'sql')}</article><article class="card"><div class="card-head"><h2 class="seam">3 · Synthesis</h2></div>${block('Final answer', t.answer, 'answer')}${checksFor(t, 'answer')}</article></section>
       <section class="notes"><h2>Operator note</h2><textarea id="note" placeholder="Record the first wrong seam and evidence. Stop after the earliest failure."></textarea><div class="saved" id="saved">Notes are stored in this browser for this run.</div></section>`;
       document.getElementById('jump').value = index;
-      document.getElementById('prev').disabled = index === 0; document.getElementById('next').disabled = index === turns.length - 1;
+      document.getElementById('prev').disabled = index === 0; document.getElementById('next').disabled = index === view.length - 1;
       document.getElementById('prev').onclick = () => { index--; render(); }; document.getElementById('next').onclick = () => { index++; render(); };
       document.getElementById('jump').onchange = event => { index = Number(event.target.value); render(); };
+      document.getElementById('grade-filter').onchange = event => { applyFilter(event.target.value); render(); };
       const note = document.getElementById('note');
       const saved = document.getElementById('saved');
       note.addEventListener('input', event => { saved.textContent = storageWrite(noteKey, event.target.value) ? 'Saved locally' : 'Notes are unavailable in this browser; navigation still works.'; });
@@ -236,23 +456,43 @@ def build_viewer_html(run: dict[str, Any], scenarios: list[dict[str, Any]] | Non
       note.value = noteState.value;
       if (noteState.error) saved.textContent = noteState.error;
     }
-    document.addEventListener('keydown', event => { if (event.target.tagName === 'TEXTAREA') return; if (event.key === 'ArrowLeft' && index > 0) { index--; render(); } if (event.key === 'ArrowRight' && index < turns.length - 1) { index++; render(); } });
+    document.addEventListener('keydown', event => { if (event.target.tagName === 'TEXTAREA') return; if (event.key === 'ArrowLeft' && index > 0) { index--; render(); } if (event.key === 'ArrowRight' && index < view.length - 1) { index++; render(); } });
     render();
   </script>
 </body>
 </html>'''.replace("__TITLE__", title).replace("__DATA__", serialized)
 
 
+def _read_grade(path: Path, parser: argparse.ArgumentParser) -> dict[str, Any]:
+    """Load a `grader.py` report, failing with the command that produces one."""
+    try:
+        grade = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        parser.error(
+            f"grade file not found: {path}. Create one with: "
+            f"uv run python -m evals.grader --run <run.json> > {path}"
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        parser.error(f"could not read grade file {path}: {exc}")
+    if not isinstance(grade, dict) or not isinstance(grade.get("scenarios"), dict):
+        parser.error(f"grade file {path} is not a grader report; expected a top-level 'scenarios' object")
+    return grade
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Generate a local HTML viewer for a scenario-driver run.")
     parser.add_argument("run", type=Path, nargs="?", help="Scenario-driver run JSON artifact")
     parser.add_argument("--sample", action="store_true", help="Generate a two-turn sample without a recorded run or model quota")
+    parser.add_argument("--grade", type=Path, help="Grader report JSON to join per turn (optional)")
     parser.add_argument("--output", type=Path, help="HTML output path (defaults beside the run artifact)")
     args = parser.parse_args(argv)
     if args.sample and args.run:
         parser.error("pass either a run artifact or --sample, not both")
     if not args.sample and not args.run:
         parser.error("provide a run artifact or --sample")
+    if args.sample and args.grade:
+        parser.error("--grade joins a grader report to a recorded run; it does not apply to --sample")
+    grade = _read_grade(args.grade, parser) if args.grade else None
     if args.sample:
         run = sample_run()
         scenarios = [{"id": "HLP-SAMPLE-1", "name": "Sample trace viewer run"}]
@@ -271,7 +511,7 @@ def main(argv: list[str] | None = None) -> None:
 
         scenarios = load_scenarios()
         output = args.output or args.run.with_name(f"{args.run.stem}-viewer.html")
-    output.write_text(build_viewer_html(run, scenarios), encoding="utf-8")
+    output.write_text(build_viewer_html(run, scenarios, grade), encoding="utf-8")
     print(output)
 
 

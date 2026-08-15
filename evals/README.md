@@ -1,6 +1,6 @@
 # `evals/` - The Evaluation Instrument
 
-> **Last verified:** 2026-08-14.
+> **Last verified:** 2026-08-15.
 
 > **Eviction:** A description here leaves when its module is removed or its command changes.
 > This file describes the layout only; findings live in the records listed at the bottom.
@@ -31,15 +31,28 @@ uv run python -m evals.scenarios --scenario HON-CURRENCY-1
 uv run python -m evals.viewer --sample        # a viewer sample with no recorded run
 ```
 
+Reading a recorded capture takes two commands - grade it, then view it with the verdict joined:
+
+```powershell
+uv run python -m evals.grader --run evals/runs/<run>.json > evals/runs/<run>-grade.json
+uv run python -m evals.viewer evals/runs/<run>.json --grade evals/runs/<run>-grade.json
+```
+
+`--grade` is optional; without it the viewer shows the capture and marks every turn `UNGRADED`.
+With it, each turn carries its `PASS`/`FAIL`/`INFRA`/`UNRUN` verdict and tier, the grade filter in
+the toolbar narrows the run to one status, and every check that did not pass is drawn beside the
+seam it judges with the `detail` that says what the rule wanted. The run header names the provider,
+model, and sampling per profile, so two arms are told apart on screen.
+
 ## The pipeline
 
 ```text
 scenarios_v1.yaml -> driver.py -> execution_accuracy.py -> grader.py
       (registry)     (capture)        (is the SQL right?)   (verdict)
-                         |                                      ^
-                         v                                      |
-                     viewer.py                              replay.py
-                  (read the turns)                     (re-grade in CI, no model)
+                         |                                    |    ^
+                         v                                    |    |
+                     viewer.py <----- grade report -----------+  replay.py
+           (read the turns and their verdict)          (re-grade in CI, no model)
 ```
 
 The split is deliberate. Capture spends quota once and writes evidence to disk; every later stage
@@ -54,7 +67,7 @@ against recorded turns, not by paying for a new capture.
 | `scenarios.py` | Loads and validates the registry, rejecting an unknown tool or grading field; generates DeepEval goldens from it; no-model CLI |
 | `harness.py` | Three-seam capture and the DeepEval metrics. Owns the seam definitions so pytest and recorded runs cannot diverge |
 | `driver.py` | Orchestration: runs the registry over the harness, paces turns to fit the quota window, owns retries, writes a manifest, checkpoints and resumes |
-| `viewer.py` | Single-file HTML viewer - one turn per screen, all three seams, operator notes |
+| `viewer.py` | Single-file HTML viewer - one turn per screen, all three seams, the joined grade verdict, run header, telemetry, and operator notes |
 | `execution_accuracy.py` | Executes generated and reference SQL against the fixture and compares result sets as unordered multisets |
 | `grader.py` | Deterministic three-tier grading (structural, textual, judge) with `PASS`/`FAIL`/`INFRA`/`UNRUN`. The last two are excluded from denominators. Owns how a rule is applied, never what a scenario expects |
 | `holdout.py` | Six-scenario contract suite, authored against the behavior spec rather than from the registry or the recorded answers |

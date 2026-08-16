@@ -1,6 +1,6 @@
 # Evaluation Operating Manual
 
-> **Last verified:** 2026-08-14.
+> **Last verified:** 2026-08-16.
 
 > **Eviction:** A claim here leaves when the module, statuses, or constraint it describes changes.
 > This file explains how the instrument works and why; [`README.md`](README.md) owns the module
@@ -106,6 +106,48 @@ Different-but-equivalent SQL passes; same-looking-but-wrong SQL fails.
 
 Everything from execution accuracy onward makes no model call, so grading a captured run is free
 and repeatable.
+
+## Running an arm: the order that protects the evidence
+
+The steps below are ordered by what is recoverable, not by convenience.
+Exactly one of them spends money and cannot be repeated; everything else is free and idempotent.
+[`README.md`](README.md) owns the exact commands.
+
+1. **Pin the inputs.** Fixture up and hash-verified, registry frozen, working tree committed. The
+   manifest records `fixture_hash`, `git_sha`, `prompt_hash`, provider, model, and sampling, and
+   that block is the only thing that makes two arms comparable. Never capture from a dirty tree:
+   the run is flagged `baseline_eligible: false` and `driver diff` will refuse it.
+2. **Capture.** `driver --output evals/runs/<arm>.json`, resumable with `--resume`. This is the
+   only step that costs quota and the only one that cannot be reproduced - the model is
+   non-deterministic, and `git_sha` and `prompt_hash` move underneath you, so a later run is a new
+   arm rather than the same one. Treat the artifact as write-once.
+3. **Freeze, before reading anything.** Project the capture into a sanitized replay under
+   [`replays/`](replays/) and commit it. Until this happens the measurement exists in one ignored
+   directory on one machine; after it, every downstream step is reproducible from the repository
+   alone. **This step has no command yet** - `replay.py` reads and validates the format but nothing
+   writes it, so the one committed replay was assembled by hand and covers 4 scenarios of 29.
+   T0030.1 is where the writer lands; until it does, this step is manual and therefore the step
+   most likely to be skipped.
+4. **Grade and read.** `grader` produces the report, and `viewer <run> --grade <grade>` joins it per
+   turn. Filter to `FAIL` and walk each one, reading the failing check's `detail` beside the seam it
+   judges. That is how 33 failures separate into behavior and rule artifacts.
+5. **Write the dated record, then leave it alone.** It is evidence, superseded by re-measurement and
+   never edited. Route real defects to the behavior milestone and rule artifacts to the registry.
+
+Two rules carry the weight, and both have been learned the expensive way.
+
+**Freeze before you analyze.** Analysis is what makes a run feel finished, so a capture left
+unfrozen until "after the write-up" is a capture nobody froze. On 2026-08-16 the T0027.3 DeepSeek
+capture was lost this way - 77 turns, 29 of 29 scenarios, the only full measurement taken to date -
+when the worktree holding it was removed after its pull request merged. Its findings survive in
+[the arm record](t0027_deepseek_arm.md) because they had been written up; the per-turn evidence
+does not, because `evals/runs/` is ignored and nothing had projected it into
+[`replays/`](replays/).
+
+**Never fix a rule in the pass that measures.** If the ruleset moves in the same session as the
+capture, the resulting number cannot say whether the agent improved or the ruler did. M27 held this
+line by forbidding scenario, threshold, and grader changes inside the milestone that measured, and
+that is why its 44/33 split can be compared to anything at all.
 
 ## Grading: three tiers, four outcomes
 

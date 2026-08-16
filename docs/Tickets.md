@@ -41,6 +41,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 27 | T0027 | DeepSeek Provider Integration | ✅ | Complete 2026-08-15 (.1-.4), following the deferred T0015.6 procedure · the spike passed, the arm measured 29/29 scenarios in 5m20s for ~$0.04, and .4 flipped both profiles to DeepSeek (D-045) with pacing at 0 and no provider key required at boot · the Groq branch stays selectable |
 | 28 | T0028 | Evaluation Documentation Ownership | ✅ | Complete 2026-08-14 (.1 Fact Ledger rows + `scenario-id` check, .2 dedupe the behavior spec, .3 seal + merge the instrument reports, .4 operating manual + stale-claim sweep). No verdict, rule, or threshold changed |
 | 29 | T0029 | Evaluation Readability | ✅ | .1 complete 2026-08-15: the verdict, the run's identity, and telemetry rendered in the viewer. Spent no quota; changed no rule |
+| 30 | T0030 | Evaluation Evidence Durability | 📋 | .1 freeze command, .2 freeze the exposed captures, .3 the telemetry decision · closes the `[MED · DECISION]` left open by T0025.10 |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -103,36 +104,6 @@ behind this work, and the release bar
 for the honesty Definition-of-Done bullet is decision **D9** in the readiness plan — answered during
 T0023's sweep, not here. A v1.0 tag that records a measured honesty limitation is a legitimate
 outcome; this milestone is how the limitation gets closed afterward.
-
----
-
-## T0026: Milestone 26 - Evaluation Workspace Hygiene - Complete 2026-08-14
-
-The three ticket plans are archived in
-[`archive/Tickets_Archive.md`](archive/Tickets_Archive.md); their outcomes are in
-[Completion Reports](Completion_Reports.md).
-
-**What the milestone delivered.** A front door (`evals/README.md`) and one owner for the
-fixture-database URL, the eight test modules moved under `tests/evals/`, and the grader's rule
-table moved into `evals/scenarios_v1.yaml` so a grading rule now sits beside its expectation.
-No verdict, threshold, or scenario expectation changed.
-
----
-
-## T0027: Milestone 27 - DeepSeek Provider Integration - Complete 2026-08-15
-
-The four ticket plans are archived in
-[`archive/Tickets_Archive.md`](archive/Tickets_Archive.md); their outcomes are in
-[Completion Reports](Completion_Reports.md).
-
-**What the milestone delivered.** A spike proved DeepSeek clears all five checks with thinking
-disabled, `AgentProvider` gained a second branch selectable per profile, and the 29-scenario
-registry captured on the DeepSeek arm in 5m20s for ~$0.04 - against a Groq baseline that managed
-13 turns in 21 minutes before quota killed it. On that measured basis (**D-045**, decided at step 4
-of the pre-registered rule) .4 flipped both profiles to `deepseek-v4-flash`, dropped
-`eval.driver.turn_pacing_seconds` to 0, and stopped requiring any provider key at boot; each branch
-now validates its own. `HLP-CONTEXT-1` and `HLP-COMPOUND-1` were measured for the first time.
-The Groq branch stays selectable, and no scenario, grading rule, threshold, or prompt changed.
 
 ---
 
@@ -213,3 +184,117 @@ which is the work this ticket removes.
 4. Regenerate from the frozen replay evidence and confirm the gate is untouched.
 
 **Blockers:** None. Spends no quota; every input is a recorded artifact.
+
+---
+
+## T0030: Milestone 30 - Evaluation Evidence Durability
+
+M29 made a recorded run readable. This milestone makes it survive.
+
+A capture is the only irreplaceable output of the loop: grading, execution accuracy, and the viewer
+are pure functions of `capture + registry + fixture` and regenerate forever, but a lost capture is
+gone. The model is non-deterministic and `git_sha` and `prompt_hash` move underneath it, so a
+re-run is a new arm, never the same one.
+
+On 2026-08-16 the T0027.3 DeepSeek capture was lost: 77 turns, 29 of 29 scenarios, the only full
+measurement the project has ever taken.
+`evals/runs/` is ignored, the worktree holding it was removed when PR #50 merged, and
+`git log --all --diff-filter=A -- "evals/runs/*"` confirms no commit on any ref ever contained it.
+The findings survive in [the arm record](../evals/t0027_deepseek_arm.md); the per-turn evidence
+does not.
+
+The mechanism to prevent this already exists and was simply never automated.
+[`evals/replays/t0025.9-committed.json`](../evals/replays/t0025.9-committed.json) is a sanitized
+projection of a capture, and `replay.py` already defines the schema (`_TURN_KEYS`, `_SEAM_KEYS`)
+and already rejects unsanitized content (`_FORBIDDEN_CONTENT` matches `trace_id`, `langfuse`,
+`api_key`, and `postgres://`).
+What is missing is a writer: `replay.py` only reads and validates, so that file was assembled by
+hand, which is why it covers 4 scenarios out of 29.
+Preserving evidence is manual work, so it does not happen.
+
+### T0030.1: Give the replay format a writer
+
+**Objective:** Make freezing a capture one command, so preservation stops depending on discipline.
+
+**In Scope:**
+* A `freeze` subcommand on the driver - `python -m evals.driver freeze <run>.json --grade
+  <grade>.json -o evals/replays/<arm>.json` - emitting exactly the schema
+  `replay.py::validate_replay` already accepts, and refusing to write anything
+  `_FORBIDDEN_CONTENT` matches.
+* Populate `source_capture` with the originating artifact name and `run_id` from its manifest, so a
+  frozen replay names the capture it came from even after that capture is gone.
+* Tests in `tests/evals/` that round-trip a capture through `freeze` and back through
+  `validate_replay`, and that assert a trace ID in the input is refused rather than written.
+
+**Out of Scope:**
+* Any change to the replay schema itself, to a grading rule, or to a threshold. This ticket moves
+  evidence, never verdicts.
+* Un-ignoring `evals/runs/`. Raw captures stay uncommitted by design (**D-046** in .3); the frozen
+  projection is what enters the repository.
+
+**Manual verification:**
+1. Freeze `evals/runs/t0025.7-acceptance.json` with its grade file <!-- lint-allow-link-path -->;
+   `uv run python -m evals.replay
+   --replay <the new file>` exits 0 against the frozen fixture.
+2. Hand-insert a `trace_id` into a copy of the capture and confirm `freeze` refuses it by name.
+3. Confirm the written file contains no `latency_ms`, no token counts, and no trace ID.
+
+### T0030.2: Freeze the captures that are still exposed
+
+**Objective:** Get the two surviving labelled captures into the repository before they follow the
+DeepSeek one.
+
+`evals/runs/t0025.7-acceptance.json` and its grade report <!-- lint-allow-link-path --> are the
+only copies of the 13-turn
+labelled sample behind [`evals/Instrument_Report.md`](../evals/Instrument_Report.md), and they exist
+on one machine in one ignored directory.
+
+**In Scope:**
+* Freeze the T0025.7 acceptance capture with the .1 command and commit the result.
+* Repoint the `<!-- lint-allow-link-path -->` references in `Instrument_Report.md` and
+  [the arm record](../evals/t0027_deepseek_arm.md) at committed replays where one now exists, so the
+  documentation gate enforces preservation instead of excusing its absence.
+* Close the `[MED · DECISION]` entry in [`Known_Issues.md`](Known_Issues.md) that T0025.10 left
+  open, and record the DeepSeek loss in [`Resolved_Issues.md`](Resolved_Issues.md) as the reason the
+  decision finally landed.
+
+**Out of Scope:**
+* Re-measuring the DeepSeek arm. That is a fresh capture under M24's re-measurement, not a recovery,
+  and it must not be presented as restoring what was lost.
+* Any edit to a sealed dated record's findings. The arm record is superseded by re-measurement,
+  never edited.
+
+**Manual verification:**
+1. `git clean -xdff` a fresh clone, then `uv run python -m evals.replay --replay
+   evals/replays/t0025.7-acceptance.json` passes with no `evals/runs/` present.
+2. `uv run python scripts/docs_lint.py` passes with fewer `lint-allow-link-path` exemptions than
+   before, and the count is stated in the completion report.
+
+### T0030.3: Decide what telemetry a frozen replay keeps
+
+**Objective:** Settle the one open question in the format, in the Decision Log, rather than leaving
+it to whoever writes the next freezer.
+
+`evals/runs/` is ignored because captures carry latency, token usage, finish reasons, and trace IDs
+([`Known_Issues.md`](Known_Issues.md)).
+Of those, only the trace ID is genuinely sensitive - it resolves to a Langfuse trace.
+T0029.1 then made telemetry visible in the viewer, so a strictly sanitized replay is now a capture
+the viewer can grade but cannot fully show.
+
+**In Scope:**
+* A **D-046** entry deciding one of: keep the strict schema and let aggregate telemetry live in the
+  dated arm record as prose, as the DeepSeek record already does ("77 turns in 5m20s for about
+  $0.04"); or admit token and latency fields while continuing to strip trace IDs.
+* Whichever is chosen, state the reason in terms of what a future reader needs to reproduce a
+  finding, not in terms of file size.
+
+**Recommendation to evaluate, not a foregone conclusion:** keep the strict schema. Per-turn latency
+has no evidentiary value once the aggregate is recorded, and every field admitted is a field the
+sanitizer must be trusted to police forever.
+
+**Out of Scope:** implementing the outcome, which belongs to .1 if it changes the writer at all.
+
+**Manual verification:** the Decision Log names D-046, and `evals/README.md` states in one line what
+a frozen replay does and does not carry.
+
+**Blockers:** None. Spends no quota; every input is a recorded artifact or a decision.

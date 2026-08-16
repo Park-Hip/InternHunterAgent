@@ -2968,3 +2968,67 @@ reflow, orphan, and scenario-id checks.
   own scoping text names for the pre-existing duplication.
 - **Follow-up tickets:** none new. M28 is complete.
 - **Docs that need updating:** None outstanding.
+
+---
+
+## T0029.1 - Diagnose and restore the serving path
+
+- **Summary:** The public demo had answered nothing since 2026-08-13 while `/health` and `/ready`
+  both returned `200`.
+  The cause was not the model provider.
+  Render was serving `de237a6`, the last `main` commit before T0021.3, so the running build had
+  neither `check=AsyncConnectionPool.check_connection` on the checkpointer pool nor the psycopg
+  guard in `classify_provider_busy_error`.
+  A stale Neon connection therefore reached visitors as `BUSY_MESSAGE` or as a `500`.
+  A Render deploy of `main` restored service; no code change was required, because the fix had
+  existed since 2026-08-12 and had never reached the running process.
+- **The elimination, in the order the milestone specified.** Each provider candidate was closed by
+  a direct probe rather than by reading logs.
+  The Groq key authenticated against `GET /openai/v1/models` and a live completion.
+  `qwen/qwen3.6-27b` was still served.
+  The rate-limit headers reported 999 of 1000 daily requests and 7981 of 8000 window tokens
+  remaining.
+- **What identified the stale build.** `POST /api/v1/agent/chat` returned `500` in 211 ms, far too
+  fast for any model call, carrying the string `Failed to process query`, which was deleted from
+  `src/api/routes/query.py` on 2026-08-13 and exists nowhere in `main`.
+  Hashing the deployed `app.js`, `styles.css`, and `index.html` against all 243 commits matched
+  `de237a6` and nothing later.
+  `docker/Dockerfile` was built from `main` to rule out a failing build as the reason deploys
+  stopped; it built clean.
+- **Why the health checks stayed green.** `/ready` borrows from the SQLAlchemy engine, which has
+  `pool_pre_ping=True`, while the agent turn borrows from the psycopg checkpointer pool, which on
+  that build had no validator. A liveness probe that shares no dependency with the failing path
+  cannot detect the failure, which is the argument for the milestone's canary block.
+- **Files changed:** `docs/Known_Issues.md`, `docs/Resolved_Issues.md`,
+  `docs/Repo_Current_State.md`, and this report. No source file changed.
+- **Commands run:** direct `curl` probes of `/api/v1/health`, `/api/v1/ready`,
+  `/api/v1/agent/chat`, and `/api/v1/agent/chat/stream` against the deployed service before and
+  after the deploy; a Groq `models` and `chat/completions` probe; a static-asset hash match across
+  every commit; `docker build -f docker/Dockerfile`; `uv run pytest -q`; and
+  `uv run python scripts/docs_lint.py`.
+- **Build and test results:** 450 passed, 2 skipped, 30 live eval tests deselected, 4 subtests
+  passed. All documentation checks passed. Both skips are environmental.
+- **Manual verification:** a `curl -N -X POST` of `/api/v1/agent/chat/stream` on the live service,
+  sending `{"query":"How many data analyst jobs are there?"}` as JSON,
+  streams `token` events and a `metadata` event carrying a Langfuse trace URL, and never an `error`
+  event. Repeat for the other built-in prompts on the demo page. `/api/v1/agent/chat` returns `200`
+  with an answer rather than a `500` in a fraction of a second.
+- **Risks:** The register eviction below removed a deferred preference rather than an open risk,
+  but it is a judgement call and git retains it.
+  The deploy that restored service also carried M27's provider flip, so the running service moved
+  from Groq to DeepSeek in the same step; the two changes are not separable after the fact.
+- **Follow-up tickets:** The canary block is the direct lesson of this outage and now has its
+  measured justification. A tracing-flush failure after a complete answer still emits an `error`
+  event to the visitor, observed locally with Langfuse unreachable: thirteen answer tokens streamed,
+  then an error banner, because `stream_agent_response` wraps the whole generator and cannot tell a
+  failed turn from a failed export of a good one.
+- **Docs that need updating:** `research/production-readiness-plan.md` §1.1 and its
+  `docs/Tickets.md` preamble conclude that the cause is the model provider, which the measurements
+  contradict; the plan's own eviction rule applies. The same plan numbers its milestones M27 to M29,
+  which collide with the completed M27 and M28 on `main`, so it renumbers to M29 to M31.
+- **Register housekeeping.** `Known_Issues.md` was at its 275-line cap, which
+  [the documentation map](README.md) predicted and answered in advance with eviction.
+  Three entries left: the T0019.7 checkpointer entry, which `Resolved_Issues.md` had already closed
+  under T0021.3 and which was a duplicate; the T0011.5 serving-pin entry, rewritten against current
+  truth now that `main` serves DeepSeek; and the T0006.10 duplicate-query entry, whose own text said
+  to address it only if evaluation showed the pattern was frequent.

@@ -8,12 +8,10 @@
 
 ## Current branch
 
-- Repository baseline: `main` at `42fb3ef`, which merged M28 as PR #49 on 2026-08-15. It carries
-  M25 and M26 from PR #48; PR #47 was closed as superseded, every commit it carried being already
-  contained in #48.
-- Active ticket branch: `feature/t0027-deepseek-provider`, merged up to that baseline rather than
-  stacked behind it, in the worktree `.claude/worktrees/t0027-deepseek-provider`.
-- `main` is the deployment source of truth and deploys the public service.
+- Repository baseline: `main` at `0a6524e`, which merged M27 as PR #50 on 2026-08-16, over M28
+  from #49 and M25 and M26 from #48. PR #47 was closed as superseded, wholly contained in #48.
+- Active ticket branch: `worktree-t0029.1-restore-serving-path`.
+- `main` is the deployment source of truth, verified against the deployed build on 2026-08-16.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
 
@@ -44,8 +42,7 @@ profiles now use `deepseek-v4-flash`, `render.yaml` declares `DEEPSEEK_API_KEY`,
 `eval.driver.turn_pacing_seconds` is 0, and each provider branch validates its own key at boot.
 The Groq branch stays selectable. See [the arm record](../evals/t0027_deepseek_arm.md) and
 [`research/deepseek-provider-evaluation.md`](../research/deepseek-provider-evaluation.md).
-**Before this reaches `main`, `DEEPSEEK_API_KEY` must exist in the Render dashboard**; without it
-the deploy starts healthy and fails on the first query.
+It reached `main` as PR #50 and serves the public demo, verified answering on 2026-08-16.
 
 M28 - Evaluation Documentation Ownership is complete (T0028.1-.4) and changes no verdict, rule, or
 threshold. The Fact Ledger names an owner for evaluation facts, enforced by a `scenario-id` lint
@@ -75,8 +72,8 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
   structural tier. Only a driver capture carries tools, SQL, and execution results.
 - `evals/runs/` is ignored, so the 13-turn labelled capture behind
   [`evals/Instrument_Report.md`](../evals/Instrument_Report.md) is not reproducible from a clean
-  checkout; references to it carry `<!-- lint-allow-link-path -->`, because they resolve on a
-  developer machine and fail the documentation gate, which lints a bare checkout.
+  checkout; references to it carry `<!-- lint-allow-link-path -->`, since they resolve only on a
+  developer machine and the documentation gate lints a bare checkout.
 
 ## Folder structure
 
@@ -121,16 +118,16 @@ The authoritative package declarations are in `pyproject.toml`.
 | Check | Most recent recorded result |
 |---|---|
 | `python scripts/docs_lint.py` | Passed on 2026-08-16 (all eleven checks) |
-| `uv run pytest -q` | 453 passed, 10 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-16 |
+| `uv run pytest -q` | 461 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-16 |
 | `uv run ruff check .` | Passed on 2026-08-16 |
 | `uv run pytest -q tests/evals` | 82 passed on 2026-08-16 |
 | `git diff --check` | Clean on 2026-08-16 |
 | `uv run python -m evals.replay` | Exit 0 on 2026-08-16, unchanged by the provider flip |
 | `uv run mypy` | Success: no issues in 43 source files on 2026-08-16 |
 
-Every skip is environmental. One migration round-trip test requires `SCRATCH_DATABASE_URL`, eight
-evaluation fixture tests require the local fixture Postgres on port 5433, and one skill-parity
-check needs the gitignored `.claude/` copy.
+Both skips are environmental. One migration round-trip test requires `SCRATCH_DATABASE_URL`, and
+one skill-parity check needs the gitignored `.claude/` copy. The eight evaluation fixture tests run
+whenever the local fixture Postgres on port 5433 is up, and skip when it is not.
 The default suite deselects live eval tests by design.
 
 ## Registers
@@ -140,11 +137,14 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0023 - the release path. `schedule:` is restored on `main` as of T0020.4, so the last open row in
-[the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 is to watch the first unattended
-02:00 UTC run; the pipeline ran green against production three times on 2026-08-13 and
-`/api/v1/ready` reports a measured `2026-08-13`. T0023 still owes its DoD sweep and terms posture.
-M24 owns the behavior failures M25 and T0027.3 measured, and T0027.3 hands it a triaged list: of 33
-failing turns, 23 are real behavior and 10 are grader phrasing artifacts recorded in
+M29 Serving Reliability, renumbered from M27 because M27 and M28 are taken. T0029.1 restored
+serving on 2026-08-16 and proved the gap its canary closes: the demo answered nothing for three
+days while `/health` and `/ready` stayed green. .2 is failover, .3 the canary. Then T0023 - the
+release path. `schedule:` is restored on `main` as of T0020.4, so the last
+open row in [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 is to watch the first
+unattended 02:00 UTC run; `/api/v1/ready` reported a measured `2026-08-16` on that date, so the
+pipeline is running same-day. T0023 still owes its DoD sweep and terms posture. M24 owns the
+behavior failures M25 and T0027.3 measured, and T0027.3 hands it a triaged list: of 33 failing
+turns, 23 are real behavior and 10 are grader phrasing artifacts recorded in
 [Known Issues](Known_Issues.md). M26, M27, and M28 are closed, so no hygiene work stands between
 here and the release sequence.

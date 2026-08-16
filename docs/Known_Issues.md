@@ -1,5 +1,5 @@
 # Known Issues & Risks
-> **Last verified:** 2026-08-14 against checked-out code, tests, configuration, and active runbooks.
+> **Last verified:** 2026-08-16 against code, tests, configuration, runbooks, and the live service.
 
 This register holds actionable risks that are open, blocked, or awaiting a maintainer decision.
 > **Eviction:** An entry leaves when fixed, superseded, or reclassified in its owning document.
@@ -11,18 +11,26 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
 | MED | 8 | 2 | 2 |
-| LOW | 17 | 3 | 0 |
+| LOW | 17 | 2 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
 
 ## Config, startup & deployment (13)
 
-- **`[LOW · BLOCKED]` The serving-model pin still lacks its final live baseline confirmation.**
-  - **Found:** T0011.5 preparation.
-  - **Impact:** A retired or incompatible Groq model ID would fail the tool loop at runtime.
-  - **Next:** Before the baseline, run a tool-using query with the configured qwen model.
-  - **History:** [Resolved Issues](Resolved_Issues.md) records the retired-model replacement.
+- **`[MED · OPEN]` Render auto-deploy stalled for three days and the reason is unexplained.**
+  - **Found:** T0029.1 on 2026-08-16, diagnosing a demo that answered nothing for three days.
+  - **Impact:** `render.yaml` declares `autoDeploy: true` on `main`, yet the service ran `de237a6`
+    from 2026-08-13 while #48 and #49 merged undeployed. An undeployed `main` stays invisible until
+    a visitor reports it, because `/health` and `/ready` both pass on a broken build.
+  - **Next:** Watch whether the next merge to `main` deploys without a click; if not, check the
+    GitHub hook and deploy history.
+  - **History:** [Resolved Issues](Resolved_Issues.md) records the outage and its elimination trail.
+
+- **`[LOW · OPEN]` A retired serving-model pin would fail the tool loop with no advance warning.**
+  - **Found:** T0011.5. T0029.1 confirmed the `qwen` pin live on 2026-08-16, then `main` moved the
+    serving profiles to DeepSeek, so that confirmation does not carry to the current pin.
+  - **Next:** Re-run a tool-using query against the configured pin whenever the provider changes.
 
 - **`[MED · OPEN]` Render Free cold starts can delay the public demo by about a minute.**
   - **Found:** T0018.4 public deployment.
@@ -69,12 +77,6 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Investigate only if failures recur; the operating window and cadence are documented.
   - **History:** [Operations](Operations.md) records the observed first-wake behavior.
 
-- **`[MED · OPEN]` Dead checkpointer connections can be reported as provider pressure.**
-  - **Found:** T0019.7 live Render investigation.
-  - **Impact:** A Neon pool failure can reach a visitor as the generic busy message.
-  - **Next:** Add a psycopg pool health check and preserve pool provenance in error classification.
-  - **History:** `src/core/checkpointer.py` and `src/core/errors.py`.
-
 - **`[MED · OPEN]` The re-armed ingestion schedule has not yet fired on its own.**
   - **Found:** T0020.4.
   - **Impact:** Every gate is signed, but an unattended run is proven only once one has happened.
@@ -100,13 +102,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Resolve the pool and LangChain message generic types in a dedicated typing pass.
   - **History:** `src/core/checkpointer.py` and `src/agents/runtime/middleware.py`.
 
-## Agent runtime & prompts (7)
-
-- **`[LOW · OPEN]` The agent can call `query_clean_jobs` twice with identical arguments.**
-  - **Found:** T0006.10 verification.
-  - **Impact:** The harmless duplicate query wastes one database round-trip.
-  - **Next:** Address only if evaluation shows the pattern is frequent.
-  - **History:** `query_clean_jobs` is deterministic and read-only.
+## Agent runtime & prompts (6)
 
 - **`[LOW · OPEN]` The agent can reason fully before declining an unsupported attribute.**
   - **Found:** T0007.2 verification.

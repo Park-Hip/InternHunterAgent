@@ -14,7 +14,7 @@ original register entry (omitted where none was assigned).
 
 ## Categories
 - [Documentation drift](#documentation-drift) — 3
-- [Config, startup & deployment](#config-startup--deployment) — 10
+- [Config, startup & deployment](#config-startup--deployment) — 11
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
@@ -59,6 +59,25 @@ original register entry (omitted where none was assigned).
     matching reality).
 
 ## Config, startup & deployment
+- **`[HIGH · RESOLVED · T0029.1, 2026-08-16]` The public demo answered no question for three
+  days while `/health` and `/ready` stayed green.**
+  - **Found:** T0029.1, probing the deployed service directly.
+  - **Cause:** Render was serving `de237a6` (2026-08-13 18:36), the last `main` commit before
+    T0021.3. That build has neither `check=AsyncConnectionPool.check_connection` on the
+    checkpointer pool nor the psycopg guard in `classify_provider_busy_error`, so a stale Neon
+    connection reached visitors as `BUSY_MESSAGE` or as a `500` in 211 ms. `/ready` kept passing
+    because it borrows from the SQLAlchemy engine, which has `pool_pre_ping=True`.
+  - **The provider was not at fault.** All three candidates the milestone listed were eliminated by
+    direct probe: the key authenticated, `qwen/qwen3.6-27b` was still served, and 999 of 1000 daily
+    requests remained. The 211 ms failure was the decisive datum, being far too fast for any model
+    call, and the deployed static assets hash-matched `de237a6` across all 243 commits.
+  - **Resolution:** A Render deploy of `main`. No code change was needed; the fix had existed since
+    T0021.3 and had never reached the running service.
+  - **Verified:** All three built-in demo prompts stream a full answer and a Langfuse trace on
+    <https://internhunteragent.onrender.com>, and the deployed assets now hash-match `main`.
+  - **Residual:** Why auto-deploy stalled is unexplained and stays open in
+    [Known Issues](Known_Issues.md).
+
 - **`[MED · RESOLVED · T0021.4, 2026-08-12]` `/ready` could label a configured fallback date
   as a measured snapshot after its date query failed.**
   - **Found:** D6 production migration follow-up.

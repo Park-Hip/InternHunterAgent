@@ -107,8 +107,8 @@ scenario and the requirement it tests, and do not restate that data.
 
 ### 4b. Coverage-gap scenarios
 
-The manual pass needs only Groq + the fixture DB, so these high-value scenarios remain in the
-registry. **Decision (T0015.2): include all five in v1.**
+The manual pass needs only the serving provider + the fixture DB, so these high-value scenarios
+remain in the registry. **Decision (T0015.2): include all five in v1.**
 
 | ID | Requirements | Probe? |
 |---|---|---|

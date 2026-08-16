@@ -1,6 +1,6 @@
 # Decision Log
 
-> **Last verified:** 2026-08-13.
+> **Last verified:** 2026-08-15.
 > This is the compact index of durable project decisions harvested from executed research.
 > It records the choice and points to the preserved reasoning.
 > Current operational facts belong in the document that owns them.
@@ -12,6 +12,7 @@
 
 | ID | Decision | Status |
 |---|---|---|
+| D-045 | DeepSeek serves the agent, on measured throughput | Active |
 | D-044 | Temperature 0 is rejected for the ReAct seam | Active |
 | D-043 | Keep the DeepEval harness, discard its HTTP transport | Active |
 | D-042 | Grader authority passes from human to grader at calibration | Active |
@@ -39,7 +40,7 @@
 | D-020 | Production ingestion needs a yield floor, rollback path, and schema assertion | Active |
 | D-019 | Keep-alive is windowed and must be measured against Neon compute use | Active |
 | D-018 | Offline evaluation precedes online monitoring | Active |
-| D-017 | Gemini judges evaluation while Groq serves the agent | Active |
+| D-017 | The judge runs on a provider that does not serve the agent | Active |
 | D-016 | Evaluation covers outcome, trajectory, and component layers | Active |
 | D-015 | V1 schema changes are decided before the schema freeze | Active |
 | D-014 | Tech stack uses an external vocabulary, not a hardcoded allowlist | Active |
@@ -58,6 +59,24 @@
 | D-001 | The behavior question bank is exploratory, not a product commitment | Active |
 
 ## Active decisions
+
+### D-045 - DeepSeek serves the agent, on measured throughput
+
+- **Decided:** 2026-08-15 - **Status:** Active. Narrows the serving half of D-017 below.
+- The measured basis is throughput, not answer quality: the 29-scenario registry captured in
+  5 minutes 20 seconds, 77 of 77 turns, zero retries, for about $0.04. The Groq free tier reached
+  13 turns in 21 minutes before quota stopped it. Steps 1 to 3 of the pre-registered rule - safety,
+  honesty, task and tool quality - found no difference this evidence can resolve, so the decision
+  was taken at step 4.
+- The evidence is one arm, not a bake-off. The Groq arm was dropped because running it costs
+  roughly four days of rationed free-tier quota, which is the constraint this decision removes.
+- Two consequences follow. `eval.driver.turn_pacing_seconds` moves to 0, because it existed only to
+  survive a per-minute token ceiling DeepSeek does not publish. No provider key is required at
+  boot: each branch validates its own, so a checkout holding only the selected provider's key runs.
+- The Groq branch stays selectable. Two working branches are what keep the provider seam honest,
+  and DeepSeek has no free tier to fall back on.
+- **Full record:** [T0027.3 DeepSeek arm](../evals/t0027_deepseek_arm.md) and
+  [DeepSeek provider evaluation](../research/deepseek-provider-evaluation.md).
 
 ### D-044 - Temperature 0 is rejected for the ReAct seam
 
@@ -261,10 +280,12 @@
 - Establish the offline baseline before adding score writeback, alerts, and judge infrastructure.
 - **Full record:** [DeepEval planning §4](../research/archive/deepeval-sql-agent-eval-planning.md).
 
-### D-017 - Gemini judges evaluation while Groq serves the agent
+### D-017 - The judge runs on a provider that does not serve the agent
 
 - **Decided:** 2026-07-03 - **Status:** Active.
 - Separating judge and serving load avoids double pressure on the serving provider's free quota.
+- Gemini judges. The serving side was Groq when this was decided and is DeepSeek since D-045; the
+  separation holds either way, and it is also what keeps a provider out of judging its own arm.
 - **Full record:** [DeepEval planning](../research/archive/deepeval-sql-agent-eval-planning.md),
   sections 5 and 11.4.
 

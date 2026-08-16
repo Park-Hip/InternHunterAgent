@@ -204,19 +204,30 @@ def build_manifest() -> dict[str, Any]:
         "database_row_count": database_row_count,
         "prompt_hash": _sha256(prompts_path),
         "config_hash": _sha256(settings_path),
+        # Provider is recorded per profile because a profile may override agent.provider,
+        # and a capture that cannot say which provider produced it is not evidence. The
+        # native knobs travel with it: `thinking` decides whether DeepSeek honored
+        # `temperature` at all, so omitting it would hide the run's biggest variable.
+        "providers": {
+            profile: agent[profile].get("provider", agent["provider"])
+            for profile in ("react", "sql_generation")
+        },
         "models": {
             "react": agent["react"]["model"],
             "sql_generation": agent["sql_generation"]["model"],
         },
         "sampling": {
-            "react": {
-                key: agent["react"].get(key)
-                for key in ("temperature", "max_tokens", "reasoning_effort", "reasoning_format")
-            },
-            "sql_generation": {
-                key: agent["sql_generation"].get(key)
-                for key in ("temperature", "max_tokens", "reasoning_effort", "reasoning_format")
-            },
+            profile: {
+                key: agent[profile].get(key)
+                for key in (
+                    "temperature",
+                    "max_tokens",
+                    "reasoning_effort",
+                    "reasoning_format",
+                    "thinking",
+                )
+            }
+            for profile in ("react", "sql_generation")
         },
         "retry_policy": {
             "max_retries_per_turn": MAX_RETRIES,

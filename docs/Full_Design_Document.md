@@ -30,8 +30,8 @@ than how many features are implemented behind it.
 
 These are deliberate, permanent decisions — not gaps to be closed by a future ticket:
 
-- **Single LLM provider** (Groq, via `AgentProvider`) — no multi-provider routing or model-selection
-  logic in the request pipeline.
+- **One LLM provider per profile**, selected in configuration and constructed by `AgentProvider` —
+  no multi-provider routing or model-selection logic in the request pipeline.
 - **No multi-agent routing**, sub-agents, or agent-to-agent delegation.
 - **No in-request autonomous or background execution** — no cron jobs, queues, or schedulers inside
   the API process or triggered by a request. (Amended 2026-07-19, T0019.6: this exclusion governs
@@ -67,8 +67,9 @@ database knowledge of its own; it delegates everything to the runtime.
 
 **Agent runtime layer** (`src/agents/runtime/factory.py`, `react_agent.py`, `provider.py`,
 `prompts.py`) — The only place permitted to construct the LangChain agent. `factory.py` builds the
-agent via `create_agent()` with the registered tool list; `provider.py`'s `AgentProvider` wraps
-`ChatGroq` and is the single point where model configuration (temperature, timeout, retries) lives;
+agent via `create_agent()` with the registered tool list; `provider.py`'s `AgentProvider` wraps the
+configured chat model and is the single point where model configuration (provider, temperature,
+timeout, retries) lives;
 `prompts.py` loads the system prompt from `config/prompts.yaml`; `react_agent.py`'s
 `AgentRuntime.ainvoke()` executes the loop and extracts the final answer. Two responsibilities are
 owned exclusively here and nowhere else: **tool registration** (no other layer may add a tool to the
@@ -91,9 +92,9 @@ runtime when invoking the agent. If Langfuse credentials are absent or initializ
 degrades to a no-op — it must never raise and never block a request.
 
 **Core layer** (`src/core/config.py`, `logger.py`, `db.py`) — Cross-cutting primitives only:
-settings (`GROQ_API_KEY`, `DATABASE_URL`, `LANGFUSE_*`), structured JSON logging, and the SQLAlchemy
-engine/session factory. Core holds no business logic and depends on nothing else in the system;
-every other layer may depend on Core, never the reverse.
+settings (`DATABASE_URL`, `LANGFUSE_*`, the optional provider keys), structured JSON logging, and
+the SQLAlchemy engine/session factory. Core holds no business logic and depends on nothing else in
+the system; every other layer may depend on Core, never the reverse.
 
 **Ingestion layer** (`src/services/ingestion/`) — Offline batch tooling that *writes* the domain
 data the agent later reads (e.g. `raw_jobs`, `clean_jobs`). It runs out-of-band as a manually
@@ -161,8 +162,8 @@ tracing. (The concrete ticket sequence that followed this principle lives in `Ti
   result rows and field lengths regardless of what SQL the model proposed (e.g. a stray `SELECT *`
   or an omitted `LIMIT`). A prompt instruction to "return few rows" is a helpful nudge, never the
   safeguard.
-- **One model provider abstraction** (`AgentProvider`/`ChatGroq`), with no provider-swap matrix
-  built in advance of needing one.
+- **One model provider abstraction** (`AgentProvider`), with a per-profile provider key and no
+  provider-swap matrix built in advance of needing one.
 - **No post-tool narration.** A tool returns a single deterministic answer string; there is no
   second LLM call to summarize or re-narrate what a tool already produced. (This is distinct from
   the SQL-generation call *inside* the tool, which produces the query, not the answer.)

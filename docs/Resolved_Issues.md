@@ -20,7 +20,7 @@ original register entry (omitted where none was assigned).
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
 - [Query tooling & SQL safety](#query-tooling--sql-safety) — 7
 - [Capacity & performance](#capacity--performance) — 1
-- [Evaluation harness](#evaluation-harness) — 16
+- [Evaluation harness](#evaluation-harness) — 17
 - [Error-handling honesty audit (2026-07-22)](#error-handling-honesty-audit-2026-07-22) — 4
   (T0021.2-T0021.4)
 - [Earlier resolved (pre-register)](#earlier-resolved-pre-register--chronological) — 12
@@ -417,6 +417,23 @@ original register entry (omitted where none was assigned).
     `Code_Review_Notes.md` bug 7. <!-- archived-on-tag -->
 
 ## Evaluation harness
+
+- **`[MED · RESOLVED · T0027.3, 2026-08-14]` Two acceptance scenarios exceeded the free tier's
+  per-minute token ceiling.**
+  - **Found:** T0025.7 paced capture on 2026-08-13. `HLP-CONTEXT-1` and `HLP-COMPOUND-1` stayed
+    `INFRA`, so the acceptance set was measured at 13 of 19 turns. Groq admits a call when window
+    usage plus the request's `max_tokens` reserve stays under 8000 TPM, and both scenarios pass that
+    inside one turn: `HLP-CONTEXT-1` peaks at 10231 on synthesis, `HLP-COMPOUND-1` spends 7653 on
+    routing. Pacing between turns cannot clear a window one turn fills by itself.
+  - **Resolution 2026-08-14, T0027.3:** both were captured on the DeepSeek arm, which publishes no
+    per-minute or per-day token ceiling. `HLP-COMPOUND-1` passes 2/2; `HLP-CONTEXT-1` passes 3/4,
+    its one failure being a second turn that skipped the required tool. Nothing about the instrument
+    changed to admit them: the ceiling was a property of the tier, never of the scenarios, and
+    reducing `max_tokens` or `query.max_rows` was rejected precisely because it would have changed
+    what the instrument measures. The ceiling still binds on the Groq arm, and is one input to the
+    T0027.4 default decision.
+  - **Verified:** [T0027.3 DeepSeek arm](../evals/t0027_deepseek_arm.md), run
+    `a6b13f52-c51a-4e5d-8df8-e798d81a5a59`, 29 of 29 scenarios and 77 of 77 turns, zero retries.
 
 - **`[LOW · RESOLVED · T0026.2, 2026-08-14]` Eval `conftest.py` redirected `DATABASE_URL` during
   every pytest collection.**

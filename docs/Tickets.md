@@ -38,6 +38,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
 | 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
+| 27 | T0027 | DeepSeek Provider Integration | ✅ | Complete 2026-08-15 (.1-.4), following the deferred T0015.6 procedure · the spike passed, the arm measured 29/29 scenarios in 5m20s for ~$0.04, and .4 flipped both profiles to DeepSeek (D-045) with pacing at 0 and no provider key required at boot · the Groq branch stays selectable |
 | 28 | T0028 | Evaluation Documentation Ownership | ✅ | Complete 2026-08-14 (.1 Fact Ledger rows + `scenario-id` check, .2 dedupe the behavior spec, .3 seal + merge the instrument reports, .4 operating manual + stale-claim sweep). No verdict, rule, or threshold changed |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
@@ -102,36 +103,6 @@ for the honesty Definition-of-Done bullet is decision **D9** in the readiness pl
 T0023's sweep, not here. A v1.0 tag that records a measured honesty limitation is a legitimate
 outcome; this milestone is how the limitation gets closed afterward.
 
-## T0025: Milestone 25 - Evaluation Instrument - Complete 2026-08-13
-
-The ten ticket plans are archived in
-[`archive/Tickets_Archive.md`](archive/Tickets_Archive.md); their outcomes are in
-[Completion Reports](Completion_Reports.md).
-
-**What the milestone delivered.** A frozen Alembic-built fixture, a 29-scenario registry that owns
-probe flags, reference SQL, and tool expectations, an in-process driver with manifests and
-checkpoint/resume, a local trace viewer, execution accuracy by executing generated and reference
-SQL against the fixture, and a deterministic three-tier grader with four outcomes. CI now replays
-committed three-seam evidence and grades it with no model, judge, or outbound call.
-
-**Where it stopped, deliberately.** T0025.7 closed partial: the free tier's admission ceiling left
-13 of 19 attempted turns measured, and `HLP-CONTEXT-1` and `HLP-COMPOUND-1` were never captured.
-The grader agrees with all 13 human labels, but 13 turns is an assertion check, not a
-production-wide accuracy estimate.
-
-**Who owns what next.**
-
-| Concern | Owner |
-|---|---|
-| Fixing the behaviors the instrument found | **M24 - Honesty Enforcement** |
-| Full 29-scenario remeasurement on the accepted instrument | **T0024.4**, once the tier decision lands |
-| Ship or no-ship thresholds, and the release policy behind them | **The release gate (D-A, D-B)** |
-| Judge calibration and fidelity | **The release gate (D-C)** |
-| The paid-tier decision the last two scenarios need | [Known Issues](Known_Issues.md) |
-
-Open evaluation risks stay in [Known Issues](Known_Issues.md); durable choices are D-040 through
-D-044 in the [Decision Log](Decision_Log.md).
-
 ---
 
 ## T0026: Milestone 26 - Evaluation Workspace Hygiene - Complete 2026-08-14
@@ -144,6 +115,23 @@ The three ticket plans are archived in
 fixture-database URL, the eight test modules moved under `tests/evals/`, and the grader's rule
 table moved into `evals/scenarios_v1.yaml` so a grading rule now sits beside its expectation.
 No verdict, threshold, or scenario expectation changed.
+
+---
+
+## T0027: Milestone 27 - DeepSeek Provider Integration - Complete 2026-08-15
+
+The four ticket plans are archived in
+[`archive/Tickets_Archive.md`](archive/Tickets_Archive.md); their outcomes are in
+[Completion Reports](Completion_Reports.md).
+
+**What the milestone delivered.** A spike proved DeepSeek clears all five checks with thinking
+disabled, `AgentProvider` gained a second branch selectable per profile, and the 29-scenario
+registry captured on the DeepSeek arm in 5m20s for ~$0.04 - against a Groq baseline that managed
+13 turns in 21 minutes before quota killed it. On that measured basis (**D-045**, decided at step 4
+of the pre-registered rule) .4 flipped both profiles to `deepseek-v4-flash`, dropped
+`eval.driver.turn_pacing_seconds` to 0, and stopped requiring any provider key at boot; each branch
+now validates its own. `HLP-CONTEXT-1` and `HLP-COMPOUND-1` were measured for the first time.
+The Groq branch stays selectable, and no scenario, grading rule, threshold, or prompt changed.
 
 ---
 

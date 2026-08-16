@@ -26,6 +26,9 @@ so everything it needs must be in the prompt or in the precise files you point i
 
 ## Step 1 — Understand the ticket (read narrowly)
 Read only what you need, using targeted tools — **not** full-file reads of large docs:
+- The ticket's **entry in `docs/roadmap.yaml`** — its milestone id, its `tickets:` list, its
+  declared `scope:`, and the `frozen:` register list. The prompt must carry all of these; a
+  coder that has to guess its number or its allowed paths is how numbers collide.
 - The ticket's own lines in `docs/Tickets.md` (grep the ticket id, read that range).
 - `CLAUDE.md` (operating rules), `docs/Repo_Current_State.md` (current state, deps, next
   ticket), `docs/Known_Issues.md` (open risks).
@@ -75,6 +78,7 @@ We are working on [PROJECT].
 
 Before coding, review:
 - AGENTS.md
+- docs/roadmap.yaml
 - docs/Full_Design_Document.md
 - docs/MVP_Technical_Design.md
 - docs/Tickets.md
@@ -85,10 +89,19 @@ Before coding, review:
 Implement this ticket only.
 
 Ticket:
-[Ticket ID - Title]
+[Ticket ID - Title, exactly as allocated in docs/roadmap.yaml. Do not allocate a number.]
 
 Branch:
-[Suggested branch name]
+[feature/tXXXX-slug, branched off the tip of origin/main. Never off another ticket branch.]
+
+Paths you may change (from this milestone's scope: in docs/roadmap.yaml):
+[list]
+
+Registers you must not touch (frozen: in docs/roadmap.yaml):
+[list]
+
+Write your plan, completion report, known issues, and manual checklist to
+docs/entries/[ticket].md. See docs/entries/README.md for the format.
 
 Goal:
 [Goal]
@@ -122,35 +135,38 @@ Project rules:
 - Avoid unnecessary dependencies.
 - Keep changes small and testable.
 - Do not fix unrelated issues inline. When you encounter a risk, bug, sharp edge, or
-  deferred/out-of-scope item, append it as a bullet to docs/Known_Issues.md (note where
-  it was found and a candidate follow-up) rather than fixing it here.
+  deferred/out-of-scope item, record it under `## Known issues` in your entry file (note
+  where it was found and a candidate follow-up) rather than fixing it here.
+- Do not edit any frozen register. The integration step folds your entry into them.
 
-After implementation, provide:
+After implementation, write these as `## ` sections in docs/entries/[ticket].md:
 - Summary of what changed
 - Files changed
 - Commands run
 - Build/test results
 - Manual verification steps
 - Whether docs need updating
-- Any risks or follow-up tickets - and confirm each was appended to docs/Known_Issues.md
+- Any risks or follow-up tickets - and the known issues you found
 ```
 
 Include these sections:
 - Project one-liner + "read only these" list (line-ranged) + "Implement this ticket only."
-- **Ticket** (id + title), **Branch** (`feature/tXXXX-slug`, off the prior ticket's branch).
+- **Ticket** (id + title, as allocated in `docs/roadmap.yaml`), **Branch**
+  (`feature/tXXXX-slug`, off the tip of `origin/main` - never off another ticket branch).
 - **Goal**, **Dependencies**.
-- **Allowed areas** (exact files to create/change) and **Do not touch** (explicit).
+- **Allowed areas** (the milestone's `scope:` from `docs/roadmap.yaml`, narrowed to the exact
+  files to create or change) and **Do not touch** (explicit, including the `frozen:` list).
 - **Interfaces you consume** (signatures) and **Pattern to mirror** (inlined snippet).
 - **Requirements** (precise, per-file), **Non-goals**.
 - **Acceptance criteria**, **Manual verification** (runnable steps a developer can check —
   `CLAUDE.md` §4: never just "build passed").
 - **Project rules** (one ticket; no unrelated refactors/deps/architecture; models in
   `models.py`; params in `config/`; keep layers isolated; **log any risk/issue/deferred
-  item to `docs/Known_Issues.md`, do not fix inline**; produce completion report +
-  update `Repo_Current_State.md`).
+  item under `## Known issues` in the entry file, do not fix inline**; write the completion
+  report to `docs/entries/`, and edit no frozen register).
 - **After implementation, provide**: summary · files changed · commands run · build/test
-  results · manual verification · docs needing updates · risks/follow-ups **and confirm
-  each was appended to `docs/Known_Issues.md`**.
+  results · manual verification · docs needing updates · risks/follow-ups — all as `## `
+  sections of `docs/entries/[ticket].md`, per `docs/entries/README.md`.
 
 ## Step 4 — Deliver
 Output the prompt as plain markdown for the user to hand to the coder session. Briefly note

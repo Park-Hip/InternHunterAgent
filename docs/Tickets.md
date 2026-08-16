@@ -1,6 +1,6 @@
 # InternHunter — Tickets & Roadmap
 
-> **Last verified:** 2026-08-14 against the active ticket plan and completion records.
+> **Last verified:** 2026-08-16 against the active ticket plan and completion records.
 
 > **Eviction:** A ticket plan leaves when its completion report is recorded and its historical scope
 > is moved to the ticket archive.
@@ -42,7 +42,13 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 28 | T0028 | Evaluation Documentation Ownership | ✅ | Complete 2026-08-14 (.1 Fact Ledger rows + `scenario-id` check, .2 dedupe the behavior spec, .3 seal + merge the instrument reports, .4 operating manual + stale-claim sweep). No verdict, rule, or threshold changed |
 | 29 | T0029 | Evaluation Readability | ✅ | .1 complete 2026-08-15: the verdict, the run's identity, and telemetry rendered in the viewer. Spent no quota; changed no rule |
 | 30 | T0030 | Evaluation Evidence Durability | 📋 | .1 freeze command, .2 freeze the exposed captures, .3 the telemetry decision · closes the `[MED · DECISION]` left open by T0025.10 |
+| 31 | T0031 | **Parallel Agent Workflow** | 🔨 | .1 registry, frozen registers, per-ticket entries · .2-.4 generator, derived state, enforcement |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
+
+> **Numbers are allocated in [`roadmap.yaml`](roadmap.yaml), not here.** This table is a reader's
+> index of what the registry already decided. M29 and M30 are in flight on their own branches and
+> add their own rows; T0031.1 adds only its own, and no later ticket adds one at all - the
+> integration step does.
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
 > maintainer executing it. Verified 2026-08-12: the Groq and Google keys are configured locally, so
@@ -298,3 +304,60 @@ sanitizer must be trusted to police forever.
 a frozen replay does and does not carry.
 
 **Blockers:** None. Spends no quota; every input is a recorded artifact or a decision.
+
+---
+
+## T0031: Milestone 31 - Parallel Agent Workflow
+
+Parallel sessions collided on documentation rather than on code. The measured cause, taken from
+the 200 commits before this milestone: `Repo_Current_State.md` changed 91 times,
+`Known_Issues.md` 68, `Tickets.md` 56, and every open branch carried an edit to all eighteen
+documents under `docs/`. Three branches independently produced a `Tickets_Archive.md` of 1775,
+2104, and 2291 lines from the same archival operation. Identity drifted the same way: M23 is
+indexed but was never scoped, PR #48 shipped titled "M25/T0026" against docs that call it M26,
+and `feature/t0031-parallel-agent-docs` ran with a worktree and no ticket body.
+
+The milestone separates the **write surface** from the **read surface**. Agents write only to
+paths no other agent owns; the shared registers are written once per merge, by the integration
+step, and are being made derivable so that step stays cheap.
+
+### T0031.1: Give parallel tickets a private write surface - 🔨 In progress
+
+**Objective.** Make it structurally impossible for two ticket agents to edit the same line.
+
+**In scope.** `docs/roadmap.yaml` as the sole owner of ticket and milestone numbers, of each
+milestone's path `scope:`, and of the `frozen:` register list · `docs/entries/` as the per-ticket
+write surface, with its format · the `docs_lint.py` exemptions that make a per-ticket file legal
+without a caps row or an inbound link · `CLAUDE.md` §3 and §7 rewritten as the parallel work
+protocol and the integration step, with §5 and §6 rerouted · the ticket-prompt skill emitting the
+scope and the frozen list.
+
+**Out of scope.** Generating anything. Enforcing anything in CI. Both are .2-.4.
+
+### T0031.2: Generate the registers from the entries - 📋 Planned
+
+**Objective.** Fold entries into `Completion_Reports.md`, `Known_Issues.md`,
+`Resolved_Issues.md`, and `Manual_Verification_Guide.md` by running a script rather than by hand.
+
+**In scope.** `scripts/docs_build.py`, which already exists as an uncommitted 386-line draft in
+the M31 worktree and reads the `docs/entries/` frontmatter contract .1 froze · generated regions
+marked in each register · a CI check that regenerating produces no diff, matching the pattern
+`check_stack` and `check_agent_parity` already use.
+
+### T0031.3: Derive the current-state snapshot - 📋 Planned
+
+**Objective.** Stop `Repo_Current_State.md` from being writable, and therefore from being wrong.
+
+**In scope.** Generate its mechanical facts - branch, baseline commit, completed milestones, open
+branches, dependencies, scripts, build status - from `git`, `roadmap.yaml`, and `pyproject.toml`.
+One human paragraph survives: the next recommended ticket and why. Blocked on .1.
+
+### T0031.4: Enforce the protocol in CI - 📋 Planned
+
+**Objective.** Make the rules self-checking, so a violation fails at push time rather than at
+merge time.
+
+**In scope.** Three `docs_lint.py` checks - `registry` (every branch and ticket resolves to a
+`roadmap.yaml` entry; no duplicate or skipped milestone id), `scope` (a PR's changed paths are a
+subset of its milestone's declared scope), and `frozen` (a PR touches no frozen path unless it is
+the integration commit). Blocked on .1.

@@ -1,0 +1,194 @@
+# InternHunter - the allocation registry for ticket and milestone identity.
+#
+# This file is the sole owner of "which number belongs to which work", and of which paths
+# a milestone is allowed to change. Nothing else allocates a number. An agent that needs
+# one stops and asks; it never infers the next free number from docs/Tickets.md.
+#
+# Inferring the number from a document is what produced every numbering defect in this
+# repository's history: M23 is indexed but was never scoped while M26, M27 and M28 shipped
+# past it; PR #48 shipped titled "M25/T0026" against documentation that calls the same work
+# M26; and feature/t0031-parallel-agent-docs existed with a worktree and no ticket body on
+# any branch.
+#
+# Milestone N owns tickets T00NN.x. That coupling is deliberate and stays - one number is
+# cheaper to arbitrate than two. What changed is that the number is claimed here, before an
+# agent starts, instead of being written by whichever agent finishes first.
+#
+# status:
+#   complete    - shipped; plan archived in docs/archive/Tickets_Archive.md.
+#   in-progress - an agent is working it on `branch`.
+#   claimed     - the number is taken and a branch may exist; no ticket body yet.
+#   planned     - indexed on the roadmap, not scoped, no branch.
+#
+# scope:
+#   The paths this milestone's tickets may change. Before launching agents in parallel,
+#   intersect their scopes: a non-empty intersection means they are NOT independent, and
+#   must be sequenced instead. Widening a scope is a one-line edit here, made in the same
+#   PR that needs it - the declaration exists to force that decision early, not to block it.
+
+version: 1
+
+# Registers no ticket agent may edit. Only the integration step writes these, after a merge.
+# A ticket routes the same information into its own docs/entries/T####.md file instead.
+frozen:
+  - docs/Repo_Current_State.md
+  - docs/Completion_Reports.md
+  - docs/Known_Issues.md
+  - docs/Resolved_Issues.md
+  - docs/Manual_Verification_Guide.md
+  - docs/README.md
+  - docs/Tickets.md
+  - docs/archive/Tickets_Archive.md
+
+milestones:
+  - id: M0
+    title: Foundation through Hardening (M0-M5)
+    status: complete
+    tickets: [T0000, T0001, T0002, T0003, T0004, T0005]
+  - id: M6
+    title: First Real SQL Tool
+    status: complete
+    tickets: [T0006]
+  - id: M7
+    title: Conversation Memory
+    status: complete
+    tickets: [T0007]
+  - id: M8
+    title: System Prompt and Persona
+    status: complete
+    tickets: [T0008]
+  - id: M9
+    title: Data Ingestion (VietnamWorks)
+    status: complete
+    tickets: [T0009]
+  - id: M10
+    title: Pre-deploy Hardening
+    status: complete
+    tickets: [T0010]
+  - id: M11
+    title: Model Evaluation Harness
+    status: complete
+    tickets: [T0011]
+    note: Shipped; the T0011.5 baseline-calibration run remains blocked on a maintainer.
+  - id: M12
+    title: Hardening and Known-Issue Fixes
+    status: complete
+    tickets: [T0012]
+  - id: M13
+    title: Pre-Deploy Refinement
+    status: complete
+    tickets: [T0013]
+  - id: M14
+    title: Pre-Deploy Known-Issue Fixes
+    status: complete
+    tickets: [T0014]
+  - id: M15
+    title: Agent Behavior Spec and Scenario Matrix
+    status: complete
+    tickets: [T0015]
+    note: Closed 2026-08-12; the remainder was absorbed by M24 and M25.
+  - id: M16
+    title: Security Posture
+    status: complete
+    tickets: [T0016]
+  - id: M17
+    title: Streaming Response Delivery
+    status: complete
+    tickets: [T0017]
+  - id: M18
+    title: Clickable Demo (UI and go-live)
+    status: complete
+    tickets: [T0018]
+  - id: M19
+    title: Ingestion Deploy Readiness
+    status: complete
+    tickets: [T0019]
+  - id: M20
+    title: Reconciliation and Activation
+    status: complete
+    tickets: [T0020]
+    note: Complete as a coder milestone; two maintainer actions remain open.
+  - id: M21
+    title: Serving-Path Hardening
+    status: complete
+    tickets: [T0021]
+  - id: M22
+    title: Docs Hygiene and Documentation System
+    status: complete
+    tickets: [T0022]
+
+  - id: M23
+    title: v1.0 Release Cut
+    status: planned
+    tickets: [T0023]
+    note: >-
+      Renumbered from T0022 on 2026-08-09. Indexed since, never scoped, and M26-M28 shipped
+      past it. Blocked on the M20 cron activation (D-038).
+  - id: M24
+    title: Honesty Enforcement (obligation seam)
+    status: planned
+    tickets: [T0024.1, T0024.2, T0024.3, T0024.4, T0024.5, T0024.6]
+    note: Carved out of M21 on 2026-08-12. Scoped in docs/Tickets.md, sequenced after M23.
+
+  - id: M25
+    title: Evaluation Instrument
+    status: complete
+    tickets: [T0025]
+  - id: M26
+    title: Evaluation Workspace Hygiene
+    status: complete
+    tickets: [T0026.1, T0026.2, T0026.3]
+  - id: M27
+    title: DeepSeek Provider Integration
+    status: complete
+    tickets: [T0027.1, T0027.2, T0027.3, T0027.4]
+  - id: M28
+    title: Evaluation Documentation Ownership
+    status: complete
+    tickets: [T0028.1, T0028.2, T0028.3, T0028.4]
+
+  - id: M29
+    title: Evaluation Readability
+    status: in-progress
+    tickets: [T0029.1]
+    branch: feature/t0029-viewer-readability
+    pr: 51
+    scope:
+      - evals/viewer.py
+      - evals/README.md
+      - tests/evals/test_viewer.py
+  - id: M30
+    title: Evaluation Evidence Durability
+    status: in-progress
+    tickets: [T0030.1, T0030.2, T0030.3]
+    branch: feature/t0030-evidence-durability
+    scope:
+      - evals/viewer.py
+      - evals/README.md
+      - evals/Operating_Manual.md
+      - tests/evals/
+    note: >-
+      Scope intersects M29 on evals/viewer.py, evals/README.md and tests/evals/. These two are
+      not independent and must not run in parallel; M30 is currently stacked on M29 and should
+      be merged in that order. This is the first entry the intersection rule would have caught
+      before launch.
+
+  - id: M31
+    title: Parallel Agent Workflow
+    status: in-progress
+    tickets: [T0031.1, T0031.2, T0031.3, T0031.4]
+    branch: feature/t0031-parallel-agent-docs
+    scope:
+      - docs/roadmap.yaml
+      - docs/entries/
+      - docs/README.md
+      - docs/Tickets.md
+      - scripts/docs_lint.py
+      - scripts/docs_build.py
+      - tests/test_docs_lint.py
+      - CLAUDE.md
+      - AGENTS.md
+      - skills/generate-ticket-prompt/SKILL.md
+    note: >-
+      Touches two frozen registers (docs/README.md, docs/Tickets.md) because it is the ticket
+      that establishes the freeze. No later ticket may claim them this way.

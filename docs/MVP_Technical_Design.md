@@ -54,14 +54,16 @@ the **only** place tools are registered and the agent is assembled.
 
 *Status: implemented*
 
-Groq chat models are wrapped by `src/agents/runtime/provider.py::AgentProvider`. This is the one
+Chat models are wrapped by `src/agents/runtime/provider.py::AgentProvider`. This is the one
 place model construction lives; no other layer constructs a model. Configuration is read from
 `config/settings.yaml` under two explicit profiles with the same fields: `agent.react.*` for the
 outer conversational ReAct agent, and `agent.sql_generation.*` for the nested SQL-generation call
 inside `query_clean_jobs`. Each profile carries `model`, `temperature`, `max_tokens`, `timeout`,
-`max_retries`, `streaming`, `reasoning_format`, and optional `reasoning_effort`; the API key still
-comes from `settings.GROQ_API_KEY`. There is deliberately no multi-provider abstraction;
-`build_model(...)` raises on any provider other than `groq`.
+`max_retries`, `streaming`, and its provider's native reasoning knob. Each profile also carries a
+`provider` key, defaulting to `agent.provider`, so one profile can move providers while the other
+stays put. `build_model(...)` supports `deepseek` and `groq` and raises on anything else; the
+selected branch reads its own key (`DEEPSEEK_API_KEY` or `GROQ_API_KEY`) and raises naming the
+profile when it is unset. Both profiles select DeepSeek (D-045).
 
 ### 2.2 System prompt & reasoning
 
@@ -257,8 +259,9 @@ T0010.1 (see §5) — a blank/whitespace-only `query` returns a clean `400`, dis
 - **Database.** PostgreSQL via SQLAlchemy; the engine and session factory live in `src/core/db.py`
   (`pool_pre_ping=True`). This app database is entirely separate from Langfuse's internal Postgres —
   different owners, lifecycles, and schemas.
-- **Required environment.** `DATABASE_URL`, `GROQ_API_KEY`, and the `LANGFUSE_*` keys (tracing
-  degrades gracefully if the Langfuse keys are absent).
+- **Required environment.** `DATABASE_URL` and the `LANGFUSE_*` keys (tracing degrades gracefully
+  if the Langfuse keys are absent). Provider keys are optional at boot and validated by the branch
+  that needs them, so a checkout runs with only the selected provider's key.
 - **Tunable parameters** live in `config/settings.yaml` (read through `src/core/config.py`):
   `agent.react.*` for the outer ReAct model, `agent.sql_generation.*` for the nested SQL-generation
   model, and `agent.memory.*` (`max_messages`) for memory. Per project convention, parameters are

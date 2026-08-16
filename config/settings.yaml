@@ -11,10 +11,20 @@ api:
     allowed_headers: ["*"]
 
 agent:
-  provider: groq
+  # Default provider for every profile. A profile may override it with its own
+  # `provider:` key, which is how one profile moves arms while the other stays put.
+  # Change `provider` and `model` together - a model name belongs to one provider.
+  # Native knobs below are read only by their own provider's branch:
+  #   groq     -> reasoning_format, reasoning_effort
+  #   deepseek -> thinking (disabled | enabled; enabled means the provider default, on)
+  # Serving moved to deepseek on measured throughput (D-045). The groq knobs stay so the
+  # other arm is one edit away: set both profiles back to `groq` / `qwen/qwen3.6-27b` and
+  # restore `eval.driver.turn_pacing_seconds: 75`.
+  provider: deepseek
 
   react:
-    model: qwen/qwen3.6-27b
+    provider: deepseek
+    model: deepseek-v4-flash
     temperature: 0.2
     max_tokens: 2048
     timeout: 30
@@ -22,9 +32,11 @@ agent:
     streaming: true
     reasoning_format: hidden
     reasoning_effort: null
+    thinking: disabled  # deepseek ignores temperature while thinking is on (T0027.1)
 
   sql_generation:
-    model: qwen/qwen3.6-27b
+    provider: deepseek
+    model: deepseek-v4-flash
     temperature: 0.0
     max_tokens: 1024
     timeout: 30
@@ -32,6 +44,7 @@ agent:
     streaming: false
     reasoning_format: hidden
     reasoning_effort: none
+    thinking: disabled  # this profile's determinism depends on temperature: 0.0
 
   memory:
     max_messages: 20
@@ -49,8 +62,11 @@ eval:
   fixture:
     database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval
   driver:
-    # One agent turn asks Groq for ~9.2k tokens (inputs plus each call's max_tokens
-    # reserve) across its routing, SQL, and synthesis calls, against an 8000 TPM
-    # ceiling. A turn therefore only lands from an idle window, and retrying inside
-    # a window the previous turn just filled can never recover. Pace turns instead.
-    turn_pacing_seconds: 75
+    # Seconds to wait between turns. This exists only to survive a per-minute token
+    # ceiling: one agent turn asks for ~9.2k tokens (inputs plus each call's max_tokens
+    # reserve) across its routing, SQL, and synthesis calls, and Groq's free tier admits
+    # 8000 TPM, so a turn only lands from an idle window and retrying inside a filled one
+    # can never recover. DeepSeek publishes no TPM or TPD limit, only account concurrency,
+    # and the driver runs one turn at a time - so the serving default needs no pacing.
+    # Restore 75 together with the groq arm; the T0027.3 capture ran 77 turns at 0.
+    turn_pacing_seconds: 0

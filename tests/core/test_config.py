@@ -49,7 +49,7 @@ class ConfigLoadTests(unittest.TestCase):
 
     def test_load_settings_raises_clear_error_for_missing_required_env_var(self) -> None:
         required_env = {
-            "DATABASE_URL": "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter",
+            "GROQ_API_KEY": "groq-test-key",
             "LANGFUSE_SECRET_KEY": "langfuse-secret",
             "LANGFUSE_PUBLIC_KEY": "langfuse-public",
         }
@@ -65,9 +65,30 @@ class ConfigLoadTests(unittest.TestCase):
 
         self.assertIn("Failed to load runtime settings.", str(ctx.exception))
         self.assertIn(
-            "Missing required environment variables: GROQ_API_KEY",
+            "Missing required environment variables: DATABASE_URL",
             str(ctx.exception),
         )
+
+    def test_load_settings_boots_with_only_the_selected_providers_key(self) -> None:
+        """No provider key is required at boot; the selected branch validates its own."""
+        selected_provider_env = {
+            "DATABASE_URL": "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter",
+            "DEEPSEEK_API_KEY": "deepseek-test-key",
+            "LANGFUSE_SECRET_KEY": "langfuse-secret",
+            "LANGFUSE_PUBLIC_KEY": "langfuse-public",
+        }
+        config_module.Settings.model_config = SettingsConfigDict(
+            env_file=None,
+            env_file_encoding="utf-8",
+            extra="ignore",
+        )
+
+        with patch.dict(os.environ, selected_provider_env, clear=True):
+            settings = config_module.load_settings(force_reload=True)
+
+        self.assertEqual(settings.DEEPSEEK_API_KEY, "deepseek-test-key")
+        self.assertIsNone(settings.GROQ_API_KEY)
+        self.assertIsNone(settings.GOOGLE_API_KEY)
 
     def test_importing_config_module_does_not_validate_env_at_import_time(self) -> None:
         with patch.dict(

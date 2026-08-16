@@ -8,9 +8,11 @@ A document over its cap means either the cap or the document is wrong; decide wh
 
 Two caps moved on 2026-08-13 when T0025.10 closed M25, both measured after the change:
 
-- `Tickets.md` 500 → 300, measured at 131. The eviction this register anticipated has happened -
-  the ten completed M25 blocks are now in [the archive](archive/Tickets_Archive.md). The headroom
-  is for M23 and M24, which are indexed but not yet scoped into ticket bodies.
+- `Tickets.md` 500 → 300, measured at 248 on 2026-08-14 after M26's three completed blocks joined
+  M25's ten in [the archive](archive/Tickets_Archive.md) and M27 was scoped into four ticket
+  bodies. That eviction was not optional: naming M27 pushed the document to its cap exactly, and
+  the cap is what surfaced the plans that had already earned their exit. The remaining headroom is
+  for M23 and M24, indexed but not yet scoped.
 - `Decision_Log.md` 350 → 450, measured at 368. Harvesting is what this document is for, so it
   grows by design each time a milestone closes; M25 contributed D-041 through D-044. Evicting a
   decision requires revoking it, so the cap is the only lever that moves.
@@ -54,6 +56,7 @@ Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries
 | [Instrument report](../evals/Instrument_Report.md) | The grader audit and the holdout calibration, merged | T3 | 250 | Evaluation work |
 | [v1 scenario matrix](../evals/archive/v1_scenario_matrix.md) | The 2026-07-14 measurement, sealed as dated evidence | T4 | Uncapped | Project history |
 | [v1 error analysis](../evals/archive/v1_error_analysis.md) | Open-coded failure modes from the recovered answers, sealed | T4 | Uncapped | Project history |
+| [T0027.3 DeepSeek arm](../evals/t0027_deepseek_arm.md) | The 2026-08-14 measured arm and the provider decision taken from it | T4 | Uncapped | Project history |
 | [Completion Reports](Completion_Reports.md) | Completed-ticket outcomes | T4 | Uncapped | Project history |
 | [Resolved Issues](Resolved_Issues.md) | Closed risk and fix records | T4 | Uncapped | Project history |
 | [Archives](archive/) | Historical plans, checklists, and snapshots | T4 | Uncapped | Project history |

@@ -1,6 +1,6 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-15 against the checked-out commit, active registers, and
+> **Last verified:** 2026-08-16 against the checked-out commit, active registers, and
 > [`Operations.md`](Operations.md).
 
 > **Eviction:** A current-state fact leaves when the checked-out repository or active operational
@@ -8,11 +8,11 @@
 
 ## Current branch
 
-- Repository baseline: `main` at `5ebbe33`, which merged M25 and M26 as PR #48 on 2026-08-15.
-  PR #47 was closed as superseded: every commit it carried was already contained in #48.
-- Active ticket branch: `feature/t0029-viewer-readability`, branched from the merged M28 work.
-- The M29 branch is checked out in the worktree `.claude/worktrees/t0029-viewer-readability`; the
-  M28 branch remains in `.claude/worktrees/t0028-evals-docs`.
+- Repository baseline: `main` at `0a6524e`, which merged M27 as PR #50 on 2026-08-16. It carries
+  M28 from PR #49 and M25 and M26 from PR #48; PR #47 was closed as superseded, every commit it
+  carried being already contained in #48.
+- Active ticket branch: `feature/t0029-viewer-readability`, merged up to that baseline rather than
+  stacked behind it, in the worktree `.claude/worktrees/t0029-viewer-readability`.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -24,35 +24,37 @@ Completed ticket plans are preserved in the [ticket archive](archive/Tickets_Arc
 M0-M20 are complete, covering the foundation, agent runtime, data ingestion, evaluation harness,
 security, streaming, deployment, and reconciliation work.
 
-M21 is complete through T0021.4.
-The same pass carved the model-honesty work out of M21 into M24 - Honesty Enforcement.
-M22 - Docs Hygiene & Documentation System has phase 1 (T0022.1-.9) merged to `main` on
-2026-08-11 via PR #41.
-T0022.10 through T0022.14 are complete.
+M21 is complete through T0021.4, and the same pass carved the model-honesty work out into M24.
+M22 - Docs Hygiene & Documentation System is complete (T0022.1-.14).
 
-M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10): the frozen Alembic-built
-fixture, the 29-scenario registry, the in-process driver with manifests and resume, the trace
-viewer, execution accuracy, the deterministic three-tier grader, and a CI replay that makes no
-model, judge, or outbound call.
-Acceptance is partial by design: 13 of 19 attempted turns measured, all 13 agreeing with the human
-labels, and two scenarios still await a paid-tier decision ([Known Issues](Known_Issues.md)).
+M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10), entered through
+[`evals/README.md`](../evals/README.md) and gated by a CI replay of committed three-seam evidence
+that makes no model, judge, or outbound call. Its acceptance run measured 13 of 19 turns on the
+free tier; T0027.3 has since measured all 29.
 
-M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changes no verdict.
-`evals/` holds the instrument plus the two live test modules, its deterministic tests live in
-`tests/evals/`, [`evals/README.md`](../evals/README.md) is the entry point, and the scenario
-registry owns every grading expectation rather than the grader.
+M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changed no verdict.
+Its deterministic tests live in `tests/evals/`, the scenario registry owns every grading
+expectation, and its three ticket plans joined M25's ten in the archive on 2026-08-14.
+
+M27 - DeepSeek Provider Integration is complete (T0027.1-.4), 2026-08-14 to 2026-08-15.
+`agent.<profile>.provider` selects a provider per profile, the manifest records which one produced
+a run, and the measured arm captured 29 of 29 scenarios and 77 turns in 5m20s for about $0.04.
+DeepSeek was selected at step 4 of the pre-registered rule (**D-045**): both profiles use
+`deepseek-v4-flash`, `eval.driver.turn_pacing_seconds` is 0, each branch validates its own key at
+boot, the Groq branch stays selectable, and [Operations.md](Operations.md) owns `DEEPSEEK_API_KEY`.
+Evidence: [the arm record](../evals/t0027_deepseek_arm.md) and
+[`research/deepseek-provider-evaluation.md`](../research/deepseek-provider-evaluation.md).
 
 M28 - Evaluation Documentation Ownership is complete (T0028.1-.4) and changes no verdict, rule, or
 threshold. The Fact Ledger names an owner for evaluation facts, enforced by a `scenario-id` lint
-check; [`Agent_Behavior_Spec.md`](Agent_Behavior_Spec.md) §4a-4c links to the registry instead of
-duplicating it; the two dated snapshots sealed into `evals/archive/` and the grader audit and
-holdout report merged into [`evals/Instrument_Report.md`](../evals/Instrument_Report.md); and
-[`evals/Operating_Manual.md`](../evals/Operating_Manual.md) now explains the instrument end to end.
+check; the behavior spec links to the registry instead of duplicating it; the dated snapshots are
+sealed in `evals/archive/` and the audit and holdout reports merged into
+[`evals/Instrument_Report.md`](../evals/Instrument_Report.md); and
+[`evals/Operating_Manual.md`](../evals/Operating_Manual.md) explains the instrument end to end.
 
 M29 - Evaluation Readability is complete through T0029.1 and changes no verdict, rule, or threshold.
-`evals/viewer.py` takes an optional `--grade` report and joins it per turn, so one screen carries
-the verdict and tier, each non-passing check beside the seam it judges, a grade filter kept distinct
-from capture status, a manifest-built run header, and telemetry as labelled fields.
+`evals/viewer.py` joins an optional `--grade` report per turn, so one screen carries the verdict and
+tier, each failing check beside its seam, a grade filter, a run header, and labelled telemetry.
 
 ## Archive tags
 
@@ -75,7 +77,8 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
   structural tier. Only a driver capture carries tools, SQL, and execution results.
 - `evals/runs/` is ignored, so the 13-turn labelled capture behind
   [`evals/Instrument_Report.md`](../evals/Instrument_Report.md) is not reproducible from a clean
-  checkout.
+  checkout. References to it carry `<!-- lint-allow-link-path -->`: they resolve on a developer
+  machine but fail the documentation gate, which lints a bare checkout.
 
 ## Folder structure
 
@@ -103,11 +106,10 @@ The authoritative package declarations are in `pyproject.toml`.
 - `uv run python -m evals.driver --output evals/runs/run.json` - capture the scenario registry.
 - `uv run python -m evals.driver --resume --output evals/runs/run.json` - resume a partial run.
 - `uv run python -m evals.driver diff left.json right.json` - verify run comparability.
-- `uv run python -m evals.viewer evals/runs/run.json --grade evals/runs/run-grade.json` - generate
-  the local trace viewer, with each turn's verdict joined when `--grade` is given.
+- `uv run python -m evals.viewer <run>.json --grade <run>-grade.json` - the local trace viewer,
+  with each turn's verdict joined when `--grade` is given.
 - `uv run python -m evals.viewer --sample` - generate a two-turn viewer sample without model quota.
-- `uv run python -m evals.execution_accuracy evals/runs/run.json` - grade persisted SQL seams.
-  The command uses frozen fixture references.
+- `uv run python -m evals.execution_accuracy <run>.json` - grade SQL seams on frozen references.
 - `uv run python -m evals.replay` - replay committed evidence with no model or judge call.
 - `uv run ruff check .` - lint the repository.
 - `uv run mypy` - type-check `src`.
@@ -119,20 +121,17 @@ The authoritative package declarations are in `pyproject.toml`.
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Passed locally on 2026-08-15 (all eleven checks) |
-| `uv run pytest -q` | 461 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-15 |
-| `uv run pytest -q tests/agents/runtime/test_prompts.py` | 10 passed on 2026-08-13 |
-| `uv run ruff check .` | Passed on 2026-08-15 |
-| `uv run pytest -q tests/evals` | 93 passed on 2026-08-15 |
-| `git diff --check` | Clean on 2026-08-15 |
-| `uv run python -m evals.fixtures.loader` then `uv run python -m evals.replay` | Passed on 2026-08-15 |
-| `uv run python -c` glossary loader check | `v1`, 18 tokens loaded on 2026-08-13 |
-| `uv run mypy src` | Success: no issues in 43 source files on 2026-08-15 |
-| CI gate, PR #48 | Passed on 2026-08-15 in 1m07s (docs, checks) |
+| `python scripts/docs_lint.py` | Passed on 2026-08-16 (all eleven checks) |
+| `uv run pytest -q` | 472 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-16 |
+| `uv run ruff check .` | Passed on 2026-08-16 |
+| `uv run pytest -q tests/evals` | 93 passed on 2026-08-16 |
+| `git diff --check` | Clean on 2026-08-16 |
+| `uv run python -m evals.replay` | Exit 0 on 2026-08-16, unchanged by the viewer work |
+| `uv run mypy` | Success: no issues in 43 source files on 2026-08-16 |
 
-Every skip is environmental. One migration round-trip test requires `SCRATCH_DATABASE_URL`, and
-eight evaluation fixture tests require the local fixture Postgres on port 5433.
-The default suite deselects live eval tests by design.
+Every skip is environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, the eight
+evaluation fixture tests need the local fixture Postgres on 5433, and skill parity needs the
+gitignored `.claude/` copy. The default suite deselects live eval tests by design.
 
 ## Registers
 
@@ -141,10 +140,11 @@ Closed entries and their resolution records: [Resolved Issues](Resolved_Issues.m
 
 ## Next recommended ticket
 
-T0023 - the release path. Two threads run into it. `schedule:` is restored on `main` as of T0020.4,
-so the last open row in [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 is to watch
-the first unattended 02:00 UTC run; the pipeline ran green against production three times on
-2026-08-13 (113 loaded, 0 pages failed each) and `/api/v1/ready` reports a measured `2026-08-13`.
-T0023 still owes its DoD sweep and terms posture, and M24 owns the behavior failures M25 measured.
-M26, M28, and M29 are closed - M28 was documentation-only and M29 changed only how a recorded run
-is read - so no hygiene work stands between here and the release sequence.
+T0023 - the release path. `schedule:` is restored on `main` as of T0020.4, so the last open row in
+[the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 is to watch the first unattended
+02:00 UTC run; the pipeline ran green against production three times on 2026-08-13 and
+`/api/v1/ready` reports a measured `2026-08-13`. T0023 still owes its DoD sweep and terms posture.
+M24 owns the behavior failures M25 and T0027.3 measured, and T0027.3 hands it a triaged list: of 33
+failing turns, 23 are real behavior and 10 are grader phrasing artifacts recorded in
+[Known Issues](Known_Issues.md); M29 is the screen that makes that triage repeatable. M26, M27,
+M28, and M29 are closed, so no hygiene work stands between here and the release sequence.

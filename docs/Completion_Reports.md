@@ -2703,6 +2703,56 @@ reflow, orphan, and scenario-id checks.
 
 ---
 
+## T0027.4 - Flip the serving default to DeepSeek
+
+- **Summary:** Both agent profiles now select `deepseek` / `deepseek-v4-flash`, `render.yaml`
+  declares `DEEPSEEK_API_KEY`, and `eval.driver.turn_pacing_seconds` drops to 0 because it existed
+  only to survive Groq's 8000 TPM free-tier ceiling. The measured basis is **D-045**, which records
+  that the decision was taken at step 4 of the pre-registered rule - throughput and quota - because
+  steps 1 to 3 found no quality difference one 29-scenario arm can resolve. The Groq branch stays
+  selectable, and `config/settings.yaml` carries the one-edit path back to it.
+- **`GROQ_API_KEY` stops being required at boot, and so does every other provider key.** Requiring
+  one provider's key while a different provider serves would fail a clean checkout that holds only
+  the right key. Each branch now validates its own and names the profile that selected it, which
+  moves the failure from startup to the first agent call. `evals/judge.py` gained the same guard on
+  its Groq branch, where the Gemini branch already had one. `Operations.md` states the consequence:
+  a deploy missing the selected provider's key starts healthy and fails on the first query.
+- **Files changed:** `config/settings.yaml`, `src/core/config.py`, `src/agents/runtime/provider.py`,
+  `evals/judge.py`, `render.yaml`, `.env.example`, `README.md`,
+  `tests/agents/runtime/test_provider.py`, `tests/core/test_config.py`, `docs/Decision_Log.md`,
+  `docs/Operations.md`, `docs/Tech_Stack.md`, `docs/MVP_Technical_Design.md`,
+  `docs/Full_Design_Document.md`, `docs/Agent_Behavior_Spec.md`, `docs/Tickets.md`,
+  `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** `uv run pytest -q`, `uv run ruff check .`, `uv run mypy`,
+  `uv run python scripts/docs_lint.py`, `uv run python -m evals.replay`, `git diff --check`, and a
+  Docker build plus container run of `docker/Dockerfile` against the local fixture corpus.
+- **Build and test results:** 455 passed, 2 skipped, 30 live eval tests deselected, 4 subtests
+  passed - two more than before, both new. Ruff, mypy, and all ten documentation checks passed.
+  `evals.replay` exits 0 against the committed artifact, untouched by the flip.
+- **Verified end to end on DeepSeek alone.** A container built from `docker/Dockerfile` and given
+  `DEEPSEEK_API_KEY` but no `GROQ_API_KEY` answered a counting question, a three-row listing
+  question, and a streamed question against the local corpus. The stream carried answer tokens
+  only, with no reasoning content, which is what `thinking: disabled` is for.
+- **The design docs were corrected, not just the config.** `MVP_Technical_Design.md` still said
+  there was "deliberately no multi-provider abstraction" and that `build_model` raises on anything
+  but `groq` - false since T0027.2 and misleading after this flip. `Full_Design_Document.md` named
+  `ChatGroq` as the constructed class in two places.
+- **Manual verification:**
+  1. `uv run python -c "from src.agents.runtime.provider import AgentProvider;
+     print(type(AgentProvider().build_model('react')).__name__)"` prints `ChatDeepSeek`.
+  2. With only `DEEPSEEK_API_KEY`, `DATABASE_URL`, and the `LANGFUSE_*` keys set, settings load and
+     the agent answers. Unset `DEEPSEEK_API_KEY` and the error names `agent.react.provider`.
+  3. `uv run python -m evals.replay` exits 0.
+  4. After the merge deploys, the live demo answers a question and returns a `trace_url`.
+- **Risks:** serving is now metered - DeepSeek has no free tier, at a measured ~$0.0005 per turn -
+  so a traffic spike on the public demo costs money where it previously cost quota. The deploy is
+  the sharp edge: `DEEPSEEK_API_KEY` must be in the Render dashboard **before** this reaches
+  `main`, because `/api/v1/health` will report healthy on a service that cannot answer.
+- **Follow-up tickets:** none. M27 is complete.
+- **Docs that need updating:** none outstanding.
+
+---
+
 ## T0028.1 - Give evaluation facts an owner, and a check that enforces it
 
 - **Summary:** The Fact Ledger in `docs/README.md` assigned an owner to fourteen fact classes and

@@ -18,6 +18,11 @@ services:
         value: "1"
       - key: PORT
         value: "8000"
+      # DEEPSEEK_API_KEY serves the agent (D-045). GROQ_API_KEY stays declared because the
+      # Groq branch remains selectable; neither is required to boot, and the branch named in
+      # config/settings.yaml validates its own key.
+      - key: DEEPSEEK_API_KEY
+        sync: false
       - key: GROQ_API_KEY
         sync: false
       - key: DATABASE_URL

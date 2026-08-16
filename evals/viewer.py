@@ -335,7 +335,6 @@ def build_viewer_html(
         "run_id": run_id,
         "status": run.get("status", "UNKNOWN"),
         "header": run_header(manifest),
-        "graded": grade is not None,
         "turns": flatten_turns(run, scenarios, grade),
     }
     serialized = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
@@ -351,6 +350,9 @@ def build_viewer_html(
     * { box-sizing:border-box; } body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
     header { background:#122b39; color:#f8fafc; padding:24px max(24px,calc((100vw - 1180px)/2)); }
     .header-row,.toolbar,.turn-meta,.card-head { display:flex; align-items:center; gap:12px; } .header-row,.toolbar { justify-content:space-between; }
+    /* A long scenario id in .progress used to squeeze the nav buttons until their own
+       labels broke across two lines. Let the toolbar reflow, and never break a label. */
+    .toolbar,.turn-meta { flex-wrap:wrap; } .toolbar button { white-space:nowrap; }
     h1 { margin:0; font-size:24px; letter-spacing:-.02em; } h2 { margin:0; font-size:18px; } h3 { margin:0; font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
     main { max-width:1180px; margin:0 auto; padding:24px; } .toolbar { margin-bottom:18px; } select,button,textarea { font:inherit; } select,button { border:1px solid var(--line); border-radius:8px; background:var(--card); padding:8px 12px; color:var(--ink); } button { cursor:pointer; } button:hover { border-color:var(--accent); }
     .progress { color:var(--muted); font-variant-numeric:tabular-nums; } .rule { background:#fff8e8; border:1px solid #f0d28c; border-radius:10px; padding:14px 16px; margin-bottom:18px; color:#5b4100; }

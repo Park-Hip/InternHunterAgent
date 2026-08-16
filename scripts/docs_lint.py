@@ -27,6 +27,10 @@ LINK_PATH_MARKER = "<!-- lint-allow-link-path -->"
 LINK_PATH_BLOCK_BEGIN = "<!-- lint-allow-link-path:begin -->"
 LINK_PATH_BLOCK_END = "<!-- lint-allow-link-path:end -->"
 AMENDMENT_MARKER = "<!-- lint-allow-amendment -->"
+SCENARIO_ID_MARKER = "<!-- lint-allow-scenario-id -->"
+SCENARIOS = ROOT / "evals" / "scenarios_v1.yaml"
+SCENARIO_ID = re.compile(r"\b(?:HLP|HON|SAF)-[A-Z0-9]+(?:-[A-Z0-9]+)*\b")
+REGISTRY_ID = re.compile(r"^- id: (\S+)", re.M)
 TECH_STACK = ROOT / "docs" / "Tech_Stack.md"
 DOCS_MAP = ROOT / "docs" / "README.md"
 CAPS_BEGIN = "<!-- caps:begin -->"
@@ -65,7 +69,6 @@ REFLOW_TARGETS = frozenset(
         "docs/Resolved_Issues.md",
         "docs/T0020.4_Cron_Activation_Runbook.md",
         "docs/Tickets.md",
-        "evals/v1_scenario_matrix.md",
         "research/docs-hygiene-and-system-plan.md",
         "research/honesty-enforcement-design.md",
         "research/v1-release-readiness-plan.md",
@@ -113,9 +116,22 @@ def markdown_files(root: Path = ROOT) -> list[Path]:
 
 
 def is_archive(path: Path) -> bool:
-    return path.is_relative_to(ROOT / "docs" / "archive") or path.is_relative_to(
-        ROOT / "research" / "archive"
+    return (
+        path.is_relative_to(ROOT / "docs" / "archive")
+        or path.is_relative_to(ROOT / "research" / "archive")
+        or path.is_relative_to(ROOT / "evals" / "archive")
     )
+
+
+DATED_RECORDS = frozenset({ROOT / "docs" / "Completion_Reports.md"})
+
+
+def is_dated_record(path: Path) -> bool:
+    """Link-path exemption for a living file whose entries name paths as they were on the day
+    they shipped, not as a live index. Deliberately narrower than is_archive(): unlike a true
+    archive, docs/Completion_Reports.md still owes the line-length, reflow, orphan, and
+    scenario-id checks - only its historical links get a pass."""
+    return is_archive(path) or path in DATED_RECORDS
 
 
 def is_line_length_exempt(line: str, in_fence: bool, in_frontmatter: bool = False) -> bool:
@@ -128,6 +144,7 @@ def is_line_length_exempt(line: str, in_fence: bool, in_frontmatter: bool = Fals
         or re.fullmatch(r">?\s*\[[^\]]+\]\([^)]+\)", stripped) is not None
         or ARCHIVED_MARKER in line
         or LINK_PATH_MARKER in line
+        or SCENARIO_ID_MARKER in line
         or re.fullmatch(r"<?https?://\S+>?", stripped) is not None
         or re.search(r"https?://\S{100,}", line) is not None
     )
@@ -197,7 +214,7 @@ def check_link_path(files: list[Path]) -> list[Finding]:
     link_pattern = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
     code_pattern = re.compile(r"`([^`]+)`")
     for path in files:
-        if is_archive(path):
+        if is_dated_record(path):
             continue
         in_fence = False
         link_path_allowed = False
@@ -441,6 +458,44 @@ def check_orphan(files: list[Path]) -> list[Finding]:
     ]
 
 
+def registered_scenario_ids(text: str) -> set[str]:
+    """Return the scenario IDs the registry defines.
+
+    Read as text rather than parsed as YAML so this script keeps its no-dependency contract.
+    """
+    return set(REGISTRY_ID.findall(text))
+
+
+def check_scenario_id(files: list[Path], registry: Path = SCENARIOS) -> list[Finding]:
+    """Keep every scenario ID named in documentation resolvable in the registry that owns it.
+
+    D-041 makes `evals/scenarios_v1.yaml` the sole owner of scenario definitions. Documentation may
+    name a scenario, but a name that the registry does not define is a broken reference.
+    """
+    if not registry.exists():
+        return [Finding("scenario-id", registry, 0, "scenario registry is missing")]
+    known = registered_scenario_ids(registry.read_text(encoding="utf-8"))
+    if not known:
+        return [Finding("scenario-id", registry, 0, "scenario registry defines no IDs")]
+    try:
+        location = registry.relative_to(ROOT).as_posix()
+    except ValueError:
+        location = registry.as_posix()
+    findings: list[Finding] = []
+    for path in files:
+        if is_archive(path) or path == registry:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if SCENARIO_ID_MARKER in line:
+                continue
+            for identifier in SCENARIO_ID.findall(line):
+                if identifier not in known:
+                    findings.append(
+                        Finding("scenario-id", path, number, f"{identifier} is absent from {location}")
+                    )
+    return findings
+
+
 CHECKS = {
     "line-length": check_line_length,
     "link-path": check_link_path,
@@ -452,6 +507,7 @@ CHECKS = {
     "eviction-rule": check_eviction_rule,
     "amendment": check_amendment,
     "orphan": check_orphan,
+    "scenario-id": check_scenario_id,
 }
 
 

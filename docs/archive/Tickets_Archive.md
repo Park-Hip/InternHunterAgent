@@ -3155,3 +3155,367 @@ outcome.
 4. `uv run pytest -q`, Ruff, mypy, and documentation lint pass.
 
 **Blockers:** T0026.1. Independent of T0026.2. Spends no provider or judge quota.
+
+---
+
+## T0027: Milestone 27 - DeepSeek Provider Integration (T0027.1-.4) - Complete 2026-08-15
+
+The agent has run on one provider since M0, and Groq's free tier is now the binding constraint on
+measurement: 8K TPM is what forces `eval.driver.turn_pacing_seconds: 75` and spreads a
+29-scenario matrix over roughly three daily windows, which is why T0025.7 closed partial. DeepSeek
+publishes no TPM or TPD ceiling - only account concurrency - at an estimated **$0.15 per full
+87-turn matrix** on `deepseek-v4-flash`.
+
+**The research is already written** and must be read before any block below is scoped:
+[`research/deepseek-provider-evaluation.md`](../../research/deepseek-provider-evaluation.md). It
+records pricing and limits, the file-level change surface, and the three thinking-mode landmines
+that make this more than a config edit: sampling parameters are silently ignored, `tool_choice` is
+rejected with HTTP 400, and `reasoning_content` must be echoed back on every tool-carrying turn,
+which `ChatDeepSeek` does not do, in an upstream issue closed as not planned. Disabling thinking
+mitigates all three, and proving that is what .1 is for.
+
+**This is not the first second provider.** T0015.6 wired Gemini beside Groq and was deferred, not
+merged; it survives on `archive/t0015.6-provider-ab` and research §7 harvests its procedure. The
+blocks below follow it: one variable changes, each arm runs with its native reasoning knob off,
+the judge comes from neither contestant's family, and no unobserved result is ever written down.
+
+**Not release-blocking.** M23 and M24 come first. The milestone kept DeepSeek a provider *option*
+through .3 and made it the default in .4, on the measured basis recorded in D-045.
+**Out of scope for the whole milestone:** changing any scenario, threshold,
+grader rule, prompt, or agent behavior; removing the Groq branch; moving the judge off Gemini;
+rebuilding an A/B harness, which research §8 shows M25 already made unnecessary.
+
+### T0027.1: Spike DeepSeek before committing to it
+> **Complete 2026-08-14. All five checks pass, the gate included.**
+> `deepseek-v4-flash` on `langchain-deepseek` 1.1.0, 7 calls, $0.0003 provider-reported.
+> The thinking switch demonstrably removes `reasoning_content`, the two-leg tool loop completes,
+> `temperature: 0.0` returns byte-identical SQL, and streaming carries no reasoning chunks.
+> The run corrects research §3: the `reasoning_content` passback failure **did not reproduce**,
+> even with thinking left on and 75 chars of reasoning in flight. `tool_choice="required"` stays
+> untested because nothing in this repo's agent path forces a tool - probe it before relying on it.
+> An earlier attempt returned `402 Insufficient Balance` and was recorded as blocked, not failed;
+> the account was funded and the spike re-run.
+
+**Objective:** Decide whether the swap is viable at all, for the price of a few cents, before any
+production file changes. The three thinking-mode landmines in research §3 are unproven against
+this account until a live call says otherwise.
+
+**In Scope:**
+* A throwaway script under `scripts/` (Ruff-excluded, per the research-spike convention) running
+  the five checks in [research §6](../../research/deepseek-provider-evaluation.md): reachability,
+  `extra_body` reaching the wire, a two-leg tool loop that does not 400, determinism at
+  `temperature: 0.0`, and streaming that emits no reasoning chunks.
+* Record every result in the research record, including a failure. A blocked check is reported as
+  blocked, never inferred from the documentation.
+
+**Out of Scope:**
+* Any change to `src/`, `config/`, or `pyproject.toml`. The spike proves a claim; it ships nothing.
+* Running any scenario from the registry. This is a provider probe, not a measurement.
+
+**Manual verification:**
+1. Run the script with `DEEPSEEK_API_KEY` set; all five checks report a live outcome.
+2. Check 3 is the gate: if the second tool leg 400s on `reasoning_content`, stop and say so in the
+   research record. The milestone does not proceed on a workaround invented at this point.
+3. Confirm the spend on the DeepSeek dashboard matches the cents-scale estimate.
+
+**Blockers:** none, beyond a funded API key. **Go/no-go for the milestone.**
+
+### T0027.2: A second provider branch, behind configuration
+> **Complete 2026-08-14.** `agent.provider` is still `groq` and both profiles still build
+> `ChatGroq`; flipping one profile to `deepseek` builds `ChatDeepSeek` with
+> `extra_body={"thinking": {"type": "disabled"}}` while the other stays on Groq. The manifest now
+> carries `providers` per profile and `thinking` in `sampling`. Nine tests added, 453 pass.
+> `uv add langchain-deepseek` also pulled `langchain-openai` and moved `langchain-core`
+> 1.4.8 to 1.5.4 and `openai` 2.44 to 2.54. The suite, Ruff, and mypy are green on the new
+> resolution, but that transitive bump is wider than this ticket asked for and is worth knowing
+> before the next lockfile change.
+
+**Objective:** Make DeepSeek selectable without making it the default, restoring the per-profile
+provider seam that `archive/t0015.6-provider-ab` already settled.
+
+**In Scope:**
+* Restore that shape in [`provider.py`](../../src/agents/runtime/provider.py): read
+  `agent.<profile>.provider` with `agent.provider` as fallback, hoist shared arguments into one
+  `common_kwargs`, keep each provider's native keys inside its own branch, import the DeepSeek
+  package inside that branch, and raise an error naming the profile when its key is missing.
+  Widen the return type to `BaseChatModel`.
+* Read `EVAL_DRIVER_DISABLE_PROVIDER_RETRIES` in the new branch exactly as the Groq branch does.
+  A branch that retries underneath the driver corrupts its retry ledger (research §8).
+* Add `DEEPSEEK_API_KEY` to `src/core/config.py` as **optional**, matching `GOOGLE_API_KEY`, plus
+  `.env.example`. Do not touch `render.yaml`: the deployed default is still Groq.
+* Carry the DeepSeek thinking switch as configuration, not a literal, so .3 can move it.
+* Record provenance in `build_manifest()`: the provider per profile, and the native knob each one
+  used. A run that cannot say which provider produced it is not evidence.
+* Mirror the existing Groq assertions in `tests/agents/runtime/test_provider.py`. The lazy import
+  means the new branch is patched at its import site, not as a module attribute.
+
+**Out of Scope:**
+* Changing `agent.provider`, any deploy configuration, or the Groq branch's behavior.
+* Relaxing `_assert_comparable()`. It is *supposed* to refuse two arms (research §8).
+
+**Manual verification:**
+1. `uv run pytest -q`, Ruff, mypy, and documentation lint pass with `agent.provider` still `groq`.
+2. Flip one profile to `deepseek` in a scratch config, build the model, confirm the DeepSeek class
+   is constructed and the other profile still builds Groq.
+3. Unset `DEEPSEEK_API_KEY` with that profile selected: the error names the profile.
+4. Start a driver run against the fixture and confirm the manifest names the provider per profile.
+5. Boot the API unchanged and answer one question, proving the default path is untouched.
+
+**Blockers:** T0027.1. Spends no quota beyond one hand-run model build.
+
+### T0027.3: Measure DeepSeek on the matrix, then decide
+> **Complete 2026-08-14, one arm instead of two. Outcome: select DeepSeek, decided at step 4.**
+> The Groq arm was dropped on the maintainer's call: it costs roughly four days of rationed
+> free-tier quota, which is the constraint this milestone exists to remove. So this block measured
+> the DeepSeek arm in full and compared it against the frozen T0025.7 capture where the two overlap,
+> which is 5 scenarios of 29. That is indicative, not the bake-off this ticket specified.
+> The full registry captured in **5 minutes 20 seconds**, 29 of 29 scenarios and 77 of 77 turns,
+> zero retries, ~$0.04. The Groq baseline managed 13 turns in 21 minutes before quota killed it.
+> **`HLP-CONTEXT-1` and `HLP-COMPOUND-1` are measured for the first time**, so their Known Issues
+> entry moved to [Resolved Issues](../Resolved_Issues.md).
+> Safety needs reading rather than quoting: graded 11/18, but all 18 turns refuse correctly on
+> inspection, and the 7 failures are substring whitelists missing "I'm not able to delete" and one
+> rule failing an answer for quoting the injection it refused. 10 of 33 failures are rule artifacts;
+> 23 are real behavior for M24. Evidence: [T0027.3 DeepSeek arm](../../evals/t0027_deepseek_arm.md).
+
+**Objective:** Produce the arm comparison T0015.6 never got to run, under its pre-registered rule.
+
+**In Scope:**
+* Run the 29-scenario registry on the DeepSeek arm against the same fixture, in one session,
+  sequentially with the Groq arm, using the driver's checkpoint and resume. Write it to its own
+  artifact; **never overwrite the frozen baseline**.
+* Hold everything else pinned: scenarios, fixture, prompts, temperature, `max_tokens`, timeout,
+  tools, graph, judge, and replicate counts. Only provider, model, and each arm's native
+  reasoning knob may differ, each set to its behavior-off value.
+* Compare **graded outcomes per scenario**, not manifests, and state the intended configuration
+  delta. `driver diff` will call the arms incomparable, correctly.
+* Apply the pre-registered rule in research §7, in order: safety probes at 100% or the arm is
+  disqualified, then honesty, then task and tool quality, then latency, tokens, and quota
+  headroom. Write the outcome up as dated evidence with tokens and latency taken from
+  `usage_metadata`, never estimated.
+* Answer the two scenarios the free tier could never capture. If `HLP-CONTEXT-1` and
+  `HLP-COMPOUND-1` land here, say so and update their [Known Issues](../Known_Issues.md) entry.
+
+**Out of Scope:**
+* Flipping the default, which is .4, and any fix for a behavior this run exposes, which is M24's.
+* Declaring a winner from a sub-significant aggregate delta. The rule is lexicographic precisely
+  because 29 scenarios cannot resolve small quality differences.
+
+**Manual verification:**
+1. Both arms' manifests are `baseline_eligible` with a clean worktree.
+2. The baseline artifact's hash is unchanged after the run.
+3. Every reported number traces to a captured turn; blocked scenarios appear as blocked.
+4. The decision follows the pre-registered order, and the write-up says which step decided it.
+
+**Blockers:** T0027.2, a funded key, and one uninterrupted session for both arms.
+
+### T0027.4: Flip the default, or record why not
+> **Complete 2026-08-15. The default flipped.** Both profiles select `deepseek` /
+> `deepseek-v4-flash`, `render.yaml` declares `DEEPSEEK_API_KEY`, and
+> `eval.driver.turn_pacing_seconds` is 0 - it existed only to survive Groq's per-minute ceiling.
+> `GROQ_API_KEY` stops being required at boot: every provider key is optional in
+> `src/core/config.py` and validated by the branch that needs it, naming the profile that selected
+> it, so a checkout runs with only the selected provider's key. The measured basis is **D-045**.
+> Verified end to end against the fixture corpus on DeepSeek alone: both endpoints answer, the
+> stream carries no reasoning tokens, and the replay gate still exits 0. 455 tests pass.
+> The deployed re-verification is the one step that cannot run pre-merge: **add
+> `DEEPSEEK_API_KEY` to the Render dashboard before merging to `main`**, or the first query after
+> the auto-deploy fails while `/api/v1/health` still reports healthy.
+
+**Objective:** Land the .3 decision as configuration and durable rationale, or close the milestone
+with DeepSeek as a proven, unselected option.
+
+**In Scope:**
+* If .3 selects DeepSeek: move `agent.provider`, declare `DEEPSEEK_API_KEY` in `render.yaml`,
+  resolve whether `GROQ_API_KEY` stays required in `src/core/config.py`, and revisit
+  `eval.driver.turn_pacing_seconds`, which exists only to survive Groq's per-minute ceiling.
+* Either way: a Decision Log entry beside **D-017** recording the measured basis, and rows in
+  [Operations](../Operations.md) for the key and [Tech Stack](../Tech_Stack.md) for the dependency.
+* Re-verify the deployed demo end to end after any deploy-affecting change.
+
+**Out of Scope:**
+* Removing the Groq branch. Two working branches are what keep the seam honest.
+
+**Manual verification:**
+1. A clean checkout boots with only the selected provider's key present.
+2. The live demo answers a question and returns a `trace_url`.
+3. The replay CI gate still passes untouched; it calls no model and must be indifferent to this.
+
+**Blockers:** T0027.3.
+
+---
+
+## T0028: Milestone 28 - Evaluation Documentation Ownership (T0028.1-.4) - Complete 2026-08-14
+
+The evaluation documentation passed every check in `scripts/docs_lint.py` when this milestone was
+scoped, so hygiene is not the failure here. Ownership is.
+
+Measured on 2026-08-14: the 29-scenario matrix is hand-written in **five** files - the registry
+`evals/scenarios_v1.yaml`, `docs/Agent_Behavior_Spec.md` §4a-4c, `evals/v1_scenario_matrix.md`, <!-- lint-allow-link-path -->
+`evals/grader_audit.md`, and `evals/v1_error_analysis.md`. <!-- lint-allow-link-path -->
+Four of those five also carry each scenario's input and expected behavior.
+`HLP-COUNT-1`'s expected sentence is character-identical, modulo backticks and the arrow glyph,
+across the registry, the behavior spec, and the scenario matrix.
+
+No lint check compares one file against another, so drift between those copies would be silent.
+That matters more here than elsewhere, because the behavior spec is what the grader is calibrated
+against, and D-041 already names the registry the single source of truth for scenario expectations.
+This milestone is the repo's own doctrine applied to its own evaluation docs -
+[`research/docs-hygiene-and-system-plan.md`](../../research/docs-hygiene-and-system-plan.md) §5.3:
+"if you are about to write a fact into a doc that does not own it, write a link instead."
+
+A second gap sits beside the first. The Fact Ledger in [`README.md`](../README.md) assigns an
+owner to fourteen fact classes and **none of them is an evaluation fact**, which is why the
+duplication was never caught by the system built to catch it.
+
+**This milestone changed no verdict and no rule.** No scenario expectation, grading rule,
+threshold, or committed replay artifact was edited. It moved facts to their owner, sealed the
+frozen records, and taught the linter to check what it previously could not.
+
+**Not release-blocking.** T0023 did not depend on it. It was sequenced before T0023 by maintainer
+choice on 2026-08-14.
+
+**Out of scope for the whole milestone**
+* Changing any scenario, expectation, grading rule, threshold, or replay artifact.
+* Re-running the evaluation, or producing any new measurement.
+* Building a documentation system separate from the M22 one - considered and rejected 2026-08-14.
+* M24 honesty work, and the paid-tier decision the last two uncaptured scenarios need.
+
+### T0028.1 - Give evaluation facts an owner, and a check that enforces it
+> **Complete 2026-08-14.** Three Fact Ledger rows landed in [`README.md`](../README.md) - scenario
+> definitions and expectations, behavior requirements and probe protocol, and the graded outcomes
+> of a dated run. A new `scenario-id` check in `scripts/docs_lint.py` fails on any `HLP-`, `HON-`,
+> or `SAF-` identifier in tracked Markdown that `evals/scenarios_v1.yaml` does not define, with
+> the same `lint-allow-*` escape hatch as the other ten checks.
+
+**Objective.** Add the missing evaluation rows to the Fact Ledger in [`README.md`](README.md), and
+add a `scripts/docs_lint.py` check that every scenario ID named in tracked Markdown exists in
+`evals/scenarios_v1.yaml`.
+
+**In Scope**
+* Three Fact Ledger rows: scenario definitions and expectations (owner `evals/scenarios_v1.yaml`),
+  behavior requirements and probe protocol (owner `docs/Agent_Behavior_Spec.md`), and the graded
+  outcomes of a dated run (owner that dated record under `evals/`).
+* A new check in `scripts/docs_lint.py` that scans tracked Markdown for `(HLP|HON|SAF)-[A-Z0-9-]+`
+  and fails on any ID absent from the registry, using the same `lint-allow-*` escape-hatch style as
+  the existing checks.
+* Test coverage for the new check, matching how the existing checks are covered.
+
+**Out of Scope**
+* Editing the duplicated tables themselves - that is .2 and .3.
+* Any check that compares expectation *text* across files. ID existence only.
+
+**Manual verification**
+1. `uv run python scripts/docs_lint.py` exits 0.
+2. Temporarily add `HLP-NOT-A-SCENARIO-9` to a tracked Markdown file and re-run the linter; it <!-- lint-allow-scenario-id -->
+   fails, naming both the file and the ID. Revert the edit.
+3. `docs/README.md` shows the three new Fact Ledger rows and stays under its cap.
+
+**Blockers.** None.
+
+### T0028.2 - Cut the duplicated scenario table out of the behavior spec
+> **Complete 2026-08-14.** `docs/Agent_Behavior_Spec.md` §4a-4c carries only scenario ID, the
+> requirement (or decision) under test, and probe status; the section legend links to
+> `evals/scenarios_v1.yaml` for every fixture row, input, and expected behavior it used to
+> duplicate. A script-checked ID diff confirmed all 29 registry IDs still resolve in the spec.
+
+**Objective.** Reduce `docs/Agent_Behavior_Spec.md` §4a-4c to what that spec owns - scenario ID,
+the requirement under test, and the probe protocol - and link to `evals/scenarios_v1.yaml` for
+inputs and expected outputs.
+
+**Notes.** The spec's "frozen 2026-07-11" header protects its requirements from drifting
+mid-measurement; it does not protect the duplicated per-scenario expectations. The maintainer
+confirmed on 2026-08-14 that the file is editable on those terms. Roughly 49 lines are in range.
+
+**In Scope**
+* Rewrite §4a-4c down to the owned columns plus a link to the registry.
+* Keep every scenario ID present, so the .1 check and every inbound reference still resolve.
+* Refresh the verification stamp per [`Docs_Conventions.md`](Docs_Conventions.md).
+
+**Out of Scope**
+* §1-§3 and §5 onward.
+* Changing any requirement text, probe flag, or scenario ID.
+
+**Manual verification**
+1. Every ID in `evals/scenarios_v1.yaml` still appears in §4a-4c.
+2. `uv run python scripts/docs_lint.py` exits 0.
+3. Searching the tree for `COUNT(*) via query_clean_jobs` returns the registry and the dated
+   records only, not the behavior spec.
+
+**Blockers.** .1, for the check that proves no ID was dropped.
+
+### T0028.3 - Seal the frozen records, and merge the two instrument reports
+> **Complete 2026-08-14.** `evals/v1_scenario_matrix.md` and `evals/v1_error_analysis.md` moved,
+> byte-identical in content, into a new `evals/archive/`, which `is_archive()` now exempts the
+> same way as `docs/archive/` and `research/archive/`. `grader_audit.md` and `holdout_report.md`
+> merged into `evals/Instrument_Report.md`; a scripted diff confirmed the only content changes
+> were the merged eviction rule and a one-sentence merge note. Every inbound link was updated to
+> the new paths, and historical prose that names the old paths as fact rather than as a live
+> pointer kept its wording and got `lint-allow-link-path` instead.
+
+**Objective.** Move the two dated snapshots out of the living document set, and fold
+`evals/holdout_report.md` into `evals/grader_audit.md` as a single instrument report. <!-- lint-allow-link-path -->
+
+**Notes.** `evals/v1_scenario_matrix.md` and `evals/v1_error_analysis.md` legitimately restate the <!-- lint-allow-link-path -->
+matrix, because a snapshot has to carry its subject. The defect is that they sit beside living docs
+with nothing marking them sealed. `is_archive()` in `scripts/docs_lint.py` already exempts
+`docs/archive/` and `research/archive/`.
+
+**In Scope**
+* Create `evals/archive/`, move both dated records into it, and extend `is_archive()` to cover it.
+* Merge `holdout_report.md` into `grader_audit.md`, renamed `evals/Instrument_Report.md`. <!-- lint-allow-link-path -->
+* Update the caps rows in [`README.md`](README.md) and every inbound link.
+
+**Out of Scope**
+* Editing the content of either dated record.
+* Re-deriving any number in the merged report.
+
+**Manual verification**
+1. `uv run python scripts/docs_lint.py` exits 0.
+2. No Markdown file in the tree links to a moved or renamed path.
+3. `docs/README.md` lists `evals/Instrument_Report.md` and drops the two merged rows. <!-- lint-allow-link-path -->
+
+**Blockers.** None. Independent of .1 and .2.
+
+### T0028.4 - Promote an operating manual, and sweep the stale claims
+> **Complete 2026-08-14.** [`evals/Operating_Manual.md`](../../evals/Operating_Manual.md) landed,
+> registered in [`README.md`](../README.md) at a 400-line cap: why the instrument exists, the
+> three seams, the three scenario classes, the run-to-artifact path, the three grading tiers and
+> four outcomes, `--resume`/`PARTIAL_QUOTA`, and the stated limits - every claim re-verified
+> against the tree, not copied from the gitignored `.lavish/` draft. `Offline_Pipelines_Design.md`
+> §8.6-8.7 now names the shipped CI replay gate and the `qwen/qwen3.6-27b` model pin. Both M26
+> follow-ups closed: `research/evaluation-strategy.md` no longer describes `test_judge_scaffold.py`
+> as a separate module, and the `link-path` check exempts `docs/Completion_Reports.md` by name in
+> `scripts/docs_lint.py` instead of via a whole-file marker.
+
+**Objective.** Give `evals/` the operating manual the tracked tree does not have, and correct the
+two documented claims that measurement shows are wrong.
+
+**Notes.** A manual-grade explainer already exists at `.lavish/how-the-evaluation-works.html`,
+written 2026-08-13, but `.lavish/` is gitignored, so no reader of the repository can find it.
+Every claim in it must be re-verified against the tree before promotion. It is a draft, not a
+source.
+
+**In Scope**
+* A prose operating manual under `evals/`, registered with a cap in [`README.md`](README.md): why
+  the instrument exists, the three seams, the three scenario classes, the run-to-artifact path, the
+  three grading tiers and four outcomes, `--resume` and `PARTIAL_QUOTA`, and the stated limits.
+* Correct [`Offline_Pipelines_Design.md`](Offline_Pipelines_Design.md) §8.6-8.7, which says the
+  replay gate is "not wired into CI" and "Deferred" (T0025.9 shipped it, and `.github/workflows/`
+  runs it) and pins `llama-3.3-70b-versatile` (settings pin `qwen/qwen3.6-27b`).
+* The two M26 follow-ups: the stale `test_judge_scaffold.py` reference, and the
+  `Completion_Reports.md` lint exemption.
+
+**Out of Scope**
+* Writing the missing sanitizer that produces a committable replay artifact. Recorded as a
+  follow-up, not built here.
+* Any new measurement.
+
+**Manual verification**
+1. A reader who has never run the evaluation can follow the manual end to end and reach a graded
+   artifact.
+2. Every command quoted in the manual runs as written.
+3. `uv run python scripts/docs_lint.py` exits 0.
+4. `docs/Offline_Pipelines_Design.md` §8.6-8.7 names the shipped CI gate and the configured model.
+
+**Blockers.** None. Independent of .1-.3.

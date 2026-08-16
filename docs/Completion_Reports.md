@@ -16,11 +16,11 @@ field list (Summary / Files / Commands / Build & test / Manual verification / Ri
 Follow-ups / Docs).
 
 Every entry records the paths a ticket touched **on the day it shipped**. Later tickets move files,
-so those paths are dated evidence rather than a live index, and the whole file is exempt from the
-link-path check under the historical-audit rule in
-[Documentation Conventions](Docs_Conventions.md).
-
-<!-- lint-allow-link-path:begin -->
+so those paths are dated evidence rather than a live index. `scripts/docs_lint.py`'s `link-path`
+check exempts this file by name (`is_dated_record()`), the same historical-audit rule
+[Documentation Conventions](Docs_Conventions.md) states for `docs/archive/` and
+`research/archive/` - narrower than a true archive, since this file still owes the line-length,
+reflow, orphan, and scenario-id checks.
 
 ---
 
@@ -1849,6 +1849,45 @@ link-path check under the historical-audit rule in
   trade-off that comparing a stamp with git mtime would require a bump after whitespace-only edits.
 - **Docs that need updating:** No additional documentation update is required for this ticket.
 
+## T0020.4 - Cron gates cleared and the first real ingestion run
+
+- **Summary:** Cleared the cron-activation gates and put the pipeline through its first genuine
+  production run. D2 is ratified: the maintainer accepted the favorable robots/ToS verdict on
+  2026-08-13 and ruled that the separate ToS §7 republishing restriction does **not** gate
+  activation, because it governs what the demo displays rather than what the cron fetches. D10 is
+  recorded as cron-live-for-v1.0 per D-038. The maintainer then rotated the Neon credential, set
+  both Actions secrets, and dispatched the workflow: run `31693930488` completed green in 1m01s,
+  logging `ingestion.schema_ok {"columns": 22}` before any write and
+  `{"fetched": 113, "raw_upserted": 113, "clean_loaded": 113, "skipped": 0, "expired_count": 47,
+  "pages_failed": 0}` on completion, followed by `ingestion.ping_sent`. `/api/v1/ready` moved from
+  `2026-07-01` to `2026-08-13`, confirming the write reached the read path. Two further
+  back-to-back dispatches proved the concurrency guard (4b), and `schedule:` is restored. **The
+  schedule begins firing when this branch merges to `main`**, since GitHub reads `schedule:` from
+  the default branch only.
+- **Files created, changed, or modified:** `.github/workflows/ingestion.yml` (the `schedule:`
+  restore), `docs/T0020.4_Cron_Activation_Runbook.md`, `docs/Decision_Log.md`,
+  `docs/Known_Issues.md`, `docs/Resolved_Issues.md`, `docs/Offline_Pipelines_Design.md`,
+  `docs/Repo_Current_State.md`, and this report.
+- **Commands executed:** `git ls-tree -r origin/main .github/` and `gh secret list` as read-only
+  pre-flight checks; `gh run list` and `gh run view --log` to read the dispatch result;
+  `curl /api/v1/ready`; `uv run python scripts/docs_lint.py`;
+  `uv run pytest -q tests/test_docs_lint.py`.
+- **Build and test results:** The documentation linter passed all ten checks. The docs-lint suite
+  passed with 25 tests and one environmental skip. No source code changed.
+- **Manual verification:** The runbook §4 carries the run id, the six-number completion line, the
+  ping, and the `/ready` transition. Results were read from the run log rather than transcribed,
+  so the recorded numbers are the workflow's own output.
+- **Risks:** No unattended run has happened yet, so the schedule itself is still unproven - that is
+  the single remaining §7 row and it resolves on the first 02:00 UTC firing after merge. Separately,
+  two documents that had contradicted each other were reconciled, and the reconciled version is
+  only as good as the reading behind it.
+- **Follow-up tickets:** `expire_stale_clean_jobs` reports `rowcount` from an `UPDATE` with no
+  `AND is_active` guard, so `expired_count` counts rows *matching* the stale predicate rather than
+  newly expired ones. All three runs logged exactly 47, which is how it surfaced. Registered as a
+  LOW issue; the fix is one clause, and it belongs to whoever next owns that file.
+- **Docs that need updating:** `Tickets.md` still describes T0020.4 as having two open maintainer
+  actions; both are now closed, leaving only the first scheduled run to observe.
+
 ## T0021.2 - Agent-path error logging at swallowed catch sites
 
 - **Summary:** Logged the original exception cause at both job-query tool catch sites and logged
@@ -2662,6 +2701,8 @@ link-path check under the historical-audit rule in
 - **Docs that need updating:** None outstanding. D-041 already records the registry as the single
   source of truth for scenario data; this ticket completes it rather than changing it.
 
+---
+
 ## T0027.4 - Flip the serving default to DeepSeek
 
 - **Summary:** Both agent profiles now select `deepseek` / `deepseek-v4-flash`, `render.yaml`
@@ -2710,4 +2751,220 @@ link-path check under the historical-audit rule in
 - **Follow-up tickets:** none. M27 is complete.
 - **Docs that need updating:** none outstanding.
 
-<!-- lint-allow-link-path:end -->
+---
+
+## T0028.1 - Give evaluation facts an owner, and a check that enforces it
+
+- **Summary:** The Fact Ledger in `docs/README.md` assigned an owner to fourteen fact classes and
+  none of them was an evaluation fact, which is how the 29-scenario matrix came to be hand-written
+  in five files with nothing able to detect drift between the copies. Added three ledger rows:
+  scenario definitions and expectations (`evals/scenarios_v1.yaml`), behavior requirements and the
+  probe protocol (`docs/Agent_Behavior_Spec.md`), and the graded outcomes of a dated run (that
+  dated record under `evals/`). Added an eleventh `scripts/docs_lint.py` check, `scenario-id`, that
+  scans tracked Markdown for `HLP-`, `HON-`, and `SAF-` identifiers and fails on any absent from the
+  registry, using the same `lint-allow-*` escape-hatch style as the existing ten checks.
+- **The check reads the registry as text, not YAML.** `registered_scenario_ids` pulls `- id: NAME`
+  lines with a regular expression instead of parsing `evals/scenarios_v1.yaml`, matching how the
+  rest of `docs_lint.py` avoids adding a dependency to a script whose contract is "no dependencies."
+- **ID existence only, no text comparison.** The check catches a renamed or deleted scenario that
+  left a stale name behind in documentation; it does not compare a scenario's expected text across
+  the five files that duplicate it. Cutting that duplication is `T0028.2` and `T0028.3`.
+- **Files changed:** `docs/README.md`, `docs/Docs_Conventions.md`, `docs/Tickets.md`,
+  `docs/Repo_Current_State.md`, `scripts/docs_lint.py`, `tests/test_docs_lint.py`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py`, `uv run pytest -q`,
+  `uv run ruff check .`, `uv run mypy`.
+- **Build and test results:** Docs lint passed with zero findings across all eleven checks. Ruff
+  reported no issues. Mypy found no issues in 43 source files. `pytest -q` ran 447 passed, 2
+  skipped, 30 deselected (live eval tests needing API keys or a paid tier), 4 subtests passed. Two
+  failures in `tests/evals/test_driver.py`
+  (`test_driver_persists_all_seams_and_resumes_completed_scenario` and
+  `test_quota_exhaustion_marks_remaining_scenarios_unrun`) are environmental, not caused by this
+  change: both need a local Postgres fixture database on `localhost:5433`, which was not running in
+  this session, and neither test touches documentation or the scenario registry.
+- **Manual verification:**
+  1. `uv run python scripts/docs_lint.py` exits 0.
+  2. Temporarily add `HLP-NOT-A-SCENARIO-9` to a tracked Markdown file and re-run the linter; it <!-- lint-allow-scenario-id -->
+     fails, naming both the file and the ID. Revert the edit.
+  3. `docs/README.md` shows the three new Fact Ledger rows and stays under its 150-line cap, which
+     the `size-cap` check enforces and which passed above.
+- **Risks:** the `scenario-id` pattern matches any `HLP-`/`HON-`/`SAF-` token shape, so prose that
+  names an example ID on purpose (as this ticket's own manual-verification step does) needs the
+  `<!-- lint-allow-scenario-id -->` marker or the check reports a false positive. The marker is
+  already applied where that happens in `docs/Tickets.md`.
+- **Follow-up tickets:** `T0028.2` - cut the duplicated scenario table out of the behavior spec, now
+  unblocked because this check can prove no scenario ID is dropped in the process.
+- **Docs that need updating:** None outstanding.
+
+---
+
+## T0028.2 - Cut the duplicated scenario table out of the behavior spec
+
+- **Summary:** `docs/Agent_Behavior_Spec.md` §4a-4c (the registry, coverage-gap, and
+  decision-specific probe tables) carried six columns each - ID, requirements or decision, fixture
+  row IDs, input or turns, expected behavior, and probe status - and four of those columns
+  duplicated `evals/scenarios_v1.yaml`, which D-041 already names the sole owner of that data.
+  Reduced every table to the three columns the spec owns: scenario ID, the requirement (or decision)
+  under test, and probe status. The legend above §4a now states explicitly that the registry owns
+  the fixture rows, input, and expected behavior the tables used to restate.
+- **No scenario ID, requirement, decision, or probe flag changed.** A script compared the ID set in
+  the registry against the ID set matched in the spec by the same `HLP|HON|SAF` pattern
+  `scripts/docs_lint.py` uses; both sets are the 29 registry IDs, exactly.
+- **The freeze note now says what it protects.** The file's `Status` block said "Frozen:
+  2026-07-11" without saying what freezing meant for editability. Added one sentence: the freeze
+  protects the requirements under test, the probe protocol, and the settled decisions, not the
+  per-scenario expectations this ticket cut - matching the maintainer's 2026-08-14 confirmation
+  recorded in `docs/Tickets.md`. Added a `> **Last verified:** 2026-08-14` stamp per
+  `Docs_Conventions.md`; the file previously had none.
+- **Files changed:** `docs/Agent_Behavior_Spec.md`, `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py`, a one-off Python check comparing the
+  registry's ID set against the spec's referenced ID set, and a tree-wide search for
+  `COUNT(*) via query_clean_jobs`.
+- **Build and test results:** Docs lint passed with zero findings across all eleven checks. The ID
+  comparison found no ID missing from either side. The search for the retired expected-behavior
+  phrase returned the registry (`evals/scenarios_v1.yaml`), the sealed snapshot
+  (`evals/v1_scenario_matrix.md`), and this ticket's own text in `docs/Tickets.md` quoting the
+  search string - not the behavior spec. This ticket edits documentation only; no test suite covers
+  its content, and no code changed.
+- **Manual verification:**
+  1. Every ID in `evals/scenarios_v1.yaml` still appears in §4a-4c of the behavior spec.
+  2. `uv run python scripts/docs_lint.py` exits 0.
+  3. Searching the tree for `COUNT(*) via query_clean_jobs` returns the registry and the dated
+     records only, not the behavior spec.
+- **Risks:** none identified. The spec's requirement-to-scenario mapping is unchanged; a reader
+  now makes one hop through the registry link to see a scenario's input and expected behavior
+  instead of finding it inline.
+- **Follow-up tickets:** none new. `T0028.3` (seal the frozen records, merge the two instrument
+  reports) and `T0028.4` (operating manual, stale-claim sweep) remain open and are independent of
+  this ticket per the milestone scoping.
+- **Docs that need updating:** None outstanding.
+
+---
+
+## T0028.3 - Seal the frozen records, and merge the two instrument reports
+
+- **Summary:** `evals/v1_scenario_matrix.md` (the 2026-07-14 raw measurement) and
+  `evals/v1_error_analysis.md` (its open-coded failure modes) sat beside the living evaluation
+  docs with nothing marking them sealed. Moved both, unchanged, into a new `evals/archive/` and
+  extended `scripts/docs_lint.py::is_archive()` to exempt it the same way `docs/archive/` and
+  `research/archive/` already are. Merged `evals/grader_audit.md` and `evals/holdout_report.md`
+  into a single `evals/Instrument_Report.md`, and updated the caps rows in `docs/README.md` and
+  every inbound link across the tree to the new paths.
+- **Neither dated record's content changed, and neither merged report's numbers were
+  re-derived.** A line-by-line diff against the pre-move content of all four files - stripping
+  only headings and the status/eviction blockquotes that had to change shape for the merge -
+  shows the only additions are the merged eviction rule and a one-sentence note that the merge
+  changed no content or numbers.
+- **Historical prose that named the old paths as fact, not as a live pointer, was left as
+  written and marked, not rewritten.** `docs/Tickets.md`'s own "Measured on 2026-08-14" scoping
+  paragraph and this ticket's Objective/Notes text describe the pre-move state; so does a
+  2026-08-09-dated reflow decision in `research/docs-hygiene-and-system-plan.md` and a
+  2026-07-16 design record in `research/honesty-enforcement-design.md`. Each got
+  `<!-- lint-allow-link-path -->` rather than an edit, matching the convention `Docs_Conventions.md`
+  already sets for a historical audit's stale paths. Functional pointers meant to keep resolving
+  - `docs/README.md`, `evals/README.md`, `docs/Decision_Log.md`, `docs/Known_Issues.md`,
+  `docs/Agent_Behavior_Spec.md`, `docs/Repo_Current_State.md`, `docs/Tickets.md`'s T0024.6 entry,
+  and `research/evaluation-strategy.md` - were updated to the new paths instead.
+  `docs/Completion_Reports.md` needed no change: its historical entries already sit inside the
+  file's existing `lint-allow-link-path:begin/end` region.
+- **The stale `REFLOW_TARGETS` entry for `evals/v1_scenario_matrix.md` was removed, not
+  renamed.** Once the file lives under `evals/archive/`, `is_archive()` exempts it from reflow the
+  same way `docs/archive/**` is exempt (documented rationale: archived files are read rarely and
+  edited never), so keeping a now-unreachable string in the whitelist would be dead configuration.
+- **Files changed:** `evals/v1_scenario_matrix.md` and `evals/v1_error_analysis.md` (moved to
+  `evals/archive/`), `evals/grader_audit.md` and `evals/holdout_report.md` (removed, merged into
+  the new `evals/Instrument_Report.md`), `scripts/docs_lint.py`, `docs/README.md`,
+  `evals/README.md`, `docs/Decision_Log.md`, `docs/Known_Issues.md`, `docs/Agent_Behavior_Spec.md`,
+  `docs/Repo_Current_State.md`, `docs/Tickets.md`, `research/docs-hygiene-and-system-plan.md`,
+  `research/evaluation-strategy.md`, `research/honesty-enforcement-design.md`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py`,
+  `uv run pytest -q tests/test_docs_lint.py`, `uv run ruff check .`, `uv run mypy`, a tree-wide
+  search for every moved or renamed filename, and a scripted diff of the merged report's content
+  against the pre-merge files.
+- **Build and test results:** Docs lint passed with zero findings across all eleven checks. Ruff
+  and mypy reported no issues. `tests/test_docs_lint.py` passed 30, skipped 1 (environmental,
+  unrelated). This ticket touches documentation and one lint script only; no other test suite
+  covers its content.
+- **Manual verification:**
+  1. `uv run python scripts/docs_lint.py` exits 0.
+  2. No Markdown file in the tree links to a moved or renamed path (verified by the passing
+     `link-path` check plus a manual `grep` for each old filename, confirming every remaining
+     mention is either inside `docs/archive/`, inside `docs/Completion_Reports.md`'s exempted
+     region, or carries a `lint-allow-link-path` marker).
+  3. `docs/README.md` lists `evals/Instrument_Report.md` and no longer lists `grader_audit.md` or
+     `holdout_report.md` separately.
+- **Risks:** none identified. The merged report's cap (250 lines) gives the same rough headroom
+  as the sum of the two caps it replaces (200 + 50); the file is 162 lines today.
+- **Follow-up tickets:** none new. `T0028.4` (operating manual, stale-claim sweep) remains open
+  and is independent of this ticket per the milestone scoping.
+- **Docs that need updating:** None outstanding.
+
+---
+
+## T0028.4 - Promote an operating manual, and sweep the stale claims
+
+- **Summary:** `evals/` had no narrative explainer - `README.md` covers layout and quota cost, not
+  why the instrument is built the way it is. Added
+  [`evals/Operating_Manual.md`](../evals/Operating_Manual.md), registered at a 400-line cap in
+  `docs/README.md`: why seam-level capture beats grading final answers alone, the three seams, the
+  three scenario classes with their measured counts, the run-to-artifact path including the
+  manifest and `baseline_eligible`, `--resume` and `PARTIAL_QUOTA`'s exact checkpoint/resume
+  behavior, the three grading tiers and four outcomes, and the stated limits. Corrected
+  `docs/Offline_Pipelines_Design.md` §8.6-8.7, which said the replay gate was "not wired into CI"
+  and pinned `llama-3.3-70b-versatile` - both stale since T0025.9. Closed the two M26 follow-ups:
+  `research/evaluation-strategy.md` no longer describes `test_judge_scaffold.py` as a separate
+  module, and `scripts/docs_lint.py`'s `link-path` check exempts `docs/Completion_Reports.md` by
+  name instead of via a whole-file marker comment.
+- **A `.lavish/how-the-evaluation-works.html` draft existed but was not the source.** Per the
+  ticket's own instruction, every claim in it was re-verified against the current tree rather than
+  copied: scenario counts against `scenarios_v1.yaml` (29 total, 6/9/14 by class, 15 probes, 2
+  conversational, 18 with reference SQL - all confirmed by script), the 8,000 TPM ceiling and the
+  10,231/7,653-token peaks against `config/settings.yaml` and `docs/Known_Issues.md`, the three
+  tools against `src/agents/tools/`, the grading tiers and outcome set against `evals/grader.py`,
+  and the driver's checkpoint/resume/`PARTIAL_QUOTA` behavior by reading `evals/driver.py` line by
+  line. Two claims in the draft were stale and were not promoted: it listed the grader's hardcoded
+  tool-expectation bug and the absence of a CI replay gate as open defects, and both were fixed by
+  T0025.9 before this ticket started - the manual states the current, fixed state instead.
+- **The `Completion_Reports.md` follow-up needed a narrower fix than "treat it like
+  `docs/archive/`."** `is_archive()` also gates the `line-length`, `reflow`, `orphan`, and
+  `scenario-id` checks, and `research/docs-hygiene-and-system-plan.md` §5.2.1 records a deliberate
+  2026-08-09 decision that `Completion_Reports.md` stays in the reflow/line-length regime despite
+  being archive-tiered, because it is appended to on every ticket. Making it archive-exempt outright
+  would have silently reversed that decision. Added a narrower `is_dated_record()` - `is_archive()`
+  plus this one file by name - and used it only in `check_link_path`, so the other four checks are
+  unaffected. Removed the whole-file `<!-- lint-allow-link-path:begin/end -->` wrapper this
+  replaces and updated the file's own header to describe the new mechanism.
+- **M28 closed.** All four tickets are complete and no scenario, grading rule, threshold, or
+  replay artifact changed across the milestone. The four ticket plans moved verbatim into
+  `docs/archive/Tickets_Archive.md` per the register's eviction rule, each subticket gaining a
+  `> **Complete 2026-08-14.**` outcome summary above its original objective text; `docs/Tickets.md`
+  keeps the collapsed milestone summary in their place, matching the M25/M26 precedent.
+- **Files changed:** `evals/Operating_Manual.md` (new), `docs/README.md`, `evals/README.md`,
+  `docs/Offline_Pipelines_Design.md`, `research/evaluation-strategy.md`, `scripts/docs_lint.py`,
+  `tests/test_docs_lint.py`, `docs/Tickets.md`, `docs/archive/Tickets_Archive.md`,
+  `docs/Repo_Current_State.md`, and this report.
+- **Commands run:** `uv run python scripts/docs_lint.py`,
+  `uv run pytest -q tests/test_docs_lint.py`, `uv run ruff check .`, `uv run mypy`,
+  `uv run pytest -q` (full suite), and a scripted count of scenario classes, probes, conversational
+  cases, and reference-SQL coverage against the registry.
+- **Build and test results:** Docs lint passed with zero findings across all eleven checks. Ruff
+  and mypy reported no issues. `uv run pytest -q` (full suite): 450 passed, 2 skipped
+  (environmental - one needs `SCRATCH_DATABASE_URL`, one needs the gitignored `.claude/` skill
+  copy), 30 deselected (live eval tests), 4 subtests passed - including the one new test for
+  `is_dated_record`.
+- **Manual verification:**
+  1. A reader who has never run the evaluation can follow `evals/Operating_Manual.md` end to end
+     and reach a graded artifact - it walks fixture, manifest, checkpointing, execution accuracy,
+     and grading in that order.
+  2. Every command quoted in the manual (`uv run python -m evals.driver --output ...`,
+     `uv run python -m evals.driver diff`, the CI's `evals.fixtures.loader` / `evals.replay` pair)
+     matches an `argparse` flag or a command already documented in `evals/README.md`; none was
+     executed live here since the driver command spends Groq quota.
+  3. `uv run python scripts/docs_lint.py` exits 0.
+  4. `docs/Offline_Pipelines_Design.md` §8.6-8.7 names the shipped CI gate
+     (`.github/workflows/ci.yml`'s `checks` job) and the configured model (`qwen/qwen3.6-27b`).
+- **Risks:** none identified. The operating manual restates facts already owned elsewhere
+  (registry counts, grader outcomes); if those drift, the manual can drift with them since no lint
+  check compares its prose against the source it describes - the same residual risk the milestone's
+  own scoping text names for the pre-existing duplication.
+- **Follow-up tickets:** none new. M28 is complete.
+- **Docs that need updating:** None outstanding.

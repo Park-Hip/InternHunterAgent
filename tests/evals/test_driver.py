@@ -32,6 +32,20 @@ def test_resolving_the_fixture_url_never_freezes_settings(
     assert driver.fixture_database_url().startswith("postgresql")
 
 
+def _stub_fingerprint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep build_manifest() off a live database.
+
+    Every path through build_manifest() calls _database_fingerprint, which opens a real
+    connection to the fixture DSN. CI runs pytest before evals.fixtures.loader, so the
+    fixture schema does not exist yet and the call raises; on a developer machine with no
+    eval Postgres listening it instead hangs for the full TCP connect timeout. Both are
+    environment, not behavior, so every manifest-exercising test stubs this.
+    """
+    monkeypatch.setattr(
+        driver, "_database_fingerprint", lambda url: ("d" * 64, "internhunter_eval", 22)
+    )
+
+
 def _case(scenario_id: str = "HLP-TEST-1", probe: bool = False) -> dict:
     return {
         "id": scenario_id,
@@ -46,11 +60,7 @@ def test_manifest_records_reproducibility_inputs(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("LANGFUSE_ENABLED", "false")
     monkeypatch.setattr(driver, "_git_sha", lambda: "abc123")
     monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
-    monkeypatch.setattr(
-        driver,
-        "_database_fingerprint",
-        lambda url: ("d" * 64, "internhunter_eval", 22),
-    )
+    _stub_fingerprint(monkeypatch)
     manifest = driver.build_manifest()
 
     assert manifest["git_sha"] == "abc123"
@@ -90,6 +100,7 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
         ]
 
     monkeypatch.setattr(driver, "_capture_case", fake_capture)
+    _stub_fingerprint(monkeypatch)
     output = tmp_path / "run.json"
     case = _case()
 
@@ -112,6 +123,7 @@ def test_quota_exhaustion_marks_remaining_scenarios_unrun(
         raise RuntimeError("429 quota exceeded")
 
     monkeypatch.setattr(driver, "_capture_case", quota_capture)
+    _stub_fingerprint(monkeypatch)
     output = tmp_path / "run.json"
     cases = [_case("HLP-TEST-1"), _case("HLP-TEST-2")]
 
@@ -126,9 +138,7 @@ def test_manifest_records_tracing_when_operator_opts_in(monkeypatch: pytest.Monk
     """An operator who enables Langfuse must not get a manifest claiming tracing was off."""
     monkeypatch.setenv("LANGFUSE_ENABLED", "true")
     monkeypatch.setattr(driver, "_git_sha", lambda: "abc123")
-    monkeypatch.setattr(
-        driver, "_database_fingerprint", lambda url: ("d" * 64, "internhunter_eval", 22)
-    )
+    _stub_fingerprint(monkeypatch)
 
     assert driver.build_manifest()["tracing"]["langfuse_enabled"] is True
 
@@ -168,6 +178,7 @@ def test_quota_retry_records_the_delay_it_actually_waited(
         slept.append(delay)
 
     monkeypatch.setattr(driver, "_capture_case", quota_capture)
+    _stub_fingerprint(monkeypatch)
     result = asyncio.run(driver.run([_case()], tmp_path / "run.json", sleep=record, pacing_seconds=0))
 
     assert slept == [13.0, 13.0]
@@ -198,9 +209,7 @@ def test_diff_refuses_different_inputs(tmp_path: Path) -> None:
 
 def test_dirty_worktree_is_not_baseline_eligible_or_comparable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(driver, "_worktree_state", lambda: "dirty")
-    monkeypatch.setattr(
-        driver, "_database_fingerprint", lambda url: ("d" * 64, "internhunter_eval", 22)
-    )
+    _stub_fingerprint(monkeypatch)
     manifest = driver.build_manifest()
 
     assert manifest["baseline_eligible"] is False
@@ -223,6 +232,7 @@ def test_turns_are_paced_so_each_meets_an_unspent_quota_window(
 
     monkeypatch.setattr(driver, "_capture_case", fake_capture)
     monkeypatch.setattr(driver, "repeat_count", lambda case: 3)
+    _stub_fingerprint(monkeypatch)
     asyncio.run(
         driver.run([_case()], tmp_path / "run.json", sleep=record, pacing_seconds=60.0)
     )
@@ -252,6 +262,7 @@ def test_conversational_turns_pace_between_themselves(
 
     monkeypatch.setattr(driver.harness, "run_conversational_case", fake_conversational)
     monkeypatch.setattr(driver, "repeat_count", lambda case: 1)
+    _stub_fingerprint(monkeypatch)
     case = {**_case(), "type": "conversational", "turns": ["first", "second"]}
     asyncio.run(driver.run([case], tmp_path / "run.json", sleep=record, pacing_seconds=60.0))
 
@@ -262,9 +273,7 @@ def test_conversational_turns_pace_between_themselves(
 def test_pacing_is_recorded_in_the_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(driver, "_git_sha", lambda: "abc123")
     monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
-    monkeypatch.setattr(
-        driver, "_database_fingerprint", lambda url: ("d" * 64, "internhunter_eval", 22)
-    )
+    _stub_fingerprint(monkeypatch)
 
     assert driver.build_manifest()["turn_pacing_seconds"] == driver.load_turn_pacing_seconds()
 

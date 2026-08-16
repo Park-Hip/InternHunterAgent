@@ -1,36 +1,28 @@
 name: Nightly ingestion
 
 on:
-  # `schedule:` is deliberately DISABLED (commented out, 2026-08-09).
+  # ENABLED 2026-08-13, after every gate in
+  # docs/T0020.4_Cron_Activation_Runbook.md §7 was signed: D2 (robots/ToS)
+  # ratified, D6 (Neon migrated to head) verified, both secrets set, a green
+  # `workflow_dispatch` run (31693930488), and the 4b concurrency check.
   #
-  # Why: GitHub fires `schedule:` from the default branch AUTOMATICALLY. The
-  # original comment here read "this stays dormant until the T0019 branch chain
-  # is merged to main" — that was wrong. Reaching `main` is not merely a
+  # BEFORE YOU EDIT THIS BLOCK, know how it failed once: GitHub fires
+  # `schedule:` from the default branch AUTOMATICALLY. Reaching `main` is not a
   # precondition for activation, it IS the activation. PR #29 (`bcc81db`,
-  # 2026-07-22) landed this file on `main`, and the cron began firing nightly
-  # that same day, with the D2 (robots/ToS ratification) and D6 (Neon
-  # `alembic stamp head`) gates in docs/T0020.4_Cron_Activation_Runbook.md
-  # still unsigned.
+  # 2026-07-22) landed this file on `main` and the cron began firing that same
+  # day with D2 and D6 still unsigned. All 19 runs through 2026-08-09 failed in
+  # ~15s at config load (`DATABASE_URL` secret unset), before any network or
+  # database call, which is the only reason an un-gated cron caused no harm.
+  # That was luck, not design. PR #33 then commented this out so activation
+  # could be a deliberate act again.
   #
-  # What actually happened: 19 consecutive scheduled runs, 2026-07-22 through
-  # 2026-08-09, ALL failed in ~15s at the "Run ingestion" step with
-  # `ConfigLoadError: DATABASE_URL: String should have at least 1 character`,
-  # because no `DATABASE_URL` repo secret was ever configured. The failure is
-  # at config load in src/core/config.py — before any network or database
-  # call — so no request ever reached ms.vietnamworks.com and Neon was never
-  # written to. No data was harmed; the gates were bypassed on paper only.
-  #
-  # Re-enable by uncommenting the two lines below, but ONLY after the runbook's
-  # gates are signed: D2 ratified, D6 stamped, and the `DATABASE_URL` (Neon
-  # direct/non-pooled host) + `HEALTHCHECKS_URL` secrets set. Verify with a
-  # `workflow_dispatch` run BEFORE restoring the schedule — that ordering is
-  # what the runbook §4 intended and what the auto-activation skipped.
+  # The rule that survived: prove a run works by `workflow_dispatch` BEFORE
+  # arming the schedule, never the reverse.
   #
   # 02:00 UTC = 09:00 ICT. Firing time drifts under Actions load; a run landing
   # a few minutes late is expected, not a failure.
-  #
-  # schedule:
-  #   - cron: '0 2 * * *'
+  schedule:
+    - cron: '0 2 * * *'
   workflow_dispatch: {}
 
 concurrency:

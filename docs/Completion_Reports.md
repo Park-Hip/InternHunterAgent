@@ -3559,4 +3559,161 @@ on 23 modules.
   `python scripts/docs_build.py --snapshot`. Both files are in M31's scope but must be edited
   identically, and changing the protocol mid-milestone is T0031.4's business rather than this
   ticket's.
+
+---
+
+## T0031.4 - Enforce the protocol in CI
+
+*Completed 2026-08-17.*
+
+**Summary**
+
+`scripts/docs_lint.py` gains three checks, bringing the linter from twelve to fifteen. A small
+`parse_roadmap` reads the two nested lists the checks need - each milestone's `scope:` and the
+top-level `frozen:` - reusing the flat-scalar reader T0031.3 added to `docs_build`, so the
+no-dependency contract holds.
+
+**`registry`** decides everything from the registry and the entry directory, reading no git state:
+duplicate milestone ids, skipped milestone numbers, tickets whose number does not match their
+milestone, tickets claimed twice, and entry files with no roadmap entry.
+
+**`scope`** compares the branch's changed paths against its milestone's declared `scope:`. The
+milestone is resolved from the entry file the change set touches, falling back to the branch name.
+
+**`frozen`** reports a changed frozen register unless one of three things is true: every commit on
+the branch is an integration commit, the change is confined to generated regions, or the milestone
+declared that path in its own `scope:`.
+
+Three design points are worth stating, because each was forced by evidence rather than chosen:
+
+- **A missing base is silence, not failure.** `scope` and `frozen` describe a change set, so a
+  clone with no `origin/main` has nothing to judge and they report nothing. This is the same
+  reasoning that left T0031.3's snapshot region ungated. CI passes `--diff-base` explicitly and
+  fetches full history, so the checks are loud exactly where it matters.
+- **The generated-region exemption is what makes the rule survivable.** Since T0031.2 every ticket
+  branch has had to commit rebuilt registers, because the `generated` check fails if it does not.
+  A naive `frozen` check would therefore reject every M31 ticket. Stripping the generated regions
+  from both sides asks the only question that matters: did a human touch anything outside them?
+- **A declared scope is a decision made in the open.** M31 is the milestone that installs the
+  marked regions and the caps rows into the frozen registers, so the check it adds must not forbid
+  the work that adds it. The roadmap note already carries the governance - "no milestone outside
+  M31 may claim a frozen path this way" - and this reads it rather than restating it.
+
+The checks were validated against real history, not only fixtures. Replaying PR #59 (T0031.3) shows
+`frozen` clearing its three generator-written registers by the region rule and its two hand-edited
+ones by the declared-scope rule, with `scope` clean. Both report nothing, which is the correct
+verdict for a PR that was reviewed and merged.
+
+**Files**
+
+- `scripts/docs_lint.py` - changed. `parse_roadmap`, `covered_numbers`, `within_scope`,
+  `milestone_for`, `resolve_base`, `changed_paths`, `only_generated_changed`, `is_integration`,
+  the three checks, and a `--diff-base` flag.
+- `scripts/docs_build.py` - changed, one line. Its `git()` helper carried the same UTF-8 defect
+  described under Build and test; fixed in place rather than left to fail later.
+- `.github/workflows/ci.yml` - changed. `fetch-depth: 0` on the docs job and an explicit
+  `--diff-base origin/${{ github.base_ref }}`.
+- `docs/roadmap.yaml` - changed. M31's `scope:` gains `.github/workflows/ci.yml`, and the note
+  records why.
+- `tests/test_docs_lint.py` - changed. Fifteen tests added, including a miniature git repository
+  fixture so the violation paths are exercised rather than assumed.
+- `docs/entries/T0031.4.md` - created. This file.
+
+**Commands**
+
+```text
+python scripts/docs_lint.py
+python scripts/docs_lint.py --check scope
+python scripts/docs_lint.py --check registry
+python scripts/docs_build.py --check
+uv run pytest -q
+uv run ruff check .
+uv run mypy
+```
+
+**Build and test**
+
+| Check | Result |
+|---|---|
+| `python scripts/docs_lint.py` | Exit 0 on 2026-08-17, all fifteen checks |
+| `python scripts/docs_build.py --check` | Exit 0 on 2026-08-17 |
+| `uv run pytest -q` | 510 passed, 2 skipped, 30 deselected, 4 subtests passed, in 11s |
+| `uv run ruff check .` | Passed on 2026-08-17 |
+| `uv run mypy` | Success: no issues in 43 source files on 2026-08-17 |
+
+`tests/test_docs_lint.py` went from 35 tests to 50.
+
+Two defects were found by running the checks against real data rather than fixtures, and both are
+fixed here:
+
+- **Untracked files were invisible to both checks.** Walking the manual checklist rather than
+  assuming it found that `changed_paths` read only the diff, so a brand new out-of-scope file went
+  unreported until it was staged - silent for exactly as long as the mistake was still cheap to
+  undo. It now also reads `git ls-files --others`. A test covers it.
+- **The scope check caught its own author.** Its first real run reported
+  `.github/workflows/ci.yml` as outside M31's declared scope, which was true - the CI edit the
+  ticket needs had not been declared. The scope was widened deliberately in the same PR, which is
+  the procedure the protocol prescribes.
+- **`git_text` crashed on this repository's own documents.** `subprocess.run(text=True)` decodes
+  with the platform locale, and on a Windows cp1252 locale `git show` raised `UnicodeDecodeError`
+  on any register containing `·` or an em dash - which is most of them. Both `docs_lint.git_text`
+  and the `docs_build.git` helper T0031.3 added now pass `encoding="utf-8"` explicitly. A test
+  covers it.
+
+The suite needs the runtime environment variables set. A fresh worktree has no `.env` - it is
+gitignored and therefore per-worktree - and without one, ten test modules fail collection with
+`ConfigLoadError: Missing required environment variables`. Exporting the same dummy values
+`ci.yml` already defines makes the suite pass in 12 seconds with only its two documented skips.
+Worth recording because it is a worktree-setup trap, not a code fault, and the parallel-worktree
+protocol makes fresh worktrees routine.
+
+`evals.replay` was not run: Postgres refuses connections on 5433 here, which is the condition
+T0031.3 recorded, and this branch changes no file under `evals/`, `src/`, or `config/`.
+
+### `main` was red, and was published before this landed
+
+`origin/main` at `553c40b` failed its own `generated` check: PR #61 merged M30's three entry files
+without running the generator, so all three generated registers disagreed with the entries feeding
+them. That was integration's step 2 for M30, outstanding, and it predated this branch.
+
+Rather than carry someone else's fold, the M30 publish was run as its own integration pass and
+pushed to `main` as `3676b86`, and this branch was rebased onto the result. That keeps the
+ownership boundary the milestone is about: an integration commit published M30, and this ticket
+publishes only its own entry.
+
+**Risks**
+
+- **`scope` and `frozen` are silent without a base.** A misconfigured CI checkout disables both
+  without failing, which is the failure mode this ticket is otherwise arguing against. The explicit
+  `--diff-base` in `ci.yml` is the mitigation, but nothing asserts that CI actually resolved one.
+- **The declared-scope exemption is only as strong as review.** Any milestone can legalise a frozen
+  path by adding one line to its own `scope:`. That is deliberate - the protocol wants the decision
+  visible in the diff rather than blocked - but the check cannot tell a considered widening from a
+  careless one. The roadmap note carries that rule socially, not mechanically.
+- **Milestone resolution can pick the wrong milestone.** It reads the entry filename, then the
+  branch name. A branch named for one ticket that writes another's entry resolves to the entry, and
+  a branch with neither is unjudged rather than rejected.
+- **`covered_numbers` reads a range out of a title.** `M0` is titled "Foundation through Hardening
+  (M0-M5)" and that parenthesised range is load-bearing for the gap check. Retitling that entry
+  would silently produce five skipped-milestone findings.
+
+**Follow-ups**
+
+- Assert in CI that a base actually resolved, so a silent `scope`/`frozen` cannot pass as green.
+- `CLAUDE.md` and `AGENTS.md` §7 step 3 still describe rewriting the snapshot by hand and say the
+  generator has not landed. T0031.3 recorded this and left it; it is still open, and it is now the
+  last stale description of the protocol.
+- Consider whether `registry` should read the branch name at all. It currently does not, and
+  "every branch resolves to a roadmap entry" from the ticket text is only enforced for the branch
+  being linted, through `scope`'s milestone resolution.
+
+**Docs**
+
+- `docs/Tickets.md` needs T0031.4 marked complete and the M31 row updated; M31 closes with it, so
+  its ticket plan is due for archiving. Frozen; integration owns both.
+- `docs/roadmap.yaml` M31 `status:` should move to complete. In scope here, but the status field is
+  integration's by protocol.
+- `docs/Repo_Current_State.md` names twelve checks in its build-status table; it is fifteen now.
+  The row is hand-written, so the `--snapshot` run does not fix it - integration does.
+- `docs/README.md` describes the linter's check count in its opening; same correction.
 <!-- generated:reports:end -->

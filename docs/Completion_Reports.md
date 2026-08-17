@@ -3309,7 +3309,7 @@ python scripts/docs_lint.py
 uv run pytest -q
 uv run ruff check .
 uv run mypy
-uv run python -m evals.replay   # started, did not finish inside the session; no result claimed
+uv run python -m evals.replay   # failed: environmental, see below
 ```
 
 **Build and test**
@@ -3324,10 +3324,29 @@ uv run python -m evals.replay   # started, did not finish inside the session; no
 
 `tests/test_docs_build.py` went from 9 tests to 19, all passing.
 
-`uv run python -m evals.replay` was started and had not produced output after five minutes, so it
-is not recorded as passing. This ticket changes no evaluation code, so the replay gate is unrelated
-to it, but the row in `Repo_Current_State.md` still carries its previous 2026-08-17 result rather
-than one measured here.
+`uv run python -m evals.replay` **failed** on this branch, and the failure is environmental:
+
+```text
+ValueError: Replay outcome mismatch: HON-CURRENCY-1 r1 t1 execution expected PASS, got INFRA;
+HLP-CONTEXT-1 r1 t1 execution expected PASS, got INFRA; HLP-CONTEXT-1 r1 t1 grade expected PASS,
+got INFRA; HLP-CONTEXT-1 r1 t2 execution expected PASS, got INFRA; HLP-CONTEXT-1 r1 t2 grade
+expected PASS, got INFRA
+```
+
+Two facts place it outside this ticket. Postgres refuses connections on both 5433 and 5432 on this
+machine, which is the same database-down condition that produced the run's 10 skips, and `INFRA` is
+the verdict the grader assigns when the seam cannot reach its database. And
+`git diff --name-only 836f765 HEAD -- evals/ src/ config/` returns nothing: this branch changes no
+evaluation, source, or configuration file at all.
+
+That is a structural argument plus a matching root cause, not a reproduction against `main`. The
+replay gate should be re-run with the fixture database up before this merges. The row in
+`Repo_Current_State.md` keeps its previously recorded 2026-08-17 result, which was measured under
+working conditions rather than here.
+
+Worth recording separately: `uv run python -m evals.replay | tail` reports `tail`'s exit status,
+not the replay's. Piping this command hides its failure, which is how the failure was nearly
+missed.
 
 The 10 skips and the 277s wall time are the documented fixture-Postgres hang, not a regression from
 this ticket: the fixture database on port 5433 was down for this run, exactly as

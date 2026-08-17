@@ -9,11 +9,12 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `feature/t0031.3-derive-state` at `836f765` - Merge pull request #58 from
-  Park-Hip/integration/t0031.2-publish (2026-08-17).
-- Branches not merged into `main`: 6 - `feature/t0022.10-prune-dead-docs`,
+- Checked out: `feature/t0031.3-derive-state` at `bcb0409` - feat(T0031.3): derive the current-state
+  snapshot (2026-08-17).
+- Branches not merged into `main`: 7 - `feature/t0022.10-prune-dead-docs`,
   `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
-  `feature/t0031-parallel-agent-docs`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+  `feature/t0031-parallel-agent-docs`, `feature/t0031.3-derive-state`, `merge/t0024.6-with-main`,
+  `merge/t0025.7-with-main`.
 - Worktrees: 7.
 <!-- generated:snapshot:end -->
 
@@ -122,7 +123,9 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
   with each turn's verdict joined when `--grade` is given.
 - `uv run python -m evals.viewer --sample` - generate a two-turn viewer sample without model quota.
 - `uv run python -m evals.execution_accuracy <run>.json` - grade SQL seams on frozen references.
-- `uv run python -m evals.replay` - replay committed evidence with no model or judge call.
+- `uv run python -m evals.replay` - replay committed evidence with no model or judge call. It does
+  still need a reachable Postgres: without one the execution seam grades `INFRA` and the replay
+  fails on an outcome mismatch rather than skipping.
 - `uv run ruff check .` - lint the repository.
 - `uv run mypy` - type-check `src`.
 - `uv run alembic current` and `uv run alembic upgrade head` - inspect or migrate a database.
@@ -161,7 +164,7 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 | `uv run pytest -q` | 488 passed, 10 skipped, 30 deselected, and 4 subtests passed on 2026-08-17 |
 | `uv run ruff check .` | Passed on 2026-08-17 |
 | `uv run mypy` | Success: no issues in 43 source files on 2026-08-17 |
-| `uv run python -m evals.replay` | Exit 0 on 2026-08-17 against the frozen evidence |
+| `uv run python -m evals.replay` | Exit 0 on 2026-08-17 against the frozen evidence, with a database up; re-run on T0031.3's branch failed with `INFRA` mismatches and no Postgres listening |
 
 Every skip is environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, and skill
 parity needs the gitignored `.claude/` copy; the default suite deselects live eval tests by design.

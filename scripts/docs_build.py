@@ -7,17 +7,32 @@ conflict inside a generated region is resolved by running this script, never by 
 
 Only the regions are generated. Everything outside them stays hand-written, which is what lets a
 register carry years of history that predates `docs/entries/` alongside the entries it now folds.
-`docs/Repo_Current_State.md` is deliberately not built here; deriving it is T0031.3.
+
+Since T0031.3 the same machinery derives `docs/Repo_Current_State.md`, whose regions come from the
+tree rather than from the entries: milestone status from `roadmap.yaml`, dependencies from
+`pyproject.toml`, and the maintenance-script inventory from `scripts/`. Those three are pure
+functions of the committed tree, so the linter gates them exactly like the entry-fed regions.
+
+The `snapshot` region is the deliberate exception. Branch, baseline commit, open branches, and
+worktrees are facts about a clone rather than about a commit, so they differ between a developer
+machine and CI and can never be gated by a check that must pass on both. `--snapshot` writes them
+and `stale()` ignores them; the integration step is what runs it. Build status stays hand-written:
+it is the result of running commands, not a reading of `git`, `roadmap.yaml`, or `pyproject.toml`.
 
 The script keeps the no-dependency contract that `scripts/docs_lint.py` holds: the entry
-frontmatter is flat scalars only and is parsed here rather than through a YAML library.
+frontmatter is flat scalars only and is parsed here rather than through a YAML library, and
+`roadmap.yaml` is read by the same flat-scalar rule rather than by pulling in PyYAML.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import re
+import subprocess
 import sys
+import textwrap
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,12 +40,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 ENTRIES = DOCS / "entries"
+STATE = DOCS / "Repo_Current_State.md"
+ROADMAP = DOCS / "roadmap.yaml"
+PYPROJECT = ROOT / "pyproject.toml"
+SCRIPTS = ROOT / "scripts"
 ENTRY_NAME = re.compile(r"^T\d{4}(?:\.\d+)?$")
 REGION = "<!-- generated:{name}:{edge} -->"
 SECTION = re.compile(r"^## +(?P<title>.+?)\s*$", re.M)
 ISSUE_ID = re.compile(r"\bKI-\d{4}-\d{2}-\d{2}-[a-z0-9-]+\b")
 SEVERITY = re.compile(r"\[(HIGH|MED|LOW)\s*[·|-]\s*(OPEN|BLOCKED|DECISION)\]")
+LINE_LIMIT = 100  # The limit scripts/docs_lint.py enforces; generated lines have to meet it too.
+MILESTONE_ID = re.compile(r"^  - id: +(?P<id>M\d+)\s*$")
+MILESTONE_FIELD = re.compile(r"^    (?P<key>[a-z_]+): +(?P<value>.+?)\s*$")
 STATUSES = ("complete", "in-progress", "next", "planned", "paused")
+MILESTONE_ORDER = ("in-progress", "claimed", "planned", "complete")
 SEVERITIES = ("HIGH", "MED", "LOW")
 STATES = ("OPEN", "BLOCKED", "DECISION")
 REPORT_FIELDS = ("Summary", "Files", "Commands", "Build and test", "Risks", "Follow-ups", "Docs")
@@ -208,6 +231,160 @@ def render_triage(register: str) -> str:
     return "\n".join(lines)
 
 
+def parse_milestones(text: str) -> list[dict[str, str]]:
+    """Return each milestone's flat scalar fields from `roadmap.yaml`, in file order.
+
+    Only the `  - id:` / `    key: value` shape is read. Block scalars and nested lists indent
+    further, so they fall through without a YAML parser having to understand them.
+    """
+    milestones: list[dict[str, str]] = []
+    for line in text.split("\n"):
+        identifier = MILESTONE_ID.match(line)
+        if identifier:
+            milestones.append({"id": identifier.group("id")})
+            continue
+        field = MILESTONE_FIELD.match(line)
+        if field and milestones:
+            milestones[-1].setdefault(field.group("key"), field.group("value"))
+    return milestones
+
+
+def compress_ids(identifiers: list[str]) -> str:
+    """Collapse consecutive milestone numbers into ranges, so 30 ids read as a short line."""
+    numbers = sorted(int(value.lstrip("M")) for value in identifiers)
+    if not numbers:
+        return "none"
+    spans: list[list[int]] = [[numbers[0], numbers[0]]]
+    for number in numbers[1:]:
+        if number == spans[-1][1] + 1:
+            spans[-1][1] = number
+        else:
+            spans.append([number, number])
+    return ", ".join(f"M{low}" if low == high else f"M{low}-M{high}" for low, high in spans)
+
+
+def render_milestones(roadmap: str) -> str:
+    """Milestone status, taken from the registry that already owns milestone identity.
+
+    Complete milestones compress to one line because their detail lives in the completion
+    reports; the ones still moving get a row each, because those are what a reader is here for.
+    """
+    milestones = parse_milestones(roadmap)
+    done = [entry["id"] for entry in milestones if entry.get("status") == "complete"]
+    open_entries = [entry for entry in milestones if entry.get("status") != "complete"]
+    lines = [
+        f"Complete: {compress_ids(done)} - {len(done)} of {len(milestones)} milestones.",
+        "",
+        "| Milestone | Title | Status |",
+        "|---|---|---|",
+    ]
+    order = {status: index for index, status in enumerate(MILESTONE_ORDER)}
+    for entry in sorted(open_entries, key=lambda item: order.get(item.get("status", ""), 99)):
+        lines.append(f"| {entry['id']} | {entry.get('title', '')} | {entry.get('status', '')} |")
+    return "\n".join(lines)
+
+
+def wrap(text: str, indent: str = "") -> str:
+    """Wrap to the documentation line limit.
+
+    Hyphen breaking is off because these lines are almost entirely hyphenated package names and
+    branch names inside backticks; letting `textwrap` split one produces a broken code span.
+    """
+    lines = textwrap.wrap(
+        text,
+        width=LINE_LIMIT,
+        subsequent_indent=indent,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+    return "\n".join(lines)
+
+
+def wrap_names(label: str, names: list[str]) -> str:
+    """Render a dependency group as wrapped prose, which costs a fifth of the lines a table does."""
+    if not names:
+        return f"{label} (0): none."
+    body = ", ".join(f"`{name}`" for name in names)
+    return wrap(f"{label} ({len(names)}): {body}")
+
+
+def render_dependencies(raw: bytes) -> str:
+    """Declared dependencies, read from the file that declares them.
+
+    Versions are deliberately omitted: `pyproject.toml` is the authority on the specifier, and
+    copying it here would create a second place for it to be wrong.
+    """
+    data = tomllib.loads(raw.decode("utf-8"))
+    runtime = [distribution(item) for item in data.get("project", {}).get("dependencies", [])]
+    development: list[str] = []
+    for group in data.get("dependency-groups", {}).values():
+        development.extend(distribution(item) for item in group if isinstance(item, str))
+    runtime_block = wrap_names("Runtime", sorted(runtime))
+    return f"{runtime_block}\n\n{wrap_names('Development', sorted(development))}"
+
+
+def distribution(specifier: str) -> str:
+    """Strip extras, version, and marker from a requirement: `psycopg[binary]>=3.2` -> `psycopg`."""
+    return re.split(r"[\[<>=!~;\s]", specifier, maxsplit=1)[0].strip()
+
+
+def render_scripts(scripts: Path = SCRIPTS) -> str:
+    """The `scripts/` inventory, each entry summarised by the first line of its own docstring."""
+    lines = []
+    for path in sorted(scripts.glob("*.py")):
+        try:
+            docstring = ast.get_docstring(ast.parse(read(path))) or ""
+        except SyntaxError:
+            docstring = ""
+        summary = docstring.strip().split("\n", 1)[0].strip() or "No module docstring."
+        # Source docstrings predate the documentation style, which spells this dash as a hyphen.
+        summary = summary.replace("—", "-").replace("–", "-")
+        lines.append(wrap(f"- `scripts/{path.name}` - {summary}", indent="  "))
+    return "\n".join(lines)
+
+
+def git(*args: str) -> str:
+    """Run a read-only git command, returning empty output rather than raising outside a clone."""
+    try:
+        result = subprocess.run(
+            ("git", *args), cwd=ROOT, capture_output=True, text=True, check=False, timeout=30
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def render_snapshot() -> str:
+    """Clone-local git facts: the part of this file that a commit alone cannot answer."""
+    head = git("rev-parse", "--short", "HEAD")
+    if not head:
+        return "- Git is unavailable, so branch and commit facts could not be derived."
+    subject = git("log", "-1", "--format=%s")
+    stamped = git("log", "-1", "--format=%cs")
+    unmerged = [
+        name
+        for name in git("branch", "--format=%(refname:short)", "--no-merged", "main").split("\n")
+        if name
+    ]
+    trees = [
+        line.removeprefix("worktree ")
+        for line in git("worktree", "list", "--porcelain").split("\n")
+        if line.startswith("worktree ")
+    ]
+    branch = git("rev-parse", "--abbrev-ref", "HEAD")
+    names = ", ".join(f"`{name}`" for name in sorted(unmerged))
+    lines = [
+        wrap(f"- Checked out: `{branch}` at `{head}` - {subject} ({stamped}).", indent="  "),
+        wrap(
+            f"- Branches not merged into `main`: {len(unmerged)}"
+            + (f" - {names}." if unmerged else "."),
+            indent="  ",
+        ),
+        f"- Worktrees: {len(trees)}.",
+    ]
+    return "\n".join(lines)
+
+
 def replace_region(text: str, name: str, body: str, path: Path) -> str:
     """Replace one generated region, leaving every hand-written line untouched."""
     begin = REGION.format(name=name, edge="begin")
@@ -219,7 +396,13 @@ def replace_region(text: str, name: str, body: str, path: Path) -> str:
     return f"{text[: start + len(begin)]}\n{payload}{text[stop:]}"
 
 
-def build(entries_dir: Path = ENTRIES, docs: Path = DOCS) -> dict[Path, str]:
+def build(
+    entries_dir: Path = ENTRIES,
+    docs: Path = DOCS,
+    roadmap: Path = ROADMAP,
+    pyproject: Path = PYPROJECT,
+    scripts: Path = SCRIPTS,
+) -> dict[Path, str]:
     """Return the rendered text of every register that carries a generated region."""
     entries = load_entries(entries_dir)
     reports = docs / "Completion_Reports.md"
@@ -240,12 +423,26 @@ def build(entries_dir: Path = ENTRIES, docs: Path = DOCS) -> dict[Path, str]:
     rendered[checks] = replace_region(
         read(checks), "checklists", render_checklists(entries), checks
     )
+
+    # The state snapshot's tree-derived regions only. `snapshot` is written by --snapshot and is
+    # absent here on purpose, so a check that must pass on every clone never reads a clone's git.
+    state = docs / "Repo_Current_State.md"
+    text = replace_region(read(state), "milestones", render_milestones(read(roadmap)), state)
+    text = replace_region(text, "dependencies", render_dependencies(pyproject.read_bytes()), state)
+    rendered[state] = replace_region(text, "scripts", render_scripts(scripts), state)
     return rendered
 
 
-def stale(entries_dir: Path = ENTRIES, docs: Path = DOCS) -> list[Path]:
+def stale(
+    entries_dir: Path = ENTRIES,
+    docs: Path = DOCS,
+    roadmap: Path = ROADMAP,
+    pyproject: Path = PYPROJECT,
+    scripts: Path = SCRIPTS,
+) -> list[Path]:
     """Return the registers whose generated regions no longer match their sources."""
-    return [path for path, text in build(entries_dir, docs).items() if read(path) != text]
+    rendered = build(entries_dir, docs, roadmap, pyproject, scripts)
+    return [path for path, text in rendered.items() if read(path) != text]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -253,9 +450,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check", action="store_true", help="Report stale registers without writing them."
     )
+    parser.add_argument(
+        "--snapshot",
+        action="store_true",
+        help="Also refresh the clone-local git region of Repo_Current_State.md.",
+    )
     args = parser.parse_args(argv)
+    if args.check and args.snapshot:
+        parser.error("--check cannot verify --snapshot: the git region differs between clones")
     try:
         rendered = build()
+        if args.snapshot:
+            rendered[STATE] = replace_region(
+                rendered[STATE], "snapshot", render_snapshot(), STATE
+            )
     except BuildError as error:
         print(f"docs-build: {error}")
         return 1

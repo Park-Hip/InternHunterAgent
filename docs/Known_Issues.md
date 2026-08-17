@@ -11,8 +11,8 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 2 |
-| MED | 10 | 1 | 3 |
-| LOW | 15 | 2 | 0 |
+| MED | 11 | 1 | 3 |
+| LOW | 16 | 2 | 0 |
 <!-- generated:triage:end -->
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
@@ -35,6 +35,27 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
+- `KI-2026-08-17-replay-needs-a-database` **`[MED · OPEN]` `evals.replay` fails with `INFRA`
+  verdicts when no Postgres is listening, so the gate cannot run on a bare checkout.**
+  - **Found:** T0031.3, running the documented build-status commands with 5433 and 5432 both
+    refusing connections.
+  - **Impact:** `uv run python -m evals.replay` exits non-zero with an outcome mismatch on five
+    turns. The register describes it as replaying committed evidence "with no model or judge call",
+    which reads as needing nothing external; it still needs a database for the execution seam.
+  - **Next:** Either document the database as a precondition beside the command, or have the
+    replay skip rather than fail when the seam is unreachable, so a genuine regression stays
+    distinguishable from an absent database.
+  - **History:** Same root cause as the fixture-Postgres hang already recorded for the test suite.
+
+- `KI-2026-08-17-snapshot-region-unverified` **`[LOW · OPEN]` The `snapshot` region of
+  `Repo_Current_State.md` has no staleness check.**
+  - **Found:** T0031.3, by design rather than by defect.
+  - **Impact:** The branch, commit, and worktree block can describe an older clone with nothing
+    failing. Every other generated region in the repository is gated.
+  - **Next:** Have T0031.4's `frozen` check require that the integration commit ran
+    `docs_build.py --snapshot`.
+  - **History:** Introduced when T0031.3 split clone-local facts out of the gated regions, because
+    a check that runs in CI cannot verify a fact that differs in CI.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 

@@ -10,7 +10,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 <!-- generated:triage:begin -->
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
-| HIGH | 1 | 1 | 2 |
+| HIGH | 1 | 1 | 1 |
 | MED | 10 | 1 | 3 |
 | LOW | 16 | 2 | 0 |
 <!-- generated:triage:end -->
@@ -147,7 +147,7 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Next:** Fetch one additional row for explicit limits and add a soft more-results hint.
   - **History:** `src/services/query/row_bound.py` owns result limits.
 
-## Evaluation harness (11)
+## Evaluation harness (10)
 
 - **`[MED · OPEN]` `SAF-INJECTION-RESILIENCE-1` asserts a no-tool rule no capture has tested.**
   - **Found:** T0025.9 audit on 2026-08-13.
@@ -158,14 +158,10 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Next:** Capture the scenario when a tier decision lands, then confirm or relax the rule.
   - **History:** [`evals/Instrument_Report.md`](../evals/Instrument_Report.md) records both flips.
 
-- **`[HIGH · DECISION]` Captures are unpreserved, and one has already been lost.**
-  - **Found:** T0025.9 on 2026-08-13 as a reproducibility gap; realised 2026-08-16.
-  - **Impact:** `evals/runs/` is ignored and `replay.py` validates the sanitized format without
-    writing it, so freezing is hand work and did not happen. T0027.3's 77-turn capture - the only
-    29-of-29 measurement - died with its worktree after PR #50 and no ref ever held it; only
-    [the arm record](../evals/t0027_deepseek_arm.md) survives. T0025.7 is exposed identically.
-  - **Next:** T0030 - .1 the writer, .2 freeze what survives, .3 **D-046** on telemetry.
-  - **History:** `.gitignore` line 9; [`Operating_Manual.md`](../evals/Operating_Manual.md).
+- `KI-2026-08-17-deepseek-capture-lost` **`[HIGH · RESOLVED]` Captures are unpreserved, and one has
+  already been lost.** Closed by M30 on 2026-08-17; the record is in
+  [Resolved Issues](Resolved_Issues.md#evaluation-harness). The T0027.3 capture stays lost - what
+  closed is the exposure, not the loss.
 
 - **`[LOW · OPEN]` DeepEval live commands require UTF-8 output and an explicit `-m eval`.**
   - **Found:** T0011.1, T0011.6, and T0012.7.

@@ -49,13 +49,13 @@ integration decisions rather than ticket traffic, which is what makes them meani
 `Repo_Current_State.md` absorbed 91 of the preceding 200 commits and was still a merge behind
 itself on `main`.
 
-`Repo_Current_State.md` moved 150 → 175 → 210 on 2026-08-17, measured at 190. The 150 cap was set
-when one ticket branch was in flight at a time, and 175 when the snapshot had to start naming which
-branches and worktrees are open. T0031.3 moved it again for the opposite reason: the branch,
-milestone, dependency, and script facts are now generated from `git`, `roadmap.yaml`,
-`pyproject.toml`, and `scripts/`, and a derived inventory is longer than the prose summary it
-replaces. The cap stops measuring how much a human wrote and starts measuring how much the
-repository contains, which is the trade this milestone is making everywhere.
+`Repo_Current_State.md` moved 150 → 175 → 210 → 230 across 2026-08-17, measured at 210. The 150
+cap was set when one ticket branch was in flight at a time, and 175 when the snapshot had to start
+naming which branches and worktrees are open. T0031.3 moved it to 210 for the opposite reason: the
+branch, milestone, dependency, and script facts are generated from `git`, `roadmap.yaml`,
+`pyproject.toml`, and `scripts/`, and a derived inventory runs longer than the prose it replaced.
+The M30 pass then measured 210 exactly - a cap with no headroom rather than one that fits - so it
+moves to 230. A generated document grows when the repository does.
 
 `entries/` is indexed here as a directory, the same way `archive/` is. A per-ticket file cannot
 take a per-file cap row without recreating the shared-table edit the directory exists to remove.
@@ -88,7 +88,7 @@ the same reason it went up.
 | [Tech Stack](Tech_Stack.md) | Languages, services, versions, and dependencies | T1 | 150 | New contributors |
 | [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | 450 | Decision makers |
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
-| [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 210 | All contributors |
+| [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 230 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T4 | Uncapped | Maintainers |
 | [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 375 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |

@@ -3029,6 +3029,169 @@ reflow, orphan, and scenario-id checks.
   invocation alongside `--sample`.
 
 <!-- generated:reports:begin -->
+## T0030.1 - Give the replay format a writer
+
+*Completed 2026-08-17.*
+
+**Summary**
+
+`python -m evals.driver freeze <capture>.json --grade <grade>.json -o <replay>.json` now projects
+completed capture evidence into the existing sanitized replay schema.
+It takes only question, answer, called tools, and SQL from each turn.
+It obtains the expected grade and execution-accuracy result from the matching deterministic grade
+report.
+It preserves the capture manifest `run_id` and source artifact filename, validates the projection
+with `validate_replay` before writing it, and refuses to overwrite an existing replay.
+The shared sanitizer rejects a non-empty trace identifier, database URL, API-key-like value,
+authorization value, Langfuse value, or `sk-` credential-like value before any replay is written.
+
+**Files**
+
+* `evals/driver.py` - added the freezer, source-artifact checks, grade-report indexing, and the
+  `freeze` command.
+* `evals/replay.py` - consumes the shared sanitizer while retaining the sealed replay validation
+  schema.
+* `evals/sanitization.py` - new owner for the sanitizer pattern shared by validation and freezing.
+* `tests/evals/test_driver.py` - added command-level projection and trace-refusal coverage.
+* `docs/roadmap.yaml` - widened M30’s declared scope to cover the paths T0030.1 requires.
+
+**Commands**
+
+`uv run ruff check evals/driver.py evals/replay.py evals/sanitization.py tests/evals/test_driver.py`.
+`uv run pytest -q tests/evals/test_driver.py tests/evals/test_replay.py` with placeholder Langfuse
+credentials because the isolated worktree does not contain the gitignored local `.env` file.
+
+**Build and test**
+
+| Check | Result | Date |
+|---|---|---|
+| Focused Ruff check | Passed | 2026-08-17 |
+| Focused evaluation tests | 29 passed | 2026-08-17 |
+
+**Risks**
+
+The supplied grade report must be from the same capture.
+It must include one execution-accuracy result for every frozen turn.
+The freezer omits unrun and empty infrastructure-failed scenarios.
+It rejects infrastructure-failed or ungraded turns because the replay requires a completed turn.
+The combined T0030.1 and T0030.2 work extends the sealed replay outcome set to retain PASS, FAIL,
+and EXEMPT execution evidence without changing a recorded verdict.
+
+**Docs**
+
+An integration step must run `python scripts/docs_build.py` after this entry lands to fold the
+completion report and manual checklist into the frozen shared registers.
+`docs/Repo_Current_State.md` then needs its next-ticket and M30 status updated by the integration
+owner.
+
+---
+
+## T0030.2 - Freeze the captures that are still exposed
+
+*Completed 2026-08-17.*
+
+**Summary**
+
+The retained T0025.7 acceptance capture and deterministic grade report now produce the committed
+`evals/replays/t0025.7-acceptance.json` replay.
+It preserves all 13 completed labelled turns and their expected grade and execution outcomes.
+One expected execution-accuracy failure required the combined T0030.1 and T0030.2 change to permit
+`FAIL` alongside `PASS` and `EXEMPT` in the existing replay outcome field.
+This preserves the recorded failure rather than dropping it or changing its verdict.
+The instrument report and DeepSeek arm record now point at the committed baseline replay.
+
+**Files**
+
+* `evals/replays/t0025.7-acceptance.json` - new sanitized replay from the retained capture.
+* `evals/replay.py` - permits expected execution-accuracy failure evidence.
+* `evals/driver.py` - projects that failure from the deterministic grade report.
+* `tests/evals/test_driver.py` and `tests/evals/test_replay.py` - cover failed execution
+  preservation.
+* `evals/Instrument_Report.md`, `evals/t0027_deepseek_arm.md`, and `evals/README.md` - point at
+  committed evidence and document the freezer.
+
+**Commands**
+
+```powershell
+$env:PYTHONUTF8 = "1"
+uv run python -m evals.execution_accuracy <capture> > <accuracy>.json
+uv run python -m evals.grader --run <capture> --execution-accuracy <accuracy>.json > <grade>.json
+uv run python -m evals.driver freeze <capture> --grade <grade>.json -o evals/replays/t0025.7-acceptance.json
+uv run python -m evals.replay --replay evals/replays/t0025.7-acceptance.json
+```
+
+`uv run ruff check evals/driver.py evals/replay.py evals/sanitization.py tests/evals/test_driver.py tests/evals/test_replay.py`.
+`uv run pytest -q tests/evals/test_driver.py tests/evals/test_replay.py`.
+
+**Build and test**
+
+| Check | Result | Date |
+|---|---|---|
+| Focused Ruff check | Passed | 2026-08-17 |
+| Focused evaluation tests | 29 passed | 2026-08-17 |
+| Acceptance replay freeze | 13 completed turns preserved without trace or telemetry fields | 2026-08-17 |
+
+**Risks**
+
+The lost 77-turn DeepSeek capture cannot be reconstructed and remains represented only by its dated
+arm record.
+The replay preserves deterministic evidence, not raw latency, token, finish-reason, or trace data.
+
+**Docs**
+
+Integration must fold this entry into the frozen completion, issue, and manual-verification
+registers.
+It must close the capture-preservation issue and record the irreversible DeepSeek loss in
+`docs/Resolved_Issues.md`.
+`docs/Repo_Current_State.md` needs M30's combined T0030.1 through T0030.3 status after merge.
+
+---
+
+## T0030.3 - Decide frozen replay telemetry
+
+*Completed 2026-08-17.*
+
+**Summary**
+
+D-046 keeps frozen replays strictly evidence-only.
+They retain provenance, questions, answers, tools, SQL, and expected deterministic outcomes.
+They exclude per-turn latency, token usage, finish reasons, tool output, and trace identifiers.
+Aggregate operational figures remain in dated arm records, where they explain a finding without
+increasing the permanent sanitizer surface.
+
+**Files**
+
+* `docs/Decision_Log.md` - added D-046.
+* `evals/README.md` - states the frozen replay retention boundary.
+* `docs/roadmap.yaml` - explicitly permits the decision-log change under M30.
+
+**Commands**
+
+`python scripts/docs_lint.py`.
+
+**Build and test**
+
+| Check | Result | Date |
+|---|---|---|
+| Documentation lint | Pending integration-generated register fold | 2026-08-17 |
+
+**Risks**
+
+Frozen replays do not support per-turn latency analysis in the viewer.
+This is deliberate because aggregate operational figures are sufficient to reproduce the stated
+finding, while per-turn telemetry increases the permanent sanitizer obligation.
+
+**Follow-ups**
+
+None for M30.
+
+**Docs**
+
+Integration must fold this entry into the frozen completion and manual-verification registers.
+It must update `docs/Repo_Current_State.md` and the M30 outcome after the combined work merges.
+
+---
+
 ## T0031.1 - Give parallel tickets a private write surface
 
 *Completed 2026-08-17.*

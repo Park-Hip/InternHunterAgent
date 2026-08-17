@@ -9,11 +9,12 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `integration/t0031.3-publish` at `ae3e8c6` - Merge pull request #59 from
-  Park-Hip/feature/t0031.3-derive-state (2026-08-17).
-- Branches not merged into `main`: 6 - `feature/t0022.10-prune-dead-docs`,
+- Checked out: `main` at `553c40b` - Merge pull request #61 from
+  Park-Hip/codex/t0030.1-replay-freeze (2026-08-17).
+- Branches not merged into `main`: 7 - `feature/t0022.10-prune-dead-docs`,
   `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
-  `feature/t0031-parallel-agent-docs`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+  `feature/t0031-parallel-agent-docs`, `feature/t0031.4-enforce-protocol`,
+  `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
 - Worktrees: 8.
 <!-- generated:snapshot:end -->
 
@@ -41,19 +42,20 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M25-M29 - 23 of 27 milestones.
+Complete: M0, M6-M22, M25-M30 - 24 of 27 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
 | M24 | Honesty Enforcement (obligation seam) | in-progress |
-| M30 | Evaluation Evidence Durability | in-progress |
 | M31 | Parallel Agent Workflow | in-progress |
 | M23 | v1.0 Release Cut | planned |
 <!-- generated:milestones:end -->
 
-M24 is in progress on an unreviewed branch rather than planned. M30 is scoped and unbuilt: its
-plan is merged and no ticket under it has landed, so the `[MED · DECISION]` T0025.10 left open in
-[Known Issues](Known_Issues.md) is still open.
+M24 is in progress on an unreviewed branch rather than planned. M30 closed on 2026-08-17 (PR #61):
+the `freeze` command exists, the surviving T0025.7 capture is committed at
+`evals/replays/t0025.7-acceptance.json`, and **D-046** settles what a frozen replay keeps. The
+capture-preservation entry it closed is in [Resolved Issues](Resolved_Issues.md); the T0027.3
+DeepSeek capture that motivated it was already lost and stays lost.
 
 ## Archive tags
 
@@ -84,10 +86,11 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
 - The legacy HTTP runner stays archived; the driver took its orchestration as a pattern only and
   runs the agent in-process (D-043). The 2026-07-14 answer artifact is answer-only, so replaying it
   still grades `INFRA` at the structural tier - only a driver capture carries tools and SQL.
-- `evals/runs/` is ignored, so the 13-turn labelled capture behind
-  [`evals/Instrument_Report.md`](../evals/Instrument_Report.md) is not reproducible from a clean
-  checkout. References to it carry `<!-- lint-allow-link-path -->`: they resolve on a developer
-  machine but fail the documentation gate, which lints a bare checkout.
+- `evals/runs/` stays ignored: raw captures are uncommitted by design (**D-046**), and their
+  sanitized projections live in `evals/replays/`. `evals/Instrument_Report.md` carries no
+  `<!-- lint-allow-link-path -->`, so its references resolve in a bare checkout. One marker
+  survives in [the arm record](../evals/t0027_deepseek_arm.md), naming the lost T0027.3 capture:
+  it cannot be repointed, because nothing to point at exists.
 
 ## Folder structure
 
@@ -124,6 +127,8 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 - `uv run python -m evals.driver --output evals/runs/run.json` - capture the scenario registry.
 - `uv run python -m evals.driver --resume --output evals/runs/run.json` - resume a partial run.
 - `uv run python -m evals.driver diff left.json right.json` - verify run comparability.
+- `uv run python -m evals.driver freeze <run>.json --grade <grade>.json -o evals/replays/<arm>.json`
+  - freeze a completed capture into committed, sanitized evidence (T0030.1).
 - `uv run python -m evals.viewer <run>.json --grade <run>-grade.json` - the local trace viewer,
   with each turn's verdict joined when `--grade` is given.
 - `uv run python -m evals.viewer --sample` - generate a two-turn viewer sample without model quota.
@@ -166,17 +171,21 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 |---|---|
 | `python scripts/docs_lint.py` | Passed on 2026-08-17 (all twelve checks, exit 0) |
 | `python scripts/docs_build.py --check` | Exit 0 on 2026-08-17; every generated region current |
-| `uv run pytest -q` | 488 passed, 10 skipped, 30 deselected, and 4 subtests passed on 2026-08-17, in 268 s |
+| `uv run pytest -q` | 502 passed, 2 skipped, 30 deselected, and 4 subtests passed on 2026-08-17, in 10 s |
 | `uv run ruff check .` | Passed on 2026-08-17 |
 | `uv run mypy` | Success: no issues in 43 source files on 2026-08-17 |
 | `uv run python -m evals.replay` | Exit 0 on 2026-08-17 against the frozen evidence, with a database up. Not re-run by the integration step that published T0031.3: Docker was not running, so nothing listened on 5432 or 5433, which is the recorded precondition rather than a result |
 
-Every skip is environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, and skill
+Both skips are environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, and skill
 parity needs the gitignored `.claude/` copy; the default suite deselects live eval tests by design.
-The 10 skips and the 277s wall time above are the fixture Postgres on 5433 being down, which is the
-hang [Known Issues](Known_Issues.md) records; with it up the same suite reports 2 skips in seconds.
-A bare `python -m pytest` is not the command: it cannot import `slowapi` and fails collection on 23
-modules. Use `uv run`.
+A run with the fixture Postgres unreachable reports 10 skips and takes minutes instead of seconds -
+the hang [Known Issues](Known_Issues.md) records.
+
+Two command traps, both measured on 2026-08-17. A bare `python -m pytest` cannot import `slowapi`
+and fails collection on 23 modules, so use `uv run`. And a fresh worktree has no `.env`, since it
+is gitignored and therefore per-worktree; without the runtime variables set, ten modules fail
+collection with `ConfigLoadError`. The dummy values in
+[`ci.yml`](../.github/workflows/ci.yml) are enough.
 
 ## Registers
 
@@ -185,15 +194,18 @@ resolution records: [Resolved Issues](Resolved_Issues.md).
 
 ## Next recommended ticket
 
-T0030.1 - give the replay format a writer. The DeepSeek capture loss that motivated M30 is a live
-risk, and every further captured run stays exposed to it until `freeze` exists.
+T0031.4 - the registry, scope, and frozen lint checks, open as PR #62. It is the last M31 ticket,
+and until it lands the protocol is a document rather than a gate: nothing detects a branch that
+hand-writes a frozen register, allocates a number the registry never issued, or drifts outside its
+declared scope.
 
-T0031.3 merged as PR #59 and was published on 2026-08-17. This section and the build-status table
-above are what a human still writes in this file: the table is the result of running commands
-rather than a reading of the tree, and deriving it needs a recorded result the build can read.
-What is left by hand elsewhere is `Tickets.md` and the judgement of where a raised issue belongs -
-and only the second is a judgement. T0031.4, the registry, scope, and frozen lint checks, is the
-remaining M31 ticket.
+M30 closed on 2026-08-17 (PR #61), retiring the standing recommendation to build it: a completed
+capture is one `freeze` command from being committed.
+
+Since T0031.3 (PR #59), this section and the build-status table are all a human writes in this
+file: the table is the result of running commands rather than a reading of the tree, so deriving
+it needs a recorded result the build can read. Elsewhere, `Tickets.md` and the judgement of where
+a raised issue belongs are what remain by hand - and only the second is a judgement.
 
 T0023 - the release path - remains open, but is less blocked than it was: the cron activation
 closed on 2026-08-17, when `Nightly ingestion` was found to have run unattended on `schedule` and

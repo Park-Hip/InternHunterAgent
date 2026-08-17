@@ -180,7 +180,7 @@ milestones:
       plan was archived the same day, which returned the docs/Tickets.md cap from 400 to 350.
   - id: M30
     title: Evaluation Evidence Durability
-    status: in-progress
+    status: complete
     tickets: [T0030.1, T0030.2, T0030.3]
     branch: feature/t0030-evidence-durability
     scope:
@@ -199,9 +199,10 @@ milestones:
       order. This is the first entry the intersection rule would have caught before launch. T0030.1
       widened this scope for the driver, replay sanitizer, private completion entry, and D-046: the
       original plan named the driver command but its scope omitted the implementation paths.
-      PR #52 merged the ticket plans on 2026-08-17 and nothing else: T0030.1, .2 and .3 are
-      scoped and unbuilt, so this milestone is in progress rather than complete. Predates
-      docs/entries/, so it has no entry file.
+      PR #52 merged the ticket plans on 2026-08-17 and nothing else; PR #61 built all three the
+      same day, with an entry file each. Complete: the freeze command exists, the surviving
+      T0025.7 capture is committed, and D-046 settles what a frozen replay keeps. The T0027.3
+      capture it was meant to save was already gone and stays gone.
 
   - id: M31
     title: Parallel Agent Workflow

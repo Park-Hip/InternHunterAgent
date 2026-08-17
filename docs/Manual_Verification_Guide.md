@@ -68,6 +68,33 @@ developer to create, and the text is not editable here anyway.
    which is the overlap that made them unsafe to run in parallel.
 6. Ask for a ticket prompt via the `generate-ticket-prompt` skill and confirm the output names
    the allocated ticket id, the allowed paths, and the frozen registers.
+
+### T0030.3: Decide frozen replay telemetry
+
+1. Read D-046 in `docs/Decision_Log.md` and confirm it names both retained evidence and excluded
+   per-turn telemetry.
+2. Read the `replays/` row in `evals/README.md` and confirm it matches D-046.
+3. Inspect `evals/replays/t0025.7-acceptance.json` and confirm it has no `trace_id`, `latency_ms`,
+   token-usage, finish-reason, or tool-output field.
+
+### T0030.2: Freeze the captures that are still exposed
+
+1. Start the fixture database with `docker compose up -d` and rebuild it with
+   `uv run python -m evals.fixtures.loader`.
+2. Run `uv run python -m evals.replay --replay evals/replays/t0025.7-acceptance.json`.
+3. Confirm the command exits 0 and the replay contains 13 completed turns, no `trace_id`, and no
+   `latency_ms`.
+4. In a clean checkout with no `evals/runs/` directory, repeat step 2.
+
+### T0030.1: Give the replay format a writer
+
+1. Freeze a completed capture with `uv run python -m evals.driver freeze <capture>.json --grade
+   <grade>.json -o <replay>.json`.
+2. Run `uv run python -m evals.replay --replay <replay>.json` and confirm it exits 0 against the
+   frozen fixture.
+3. Insert a non-empty `trace_id` into a copy of the capture, rerun `freeze`, and confirm it refuses
+   the source path without creating output.
+4. Inspect the replay and confirm it contains no `trace_id`, `latency_ms`, or token-usage field.
 <!-- generated:checklists:end -->
 <!-- lint-allow-link-path:end -->
 

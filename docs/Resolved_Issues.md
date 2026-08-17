@@ -492,6 +492,22 @@ original register entry (omitted where none was assigned).
 
 ## Evaluation harness
 
+- **`[HIGH · RESOLVED · T0030, 2026-08-17]` Captures were unpreserved, and one was lost before the
+  writer existed.**
+  - **Found:** T0025.9 on 2026-08-13 as a reproducibility gap; realised 2026-08-16 when the loss
+    was confirmed. `evals/runs/` is ignored and `replay.py` validated the sanitized format without
+    writing it, so freezing was hand work and did not happen.
+  - **Resolution 2026-08-17, M30:** T0030.1 gave the driver a `freeze` subcommand that emits the
+    schema `validate_replay` already accepted and refuses forbidden content; T0030.2 froze the
+    surviving T0025.7 acceptance capture to `evals/replays/t0025.7-acceptance.json`, all 13
+    labelled turns; T0030.3 settled what a frozen replay retains as **D-046**. Preservation stopped
+    depending on discipline and became one command.
+  - **What did not close:** T0027.3's 77-turn DeepSeek capture - the only 29-of-29 measurement -
+    died with its worktree after PR #50 and no ref ever held it. It is irrecoverable. Only
+    [the arm record](../evals/t0027_deepseek_arm.md) survives, and re-measurement under M24 would
+    be a fresh capture rather than a recovery. The exposure closed; the loss did not.
+  - **Verified:** `evals/replays/t0025.7-acceptance.json` is committed and replays clean.
+
 - **`[MED · RESOLVED · T0027.3, 2026-08-14]` Two acceptance scenarios exceeded the free tier's
   per-minute token ceiling.**
   - **Found:** T0025.7 paced capture on 2026-08-13. `HLP-CONTEXT-1` and `HLP-COMPOUND-1` stayed

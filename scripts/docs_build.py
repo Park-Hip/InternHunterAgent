@@ -1,9 +1,13 @@
 """Render the derived documentation registers from the per-ticket entry files.
 
-Every register that used to be hand-edited by each ticket now carries generated regions marked
+Three registers that every ticket used to hand-edit now carry generated regions marked
 `<!-- generated:<name>:begin -->` and `<!-- generated:<name>:end -->`. The sole source is one file
 per ticket under `docs/entries/`, so a ticket branch writes a file no other branch owns. A merge
 conflict inside a generated region is resolved by running this script, never by hand.
+
+Only the regions are generated. Everything outside them stays hand-written, which is what lets a
+register carry years of history that predates `docs/entries/` alongside the entries it now folds.
+`docs/Repo_Current_State.md` is deliberately not built here; deriving it is T0031.3.
 
 The script keeps the no-dependency contract that `scripts/docs_lint.py` holds: the entry
 frontmatter is flat scalars only and is parsed here rather than through a YAML library.
@@ -23,23 +27,13 @@ DOCS = ROOT / "docs"
 ENTRIES = DOCS / "entries"
 ENTRY_NAME = re.compile(r"^T\d{4}(?:\.\d+)?$")
 REGION = "<!-- generated:{name}:{edge} -->"
-REGION_ANY = re.compile(
-    r"<!-- generated:(?P<name>[a-z-]+):begin -->\n(?P<body>.*?)<!-- generated:(?P=name):end -->",
-    re.S,
-)
 SECTION = re.compile(r"^## +(?P<title>.+?)\s*$", re.M)
-TABLE_ROW = re.compile(r"^\|(?P<cells>.+)\|\s*$", re.M)
 ISSUE_ID = re.compile(r"\bKI-\d{4}-\d{2}-\d{2}-[a-z0-9-]+\b")
 SEVERITY = re.compile(r"\[(HIGH|MED|LOW)\s*[·|-]\s*(OPEN|BLOCKED|DECISION)\]")
-STATUS_GLYPH = {
-    "complete": "✅",
-    "in-progress": "\U0001f528",
-    "next": "▶",
-    "planned": "\U0001f4cb",
-    "paused": "⏸",
-}
+STATUSES = ("complete", "in-progress", "next", "planned", "paused")
 SEVERITIES = ("HIGH", "MED", "LOW")
 STATES = ("OPEN", "BLOCKED", "DECISION")
+REPORT_FIELDS = ("Summary", "Files", "Commands", "Build and test", "Risks", "Follow-ups", "Docs")
 
 
 @dataclass(frozen=True)
@@ -55,20 +49,12 @@ class Entry:
         return self.meta.get("ticket", self.path.stem)
 
     @property
-    def milestone(self) -> str:
-        return self.meta.get("milestone", "")
-
-    @property
     def title(self) -> str:
         return self.meta.get("title", self.ticket)
 
     @property
     def status(self) -> str:
         return self.meta.get("status", "planned")
-
-    @property
-    def goal(self) -> str:
-        return self.meta.get("goal", "")
 
     @property
     def date(self) -> str:
@@ -141,67 +127,32 @@ def load_entries(entries_dir: Path = ENTRIES) -> list[Entry]:
         for required in ("ticket", "title", "status", "date"):
             if required not in meta:
                 raise BuildError(f"{path.name}: frontmatter is missing `{required}`")
-        if meta["status"] not in STATUS_GLYPH:
+        if meta["status"] not in STATUSES:
             raise BuildError(f"{path.name}: unknown status {meta['status']!r}")
         loaded.append(Entry(path=path, meta=meta, sections=parse_sections(body)))
     return sorted(loaded, key=Entry.sort_key)
 
 
-def newest_date(entries: list[Entry]) -> str:
-    return max((entry.date for entry in entries if entry.date), default="")
-
-
 def strip_generated(text: str) -> str:
-    """Return the text with every generated region emptied, leaving only hand-written content."""
-    return REGION_ANY.sub("", text)
-
-
-def table_rows(text: str) -> list[list[str]]:
-    """Return the data rows of the first Markdown table in the text."""
-    rows: list[list[str]] = []
-    for match in TABLE_ROW.finditer(text):
-        cells = [cell.strip() for cell in match.group("cells").split("|")]
-        if not cells or set("".join(cells)) <= {"-", ":"} or not any(cells):
-            continue
-        rows.append(cells)
-    return rows[1:] if rows else rows
-
-
-def render_index(entries: list[Entry]) -> str:
-    """Milestone index rows, one per ticket entry."""
-    lines = []
-    for entry in entries:
-        glyph = STATUS_GLYPH[entry.status]
-        lines.append(
-            f"| {entry.milestone} | {entry.ticket} | {entry.title} | {glyph} | {entry.goal} |"
-        )
-    return "\n".join(lines)
-
-
-def render_plans(entries: list[Entry]) -> str:
-    """Plan bodies for tickets that are not yet complete.
-
-    A completed ticket drops out of this region automatically, which is the eviction rule for
-    ticket plans expressed as code rather than as a habit.
-    """
-    blocks = []
-    for entry in entries:
-        plan = entry.section("Plan")
-        if entry.is_complete or not plan:
-            continue
-        blocks.append(f"## {entry.ticket}: {entry.title}\n\n{plan}")
-    return "\n\n---\n\n".join(blocks)
+    """Return the text with every generated region removed, leaving only hand-written content."""
+    pattern = re.compile(
+        r"<!-- generated:(?P<name>[a-z-]+):begin -->\n.*?<!-- generated:(?P=name):end -->", re.S
+    )
+    return pattern.sub("", text)
 
 
 def render_reports(entries: list[Entry]) -> str:
-    """Completion reports for finished tickets, newest first."""
-    fields = ("Summary", "Files", "Commands", "Build and test", "Risks", "Follow-ups", "Docs")
+    """Completion reports for finished tickets, oldest first.
+
+    The register is append-only and reads chronologically, so a generated report lands where a
+    hand-written one would have: at the end, under the reports that shipped before it.
+    """
     blocks = []
-    for entry in reversed(entries):
+    for entry in entries:
         if not entry.is_complete:
             continue
         parts = [f"## {entry.ticket} - {entry.title}", f"*Completed {entry.date}.*"]
-        for field in fields:
+        for field in REPORT_FIELDS:
             content = entry.section(field)
             if content:
                 parts.append(f"**{field}**\n\n{content}")
@@ -210,7 +161,11 @@ def render_reports(entries: list[Entry]) -> str:
 
 
 def render_checklists(entries: list[Entry]) -> str:
-    """Manual-verification checklists that have not been marked verified."""
+    """Manual-verification checklists that have not been marked verified.
+
+    A checklist leaves this region when its entry sets `verified: yes`, which is the guide's
+    stated eviction rule expressed as code rather than as a habit.
+    """
     blocks = []
     for entry in reversed(entries):
         checklist = entry.section("Manual verification")
@@ -220,49 +175,13 @@ def render_checklists(entries: list[Entry]) -> str:
     return "\n\n".join(blocks)
 
 
-def render_milestones(entries: list[Entry]) -> str:
-    """One paragraph per completed milestone, for the current-state snapshot."""
-    lines = []
-    for entry in entries:
-        if not entry.is_complete:
-            continue
-        label = f"M{entry.milestone} - " if entry.milestone else ""
-        lines.append(f"{label}{entry.title} is complete as of {entry.date} ({entry.ticket}). "
-                     f"{entry.goal}".rstrip())
-    return "\n\n".join(lines)
-
-
-def render_tests(entries: list[Entry]) -> str:
-    """The build and test table, keeping the newest recorded result for each check.
-
-    A check that no ticket has re-run drops off the table rather than carrying a stale claim
-    forward, which is the same honesty rule the rest of this repository applies to measurements.
-    """
-    latest: dict[str, tuple[str, str]] = {}
-    for entry in entries:
-        for row in table_rows(entry.section("Build and test")):
-            if len(row) < 3:
-                continue
-            check, result, date = row[0], row[1], row[2]
-            if not check:
-                continue
-            if check not in latest or date >= latest[check][1]:
-                latest[check] = (result, date)
-    if not latest:
-        return "| Check | Most recent recorded result | Date |\n|---|---|---|"
-    lines = ["| Check | Most recent recorded result | Date |", "|---|---|---|"]
-    for check in sorted(latest):
-        result, date = latest[check]
-        lines.append(f"| {check} | {result} | {date} |")
-    return "\n".join(lines)
-
-
 def render_registered(entries: list[Entry], register: str) -> str:
     """Issues raised by tickets that a maintainer has not yet filed into a topic section.
 
     Membership is decided by the issue id: paste an entry into a topic section keeping its id and
     it leaves this region on the next build, with no edit to the ticket entry and no way for the
-    two copies to drift.
+    two copies to drift. A bullet with no id is never inboxed, which is what keeps the register's
+    pre-M31 history out of it.
     """
     filed = set(ISSUE_ID.findall(strip_generated(register)))
     blocks = []
@@ -289,12 +208,6 @@ def render_triage(register: str) -> str:
     return "\n".join(lines)
 
 
-def render_stamp(entries: list[Entry], subject: str) -> str:
-    """The verification stamp, dated from the newest entry rather than from the clock."""
-    date = newest_date(entries) or "1970-01-01"
-    return f"> **Last verified:** {date} against {subject}."
-
-
 def replace_region(text: str, name: str, body: str, path: Path) -> str:
     """Replace one generated region, leaving every hand-written line untouched."""
     begin = REGION.format(name=name, edge="begin")
@@ -309,45 +222,24 @@ def replace_region(text: str, name: str, body: str, path: Path) -> str:
 def build(entries_dir: Path = ENTRIES, docs: Path = DOCS) -> dict[Path, str]:
     """Return the rendered text of every register that carries a generated region."""
     entries = load_entries(entries_dir)
-    tickets = docs / "Tickets.md"
-    state = docs / "Repo_Current_State.md"
     reports = docs / "Completion_Reports.md"
     checks = docs / "Manual_Verification_Guide.md"
     issues = docs / "Known_Issues.md"
 
-    rendered: dict[Path, str] = {}
+    # The triage counts tally the whole register, so the inbox has to be rendered first and
+    # counted alongside the hand-filed sections; otherwise an unfiled issue is invisible to it.
     register = read(issues)
     registered = render_registered(entries, register)
     updated = replace_region(register, "registered", registered, issues)
-    rendered[issues] = replace_region(
-        updated, "triage", render_triage(strip_generated(updated) + registered), issues
-    )
+    counted = strip_generated(updated) + registered
+    rendered = {issues: replace_region(updated, "triage", render_triage(counted), issues)}
 
-    plan_subject = "the ticket entries under `docs/entries/`"
-    for path, regions in (
-        (
-            tickets,
-            {
-                "stamp": render_stamp(entries, plan_subject),
-                "index": render_index(entries),
-                "plans": render_plans(entries),
-            },
-        ),
-        (
-            state,
-            {
-                "stamp": render_stamp(entries, "the ticket entries and the recorded check results"),
-                "milestones": render_milestones(entries),
-                "tests": render_tests(entries),
-            },
-        ),
-        (reports, {"reports": render_reports(entries)}),
-        (checks, {"checklists": render_checklists(entries)}),
-    ):
-        text = read(path)
-        for name, body in regions.items():
-            text = replace_region(text, name, body, path)
-        rendered[path] = text
+    rendered[reports] = replace_region(
+        read(reports), "reports", render_reports(entries), reports
+    )
+    rendered[checks] = replace_region(
+        read(checks), "checklists", render_checklists(entries), checks
+    )
     return rendered
 
 

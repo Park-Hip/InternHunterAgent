@@ -26,13 +26,20 @@ budget on them would measure nothing. The three living ones carry caps set from 
 length.
 
 `Known_Issues.md` moved 250 → 275 on 2026-08-14, measured at 258, then 275 → 300 on 2026-08-17,
-measured at 299 once T0031.1's three findings joined it. It bound exactly at its cap both times,
-which is the cap doing its job. The maintainer chose the cap over eviction the first time and the
-eviction was owed at the next binding, which came the same day: the cap held at 300 and the
-eviction ran, reclassifying seven entries whose own text said "act only if X happens" into a
-one-line "Deferred preferences" table. The cap stays at 300, measured at 288, because the same
-pass added the 2026-08-13 outage residual and the unmerged-M24 decision. Eviction and a raised cap
-are not alternatives here; the register needed both, and only eviction bought headroom back.
+measured at 299. It bound exactly at its cap both times, which is the cap doing its job. The
+maintainer chose the cap over eviction the first time and the eviction was owed at the next
+binding, which came the same day: the cap held and the eviction ran, reclassifying seven entries
+whose own text said "act only if X happens" into a one-line "Deferred preferences" table, leaving
+288. Eviction and a raised cap were not alternatives there; the register needed both, and only
+eviction bought headroom back.
+
+`Known_Issues.md` and `Manual_Verification_Guide.md` then became `T4 · Uncapped` when T0031.2 gave
+each a generated region. This is not a reversal of that eviction, which is what left the register
+healthy enough to uncap: it is that a cap on a part-generated document measures the generator. An
+issue now enters the register when a ticket raises it and a checklist leaves when its entry sets
+`verified: yes`, so both documents have the executable eviction rule a cap was standing in for.
+What a cap cannot do is force the judgement call the 2026-08-17 pass made, so the integration step
+owns that judgement outright. Measured at 334 and 157 with the regions in place.
 
 T0031.1 split this map into a write surface and a read surface. Every document listed below is now
 read-mostly for a ticket agent: the ones named in the `frozen:` list in
@@ -80,10 +87,10 @@ the same reason it went up.
 | [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | 450 | Decision makers |
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 175 | All contributors |
-| [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 300 | Maintainers |
+| [Known Issues](Known_Issues.md) | Open risks and follow-ups | T4 | Uncapped | Maintainers |
 | [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 350 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
-| [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T3 | 150 | Developers |
+| [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T4 | Uncapped | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |
 | [Streaming and SSE Explained](../guides/Streaming_And_SSE_Explained.md) | Streaming learning walkthrough | T4 | Uncapped | New contributors |
 | [Research index](../research/README.md) | Live pre-design research | T3 | 250 | Designers and maintainers |

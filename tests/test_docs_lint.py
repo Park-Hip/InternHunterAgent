@@ -364,3 +364,30 @@ def test_orphan_reports_an_unlinked_document_and_clears_after_linking(tmp_path: 
     assert [finding.path for finding in findings] == [orphan]
     index.write_text("[Entry](entry.md)\n[Orphan](orphan.md)\n", encoding="utf-8")
     assert docs_lint.check_orphan([entry, index, orphan]) == []
+
+
+def test_generated_check_reports_a_stale_register(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The check owns no rendering: it reports whatever docs_build says has drifted."""
+    stale = docs_lint.ROOT / "docs" / "Known_Issues.md"
+    monkeypatch.setattr(docs_lint.docs_build, "stale", lambda: [stale])
+
+    findings = docs_lint.check_generated([])
+
+    assert [finding.path for finding in findings] == [stale]
+    assert "docs_build" in findings[0].message
+
+
+def test_generated_check_reports_an_unbuildable_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    def explode() -> list[Path]:
+        raise docs_lint.docs_build.BuildError("T9999.md: frontmatter is missing `ticket`")
+
+    monkeypatch.setattr(docs_lint.docs_build, "stale", explode)
+
+    findings = docs_lint.check_generated([])
+
+    assert len(findings) == 1
+    assert "cannot run" in findings[0].message
+
+
+def test_the_committed_generated_regions_are_current() -> None:
+    assert docs_lint.check_generated([]) == []

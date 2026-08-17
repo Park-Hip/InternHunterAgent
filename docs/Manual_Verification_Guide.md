@@ -9,28 +9,51 @@ Dated live-pass logs remain in
 > **Eviction:** A checklist leaves when its verification is recorded in the archive or its owning
 > ticket is superseded by a replacement checklist.
 
+> ⚠ Any checklist step that imports the project needs a worktree that can. A fresh worktree has no
+> `.env` and ten test modules fail at collection with `ConfigLoadError`; copy `.env` from the
+> primary worktree first. See [Known Issues](Known_Issues.md).
+
 ## Current and unrun checklists
 
-### T0031.1: The write surface, and that its lint exemption is scoped
+Checklists below the marker are generated from the `## Manual verification` section of each file
+under [`entries/`](entries/README.md) by `scripts/docs_build.py`, and one leaves when its entry
+sets `verified: yes`. Edit the entry, not this region. Checklists after the region are
+hand-written and predate `docs/entries/`. Path references inside it are exempt from `link-path`
+for the same reason the entries themselves are: a checklist step may name a file it tells the
+developer to create, and the text is not editable here anyway.
 
-Not yet re-run by a developer: the ticket's entry records `verified: no`.
+<!-- lint-allow-link-path:begin -->
+<!-- generated:checklists:begin -->
+### T0031.2: Generate the registers from the entries
+
+1. `python scripts/docs_build.py` prints `every generated region is already current`.
+2. Edit one line inside a `<!-- generated:... -->` region by hand, then run
+   `python scripts/docs_lint.py`. It must report a `generated` finding naming that file. Run
+   `python scripts/docs_build.py` and confirm the edit is overwritten and the linter goes quiet.
+   This is the check that matters: it proves a region cannot be hand-maintained.
+3. Set `verified: yes` in this file, run the build, and confirm this checklist disappears from
+   `docs/Manual_Verification_Guide.md`. Set it back to `no` and rebuild.
+4. Open `docs/Known_Issues.md` and confirm the "Raised, not yet filed" region lists the issues
+   below. Move one into a topic section, keeping its `KI-` id, rebuild, and confirm it leaves the
+   region and the triage table is unchanged.
+5. Confirm the text outside the regions is untouched: `docs/Completion_Reports.md` still opens on
+   its hand-written preamble and still holds every report from before `docs/entries/` existed.
+
+### T0031.1: Give parallel tickets a private write surface
 
 1. `python scripts/docs_lint.py` exits 0 and prints nothing.
 2. `python -m pytest tests/test_docs_lint.py -q` passes.
-3. Add a throwaway `docs/entries/T9999.md` and re-run the linter. <!-- lint-allow-link-path -->
-   Confirm it reports no `size-cap` and no `orphan` finding for it, then delete the file.
-4. Add a throwaway `docs/Scratch.md` and re-run the linter. <!-- lint-allow-link-path -->
-   Confirm it *does* report `size-cap: living document is missing from caps table`, then delete
-   the file. This is the check that matters: it proves the exemption is scoped to `entries/`
-   rather than switched off.
-5. Open [`roadmap.yaml`](roadmap.yaml) and confirm M29 and M30 both list `evals/viewer.py` under
-   `scope:`, the overlap that made them unsafe to run in parallel.
-6. Ask for a ticket prompt via the `generate-ticket-prompt` skill and confirm the output names the
-   allocated ticket id, the allowed paths, and the frozen registers.
-
-> ⚠ Step 1 and 2 need a worktree that can import the project. A fresh worktree has no `.env` and
-> ten test modules fail at collection with `ConfigLoadError`; copy `.env` from the primary
-> worktree first. See [Known Issues](Known_Issues.md).
+3. Add a throwaway `docs/entries/T9999.md`, re-run the linter, and confirm it reports no
+   `size-cap` and no `orphan` finding for it. Delete the file.
+4. Add a throwaway `docs/Scratch.md`, re-run the linter, and confirm it *does* report
+   `size-cap: living document is missing from caps table`. Delete the file. This proves the
+   exemption is scoped to `entries/` rather than switched off.
+5. Open `docs/roadmap.yaml` and confirm M29 and M30 both list `evals/viewer.py` under `scope:`,
+   which is the overlap that made them unsafe to run in parallel.
+6. Ask for a ticket prompt via the `generate-ticket-prompt` skill and confirm the output names
+   the allocated ticket id, the allowed paths, and the frozen registers.
+<!-- generated:checklists:end -->
+<!-- lint-allow-link-path:end -->
 
 ### T0027.4: Deployed demo on the DeepSeek default
 

@@ -6,8 +6,13 @@ produce a conflicting edit.
 
 This directory is the **write surface**. The registers in `docs/` are the **read surface**,
 and a ticket agent does not touch them - see the `frozen:` list in
-[`../roadmap.yaml`](../roadmap.yaml). The integration step folds each entry into those
-registers after the merge.
+[`../roadmap.yaml`](../roadmap.yaml). Since T0031.2 the folding is a script rather than a
+reading: `python scripts/docs_build.py` renders these files into the marked regions of
+[`Completion_Reports.md`](../Completion_Reports.md),
+[`Known_Issues.md`](../Known_Issues.md), and
+[`Manual_Verification_Guide.md`](../Manual_Verification_Guide.md), and the linter's `generated`
+check fails if the committed regions disagree with the entries. Write the entry; run the build;
+never edit a region.
 
 ## Why the split exists
 
@@ -59,7 +64,8 @@ A short checklist a developer can re-run. Set `verified: yes` once it has been r
 ## Follow-ups
 
 ## Known issues
-Entries a maintainer should file into `Known_Issues.md`.
+- `KI-2026-08-17-worktree-env` **`[MED · OPEN]` One-line title.**
+  - **Found:** / **Impact:** / **Next:** / **History:**
 
 ## Docs
 Documents that need updating.
@@ -67,6 +73,22 @@ Documents that need updating.
 
 `status` is one of `complete`, `in-progress`, `next`, `planned`, `paused`. `ticket`,
 `title`, `status`, and `date` are required; the rest are optional.
+
+## What each section becomes
+
+| Section | Where it is rendered | When it leaves |
+|---|---|---|
+| `Summary` `Files` `Commands` `Build and test` `Risks` `Follow-ups` `Docs` | the report region of [`Completion_Reports.md`](../Completion_Reports.md) | never; the register is history |
+| `Manual verification` | the checklist region of [`Manual_Verification_Guide.md`](../Manual_Verification_Guide.md) | when the entry sets `verified: yes` |
+| `Known issues` | the "raised, not yet filed" region of [`Known_Issues.md`](../Known_Issues.md) | when a maintainer files it into a topic section, keeping its id |
+| `Plan` | nothing yet - `Tickets.md` is still hand-written | - |
+
+A report is rendered only once `status: complete`, so an in-progress entry costs nothing.
+
+Give every bullet under `## Known issues` an id of the form `KI-YYYY-MM-DD-slug` using the date
+it was found. The id is the whole dedup mechanism: the inbox region drops any bullet whose id
+already appears elsewhere in the register, so filing an issue is a copy-paste that keeps the id,
+and the two copies can never drift. A bullet with no id is never inboxed and will be missed.
 
 ## Lint
 

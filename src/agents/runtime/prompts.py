@@ -48,7 +48,12 @@ def load_prompt_version() -> str:
 
 
 def load_behavior_glossary() -> dict[str, str]:
-    """Load the canonical behavior phrasings as a validated artifact."""
+    """Canonical hedge and refusal phrasings, keyed by token.
+
+    Machine source of truth for the phrasings the behavior spec records in prose. These
+    are reference strings: nothing here reaches the model until an obligation resolves one
+    of them at runtime.
+    """
     glossary = settings.prompts_yaml.get("behavior_glossary")
     if not isinstance(glossary, dict) or not glossary:
         raise ValueError("Missing or empty 'behavior_glossary' in config/prompts.yaml")

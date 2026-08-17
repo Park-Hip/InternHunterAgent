@@ -221,4 +221,6 @@ milestones:
       may claim a frozen path this way. T0031.2 widened the list on 2026-08-17 for the three
       registers it generates, and Repo_Current_State.md is reserved for .3.
       T0031.1 merged 2026-08-17 as PR #53 and its entry was folded by the integration step the
-      same day; .2 is in progress, .3 and .4 are planned, so the milestone stays in progress.
+      same day; .2 merged as PR #57 and its entry was the first the generator published, leaving
+      the integration step Tickets.md, Repo_Current_State.md, and where a raised issue belongs.
+      .3 and .4 are planned, so the milestone stays in progress.

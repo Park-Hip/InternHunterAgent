@@ -66,7 +66,7 @@ branches is the condition this milestone exists to support, so the cap was the s
 Eviction was not available to that ticket: the completed M28 and M29 plans had earned their exit,
 but archiving them writes [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md), which is
 frozen and outside M31's scope. The integration step ran that eviction on 2026-08-17 and the cap
-moved 400 → 350, measured at 323.
+moved 400 → 350 (measured 323), then 350 → 375 on the T0031.3 publish (measured 349).
 
 It does not return to 300, and the difference is worth naming: eviction bought 45 lines, not 100.
 Only M28 and M29 had closed with live plans, and M28's had already been archived, so one milestone
@@ -90,7 +90,7 @@ the same reason it went up.
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 210 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T4 | Uncapped | Maintainers |
-| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 350 | Delivery planning |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 375 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T4 | Uncapped | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |

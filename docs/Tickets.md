@@ -42,7 +42,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 28 | T0028 | Evaluation Documentation Ownership | ✅ | Complete 2026-08-14 (.1 Fact Ledger rows + `scenario-id` check, .2 dedupe the behavior spec, .3 seal + merge the instrument reports, .4 operating manual + stale-claim sweep). No verdict, rule, or threshold changed |
 | 29 | T0029 | Evaluation Readability | ✅ | .1 complete 2026-08-15: the verdict, the run's identity, and telemetry rendered in the viewer. Spent no quota; changed no rule |
 | 30 | T0030 | Evaluation Evidence Durability | 📋 | .1 freeze command, .2 freeze the exposed captures, .3 the telemetry decision · closes the `[MED · DECISION]` left open by T0025.10 |
-| 31 | T0031 | **Parallel Agent Workflow** | 🔨 | .1 complete 2026-08-17 (PR #53): registry, frozen registers, per-ticket entries · .2 complete 2026-08-17 (PR #57): three registers generated from the entries, enforced by a `generated` lint check · .3-.4 derived state, enforcement |
+| 31 | T0031 | **Parallel Agent Workflow** | 🔨 | .1 complete 2026-08-17 (PR #53): registry, frozen registers, per-ticket entries · .2 complete 2026-08-17 (PR #57): three registers generated from the entries, enforced by a `generated` lint check · .3 complete 2026-08-17 (PR #59): `Repo_Current_State.md` derived from the tree, build status excepted · .4 enforcement |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > **Numbers are allocated in [`roadmap.yaml`](roadmap.yaml), not here.** This table is a reader's
@@ -56,12 +56,13 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 > the constraint is the Groq daily token budget and operator time, not access. See
 > [`Known_Issues.md`](Known_Issues.md).
 >
-> ⚠ **M20:** complete as a coder milestone; two **maintainer** actions remain open — branch
-> protection to *enforce* the CI gate, and the gated cron activation. See
+> ⚠ **M20:** complete as a coder milestone; one **maintainer** action remains open — branch
+> protection to *enforce* the CI gate. See
 > [`T0020.4_Cron_Activation_Runbook.md`](T0020.4_Cron_Activation_Runbook.md).
-> The cron activation now **blocks T0023**: [`Decision_Log.md`](Decision_Log.md) D-038 makes a live
-> schedule a required MVP capability, so its gates — including the terms posture — are
-> release-blocking rather than optional hardening.
+> The cron activation **closed on 2026-08-17**: four consecutive unattended `schedule` runs
+> succeeded on 2026-08-14 through 08-17, which satisfies the runbook's §7 last row and clears the
+> [`Decision_Log.md`](Decision_Log.md) D-038 requirement that a live schedule is an MVP capability.
+> T0023 is therefore unblocked on the cron, and owes its DoD sweep and the terms posture.
 
 ---
 
@@ -315,13 +316,27 @@ section feeds it, and closing an issue is a judgement about whether a fix holds,
 of what a ticket wrote. The line is corrected here rather than left standing, which is the
 integration edit `KI-2026-08-17-tickets-names-resolved-issues` asked for.
 
-### T0031.3: Derive the current-state snapshot - 📋 Planned
+### T0031.3: Derive the current-state snapshot - ✅ Complete 2026-08-17
+
+> **Complete 2026-08-17** as PR #59. `scripts/docs_build.py` renders four regions into
+> `Repo_Current_State.md`, extending .2's machinery rather than adding a second generator.
+> `milestones`, `dependencies`, and `scripts` are pure functions of the committed tree, so the
+> existing `generated` check gates them with no CI change. `snapshot` - branch, commit, unmerged
+> branches, worktrees - describes a clone rather than a commit, so it is written by `--snapshot`
+> and deliberately not gated. Outcome in [Completion Reports](Completion_Reports.md).
 
 **Objective.** Stop `Repo_Current_State.md` from being writable, and therefore from being wrong.
 
 **In scope.** Generate its mechanical facts - branch, baseline commit, completed milestones, open
 branches, dependencies, scripts, build status - from `git`, `roadmap.yaml`, and `pyproject.toml`.
 One human paragraph survives: the next recommended ticket and why. Blocked on .1.
+
+**Build status was not derived.** It is the result of running commands, not a reading of any of
+the three sources this plan names, so generating it would have meant running the suite inside the
+documentation build or inventing a cache for it. It stays hand-written, and the line above is
+corrected here rather than left standing as delivered. Deriving it needs a recorded result the
+build can read - a committed JSON written by CI is the obvious shape - and is carried as a
+follow-up.
 
 ### T0031.4: Enforce the protocol in CI - 📋 Planned
 

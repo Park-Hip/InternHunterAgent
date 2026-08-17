@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 2 |
-| MED | 11 | 1 | 3 |
+| MED | 10 | 1 | 3 |
 | LOW | 16 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -35,31 +35,10 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
-- `KI-2026-08-17-replay-needs-a-database` **`[MED · OPEN]` `evals.replay` fails with `INFRA`
-  verdicts when no Postgres is listening, so the gate cannot run on a bare checkout.**
-  - **Found:** T0031.3, running the documented build-status commands with 5433 and 5432 both
-    refusing connections.
-  - **Impact:** `uv run python -m evals.replay` exits non-zero with an outcome mismatch on five
-    turns. The register describes it as replaying committed evidence "with no model or judge call",
-    which reads as needing nothing external; it still needs a database for the execution seam.
-  - **Next:** Either document the database as a precondition beside the command, or have the
-    replay skip rather than fail when the seam is unreachable, so a genuine regression stays
-    distinguishable from an absent database.
-  - **History:** Same root cause as the fixture-Postgres hang already recorded for the test suite.
-
-- `KI-2026-08-17-snapshot-region-unverified` **`[LOW · OPEN]` The `snapshot` region of
-  `Repo_Current_State.md` has no staleness check.**
-  - **Found:** T0031.3, by design rather than by defect.
-  - **Impact:** The branch, commit, and worktree block can describe an older clone with nothing
-    failing. Every other generated region in the repository is gated.
-  - **Next:** Have T0031.4's `frozen` check require that the integration commit ran
-    `docs_build.py --snapshot`.
-  - **History:** Introduced when T0031.3 split clone-local facts out of the gated regions, because
-    a check that runs in CI cannot verify a fact that differs in CI.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 
-## Config, startup & deployment (12)
+## Config, startup & deployment (11)
 
 - **`[MED · OPEN]` Render auto-deploy stalled for three days and the reason is unexplained.**
   - **Found:** the 2026-08-13 serving outage, diagnosed 2026-08-16.
@@ -116,13 +95,6 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Next:** Log `truncated: true` or warn when collection exits because the cap was reached.
   - **History:** `src/services/ingestion/sources/vietnamworks.py::_collect`.
 
-- **`[MED · OPEN]` The re-armed ingestion schedule has not yet fired on its own.**
-  - **Found:** T0020.4.
-  - **Impact:** Every gate is signed, but an unattended run is proven only once one has happened.
-  - **Next:** Merge to `main` — GitHub reads `schedule:` from the default branch, so the merge is
-    the activation — then confirm the next 02:00 UTC run.
-  - **History:** [Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) §7.
-
 - **`[LOW · OPEN]` `expired_count` reports rows matching the stale predicate, not newly expired.**
   - **Found:** T0020.4, when three consecutive runs all logged exactly `expired_count: 47`.
   - **Impact:** Nightly logs cannot distinguish fresh expiries from long-expired rows.
@@ -175,7 +147,7 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Next:** Fetch one additional row for explicit limits and add a soft more-results hint.
   - **History:** `src/services/query/row_bound.py` owns result limits.
 
-## Evaluation harness (10)
+## Evaluation harness (11)
 
 - **`[MED · OPEN]` `SAF-INJECTION-RESILIENCE-1` asserts a no-tool rule no capture has tested.**
   - **Found:** T0025.9 audit on 2026-08-13.
@@ -265,7 +237,19 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Next:** M24 owns these; T0025.7 measures them and changes no prompt or runtime behavior.
   - **History:** Ignored `evals/runs/t0025.7-acceptance.json` and its grade report. <!-- lint-allow-link-path -->
 
-## Workflow & documentation (7)
+- `KI-2026-08-17-replay-needs-a-database` **`[MED · OPEN]` `evals.replay` fails with `INFRA`
+  verdicts when no Postgres is listening, so the gate cannot run on a bare checkout.**
+  - **Found:** T0031.3, running the documented build-status commands with 5433 and 5432 both
+    refusing connections.
+  - **Impact:** `uv run python -m evals.replay` exits non-zero with an outcome mismatch on five
+    turns. The register describes it as replaying committed evidence "with no model or judge call",
+    which reads as needing nothing external; it still needs a database for the execution seam.
+  - **Next:** Either document the database as a precondition beside the command, or have the
+    replay skip rather than fail when the seam is unreachable, so a genuine regression stays
+    distinguishable from an absent database.
+  - **History:** Same root cause as the fixture-Postgres hang already recorded for the test suite.
+
+## Workflow & documentation (8)
 
 - **`[MED · OPEN]` A fresh worktree cannot run the test suite.**
   - **Found:** T0031.1 on 2026-08-16.
@@ -326,6 +310,16 @@ copies can never drift. Entries that predate the id convention are never inboxed
     stayed because its lock names a dead pid, and a lock nothing can release blocks the next sweep.
   - **Next:** Release it by hand once its owner is confirmed gone; only then consider automating.
   - **History:** `git worktree list`; `CLAUDE.md` §3.
+
+- `KI-2026-08-17-snapshot-region-unverified` **`[LOW · OPEN]` The `snapshot` region of
+  `Repo_Current_State.md` has no staleness check.**
+  - **Found:** T0031.3, by design rather than by defect.
+  - **Impact:** The branch, commit, and worktree block can describe an older clone with nothing
+    failing. Every other generated region in the repository is gated.
+  - **Next:** Have T0031.4's `frozen` check require that the integration commit ran
+    `docs_build.py --snapshot`.
+  - **History:** Introduced when T0031.3 split clone-local facts out of the gated regions, because
+    a check that runs in CI cannot verify a fact that differs in CI.
 
 ## Demo UI (1)
 

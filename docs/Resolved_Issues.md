@@ -13,7 +13,7 @@ resolution detail and a `Verified:` line where relevant. Severity is carried ove
 original register entry (omitted where none was assigned).
 
 ## Categories
-- [Documentation drift](#documentation-drift) — 3
+- [Documentation drift](#documentation-drift) — 4
 - [Config, startup & deployment](#config-startup--deployment) — 11
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
@@ -28,6 +28,20 @@ original register entry (omitted where none was assigned).
 ---
 
 ## Documentation drift
+- **`[LOW · RESOLVED · Integration, 2026-08-17]` The T0031.2 ticket body promised a register the
+  milestone never generates.** (`KI-2026-08-17-tickets-names-resolved-issues`)
+  - **Found:** T0031.2, reading its own ticket against the M31 design record, and raised in
+    [`entries/T0031.2.md`](entries/T0031.2.md).
+  - **Cause:** `docs/Tickets.md` listed `Resolved_Issues.md` among the registers T0031.2 would fold
+    from the entries. No entry section feeds it and the design record names only three registers,
+    so the line described work that was never in the milestone.
+  - **Resolution:** the integration step corrected the objective when it wrote M31's outcome, and
+    said why the omission is right rather than accidental: closing an issue is a judgement about
+    whether a fix holds, not a rendering of what a ticket wrote. `Tickets.md` is frozen, so this
+    was an integration edit by definition - which is what the issue asked for.
+  - **Verified:** `docs/Tickets.md` T0031.2 names three registers, and `python scripts/docs_lint.py`
+    exits 0.
+
 - **`[LOW · RESOLVED · T0020.4, 2026-07-26]` T0020 had no milestone/sub-ticket block in `Tickets.md`
   while T0020.1–.4 were already referenced across the docs.**
   - **Resolved 2026-07-26, T0020.4:** the `## T0020: Milestone 20 - Reconciliation & Activation`

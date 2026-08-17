@@ -35,34 +35,6 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
-- `KI-2026-08-17-tickets-names-resolved-issues` **`[LOW · OPEN]` The T0031.2 ticket body names a
-  register the milestone never generates.**
-  - **Found:** T0031.2, reading the ticket against the M31 design record.
-  - **Impact:** `docs/Tickets.md` promises `Resolved_Issues.md` is folded from the entries. No
-    entry section feeds it and the design record never names it, so the line describes work that
-    does not exist.
-  - **Next:** Correct the line when M31's outcome is written. `Tickets.md` is frozen, so this is
-    an integration edit by definition.
-  - **History:** `.lavish/parallel-agent-workflow.html` R4 names the three registers.
-
-- `KI-2026-08-17-section-counts-are-hand-tallies` **`[LOW · OPEN]` The per-section counts in
-  `Known_Issues.md` headings are hand tallies that nothing checks.**
-  - **Found:** T0031.2, generating the triage table beside them.
-  - **Impact:** `## Config, startup & deployment (12)` and its six siblings drift the same way the
-    triage table did, and the same integration pass that recounted the triage table had to recount
-    these by hand too.
-  - **Next:** Either generate the heading counts or drop them. Cheap either way; not worth a
-    ticket on its own.
-  - **History:** The triage table is generated as of this ticket; these are what is left.
-
-- `KI-2026-08-17-entries-lack-issue-ids` **`[LOW · OPEN]` T0031.1's five known issues predate the
-  id convention and can never be inboxed.**
-  - **Found:** T0031.2, writing the dedup rule.
-  - **Impact:** None today, because all five were filed by hand on 2026-08-17. It means the inbox
-    cannot be used to audit whether older entries were fully filed.
-  - **Next:** Nothing, unless an entry is ever found to have been missed. Recorded so the gap in
-    coverage is stated rather than assumed away.
-  - **History:** `docs/entries/T0031.1.md` `## Known issues`.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 
@@ -272,7 +244,7 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Next:** M24 owns these; T0025.7 measures them and changes no prompt or runtime behavior.
   - **History:** Ignored `evals/runs/t0025.7-acceptance.json` and its grade report. <!-- lint-allow-link-path -->
 
-## Workflow & documentation (4)
+## Workflow & documentation (7)
 
 - **`[MED · OPEN]` A fresh worktree cannot run the test suite.**
   - **Found:** T0031.1 on 2026-08-16.
@@ -298,6 +270,34 @@ copies can never drift. Entries that predate the id convention are never inboxed
     registers, because it predates the T0031.1 freeze, so landing it means routing those edits
     through an entry first.
   - **History:** [`roadmap.yaml`](roadmap.yaml) now records M24 as in progress on that branch.
+
+- `KI-2026-08-17-section-counts-are-hand-tallies` **`[LOW · OPEN]` The per-section counts in the
+  headings of this register are hand tallies that nothing checks.**
+  - **Found:** T0031.2, generating the triage table beside them.
+  - **Impact:** `## Config, startup & deployment (12)` and its six siblings drift the same way the
+    triage table did, and the integration pass that recounted the triage table on 2026-08-17 had
+    to recount these by hand in the same sitting.
+  - **Next:** Either generate the heading counts or drop them. Cheap either way.
+  - **History:** The triage table is generated as of T0031.2; these are what is left.
+
+- `KI-2026-08-17-entries-lack-issue-ids` **`[LOW · OPEN]` T0031.1's five known issues predate the
+  id convention and can never be inboxed.**
+  - **Found:** T0031.2, writing the dedup rule.
+  - **Impact:** None today, because all five were filed by hand on 2026-08-17. It means the inbox
+    cannot be used to audit whether an older entry was fully filed.
+  - **Next:** Nothing, unless an entry is ever found to have been missed. Recorded so the gap in
+    coverage is stated rather than assumed away.
+  - **History:** [`entries/T0031.1.md`](entries/T0031.1.md) `## Known issues`.
+
+- **`[LOW · OPEN]` An issue fixed on arrival has no way out of the generated inbox.**
+  - **Found:** the integration step on 2026-08-17, folding T0031.2.
+  - **Impact:** `render_registered` drops an id once it appears outside the generated regions of
+    this file, so an issue the integrator *fixes* rather than files has to be named here anyway,
+    with a pointer to [Resolved Issues](Resolved_Issues.md), or it stays listed as unfiled forever.
+    `KI-2026-08-17-tickets-names-resolved-issues` is the first case and is handled exactly that way.
+  - **Next:** Let the dedup also read `Resolved_Issues.md`, or give the inbox a closed state.
+    Fold it into T0031.4, which already owns the un-id'd-bullet check.
+  - **History:** `scripts/docs_build.py::render_registered`.
 
 - **`[LOW · OPEN]` A worktree lock can outlive the session that took it.**
   - **Found:** T0031.1 on 2026-08-16; the prune sweep ran on 2026-08-17.

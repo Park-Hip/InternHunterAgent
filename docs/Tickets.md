@@ -42,7 +42,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 28 | T0028 | Evaluation Documentation Ownership | ✅ | Complete 2026-08-14 (.1 Fact Ledger rows + `scenario-id` check, .2 dedupe the behavior spec, .3 seal + merge the instrument reports, .4 operating manual + stale-claim sweep). No verdict, rule, or threshold changed |
 | 29 | T0029 | Evaluation Readability | ✅ | .1 complete 2026-08-15: the verdict, the run's identity, and telemetry rendered in the viewer. Spent no quota; changed no rule |
 | 30 | T0030 | Evaluation Evidence Durability | 📋 | .1 freeze command, .2 freeze the exposed captures, .3 the telemetry decision · closes the `[MED · DECISION]` left open by T0025.10 |
-| 31 | T0031 | **Parallel Agent Workflow** | 🔨 | .1 complete 2026-08-17 (PR #53): registry, frozen registers, per-ticket entries · .2-.4 generator, derived state, enforcement |
+| 31 | T0031 | **Parallel Agent Workflow** | 🔨 | .1 complete 2026-08-17 (PR #53): registry, frozen registers, per-ticket entries · .2 complete 2026-08-17 (PR #57): three registers generated from the entries, enforced by a `generated` lint check · .3-.4 derived state, enforcement |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > **Numbers are allocated in [`roadmap.yaml`](roadmap.yaml), not here.** This table is a reader's
@@ -294,15 +294,26 @@ scope and the frozen list.
 
 **Out of scope.** Generating anything. Enforcing anything in CI. Both are .2-.4.
 
-### T0031.2: Generate the registers from the entries - 📋 Planned
+### T0031.2: Generate the registers from the entries - ✅ Complete 2026-08-17
 
-**Objective.** Fold entries into `Completion_Reports.md`, `Known_Issues.md`,
-`Resolved_Issues.md`, and `Manual_Verification_Guide.md` by running a script rather than by hand.
+> **Complete 2026-08-17** as PR #57. `scripts/docs_build.py` renders each entry into marked
+> regions of `Completion_Reports.md`, `Known_Issues.md`, and `Manual_Verification_Guide.md`, and a
+> `generated` check in `docs_lint.py` fails when a region and its entry disagree. CI needed no
+> change, because it already runs the linter. Outcome in
+> [Completion Reports](Completion_Reports.md), which now carries it generated rather than folded.
+
+**Objective.** Fold entries into `Completion_Reports.md`, `Known_Issues.md`, and
+`Manual_Verification_Guide.md` by running a script rather than by hand.
 
 **In scope.** `scripts/docs_build.py`, which already exists as an uncommitted 386-line draft in
 the M31 worktree and reads the `docs/entries/` frontmatter contract .1 froze · generated regions
 marked in each register · a CI check that regenerating produces no diff, matching the pattern
 `check_stack` and `check_agent_parity` already use.
+
+**Not `Resolved_Issues.md`.** The plan named it and the milestone never generated it: no entry
+section feeds it, and closing an issue is a judgement about whether a fix holds, not a rendering
+of what a ticket wrote. The line is corrected here rather than left standing, which is the
+integration edit `KI-2026-08-17-tickets-names-resolved-issues` asked for.
 
 ### T0031.3: Derive the current-state snapshot - 📋 Planned
 

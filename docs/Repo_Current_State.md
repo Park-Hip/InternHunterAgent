@@ -8,14 +8,16 @@
 
 ## Current branch
 
-- Repository baseline: `main` at `49852ae`, the first integration pass of 2026-08-17 (PR #54),
-  on top of T0031.1 (PR #53), M30's scoping plan (PR #52), M29 (PR #51), M27 (PR #50, 2026-08-16),
-  M28 (PR #49), and M25/M26 (PR #48); PR #47 was closed as superseded by #48.
+- Repository baseline: `main` at `63cb6d3`, which merged T0031.2 as PR #57 on 2026-08-17, on top
+  of three integration passes the same day (PRs #54-#56), T0031.1 (PR #53), M30's scoping plan
+  (PR #52), M29 (PR #51), M27 (PR #50, 2026-08-16), M28 (PR #49), and M25/M26 (PR #48); PR #47 was
+  closed as superseded by #48.
 - Unmerged work: `feature/t0024.6-persona-scope` carries T0024.1 and T0024.6, built 2026-08-13,
-  never reviewed, and invisible until 2026-08-17 - see [Known Issues](Known_Issues.md).
-  `feature/t0031.2-generate-registers` is open at the baseline; M29 and M30 are merged.
+  never reviewed, and invisible until 2026-08-17 - see [Known Issues](Known_Issues.md). M29, M30,
+  and T0031.2 are merged.
 - Numbers, milestone scopes, and the frozen register list live in
-  [`roadmap.yaml`](roadmap.yaml) as of T0031.1; this snapshot is written only by integration.
+  [`roadmap.yaml`](roadmap.yaml) as of T0031.1; this snapshot is written only by integration, and
+  is the last register still written by hand rather than generated.
 - Worktrees: three finished ones were pruned on 2026-08-17. `t0031-parallel-docs-workflow` stayed,
   locked by a dead pid; `t0024.1-behavior-glossary` stayed, holding the unmerged M24 work.
 - `main` is the deployment source of truth and deploys the public service.
@@ -49,10 +51,14 @@ ticket under it has landed. It closes the `[MED · DECISION]` T0025.10 left open
 whose per-turn evidence is gone even though its findings survive in
 [the arm record](../evals/t0027_deepseek_arm.md).
 
-M31 - Parallel Agent Workflow is complete through T0031.1 (PR #53, 2026-08-17) and changes no
-runtime behavior. A ticket records its outcome in [`entries/`](entries/README.md) and the
-integration step folds it into the registers. T0031.2-.4 - the generator, the derived snapshot,
-and the CI enforcement - are planned, so that fold is hand work today.
+M31 - Parallel Agent Workflow is complete through T0031.2 (PRs #53 and #57, 2026-08-17) and
+changes no runtime behavior. A ticket records its outcome in [`entries/`](entries/README.md), and
+`scripts/docs_build.py` now renders those entries into marked regions of
+[Completion Reports](Completion_Reports.md), [Known Issues](Known_Issues.md), and the
+[Manual Verification Guide](Manual_Verification_Guide.md); a `generated` lint check fails when a
+region and its entry disagree, so a region cannot be hand-maintained. What integration still does
+by hand is this file, `Tickets.md`, and deciding where a raised issue belongs. T0031.3 - deriving
+this snapshot - and T0031.4 - the registry, scope, and frozen checks - are planned.
 
 ## Archive tags
 
@@ -121,13 +127,16 @@ The authoritative package declarations are in `pyproject.toml`.
 - `uv run alembic current` and `uv run alembic upgrade head` - inspect or migrate a database.
 - `docker compose up -d` - start local Postgres and the API.
 - `uv run python scripts/docs_lint.py` - run every documentation convention check.
+- `uv run python scripts/docs_build.py` - regenerate the register regions from `docs/entries/`;
+  `--check` fails instead of writing.
 
 ## Build and test status
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Passed on 2026-08-17 (all eleven checks, exit 0) |
-| `uv run pytest -q` | 474 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-17 |
+| `python scripts/docs_lint.py` | Passed on 2026-08-17 (all twelve checks, exit 0) |
+| `python scripts/docs_build.py --check` | Exit 0 on 2026-08-17; every generated region current |
+| `uv run pytest -q` | 488 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-17 |
 | `uv run ruff check .` | Passed on 2026-08-17 |
 | `uv run mypy` | Success: no issues in 43 source files on 2026-08-17 |
 | `uv run python -m evals.replay` | Exit 0 on 2026-08-17 against the frozen evidence |
@@ -147,9 +156,11 @@ resolution records: [Resolved Issues](Resolved_Issues.md).
 T0030.1 - give the replay format a writer. The DeepSeek capture loss that motivated M30 is a live
 risk, and every further captured run stays exposed to it until `freeze` exists.
 
-T0031.2 and T0031.3 are the competing pick, and this integration is the evidence for them: folding
-one entry into five registers by hand, re-measuring two caps, and rewriting this snapshot is the
-recurring cost T0031.1 deferred rather than removed.
+T0031.3 is the competing pick, and this file is the argument for it. T0031.2 removed the fold from
+three registers, and the measurement is plain: publishing its own entry cost one command. What is
+left by hand is this snapshot, `Tickets.md`, and the judgement of where a raised issue belongs -
+and only the last of those is a judgement. Four integration passes ran on 2026-08-17 and each one
+rewrote this file.
 
 T0023 - the release path - remains open: `schedule:` is restored on `main` as of T0020.4, so the
 last row in [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 is to watch the first

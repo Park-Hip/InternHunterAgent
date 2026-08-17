@@ -9,13 +9,12 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `feature/t0031.3-derive-state` at `bcb0409` - feat(T0031.3): derive the current-state
-  snapshot (2026-08-17).
-- Branches not merged into `main`: 7 - `feature/t0022.10-prune-dead-docs`,
+- Checked out: `integration/t0031.3-publish` at `ae3e8c6` - Merge pull request #59 from
+  Park-Hip/feature/t0031.3-derive-state (2026-08-17).
+- Branches not merged into `main`: 6 - `feature/t0022.10-prune-dead-docs`,
   `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
-  `feature/t0031-parallel-agent-docs`, `feature/t0031.3-derive-state`, `merge/t0024.6-with-main`,
-  `merge/t0025.7-with-main`.
-- Worktrees: 7.
+  `feature/t0031-parallel-agent-docs`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+- Worktrees: 8.
 <!-- generated:snapshot:end -->
 
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
@@ -29,7 +28,10 @@ differ between a developer machine and CI, and a check that must pass on both ca
   pid.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>, re-probed 2026-08-17: a real answer with a
-  Langfuse trace in 10.6 s, and its static assets hash-match `main`.
+  Langfuse trace in 10.6 s, and its static assets hash-match `main`. Re-probed again by the
+  integration step the same day: `/api/v1/health` and `/api/v1/ready` both `200` warm, the latter
+  reporting `data_snapshot_date: 2026-08-17` with `provenance: measured`. Note the health routes
+  live under the `/api/v1` prefix; bare `/health` and `/ready` are `404` and are not the check.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
 
 ## Milestones
@@ -69,13 +71,16 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
 ## Carried work
 
 - `stash@{0}` is unverified and retained; believed superseded, not compared line by line.
-- The primary worktree holds an uncommitted `docs/Tickets.md` draft, and an untracked research plan
-  beside it, scoping serving reliability, operational telemetry, and a production evaluation loop as
-  T0027-T0029 - numbers already spent. Superseded as written; re-numbering it through
-  [`roadmap.yaml`](roadmap.yaml) is the only way it lands. This is the drift T0031.1 prevents.
-  Its §1.1 also concludes the 2026-08-13 outage was a model-provider failure, which the direct
-  probes recorded in [Resolved Issues](Resolved_Issues.md) disprove: that section is wrong, not
-  merely stale.
+- The primary worktree's uncommitted `docs/Tickets.md` draft is gone as of 2026-08-17; the untracked
+  research plan beside it remains, scoping serving reliability, operational telemetry, and a
+  production evaluation loop as T0027-T0029 - numbers already spent. Superseded as written;
+  re-numbering it through [`roadmap.yaml`](roadmap.yaml) is the only way it lands. This is the drift
+  T0031.1 prevents. Its §1.1 also concludes the 2026-08-13 outage was a model-provider failure,
+  which the direct probes recorded in [Resolved Issues](Resolved_Issues.md) disprove: that section
+  is wrong, not merely stale.
+- The primary worktree also holds a staged one-line `.env.example` edit that adds a second
+  `DEEPSEEK_API_KEY` line, single-quoted, beside the double-quoted one already on the line above.
+  It is a duplicate rather than a change, so it is noted here rather than carried forward.
 - The legacy HTTP runner stays archived; the driver took its orchestration as a pattern only and
   runs the agent in-process (D-043). The 2026-07-14 answer artifact is answer-only, so replaying it
   still grades `INFRA` at the structural tier - only a driver capture carries tools and SQL.
@@ -161,10 +166,10 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 |---|---|
 | `python scripts/docs_lint.py` | Passed on 2026-08-17 (all twelve checks, exit 0) |
 | `python scripts/docs_build.py --check` | Exit 0 on 2026-08-17; every generated region current |
-| `uv run pytest -q` | 488 passed, 10 skipped, 30 deselected, and 4 subtests passed on 2026-08-17 |
+| `uv run pytest -q` | 488 passed, 10 skipped, 30 deselected, and 4 subtests passed on 2026-08-17, in 268 s |
 | `uv run ruff check .` | Passed on 2026-08-17 |
 | `uv run mypy` | Success: no issues in 43 source files on 2026-08-17 |
-| `uv run python -m evals.replay` | Exit 0 on 2026-08-17 against the frozen evidence, with a database up; re-run on T0031.3's branch failed with `INFRA` mismatches and no Postgres listening |
+| `uv run python -m evals.replay` | Exit 0 on 2026-08-17 against the frozen evidence, with a database up. Not re-run by the integration step that published T0031.3: Docker was not running, so nothing listened on 5432 or 5433, which is the recorded precondition rather than a result |
 
 Every skip is environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, and skill
 parity needs the gitignored `.claude/` copy; the default suite deselects live eval tests by design.
@@ -183,13 +188,17 @@ resolution records: [Resolved Issues](Resolved_Issues.md).
 T0030.1 - give the replay format a writer. The DeepSeek capture loss that motivated M30 is a live
 risk, and every further captured run stays exposed to it until `freeze` exists.
 
-T0031.3 has landed, so this section is now the only part of this file a human writes. What is left
-by hand elsewhere is `Tickets.md` and the judgement of where a raised issue belongs - and only the
-second is a judgement. T0031.4, the registry, scope, and frozen lint checks, is the remaining M31
-ticket.
+T0031.3 merged as PR #59 and was published on 2026-08-17. This section and the build-status table
+above are what a human still writes in this file: the table is the result of running commands
+rather than a reading of the tree, and deriving it needs a recorded result the build can read.
+What is left by hand elsewhere is `Tickets.md` and the judgement of where a raised issue belongs -
+and only the second is a judgement. T0031.4, the registry, scope, and frozen lint checks, is the
+remaining M31 ticket.
 
-T0023 - the release path - remains open: `schedule:` is restored on `main` as of T0020.4, so the
-last row in [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 is to watch the first
-unattended 02:00 UTC run, and T0023 still owes its DoD sweep and terms posture. M24 owns the
+T0023 - the release path - remains open, but is less blocked than it was: the cron activation
+closed on 2026-08-17, when `Nightly ingestion` was found to have run unattended on `schedule` and
+succeeded four nights running (2026-08-14 through 08-17, the last at 03:02 UTC). That satisfies the
+last row of [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 and the D-038 live
+schedule requirement, so what T0023 still owes is its DoD sweep and terms posture. M24 owns the
 behavior failures M25 and T0027.3 measured, triaged in [Known Issues](Known_Issues.md) as 23 real
 behavior and 10 grader phrasing artifacts.

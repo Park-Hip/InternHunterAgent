@@ -110,7 +110,10 @@ milestones:
     title: Reconciliation and Activation
     status: complete
     tickets: [T0020]
-    note: Complete as a coder milestone; two maintainer actions remain open.
+    note: >-
+      Complete as a coder milestone. The cron activation closed 2026-08-17 on four consecutive
+      unattended schedule runs; branch protection to enforce the CI gate is the one maintainer
+      action still open.
   - id: M21
     title: Serving-Path Hardening
     status: complete
@@ -197,7 +200,7 @@ milestones:
     title: Parallel Agent Workflow
     status: in-progress
     tickets: [T0031.1, T0031.2, T0031.3, T0031.4]
-    branch: feature/t0031.2-generate-registers
+    branch: feature/t0031.3-derive-state
     scope:
       - docs/roadmap.yaml
       - docs/entries/
@@ -219,8 +222,9 @@ milestones:
       them. A register enters this list once, to gain its marked region and its caps row; after
       that only the integration step and the generator write it, and no milestone outside M31
       may claim a frozen path this way. T0031.2 widened the list on 2026-08-17 for the three
-      registers it generates, and Repo_Current_State.md is reserved for .3.
+      registers it generates, and .3 spent the Repo_Current_State.md reservation the same day.
       T0031.1 merged 2026-08-17 as PR #53 and its entry was folded by the integration step the
-      same day; .2 merged as PR #57 and its entry was the first the generator published, leaving
-      the integration step Tickets.md, Repo_Current_State.md, and where a raised issue belongs.
-      .3 and .4 are planned, so the milestone stays in progress.
+      same day; .2 merged as PR #57 and its entry was the first the generator published; .3 merged
+      as PR #59, which leaves the integration step Tickets.md, one --snapshot run, and the
+      judgement of where a raised issue belongs. Only .4 is planned, so the milestone stays in
+      progress.

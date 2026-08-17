@@ -14,7 +14,7 @@ original register entry (omitted where none was assigned).
 
 ## Categories
 - [Documentation drift](#documentation-drift) — 4
-- [Config, startup & deployment](#config-startup--deployment) — 11
+- [Config, startup & deployment](#config-startup--deployment) — 12
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
@@ -73,6 +73,25 @@ original register entry (omitted where none was assigned).
     matching reality).
 
 ## Config, startup & deployment
+- **`[MED · RESOLVED · Integration, 2026-08-17]` The re-armed ingestion schedule had never fired
+  on its own.**
+  - **Found:** T0020.4, which signed every activation gate but could not prove an unattended run,
+    because at that point none had happened since the schedule was re-armed.
+  - **Cause:** Not a defect. The gate was evidence, not code: GitHub reads `schedule:` from the
+    default branch, so merging to `main` *is* the activation, and the only thing that can close
+    the item is a scheduled run actually happening and succeeding.
+  - **Resolution:** four consecutive unattended runs of the `Nightly ingestion` workflow completed
+    with `event: schedule` and `conclusion: success` on 2026-08-14, 08-15, 08-16, and 08-17, the
+    last at 03:02 UTC against `cron: '0 2 * * *'`. That ends the streak of 19 consecutive failures
+    through 2026-08-09, which failed in ~15 s at config load with `DATABASE_URL` unset. This closes
+    the last row of the [Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) §7.
+  - **Verified:** `gh run list --workflow="Nightly ingestion"` on 2026-08-17 reports the four
+    scheduled successes, and the deployed `/api/v1/ready` returns
+    `data_snapshot_date: 2026-08-17` with `provenance: measured`, so the runs reached the database
+    rather than merely exiting zero.
+  - **Still open:** branch protection to *enforce* the CI gate, which is the other M20 maintainer
+    action and is unaffected by this.
+
 - **`[HIGH · RESOLVED · Incident 2026-08-13, closed 2026-08-16]` The public demo answered no
   question for three days while `/health` and `/ready` both stayed green.**
   - **Found:** by probing the deployed service directly, after the health endpoints had reported

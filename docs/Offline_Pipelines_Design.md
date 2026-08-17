@@ -31,11 +31,13 @@ re-derive it.
 > (**T0019.3**); (b) ⏳ an **external, out-of-band GitHub Actions cron** is intended to invoke the
 > same CLI nightly against the live Neon DB (**T0019.6**, hard-gated on a robots.txt/ToS check,
 > **T0019.1**, whose favorable verdict the maintainer **ratified on 2026-08-13** — the gate is
-> cleared; see the cron activation runbook §1). The cron's `schedule:` trigger is **dormant**
-> because PR #33 commented it out on `main`. Note that reaching `main` does not merely permit a
-> schedule, it starts one: GitHub fires `schedule:` from the default branch automatically, which is
-> how this workflow ran un-gated for 19 nights. Coverage and detail-visibility follow-ups are scoped
-> as **T0019.9** and **T0019.10** (`docs/Tickets.md`); neither is implemented. This does **not**
+> cleared; see the cron activation runbook §1). The cron's `schedule:` trigger is **live** as of
+> T0020.4, which restored it after PR #33 had commented it out on `main`; it has run unattended and
+> succeeded every night from 2026-08-14 through 2026-08-17. Note that reaching `main` does not
+> merely permit a schedule, it starts one: GitHub fires `schedule:` from the default branch
+> automatically, which is how this workflow ran un-gated for 19 nights. Coverage and
+> detail-visibility follow-ups are scoped as **T0019.9** and **T0019.10** (`docs/Tickets.md`);
+> neither is implemented. This does **not**
 > relax the §7 layer law or the `Full_Design_Document.md` §2 no-schedulers exclusion — the cron runs
 > on GitHub's runner, never in the API process, and §2's exclusion is amended to name what it always
 > meant: *in-request* background execution; (c) unattended-run safety — pre-flight schema assertion,

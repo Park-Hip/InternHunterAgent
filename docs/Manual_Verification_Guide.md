@@ -11,6 +11,27 @@ Dated live-pass logs remain in
 
 ## Current and unrun checklists
 
+### T0031.1: The write surface, and that its lint exemption is scoped
+
+Not yet re-run by a developer: the ticket's entry records `verified: no`.
+
+1. `python scripts/docs_lint.py` exits 0 and prints nothing.
+2. `python -m pytest tests/test_docs_lint.py -q` passes.
+3. Add a throwaway `docs/entries/T9999.md` and re-run the linter. <!-- lint-allow-link-path -->
+   Confirm it reports no `size-cap` and no `orphan` finding for it, then delete the file.
+4. Add a throwaway `docs/Scratch.md` and re-run the linter. <!-- lint-allow-link-path -->
+   Confirm it *does* report `size-cap: living document is missing from caps table`, then delete
+   the file. This is the check that matters: it proves the exemption is scoped to `entries/`
+   rather than switched off.
+5. Open [`roadmap.yaml`](roadmap.yaml) and confirm M29 and M30 both list `evals/viewer.py` under
+   `scope:`, the overlap that made them unsafe to run in parallel.
+6. Ask for a ticket prompt via the `generate-ticket-prompt` skill and confirm the output names the
+   allocated ticket id, the allowed paths, and the frozen registers.
+
+> ⚠ Step 1 and 2 need a worktree that can import the project. A fresh worktree has no `.env` and
+> ten test modules fail at collection with `ConfigLoadError`; copy `.env` from the primary
+> worktree first. See [Known Issues](Known_Issues.md).
+
 ### T0027.4: Deployed demo on the DeepSeek default
 
 The local half of this checklist passed on 2026-08-15. What remains needs a deploy, because the

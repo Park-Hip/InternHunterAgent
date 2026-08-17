@@ -170,9 +170,10 @@ milestones:
       - tests/evals/
     note: >-
       Scope intersects M29 on evals/viewer.py, evals/README.md and tests/evals/. These two are
-      not independent and must not run in parallel; M30 was stacked on M29 and is merged in that
+      not independent and must not run in parallel; M30 was stacked on M29 and merged in that
       order. This is the first entry the intersection rule would have caught before launch.
-      M29 landed 2026-08-17; M30's remaining commit merges into main cleanly. Predates
+      PR #52 merged the ticket plans on 2026-08-17 and nothing else: T0030.1, .2 and .3 are
+      scoped and unbuilt, so this milestone is in progress rather than complete. Predates
       docs/entries/, so it has no entry file.
 
   - id: M31
@@ -194,3 +195,5 @@ milestones:
     note: >-
       Touches two frozen registers (docs/README.md, docs/Tickets.md) because it is the ticket
       that establishes the freeze. No later ticket may claim them this way.
+      T0031.1 merged 2026-08-17 as PR #53 and its entry was folded by the integration step the
+      same day; .2, .3 and .4 are planned, so the milestone stays in progress.

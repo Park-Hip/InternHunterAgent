@@ -32,10 +32,41 @@ these architectural boundaries is required.
   concerns leak across the entire codebase.
 
 
-## 3. Branching Strategy
-* Use branches per ticket.
-* For each ticket flow: main ↓ feature/t0001-project-skeleton ↓ test ↓ merge ↓
-  feature/t0002-core-model.
+## 3. Parallel Work Protocol
+Sessions run in parallel and share one repository. These rules exist so two agents can finish on
+the same day without touching the same lines.
+
+**Identity comes from the registry, never from a document.**
+* `docs/roadmap.yaml` is the sole owner of ticket and milestone numbers. Read it first.
+* Never infer the next free number from `docs/Tickets.md`. If your work has no entry in
+  `roadmap.yaml`, stop and ask for one; do not allocate your own.
+* Milestone N owns tickets T00NN.x. One number, claimed once, before work starts.
+
+**Stay inside your declared scope.**
+* Your milestone's `scope:` in `docs/roadmap.yaml` lists the paths you may change. Widening it is a
+  one-line edit in the same PR - make the edit deliberately, do not drift past it silently.
+* Before running agents in parallel, intersect their scopes. A non-empty intersection means the
+  tickets are not independent and must be sequenced.
+
+**Branch off `main`, never off another branch.**
+* Every ticket branch starts at the tip of `origin/main`. If your ticket needs another ticket's
+  unmerged code, it is not parallelizable - sequence it instead.
+* One PR per ticket, targeting `main`. Open it within a day of starting; a branch that lives longer
+  accumulates other tickets and stops being reviewable on its own.
+* Rebase onto `origin/main` before opening the PR and before each re-review. Never merge `main`
+  into a ticket branch.
+
+**Write to your own file, not to shared registers.**
+* The `frozen:` list in `docs/roadmap.yaml` names the registers only the integration step writes.
+  A ticket agent does not edit them.
+* Everything a ticket has to record goes in one file under `docs/entries/`, named for your ticket,
+  on a path no other branch owns. See [`docs/entries/README.md`](docs/entries/README.md) for the
+  naming rule and the format.
+
+**Work in your own git worktree.**
+* Any session that will write to the repo (edit files, run builds or tests that mutate state) must
+  work in its own git worktree. Read-only sessions do not need one.
+* A worktree isolates the filesystem, not the logical scope. Both rules apply.
 
 ## 4. Manual Verification
 * Always add manual verification that the developer can test after make changes not just  "build
@@ -44,8 +75,9 @@ these architectural boundaries is required.
 
 
 ## 5. Completion Report Requirement
-At the end of every ticket execution, a completion report must be generated. The report must
-strictly include:
+At the end of every ticket execution, write the completion report as `## ` sections in your own
+file under `docs/entries/`. Do not edit `docs/Completion_Reports.md`; the integration step folds
+your entry into it. The report must strictly include:
 
 * Summary of changes.
 * Files created, changed, or modified.
@@ -56,8 +88,13 @@ strictly include:
 * Follow-up tickets.
 * Docs that need updating.
 
+Anything you would have added to `docs/Known_Issues.md` goes in your entry's `## Known issues`
+section instead, for the same reason.
+
 ## 6. Repo-State Updates
-Update a Repo_Current_State.md file after completion. Include the following:
+`docs/Repo_Current_State.md` is frozen against ticket agents: it is the repository's single
+mutable snapshot, and one writer per merge is the only way it stays true. Record the same facts in
+your entry file and let the integration step publish them:
 
 * Current branch.
 * Completed tickets.
@@ -65,6 +102,29 @@ Update a Repo_Current_State.md file after completion. Include the following:
 * Installed dependencies.
 * Available scripts.
 * Build/test status.
-* Known issues — do not list these inline; record them in `docs/Known_Issues.md` (the living
-  register) and link to it from Repo_Current_State.md.
+* Known issues — do not list these inline; they belong in your entry's `## Known issues` section,
+  which the integration step files into `docs/Known_Issues.md` (the living register).
 * Next recommended ticket.
+
+## 7. Integration Step
+Run by a **dedicated integration session** - one that merges and publishes, and implements no
+ticket. It is the only writer of the `frozen:` registers, and it runs once per merge to `main`.
+
+An integration session must not also carry a ticket. The whole point is that exactly one writer
+touches the shared registers at a time; a session doing both re-creates the conflict from inside
+the fix. Its commits are `docs(integration):` and nothing else.
+
+1. Merge the PR. If several are ready, merge them one at a time.
+2. Fold each new file under `docs/entries/` into the registers it belongs to: the completion
+   report into `docs/Completion_Reports.md`, `## Known issues` into `docs/Known_Issues.md`,
+   the manual checklist into `docs/Manual_Verification_Guide.md`, the milestone outcome into
+   `docs/Tickets.md`, and archive the ticket plan when its milestone closes.
+3. Rewrite `docs/Repo_Current_State.md` against the merged tree, and re-stamp `Last verified:`.
+4. Set the milestone's `status:` in `docs/roadmap.yaml`, and move any cap that now binds.
+5. Run `python scripts/docs_lint.py` and commit as one `docs(integration):` commit.
+
+Step 2 and step 3 are mechanical and are being replaced by a generator under M31; until it lands,
+they are done by hand.
+
+A ticket that predates `docs/entries/` has no entry file. Integrating it means step 3 only:
+rewrite the snapshot against the merged tree and re-stamp it.

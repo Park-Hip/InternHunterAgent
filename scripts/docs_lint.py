@@ -124,14 +124,27 @@ def is_archive(path: Path) -> bool:
 
 
 DATED_RECORDS = frozenset({ROOT / "docs" / "Completion_Reports.md"})
+TICKET_ENTRIES = ROOT / "docs" / "entries"
+
+
+def is_ticket_entry(path: Path) -> bool:
+    """Per-ticket write surface: one file per ticket, owned by exactly one branch.
+
+    These files are exempt from the caps table and the orphan check because neither applies
+    to them. A caps row is a shared table row, which is the conflict this directory exists to
+    remove, and an inbound link per entry would be the same shared edit under another name.
+    The directory is indexed as a group in docs/README.md instead. Entries still owe the
+    line-length, encoding, and scenario-id checks."""
+    return path.is_relative_to(TICKET_ENTRIES)
 
 
 def is_dated_record(path: Path) -> bool:
     """Link-path exemption for a living file whose entries name paths as they were on the day
     they shipped, not as a live index. Deliberately narrower than is_archive(): unlike a true
     archive, docs/Completion_Reports.md still owes the line-length, reflow, orphan, and
-    scenario-id checks - only its historical links get a pass."""
-    return is_archive(path) or path in DATED_RECORDS
+    scenario-id checks - only its historical links get a pass. Ticket entries carry the same
+    dated-evidence property for the same reason."""
+    return is_archive(path) or is_ticket_entry(path) or path in DATED_RECORDS
 
 
 def is_line_length_exempt(line: str, in_fence: bool, in_frontmatter: bool = False) -> bool:
@@ -372,7 +385,7 @@ def managed_documentation_files(files: list[Path], docs_root: Path = ROOT / "doc
     return {
         path.resolve()
         for path in files
-        if path.is_relative_to(docs_root) and not is_archive(path)
+        if path.is_relative_to(docs_root) and not is_archive(path) and not is_ticket_entry(path)
     }
 
 
@@ -434,7 +447,7 @@ def check_amendment(_: list[Path], map_path: Path = DOCS_MAP) -> list[Finding]:
 
 def check_orphan(files: list[Path]) -> list[Finding]:
     """Require every living Markdown document to have an inbound documentation link."""
-    live = {path.resolve() for path in files if not is_archive(path)}
+    live = {path.resolve() for path in files if not is_archive(path) and not is_ticket_entry(path)}
     linked: set[Path] = set()
     link_pattern = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
     code_pattern = re.compile(r"`([^`]+)`")

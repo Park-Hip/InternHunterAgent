@@ -18,7 +18,27 @@ SPEC.loader.exec_module(docs_lint)
 def test_is_dated_record_covers_completion_reports_and_archive_dirs() -> None:
     assert docs_lint.is_dated_record(docs_lint.ROOT / "docs" / "Completion_Reports.md")
     assert docs_lint.is_dated_record(docs_lint.ROOT / "docs" / "archive" / "x.md")
+    assert docs_lint.is_dated_record(docs_lint.ROOT / "docs" / "entries" / "T0031.1.md")
     assert not docs_lint.is_dated_record(docs_lint.ROOT / "docs" / "Tickets.md")
+
+
+def test_is_ticket_entry_covers_only_the_entries_directory() -> None:
+    assert docs_lint.is_ticket_entry(docs_lint.ROOT / "docs" / "entries" / "T0031.1.md")
+    assert docs_lint.is_ticket_entry(docs_lint.ROOT / "docs" / "entries" / "README.md")
+    assert not docs_lint.is_ticket_entry(docs_lint.ROOT / "docs" / "Tickets.md")
+    assert not docs_lint.is_ticket_entry(docs_lint.ROOT / "docs" / "archive" / "x.md")
+
+
+def test_ticket_entries_need_no_caps_row_and_no_inbound_link() -> None:
+    """A per-ticket file is owned by one branch, so neither shared index applies to it."""
+    entry = docs_lint.ROOT / "docs" / "entries" / "README.md"
+    tickets = docs_lint.ROOT / "docs" / "Tickets.md"
+
+    managed = docs_lint.managed_documentation_files([entry, tickets])
+
+    assert entry.resolve() not in managed
+    assert tickets.resolve() in managed
+    assert docs_lint.check_orphan([entry]) == []
 
 
 def test_archived_on_tag_reference_is_allowed(tmp_path: Path) -> None:

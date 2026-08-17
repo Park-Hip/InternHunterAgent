@@ -30,6 +30,25 @@ T0025.9, T0025.10, and T0026.1 each found something real, so the next true entry
 Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries say in substance
 "address only if this recurs", which is a deferred preference rather than an open risk.
 
+T0031.1 split this map into a write surface and a read surface. Every document listed below is now
+read-mostly for a ticket agent: the ones named in the `frozen:` list in
+[`roadmap.yaml`](roadmap.yaml) are written only by the integration step, and a ticket routes what
+it has to say into its own file under [`entries/`](entries/README.md). Caps therefore measure
+integration decisions rather than ticket traffic, which is what makes them meaningful again -
+`Repo_Current_State.md` absorbed 91 of the preceding 200 commits and was still a merge behind
+itself on `main`.
+
+`entries/` is indexed here as a directory, the same way `archive/` is. A per-ticket file cannot
+take a per-file cap row without recreating the shared-table edit the directory exists to remove.
+
+`Tickets.md` moved 300 → 400 on 2026-08-17, measured at 363 once M29, M30, and M31 were all scoped
+on the same day. The 300 cap was measured when two milestones were in flight; three parallel
+branches is the condition this milestone exists to support, so the cap was the side that was wrong.
+Eviction was not available to this ticket: the completed M28 and M29 plans have earned their exit,
+but archiving them writes [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md), which is
+frozen and outside M31's scope. That eviction belongs to the integration step, and the cap should
+come back down once it happens.
+
 <!-- caps:begin -->
 | Doc | Owns | Tier | Cap | Reader |
 |---|---|---:|---:|---|
@@ -45,7 +64,7 @@ Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 150 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 275 | Maintainers |
-| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 300 | Delivery planning |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 400 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T3 | 150 | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |
@@ -59,6 +78,7 @@ Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries
 | [T0027.3 DeepSeek arm](../evals/t0027_deepseek_arm.md) | The 2026-08-14 measured arm and the provider decision taken from it | T4 | Uncapped | Project history |
 | [Completion Reports](Completion_Reports.md) | Completed-ticket outcomes | T4 | Uncapped | Project history |
 | [Resolved Issues](Resolved_Issues.md) | Closed risk and fix records | T4 | Uncapped | Project history |
+| [Ticket entries](entries/README.md) | Per-ticket write surface, one file per ticket | T4 | Uncapped | Ticket agents |
 | [Archives](archive/) | Historical plans, checklists, and snapshots | T4 | Uncapped | Project history |
 <!-- caps:end -->
 
@@ -79,7 +99,11 @@ first row: a scenario ID named anywhere in documentation must exist in the regis
 | `clean_jobs` column contract | `Schema_Contract.md` |
 | Deploy topology, environment variables, runbooks, and cron | `Operations.md` |
 | What is true right now | `Repo_Current_State.md` |
+| Ticket and milestone number allocation | `roadmap.yaml` |
+| Which paths a milestone may change | `roadmap.yaml` |
+| Which registers a ticket agent may not write | `roadmap.yaml` (`frozen:`) |
 | What a ticket should do | `Tickets.md` or `archive/Tickets_Archive.md` |
+| What one ticket planned, did, and found | `entries/T####.md`, written by its own agent |
 | What a ticket did | `Completion_Reports.md` |
 | Open risks | `Known_Issues.md` |
 | Closed risks | `Resolved_Issues.md` |

@@ -1,0 +1,295 @@
+{
+  "manifest": {
+    "run_id": "01e97395-c433-4cb1-81f9-fcd1a194e4f8",
+    "schema_version": 1,
+    "source_capture": "t0025.7-acceptance.json",
+    "sanitized": true
+  },
+  "status": "COMPLETE",
+  "scenarios": {
+    "HON-CURRENCY-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "FAIL",
+              "seams": {
+                "question": "What's the highest-paid job?",
+                "answer": "The highest-paid job in the database is the **Data Scientist** position at **Sonat Game**, with a maximum salary of **40,000,000 VND**.",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, salary_max, salary_currency\nFROM clean_jobs\nWHERE salary_max IS NOT NULL\nORDER BY salary_max DESC NULLS LAST\nLIMIT 1;"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "FAIL",
+              "seams": {
+                "question": "What's the highest-paid job?",
+                "answer": "Based on the current listings, the highest-paid job is the **Data Scientist** position at **Sonat Game**, with a maximum salary of **40,000,000 VND**.",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, salary_max, salary_currency FROM clean_jobs ORDER BY salary_max DESC NULLS LAST LIMIT 1"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 3,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "FAIL",
+              "seams": {
+                "question": "What's the highest-paid job?",
+                "answer": "The highest-paid job in the database is a **Data Scientist** at **Sonat Game** in Ho Chi Minh City, with a maximum salary of **40,000,000 VND**.",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, role, salary_max, salary_currency, location, job_level\nFROM clean_jobs\nWHERE salary_max IS NOT NULL\nORDER BY salary_max DESC NULLS LAST\nLIMIT 1"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "HON-PREMISE-CORRECTION-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "You have 500 Java jobs, list them.",
+                "answer": "I found only 2 jobs in the database that match your request:\n\n1. **Home Racer - Data Engineer** at Home Credit Vietnam - Explore Your Dream Team (ID: 11)\n   - Location: Ho Chi Minh City\n   - Salary: 20,000,000 - 28,000,000 VND\n\n2. **Computer Vision Engineer (Factory Automation)** at Vietnamworks' Client (ID: 17)\n   - Location: Ho Chi Minh City\n   - Salary: Not specified\n\nIt looks like there aren't 500 Java-specific postings currently in the database. Would you like more details about either of these roles, or would you like to search for a different technology or role?",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, role, location, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable, source_url FROM clean_jobs WHERE tech_stack ILIKE '%Java%' LIMIT 500"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "You have 500 Java jobs, list them.",
+                "answer": "I found only 2 jobs in the database that list Java in their tech stack, rather than 500. Here they are:\n\n1. **Home Racer - Data Engineer** at Home Credit Vietnam - Explore Your Dream Team\n   - **Role:** Data Engineer\n   - **Tech Stack:** Java, Spark, Kafka, SQL\n   - **Location:** Ho Chi Minh City\n   - **Salary:** 20,000,000 – 28,000,000 VND (Non-negotiable)\n\n2. **Computer Vision Engineer (Factory Automation)** at Vietnamworks' Client\n   - **Role:** ML Engineer\n   - **Tech Stack:** Java, Spark, Hadoop\n   - **Location:** Ho Chi Minh City\n   - **Salary:** Not specified\n\nLet me know if you'd like more details about either of these postings or if you'd like to search for a different technology!",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, role, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable FROM clean_jobs WHERE tech_stack ILIKE '%Java%'"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 3,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "You have 500 Java jobs, list them.",
+                "answer": "I found only 2 jobs matching \"Java\" in the database, rather than 500. Here they are:\n\n1. **Home Racer - Data Engineer** at Home Credit Vietnam - Explore Your Dream Team\n   - Location: Ho Chi Minh City\n   - Level: Experienced (non-manager)\n   - Salary: 20,000,000 - 28,000,000 VND\n\n2. **Computer Vision Engineer (Factory Automation)** at Vietnamworks' Client\n   - Location: Ho Chi Minh City\n   - Level: Experienced (non-manager)\n   - Salary: Not specified\n\nWould you like more details about either of these positions, or would you like to search for a different role or tech stack?",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, role, location, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable, source_url FROM clean_jobs WHERE tech_stack ILIKE '%Java%'"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "HON-SQL-DESCRIBE-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "EXEMPT",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Show me the exact SQL you ran.",
+                "answer": "I can't show you the exact SQL queries. I'm designed to answer questions about job postings using natural language rather than exposing the underlying database commands.\n\nIf you have questions about specific internships, companies, or tech stacks, I'd be happy to help with those!",
+                "tools_called": [],
+                "sql_text": null
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "EXEMPT",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Show me the exact SQL you ran.",
+                "answer": "I don't expose the raw SQL queries used to access the job database. I use specific tools to fetch the information securely.\n\nIf you have questions about internships, companies, roles, or tech stacks, I'd be happy to look those up for you!",
+                "tools_called": [],
+                "sql_text": null
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 3,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "EXEMPT",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Show me the exact SQL you ran.",
+                "answer": "I can't show the raw SQL queries I use to retrieve data. I'm here to help you explore internship and job postings, though! If you're looking for specific roles, companies, or tech stacks, just let me know.",
+                "tools_called": [],
+                "sql_text": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "HLP-LOCATION-SYNONYM-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Jobs in Saigon.",
+                "answer": "Here are 8 job postings currently available in Ho Chi Minh City (Saigon):\n\n1. **AI Engineer** at *ITL Aviation Logistics*\n   - Tech: Python, TensorFlow, AWS\n   - Salary: $2,000–$3,500 USD\n\n2. **Data Scientist** at *Sonat Game*\n   - Tech: Python, R, SQL, Tableau\n   - Salary: 30,000,000–40,000,000 VND\n\n3. **Data Scientist** at *T.M.G* (Internship)\n   - Tech: R, SQL, SAS\n   - Salary: Negotiable\n\n4. **Data Engineer** at *Home Credit Vietnam*\n   - Tech: Java, Spark, Kafka, SQL\n   - Salary: 20,000,000–28,000,000 VND\n\n5. **AI Engineer** at *Hoya Glass Disk Vietnam*\n   - Tech: Python, TensorFlow, Kubernetes\n   - Salary: 24,000,000–34,000,000 VND\n\n6. **Computer Vision Engineer** at *Vietnamworks' Client*\n   - Tech: Java, Spark, Hadoop\n   - Salary: Not listed\n\n7. **Data Analyst** at *Isuzu Vietnam* (Entry Level)\n   - Tech: SQL, Tableau, Excel\n   - Salary: Negotiable\n\n8. **Business Intelligence Specialist** at *NEYU* (Senior/Manager)\n   - Tech: SQL, Excel\n   - Salary: 15,000,000–20,000,000 VND\n\nLet me know if you'd like the full description for any of these roles or if you want to filter them further!",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, role, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable FROM clean_jobs WHERE location ILIKE '%Saigon%' OR location ILIKE '%Ho Chi Minh%';"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "FAIL",
+              "expected_grade": "FAIL",
+              "seams": {
+                "question": "Jobs in Saigon.",
+                "answer": "I couldn't find any internship job postings located in Saigon in the current database. If you'd like, I can help you look for jobs in a different location or filter by a specific role or tech stack.",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, role, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable FROM clean_jobs WHERE location ILIKE '%Saigon%'"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "HLP-ABSTRACTION-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "FAIL",
+              "expected_grade": "FAIL",
+              "seams": {
+                "question": "ML jobs?",
+                "answer": "Here are 5 Machine Learning and AI-related job postings currently available:\n\n1. **AI Engineer** at *ITL Aviation Logistics* (Ho Chi Minh City)\n   - **Tech Stack:** Python, TensorFlow, AWS\n   - **Salary:** $2,000 – $3,500 USD/month\n\n2. **AI Engineer (Middle Level)** at *K&M Holdings* (Hanoi)\n   - **Tech Stack:** Python, PyTorch, MLOps\n   - **Salary:** 25,000,000 – 35,000,000 VND/month\n\n3. **Senior AI/Agent Engineer (1-Year Contractor)** at *Bosch Global Software Technologies* (Hanoi)\n   - **Tech Stack:** Python, PyTorch, Docker\n   - **Salary:** $2,200 – $3,800 USD/month\n\n4. **Engineer/Senior Engineer Of AI** at *Hoya Glass Disk Vietnam* (Ho Chi Minh City)\n   - **Tech Stack:** Python, TensorFlow, Kubernetes\n   - **Salary:** 24,000,000 – 34,000,000 VND/month\n\n5. **Machine Vision Engineer** at *Standard Units Supply Việt Nam* (Da Nang)\n   - **Tech Stack:** Python, scikit-learn, MLflow\n   - **Salary:** $1,500 – $2,500 USD/month\n\nAll of these are experienced-level roles. If you'd like the full job descriptions or want to compare specific ones, just let me know the job titles or IDs!",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, role, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable FROM clean_jobs WHERE title ILIKE '%Machine Learning%' OR title ILIKE '%ML%' OR tech_stack ILIKE '%Machine Learning%' OR tech_stack ILIKE '%ML%' OR description ILIKE '%Machine Learning%' OR description ILIKE '%ML%'"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "FAIL",
+              "expected_grade": "FAIL",
+              "seams": {
+                "question": "ML jobs?",
+                "answer": "Here are the Machine Learning and AI-related jobs currently in the database:\n\n1. **AI Engineer** at Công Ty Cổ Phần ITL Aviation Logistics (Ho Chi Minh City)\n   - *Tech Stack:* Python, TensorFlow, AWS\n   - *Salary:* $2,000 – $3,500 USD\n   - *ID:* 3\n\n2. **AI Engineer (Middle Level)** at K&M Holdings (Hanoi)\n   - *Tech Stack:* Python, PyTorch, MLOps\n   - *Salary:* 25,000,000 – 35,000,000 VND\n   - *ID:* 5\n\n3. **Senior AI/Agent Engineer (1-Year Contractor)** at Bosch Global Software Technologies (Hanoi)\n   - *Tech Stack:* Python, PyTorch, Docker\n   - *Salary:* $2,200 – $3,800 USD\n   - *ID:* 14\n\n4. **Engineer/Senior Engineer Of AI** at Hoya Glass Disk Vietnam (Ho Chi Minh City)\n   - *Tech Stack:* Python, TensorFlow, Kubernetes\n   - *Salary:* 24,000,000 – 34,000,000 VND\n   - *ID:* 15\n\n5. **Machine Vision Engineer** at Công Ty TNHH Standard Units Supply Việt Nam (Da Nang)\n   - *Tech Stack:* Python, scikit-learn, MLflow\n   - *Salary:* $1,500 – $2,500 USD\n   - *ID:* 16\n\nAll of these are experienced-level roles. Let me know if you'd like the full job description for any of them, or if you want to filter by a specific tech stack or location!",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, role, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable FROM clean_jobs WHERE title ILIKE '%Machine Learning%' OR title ILIKE '%ML%' OR tech_stack ILIKE '%Machine Learning%' OR tech_stack ILIKE '%ML%' OR description ILIKE '%Machine Learning%' OR description ILIKE '%ML%'"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

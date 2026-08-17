@@ -104,6 +104,7 @@ _bind_fixture_environment()
 
 from evals import harness  # noqa: E402
 from evals.scenarios import load_scenarios, repeat_count  # noqa: E402
+from evals.sanitization import FORBIDDEN_CONTENT  # noqa: E402
 
 
 def _utc_now() -> str:
@@ -285,6 +286,156 @@ def compare_runs(left_path: Path, right_path: Path) -> dict[str, Any]:
     return {"comparable": True, "left": left["manifest"]["run_id"], "right": right["manifest"]["run_id"]}
 
 
+def _forbidden_capture_field(value: Any, path: str = "capture") -> str | None:
+    """Name the first secret-like source value before it reaches a replay."""
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}"
+            if (
+                FORBIDDEN_CONTENT.search(key)
+                and isinstance(child, str)
+                and child.strip()
+            ):
+                return child_path
+            found = _forbidden_capture_field(child, child_path)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found = _forbidden_capture_field(child, f"{path}[{index}]")
+            if found:
+                return found
+    elif isinstance(value, str) and FORBIDDEN_CONTENT.search(value):
+        return path
+    return None
+
+
+def _grade_index(grade: dict[str, Any], capture_run_id: str) -> dict[tuple[str, int, int], dict[str, Any]]:
+    if grade.get("run_id") != capture_run_id:
+        raise ValueError("Grade report run_id does not match the capture manifest")
+    scenarios = grade.get("scenarios")
+    if not isinstance(scenarios, dict):
+        raise ValueError("Grade report must contain a scenarios object")
+    indexed: dict[tuple[str, int, int], dict[str, Any]] = {}
+    for scenario_id, entries in scenarios.items():
+        if not isinstance(entries, list):
+            raise ValueError(f"Grade report scenario {scenario_id} must contain a list")
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get("repeat"), int) or not isinstance(entry.get("turn"), int):
+                continue
+            key = (scenario_id, entry["repeat"], entry["turn"])
+            if key in indexed:
+                raise ValueError(f"Grade report has duplicate evidence for {scenario_id} r{entry['repeat']} t{entry['turn']}")
+            indexed[key] = entry
+    return indexed
+
+
+def _expected_execution_accuracy(
+    grade: dict[str, Any], scenario: dict[str, Any], label: str
+) -> str:
+    for check in grade.get("checks", []):
+        if not isinstance(check, dict) or check.get("name") != "execution_accuracy":
+            continue
+        match = re.fullmatch(
+            r"execution accuracy (?:is )?(PASS|FAIL|EXEMPT)",
+            str(check.get("detail", "")),
+        )
+        if match and check.get("passed") is (match.group(1) != "FAIL"):
+            return match.group(1)
+    if scenario.get("execution_accuracy_exempt"):
+        return "EXEMPT"
+    raise ValueError(
+        f"Grade report has a non-replayable execution-accuracy result for {label}; "
+        "it must declare PASS, FAIL, or EXEMPT"
+    )
+
+
+def freeze_capture(capture_path: Path, grade_path: Path, output: Path) -> dict[str, Any]:
+    """Project completed capture evidence into the narrow, committed replay format."""
+    if output.exists():
+        raise FileExistsError(f"Refusing to overwrite existing replay: {output}")
+
+    capture = load_run(capture_path)
+    forbidden = _forbidden_capture_field(capture)
+    if forbidden:
+        raise ValueError(f"Capture contains forbidden content at {forbidden}")
+
+    grade = json.loads(grade_path.read_text(encoding="utf-8"))
+    if not isinstance(grade, dict):
+        raise ValueError(f"{grade_path} is not a grader report")
+    run_id = capture["manifest"].get("run_id")
+    if not isinstance(run_id, str) or not run_id:
+        raise ValueError("Capture manifest must contain a run_id")
+    grades = _grade_index(grade, run_id)
+    scenarios_by_id = {scenario["id"]: scenario for scenario in load_scenarios()}
+
+    replay: dict[str, Any] = {
+        "manifest": {
+            "run_id": run_id,
+            "schema_version": 1,
+            "source_capture": capture_path.name,
+            "sanitized": True,
+        },
+        "status": "COMPLETE",
+        "scenarios": {},
+    }
+    for scenario_id, record in capture.get("scenarios", {}).items():
+        scenario = scenarios_by_id.get(scenario_id)
+        if scenario is None:
+            raise ValueError(f"Capture contains unknown scenario id: {scenario_id}")
+        capture_repeats = record.get("repeats", [])
+        if record.get("status") in {"UNRUN", "INFRA"} and not any(
+            repeat.get("turns") for repeat in capture_repeats if isinstance(repeat, dict)
+        ):
+            continue
+        if record.get("status") != "COMPLETE":
+            raise ValueError(f"Capture scenario {scenario_id} is not COMPLETE")
+        frozen_repeats: list[dict[str, Any]] = []
+        for repeat in capture_repeats:
+            repeat_number = repeat.get("repeat")
+            if not isinstance(repeat_number, int) or repeat.get("status") != "COMPLETE":
+                raise ValueError(f"Capture scenario {scenario_id} has an incomplete repeat")
+            turns: list[dict[str, Any]] = []
+            for turn_number, turn in enumerate(repeat.get("turns", []), start=1):
+                label = f"{scenario_id} r{repeat_number} t{turn_number}"
+                if turn.get("status") != "COMPLETE":
+                    raise ValueError(f"Capture turn {label} is not COMPLETE")
+                grade_entry = grades.get((scenario_id, repeat_number, turn_number))
+                if grade_entry is None:
+                    raise ValueError(f"Grade report has no evidence for {label}")
+                if grade_entry.get("status") not in {"PASS", "FAIL"}:
+                    raise ValueError(f"Grade report has an unusable verdict for {label}")
+                seams = turn.get("seams")
+                if not isinstance(seams, dict):
+                    raise ValueError(f"Capture turn {label} has no seam evidence")
+                turns.append(
+                    {
+                        "turn": turn_number,
+                        "status": "COMPLETE",
+                        "expected_execution_accuracy": _expected_execution_accuracy(
+                            grade_entry, scenario, label
+                        ),
+                        "expected_grade": grade_entry["status"],
+                        "seams": {key: seams.get(key) for key in ("question", "answer", "tools_called", "sql_text")},
+                    }
+                )
+            frozen_repeats.append({"repeat": repeat_number, "status": "COMPLETE", "turns": turns})
+        replay["scenarios"][scenario_id] = {
+            "scenario_type": scenario["type"],
+            "status": "COMPLETE",
+            "repeats": frozen_repeats,
+        }
+
+    # Importing the replay runner also imports its deterministic grader, which
+    # reads runtime settings. Native capture imports must stay independent of
+    # that path so they can bind the fixture environment before configuration.
+    from evals.replay import validate_replay
+
+    validate_replay(replay)
+    _write_json(output, replay)
+    return replay
+
+
 def _is_quota_error(exc: BaseException) -> bool:
     text = str(exc).lower()
     return any(token in text for token in ("429", "rate limit", "rate_limit", "quota", "tpm", "tokens per minute"))
@@ -442,17 +593,25 @@ def _mark_unrun(artifact: dict[str, Any], scenarios: list[dict[str, Any]], index
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Run evaluation scenarios over the in-process harness.")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT / "run.json")
+    parser.add_argument("--output", "-o", type=Path, default=DEFAULT_OUTPUT / "run.json")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--score", action="store_true", help="Run the judge after each captured repeat.")
     parser.add_argument("--ids", help="Comma-separated scenario IDs to run.")
-    parser.add_argument("command", nargs="?", choices=("run", "diff"), default="run")
-    parser.add_argument("other", nargs="?", type=Path, help="Second run artifact for diff.")
+    parser.add_argument("--grade", type=Path, help="Deterministic grader report for freeze.")
+    parser.add_argument("command", nargs="?", choices=("run", "diff", "freeze"), default="run")
+    parser.add_argument("other", nargs="?", type=Path, help="Second run artifact for diff, or capture artifact for freeze.")
     args = parser.parse_args(argv)
     if args.command == "diff":
         if args.other is None:
             parser.error("diff requires a second run artifact")
         print(json.dumps(compare_runs(args.output, args.other), indent=2))
+        return
+    if args.command == "freeze":
+        if args.other is None:
+            parser.error("freeze requires a capture artifact")
+        if args.grade is None:
+            parser.error("freeze requires --grade <grade.json>")
+        freeze_capture(args.other, args.grade, args.output)
         return
     scenarios = load_scenarios()
     if args.ids:

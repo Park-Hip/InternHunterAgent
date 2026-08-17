@@ -184,14 +184,21 @@ milestones:
     tickets: [T0030.1, T0030.2, T0030.3]
     branch: feature/t0030-evidence-durability
     scope:
+      - evals/driver.py
+      - evals/replay.py
+      - evals/sanitization.py
       - evals/viewer.py
       - evals/README.md
       - evals/Operating_Manual.md
       - tests/evals/
+      - docs/entries/
+      - docs/Decision_Log.md
     note: >-
       Scope intersects M29 on evals/viewer.py, evals/README.md and tests/evals/. These two are
       not independent and must not run in parallel; M30 was stacked on M29 and merged in that
-      order. This is the first entry the intersection rule would have caught before launch.
+      order. This is the first entry the intersection rule would have caught before launch. T0030.1
+      widened this scope for the driver, replay sanitizer, private completion entry, and D-046: the
+      original plan named the driver command but its scope omitted the implementation paths.
       PR #52 merged the ticket plans on 2026-08-17 and nothing else: T0030.1, .2 and .3 are
       scoped and unbuilt, so this milestone is in progress rather than complete. Predates
       docs/entries/, so it has no entry file.

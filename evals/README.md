@@ -1,6 +1,6 @@
 # `evals/` - The Evaluation Instrument
 
-> **Last verified:** 2026-08-15.
+> **Last verified:** 2026-08-17.
 
 > **Eviction:** A description here leaves when its module is removed or its command changes.
 > This file describes the layout only; findings live in the records listed at the bottom.
@@ -36,6 +36,7 @@ Reading a recorded capture takes two commands - grade it, then view it with the 
 ```powershell
 uv run python -m evals.grader --run evals/runs/<run>.json > evals/runs/<run>-grade.json
 uv run python -m evals.viewer evals/runs/<run>.json --grade evals/runs/<run>-grade.json
+uv run python -m evals.driver freeze evals/runs/<run>.json --grade evals/runs/<run>-grade.json -o evals/replays/<run>.json
 ```
 
 `--grade` is optional; without it the viewer shows the capture and marks every turn `UNGRADED`.
@@ -66,13 +67,13 @@ against recorded turns, not by paying for a new capture.
 | `scenarios_v1.yaml` | **The registry.** 29 scenarios with probe flags, requirements, reference SQL, `expected_tools`, and a `grading:` block holding what each answer must and must not say. The single source of truth (D-041) |
 | `scenarios.py` | Loads and validates the registry, rejecting an unknown tool or grading field; generates DeepEval goldens from it; no-model CLI |
 | `harness.py` | Three-seam capture and the DeepEval metrics. Owns the seam definitions so pytest and recorded runs cannot diverge |
-| `driver.py` | Orchestration: runs the registry over the harness, paces turns to fit the quota window, owns retries, writes a manifest, checkpoints and resumes |
+| `driver.py` | Orchestration: runs the registry over the harness, paces turns to fit the quota window, owns retries, writes a manifest, checkpoints and resumes, and freezes completed evidence into a sanitized replay |
 | `viewer.py` | Single-file HTML viewer - one turn per screen, all three seams, the joined grade verdict, run header, telemetry, and operator notes |
 | `execution_accuracy.py` | Executes generated and reference SQL against the fixture and compares result sets as unordered multisets |
 | `grader.py` | Deterministic three-tier grading (structural, textual, judge) with `PASS`/`FAIL`/`INFRA`/`UNRUN`. The last two are excluded from denominators. Owns how a rule is applied, never what a scenario expects |
 | `holdout.py` | Six-scenario contract suite, authored against the behavior spec rather than from the registry or the recorded answers |
-| `replay.py` | Validates the committed artifact, executes its SQL, grades it. What CI runs |
-| `replays/` | The committed sanitized evidence the gate replays |
+| `replay.py` | Validates the committed artifact, executes its SQL, grades it, and checks expected PASS, FAIL, or EXEMPT execution outcomes. What CI runs |
+| `replays/` | The committed sanitized evidence the gate replays. It retains questions, answers, tools, SQL, and expected outcomes, never telemetry or trace identifiers |
 | `judge.py` | `DeepEvalBaseLLM` adapter with an RPM throttle. No scenario rule reaches the judge tier yet |
 | `writeback.py` | Langfuse score writeback. Called by `harness.py`; not part of the deterministic path |
 | `fixtures/loader.py` | Builds and resets the frozen fixture through Alembic plus `seed_eval_db.sql`. Owns `fixture_database_url()` |

@@ -3022,3 +3022,50 @@ reflow, orphan, and scenario-id checks.
   a capture's header shows the models and sampling and reports the provider as not recorded.
 - **Docs that need updating:** None outstanding. `evals/README.md` now documents the real-artifact
   invocation alongside `--sample`.
+
+## T0031.1 - Give parallel tickets a private write surface
+
+Folded by the integration step from [`entries/T0031.1.md`](entries/T0031.1.md), which remains the
+ticket's own record.
+
+- **Summary:** Parallel sessions collided on documentation rather than on code, and the ticket
+  measured it before changing anything: across the preceding 200 commits `Repo_Current_State.md`
+  changed 91 times, `Known_Issues.md` 68, `Tickets.md` 56, and each of eight open branches carried
+  an edit to all eighteen documents under `docs/`. Three branches independently produced a
+  `Tickets_Archive.md` of 1775, 2104, and 2291 lines from the same archival operation. Identity
+  drifted the same way, because `Tickets.md` uses the heading form `## T00NN: Milestone NN`, so an
+  agent picking a ticket number silently claimed a milestone number with nothing arbitrating the
+  claim. Four changes follow: `docs/roadmap.yaml` becomes the sole owner of ticket and milestone
+  identity, of each milestone's path `scope:`, and of the `frozen:` register list; `docs/entries/`
+  becomes the write surface, one file per ticket on a path no other branch owns; `docs_lint.py`
+  exempts that directory from the caps table and the orphan check while it still owes
+  line-length, encoding, and scenario-id; and `CLAUDE.md` §3 becomes the parallel work protocol
+  with a new §7 defining the single-writer integration step, §5 and §6 rerouted into the entry
+  file. The registry records M29 and M30 as intersecting on `evals/viewer.py`, `evals/README.md`,
+  and `tests/evals/` - the first pair the intersection rule would have caught before launch.
+- **Files:** `docs/roadmap.yaml` (new), `docs/entries/README.md` (new),
+  `docs/entries/T0031.1.md` (new), `scripts/docs_lint.py`, `tests/test_docs_lint.py`,
+  `CLAUDE.md`, `AGENTS.md` (kept byte-identical), `docs/README.md`, `docs/Tickets.md`, and
+  `skills/generate-ticket-prompt/SKILL.md`.
+- **Commands:** `git merge-base --is-ancestor` across each pair of open branches,
+  `git log --pretty=format: --name-only -200 | sort | uniq -c | sort -rn`,
+  `git diff --name-only origin/main...feature/t0029-viewer-readability`,
+  `python scripts/docs_lint.py`, and `python -m pytest tests/test_docs_lint.py -q`.
+- **Build and test results:** `scripts/docs_lint.py` exit 0 with no findings;
+  `uv run --frozen python -m pytest -q` 455 passed, 10 skipped, 30 deselected;
+  `python -m pytest tests/test_docs_lint.py -q` 33 passed, 1 skipped. The exemption was proved
+  scoped rather than switched off: a throwaway `docs/entries/T9999.md` lints clean while a
+  throwaway `docs/Scratch.md` still reports `size-cap`.
+- **Manual verification:** carried into
+  [Manual Verification Guide](Manual_Verification_Guide.md); not yet re-run by a developer, and
+  the entry's own `verified:` field reads `no`.
+- **Risks:** the ticket edits two frozen registers (`docs/README.md`, `docs/Tickets.md`) because
+  it is the ticket that establishes the freeze, and T0031.4's `frozen` check must not read this
+  commit as precedent. The integration step stays manual until .2 and .3 land, which is the same
+  cost that produced the current branch stack. Scope declarations can rot, so widening one is
+  deliberately a one-line edit. The existing M26-M30 branches are untouched and still carry each
+  other's diffs; the new rules apply from the next branch cut off `main`.
+- **Follow-ups:** T0031.2 (generate the registers), T0031.3 (derive the snapshot), T0031.4
+  (enforce registry, scope, and frozen in CI).
+- **Docs that need updating:** `docs/Docs_Conventions.md` should gain a short section on the
+  write-surface split once T0031.2 lands and the generated regions exist.

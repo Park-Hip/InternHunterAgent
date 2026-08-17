@@ -1,6 +1,6 @@
 # InternHunter — Tickets & Roadmap
 
-> **Last verified:** 2026-08-16 against the active ticket plan and completion records.
+> **Last verified:** 2026-08-17 against the active ticket plan and completion records.
 
 > **Eviction:** A ticket plan leaves when its completion report is recorded and its historical scope
 > is moved to the ticket archive.
@@ -42,13 +42,14 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 28 | T0028 | Evaluation Documentation Ownership | ✅ | Complete 2026-08-14 (.1 Fact Ledger rows + `scenario-id` check, .2 dedupe the behavior spec, .3 seal + merge the instrument reports, .4 operating manual + stale-claim sweep). No verdict, rule, or threshold changed |
 | 29 | T0029 | Evaluation Readability | ✅ | .1 complete 2026-08-15: the verdict, the run's identity, and telemetry rendered in the viewer. Spent no quota; changed no rule |
 | 30 | T0030 | Evaluation Evidence Durability | 📋 | .1 freeze command, .2 freeze the exposed captures, .3 the telemetry decision · closes the `[MED · DECISION]` left open by T0025.10 |
-| 31 | T0031 | **Parallel Agent Workflow** | 🔨 | .1 registry, frozen registers, per-ticket entries · .2-.4 generator, derived state, enforcement |
+| 31 | T0031 | **Parallel Agent Workflow** | 🔨 | .1 complete 2026-08-17 (PR #53): registry, frozen registers, per-ticket entries · .2-.4 generator, derived state, enforcement |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > **Numbers are allocated in [`roadmap.yaml`](roadmap.yaml), not here.** This table is a reader's
-> index of what the registry already decided. M29 and M30 are in flight on their own branches and
-> add their own rows; T0031.1 adds only its own, and no later ticket adds one at all - the
-> integration step does.
+> index of what the registry already decided. M29 and M30 merged on 2026-08-17 as PRs #51 and #52
+> and each added its own row on the way in; T0031.1 adds only its own. That is the last row a
+> ticket adds - once this milestone lands, the table is frozen and the integration step maintains
+> it.
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
 > maintainer executing it. Verified 2026-08-12: the Groq and Google keys are configured locally, so
@@ -321,7 +322,11 @@ The milestone separates the **write surface** from the **read surface**. Agents 
 paths no other agent owns; the shared registers are written once per merge, by the integration
 step, and are being made derivable so that step stays cheap.
 
-### T0031.1: Give parallel tickets a private write surface - 🔨 In progress
+### T0031.1: Give parallel tickets a private write surface - ✅ Complete 2026-08-17
+
+> **Complete 2026-08-17** as PR #53. `docs/roadmap.yaml` owns identity, scope, and the frozen
+> list; `docs/entries/` is the write surface; `CLAUDE.md` and `AGENTS.md` carry the protocol and
+> the integration step. This entry is the first the integration step folded by hand.
 
 **Objective.** Make it structurally impossible for two ticket agents to edit the same line.
 

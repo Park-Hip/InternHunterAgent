@@ -1,5 +1,5 @@
 # Known Issues & Risks
-> **Last verified:** 2026-08-14 against checked-out code, tests, configuration, and active runbooks.
+> **Last verified:** 2026-08-17 against checked-out code, tests, configuration, and active runbooks.
 
 This register holds actionable risks that are open, blocked, or awaiting a maintainer decision.
 > **Eviction:** An entry leaves when fixed, superseded, or reclassified in its owning document.
@@ -10,8 +10,8 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 8 | 2 | 2 |
-| LOW | 17 | 3 | 0 |
+| MED | 9 | 2 | 3 |
+| LOW | 18 | 3 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
@@ -247,6 +247,30 @@ or maintainer action, and `DECISION` needs a product or operational choice.
     for 8 rows, the other matched Saigon alone, returned none, and reported no postings.
   - **Next:** M24 owns these; T0025.7 measures them and changes no prompt or runtime behavior.
   - **History:** Ignored `evals/runs/t0025.7-acceptance.json` and its grade report. <!-- lint-allow-link-path -->
+
+## Workflow & documentation (3)
+
+- **`[MED · OPEN]` A fresh worktree cannot run the test suite.**
+  - **Found:** T0031.1 on 2026-08-16.
+  - **Impact:** `.env` is gitignored, so a new worktree has no Langfuse keys and ten test modules
+    fail at collection with `ConfigLoadError` - a first-run trap for every agent, since §3 now
+    requires each writing session to work in its own worktree.
+  - **Next:** Copy `.env` from the primary worktree, or supply test-only conftest placeholders.
+  - **History:** `.gitignore`; `CLAUDE.md` §3.
+
+- **`[MED · DECISION]` M23 has been indexed and unscoped since 2026-08-09.**
+  - **Found:** T0031.1 on 2026-08-16, auditing numbering drift.
+  - **Impact:** M26 through M31 all shipped past the v1.0 release cut, so the release sits behind
+    work that keeps arriving and nothing arbitrates that.
+  - **Next:** A maintainer decides where M23 sits; sequencing is not a ticket's call.
+  - **History:** [Tickets](Tickets.md) M23; [`roadmap.yaml`](roadmap.yaml).
+
+- **`[LOW · OPEN]` Stale worktrees survive their finished sessions.**
+  - **Found:** T0031.1 on 2026-08-16.
+  - **Impact:** Two belong to finished sessions and the t0031 lock named a dead pid, so a merged
+    branch can look active and a lock can outlive its owner.
+  - **Next:** One prune sweep, worth a follow-up ticket rather than an ad-hoc deletion.
+  - **History:** `git worktree list`; `CLAUDE.md` §3.
 
 ## Demo UI (4)
 

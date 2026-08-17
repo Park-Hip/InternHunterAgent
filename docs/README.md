@@ -25,10 +25,12 @@ was true on 2026-07-14 and will be replaced by a re-measurement rather than edit
 budget on them would measure nothing. The three living ones carry caps set from their measured
 length.
 
-`Known_Issues.md` moved 250 → 275 on 2026-08-14, measured at 258. It sat exactly at its cap while
-T0025.9, T0025.10, and T0026.1 each found something real, so the next true entry had nowhere to go.
-Eviction is the cheaper fix when this binds again: several `LOW · OPEN` entries say in substance
-"address only if this recurs", which is a deferred preference rather than an open risk.
+`Known_Issues.md` moved 250 → 275 on 2026-08-14, measured at 258, then 275 → 300 on 2026-08-17,
+measured at 299 once T0031.1's three findings joined it under a new "Workflow & documentation"
+heading. It bound exactly at its cap both times, which is the cap doing its job. The maintainer
+chose the cap over eviction on 2026-08-17; the eviction argument still stands and is owed at the
+next binding: several `LOW · OPEN` entries say in substance "address only if this recurs", which
+is a deferred preference rather than an open risk.
 
 T0031.1 split this map into a write surface and a read surface. Every document listed below is now
 read-mostly for a ticket agent: the ones named in the `frozen:` list in
@@ -63,7 +65,7 @@ come back down once it happens.
 | [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | 450 | Decision makers |
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 150 | All contributors |
-| [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 275 | Maintainers |
+| [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 300 | Maintainers |
 | [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 400 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T3 | 150 | Developers |

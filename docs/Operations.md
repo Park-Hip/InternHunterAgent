@@ -155,6 +155,7 @@ The remaining cost decision and the separate ingestion-cron activation gates rem
 | Symptom | First response |
 |---|---|
 | API unavailable | Check Render deploy logs, then `/api/v1/health` and `/api/v1/ready`. |
+| Demo answers nothing while `/health` and `/ready` are green | Suspect a stale build first, not the model provider. Compare the deployed `app.js`, `styles.css`, and `index.html` against `main` with `git hash-object`; a mismatch means the running commit is not `main`, and a deploy is the fix. A `500` returned in milliseconds is too fast to be a model call. |
 | Database readiness fails | Check Neon availability and `DATABASE_URL`; do not reset production. |
 | Ingestion fails | Inspect the GitHub Actions run and follow the activation runbook before retrying. |
 | Schema mismatch | Stop the ingestion/deploy path and run the deliberate Alembic procedure above. |

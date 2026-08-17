@@ -26,11 +26,13 @@ budget on them would measure nothing. The three living ones carry caps set from 
 length.
 
 `Known_Issues.md` moved 250 → 275 on 2026-08-14, measured at 258, then 275 → 300 on 2026-08-17,
-measured at 299 once T0031.1's three findings joined it under a new "Workflow & documentation"
-heading. It bound exactly at its cap both times, which is the cap doing its job. The maintainer
-chose the cap over eviction on 2026-08-17; the eviction argument still stands and is owed at the
-next binding: several `LOW · OPEN` entries say in substance "address only if this recurs", which
-is a deferred preference rather than an open risk.
+measured at 299 once T0031.1's three findings joined it. It bound exactly at its cap both times,
+which is the cap doing its job. The maintainer chose the cap over eviction the first time and the
+eviction was owed at the next binding, which came the same day: the cap held at 300 and the
+eviction ran, reclassifying seven entries whose own text said "act only if X happens" into a
+one-line "Deferred preferences" table. The cap stays at 300, measured at 288, because the same
+pass added the 2026-08-13 outage residual and the unmerged-M24 decision. Eviction and a raised cap
+are not alternatives here; the register needed both, and only eviction bought headroom back.
 
 T0031.1 split this map into a write surface and a read surface. Every document listed below is now
 read-mostly for a ticket agent: the ones named in the `frozen:` list in
@@ -39,6 +41,12 @@ it has to say into its own file under [`entries/`](entries/README.md). Caps ther
 integration decisions rather than ticket traffic, which is what makes them meaningful again -
 `Repo_Current_State.md` absorbed 91 of the preceding 200 commits and was still a merge behind
 itself on `main`.
+
+`Repo_Current_State.md` moved 150 → 175 on 2026-08-17, measured at 158. The 150 cap was set when
+one ticket branch was in flight at a time; the snapshot now has to name which branches are open,
+which carry unmerged work, and which worktrees exist, because parallel work is the condition this
+repository operates under. That is the same argument that moved `Tickets.md`, and the same answer:
+the cap was measuring a repository with one branch in flight, and this one has several.
 
 `entries/` is indexed here as a directory, the same way `archive/` is. A per-ticket file cannot
 take a per-file cap row without recreating the shared-table edit the directory exists to remove.
@@ -64,7 +72,7 @@ come back down once it happens.
 | [Tech Stack](Tech_Stack.md) | Languages, services, versions, and dependencies | T1 | 150 | New contributors |
 | [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | 450 | Decision makers |
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
-| [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 150 | All contributors |
+| [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 175 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 300 | Maintainers |
 | [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 400 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |

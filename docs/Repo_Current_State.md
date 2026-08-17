@@ -8,15 +8,19 @@
 
 ## Current branch
 
-- Repository baseline: `main` at `1bc3e17`, which merged T0031.1 as PR #53 on 2026-08-17,
-  carrying M30's scoping plan (PR #52, same day), M29 (PR #51), M27 (PR #50, 2026-08-16), M28
-  (PR #49), and M25/M26 (PR #48); PR #47 was closed as superseded by #48.
-- Active ticket branch: none. `feature/t0031-parallel-agent-docs` stays open for T0031.2-.4 with no
-  unmerged work; the M29 and M30 branches are merged.
+- Repository baseline: `main` at `49852ae`, the first integration pass of 2026-08-17 (PR #54),
+  on top of T0031.1 (PR #53), M30's scoping plan (PR #52), M29 (PR #51), M27 (PR #50, 2026-08-16),
+  M28 (PR #49), and M25/M26 (PR #48); PR #47 was closed as superseded by #48.
+- Unmerged work: `feature/t0024.6-persona-scope` carries T0024.1 and T0024.6, built 2026-08-13,
+  never reviewed, and invisible until 2026-08-17 - see [Known Issues](Known_Issues.md).
+  `feature/t0031.2-generate-registers` is open at the baseline; M29 and M30 are merged.
 - Numbers, milestone scopes, and the frozen register list live in
   [`roadmap.yaml`](roadmap.yaml) as of T0031.1; this snapshot is written only by integration.
+- Worktrees: three finished ones were pruned on 2026-08-17. `t0031-parallel-docs-workflow` stayed,
+  locked by a dead pid; `t0024.1-behavior-glossary` stayed, holding the unmerged M24 work.
 - `main` is the deployment source of truth and deploys the public service.
-- Live demo: <https://internhunteragent.onrender.com>.
+- Live demo: <https://internhunteragent.onrender.com>, re-probed 2026-08-17: a real answer with a
+  Langfuse trace in 10.6 s, and its static assets hash-match `main`.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
 
 ## Completed milestones
@@ -26,7 +30,7 @@ Completed ticket plans are preserved in the [ticket archive](archive/Tickets_Arc
 M0-M20 are complete, covering the foundation, agent runtime, data ingestion, evaluation harness,
 security, streaming, deployment, and reconciliation work. M21 is complete through T0021.4, the
 pass that carved the model-honesty work out into M24, and M22 - Docs Hygiene & Documentation
-System - is complete (T0022.1-.14).
+System - is complete (T0022.1-.14). M24 is in progress on an unreviewed branch, not planned.
 
 M25-M29 are complete, entered through [`evals/README.md`](../evals/README.md) and recorded in full
 in [Completion Reports](Completion_Reports.md): the evaluation instrument and its CI replay gate,
@@ -61,6 +65,7 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
 | `archive/t0015.6-provider-ab` | `45d333c` | The deferred provider/reasoning A/B phase and Windows event-loop factory. |
 | `archive/stash-t0019.6-docs` | `b7a291e` | The former T0019.6 documentation stash and its original ten files. |
 | `archive/docs-pre-prune` | `cb9ee2b` | The dead documentation surface and self-hosted Langfuse stack. |
+| `archive/serving-outage-2026-08-13` | `1e073e3` | The original 2026-08-13 outage diagnosis, folded into the registers without a ticket number. |
 
 ## Carried work
 
@@ -69,6 +74,9 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
   beside it, scoping serving reliability, operational telemetry, and a production evaluation loop as
   T0027-T0029 - numbers already spent. Superseded as written; re-numbering it through
   [`roadmap.yaml`](roadmap.yaml) is the only way it lands. This is the drift T0031.1 prevents.
+  Its §1.1 also concludes the 2026-08-13 outage was a model-provider failure, which the direct
+  probes recorded in [Resolved Issues](Resolved_Issues.md) disprove: that section is wrong, not
+  merely stale.
 - The legacy HTTP runner stays archived; the driver took its orchestration as a pattern only and
   runs the agent in-process (D-043). The 2026-07-14 answer artifact is answer-only, so replaying it
   still grades `INFRA` at the structural tier - only a driver capture carries tools and SQL.

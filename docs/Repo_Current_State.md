@@ -8,11 +8,11 @@
 
 ## Current branch
 
-- Repository baseline: `main` at `42fb3ef`, which merged M28 as PR #49 on 2026-08-15. It carries
-  M25 and M26 from PR #48; PR #47 was closed as superseded, every commit it carried being already
-  contained in #48.
-- Active ticket branch: `feature/t0027-deepseek-provider`, merged up to that baseline rather than
-  stacked behind it, in the worktree `.claude/worktrees/t0027-deepseek-provider`.
+- Repository baseline: `main` at `0a6524e`, which merged M27 as PR #50 on 2026-08-16. It carries
+  M28 from PR #49 and M25 and M26 from PR #48; PR #47 was closed as superseded, every commit it
+  carried being already contained in #48.
+- Active ticket branch: `feature/t0029-viewer-readability`, merged up to that baseline rather than
+  stacked behind it, in the worktree `.claude/worktrees/t0029-viewer-readability`.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
@@ -27,10 +27,10 @@ security, streaming, deployment, and reconciliation work.
 M21 is complete through T0021.4, and the same pass carved the model-honesty work out into M24.
 M22 - Docs Hygiene & Documentation System is complete (T0022.1-.14).
 
-M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10), and
-[`evals/README.md`](../evals/README.md) is its entry point. CI replays committed three-seam
-evidence with no model, judge, or outbound call. Its acceptance run was partial by design - the
-free tier's ceiling left 13 of 19 turns measured - and T0027.3 has since measured all 29 scenarios.
+M25 - Evaluation Instrument is complete as of 2026-08-13 (T0025.0-.10), entered through
+[`evals/README.md`](../evals/README.md) and gated by a CI replay of committed three-seam evidence
+that makes no model, judge, or outbound call. Its acceptance run measured 13 of 19 turns on the
+free tier; T0027.3 has since measured all 29.
 
 M26 - Evaluation Workspace Hygiene is complete (T0026.1-.3) and changed no verdict.
 Its deterministic tests live in `tests/evals/`, the scenario registry owns every grading
@@ -39,13 +39,11 @@ expectation, and its three ticket plans joined M25's ten in the archive on 2026-
 M27 - DeepSeek Provider Integration is complete (T0027.1-.4), 2026-08-14 to 2026-08-15.
 `agent.<profile>.provider` selects a provider per profile, the manifest records which one produced
 a run, and the measured arm captured 29 of 29 scenarios and 77 turns in 5m20s for about $0.04.
-DeepSeek was selected on operational grounds at step 4 of the pre-registered rule (**D-045**): both
-profiles now use `deepseek-v4-flash`, `render.yaml` declares `DEEPSEEK_API_KEY`,
-`eval.driver.turn_pacing_seconds` is 0, and each provider branch validates its own key at boot.
-The Groq branch stays selectable. See [the arm record](../evals/t0027_deepseek_arm.md) and
+DeepSeek was selected at step 4 of the pre-registered rule (**D-045**): both profiles use
+`deepseek-v4-flash`, `eval.driver.turn_pacing_seconds` is 0, each branch validates its own key at
+boot, the Groq branch stays selectable, and [Operations.md](Operations.md) owns `DEEPSEEK_API_KEY`.
+Evidence: [the arm record](../evals/t0027_deepseek_arm.md) and
 [`research/deepseek-provider-evaluation.md`](../research/deepseek-provider-evaluation.md).
-**Before this reaches `main`, `DEEPSEEK_API_KEY` must exist in the Render dashboard**; without it
-the deploy starts healthy and fails on the first query.
 
 M28 - Evaluation Documentation Ownership is complete (T0028.1-.4) and changes no verdict, rule, or
 threshold. The Fact Ledger names an owner for evaluation facts, enforced by a `scenario-id` lint
@@ -53,6 +51,10 @@ check; the behavior spec links to the registry instead of duplicating it; the da
 sealed in `evals/archive/` and the audit and holdout reports merged into
 [`evals/Instrument_Report.md`](../evals/Instrument_Report.md); and
 [`evals/Operating_Manual.md`](../evals/Operating_Manual.md) explains the instrument end to end.
+
+M29 - Evaluation Readability is complete through T0029.1 and changes no verdict, rule, or threshold.
+`evals/viewer.py` joins an optional `--grade` report per turn, so one screen carries the verdict and
+tier, each failing check beside its seam, a grade filter, a run header, and labelled telemetry.
 
 ## Archive tags
 
@@ -75,8 +77,8 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
   structural tier. Only a driver capture carries tools, SQL, and execution results.
 - `evals/runs/` is ignored, so the 13-turn labelled capture behind
   [`evals/Instrument_Report.md`](../evals/Instrument_Report.md) is not reproducible from a clean
-  checkout; references to it carry `<!-- lint-allow-link-path -->`, because they resolve on a
-  developer machine and fail the documentation gate, which lints a bare checkout.
+  checkout. References to it carry `<!-- lint-allow-link-path -->`: they resolve on a developer
+  machine but fail the documentation gate, which lints a bare checkout.
 
 ## Folder structure
 
@@ -104,11 +106,10 @@ The authoritative package declarations are in `pyproject.toml`.
 - `uv run python -m evals.driver --output evals/runs/run.json` - capture the scenario registry.
 - `uv run python -m evals.driver --resume --output evals/runs/run.json` - resume a partial run.
 - `uv run python -m evals.driver diff left.json right.json` - verify run comparability.
-- `uv run python -m evals.viewer evals/runs/run.json --output evals/runs/run-viewer.html` - generate
-  the local trace viewer.
+- `uv run python -m evals.viewer <run>.json --grade <run>-grade.json` - the local trace viewer,
+  with each turn's verdict joined when `--grade` is given.
 - `uv run python -m evals.viewer --sample` - generate a two-turn viewer sample without model quota.
-- `uv run python -m evals.execution_accuracy evals/runs/run.json` - grade persisted SQL seams.
-  The command uses frozen fixture references.
+- `uv run python -m evals.execution_accuracy <run>.json` - grade SQL seams on frozen references.
 - `uv run python -m evals.replay` - replay committed evidence with no model or judge call.
 - `uv run ruff check .` - lint the repository.
 - `uv run mypy` - type-check `src`.
@@ -121,17 +122,16 @@ The authoritative package declarations are in `pyproject.toml`.
 | Check | Most recent recorded result |
 |---|---|
 | `python scripts/docs_lint.py` | Passed on 2026-08-16 (all eleven checks) |
-| `uv run pytest -q` | 453 passed, 10 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-16 |
+| `uv run pytest -q` | 472 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-16 |
 | `uv run ruff check .` | Passed on 2026-08-16 |
-| `uv run pytest -q tests/evals` | 82 passed on 2026-08-16 |
+| `uv run pytest -q tests/evals` | 93 passed on 2026-08-16 |
 | `git diff --check` | Clean on 2026-08-16 |
-| `uv run python -m evals.replay` | Exit 0 on 2026-08-16, unchanged by the provider flip |
+| `uv run python -m evals.replay` | Exit 0 on 2026-08-16, unchanged by the viewer work |
 | `uv run mypy` | Success: no issues in 43 source files on 2026-08-16 |
 
-Every skip is environmental. One migration round-trip test requires `SCRATCH_DATABASE_URL`, eight
-evaluation fixture tests require the local fixture Postgres on port 5433, and one skill-parity
-check needs the gitignored `.claude/` copy.
-The default suite deselects live eval tests by design.
+Every skip is environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, the eight
+evaluation fixture tests need the local fixture Postgres on 5433, and skill parity needs the
+gitignored `.claude/` copy. The default suite deselects live eval tests by design.
 
 ## Registers
 
@@ -146,5 +146,5 @@ T0023 - the release path. `schedule:` is restored on `main` as of T0020.4, so th
 `/api/v1/ready` reports a measured `2026-08-13`. T0023 still owes its DoD sweep and terms posture.
 M24 owns the behavior failures M25 and T0027.3 measured, and T0027.3 hands it a triaged list: of 33
 failing turns, 23 are real behavior and 10 are grader phrasing artifacts recorded in
-[Known Issues](Known_Issues.md). M26, M27, and M28 are closed, so no hygiene work stands between
-here and the release sequence.
+[Known Issues](Known_Issues.md); M29 is the screen that makes that triage repeatable. M26, M27,
+M28, and M29 are closed, so no hygiene work stands between here and the release sequence.

@@ -40,6 +40,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
 | 27 | T0027 | DeepSeek Provider Integration | ✅ | Complete 2026-08-15 (.1-.4), following the deferred T0015.6 procedure · the spike passed, the arm measured 29/29 scenarios in 5m20s for ~$0.04, and .4 flipped both profiles to DeepSeek (D-045) with pacing at 0 and no provider key required at boot · the Groq branch stays selectable |
 | 28 | T0028 | Evaluation Documentation Ownership | ✅ | Complete 2026-08-14 (.1 Fact Ledger rows + `scenario-id` check, .2 dedupe the behavior spec, .3 seal + merge the instrument reports, .4 operating manual + stale-claim sweep). No verdict, rule, or threshold changed |
+| 29 | T0029 | Evaluation Readability | ✅ | .1 complete 2026-08-15: the verdict, the run's identity, and telemetry rendered in the viewer. Spent no quota; changed no rule |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > ⚠ **M11:** milestone shipped, but the T0011.5 baseline-calibration run is still **blocked** on a
@@ -150,3 +151,65 @@ holdout report merged into [`evals/Instrument_Report.md`](../evals/Instrument_Re
 the three seams, grading, and its stated limits, and `Offline_Pipelines_Design.md` §8.6-8.7 now
 names the shipped CI replay gate and the configured model.
 No scenario, grading rule, threshold, or replay artifact changed.
+
+---
+
+## T0029: Milestone 29 - Evaluation Readability
+
+M28 gave every evaluation fact an owner. This milestone makes a *recorded run* readable, which is
+the step that still costs a person an afternoon now that capturing one costs four cents.
+
+### T0029.1: Show the verdict, the run, and the telemetry in the viewer
+
+> **Complete 2026-08-15.** `--grade` joins a grader report per turn; each turn shows its verdict
+> and tier with every non-passing check drawn beside the seam it judges, the toolbar filters by
+> grade status separately from capture status, a manifest-built run header names provider, model,
+> and sampling per profile, and telemetry renders as labelled fields. No rule, threshold, verdict,
+> or replay artifact changed. Outcome in [Completion Reports](Completion_Reports.md).
+
+**Objective:** Make one capture answerable in the viewer alone - what failed, on which rule, under
+which provider and sampling.
+
+The measured arm produced 77 turns and 33 failures. Finding them meant pressing "Next" 77 times,
+because [`viewer.py`](../evals/viewer.py) opens the driver artifact only: the verdict sits in a
+separate `-grade.json` the viewer never reads, the manifest's provider and sampling never reach
+the screen, and telemetry renders as one `json.dumps` blob in a text field. Triaging those 33 into
+23 real behaviors and 10 grader phrasing artifacts was done with throwaway Python at a terminal,
+which is the work this ticket removes.
+
+**In Scope:**
+* A `--grade <path>` input, joined on scenario / repeat / turn - already the viewer's `key`. Show
+  each turn's `PASS`/`FAIL`/`INFRA`/`UNRUN` and its tier, and render every failing check's `name`
+  and `detail` beside the seam it judges. `detail` carries what the rule wanted against what it
+  saw, which is the field that makes a verdict explicable rather than merely visible.
+* Filter the turn list by grade status. Note this is **not** the `status` the viewer shows today,
+  which is capture status (`COMPLETE`, `PARTIAL_QUOTA`); both must be legible without collision.
+* A run header built from the manifest: provider and model per profile, temperature, `max_tokens`,
+  the reasoning knob, `git_sha`, and `baseline_eligible`. Two arms must be distinguishable on
+  screen - today the string `deepseek` appears nowhere in the generated HTML, although T0027.2 put
+  `providers` in the manifest precisely so a capture could say what produced it.
+* Telemetry as labelled fields rather than one blob: latency, input / output / total tokens, the
+  per-call breakdown, and finish reasons.
+* The real-artifact invocation in [`evals/README.md`](../evals/README.md), which documents
+  `--sample` only. Commands belong there, not in the Operating Manual.
+
+**Out of Scope:**
+* Judge-tier UI. No scenario sets `judge_metric`, so all 77 grades resolved structural or textual
+  and there is nothing to draw. Render the `tier` field generically and a judge check appears the
+  day a rule declares one.
+* Any change to a grading rule, a threshold, or a verdict. The viewer reads evidence and never
+  writes it, which is what lets it stay outside the replay gate.
+* [`Operating_Manual.md`](../evals/Operating_Manual.md), which owns why the instrument is built
+  this way rather than how to run it, and any new dependency. The viewer is one self-contained
+  HTML file with no external asset, and stays that way.
+
+**Manual verification:**
+1. `uv run python -m evals.viewer --sample` still renders with no run artifact and no grade file,
+   proving the grade input is optional rather than required.
+2. Generate against a capture plus its grade file: filtering to `FAIL` yields the same count the
+   grade summary reports, and the header names the model and per-profile temperature.
+3. Open a `SAF` turn graded `FAIL` and read the failing check's `detail`. It must show the
+   substring the rule wanted - that is how the 10 phrasing artifacts were identified by hand.
+4. Regenerate from the frozen replay evidence and confirm the gate is untouched.
+
+**Blockers:** None. Spends no quota; every input is a recorded artifact.

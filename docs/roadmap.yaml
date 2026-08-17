@@ -245,7 +245,7 @@ milestones:
 
   - id: M32
     title: Prompt Surface Pass
-    status: planned
+    status: in-progress
     tickets: [T0032.1, T0032.2, T0032.3, T0032.4]
     scope:
       - src/agents/tools/
@@ -260,4 +260,6 @@ milestones:
       disjoint from M24's (config/prompts.yaml, src/agents/runtime/prompts.py,
       tests/agents/runtime/test_prompts.py, docs/Agent_Behavior_Spec.md), so the two milestones
       are independent and may run in parallel. Instruction-count pruning is deliberately excluded
-      and sequenced after M24; see the follow-ups in the ticket plan.
+      and sequenced after M24; see the follow-ups in the ticket plan. T0032.4 merged as PR #63 on
+      2026-08-17 and selected the English prompt plus a Vietnamese-output rule for a later
+      promotion ticket. T0032.1 through T0032.3 remain open.

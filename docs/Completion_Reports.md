@@ -3716,4 +3716,62 @@ publishes only its own entry.
 - `docs/Repo_Current_State.md` names twelve checks in its build-status table; it is fifteen now.
   The row is hand-written, so the `--snapshot` run does not fix it - integration does.
 - `docs/README.md` describes the linter's check count in its opening; same correction.
+
+---
+
+## T0032.4 - Measure Vietnamese prompt options
+
+*Completed 2026-08-17.*
+
+**Summary**
+
+Added a fixture-backed Vietnamese prompt spike that injects a variant only in memory.
+The script records answers, generated SQL, called tools, language-purity signals, and per-rule
+compliance for each run.
+The live comparison selected A1: retain the English prompt and add one Vietnamese-output rule when
+a later ticket promotes the policy.
+
+**Files**
+
+* `scripts/vietnamese_prompt_spike.py` - added the A0-A4 fixture-backed spike.
+* `research/vietnamese-prompt-spike.md` - records the method, findings, and A1 recommendation.
+* `docs/entries/T0032.4.md` - ticket completion entry.
+
+**Commands**
+
+* `uv run python -m py_compile scripts/vietnamese_prompt_spike.py`.
+* `uv run ruff check scripts/vietnamese_prompt_spike.py`.
+* `uv run python scripts/vietnamese_prompt_spike.py --help`.
+* `uv run python scripts/docs_lint.py`.
+* `git diff --check`.
+* `uv run python scripts/vietnamese_prompt_spike.py --arm A0 --output <temporary path>`.
+* `uv run python scripts/vietnamese_prompt_spike.py --arm A1 --runs 3 --output <temporary path>`.
+* `uv run python scripts/vietnamese_prompt_spike.py --arm A2 --runs 3 --output <temporary path>`.
+* `uv run python scripts/vietnamese_prompt_spike.py --arm A3 --winner A1 --runs 3`.
+* `uv run python scripts/vietnamese_prompt_spike.py --arm A4 --winner A1 --runs 3`.
+
+**Build and test**
+
+| Check | Result |
+|---|---|
+| Script compilation and Ruff | Passed. |
+| Documentation lint and diff check | Passed for ticket-owned files. |
+| Fixture-backed A0-A4 spike | Passed with 72 recorded rows. |
+| Full pytest suite | 527 passed, 2 skipped, and 2 failures from the pre-existing stale frozen register. |
+
+**Risks**
+
+The selected language policy is evidence for a later promotion ticket, not a shipped change.
+The strict English-fragment rule needs an explicit source-value exemption decision.
+
+**Follow-ups**
+
+Promote A1 only in a later Vietnamese-language milestone that defines the source-value language
+policy.
+Address application-deadline honesty and the multi-turn tool instability in a behavior ticket.
+
+**Docs**
+
+The integration step must fold this entry into the frozen completion, manual-verification, and
+known-issues registers.
 <!-- generated:reports:end -->

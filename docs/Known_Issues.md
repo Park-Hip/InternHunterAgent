@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 10 | 1 | 3 |
+| MED | 11 | 1 | 3 |
 | LOW | 17 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -35,6 +35,12 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
+- `KI-2026-08-17-vietnamese-spike-multiturn` **`[MED - OPEN]` Multi-turn tool following is
+  unstable.**
+  - **Found:** A3 used `get_current_time` for an application-deadline question in two of three runs.
+  - **Impact:** A Vietnamese conversation can lose reliable tool selection after turn six.
+  - **Next:** Add a behavior ticket that reproduces and corrects the instability.
+  - **History:** Found during T0032.4 on 2026-08-17 against the fixture database and DeepSeek.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 

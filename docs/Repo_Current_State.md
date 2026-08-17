@@ -9,13 +9,15 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `main` at `8b2c02e` - docs(integration): refresh M32 repository state (2026-08-17).
-- Branches not merged into `main`: 10 - `codex/t0032.1-tool-surface`,
+- Checked out: `integration/t0032.4-publish` at `b4d8880` - Merge pull request #63 from
+  Park-Hip/feature/t0032.4-vietnamese-prompt-spike (2026-08-17).
+- Branches not merged into `main`: 12 - `codex/t0032.1-tool-surface`,
   `codex/t0032.2-prompt-inventory`, `codex/t0032.3-prompt-consistency`,
   `feature/t0022.10-prune-dead-docs`, `feature/t0024.1-behavior-glossary`,
   `feature/t0024.6-persona-scope`, `feature/t0031-parallel-agent-docs`,
-  `integration/t0031.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
-- Worktrees: 14.
+  `feature/t0032.4-vietnamese-prompt-spike`, `integration/t0031.4-publish`,
+  `integration/t0032.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+- Worktrees: 15.
 <!-- generated:snapshot:end -->
 
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
@@ -47,8 +49,8 @@ Complete: M0, M6-M22, M25-M31 - 25 of 28 milestones.
 | Milestone | Title | Status |
 |---|---|---|
 | M24 | Honesty Enforcement (obligation seam) | in-progress |
+| M32 | Prompt Surface Pass | in-progress |
 | M23 | v1.0 Release Cut | planned |
-| M32 | Prompt Surface Pass | planned |
 <!-- generated:milestones:end -->
 
 M24 is in progress on an unreviewed branch rather than planned. M30 closed on 2026-08-17 (PR #61):
@@ -163,6 +165,8 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 - `scripts/scrape_topcv_spike.py` - Scraping spike - TopCV internship listings via cloudscraper.
 - `scripts/scrape_topdev_spike.py` - Scraping spike - TopDev AI/Data IT jobs via RSC payload
   parsing.
+- `scripts/vietnamese_prompt_spike.py` - Measure Vietnamese prompt variants against the
+  fixture-backed production agent.
 <!-- generated:scripts:end -->
 
 ## Build and test status

@@ -43,7 +43,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 29 | T0029 | Evaluation Readability | ✅ | .1 complete 2026-08-15: the verdict, the run's identity, and telemetry rendered in the viewer. Spent no quota; changed no rule |
 | 30 | T0030 | Evaluation Evidence Durability | ✅ | Complete 2026-08-17 (PR #61): .1 the `freeze` command, .2 the surviving T0025.7 capture frozen to `evals/replays/`, .3 **D-046** on telemetry · closed the `[HIGH · DECISION]` capture-preservation entry. The lost T0027.3 capture stays lost |
 | 31 | T0031 | Parallel Agent Workflow | ✅ | Complete 2026-08-17 (.1 PR #53 registry, frozen registers, per-ticket entries · .2 PR #57 three registers generated from the entries · .3 PR #59 `Repo_Current_State.md` derived from the tree · .4 PR #62 `registry`, `scope`, and `frozen` checks in CI). Build status and the branch check stayed undone, both recorded |
-| 32 | T0032 | Prompt Surface Pass | 📋 | Complete the settled persona-scope decision across the tool surface, record model-facing strings, pin prompt schema lists, and measure Vietnamese prompt options |
+| 32 | T0032 | Prompt Surface Pass | 🔄 | T0032.4 complete 2026-08-17 (PR #63): selected the English prompt plus a Vietnamese-output rule for later promotion; .1-.3 remain open |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > **Numbers are allocated in [`roadmap.yaml`](roadmap.yaml), not here.** This table is a reader's
@@ -271,7 +271,7 @@ Run the whole suite and confirm it is green.
 
 ---
 
-#### T0032.4: Vietnamese prompt spike - 📋 Planned
+#### T0032.4: Vietnamese prompt spike - ✅ Complete 2026-08-17 (PR #63)
 
 **Objective.** Decide, on measured evidence rather than argument, whether the system prompt's
 instructions should be written in Vietnamese or stay English with an explicit output-language rule -
@@ -318,3 +318,9 @@ not separate.
 **Blockers.**
 A running fixture database.
 Provider budget for roughly five arms of ten cases with three runs each on the honesty probes.
+
+**Outcome.**
+All five arms completed with 72 recorded rows.
+The research record selects A1: retain the English system prompt and add one Vietnamese-output
+rule only when a later ticket defines the source-value language policy.
+The spike made no production prompt or settings changes.

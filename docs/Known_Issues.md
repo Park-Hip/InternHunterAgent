@@ -35,15 +35,6 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
-- `KI-2026-08-17-lint-checks-silent-without-base` **`[LOW · OPEN]` The `scope` and `frozen` checks
-  pass silently when no diff base resolves.**
-  - **Found:** T0031.4, by design rather than by defect.
-  - **Impact:** A CI checkout that stops fetching the base branch disables two protocol checks
-    without turning the build red. The failure looks identical to compliance.
-  - **Next:** Have CI assert that `--diff-base` resolved, or add a flag that makes an unresolvable
-    base an error rather than silence.
-  - **History:** Chosen so the linter stays runnable in a shallow clone or offline copy, the same
-    trade T0031.3 made for the snapshot region.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 
@@ -254,7 +245,7 @@ copies can never drift. Entries that predate the id convention are never inboxed
     distinguishable from an absent database.
   - **History:** Same root cause as the fixture-Postgres hang already recorded for the test suite.
 
-## Workflow & documentation (8)
+## Workflow & documentation (9)
 
 - **`[MED · OPEN]` A fresh worktree cannot run the test suite.**
   - **Found:** T0031.1 on 2026-08-16.
@@ -321,10 +312,21 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Found:** T0031.3, by design rather than by defect.
   - **Impact:** The branch, commit, and worktree block can describe an older clone with nothing
     failing. Every other generated region in the repository is gated.
-  - **Next:** Have T0031.4's `frozen` check require that the integration commit ran
-    `docs_build.py --snapshot`.
+  - **Next:** Have a check require that an integration commit ran `docs_build.py --snapshot`.
+    T0031.4 shipped the `frozen` check without this, so it needs its own ticket rather than a
+    milestone that is now closed.
   - **History:** Introduced when T0031.3 split clone-local facts out of the gated regions, because
     a check that runs in CI cannot verify a fact that differs in CI.
+
+- `KI-2026-08-17-lint-checks-silent-without-base` **`[LOW · OPEN]` The `scope` and `frozen` checks
+  pass silently when no diff base resolves.**
+  - **Found:** T0031.4, by design rather than by defect.
+  - **Impact:** A CI checkout that stops fetching the base branch disables two protocol checks
+    without turning the build red. The failure looks identical to compliance.
+  - **Next:** Have CI assert that `--diff-base` resolved, or add a flag that makes an unresolvable
+    base an error rather than silence.
+  - **History:** Chosen so the linter stays runnable in a shallow clone or offline copy, the same
+    trade T0031.3 made for the snapshot region.
 
 ## Demo UI (1)
 

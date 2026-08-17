@@ -62,10 +62,10 @@ take a per-file cap row without recreating the shared-table edit the directory e
 
 `Tickets.md` moved from 300 to 400 on 2026-08-17, then to 350 after the M28 and M29 plans were
 archived, and to 375 on the T0031.3 publish.
-M32's four newly allocated ticket bodies bring the document to 408 lines, so the integration step
-moves its cap to 425.
-A plan leaves when its **milestone** closes, not when its ticket does, and this cap accommodates the
-active plans without prematurely archiving them.
+M32's four ticket bodies then brought the document to 408 lines, so its cap moved to 425.
+When M31 closed, its archived plan reduced the document to 320 lines, and the cap moved to 350.
+A plan leaves when its **milestone** closes, not when its ticket does, so the cap retains headroom
+for the active M24 and M32 plans without prematurely archiving either.
 
 <!-- caps:begin -->
 | Doc | Owns | Tier | Cap | Reader |
@@ -82,7 +82,7 @@ active plans without prematurely archiving them.
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 230 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T4 | Uncapped | Maintainers |
-| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 425 | Delivery planning |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 350 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T4 | Uncapped | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |

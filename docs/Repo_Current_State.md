@@ -9,13 +9,13 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `main` at `553c40b` - Merge pull request #61 from
-  Park-Hip/codex/t0030.1-replay-freeze (2026-08-17).
-- Branches not merged into `main`: 7 - `feature/t0022.10-prune-dead-docs`,
-  `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
-  `feature/t0031-parallel-agent-docs`, `feature/t0031.4-enforce-protocol`,
-  `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
-- Worktrees: 8.
+- Checked out: `main` at `8b2c02e` - docs(integration): refresh M32 repository state (2026-08-17).
+- Branches not merged into `main`: 10 - `codex/t0032.1-tool-surface`,
+  `codex/t0032.2-prompt-inventory`, `codex/t0032.3-prompt-consistency`,
+  `feature/t0022.10-prune-dead-docs`, `feature/t0024.1-behavior-glossary`,
+  `feature/t0024.6-persona-scope`, `feature/t0031-parallel-agent-docs`,
+  `integration/t0031.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+- Worktrees: 14.
 <!-- generated:snapshot:end -->
 
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
@@ -42,12 +42,11 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M25-M30 - 24 of 28 milestones.
+Complete: M0, M6-M22, M25-M31 - 25 of 28 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
 | M24 | Honesty Enforcement (obligation seam) | in-progress |
-| M31 | Parallel Agent Workflow | in-progress |
 | M23 | v1.0 Release Cut | planned |
 | M32 | Prompt Surface Pass | planned |
 <!-- generated:milestones:end -->

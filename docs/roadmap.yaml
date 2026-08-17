@@ -206,7 +206,7 @@ milestones:
 
   - id: M31
     title: Parallel Agent Workflow
-    status: in-progress
+    status: complete
     tickets: [T0031.1, T0031.2, T0031.3, T0031.4]
     branch: feature/t0031.3-derive-state
     scope:
@@ -237,7 +237,11 @@ milestones:
       as PR #59, which leaves the integration step Tickets.md, one --snapshot run, and the
       judgement of where a raised issue belongs. .4 widened this list by one path,
       .github/workflows/ci.yml, because the checks it adds need the base branch fetched; the
-      scope check it was adding is what caught the omission.
+      scope check it was adding is what caught the omission. Closed 2026-08-17 with .4 as PR #62,
+      and the ticket plan archived the same day. Two named items shipped undone and are recorded
+      rather than quietly dropped: derived build status (.3) and the every-branch half of the
+      registry check (.4). The scope list stays as a record of what the milestone was allowed to
+      touch; the frozen paths in it are spent and confer nothing now that it is complete.
 
   - id: M32
     title: Prompt Surface Pass

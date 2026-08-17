@@ -3697,3 +3697,106 @@ a frozen replay does and does not carry.
 **Blockers:** None. Spends no quota; every input is a recorded artifact or a decision.
 
 ---
+
+## T0031: Milestone 31 - Parallel Agent Workflow (T0031.1-.4) - Complete 2026-08-17
+
+Parallel sessions collided on documentation rather than on code. The measured cause, taken from
+the 200 commits before this milestone: `Repo_Current_State.md` changed 91 times,
+`Known_Issues.md` 68, `Tickets.md` 56, and every open branch carried an edit to all eighteen
+documents under `docs/`. Three branches independently produced a `Tickets_Archive.md` of 1775,
+2104, and 2291 lines from the same archival operation. Identity drifted the same way: M23 is
+indexed but was never scoped, PR #48 shipped titled "M25/T0026" against docs that call it M26,
+and `feature/t0031-parallel-agent-docs` ran with a worktree and no ticket body.
+
+The milestone separates the **write surface** from the **read surface**. Agents write only to
+paths no other agent owns; the shared registers are written once per merge, by the integration
+step, and are being made derivable so that step stays cheap.
+
+### T0031.1: Give parallel tickets a private write surface - ✅ Complete 2026-08-17
+
+> **Complete 2026-08-17** as PR #53. `docs/roadmap.yaml` owns identity, scope, and the frozen
+> list; `docs/entries/` is the write surface; `CLAUDE.md` and `AGENTS.md` carry the protocol and
+> the integration step. This entry is the first the integration step folded by hand.
+
+**Objective.** Make it structurally impossible for two ticket agents to edit the same line.
+
+**In scope.** `docs/roadmap.yaml` as the sole owner of ticket and milestone numbers, of each
+milestone's path `scope:`, and of the `frozen:` register list · `docs/entries/` as the per-ticket
+write surface, with its format · the `docs_lint.py` exemptions that make a per-ticket file legal
+without a caps row or an inbound link · `CLAUDE.md` §3 and §7 rewritten as the parallel work
+protocol and the integration step, with §5 and §6 rerouted · the ticket-prompt skill emitting the
+scope and the frozen list.
+
+**Out of scope.** Generating anything. Enforcing anything in CI. Both are .2-.4.
+
+### T0031.2: Generate the registers from the entries - ✅ Complete 2026-08-17
+
+> **Complete 2026-08-17** as PR #57. `scripts/docs_build.py` renders each entry into marked
+> regions of `Completion_Reports.md`, `Known_Issues.md`, and `Manual_Verification_Guide.md`, and a
+> `generated` check in `docs_lint.py` fails when a region and its entry disagree. CI needed no
+> change, because it already runs the linter. Outcome in
+> [Completion Reports](Completion_Reports.md), which now carries it generated rather than folded.
+
+**Objective.** Fold entries into `Completion_Reports.md`, `Known_Issues.md`, and
+`Manual_Verification_Guide.md` by running a script rather than by hand.
+
+**In scope.** `scripts/docs_build.py`, which already exists as an uncommitted 386-line draft in
+the M31 worktree and reads the `docs/entries/` frontmatter contract .1 froze · generated regions
+marked in each register · a CI check that regenerating produces no diff, matching the pattern
+`check_stack` and `check_agent_parity` already use.
+
+**Not `Resolved_Issues.md`.** The plan named it and the milestone never generated it: no entry
+section feeds it, and closing an issue is a judgement about whether a fix holds, not a rendering
+of what a ticket wrote. The line is corrected here rather than left standing, which is the
+integration edit `KI-2026-08-17-tickets-names-resolved-issues` asked for.
+
+### T0031.3: Derive the current-state snapshot - ✅ Complete 2026-08-17
+
+> **Complete 2026-08-17** as PR #59. `scripts/docs_build.py` renders four regions into
+> `Repo_Current_State.md`, extending .2's machinery rather than adding a second generator.
+> `milestones`, `dependencies`, and `scripts` are pure functions of the committed tree, so the
+> existing `generated` check gates them with no CI change. `snapshot` - branch, commit, unmerged
+> branches, worktrees - describes a clone rather than a commit, so it is written by `--snapshot`
+> and deliberately not gated. Outcome in [Completion Reports](Completion_Reports.md).
+
+**Objective.** Stop `Repo_Current_State.md` from being writable, and therefore from being wrong.
+
+**In scope.** Generate its mechanical facts - branch, baseline commit, completed milestones, open
+branches, dependencies, scripts, build status - from `git`, `roadmap.yaml`, and `pyproject.toml`.
+One human paragraph survives: the next recommended ticket and why. Blocked on .1.
+
+**Build status was not derived.** It is the result of running commands, not a reading of any of
+the three sources this plan names, so generating it would have meant running the suite inside the
+documentation build or inventing a cache for it. It stays hand-written, and the line above is
+corrected here rather than left standing as delivered. Deriving it needs a recorded result the
+build can read - a committed JSON written by CI is the obvious shape - and is carried as a
+follow-up.
+
+### T0031.4: Enforce the protocol in CI - ✅ Complete 2026-08-17
+
+> **Complete 2026-08-17** as PR #62. `docs_lint.py` goes from twelve checks to fifteen.
+> `registry` decides duplicate ids, skipped numbers, and mismatched ticket numbers from the
+> registry alone, reading no git state. `scope` and `frozen` describe a change set, so they
+> resolve a base ref and report nothing without one; CI passes `--diff-base` explicitly and
+> fetches full history. `frozen` clears a change confined to generated regions, which is what
+> lets a ticket branch carry the rebuilt registers the `generated` check already requires of it.
+> Outcome in [Completion Reports](Completion_Reports.md).
+
+**Objective.** Make the rules self-checking, so a violation fails at push time rather than at
+merge time.
+
+**In scope.** Three `docs_lint.py` checks - `registry` (every branch and ticket resolves to a
+`roadmap.yaml` entry; no duplicate or skipped milestone id), `scope` (a PR's changed paths are a
+subset of its milestone's declared scope), and `frozen` (a PR touches no frozen path unless it is
+the integration commit). Blocked on .1.
+
+**The branch check was not built.** `registry` reads the roadmap and the entry directory only, so
+"every branch resolves to a roadmap entry" holds for the branch being linted, through `scope`'s
+milestone resolution, and not for every branch in the clone. The line is corrected here rather
+than left standing as delivered, and carried as a follow-up.
+
+**Scope widened once, deliberately.** `.github/workflows/ci.yml` was added to M31's `scope:` in
+the same PR, because the two diff-based checks need the base branch fetched. The scope check
+reported its own author first, which is the procedure working rather than failing.
+
+---

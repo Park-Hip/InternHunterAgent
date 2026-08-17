@@ -8,7 +8,10 @@
 # repository's history: M23 is indexed but was never scoped while M26, M27 and M28 shipped
 # past it; PR #48 shipped titled "M25/T0026" against documentation that calls the same work
 # M26; and feature/t0031-parallel-agent-docs existed with a worktree and no ticket body on
-# any branch.
+# any branch. A fourth surfaced on 2026-08-17: worktree-t0027.1-restore-serving-path numbered
+# its work T0029.1 "because M27 and M28 are taken on main", while T0029.1 on main is the
+# viewer-readability ticket. That work was an incident, which needs no number at all; it is
+# recorded in docs/Resolved_Issues.md and preserved as archive/serving-outage-2026-08-13.
 #
 # Milestone N owns tickets T00NN.x. That coupling is deliberate and stays - one number is
 # cheaper to arbitrate than two. What changed is that the number is claimed here, before an
@@ -126,9 +129,21 @@ milestones:
       past it. Blocked on the M20 cron activation (D-038).
   - id: M24
     title: Honesty Enforcement (obligation seam)
-    status: planned
+    status: in-progress
     tickets: [T0024.1, T0024.2, T0024.3, T0024.4, T0024.5, T0024.6]
-    note: Carved out of M21 on 2026-08-12. Scoped in docs/Tickets.md, sequenced after M23.
+    branch: feature/t0024.6-persona-scope
+    scope:
+      - config/prompts.yaml
+      - src/agents/runtime/prompts.py
+      - tests/agents/runtime/test_prompts.py
+      - docs/Agent_Behavior_Spec.md
+    note: >-
+      Carved out of M21 on 2026-08-12. Scoped in docs/Tickets.md, sequenced after M23. Recorded
+      as planned with no branch until 2026-08-17, when the integration step found T0024.1 and
+      T0024.6 already built on feature/t0024.6-persona-scope since 2026-08-13 - the behavior
+      glossary, the prompt version, and the persona-scope fix, with tests - unmerged and unreviewed.
+      That branch also writes frozen registers, because it predates the T0031.1 freeze; whoever
+      lands it must route those edits through an entry instead.
 
   - id: M25
     title: Evaluation Instrument

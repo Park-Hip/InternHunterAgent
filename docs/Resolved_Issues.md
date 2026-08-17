@@ -14,7 +14,7 @@ original register entry (omitted where none was assigned).
 
 ## Categories
 - [Documentation drift](#documentation-drift) — 3
-- [Config, startup & deployment](#config-startup--deployment) — 10
+- [Config, startup & deployment](#config-startup--deployment) — 11
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
 - [Data & ingestion / database schema](#data--ingestion--database-schema) — 5
@@ -59,6 +59,47 @@ original register entry (omitted where none was assigned).
     matching reality).
 
 ## Config, startup & deployment
+- **`[HIGH · RESOLVED · Incident 2026-08-13, closed 2026-08-16]` The public demo answered no
+  question for three days while `/health` and `/ready` both stayed green.**
+  - **Found:** by probing the deployed service directly, after the health endpoints had reported
+    the service well for the whole outage.
+  - **Cause:** Render was serving `de237a6`, the last `main` commit before T0021.3.
+    That build has neither `check=AsyncConnectionPool.check_connection` on the checkpointer pool
+    nor the psycopg guard in `classify_provider_busy_error`, so a stale Neon connection reached
+    visitors as `BUSY_MESSAGE` or as a `500`.
+  - **Why the health checks stayed green:** `/ready` borrows from the SQLAlchemy engine, which has
+    `pool_pre_ping=True`, while an agent turn borrows from the psycopg checkpointer pool, which on
+    that build had no validator.
+    A liveness probe that shares no dependency with the failing path cannot detect that path
+    failing - the durable lesson, now carried in [Operations](Operations.md).
+  - **The provider was not at fault.** Each candidate was closed by direct probe rather than by
+    reading logs: the Groq key authenticated against `GET /openai/v1/models` and a live completion,
+    `qwen/qwen3.6-27b` was still served, and the rate-limit headers reported 999 of 1000 daily
+    requests and 7981 of 8000 window tokens remaining.
+  - **What identified the stale build:** `POST /api/v1/agent/chat` returned `500` in 211 ms, far
+    too fast for any model call, carrying the string `Failed to process query`, which had been
+    deleted from `src/api/routes/query.py` on 2026-08-13 and exists nowhere in `main`.
+    Hashing the deployed `app.js`, `styles.css`, and `index.html` against all 243 commits matched
+    `de237a6` and nothing later.
+    `docker/Dockerfile` was then built from `main` to rule out a failing build as the reason
+    deploys had stopped; it built clean.
+  - **Resolution:** a Render deploy of `main`. No code change was needed; the fix had existed since
+    T0021.3 on 2026-08-12 and had never reached the running process.
+  - **Verified:** on 2026-08-17 the integration step re-probed the live service: `/api/v1/health`
+    returned `200`, `POST /api/v1/agent/chat` returned a real answer with a Langfuse `trace_url` in
+    10.6 s, and the deployed `app.js`, `styles.css`, and `index.html` hash-match `main` while
+    differing from `de237a6`, so the stale build is gone.
+  - **Residual:** why auto-deploy stalled is still unexplained and stays open in
+    [Known Issues](Known_Issues.md).
+    The restoring deploy also carried M27's provider flip, so the running service moved from Groq
+    to DeepSeek in the same step; the two changes are not separable after the fact.
+  - **Provenance:** diagnosed on 2026-08-16 on `worktree-t0027.1-restore-serving-path`, which
+    numbered the work T0029.1 because M27 and M28 were taken - a number that already belonged to
+    the viewer-readability ticket.
+    The branch never reached `main` and is preserved as the tag `archive/serving-outage-2026-08-13`.
+    The integration step folded it here on 2026-08-17 without allocating a number, because an
+    incident is not a ticket.
+
 - **`[MED · RESOLVED · T0021.4, 2026-08-12]` `/ready` could label a configured fallback date
   as a measured snapshot after its date query failed.**
   - **Found:** D6 production migration follow-up.

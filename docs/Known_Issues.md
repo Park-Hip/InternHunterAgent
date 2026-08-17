@@ -9,20 +9,35 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
-| HIGH | 1 | 1 | 1 |
-| MED | 9 | 2 | 3 |
-| LOW | 18 | 3 | 0 |
+| HIGH | 1 | 1 | 2 |
+| MED | 10 | 1 | 3 |
+| LOW | 12 | 2 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
 
-## Config, startup & deployment (13)
+These counts and the per-section counts below were recounted from the entries on 2026-08-17
+rather than incremented, and both had drifted: every pass until then adjusted them by hand from
+what that pass alone had changed. The seven deferred preferences at the foot of this document are
+deliberately excluded from the counts, because nothing is owed on them.
 
-- **`[LOW · BLOCKED]` The serving-model pin still lacks its final live baseline confirmation.**
+## Config, startup & deployment (12)
+
+- **`[MED · OPEN]` Render auto-deploy stalled for three days and the reason is unexplained.**
+  - **Found:** the 2026-08-13 serving outage, diagnosed 2026-08-16.
+  - **Impact:** `render.yaml` declares `autoDeploy: true` on `main`, yet the service ran `de237a6`
+    while PR #48 and #49 merged undeployed. An undeployed `main` stays invisible until a visitor
+    reports it, because `/health` and `/ready` both pass on a broken build.
+  - **Next:** After the next merge that changes `src/`, compare the deployed static-asset hashes
+    against `main`; if they differ, check the GitHub hook and Render's deploy history.
+  - **History:** [Resolved Issues](Resolved_Issues.md) records the outage and its elimination trail.
+
+- **`[LOW · OPEN]` A retired serving-model pin would fail the tool loop with no advance warning.**
   - **Found:** T0011.5 preparation.
-  - **Impact:** A retired or incompatible Groq model ID would fail the tool loop at runtime.
-  - **Next:** Before the baseline, run a tool-using query with the configured qwen model.
-  - **History:** [Resolved Issues](Resolved_Issues.md) records the retired-model replacement.
+  - **Impact:** A retired or incompatible model ID fails at the first tool call, not at boot.
+  - **Next:** Re-run one tool-using query against the configured pin whenever the provider changes.
+  - **History:** The `qwen` pin was confirmed live on 2026-08-16, but `main` then moved the serving
+    profiles to DeepSeek, so that confirmation does not carry to the current pin.
 
 - **`[MED · OPEN]` Render Free cold starts can delay the public demo by about a minute.**
   - **Found:** T0018.4 public deployment.
@@ -63,18 +78,6 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Log `truncated: true` or warn when collection exits because the cap was reached.
   - **History:** `src/services/ingestion/sources/vietnamworks.py::_collect`.
 
-- **`[LOW · OPEN]` The cron-job.org keep-alive can time out during an overnight Render wake-up.**
-  - **Found:** T0019.7 execution history.
-  - **Impact:** One missed ping can permit another cold start before the next scheduled ping.
-  - **Next:** Investigate only if failures recur; the operating window and cadence are documented.
-  - **History:** [Operations](Operations.md) records the observed first-wake behavior.
-
-- **`[MED · OPEN]` Dead checkpointer connections can be reported as provider pressure.**
-  - **Found:** T0019.7 live Render investigation.
-  - **Impact:** A Neon pool failure can reach a visitor as the generic busy message.
-  - **Next:** Add a psycopg pool health check and preserve pool provenance in error classification.
-  - **History:** `src/core/checkpointer.py` and `src/core/errors.py`.
-
 - **`[MED · OPEN]` The re-armed ingestion schedule has not yet fired on its own.**
   - **Found:** T0020.4.
   - **Impact:** Every gate is signed, but an unattended run is proven only once one has happened.
@@ -100,19 +103,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Resolve the pool and LangChain message generic types in a dedicated typing pass.
   - **History:** `src/core/checkpointer.py` and `src/agents/runtime/middleware.py`.
 
-## Agent runtime & prompts (7)
-
-- **`[LOW · OPEN]` The agent can call `query_clean_jobs` twice with identical arguments.**
-  - **Found:** T0006.10 verification.
-  - **Impact:** The harmless duplicate query wastes one database round-trip.
-  - **Next:** Address only if evaluation shows the pattern is frequent.
-  - **History:** `query_clean_jobs` is deterministic and read-only.
-
-- **`[LOW · OPEN]` The agent can reason fully before declining an unsupported attribute.**
-  - **Found:** T0007.2 verification.
-  - **Impact:** Questions outside the schema receive a truthful but slow refusal.
-  - **Next:** Add a short-circuit example when behavior work resumes.
-  - **History:** `config/prompts.yaml` owns the visible schema.
+## Agent runtime & prompts (4)
 
 - **`[MED · OPEN]` The model does not reliably refuse to invent posting freshness.**
   - **Found:** T0009.8 repeated probe.
@@ -125,12 +116,6 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Impact:** Negotiable pay can be called missing, contrary to the prompt rule.
   - **Next:** Add a canonical few-shot and measure it in the behavior goldens.
   - **History:** [Agent Behavior Spec](Agent_Behavior_Spec.md).
-
-- **`[LOW · OPEN]` The prompt-only id-first SQL convention is not deterministic.**
-  - **Found:** T0009.11.
-  - **Impact:** A result without `id` cannot chain into a `get_job_details` lookup.
-  - **Next:** Reinforce with a few-shot only if omission is observed in evaluation.
-  - **History:** `config/prompts.yaml` contains the current convention.
 
 - **`[LOW · OPEN]` Salary-sort SQL can omit the requested single-currency scope.**
   - **Found:** T0012.2 verification.
@@ -185,12 +170,6 @@ or maintainer action, and `DECISION` needs a product or operational choice.
     state sheet calls these environmental skips, which holds only while the fixture is reachable.
   - **Next:** Guard them with a reachability check that skips naming `docker compose up -d`.
   - **History:** `tests/evals/test_fixture_counts.py`; the paths moved in T0026.2.
-
-- **`[LOW · OPEN]` GEval criteria remain hardcoded outside the project configuration.**
-  - **Found:** T0011.3.
-  - **Impact:** Evaluation wording bypasses the normal prompt and parameter ownership convention.
-  - **Next:** Centralize only if additional metrics make the duplication costly.
-  - **History:** `evals/harness.py`.
 
 - **`[HIGH · BLOCKED]` The full golden evaluation and judge check lack a credentialed run.**
   - **Found:** T0011.6 and T0012.10.
@@ -248,7 +227,7 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** M24 owns these; T0025.7 measures them and changes no prompt or runtime behavior.
   - **History:** Ignored `evals/runs/t0025.7-acceptance.json` and its grade report. <!-- lint-allow-link-path -->
 
-## Workflow & documentation (3)
+## Workflow & documentation (4)
 
 - **`[MED · OPEN]` A fresh worktree cannot run the test suite.**
   - **Found:** T0031.1 on 2026-08-16.
@@ -265,14 +244,24 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** A maintainer decides where M23 sits; sequencing is not a ticket's call.
   - **History:** [Tickets](Tickets.md) M23; [`roadmap.yaml`](roadmap.yaml).
 
-- **`[LOW · OPEN]` Stale worktrees survive their finished sessions.**
-  - **Found:** T0031.1 on 2026-08-16.
-  - **Impact:** Two belong to finished sessions and the t0031 lock named a dead pid, so a merged
-    branch can look active and a lock can outlive its owner.
-  - **Next:** One prune sweep, worth a follow-up ticket rather than an ad-hoc deletion.
+- **`[MED · DECISION]` Two built M24 tickets have sat unmerged and unreviewed since 2026-08-13.**
+  - **Found:** the integration step on 2026-08-17, auditing worktrees before pruning them.
+  - **Impact:** `feature/t0024.6-persona-scope` carries T0024.1 and T0024.6 - the behavior
+    glossary, the prompt version, and the persona-scope fix, with tests - across 11 files. The
+    roadmap called M24 `planned` with no branch, so this work was invisible to anyone reading it.
+  - **Next:** Decide whether to review and land it or to abandon it. It also writes frozen
+    registers, because it predates the T0031.1 freeze, so landing it means routing those edits
+    through an entry first.
+  - **History:** [`roadmap.yaml`](roadmap.yaml) now records M24 as in progress on that branch.
+
+- **`[LOW · OPEN]` A worktree lock can outlive the session that took it.**
+  - **Found:** T0031.1 on 2026-08-16; the prune sweep ran on 2026-08-17.
+  - **Impact:** The sweep removed three finished worktrees, but `t0031-parallel-docs-workflow`
+    stayed because its lock names a dead pid, and a lock nothing can release blocks the next sweep.
+  - **Next:** Release it by hand once its owner is confirmed gone; only then consider automating.
   - **History:** `git worktree list`; `CLAUDE.md` §3.
 
-## Demo UI (4)
+## Demo UI (1)
 
 - **`[LOW · OPEN]` The mid-stream error bubble has no deterministic end-to-end test hook.**
   - **Found:** T0018.3.
@@ -280,20 +269,21 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Add a test-only synthetic stream error when this UI path changes.
   - **History:** `src/api/static/app.js::showErrorBubble`.
 
-- **`[LOW · OPEN]` The browser parser accepts only the service's current single-line SSE framing.**
-  - **Found:** T0018.3.
-  - **Impact:** A future multiline or comment-bearing SSE frame would break client parsing.
-  - **Next:** Generalize the parser only when the server frame contract changes.
-  - **History:** `src/api/routes/query.py::_server_sent_event`.
+## Deferred preferences (7)
 
-- **`[LOW · OPEN]` The stream reader has no client-side idle timeout.**
-  - **Found:** T0018.3.
-  - **Impact:** A hung upstream can leave the composer disabled until the connection closes.
-  - **Next:** Add an `AbortController` idle guard if public load expands.
-  - **History:** `src/api/static/app.js::ask`.
+Reclassified out of the register on 2026-08-17 under its own eviction rule, when it bound at its
+cap a second time. Each of these had said in substance "act only if X happens", which makes it a
+standing preference rather than an open risk: nothing is owed until its trigger fires. They are
+kept in one line each so the trigger stays findable, and they return to a full entry above if one
+of them fires.
 
-- **`[LOW · OPEN]` Streamed Markdown is displayed as literal text.**
-  - **Found:** T0018.3.
-  - **Impact:** Model lists and emphasis do not render as readable rich text.
-  - **Next:** Add a safe lightweight renderer if formatted answers become a product need.
-  - **History:** `src/api/static/app.js::appendToken`.
+| Deferred | Trigger that revives it | Where |
+|---|---|---|
+| Investigate keep-alive ping timeouts on overnight Render wake-up (T0019.7) | Failures recur | [Operations](Operations.md) |
+| Short-circuit the agent's full reasoning before it declines an unsupported attribute (T0007.2) | Behavior work resumes | `config/prompts.yaml` |
+| Enforce the id-first SQL convention with a few-shot rather than prompt text (T0009.11) | Evaluation observes the omission | `config/prompts.yaml` |
+| Centralize the hardcoded GEval criteria into project configuration (T0011.3) | More metrics make the duplication costly | `evals/harness.py` |
+| Generalize the browser SSE parser past single-line framing (T0018.3) | The server frame contract changes | `src/api/routes/query.py::_server_sent_event` |
+| Add an `AbortController` idle guard to the stream reader (T0018.3) | Public load expands | `src/api/static/app.js::ask` |
+| Render streamed Markdown as rich text instead of literal text (T0018.3) | Formatted answers become a product need | `src/api/static/app.js::appendToken` |
+

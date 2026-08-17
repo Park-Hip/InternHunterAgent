@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from src.agents.runtime.prompts import load_behavior_glossary
 from src.services.query.executor import ExecutorError
 from src.services.query.models import ValidationResult
 
@@ -50,7 +51,18 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
         result = await query_clean_jobs.ainvoke({"question": "Any jobs at Nope?"})
 
-        self.assertIn("No matching internship job postings", result)
+        self.assertEqual(result, load_behavior_glossary()["ZERO_RESULTS"])
+        self.assertNotIn("internship", result.lower())
+
+    def test_description_covers_ai_data_roles_and_search_use(self) -> None:
+        from src.agents.tools.query_clean_jobs import query_clean_jobs
+
+        description = query_clean_jobs.description
+
+        self.assertIn("AI and data job and internship postings", description)
+        self.assertIn("before get_job_details", description)
+        self.assertIn("user's question", description)
+        self.assertNotIn("internship job postings", description)
 
     @patch("src.agents.tools.query_clean_jobs.logger")
     @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")

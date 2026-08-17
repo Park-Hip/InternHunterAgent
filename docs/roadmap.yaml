@@ -172,7 +172,9 @@ milestones:
       - evals/viewer.py
       - evals/README.md
       - tests/evals/test_viewer.py
-    note: Merged 2026-08-17 as PR #51. Predates docs/entries/, so it has no entry file.
+    note: >-
+      Merged 2026-08-17 as PR #51. Predates docs/entries/, so it has no entry file. Its ticket
+      plan was archived the same day, which returned the docs/Tickets.md cap from 400 to 350.
   - id: M30
     title: Evaluation Evidence Durability
     status: in-progress

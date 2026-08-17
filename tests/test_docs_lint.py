@@ -391,3 +391,215 @@ def test_generated_check_reports_an_unbuildable_entry(monkeypatch: pytest.Monkey
 
 def test_the_committed_generated_regions_are_current() -> None:
     assert docs_lint.check_generated([]) == []
+
+
+# --- T0031.4: the protocol checks -------------------------------------------------------------
+
+ROADMAP_TEXT = """version: 1
+
+frozen:
+  - docs/Tickets.md
+  - docs/Known_Issues.md
+
+milestones:
+  - id: M0
+    title: Foundation through Hardening (M0-M5)
+    status: complete
+    tickets: [T0000, T0003]
+  - id: M6
+    title: A milestone
+    status: complete
+    tickets: [T0006]
+  - id: M7
+    title: Another milestone
+    status: in-progress
+    tickets: [T0007.1]
+    scope:
+      - scripts/docs_lint.py
+      - docs/entries/
+    note: >-
+      A block scalar must not be read as a scope entry.
+"""
+
+
+def test_parse_roadmap_reads_the_nested_lists() -> None:
+    milestones, frozen = docs_lint.parse_roadmap(ROADMAP_TEXT)
+
+    assert frozen == ["docs/Tickets.md", "docs/Known_Issues.md"]
+    assert [item["id"] for item in milestones] == ["M0", "M6", "M7"]
+    assert milestones[2]["scope"] == ["scripts/docs_lint.py", "docs/entries/"]
+    assert milestones[2]["tickets"] == ["T0007.1"]
+    # The block scalar under note: indents past a field and must not land in scope.
+    assert milestones[0]["scope"] == []
+
+
+def test_an_aggregate_milestone_covers_its_titled_range() -> None:
+    """M0 stands for six milestones, so M1-M5 are accounted for rather than skipped."""
+    milestones, _ = docs_lint.parse_roadmap(ROADMAP_TEXT)
+
+    assert docs_lint.covered_numbers(milestones[0]) == {0, 1, 2, 3, 4, 5}
+    assert docs_lint.covered_numbers(milestones[1]) == {6}
+
+
+def test_within_scope_matches_files_exactly_and_directories_by_prefix() -> None:
+    scope = ["scripts/docs_lint.py", "docs/entries/"]
+
+    assert docs_lint.within_scope("scripts/docs_lint.py", scope)
+    assert docs_lint.within_scope("docs/entries/T0007.1.md", scope)
+    assert not docs_lint.within_scope("scripts/docs_build.py", scope)
+    # A prefix that is not a directory boundary must not match.
+    assert not docs_lint.within_scope("docs/entries-old.md", scope)
+
+
+def test_the_registry_check_passes_on_the_committed_roadmap() -> None:
+    """The gate itself: this repository's own registry must satisfy the rule it now enforces."""
+    assert docs_lint.check_registry([]) == []
+
+
+def write_roadmap(root: Path, text: str) -> None:
+    (root / "docs").mkdir(parents=True, exist_ok=True)
+    (root / "docs" / "roadmap.yaml").write_text(text, encoding="utf-8")
+
+
+def test_registry_reports_gaps_duplicates_and_misfiled_tickets(tmp_path: Path) -> None:
+    broken = ROADMAP_TEXT.replace(
+        "  - id: M6\n    title: A milestone\n", "  - id: M8\n    title: A milestone\n"
+    ).replace("tickets: [T0007.1]", "tickets: [T0009.1]")
+    write_roadmap(tmp_path, broken)
+
+    messages = [
+        finding.message
+        for finding in docs_lint.check_registry([], tmp_path / "docs" / "roadmap.yaml")
+    ]
+
+    # M0 covers 0-5 and the renamed entry claims 8, so 6 is the number nothing accounts for.
+    assert any("M6 is skipped" in message for message in messages)
+    assert any("T0009.1 sits under M7" in message for message in messages)
+
+
+def git(root: Path, *args: str) -> None:
+    import subprocess
+
+    subprocess.run(("git", *args), cwd=root, check=True, capture_output=True)
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> Path:
+    """A miniature repository with a main branch, a roadmap, and a ticket branch off it."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    git(root, "init", "-q", "-b", "main")
+    git(root, "config", "user.email", "t@example.com")
+    git(root, "config", "user.name", "Test")
+    write_roadmap(root, ROADMAP_TEXT)
+    (root / "scripts").mkdir()
+    (root / "scripts" / "docs_lint.py").write_text("# lint\n", encoding="utf-8")
+    (root / "docs" / "Tickets.md").write_text(
+        "# Tickets\n\n<!-- generated:reports:begin -->\nold\n<!-- generated:reports:end -->\n\ntail\n",
+        encoding="utf-8",
+    )
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "base")
+    git(root, "checkout", "-qb", "feature/t0007.1-thing")
+    return root
+
+
+def test_scope_accepts_a_declared_path_and_rejects_an_undeclared_one(repo: Path) -> None:
+    (repo / "scripts" / "docs_lint.py").write_text("# changed\n", encoding="utf-8")
+
+    assert docs_lint.check_scope([], "main", repo) == []
+
+    (repo / "scripts" / "other.py").write_text("# stray\n", encoding="utf-8")
+    git(repo, "add", "-A")
+    findings = docs_lint.check_scope([], "main", repo)
+
+    assert [finding.path.name for finding in findings] == ["other.py"]
+    assert "M7" in findings[0].message
+
+
+def test_scope_reports_nothing_when_no_base_resolves(repo: Path) -> None:
+    """A clone with no comparable base has no change set to judge, so the check is silent."""
+    assert docs_lint.check_scope([], "no/such/ref", repo) == []
+
+
+def test_frozen_rejects_a_hand_edit_to_a_register(repo: Path) -> None:
+    tickets = repo / "docs" / "Tickets.md"
+    tickets.write_text(tickets.read_text(encoding="utf-8") + "a hand edit\n", encoding="utf-8")
+    git(repo, "add", "-A")
+
+    findings = docs_lint.check_frozen([], "main", repo)
+
+    assert [finding.path.name for finding in findings] == ["Tickets.md"]
+
+
+def test_frozen_allows_a_change_confined_to_a_generated_region(repo: Path) -> None:
+    """The generator writes those bytes, and the `generated` check makes running it mandatory.
+
+    This is the rule that lets a ticket branch carry a rebuilt register, which is what every
+    M31 ticket has had to do since T0031.2.
+    """
+    tickets = repo / "docs" / "Tickets.md"
+    tickets.write_text(
+        tickets.read_text(encoding="utf-8").replace("old", "regenerated"), encoding="utf-8"
+    )
+    git(repo, "add", "-A")
+
+    assert docs_lint.check_frozen([], "main", repo) == []
+
+
+def test_frozen_allows_the_integration_commit(repo: Path) -> None:
+    tickets = repo / "docs" / "Tickets.md"
+    tickets.write_text(tickets.read_text(encoding="utf-8") + "published\n", encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "docs(integration): publish the entry")
+
+    assert docs_lint.check_frozen([], "main", repo) == []
+
+
+def test_frozen_ignores_paths_that_are_not_frozen(repo: Path) -> None:
+    (repo / "scripts" / "docs_lint.py").write_text("# changed\n", encoding="utf-8")
+    git(repo, "add", "-A")
+
+    assert docs_lint.check_frozen([], "main", repo) == []
+
+
+def test_frozen_allows_a_register_the_milestone_declared_in_its_scope(repo: Path) -> None:
+    """Declaring a frozen path in `scope:` is the decision made in the open that the rule wants.
+
+    M31 is the standing case: it is the milestone that installs the marked regions and the caps
+    rows into these registers, so the check it adds must not forbid the work that adds it.
+    """
+    roadmap = repo / "docs" / "roadmap.yaml"
+    roadmap.write_text(
+        ROADMAP_TEXT.replace(
+            "      - scripts/docs_lint.py\n", "      - scripts/docs_lint.py\n      - docs/Tickets.md\n"
+        ),
+        encoding="utf-8",
+    )
+    tickets = repo / "docs" / "Tickets.md"
+    tickets.write_text(tickets.read_text(encoding="utf-8") + "a declared edit\n", encoding="utf-8")
+    git(repo, "add", "-A")
+
+    assert docs_lint.check_frozen([], "main", repo) == []
+
+
+def test_git_text_decodes_utf8_regardless_of_platform_locale(repo: Path) -> None:
+    """`git show` on these registers returns UTF-8; the platform locale must not decode it."""
+    path = repo / "docs" / "Tickets.md"
+    path.write_text("# Tickets\n\nA middot \u00b7 and an em dash \u2014 survive.\n", encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "unicode")
+
+    shown = docs_lint.git_text("show", "HEAD:docs/Tickets.md", root=repo)
+
+    assert shown is not None
+    assert "\u00b7" in shown and "\u2014" in shown
+
+
+def test_scope_sees_an_untracked_file(repo: Path) -> None:
+    """A new file is untracked until someone stages it, which is before the mistake is permanent."""
+    (repo / "scripts" / "stray.py").write_text("# stray\n", encoding="utf-8")
+
+    findings = docs_lint.check_scope([], "main", repo)
+
+    assert [finding.path.name for finding in findings] == ["stray.py"]

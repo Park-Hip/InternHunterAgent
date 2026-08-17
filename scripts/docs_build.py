@@ -347,11 +347,21 @@ def git(*args: str) -> str:
     """Run a read-only git command, returning empty output rather than raising outside a clone."""
     try:
         result = subprocess.run(
-            ("git", *args), cwd=ROOT, capture_output=True, text=True, check=False, timeout=30
+            ("git", *args),
+            cwd=ROOT,
+            capture_output=True,
+            # Explicit UTF-8: a commit subject with a non-ASCII character otherwise crashes the
+            # snapshot on a Windows locale, where `text=True` decodes as cp1252.
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=30,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return result.stdout.strip() if result.returncode == 0 else ""
+    if result.returncode != 0 or result.stdout is None:
+        return ""
+    return result.stdout.strip()
 
 
 def render_snapshot() -> str:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -54,6 +55,7 @@ STAMPED_DOCS = (
 )
 LAST_VERIFIED = re.compile(r"^> \*\*Last verified:\*\* \d{4}-\d{2}-\d{2}(?:\b|$)")
 PYPROJECT = ROOT / "pyproject.toml"
+ROADMAP = ROOT / "docs" / "roadmap.yaml"
 DEPS_BEGIN = "<!-- deps:begin -->"
 DEPS_END = "<!-- deps:end -->"
 REFLOW_TARGETS = frozenset(
@@ -528,6 +530,312 @@ def check_scenario_id(files: list[Path], registry: Path = SCENARIOS) -> list[Fin
     return findings
 
 
+def parse_roadmap(text: str) -> tuple[list[dict[str, object]], list[str]]:
+    """Return the milestones and the frozen path list from `roadmap.yaml`.
+
+    `docs_build.parse_milestones` already reads the flat scalars. This adds the two nested lists
+    the protocol checks need - each milestone's `scope:` and the top-level `frozen:` - by the same
+    indentation rule, keeping the no-dependency contract both scripts hold.
+    """
+    milestones: list[dict[str, object]] = []
+    frozen: list[str] = []
+    collecting: list[str] | None = None
+    collecting_indent = 0
+    for line in text.split("\n"):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if collecting is not None:
+            if stripped.startswith("- ") and indent > collecting_indent:
+                collecting.append(stripped[2:].strip())
+                continue
+            collecting = None
+        if line.rstrip() == "frozen:":
+            frozen = []
+            collecting, collecting_indent = frozen, 0
+            continue
+        identifier = docs_build.MILESTONE_ID.match(line)
+        if identifier:
+            milestones.append({"id": identifier.group("id"), "scope": [], "tickets": []})
+            continue
+        field = docs_build.MILESTONE_FIELD.match(line)
+        if field and milestones:
+            key, value = field.group("key"), field.group("value")
+            if key == "tickets":
+                milestones[-1]["tickets"] = [
+                    item.strip() for item in value.strip("[]").split(",") if item.strip()
+                ]
+            elif key not in milestones[-1]:
+                milestones[-1][key] = value
+            continue
+        if milestones and stripped == "scope:":
+            collecting = milestones[-1]["scope"]  # type: ignore[assignment]
+            collecting_indent = indent
+    return milestones, frozen
+
+
+def covered_numbers(milestone: dict[str, object]) -> set[int]:
+    """The milestone numbers an entry accounts for.
+
+    Most entries account for their own number. `M0` is titled "Foundation through Hardening
+    (M0-M5)" and genuinely stands for six milestones, so the range in the title is read rather
+    than treated as five missing ids. That fact is already recorded; this reads it.
+    """
+    number = int(str(milestone["id"]).lstrip("M"))
+    match = re.search(r"\(M(\d+)\s*-\s*M(\d+)\)", str(milestone.get("title", "")))
+    if match:
+        low, high = int(match.group(1)), int(match.group(2))
+        if low <= number <= high:
+            return set(range(low, high + 1))
+    return {number}
+
+
+def check_registry(_: list[Path], roadmap: Path | None = None) -> list[Finding]:
+    """Keep every number resolvable in the registry that owns numbers.
+
+    Identity drift is what M31 exists to stop, and it always looked the same: a number that no
+    entry claims, or a number two entries claim. Both are decidable from the registry and the
+    entry directory alone, so this check reads no git state.
+    """
+    roadmap = roadmap or ROADMAP
+    if not roadmap.exists():
+        return [Finding("registry", roadmap, 0, "docs/roadmap.yaml is missing")]
+    entries = roadmap.parent / "entries"
+    milestones, _frozen = parse_roadmap(docs_build.read(roadmap))
+    findings: list[Finding] = []
+    if not milestones:
+        return [Finding("registry", roadmap, 0, "no milestones found")]
+
+    seen: dict[str, int] = {}
+    covered: set[int] = set()
+    for milestone in milestones:
+        identifier = str(milestone["id"])
+        seen[identifier] = seen.get(identifier, 0) + 1
+        covered |= covered_numbers(milestone)
+    for identifier, count in sorted(seen.items()):
+        if count > 1:
+            findings.append(Finding("registry", roadmap, 0, f"milestone {identifier} is declared {count} times"))
+    missing = sorted(set(range(min(covered), max(covered) + 1)) - covered)
+    for number in missing:
+        findings.append(Finding("registry", roadmap, 0, f"milestone M{number} is skipped: no entry claims it"))
+
+    tickets: dict[str, str] = {}
+    for milestone in milestones:
+        identifier = str(milestone["id"])
+        owned = covered_numbers(milestone)
+        for ticket in milestone["tickets"]:  # type: ignore[union-attr]
+            if ticket in tickets:
+                findings.append(
+                    Finding("registry", roadmap, 0, f"ticket {ticket} is claimed by {tickets[ticket]} and {identifier}")
+                )
+            tickets[ticket] = identifier
+            owner = re.match(r"^T(\d{4})(?:\.\d+)?$", ticket)
+            if not owner:
+                findings.append(Finding("registry", roadmap, 0, f"ticket {ticket} is not a T#### id"))
+            elif int(owner.group(1)) not in owned:
+                findings.append(
+                    Finding("registry", roadmap, 0, f"ticket {ticket} sits under {identifier}; milestone N owns T00NN.x")
+                )
+
+    if entries.is_dir():
+        for path in sorted(entries.glob("*.md")):
+            if docs_build.ENTRY_NAME.match(path.stem) and path.stem not in tickets:
+                findings.append(Finding("registry", path, 0, f"{path.stem} has no entry in docs/roadmap.yaml"))
+    return findings
+
+
+def git_text(*args: str, root: Path = ROOT) -> str | None:
+    """Run a read-only git command, returning None when git or the ref is unavailable."""
+    try:
+        result = subprocess.run(
+            ("git", *args),
+            cwd=root,
+            capture_output=True,
+            # These documents are UTF-8 and contain characters cp1252 cannot decode. Without an
+            # explicit encoding, `text=True` uses the platform locale and `git show` crashes on
+            # Windows against the repository's own registers.
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0 or result.stdout is None:
+        return None
+    return result.stdout.strip()
+
+
+def resolve_base(explicit: str | None = None, root: Path = ROOT) -> str | None:
+    """Find the ref this branch should be compared against, or None if there is nothing to use.
+
+    A missing base is not a violation. These two checks describe a change set, and a clone with
+    no `origin/main` - a shallow CI checkout, an offline copy - has no change set to describe.
+    They report nothing there rather than failing, which is the same reason T0031.3 left the
+    snapshot region ungated.
+    """
+    base_ref = os.environ.get("GITHUB_BASE_REF")
+    candidates = [
+        explicit,
+        os.environ.get("DOCS_LINT_DIFF_BASE"),
+        f"origin/{base_ref}" if base_ref else None,
+        "origin/main",
+    ]
+    for candidate in candidates:
+        if candidate and git_text(
+            "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}", root=root
+        ):
+            return candidate
+    return None
+
+
+def changed_paths(base: str, root: Path = ROOT) -> set[str]:
+    """Paths this branch changes against `base`: committed, staged, unstaged, or untracked.
+
+    Untracked files count. A ticket adding a brand new file outside its scope is exactly the
+    drift these checks exist to catch, and that file is untracked until someone stages it - so
+    reading only the diff would stay silent until the moment the mistake became permanent.
+    """
+    paths: set[str] = set()
+    commands = (
+        ("diff", "--name-only", f"{base}...HEAD"),
+        ("diff", "--name-only", "HEAD"),
+        ("ls-files", "--others", "--exclude-standard"),
+    )
+    for args in commands:
+        output = git_text(*args, root=root)
+        if output:
+            paths |= {line.strip() for line in output.split("\n") if line.strip()}
+    return paths
+
+
+def milestone_for(
+    paths: set[str], milestones: list[dict[str, object]], root: Path = ROOT
+) -> dict[str, object] | None:
+    """Decide which milestone a change set belongs to.
+
+    The entry file is the authority: a ticket writes exactly one, and it names its own number.
+    The branch name is the fallback for a change set that has not written its entry yet.
+    """
+    numbers = {
+        match.group(1)
+        for path in paths
+        if (match := re.match(r"^docs/entries/T(\d{4})(?:\.\d+)?\.md$", path))
+    }
+    if not numbers:
+        branch = git_text("rev-parse", "--abbrev-ref", "HEAD", root=root) or ""
+        if match := re.search(r"[tT](\d{4})(?:\.\d+)?", branch):
+            numbers = {match.group(1)}
+    if len(numbers) != 1:
+        return None
+    wanted = f"M{int(next(iter(numbers)))}"
+    return next((item for item in milestones if str(item["id"]) == wanted), None)
+
+
+def within_scope(path: str, scope: list[str]) -> bool:
+    """A declared path matches itself; a declared directory matches everything beneath it."""
+    return any(path == entry or (entry.endswith("/") and path.startswith(entry)) for entry in scope)
+
+
+def check_scope(
+    _: list[Path], explicit: str | None = None, root: Path = ROOT
+) -> list[Finding]:
+    """Keep a branch inside the paths its milestone declared."""
+    roadmap = root / "docs" / "roadmap.yaml"
+    if not roadmap.exists():
+        return []
+    base = resolve_base(explicit, root)
+    if base is None:
+        return []
+    paths = changed_paths(base, root)
+    if not paths:
+        return []
+    milestones, _frozen = parse_roadmap(docs_build.read(roadmap))
+    milestone = milestone_for(paths, milestones, root)
+    if milestone is None:
+        return []
+    scope = [str(entry) for entry in milestone["scope"]]  # type: ignore[union-attr]
+    if not scope:
+        return []
+    return [
+        Finding(
+            "scope",
+            root / path,
+            0,
+            f"outside {milestone['id']}'s declared scope; widen scope: in docs/roadmap.yaml or move the change",
+        )
+        for path in sorted(paths)
+        if not within_scope(path, scope)
+    ]
+
+
+def only_generated_changed(path: str, base: str, root: Path = ROOT) -> bool:
+    """True when a frozen register's change is confined to its generated regions.
+
+    This is what lets a ticket branch carry a rebuilt register without being the integration
+    step. The generator wrote those bytes, not the agent, and running it is mandatory - the
+    `generated` check fails if the branch does not. Stripping the regions from both sides asks
+    the only question that matters: did a human touch anything outside them?
+    """
+    before = git_text("show", f"{base}:{path}", root=root)
+    if before is None:
+        return False
+    current = root / path
+    if not current.exists():
+        return False
+    strip = docs_build.strip_generated
+    # `git show` output arrives without its trailing newline; compare the bodies, not the edges.
+    return (
+        strip(before.replace("\r\n", "\n")).strip() == strip(docs_build.read(current)).strip()
+    )
+
+
+def is_integration(base: str, root: Path = ROOT) -> bool:
+    """True when every commit on this branch is an integration commit."""
+    subjects = git_text("log", "--format=%s", f"{base}..HEAD", root=root)
+    if not subjects:
+        return False
+    return all(line.startswith("docs(integration)") for line in subjects.split("\n") if line.strip())
+
+
+def check_frozen(
+    _: list[Path], explicit: str | None = None, root: Path = ROOT
+) -> list[Finding]:
+    """Keep the shared registers writable by the integration step and the generator only."""
+    roadmap = root / "docs" / "roadmap.yaml"
+    if not roadmap.exists():
+        return []
+    base = resolve_base(explicit, root)
+    if base is None:
+        return []
+    paths = changed_paths(base, root)
+    if not paths or is_integration(base, root):
+        return []
+    milestones, frozen = parse_roadmap(docs_build.read(roadmap))
+    # A milestone that named a frozen path in its own scope: has already made that decision in
+    # the open, which is the governance the protocol asks for. M31 is the standing example - it
+    # is the milestone that installs the marked regions and the caps rows into these registers,
+    # so the check it adds must not forbid the work that adds it.
+    declared = milestone_for(paths, milestones, root) or {}
+    scope = [str(entry) for entry in declared.get("scope", [])]  # type: ignore[union-attr]
+    findings = []
+    for path in sorted(paths):
+        if not within_scope(path, frozen) or within_scope(path, scope):
+            continue
+        if only_generated_changed(path, base, root):
+            continue
+        findings.append(
+            Finding(
+                "frozen",
+                root / path,
+                0,
+                "frozen register: only the integration step and scripts/docs_build.py write this",
+            )
+        )
+    return findings
+
+
 CHECKS = {
     "line-length": check_line_length,
     "link-path": check_link_path,
@@ -541,6 +849,9 @@ CHECKS = {
     "amendment": check_amendment,
     "orphan": check_orphan,
     "scenario-id": check_scenario_id,
+    "registry": check_registry,
+    "scope": check_scope,
+    "frozen": check_frozen,
 }
 
 
@@ -625,6 +936,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", choices=CHECKS, action="append")
     parser.add_argument("--stat", action="store_true")
     parser.add_argument("--fix", action="store_true", help="Safely reflow ordinary prose lines only.")
+    parser.add_argument(
+        "--diff-base",
+        help="Ref the scope and frozen checks compare against. Defaults to origin/main; both "
+        "checks report nothing when no base resolves.",
+    )
     args = parser.parse_args(argv)
     files = markdown_files()
     if args.stat:
@@ -635,7 +951,14 @@ def main(argv: list[str] | None = None) -> int:
         for path in reflow_line_length(files):
             print(f"reflowed {path.relative_to(ROOT).as_posix()}")
     selected = args.check or list(CHECKS)
-    findings = [finding for name in selected for finding in CHECKS[name](files)]
+    diffed = {"scope": check_scope, "frozen": check_frozen}
+    findings = [
+        finding
+        for name in selected
+        for finding in (
+            diffed[name](files, args.diff_base) if name in diffed else CHECKS[name](files)
+        )
+    ]
     for finding in findings:
         print(finding)
     return 1 if findings else 0

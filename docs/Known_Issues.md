@@ -12,7 +12,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
 | MED | 10 | 1 | 3 |
-| LOW | 16 | 2 | 0 |
+| LOW | 17 | 2 | 0 |
 <!-- generated:triage:end -->
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
@@ -35,6 +35,15 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
+- `KI-2026-08-17-lint-checks-silent-without-base` **`[LOW · OPEN]` The `scope` and `frozen` checks
+  pass silently when no diff base resolves.**
+  - **Found:** T0031.4, by design rather than by defect.
+  - **Impact:** A CI checkout that stops fetching the base branch disables two protocol checks
+    without turning the build red. The failure looks identical to compliance.
+  - **Next:** Have CI assert that `--diff-base` resolved, or add a flag that makes an unresolvable
+    base an error rather than silence.
+  - **History:** Chosen so the linter stays runnable in a shallow clone or offline copy, the same
+    trade T0031.3 made for the snapshot region.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 

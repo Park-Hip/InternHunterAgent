@@ -222,6 +222,7 @@ milestones:
       - scripts/docs_build.py
       - tests/test_docs_lint.py
       - tests/test_docs_build.py
+      - .github/workflows/ci.yml
       - CLAUDE.md
       - AGENTS.md
       - skills/generate-ticket-prompt/SKILL.md
@@ -234,5 +235,6 @@ milestones:
       T0031.1 merged 2026-08-17 as PR #53 and its entry was folded by the integration step the
       same day; .2 merged as PR #57 and its entry was the first the generator published; .3 merged
       as PR #59, which leaves the integration step Tickets.md, one --snapshot run, and the
-      judgement of where a raised issue belongs. Only .4 is planned, so the milestone stays in
-      progress.
+      judgement of where a raised issue belongs. .4 widened this list by one path,
+      .github/workflows/ci.yml, because the checks it adds need the base branch fetched; the
+      scope check it was adding is what caught the omission.

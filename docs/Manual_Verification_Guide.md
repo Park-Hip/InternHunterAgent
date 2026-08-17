@@ -24,6 +24,25 @@ developer to create, and the text is not editable here anyway.
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:checklists:begin -->
+### T0031.4: Enforce the protocol in CI
+
+1. `python scripts/docs_lint.py` exits 0 on a clean checkout and reports fifteen checks' worth of
+   findings when something is wrong.
+2. Add a path outside M31's scope, for example `touch src/scratch.py`, then run
+   `python scripts/docs_lint.py --check scope`. It names the file and points at `roadmap.yaml`.
+   Delete the file and it passes.
+3. Hand-edit a line in `docs/Resolved_Issues.md`, then run
+   `python scripts/docs_lint.py --check frozen`. It reports the register. Revert with
+   `git checkout --`. Use that file rather than `Known_Issues.md`: the latter is in M31's declared
+   scope, so the declared-scope rule clears it and the check correctly stays quiet.
+4. Hand-edit a line **inside** a generated region of `docs/Known_Issues.md` and run
+   `python scripts/docs_lint.py --check generated`. It fails, because the generator owns those
+   bytes. `python scripts/docs_build.py` restores them.
+5. Change a milestone id in `docs/roadmap.yaml` to a number that leaves a gap, then run
+   `python scripts/docs_lint.py --check registry`. It names the skipped number. Revert.
+6. `python scripts/docs_lint.py --check scope --diff-base no/such/ref` exits 0: an unresolvable
+   base is silence by design.
+
 ### T0031.3: Derive the current-state snapshot
 
 1. `python scripts/docs_build.py --check` exits 0 on a clean checkout.

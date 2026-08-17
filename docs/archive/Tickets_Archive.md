@@ -3519,3 +3519,65 @@ source.
 4. `docs/Offline_Pipelines_Design.md` §8.6-8.7 names the shipped CI gate and the configured model.
 
 **Blockers.** None. Independent of .1-.3.
+
+---
+
+## T0029: Milestone 29 - Evaluation Readability (T0029.1) - Complete 2026-08-15
+
+M28 gave every evaluation fact an owner. This milestone makes a *recorded run* readable, which is
+the step that still costs a person an afternoon now that capturing one costs four cents.
+
+### T0029.1: Show the verdict, the run, and the telemetry in the viewer
+
+> **Complete 2026-08-15.** `--grade` joins a grader report per turn; each turn shows its verdict
+> and tier with every non-passing check drawn beside the seam it judges, the toolbar filters by
+> grade status separately from capture status, a manifest-built run header names provider, model,
+> and sampling per profile, and telemetry renders as labelled fields. No rule, threshold, verdict,
+> or replay artifact changed. Outcome in [Completion Reports](Completion_Reports.md).
+
+**Objective:** Make one capture answerable in the viewer alone - what failed, on which rule, under
+which provider and sampling.
+
+The measured arm produced 77 turns and 33 failures. Finding them meant pressing "Next" 77 times,
+because [`viewer.py`](../evals/viewer.py) opens the driver artifact only: the verdict sits in a
+separate `-grade.json` the viewer never reads, the manifest's provider and sampling never reach
+the screen, and telemetry renders as one `json.dumps` blob in a text field. Triaging those 33 into
+23 real behaviors and 10 grader phrasing artifacts was done with throwaway Python at a terminal,
+which is the work this ticket removes.
+
+**In Scope:**
+* A `--grade <path>` input, joined on scenario / repeat / turn - already the viewer's `key`. Show
+  each turn's `PASS`/`FAIL`/`INFRA`/`UNRUN` and its tier, and render every failing check's `name`
+  and `detail` beside the seam it judges. `detail` carries what the rule wanted against what it
+  saw, which is the field that makes a verdict explicable rather than merely visible.
+* Filter the turn list by grade status. Note this is **not** the `status` the viewer shows today,
+  which is capture status (`COMPLETE`, `PARTIAL_QUOTA`); both must be legible without collision.
+* A run header built from the manifest: provider and model per profile, temperature, `max_tokens`,
+  the reasoning knob, `git_sha`, and `baseline_eligible`. Two arms must be distinguishable on
+  screen - today the string `deepseek` appears nowhere in the generated HTML, although T0027.2 put
+  `providers` in the manifest precisely so a capture could say what produced it.
+* Telemetry as labelled fields rather than one blob: latency, input / output / total tokens, the
+  per-call breakdown, and finish reasons.
+* The real-artifact invocation in [`evals/README.md`](../evals/README.md), which documents
+  `--sample` only. Commands belong there, not in the Operating Manual.
+
+**Out of Scope:**
+* Judge-tier UI. No scenario sets `judge_metric`, so all 77 grades resolved structural or textual
+  and there is nothing to draw. Render the `tier` field generically and a judge check appears the
+  day a rule declares one.
+* Any change to a grading rule, a threshold, or a verdict. The viewer reads evidence and never
+  writes it, which is what lets it stay outside the replay gate.
+* [`Operating_Manual.md`](../evals/Operating_Manual.md), which owns why the instrument is built
+  this way rather than how to run it, and any new dependency. The viewer is one self-contained
+  HTML file with no external asset, and stays that way.
+
+**Manual verification:**
+1. `uv run python -m evals.viewer --sample` still renders with no run artifact and no grade file,
+   proving the grade input is optional rather than required.
+2. Generate against a capture plus its grade file: filtering to `FAIL` yields the same count the
+   grade summary reports, and the header names the model and per-profile temperature.
+3. Open a `SAF` turn graded `FAIL` and read the failing check's `detail`. It must show the
+   substring the rule wanted - that is how the 10 phrasing artifacts were identified by hand.
+4. Regenerate from the frozen replay evidence and confirm the gate is untouched.
+
+**Blockers:** None. Spends no quota; every input is a recorded artifact.

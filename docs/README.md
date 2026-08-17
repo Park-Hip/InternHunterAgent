@@ -54,10 +54,17 @@ take a per-file cap row without recreating the shared-table edit the directory e
 `Tickets.md` moved 300 → 400 on 2026-08-17, measured at 363 once M29, M30, and M31 were all scoped
 on the same day. The 300 cap was measured when two milestones were in flight; three parallel
 branches is the condition this milestone exists to support, so the cap was the side that was wrong.
-Eviction was not available to this ticket: the completed M28 and M29 plans have earned their exit,
+Eviction was not available to that ticket: the completed M28 and M29 plans had earned their exit,
 but archiving them writes [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md), which is
-frozen and outside M31's scope. That eviction belongs to the integration step, and the cap should
-come back down once it happens.
+frozen and outside M31's scope. The integration step ran that eviction on 2026-08-17 and the cap
+moved 400 → 350, measured at 323.
+
+It does not return to 300, and the difference is worth naming: eviction bought 45 lines, not 100.
+Only M28 and M29 had closed with live plans, and M28's had already been archived, so one milestone
+was actually available. A plan leaves when its **milestone** closes, not when its ticket does, so
+T0031.1's plan stays while T0031.2-.4 are open, and M24's and M30's stay because neither has
+shipped. The cap is set from what the document measures with three milestones in flight, which is
+the same reason it went up.
 
 <!-- caps:begin -->
 | Doc | Owns | Tier | Cap | Reader |
@@ -74,7 +81,7 @@ come back down once it happens.
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 175 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 300 | Maintainers |
-| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 400 | Delivery planning |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 350 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T3 | 150 | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |

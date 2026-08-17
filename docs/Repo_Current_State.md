@@ -42,13 +42,14 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M25-M30 - 24 of 27 milestones.
+Complete: M0, M6-M22, M25-M30 - 24 of 28 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
 | M24 | Honesty Enforcement (obligation seam) | in-progress |
 | M31 | Parallel Agent Workflow | in-progress |
 | M23 | v1.0 Release Cut | planned |
+| M32 | Prompt Surface Pass | planned |
 <!-- generated:milestones:end -->
 
 M24 is in progress on an unreviewed branch rather than planned. M30 closed on 2026-08-17 (PR #61):

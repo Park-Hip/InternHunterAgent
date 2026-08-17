@@ -3775,6 +3775,57 @@ No additional documentation changes are needed.
 
 ---
 
+## T0032.3 - Pin the column list across the three prompt blocks
+
+*Completed 2026-08-17.*
+
+**Summary**
+
+Added a consistency test for the column lists in the system prompt, schema context, and SQL prompt.
+The test models the six lifecycle and source fields that are intentionally hidden from the agent.
+It fails if any prompt list drifts or if a new model column lacks an explicit visibility decision.
+
+**Files**
+
+- Created `tests/test_prompt_consistency.py`.
+- Created `docs/entries/T0032.3.md`.
+
+**Commands**
+
+- Focused prompt-consistency test.
+- Stacked prompt, tool, and consistency regression suite with placeholder Langfuse settings.
+- Focused Ruff check.
+- A deliberate SQL prompt mutation that removed `job_level`.
+- `uv run pytest -q` with placeholder Langfuse settings.
+- `uv run python scripts/docs_build.py`.
+- `uv run python scripts/docs_lint.py`.
+
+**Build and test**
+
+| Command | Result |
+|---|---|
+| Focused prompt-consistency test | 2 passed |
+| Stacked prompt and tool regression suite | 17 passed |
+| Focused Ruff check | Passed |
+| SQL prompt mutation test | Failed as expected and named `job_level` |
+| Full suite before documentation build | 2 generated-register failures and 532 passed |
+| Documentation build and final suite | 534 passed, 2 skipped, 30 deselected, 43 subtests passed |
+
+**Risks**
+
+- The test intentionally excludes six model fields that are not agent-visible.
+- Adding a model field requires an explicit agent-visibility decision before the test can pass.
+
+**Follow-ups**
+
+None.
+
+**Docs**
+
+No additional documentation changes are needed.
+
+---
+
 ## T0032.4 - Measure Vietnamese prompt options
 
 *Completed 2026-08-17.*

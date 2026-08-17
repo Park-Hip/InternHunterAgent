@@ -7,19 +7,64 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 
 ## Triage
 
+<!-- generated:triage:begin -->
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 2 |
 | MED | 10 | 1 | 3 |
-| LOW | 12 | 2 | 0 |
+| LOW | 15 | 2 | 0 |
+<!-- generated:triage:end -->
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
 
-These counts and the per-section counts below were recounted from the entries on 2026-08-17
-rather than incremented, and both had drifted: every pass until then adjusted them by hand from
-what that pass alone had changed. The seven deferred preferences at the foot of this document are
-deliberately excluded from the counts, because nothing is owed on them.
+The table is counted from the `[SEVERITY · STATE]` badge on every entry below, including the
+unfiled ones, by `scripts/docs_build.py`. It is a tally of this register rather than a claim about
+it. The counts were recounted by hand on 2026-08-17 rather than incremented, because every pass
+until then had adjusted them from what that pass alone had changed, and they had drifted; since
+T0031.2 they cannot drift again. The per-section counts in the headings below are still hand
+tallies. The seven deferred preferences at the foot of this document carry no badge and so are
+excluded from the table, which is the behaviour that pass chose for them: nothing is owed on them.
+
+## Raised, not yet filed
+
+Issues a ticket recorded in its file under [`entries/`](entries/README.md) that no maintainer has
+filed into a topic section yet. Filing one means moving it into the section it belongs to,
+**keeping its `KI-` id**: the id is what drops it from this region on the next build, so the two
+copies can never drift. Entries that predate the id convention are never inboxed here.
+
+<!-- lint-allow-link-path:begin -->
+<!-- generated:registered:begin -->
+- `KI-2026-08-17-tickets-names-resolved-issues` **`[LOW · OPEN]` The T0031.2 ticket body names a
+  register the milestone never generates.**
+  - **Found:** T0031.2, reading the ticket against the M31 design record.
+  - **Impact:** `docs/Tickets.md` promises `Resolved_Issues.md` is folded from the entries. No
+    entry section feeds it and the design record never names it, so the line describes work that
+    does not exist.
+  - **Next:** Correct the line when M31's outcome is written. `Tickets.md` is frozen, so this is
+    an integration edit by definition.
+  - **History:** `.lavish/parallel-agent-workflow.html` R4 names the three registers.
+
+- `KI-2026-08-17-section-counts-are-hand-tallies` **`[LOW · OPEN]` The per-section counts in
+  `Known_Issues.md` headings are hand tallies that nothing checks.**
+  - **Found:** T0031.2, generating the triage table beside them.
+  - **Impact:** `## Config, startup & deployment (12)` and its six siblings drift the same way the
+    triage table did, and the same integration pass that recounted the triage table had to recount
+    these by hand too.
+  - **Next:** Either generate the heading counts or drop them. Cheap either way; not worth a
+    ticket on its own.
+  - **History:** The triage table is generated as of this ticket; these are what is left.
+
+- `KI-2026-08-17-entries-lack-issue-ids` **`[LOW · OPEN]` T0031.1's five known issues predate the
+  id convention and can never be inboxed.**
+  - **Found:** T0031.2, writing the dedup rule.
+  - **Impact:** None today, because all five were filed by hand on 2026-08-17. It means the inbox
+    cannot be used to audit whether older entries were fully filed.
+  - **Next:** Nothing, unless an entry is ever found to have been missed. Recorded so the gap in
+    coverage is stated rather than assumed away.
+  - **History:** `docs/entries/T0031.1.md` `## Known issues`.
+<!-- generated:registered:end -->
+<!-- lint-allow-link-path:end -->
 
 ## Config, startup & deployment (12)
 

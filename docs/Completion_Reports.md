@@ -15,6 +15,11 @@ One entry per ticket: **Did** (what changed) · **Files** (key paths) · **Tests
 field list (Summary / Files / Commands / Build & test / Manual verification / Risks /
 Follow-ups / Docs).
 
+Reports for tickets that have a file under [`entries/`](entries/README.md) are **generated** into
+the marked region at the end of this file by `scripts/docs_build.py`, from that entry's `##`
+sections. Edit the entry, never the region. Everything above the region is hand-written history
+from before the write surface existed, and stays that way.
+
 Every entry records the paths a ticket touched **on the day it shipped**. Later tickets move files,
 so those paths are dated evidence rather than a live index. `scripts/docs_lint.py`'s `link-path`
 check exempts this file by name (`is_dated_record()`), the same historical-audit rule
@@ -3023,49 +3028,223 @@ reflow, orphan, and scenario-id checks.
 - **Docs that need updating:** None outstanding. `evals/README.md` now documents the real-artifact
   invocation alongside `--sample`.
 
+<!-- generated:reports:begin -->
 ## T0031.1 - Give parallel tickets a private write surface
 
-Folded by the integration step from [`entries/T0031.1.md`](entries/T0031.1.md), which remains the
-ticket's own record.
+*Completed 2026-08-17.*
 
-- **Summary:** Parallel sessions collided on documentation rather than on code, and the ticket
-  measured it before changing anything: across the preceding 200 commits `Repo_Current_State.md`
-  changed 91 times, `Known_Issues.md` 68, `Tickets.md` 56, and each of eight open branches carried
-  an edit to all eighteen documents under `docs/`. Three branches independently produced a
-  `Tickets_Archive.md` of 1775, 2104, and 2291 lines from the same archival operation. Identity
-  drifted the same way, because `Tickets.md` uses the heading form `## T00NN: Milestone NN`, so an
-  agent picking a ticket number silently claimed a milestone number with nothing arbitrating the
-  claim. Four changes follow: `docs/roadmap.yaml` becomes the sole owner of ticket and milestone
-  identity, of each milestone's path `scope:`, and of the `frozen:` register list; `docs/entries/`
-  becomes the write surface, one file per ticket on a path no other branch owns; `docs_lint.py`
-  exempts that directory from the caps table and the orphan check while it still owes
-  line-length, encoding, and scenario-id; and `CLAUDE.md` §3 becomes the parallel work protocol
-  with a new §7 defining the single-writer integration step, §5 and §6 rerouted into the entry
-  file. The registry records M29 and M30 as intersecting on `evals/viewer.py`, `evals/README.md`,
-  and `tests/evals/` - the first pair the intersection rule would have caught before launch.
-- **Files:** `docs/roadmap.yaml` (new), `docs/entries/README.md` (new),
-  `docs/entries/T0031.1.md` (new), `scripts/docs_lint.py`, `tests/test_docs_lint.py`,
-  `CLAUDE.md`, `AGENTS.md` (kept byte-identical), `docs/README.md`, `docs/Tickets.md`, and
-  `skills/generate-ticket-prompt/SKILL.md`.
-- **Commands:** `git merge-base --is-ancestor` across each pair of open branches,
-  `git log --pretty=format: --name-only -200 | sort | uniq -c | sort -rn`,
-  `git diff --name-only origin/main...feature/t0029-viewer-readability`,
-  `python scripts/docs_lint.py`, and `python -m pytest tests/test_docs_lint.py -q`.
-- **Build and test results:** `scripts/docs_lint.py` exit 0 with no findings;
-  `uv run --frozen python -m pytest -q` 455 passed, 10 skipped, 30 deselected;
-  `python -m pytest tests/test_docs_lint.py -q` 33 passed, 1 skipped. The exemption was proved
-  scoped rather than switched off: a throwaway `docs/entries/T9999.md` lints clean while a
-  throwaway `docs/Scratch.md` still reports `size-cap`.
-- **Manual verification:** carried into
-  [Manual Verification Guide](Manual_Verification_Guide.md); not yet re-run by a developer, and
-  the entry's own `verified:` field reads `no`.
-- **Risks:** the ticket edits two frozen registers (`docs/README.md`, `docs/Tickets.md`) because
-  it is the ticket that establishes the freeze, and T0031.4's `frozen` check must not read this
-  commit as precedent. The integration step stays manual until .2 and .3 land, which is the same
-  cost that produced the current branch stack. Scope declarations can rot, so widening one is
-  deliberately a one-line edit. The existing M26-M30 branches are untouched and still carry each
-  other's diffs; the new rules apply from the next branch cut off `main`.
-- **Follow-ups:** T0031.2 (generate the registers), T0031.3 (derive the snapshot), T0031.4
-  (enforce registry, scope, and frozen in CI).
-- **Docs that need updating:** `docs/Docs_Conventions.md` should gain a short section on the
-  write-surface split once T0031.2 lands and the generated regions exist.
+**Summary**
+
+Measured first. Across the 200 commits before this ticket, `Repo_Current_State.md` changed 91
+times, `Known_Issues.md` 68, `Tickets.md` 56, `Manual_Verification_Guide.md` 54, and
+`Completion_Reports.md` 50 - and each of the eight open branches carried an edit to all eighteen
+documents under `docs/`. Three branches independently produced a `Tickets_Archive.md` of 1775,
+2104, and 2291 lines from the same archival operation. `Repo_Current_State.md` on `main` named
+the baseline as `42fb3ef` while `main` was at `0a6524e`, and called an already-merged branch
+active: the single mutable snapshot was stale even with one writer.
+
+Identity drifted the same way. `Tickets.md` uses the heading form `## T00NN: Milestone NN`, so an
+agent picking a ticket number silently claims a milestone number, with nothing arbitrating the
+claim. M23 is indexed but was never scoped while M26-M28 shipped past it; PR #48 shipped titled
+"M25/T0026" against documentation that calls the same work M26; and
+`feature/t0031-parallel-agent-docs` had a worktree, a lock, and no ticket body on any branch.
+
+Four changes follow from that:
+
+* `docs/roadmap.yaml` becomes the sole owner of ticket and milestone identity, of each
+  milestone's path `scope:`, and of the `frozen:` register list. Numbers are claimed before an
+  agent starts, never inferred from a document. The registry records M29 and M30 as intersecting
+  on `evals/viewer.py`, `evals/README.md`, and `tests/evals/` - the first pair the intersection
+  rule would have caught before launch.
+* `docs/entries/` becomes the write surface: one file per ticket, on a path no other branch owns.
+  Its frontmatter contract matches the draft generator T0031.2 will land.
+* `scripts/docs_lint.py` exempts that directory from the caps table and the orphan check, and
+  treats its path references as dated evidence. Both exemptions are structural: a caps row and an
+  inbound link are each a shared-table edit, which is the conflict the directory exists to remove.
+  Entries still owe line-length, encoding, and scenario-id.
+* `CLAUDE.md` and `AGENTS.md` §3 become the parallel work protocol - registry-owned numbers,
+  declared scope, branch off `main` only, write to your own file, work in your own worktree - and
+  a new §7 defines the single-writer integration step. §5 and §6 route the completion report and
+  the state facts into the entry file instead of the frozen registers.
+
+**Files**
+
+* `docs/roadmap.yaml` - new; the allocation registry and the frozen list.
+* `docs/entries/README.md` - new; the write-surface convention and format.
+* `docs/entries/T0031.1.md` - new; this entry.
+* `scripts/docs_lint.py` - `is_ticket_entry()`; excluded from `managed_documentation_files()`
+  and `check_orphan()`; included in `is_dated_record()`.
+* `tests/test_docs_lint.py` - three tests covering the predicate and both exemptions.
+* `CLAUDE.md`, `AGENTS.md` - §3 rewritten, §5 and §6 rerouted, §7 added. Kept byte-identical.
+* `docs/README.md` - `entries/` indexed as a directory; four Fact Ledger rows.
+* `docs/Tickets.md` - M31 index row and the M31 section with T0031.1-.4. Its cap moved 300 -> 400
+  when M29, M30, and M31 all sat scoped at once; three parallel milestones is the condition this
+  milestone exists to support, so the cap was the side that was wrong. Eviction was unavailable
+  here because it writes the frozen ticket archive.
+* `skills/generate-ticket-prompt/SKILL.md` - reads the registry, emits scope and frozen list.
+
+**Commands**
+
+```
+git merge-base --is-ancestor <each pair of open branches>
+git log --pretty=format: --name-only -200 | sort | uniq -c | sort -rn
+git diff --name-only origin/main...feature/t0029-viewer-readability
+python scripts/docs_lint.py
+python -m pytest tests/test_docs_lint.py -q
+```
+
+**Build and test**
+
+| Check | Result |
+|---|---|
+| `python scripts/docs_lint.py` | pass, exit 0, no findings |
+| `uv run --frozen python -m pytest -q` | 455 passed, 10 skipped, 30 deselected, exit 0 |
+| `python -m pytest tests/test_docs_lint.py -q` | 33 passed, 1 skipped |
+| Exemption is scoped, not switched off | throwaway `docs/entries/T9999.md` clean; throwaway `docs/Scratch.md` still reports `size-cap` |
+| `docs/Tickets.md` against its 400 cap | 364 lines |
+| `docs/README.md` against its 150 cap | 124 lines |
+
+**Risks**
+
+* **`docs/README.md` and `docs/Tickets.md` are on the frozen list and this ticket edits both.**
+  It is the ticket that establishes the freeze, so it cannot avoid them. T0031.4's `frozen` check
+  must not treat this commit as precedent.
+* **The integration step is manual until T0031.2 and T0031.3 land.** If it is slow, PRs queue and
+  branches age past a day, which is what produced the current stack. Landing .2 and .3 is what
+  keeps the step cheap enough to stay serialized.
+* **Scope declarations can rot.** A ticket that needs an unforeseen path will fail T0031.4's
+  `scope` check mid-implementation. Widening is deliberately a one-line edit so the check forces
+  a conversation rather than a rewrite.
+* **The existing branch stack is untouched.** M26-M30 still carry each other's diffs and must be
+  merged in ancestor order. The new rules apply from the next ticket branched off `main`.
+
+**Follow-ups**
+
+* T0031.2 - generate the registers from the entries.
+* T0031.3 - derive `Repo_Current_State.md`.
+* T0031.4 - enforce registry, scope, and frozen in CI.
+
+**Docs**
+
+`docs/README.md`, `docs/Tickets.md`, `CLAUDE.md`, `AGENTS.md`, and
+`skills/generate-ticket-prompt/SKILL.md` are updated here. `docs/Docs_Conventions.md` should gain
+a short section on the write-surface split once T0031.2 lands and the generated regions exist.
+
+---
+
+## T0031.2 - Generate the registers from the entries
+
+*Completed 2026-08-17.*
+
+**Summary**
+
+The draft generator was written against a wider brief than the ticket: it also rendered
+`Repo_Current_State.md` (T0031.3's objective) and a `Tickets.md` milestone index. Both came out.
+The state file is a separate ticket, and the index could not be generated as drafted: the
+existing table carries one row per milestone for all 31 milestones, while the renderer emits one
+row per entry, so switching it on today would have produced a mixed-granularity table with a
+duplicate M31 row. `Tickets.md` is untouched by this ticket as a result.
+
+What remains generates three registers from the same frontmatter contract T0031.1 froze:
+
+* **`Completion_Reports.md`** renders a report for each entry with `status: complete`, from its
+  `Summary`, `Files`, `Commands`, `Build and test`, `Risks`, `Follow-ups`, and `Docs` sections.
+  Order is oldest first, matching the register's append-only shape, so a generated report lands
+  where a hand-written one would have.
+* **`Manual_Verification_Guide.md`** renders each entry's `Manual verification` section and drops
+  it when the entry sets `verified: yes`. The guide's stated eviction rule is now executable.
+* **`Known_Issues.md`** renders two regions. `registered` is an inbox of issues a ticket raised
+  that no maintainer has filed into a topic section, and `triage` is the severity table, counted
+  from the `[SEVERITY · STATE]` badges rather than tallied by hand.
+
+Membership of the inbox is decided by a `KI-YYYY-MM-DD-slug` id: filing an issue means pasting it
+into a topic section keeping its id, after which it leaves the inbox on the next build. Nothing
+is deleted from the entry and the two copies cannot drift. A bullet with no id is never inboxed,
+which is what keeps the register's pre-M31 issues out of it without touching any of them.
+
+Generating the triage table first falsified it and then confirmed it. Against the `main` this
+ticket branched from, the hand counts read HIGH 1/1/1, MED 9/2/3, LOW 18/3/0 for 38 issues while
+the register held 39. That `main` is gone: the 2026-08-17 integration pass recounted the table by
+hand and evicted seven deferred preferences, and the generator reproduces its numbers exactly,
+differing only by this ticket's three new issues. So the table was wrong for as long as it was
+incremented, was right once for as long as nobody touched it, and is now derived.
+
+T0031.1's report and checklist had already been hand-folded into two of these registers by the
+first integration session. Both hand copies were removed so the generated region is the only
+source, which is the migration the maintainer chose over adding a second dedup rule. The `.env`
+warning that the hand copy carried was kept, promoted to a standing note in the guide's preamble
+where it applies to every checklist rather than to one.
+
+`Known_Issues.md` and `Manual_Verification_Guide.md` moved to `T4 · Uncapped`, measured at 334
+and 157. A cap on a part-generated document measures the generator rather than a writing decision,
+and both now have executable eviction rules, which is what the cap was standing in for. This does
+not reverse the eviction the integration step ran hours earlier; that eviction is what left the
+register healthy enough to uncap, and its record is kept in `docs/README.md`. What the cap can no
+longer do is force the judgement call that pass made, so the integration step owns it outright.
+
+CI needed no change. The gate is a check inside `docs_lint.py`, the same shape as `stack` and
+`agent-parity`, and `.github/workflows/ci.yml` already runs that script.
+
+**Files**
+
+* `scripts/docs_build.py` - rewritten from the preserved draft: three registers instead of five,
+  chronological reports, no state-file or ticket-index renderers.
+* `scripts/docs_lint.py` - `check_generated()`, registered in `CHECKS` as `generated`.
+* `tests/test_docs_build.py` (new) - eleven cases over the renderers, the dedup, idempotence,
+  and the malformed-entry errors.
+* `tests/test_docs_lint.py` - three cases over the new check.
+* `docs/Completion_Reports.md`, `docs/Known_Issues.md`, `docs/Manual_Verification_Guide.md` -
+  marked regions, and the two T0031.1 hand copies removed.
+* `docs/README.md` - both registers moved to `T4 · Uncapped`, with the cap history collapsed into
+  one paragraph rather than amended.
+* `docs/entries/README.md` - what each section becomes, and the issue-id rule.
+* `docs/roadmap.yaml` - M31's branch and scope, and why a frozen path may be claimed once.
+
+**Commands**
+
+`python scripts/docs_build.py`, `python scripts/docs_build.py --check`,
+`python scripts/docs_lint.py`, `python -m pytest tests/test_docs_build.py tests/test_docs_lint.py
+-q`, `uv run --frozen python -m pytest -q`, `uv run --frozen ruff check .`,
+`uv run --frozen mypy`.
+
+**Build and test**
+
+| Check | Result | Date |
+|---|---|---|
+| `python scripts/docs_lint.py` | pass, exit 0, no findings | 2026-08-17 |
+| `python scripts/docs_build.py --check` | pass, exit 0, regions current | 2026-08-17 |
+| `uv run --frozen python -m pytest -q` | 488 passed, 2 skipped, 30 deselected, exit 0 | 2026-08-17 |
+| `uv run --frozen ruff check .` | All checks passed | 2026-08-17 |
+| `uv run --frozen mypy` | no issues in 43 source files | 2026-08-17 |
+| `docs/Known_Issues.md` measured | 334 lines, now uncapped | 2026-08-17 |
+| `docs/README.md` against its 150 cap | 142 lines | 2026-08-17 |
+
+**Risks**
+
+* **The registers now have two shapes.** Reports before the region are bullet lists with bold
+  labels; generated ones are headed blocks. The reading experience is uneven until enough tickets
+  ship through the generator, and nothing forces the old ones to convert.
+* **The issue-id convention is unenforced.** A ticket that writes a `## Known issues` bullet with
+  no id loses it silently: the entry keeps it, but no integrator ever sees it in the inbox.
+  T0031.4's lint work should reject an un-id'd bullet in an entry.
+* **`Known_Issues.md` has no size brake at all now.** The uncapped row trades a measured ceiling
+  for an eviction rule that only covers checklists, not issues. The eviction argument the cap kept
+  surfacing is still owed and is now owed to a document that will not raise its hand.
+* **`docs/Tickets.md` remains hand-written**, so a ticket's plan and status still reach the reader
+  through the integration step. That is the last register a ticket agent has a reason to want.
+
+**Follow-ups**
+
+* T0031.3 - derive `docs/Repo_Current_State.md`. The removed `render_milestones` and
+  `render_tests` renderers are recoverable from commit `5270da3`.
+* T0031.4 - registry, scope, and frozen checks; plus rejecting an un-id'd known-issue bullet.
+* A later ticket for the `Tickets.md` index, which needs the table restructured to one row per
+  ticket before a generator can own it.
+
+**Docs**
+
+`docs/README.md`, `docs/entries/README.md`, and `docs/roadmap.yaml` are updated here.
+`docs/Docs_Conventions.md` still owes the section on the write-surface split that T0031.1 flagged;
+the generated regions now exist, so it can be written. `docs/Tickets.md` needs M31's outcome and
+the `Resolved_Issues.md` correction, both of which are integration edits.
+<!-- generated:reports:end -->

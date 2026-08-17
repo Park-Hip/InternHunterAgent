@@ -11,6 +11,9 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import docs_build  # noqa: E402  - sibling script, imported after the path is set
 
 ROOT = Path(__file__).resolve().parents[1]
 LINE_LIMIT = 100
@@ -289,6 +292,22 @@ def check_agent_parity(_: list[Path]) -> list[Finding]:
     return []
 
 
+def check_generated(_: list[Path]) -> list[Finding]:
+    """Keep every generated register agreeing with the ticket entries it is built from.
+
+    The same shape as `stack` and `agent-parity`: the check owns no rendering logic, it just
+    reports when the committed text and the derivable text have parted company.
+    """
+    try:
+        stale = docs_build.stale()
+    except docs_build.BuildError as error:
+        return [Finding("generated", DOCS_MAP, 0, f"docs_build cannot run: {error}")]
+    return [
+        Finding("generated", path, 0, "generated regions are stale; run scripts/docs_build.py")
+        for path in stale
+    ]
+
+
 def declared_dependencies(raw: bytes) -> set[str]:
     """Return the distribution names from pyproject's runtime and dev dependency groups."""
     data = tomllib.loads(raw.decode("utf-8"))
@@ -515,6 +534,7 @@ CHECKS = {
     "encoding": check_encoding,
     "agent-parity": check_agent_parity,
     "stack": check_stack,
+    "generated": check_generated,
     "stamp": lambda _: check_stamps(),
     "size-cap": check_size_cap,
     "eviction-rule": check_eviction_rule,

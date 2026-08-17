@@ -197,20 +197,28 @@ milestones:
     title: Parallel Agent Workflow
     status: in-progress
     tickets: [T0031.1, T0031.2, T0031.3, T0031.4]
-    branch: feature/t0031-parallel-agent-docs
+    branch: feature/t0031.2-generate-registers
     scope:
       - docs/roadmap.yaml
       - docs/entries/
       - docs/README.md
       - docs/Tickets.md
+      - docs/Completion_Reports.md
+      - docs/Known_Issues.md
+      - docs/Manual_Verification_Guide.md
+      - docs/Repo_Current_State.md
       - scripts/docs_lint.py
       - scripts/docs_build.py
       - tests/test_docs_lint.py
+      - tests/test_docs_build.py
       - CLAUDE.md
       - AGENTS.md
       - skills/generate-ticket-prompt/SKILL.md
     note: >-
-      Touches two frozen registers (docs/README.md, docs/Tickets.md) because it is the ticket
-      that establishes the freeze. No later ticket may claim them this way.
+      Touches six frozen registers because it is the milestone that installs the generator into
+      them. A register enters this list once, to gain its marked region and its caps row; after
+      that only the integration step and the generator write it, and no milestone outside M31
+      may claim a frozen path this way. T0031.2 widened the list on 2026-08-17 for the three
+      registers it generates, and Repo_Current_State.md is reserved for .3.
       T0031.1 merged 2026-08-17 as PR #53 and its entry was folded by the integration step the
-      same day; .2, .3 and .4 are planned, so the milestone stays in progress.
+      same day; .2 is in progress, .3 and .4 are planned, so the milestone stays in progress.

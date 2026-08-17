@@ -1,6 +1,6 @@
 # T0025 Instrument Report
 
-> **Last verified:** 2026-08-14.
+> **Last verified:** 2026-08-17.
 
 > **Eviction:** This report leaves the active evaluation record when a replacement grader,
 > scenario registry, or holdout supersedes its assertions, replay provenance, or calibration.
@@ -77,15 +77,15 @@ The other 27 expectations restate what the grader already enforced.
 
 ### Human labels on real captured turns
 
-The 13 labels below were reviewed from the ignored `evals/runs/t0025.7-acceptance.json`. <!-- lint-allow-link-path -->
+The 13 labels below are preserved in the sanitized
+[`replays/t0025.7-acceptance.json`](replays/t0025.7-acceptance.json).
 The two quota-ended scenarios are not labels because they produced no completed turn.
-They still appear in the regrade summary as two repeat-level `INFRA` records.
+They remain outside the replay because it contains completed evidence only.
 
-That capture is **not committed**: `evals/runs/` is ignored because its turns carry latency,
-token usage, and finish reasons.
-A reader without the capture host cannot reproduce this table.
-Two of the 13 turns survive in the committed replay; the other 11 are attested here only.
-Re-measuring the sample on a paid tier is the durable fix, and T0025.10 carries the decision.
+The raw capture remains uncommitted because it carries latency, token usage, and finish reasons.
+The committed replay preserves all 13 completed labelled turns without those fields.
+A reader can reproduce this table's deterministic grade against the frozen fixture.
+Re-measuring the sample on a paid tier remains a separate baseline-quality decision.
 
 | Turn | Human label | Deterministic grade | Basis |
 |---|---|---|---|
@@ -119,6 +119,11 @@ default.
 replay artifact with no telemetry, tool output, trace identifier, credential, or live trace URL.
 It covers safety, honesty, and helpfulness, with both query and no-query paths plus one
 conversational case.
+
+[`replays/t0025.7-acceptance.json`](replays/t0025.7-acceptance.json) preserves every completed
+turn from the 13-turn human-labelled Groq sample.
+It includes one expected execution-accuracy failure, so the replay gate checks that a known SQL
+mistake remains correctly identified rather than treating only passing SQL as evidence.
 
 The currency and SQL-description records are sanitized T0025.7 turns.
 T0025.7 exhausted quota before it captured safety or conversational turns, so the

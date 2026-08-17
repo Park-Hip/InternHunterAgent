@@ -5,12 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-import re
 from typing import Any
 
 from evals.execution_accuracy import grade_run
 from evals.grader import grade_persisted_run
 from evals.scenarios import load_scenarios
+from evals.sanitization import FORBIDDEN_CONTENT as _FORBIDDEN_CONTENT
 
 REPLAY_PATH = Path(__file__).with_name("replays") / "t0025.9-committed.json"
 _MANIFEST_KEYS = {"run_id", "schema_version", "source_capture", "sanitized"}
@@ -24,12 +24,6 @@ _TURN_KEYS = {
     "expected_grade",
 }
 _SEAM_KEYS = {"question", "answer", "tools_called", "sql_text"}
-_FORBIDDEN_CONTENT = re.compile(
-    r"postgres(?:ql)?://|api[_-]?key|authorization:|langfuse|trace[_-]?id|\bsk-[a-z0-9]",
-    re.IGNORECASE,
-)
-
-
 def load_replay(path: Path = REPLAY_PATH) -> dict[str, Any]:
     """Load the committed replay artifact as UTF-8 JSON."""
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -111,7 +105,7 @@ def validate_replay(replay: dict[str, Any]) -> None:
                 _assert_keys(turn, _TURN_KEYS, f"Replay scenario {scenario_id} turn")
                 if turn["turn"] != turn_index or turn["status"] != "COMPLETE":
                     raise ValueError(f"Replay scenario {scenario_id} turn is invalid")
-                if turn["expected_execution_accuracy"] not in {"PASS", "EXEMPT"}:
+                if turn["expected_execution_accuracy"] not in {"PASS", "FAIL", "EXEMPT"}:
                     raise ValueError(
                         f"Replay scenario {scenario_id} has an invalid expected execution status"
                     )

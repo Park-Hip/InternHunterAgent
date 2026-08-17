@@ -9,6 +9,7 @@ import pytest
 
 from evals import driver
 from evals.harness import ProviderTelemetryCallback, SeamRun
+from evals.replay import load_replay, validate_replay
 
 
 def test_resolving_the_fixture_url_never_freezes_settings(
@@ -317,3 +318,134 @@ def test_provider_telemetry_marks_missing_provider_fields_unavailable() -> None:
         }
     ]
     assert telemetry["finish_reasons"] == ["unavailable"]
+
+
+def _capture_and_grade_from_replay() -> tuple[dict, dict]:
+    replay = load_replay()
+    capture = {
+        "manifest": {"run_id": "capture-123"},
+        "status": "COMPLETE",
+        "scenarios": {},
+    }
+    grade = {"run_id": "capture-123", "scenarios": {}}
+    for scenario_id, scenario in replay["scenarios"].items():
+        capture_repeats = []
+        grade_entries = []
+        for repeat in scenario["repeats"]:
+            capture_turns = []
+            for turn in repeat["turns"]:
+                capture_turns.append(
+                    {
+                        "turn": turn["turn"],
+                        "status": "COMPLETE",
+                        "seams": {**turn["seams"], "trace_id": None},
+                        "telemetry": {"latency_ms": 42},
+                    }
+                )
+                grade_entries.append(
+                    {
+                        "repeat": repeat["repeat"],
+                        "turn": turn["turn"],
+                        "status": turn["expected_grade"],
+                        "checks": [
+                            {
+                                "name": "execution_accuracy",
+                                "passed": True,
+                                "detail": f"execution accuracy {turn['expected_execution_accuracy']}",
+                            }
+                        ],
+                    }
+                )
+            capture_repeats.append({"repeat": repeat["repeat"], "status": "COMPLETE", "turns": capture_turns})
+        capture["scenarios"][scenario_id] = {"status": "COMPLETE", "repeats": capture_repeats}
+        grade["scenarios"][scenario_id] = grade_entries
+    return capture, grade
+
+
+def test_freeze_projects_a_capture_into_a_valid_sanitized_replay(tmp_path: Path) -> None:
+    capture, grade = _capture_and_grade_from_replay()
+    capture_path = tmp_path / "capture.json"
+    grade_path = tmp_path / "grade.json"
+    output = tmp_path / "frozen.json"
+    capture_path.write_text(json.dumps(capture), encoding="utf-8")
+    grade_path.write_text(json.dumps(grade), encoding="utf-8")
+
+    driver.main(["freeze", str(capture_path), "--grade", str(grade_path), "-o", str(output)])
+    frozen = json.loads(output.read_text(encoding="utf-8"))
+
+    validate_replay(frozen)
+    assert frozen["manifest"] == {
+        "run_id": "capture-123",
+        "schema_version": 1,
+        "source_capture": "capture.json",
+        "sanitized": True,
+    }
+    encoded = output.read_text(encoding="utf-8")
+    assert "trace_id" not in encoded
+    assert "latency_ms" not in encoded
+
+
+def test_freeze_refuses_a_capture_with_a_live_trace_id(tmp_path: Path) -> None:
+    capture, grade = _capture_and_grade_from_replay()
+    capture["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]["seams"]["trace_id"] = "live-trace"
+    capture_path = tmp_path / "capture.json"
+    grade_path = tmp_path / "grade.json"
+    output = tmp_path / "frozen.json"
+    capture_path.write_text(json.dumps(capture), encoding="utf-8")
+    grade_path.write_text(json.dumps(grade), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="trace_id"):
+        driver.freeze_capture(capture_path, grade_path, output)
+
+    assert not output.exists()
+
+
+def test_freeze_preserves_a_failed_execution_result(tmp_path: Path) -> None:
+    capture, grade = _capture_and_grade_from_replay()
+    grade["scenarios"]["HON-CURRENCY-1"][0]["checks"][0] = {
+        "name": "execution_accuracy",
+        "passed": False,
+        "detail": "execution accuracy is FAIL",
+    }
+    capture_path = tmp_path / "capture.json"
+    grade_path = tmp_path / "grade.json"
+    output = tmp_path / "frozen.json"
+    capture_path.write_text(json.dumps(capture), encoding="utf-8")
+    grade_path.write_text(json.dumps(grade), encoding="utf-8")
+
+    frozen = driver.freeze_capture(capture_path, grade_path, output)
+
+    validate_replay(frozen)
+    turn = frozen["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]
+    assert turn["expected_execution_accuracy"] == "FAIL"
+
+
+def test_freeze_derives_an_exempt_execution_result_from_the_registry(tmp_path: Path) -> None:
+    capture, grade = _capture_and_grade_from_replay()
+    grade["scenarios"]["HON-SQL-DESCRIBE-1"][0]["checks"] = []
+    capture_path = tmp_path / "capture.json"
+    grade_path = tmp_path / "grade.json"
+    output = tmp_path / "frozen.json"
+    capture_path.write_text(json.dumps(capture), encoding="utf-8")
+    grade_path.write_text(json.dumps(grade), encoding="utf-8")
+
+    frozen = driver.freeze_capture(capture_path, grade_path, output)
+
+    turn = frozen["scenarios"]["HON-SQL-DESCRIBE-1"]["repeats"][0]["turns"][0]
+    assert turn["expected_execution_accuracy"] == "EXEMPT"
+
+
+def test_freeze_projects_completed_evidence_from_a_partial_quota_capture(tmp_path: Path) -> None:
+    capture, grade = _capture_and_grade_from_replay()
+    capture["status"] = "PARTIAL_QUOTA"
+    capture["scenarios"]["HLP-COUNT-1"] = {"status": "INFRA", "repeats": []}
+    capture_path = tmp_path / "capture.json"
+    grade_path = tmp_path / "grade.json"
+    output = tmp_path / "frozen.json"
+    capture_path.write_text(json.dumps(capture), encoding="utf-8")
+    grade_path.write_text(json.dumps(grade), encoding="utf-8")
+
+    frozen = driver.freeze_capture(capture_path, grade_path, output)
+
+    validate_replay(frozen)
+    assert "HLP-COUNT-1" not in frozen["scenarios"]

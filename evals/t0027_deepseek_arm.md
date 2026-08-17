@@ -23,7 +23,7 @@ The decision below does not rest on it.
 
 | Field | DeepSeek arm | Frozen Groq baseline |
 |---|---|---|
-| Artifact | `evals/runs/t0027.3-deepseek.json` <!-- lint-allow-link-path --> | `evals/runs/t0025.7-acceptance.json` <!-- lint-allow-link-path --> |
+| Artifact | `evals/runs/t0027.3-deepseek.json` <!-- lint-allow-link-path --> | [`replays/t0025.7-acceptance.json`](replays/t0025.7-acceptance.json) |
 | `run_id` | `a6b13f52-c51a-4e5d-8df8-e798d81a5a59` | `01e97395-c433-4cb1-81f9-fcd1a194e4f8` |
 | `git_sha` | `5621695` | `eb44936` |
 | Ran | 2026-08-14T13:09:48Z to 13:15:08Z | 2026-08-13T11:52:54Z to 12:14:07Z |

@@ -92,6 +92,15 @@ def test_replay_rejects_a_question_that_drifted_from_the_registry() -> None:
         validate_replay(replay)
 
 
+def test_replay_accepts_a_recorded_execution_failure() -> None:
+    replay = load_replay()
+    replay["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0][
+        "expected_execution_accuracy"
+    ] = "FAIL"
+
+    validate_replay(replay)
+
+
 def test_replay_runs_execution_accuracy_before_the_deterministic_grader(
     monkeypatch,
 ) -> None:

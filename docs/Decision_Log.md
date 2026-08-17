@@ -1,6 +1,6 @@
 # Decision Log
 
-> **Last verified:** 2026-08-15.
+> **Last verified:** 2026-08-17.
 > This is the compact index of durable project decisions harvested from executed research.
 > It records the choice and points to the preserved reasoning.
 > Current operational facts belong in the document that owns them.
@@ -12,6 +12,7 @@
 
 | ID | Decision | Status |
 |---|---|---|
+| D-046 | Frozen replays retain evidence, not per-turn telemetry | Active |
 | D-045 | DeepSeek serves the agent, on measured throughput | Active |
 | D-044 | Temperature 0 is rejected for the ReAct seam | Active |
 | D-043 | Keep the DeepEval harness, discard its HTTP transport | Active |
@@ -59,6 +60,18 @@
 | D-001 | The behavior question bank is exploratory, not a product commitment | Active |
 
 ## Active decisions
+
+### D-046 - Frozen replays retain evidence, not per-turn telemetry
+
+- **Decided:** 2026-08-17 - **Status:** Active. Settled by T0030.3.
+- A committed replay keeps the source artifact name and run id, questions, answers, called tools,
+  generated SQL, and expected deterministic outcomes. It excludes per-turn latency, token usage,
+  finish reasons, tool output, and every trace identifier.
+- A future reader needs the retained fields to reproduce the fixture-bound verdict. Aggregate cost
+  and latency belong in the dated arm record, where they explain the finding without making each
+  replayed turn a broader sanitization obligation.
+- **Full record:** [T0030.2 acceptance replay](../evals/replays/t0025.7-acceptance.json) and
+  [T0027.3 DeepSeek arm](../evals/t0027_deepseek_arm.md).
 
 ### D-045 - DeepSeek serves the agent, on measured throughput
 

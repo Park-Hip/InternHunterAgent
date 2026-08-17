@@ -41,6 +41,14 @@ itself on `main`.
 `entries/` is indexed here as a directory, the same way `archive/` is. A per-ticket file cannot
 take a per-file cap row without recreating the shared-table edit the directory exists to remove.
 
+`Tickets.md` moved 300 → 400 on 2026-08-17, measured at 363 once M29, M30, and M31 were all scoped
+on the same day. The 300 cap was measured when two milestones were in flight; three parallel
+branches is the condition this milestone exists to support, so the cap was the side that was wrong.
+Eviction was not available to this ticket: the completed M28 and M29 plans have earned their exit,
+but archiving them writes [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md), which is
+frozen and outside M31's scope. That eviction belongs to the integration step, and the cap should
+come back down once it happens.
+
 <!-- caps:begin -->
 | Doc | Owns | Tier | Cap | Reader |
 |---|---|---:|---:|---|
@@ -56,7 +64,7 @@ take a per-file cap row without recreating the shared-table edit the directory e
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 150 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T3 | 275 | Maintainers |
-| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 300 | Delivery planning |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 400 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T3 | 150 | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |

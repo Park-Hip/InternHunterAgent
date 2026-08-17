@@ -107,8 +107,12 @@ your entry file and let the integration step publish them:
 * Next recommended ticket.
 
 ## 7. Integration Step
-One writer, run once per merge to `main`, by the maintainer or a session doing nothing else. This
-is the only place the `frozen:` registers change.
+Run by a **dedicated integration session** - one that merges and publishes, and implements no
+ticket. It is the only writer of the `frozen:` registers, and it runs once per merge to `main`.
+
+An integration session must not also carry a ticket. The whole point is that exactly one writer
+touches the shared registers at a time; a session doing both re-creates the conflict from inside
+the fix. Its commits are `docs(integration):` and nothing else.
 
 1. Merge the PR. If several are ready, merge them one at a time.
 2. Fold each new file under `docs/entries/` into the registers it belongs to: the completion
@@ -121,3 +125,6 @@ is the only place the `frozen:` registers change.
 
 Step 2 and step 3 are mechanical and are being replaced by a generator under M31; until it lands,
 they are done by hand.
+
+A ticket that predates `docs/entries/` has no entry file. Integrating it means step 3 only:
+rewrite the snapshot against the merged tree and re-stamp it.

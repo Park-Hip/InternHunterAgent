@@ -149,7 +149,7 @@ milestones:
 
   - id: M29
     title: Evaluation Readability
-    status: in-progress
+    status: complete
     tickets: [T0029.1]
     branch: feature/t0029-viewer-readability
     pr: 51
@@ -157,6 +157,7 @@ milestones:
       - evals/viewer.py
       - evals/README.md
       - tests/evals/test_viewer.py
+    note: Merged 2026-08-17 as PR #51. Predates docs/entries/, so it has no entry file.
   - id: M30
     title: Evaluation Evidence Durability
     status: in-progress
@@ -169,9 +170,10 @@ milestones:
       - tests/evals/
     note: >-
       Scope intersects M29 on evals/viewer.py, evals/README.md and tests/evals/. These two are
-      not independent and must not run in parallel; M30 is currently stacked on M29 and should
-      be merged in that order. This is the first entry the intersection rule would have caught
-      before launch.
+      not independent and must not run in parallel; M30 was stacked on M29 and is merged in that
+      order. This is the first entry the intersection rule would have caught before launch.
+      M29 landed 2026-08-17; M30's remaining commit merges into main cleanly. Predates
+      docs/entries/, so it has no entry file.
 
   - id: M31
     title: Parallel Agent Workflow

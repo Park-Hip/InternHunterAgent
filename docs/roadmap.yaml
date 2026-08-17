@@ -238,3 +238,22 @@ milestones:
       judgement of where a raised issue belongs. .4 widened this list by one path,
       .github/workflows/ci.yml, because the checks it adds need the base branch fetched; the
       scope check it was adding is what caught the omission.
+
+  - id: M32
+    title: Prompt Surface Pass
+    status: planned
+    tickets: [T0032.1, T0032.2, T0032.3, T0032.4]
+    scope:
+      - src/agents/tools/
+      - tests/agents/tools/
+      - tests/test_prompt_surface.py
+      - tests/test_prompt_consistency.py
+      - scripts/vietnamese_prompt_spike.py
+      - research/vietnamese-prompt-spike.md
+      - docs/entries/
+    note: >-
+      Everything that must be true before the Vietnamese language milestone starts. Scope is
+      disjoint from M24's (config/prompts.yaml, src/agents/runtime/prompts.py,
+      tests/agents/runtime/test_prompts.py, docs/Agent_Behavior_Spec.md), so the two milestones
+      are independent and may run in parallel. Instruction-count pruning is deliberately excluded
+      and sequenced after M24; see the follow-ups in the ticket plan.

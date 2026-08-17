@@ -60,20 +60,12 @@ moves to 230. A generated document grows when the repository does.
 `entries/` is indexed here as a directory, the same way `archive/` is. A per-ticket file cannot
 take a per-file cap row without recreating the shared-table edit the directory exists to remove.
 
-`Tickets.md` moved 300 → 400 on 2026-08-17, measured at 363 once M29, M30, and M31 were all scoped
-on the same day. The 300 cap was measured when two milestones were in flight; three parallel
-branches is the condition this milestone exists to support, so the cap was the side that was wrong.
-Eviction was not available to that ticket: the completed M28 and M29 plans had earned their exit,
-but archiving them writes [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md), which is
-frozen and outside M31's scope. The integration step ran that eviction on 2026-08-17 and the cap
-moved 400 → 350 (measured 323), then 350 → 375 on the T0031.3 publish (measured 349).
-
-It does not return to 300, and the difference is worth naming: eviction bought 45 lines, not 100.
-Only M28 and M29 had closed with live plans, and M28's had already been archived, so one milestone
-was actually available. A plan leaves when its **milestone** closes, not when its ticket does, so
-T0031.1's plan stays while T0031.2-.4 are open, and M24's and M30's stay because neither has
-shipped. The cap is set from what the document measures with three milestones in flight, which is
-the same reason it went up.
+`Tickets.md` moved from 300 to 400 on 2026-08-17, then to 350 after the M28 and M29 plans were
+archived, and to 375 on the T0031.3 publish.
+M32's four newly allocated ticket bodies bring the document to 408 lines, so the integration step
+moves its cap to 425.
+A plan leaves when its **milestone** closes, not when its ticket does, and this cap accommodates the
+active plans without prematurely archiving them.
 
 <!-- caps:begin -->
 | Doc | Owns | Tier | Cap | Reader |
@@ -90,7 +82,7 @@ the same reason it went up.
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 230 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T4 | Uncapped | Maintainers |
-| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 375 | Delivery planning |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 425 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T4 | Uncapped | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |

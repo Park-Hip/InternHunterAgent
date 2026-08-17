@@ -12,7 +12,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 2 |
 | MED | 10 | 1 | 3 |
-| LOW | 15 | 2 | 0 |
+| LOW | 16 | 2 | 0 |
 <!-- generated:triage:end -->
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
@@ -35,6 +35,15 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
+- `KI-2026-08-17-snapshot-region-unverified` **`[LOW · OPEN]` The `snapshot` region of
+  `Repo_Current_State.md` has no staleness check.**
+  - **Found:** T0031.3, by design rather than by defect.
+  - **Impact:** The branch, commit, and worktree block can describe an older clone with nothing
+    failing. Every other generated region in the repository is gated.
+  - **Next:** Have T0031.4's `frozen` check require that the integration commit ran
+    `docs_build.py --snapshot`.
+  - **History:** Introduced when T0031.3 split clone-local facts out of the gated regions, because
+    a check that runs in CI cannot verify a fact that differs in CI.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 

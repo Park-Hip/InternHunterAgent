@@ -8,57 +8,49 @@
 
 ## Current branch
 
-- Repository baseline: `main` at `63cb6d3`, which merged T0031.2 as PR #57 on 2026-08-17, on top
-  of three integration passes the same day (PRs #54-#56), T0031.1 (PR #53), M30's scoping plan
-  (PR #52), M29 (PR #51), M27 (PR #50, 2026-08-16), M28 (PR #49), and M25/M26 (PR #48); PR #47 was
-  closed as superseded by #48.
-- Unmerged work: `feature/t0024.6-persona-scope` carries T0024.1 and T0024.6, built 2026-08-13,
-  never reviewed, and invisible until 2026-08-17 - see [Known Issues](Known_Issues.md). M29, M30,
-  and T0031.2 are merged.
+<!-- generated:snapshot:begin -->
+- Checked out: `feature/t0031.3-derive-state` at `836f765` - Merge pull request #58 from
+  Park-Hip/integration/t0031.2-publish (2026-08-17).
+- Branches not merged into `main`: 6 - `feature/t0022.10-prune-dead-docs`,
+  `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
+  `feature/t0031-parallel-agent-docs`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+- Worktrees: 7.
+<!-- generated:snapshot:end -->
+
+The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
+run in, so it is the one generated region the linter does not gate: branch and worktree facts
+differ between a developer machine and CI, and a check that must pass on both cannot read them.
+
 - Numbers, milestone scopes, and the frozen register list live in
-  [`roadmap.yaml`](roadmap.yaml) as of T0031.1; this snapshot is written only by integration, and
-  is the last register still written by hand rather than generated.
-- Worktrees: three finished ones were pruned on 2026-08-17. `t0031-parallel-docs-workflow` stayed,
-  locked by a dead pid; `t0024.1-behavior-glossary` stayed, holding the unmerged M24 work.
+  [`roadmap.yaml`](roadmap.yaml) as of T0031.1.
+- `feature/t0024.6-persona-scope` carries the unreviewed T0024.1 and T0024.6 work from 2026-08-13,
+  recorded in [Known Issues](Known_Issues.md). `t0031-parallel-docs-workflow` is locked by a dead
+  pid.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>, re-probed 2026-08-17: a real answer with a
   Langfuse trace in 10.6 s, and its static assets hash-match `main`.
 - Deployment, database, cron, and incident procedures: [Operations.md](Operations.md).
 
-## Completed milestones
+## Milestones
 
-Completed ticket plans are preserved in the [ticket archive](archive/Tickets_Archive.md).
+Status is read from [`roadmap.yaml`](roadmap.yaml), which owns milestone identity. What each
+milestone delivered is in [Completion Reports](Completion_Reports.md); completed ticket plans are
+preserved in the [ticket archive](archive/Tickets_Archive.md).
 
-M0-M20 are complete, covering the foundation, agent runtime, data ingestion, evaluation harness,
-security, streaming, deployment, and reconciliation work. M21 is complete through T0021.4, the
-pass that carved the model-honesty work out into M24, and M22 - Docs Hygiene & Documentation
-System - is complete (T0022.1-.14). M24 is in progress on an unreviewed branch, not planned.
+<!-- generated:milestones:begin -->
+Complete: M0, M6-M22, M25-M29 - 23 of 27 milestones.
 
-M25-M29 are complete, entered through [`evals/README.md`](../evals/README.md) and recorded in full
-in [Completion Reports](Completion_Reports.md): the evaluation instrument and its CI replay gate,
-which makes no model, judge, or outbound call (M25); workspace hygiene, with the deterministic
-tests in `tests/evals/` and every grading expectation owned by the registry (M26); the
-`deepseek-v4-flash` serving default per the pre-registered rule **D-045**, measured at 29 of 29
-scenarios in 5m20s for about $0.04 (M27, [the arm record](../evals/t0027_deepseek_arm.md));
-documentation ownership enforced by the `scenario-id` check, explained end to end in
-[`evals/Operating_Manual.md`](../evals/Operating_Manual.md) (M28); and the graded trace viewer,
-where `--grade` puts a turn's verdict, its failing checks, the run header, and telemetry on one
-screen (M29). None of M26, M28, or M29 changed a verdict, rule, or threshold.
+| Milestone | Title | Status |
+|---|---|---|
+| M24 | Honesty Enforcement (obligation seam) | in-progress |
+| M30 | Evaluation Evidence Durability | in-progress |
+| M31 | Parallel Agent Workflow | in-progress |
+| M23 | v1.0 Release Cut | planned |
+<!-- generated:milestones:end -->
 
-M30 - Evaluation Evidence Durability is scoped, not built: the plan (T0030.1-.3) is merged, but no
-ticket under it has landed. It closes the `[MED · DECISION]` T0025.10 left open in
-[Known Issues](Known_Issues.md), triggered by the 2026-08-16 loss of the T0027.3 DeepSeek capture,
-whose per-turn evidence is gone even though its findings survive in
-[the arm record](../evals/t0027_deepseek_arm.md).
-
-M31 - Parallel Agent Workflow is complete through T0031.2 (PRs #53 and #57, 2026-08-17) and
-changes no runtime behavior. A ticket records its outcome in [`entries/`](entries/README.md), and
-`scripts/docs_build.py` now renders those entries into marked regions of
-[Completion Reports](Completion_Reports.md), [Known Issues](Known_Issues.md), and the
-[Manual Verification Guide](Manual_Verification_Guide.md); a `generated` lint check fails when a
-region and its entry disagree, so a region cannot be hand-maintained. What integration still does
-by hand is this file, `Tickets.md`, and deciding where a raised issue belongs. T0031.3 - deriving
-this snapshot - and T0031.4 - the registry, scope, and frozen checks - are planned.
+M24 is in progress on an unreviewed branch rather than planned. M30 is scoped and unbuilt: its
+plan is merged and no ticket under it has landed, so the `[MED · DECISION]` T0025.10 left open in
+[Known Issues](Known_Issues.md) is still open.
 
 ## Archive tags
 
@@ -106,8 +98,17 @@ tests/         automated tests, including tests/evals for the deterministic eval
 
 ## Dependencies
 
-Runtime and development dependencies are maintained in [Tech Stack](Tech_Stack.md).
-The authoritative package declarations are in `pyproject.toml`.
+Declared in `pyproject.toml`, which is authoritative for the version specifier; what each package
+is for is in [Tech Stack](Tech_Stack.md).
+
+<!-- generated:dependencies:begin -->
+Runtime (18): `alembic`, `beautifulsoup4`, `cloudscraper`, `fastapi`, `httpx`, `langchain`,
+`langchain-deepseek`, `langchain-google-genai`, `langchain-groq`, `langfuse`,
+`langgraph-checkpoint-postgres`, `lxml`, `psycopg`, `pydantic-settings`, `slowapi`, `sqlalchemy`,
+`structlog`, `uvicorn`
+
+Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, `ruff`
+<!-- generated:dependencies:end -->
 
 ## Available scripts
 
@@ -127,8 +128,29 @@ The authoritative package declarations are in `pyproject.toml`.
 - `uv run alembic current` and `uv run alembic upgrade head` - inspect or migrate a database.
 - `docker compose up -d` - start local Postgres and the API.
 - `uv run python scripts/docs_lint.py` - run every documentation convention check.
-- `uv run python scripts/docs_build.py` - regenerate the register regions from `docs/entries/`;
-  `--check` fails instead of writing.
+- `uv run python scripts/docs_build.py` - regenerate the register regions from `docs/entries/`
+  and this file's derived regions; `--check` fails instead of writing, and `--snapshot` also
+  refreshes the git block under [Current branch](#current-branch).
+
+### Maintenance scripts
+
+<!-- generated:scripts:begin -->
+- `scripts/audit_fields.py` - Field audit of the captured VietnamWorks sample - tech_stack tags +
+  job_level.
+- `scripts/build_tech_vocabulary.py` - No module docstring.
+- `scripts/deepseek_provider_spike.py` - Throwaway spike (T0027.1): decide whether DeepSeek can
+  serve this agent at all.
+- `scripts/docs_build.py` - Render the derived documentation registers from the per-ticket entry
+  files.
+- `scripts/docs_lint.py` - Check repository documentation hygiene without external dependencies.
+- `scripts/eval_judge_spike.py` - Throwaway spike (T0011.1): pick a DeepEval judge that reliably
+  returns schema-valid JSON.
+- `scripts/scrape_itviec_spike.py` - Scraping spike - ITviec AI/Data IT jobs via cloudscraper.
+- `scripts/scrape_spike.py` - Scraping experiment - VietnamWorks AI/Data IT jobs.
+- `scripts/scrape_topcv_spike.py` - Scraping spike - TopCV internship listings via cloudscraper.
+- `scripts/scrape_topdev_spike.py` - Scraping spike - TopDev AI/Data IT jobs via RSC payload
+  parsing.
+<!-- generated:scripts:end -->
 
 ## Build and test status
 
@@ -136,15 +158,17 @@ The authoritative package declarations are in `pyproject.toml`.
 |---|---|
 | `python scripts/docs_lint.py` | Passed on 2026-08-17 (all twelve checks, exit 0) |
 | `python scripts/docs_build.py --check` | Exit 0 on 2026-08-17; every generated region current |
-| `uv run pytest -q` | 488 passed, 2 skipped, 30 live eval tests deselected, and 4 subtests passed on 2026-08-17 |
+| `uv run pytest -q` | 488 passed, 10 skipped, 30 deselected, and 4 subtests passed on 2026-08-17 |
 | `uv run ruff check .` | Passed on 2026-08-17 |
 | `uv run mypy` | Success: no issues in 43 source files on 2026-08-17 |
 | `uv run python -m evals.replay` | Exit 0 on 2026-08-17 against the frozen evidence |
 
 Every skip is environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, and skill
 parity needs the gitignored `.claude/` copy; the default suite deselects live eval tests by design.
-An earlier run the same day reported 466 passed and 10 skipped in 279s with the fixture Postgres on
-5433 down - the extra skips and the wall time are the hang [Known Issues](Known_Issues.md) records.
+The 10 skips and the 277s wall time above are the fixture Postgres on 5433 being down, which is the
+hang [Known Issues](Known_Issues.md) records; with it up the same suite reports 2 skips in seconds.
+A bare `python -m pytest` is not the command: it cannot import `slowapi` and fails collection on 23
+modules. Use `uv run`.
 
 ## Registers
 
@@ -156,11 +180,10 @@ resolution records: [Resolved Issues](Resolved_Issues.md).
 T0030.1 - give the replay format a writer. The DeepSeek capture loss that motivated M30 is a live
 risk, and every further captured run stays exposed to it until `freeze` exists.
 
-T0031.3 is the competing pick, and this file is the argument for it. T0031.2 removed the fold from
-three registers, and the measurement is plain: publishing its own entry cost one command. What is
-left by hand is this snapshot, `Tickets.md`, and the judgement of where a raised issue belongs -
-and only the last of those is a judgement. Four integration passes ran on 2026-08-17 and each one
-rewrote this file.
+T0031.3 has landed, so this section is now the only part of this file a human writes. What is left
+by hand elsewhere is `Tickets.md` and the judgement of where a raised issue belongs - and only the
+second is a judgement. T0031.4, the registry, scope, and frozen lint checks, is the remaining M31
+ticket.
 
 T0023 - the release path - remains open: `schedule:` is restored on `main` as of T0020.4, so the
 last row in [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 is to watch the first

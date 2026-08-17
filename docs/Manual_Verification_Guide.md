@@ -24,6 +24,22 @@ developer to create, and the text is not editable here anyway.
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:checklists:begin -->
+### T0031.3: Derive the current-state snapshot
+
+1. `python scripts/docs_build.py --check` exits 0 on a clean checkout.
+2. Hand-edit a line inside the `milestones` region of `docs/Repo_Current_State.md`, then run
+   `python scripts/docs_lint.py`. It fails, naming the file and telling you to run `docs_build.py`.
+   Run `python scripts/docs_build.py` and the edit is reverted.
+3. Change a milestone's `status:` in `docs/roadmap.yaml`, run `python scripts/docs_build.py`, and
+   confirm the milestone table and the complete-count line both move. Revert.
+4. Hand-edit a line inside the `snapshot` region and run `python scripts/docs_lint.py`. It still
+   passes: that region is clone-local by design. `python scripts/docs_build.py --snapshot` restores
+   it.
+5. `python scripts/docs_build.py --check --snapshot` exits non-zero with a message explaining that
+   the git region cannot be verified, rather than reporting a stale file.
+6. Confirm `docs/Repo_Current_State.md` is at or under its 210-line cap: `python
+   scripts/docs_lint.py --check size-cap`.
+
 ### T0031.2: Generate the registers from the entries
 
 1. `python scripts/docs_build.py` prints `every generated region is already current`.

@@ -163,14 +163,14 @@ or maintainer action, and `DECISION` needs a product or operational choice.
   - **Next:** Capture the scenario when a tier decision lands, then confirm or relax the rule.
   - **History:** [`evals/Instrument_Report.md`](../evals/Instrument_Report.md) records both flips.
 
-- **`[MED · DECISION]` The 13-turn label sample cannot be reproduced from a clean checkout.**
-  - **Found:** T0025.9 audit on 2026-08-13.
-  - **Impact:** `evals/runs/` is ignored because its turns carry latency, token usage, and finish
-    reasons, so the capture is uncommitted. Two turns survive in the replay; 11 are attested only.
-  - **Next:** Maintainer call, left open by T0025.10: commit a sanitized full capture, or supersede
-    the sample with a paid-tier re-measurement under T0024.4 - the same decision as the entry below.
-  - **History:** `.gitignore` line 9 and
-    [`evals/Instrument_Report.md`](../evals/Instrument_Report.md).
+- **`[HIGH · DECISION]` Captures are unpreserved, and one has already been lost.**
+  - **Found:** T0025.9 on 2026-08-13 as a reproducibility gap; realised 2026-08-16.
+  - **Impact:** `evals/runs/` is ignored and `replay.py` validates the sanitized format without
+    writing it, so freezing is hand work and did not happen. T0027.3's 77-turn capture - the only
+    29-of-29 measurement - died with its worktree after PR #50 and no ref ever held it; only
+    [the arm record](../evals/t0027_deepseek_arm.md) survives. T0025.7 is exposed identically.
+  - **Next:** T0030 - .1 the writer, .2 freeze what survives, .3 **D-046** on telemetry.
+  - **History:** `.gitignore` line 9; [`Operating_Manual.md`](../evals/Operating_Manual.md).
 
 - **`[LOW · OPEN]` DeepEval live commands require UTF-8 output and an explicit `-m eval`.**
   - **Found:** T0011.1, T0011.6, and T0012.7.

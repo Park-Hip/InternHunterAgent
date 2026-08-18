@@ -141,6 +141,16 @@ developer to create, and the text is not editable here anyway.
 3. Insert a non-empty `trace_id` into a copy of the capture, rerun `freeze`, and confirm it refuses
    the source path without creating output.
 4. Inspect the replay and confirm it contains no `trace_id`, `latency_ms`, or token-usage field.
+
+### T0024.2: Obligation seam and listing-expiry honesty guard
+
+- Configure the fixture database, a selected-provider key, and Langfuse credentials.
+- Start the app and ask which postings expire soon.
+- Inspect the tool trace for `[LISTING_EXPIRY_NOT_DEADLINE]` with the glossary wording.
+- Ask for an application deadline and confirm the final answer does not relabel listing expiry.
+- Ask for a non-existent column such as applicant count.
+- Confirm the tool uses the absent-field wording.
+- Ask for a role with no matching postings and confirm the zero-results wording is unchanged.
 <!-- generated:checklists:end -->
 <!-- lint-allow-link-path:end -->
 

@@ -63,7 +63,7 @@ async def generate_sql(question: str, config: RunnableConfig | None = None) -> s
 
 def _build_answer(table: TableArtifact) -> str:
     if table.row_count == 0:
-        return "No matching internship job postings were found."
+        return "I didn't find any postings matching that in the data."
 
     if table.truncated:
         header = (
@@ -82,7 +82,12 @@ def _build_answer(table: TableArtifact) -> str:
 
 @tool
 async def query_clean_jobs(question: str, config: RunnableConfig) -> str:
-    """Answer questions about internship job postings stored in the clean_jobs table."""
+    """Search AI and data job and internship postings in the clean_jobs table.
+
+    Use this tool for discovery questions before get_job_details, which retrieves details for
+    postings already shown. Pass the user's question with any role, skill, location, or other
+    search criteria.
+    """
     sql = await generate_sql(question, config)
     validation = validate_sql(sql)
 

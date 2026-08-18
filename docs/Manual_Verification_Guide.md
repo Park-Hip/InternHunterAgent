@@ -34,6 +34,14 @@ developer to create, and the text is not editable here anyway.
    `docs_build.py` and then the lint with `--diff-base origin/main`. It must exit 0, where before
    this ticket it reported three registers as out of scope.
 
+### T0032.1: Finish decision 10 across the tool surface
+
+- Configure the fixture database, the selected provider key, and Langfuse credentials.
+- Start the app and ask for a role with no matching postings, such as `Do you have any COBOL jobs?`.
+- Confirm the response does not contain `internship` and matches the zero-results wording.
+- Ask what the assistant can help with and confirm its tool trace describes AI and data job and
+  internship postings.
+
 ### T0031.4: Enforce the protocol in CI
 
 1. `python scripts/docs_lint.py` exits 0 on a clean checkout and reports fifteen checks' worth of

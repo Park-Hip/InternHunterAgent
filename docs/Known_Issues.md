@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 12 | 1 | 2 |
+| MED | 13 | 1 | 2 |
 | LOW | 17 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -35,6 +35,17 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
+- `KI-2026-08-17-generated-register-scope` **`[MED · OPEN]` Generated registers fail M32 scope
+  validation.**
+  - **Found:** `docs_lint.py` reports generated `Completion_Reports.md` and
+    `Manual_Verification_Guide.md` changes outside M32's scope after `docs_build.py` renders this
+    entry.
+  - **Impact:** A ticket branch following the required entry-generation workflow cannot pass the
+    full documentation linter.
+  - **Next:** A follow-up should permit generated register changes in the scope check or explicitly
+    include the generated registers in applicable milestone scopes.
+  - **History:** First observed while completing T0032.1 on 2026-08-17.
+
 - `KI-2026-08-17-vietnamese-spike-multiturn` **`[MED - OPEN]` Multi-turn tool following is
   unstable.**
   - **Found:** A3 used `get_current_time` for an application-deadline question in two of three runs.

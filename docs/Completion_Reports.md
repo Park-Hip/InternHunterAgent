@@ -3719,6 +3719,62 @@ publishes only its own entry.
 
 ---
 
+## T0032.1 - Finish decision 10 across the tool surface
+
+*Completed 2026-08-17.*
+
+**Summary**
+
+Updated the model-visible `query_clean_jobs` description to cover AI and data job and internship
+postings.
+The description now tells the agent to use the search tool before `get_job_details` and to pass the
+user's search criteria.
+Updated the zero-results answer to match the `ZERO_RESULTS` glossary phrasing without loading the
+glossary in production code.
+Added regression coverage for the wording and glossary equivalence.
+
+**Files**
+
+- Modified `src/agents/tools/query_clean_jobs.py`.
+- Modified `tests/agents/tools/test_query_clean_jobs.py`.
+- Created `docs/entries/T0032.1.md`.
+
+**Commands**
+
+- Focused `test_query_clean_jobs.py` run.
+- Focused query and details tool suite with placeholder Langfuse settings.
+- Full non-evaluation test suite with placeholder Langfuse settings.
+- Focused Ruff check for the changed tool and test.
+- `uv run python scripts/docs_build.py`.
+- `uv run python scripts/docs_lint.py`.
+
+**Build and test**
+
+| Command | Result |
+|---|---|
+| Focused query tool test without Langfuse settings | Blocked by missing Langfuse settings |
+| Focused query and details tool tests with placeholders | 19 passed |
+| Full non-evaluation test suite with placeholders | 530 passed, 2 skipped, 30 deselected, 43 subtests passed |
+| Focused Ruff check | Passed |
+| Documentation build | Rebuilt the completion report and manual verification guide |
+| Documentation lint | Fails only because M32 does not scope generated register outputs |
+
+**Risks**
+
+- The live app and Langfuse trace verification was not run because this isolated worktree lacks
+  provider and Langfuse credentials.
+
+**Follow-ups**
+
+- T0024.2 may replace the duplicated zero-results literal with the glossary loader after its
+  obligation mechanism is in scope.
+
+**Docs**
+
+No additional documentation changes are needed.
+
+---
+
 ## T0032.4 - Measure Vietnamese prompt options
 
 *Completed 2026-08-17.*

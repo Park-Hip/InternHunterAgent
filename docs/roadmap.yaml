@@ -506,6 +506,7 @@ milestones:
       - evals/grader.py
       - evals/execution_accuracy.py
       - evals/Instrument_Report.md
+      - evals/replays/t0024.4-v3-obligations.json
       - config/prompts.yaml
       - tests/evals/
       - docs/roadmap.yaml

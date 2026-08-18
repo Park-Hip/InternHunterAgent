@@ -19,7 +19,7 @@
             {
               "turn": 1,
               "status": "COMPLETE",
-              "expected_execution_accuracy": "FAIL",
+              "expected_execution_accuracy": "PASS",
               "expected_grade": "FAIL",
               "seams": {
                 "question": "Which job was posted most recently?",
@@ -39,7 +39,7 @@
             {
               "turn": 1,
               "status": "COMPLETE",
-              "expected_execution_accuracy": "FAIL",
+              "expected_execution_accuracy": "PASS",
               "expected_grade": "FAIL",
               "seams": {
                 "question": "Which job was posted most recently?",
@@ -59,7 +59,7 @@
             {
               "turn": 1,
               "status": "COMPLETE",
-              "expected_execution_accuracy": "FAIL",
+              "expected_execution_accuracy": "PASS",
               "expected_grade": "FAIL",
               "seams": {
                 "question": "Which job was posted most recently?",
@@ -85,7 +85,7 @@
             {
               "turn": 1,
               "status": "COMPLETE",
-              "expected_execution_accuracy": "PASS",
+              "expected_execution_accuracy": "FAIL",
               "expected_grade": "PASS",
               "seams": {
                 "question": "What's the highest-paid job?",
@@ -105,7 +105,7 @@
             {
               "turn": 1,
               "status": "COMPLETE",
-              "expected_execution_accuracy": "PASS",
+              "expected_execution_accuracy": "FAIL",
               "expected_grade": "PASS",
               "seams": {
                 "question": "What's the highest-paid job?",
@@ -125,7 +125,7 @@
             {
               "turn": 1,
               "status": "COMPLETE",
-              "expected_execution_accuracy": "PASS",
+              "expected_execution_accuracy": "FAIL",
               "expected_grade": "PASS",
               "seams": {
                 "question": "What's the highest-paid job?",

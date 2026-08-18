@@ -3132,6 +3132,60 @@ Bumped `prompt_version` from `v2` to `v3`.
 
 ---
 
+## T0024.4 - Honesty obligation evaluation gate
+
+*Completed 2026-08-18.*
+
+**Summary**
+
+Captured the merged `v3` prompt against the frozen 22-row fixture with the DeepSeek serving profile.
+The targeted six-scenario honesty capture completed all 18 probe turns and was frozen to replay.
+The replay passes its no-model validation and deterministic regrading.
+The grade result is 11 PASS and 7 FAIL.
+The caveat-relay contract was preserved in the measured currency and listing-expiry answers.
+T0024.5 is not required because the model did not drop explicit caveats.
+
+**Files**
+
+- Created `evals/replays/t0024.4-v3-obligations.json`.
+- Created `docs/entries/T0024.4.md`.
+- Updated generated completion and manual-verification registers.
+
+**Commands**
+
+- Started the fixture Postgres service with `docker compose up -d`.
+- Rebuilt the frozen fixture with `python -m evals.fixtures.loader`.
+- Captured the full 29-scenario registry and the targeted six-scenario honesty set.
+- Calculated execution accuracy and deterministic grades for the targeted capture.
+- Froze and replayed the targeted capture.
+- Ran the complete non-evaluation test suite with temporary placeholder settings.
+- Ran docs build and diff-aware docs lint.
+
+**Build and test**
+
+- Targeted replay passed the no-model replay gate.
+- Targeted deterministic grades were 11 PASS and 7 FAIL across 18 turns.
+- Full non-evaluation tests passed before the entry was added: 543 tests and 2 skips.
+- The evaluation environment used a clean worktree and the frozen fixture with 22 rows.
+
+**Risks**
+
+- The targeted gate is not a full 29-scenario replay.
+- The current freezer rejects turns without generated SQL.
+- The capture found a currency-ranking contradiction and outdated absent-field grading expectations.
+
+**Follow-ups**
+
+- File a ticket for replay freezing of multi-turn or no-SQL turns.
+- File a ticket for the cross-currency answer that still crowns one posting after its caveat.
+- Reconcile the absent-field grader with truthful listing-expiry answers.
+
+**Docs**
+
+- No additional documentation updates are required.
+
+---
+
 ## T0030.1 - Give the replay format a writer
 
 *Completed 2026-08-17.*

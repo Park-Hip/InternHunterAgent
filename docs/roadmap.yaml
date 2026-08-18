@@ -345,8 +345,12 @@ milestones:
     tickets: [T0034.1, T0034.2]
     scope:
       - src/agents/runtime/middleware.py
+      - src/agents/runtime/factory.py
       - config/settings.yaml
       - tests/agents/runtime/test_memory.py
+      - tests/agents/runtime/test_trimming.py
+      - docs/roadmap.yaml
+      - docs/MVP_Technical_Design.md
       - docs/entries/
     note: >-
       Allocated 2026-08-17 out of M33 by decision D2 of the T0032.4 spike triage

@@ -4148,6 +4148,59 @@ The integration step should publish M34's registry outcome after T0034.2 complet
 
 ---
 
+## T0034.2 - Retain complete user turns in the serving memory window
+
+*Completed 2026-08-18.*
+
+**Summary**
+
+Replaced message-count trimming with a six-turn retention policy.
+The middleware retains complete turns from each human message through the next human message.
+The six-turn one-tool and four-turn sequential-two-tool reproductions now retain turn 1.
+The system prompt remains present in the model input, and the stored checkpoint keeps full history.
+
+**Files**
+
+- Modified `config/settings.yaml`.
+- Modified `src/agents/runtime/factory.py`.
+- Modified `src/agents/runtime/middleware.py`.
+- Modified `tests/agents/runtime/test_memory.py`.
+- Modified `tests/agents/runtime/test_trimming.py`.
+- Modified `docs/roadmap.yaml` to widen M34's declared implementation scope.
+- Added `docs/entries/T0034.2.md`.
+
+**Commands**
+
+- `$env:LANGFUSE_PUBLIC_KEY='test'; $env:LANGFUSE_SECRET_KEY='test'`
+- `uv run pytest tests/agents/runtime/test_memory.py tests/agents/runtime/test_trimming.py -q`
+- `uv run ruff check src/agents/runtime/middleware.py src/agents/runtime/factory.py`
+- `uv run ruff check tests/agents/runtime/test_memory.py tests/agents/runtime/test_trimming.py`
+- `uv run mypy src`
+- `git diff --check`
+
+**Build and test**
+
+| Command | Result |
+|---|---|
+| Focused memory and trimming tests | 15 passed |
+| Ruff | Passed |
+| Mypy | Passed for 44 source files |
+
+**Risks**
+
+Six complete turns can contain more messages and tokens than the old 20-message cap.
+The six-turn bound limits this growth while keeping the user-visible window stable.
+
+**Follow-ups**
+
+No follow-up ticket is required for M34.
+
+**Docs**
+
+The integration step should close M34 and resolve its multi-turn memory issue.
+
+---
+
 ## T0035.1 - Stamp prompt_version into the capture manifest and the viewer header
 
 *Completed 2026-08-18.*

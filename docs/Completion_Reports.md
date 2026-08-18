@@ -4161,4 +4161,126 @@ register. The diff still shows it.
 
 None. `CLAUDE.md` and `AGENTS.md` describe the protocol, not the checks that enforce it, and
 neither statement changes.
+
+---
+
+## T0037.1 - Bound the ingestion run so a dead source fails inside the job ceiling
+
+*Completed 2026-08-18.*
+
+**Summary**
+
+The 2026-08-18 nightly (run 32093739835) was cancelled at the workflow's 15-minute
+`timeout-minutes` ceiling after every VietnamWorks request hung for its full timeout.
+
+Each page costs `retry_attempts` 2 plus the initial try at `timeout_seconds` 30, plus
+`retry_backoff_seconds` 2.0 doubling once, so `3 x 30 + 2 + 4 = 96s`.
+That is exactly the observed spacing between consecutive `ingestion.page_failed` events.
+At 8 queries x `pages_per_query` 2 = 16 requests, a whole-source failure needs about 26 minutes.
+
+The run therefore could not give up before the runner killed it.
+`fetch()` never returned, so `main()` never reached `except IngestionSafetyError`,
+`logger.error("ingestion.aborted")` never fired, and the only diagnostic left was the
+spacing between log lines.
+A whole-source failure is the exact case that abort path exists for, and the one case it
+structurally could not reach.
+
+This ticket adds `api.max_elapsed_seconds`, a wall-clock budget for the whole fetch, checked
+before every request.
+Once spent, `_collect` stops issuing requests and `fetch()` returns normally with whatever it
+has, which is usually nothing.
+`assert_min_yield` then aborts the run with a logged reason, which is the pre-existing and
+correct behaviour for an empty fetch.
+
+No data was ever at risk in the incident.
+`fetch()` must return before `upsert_raw_postings` runs, and the kill landed mid-fetch on query
+9 of 16, so nothing was written.
+The dead-man ping behaved correctly by staying silent.
+
+### Why a budget and not a circuit breaker
+
+A consecutive-failure breaker would have stopped the observed outage sooner, and it is the more
+obvious fix.
+It was rejected because it bounds only the all-failing case: under intermittent failure, where
+pages alternate between slow success and timeout, the breaker never trips and the run is
+unbounded again.
+The budget holds the invariant regardless of failure pattern, query count, or page count, which
+is the property the workflow ceiling actually needs.
+
+Raising `timeout-minutes` was rejected outright.
+It moves the ceiling without bounding the run, and reproduces the same gap at a larger query
+count.
+
+**Files**
+
+- `config/ingestion.yaml` - added `api.max_elapsed_seconds: 600`, with the arithmetic that sizes
+  it against the workflow ceiling.
+- `src/services/ingestion/sources/vietnamworks.py` - added `_out_of_budget()`, the deadline set
+  in `fetch()`, and the checks in both `_collect` loops.
+- `tests/services/ingestion/test_vietnamworks.py` - added `VietnamWorksBudgetTests` (7 tests)
+  and the `_FakeClock` helper.
+- `docs/roadmap.yaml` - registered M37 and this ticket.
+- `docs/entries/T0037.1.md` - this file.
+
+**Commands**
+
+```
+git worktree add -b feature/t0037.1-ingestion-budget .claude/worktrees/... origin/main
+uv run python -m pytest tests/services/ingestion/ -q
+uv run python -m pytest tests/ -q --ignore=tests/evals
+uv run ruff check src/services/ingestion/ tests/services/ingestion/
+uv run mypy src/services/ingestion/sources/vietnamworks.py
+python scripts/docs_build.py
+python scripts/docs_lint.py
+```
+
+**Build and test**
+
+| Check | Result |
+|---|---|
+| `tests/services/ingestion/` | 174 passed, 4 subtests passed |
+| Full suite (`--ignore=tests/evals`) | 448 passed, 2 skipped, 45 subtests passed |
+| `ruff check` on changed paths | All checks passed |
+| `mypy` on the adapter | Success, no issues |
+| New tests fail without the fix | 6 of 7 fail; the 7th is the inertness guard |
+
+The env vars must be set to placeholders to run tests in a fresh worktree, which has no `.env`.
+This is pre-existing and unrelated to this ticket.
+
+The regression was confirmed by neutralising `_out_of_budget()` and re-running: 6 of the 7 new
+tests fail.
+The 7th, `test_healthy_run_is_untouched_by_the_budget`, passes both ways by design, because it
+pins that the budget stays inert on a good night.
+
+**Risks**
+
+The budget is checked between pages, never mid-retry-ladder, so the true bound is the budget
+plus one page's worst case rather than the budget exactly.
+This is deliberate: tearing down a page already in flight would buy at most ~96s and would cost
+the clean per-page accounting that `pages_failed` depends on.
+The headroom under the ceiling is sized for it.
+
+`max_elapsed_seconds` and the workflow's `timeout-minutes` are related by a comment, not by a
+check, so raising one without the other silently reopens the gap this ticket closed.
+Raised as a known issue below.
+
+A budget that is set too low would truncate a healthy run and trip `min_yield`, turning a good
+night into a failed one.
+At 600s against a measured ~40s of real fetching the margin is large, but the knob is sharp in
+that direction.
+
+**Follow-ups**
+
+- Consider adding a consecutive-failure circuit breaker on top of the budget.
+  It is not needed for the invariant, but it would end a dead-source run in about 5 minutes
+  rather than 10, and would stop issuing requests at a source already signalling distress.
+- Consider surfacing `budget_exhausted` in the `run_ingestion` result dict and the
+  `ingestion.completed` event, so a truncated run is visible without reading warnings.
+  This needs `loader.py`, which is outside this milestone's declared scope.
+
+**Docs**
+
+- `docs/Operations.md` describes the nightly ingestion run and does not yet mention the fetch
+  budget or what a `ingestion.budget_exhausted` warning means for an operator.
+  It should gain a line once this merges.
 <!-- generated:reports:end -->

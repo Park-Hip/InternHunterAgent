@@ -12,7 +12,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
 | MED | 12 | 1 | 3 |
-| LOW | 17 | 2 | 0 |
+| LOW | 18 | 2 | 0 |
 <!-- generated:triage:end -->
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
@@ -35,6 +35,18 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
+- `KI-2026-08-18-budget-ceiling-unlinked` **`[LOW · OPEN]` The fetch budget and the workflow
+  timeout are linked by a comment, not a check.**
+  - **Found:** T0037.1, 2026-08-18, while sizing `max_elapsed_seconds` against
+    `timeout-minutes`.
+  - **Impact:** Raising `pages_per_query`, `queries`, `timeout_seconds`, or `retry_attempts`
+    without re-deriving the budget can push the worst case back over the ceiling, which
+    reproduces the cancelled-not-failed behaviour this ticket removed.
+    Nothing fails a build if that happens.
+  - **Next:** Either assert the relationship in a test that reads both files, or derive the
+    budget from the ceiling instead of hard-coding it.
+    Deferred because both options couple the adapter to the workflow file, which is a design
+    call this ticket should not make alone.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 

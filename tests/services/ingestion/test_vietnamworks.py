@@ -431,5 +431,173 @@ class VietnamWorksCoverageTests(unittest.TestCase):
         self.assertNotIn("300", {r.external_id for r in results})
 
 
+class _FakeClock:
+    """A monotonic clock the test advances by hand.
+
+    Real elapsed time cannot be asserted on — the whole point of the budget is a
+    duration no test may actually wait out. Every second the adapter would spend
+    is instead charged to this clock: the mocked `time.sleep` advances it by the
+    slept amount, and the mocked transport advances it by `timeout_seconds`
+    before raising, which is what a hung request costs in wall time.
+    """
+
+    def __init__(self, start: float = 1000.0) -> None:
+        self.now = start
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
+class VietnamWorksBudgetTests(unittest.TestCase):
+    """The global wall-clock budget — the 2026-08-18 nightly outage, reproduced.
+
+    Run 32093739835 hung on every request and needed ~26 minutes to give up,
+    against a 15-minute `timeout-minutes` ceiling in the workflow. The runner
+    cancelled the job mid-fetch, so `fetch()` never returned, `main()` never
+    reached `except IngestionSafetyError`, and the only diagnostic left was the
+    spacing between log lines. These tests pin the property that failure was
+    missing: a dead source ends the run from inside, in bounded time.
+    """
+
+    # The workflow's timeout-minutes: 15, in seconds. The bound every test here
+    # is ultimately about — a run that exceeds this is killed rather than ending.
+    JOB_CEILING_SECONDS = 900
+
+    def setUp(self) -> None:
+        self.fixture = _load_fixture()
+        self.clock = _FakeClock()
+
+        sleep_patcher = patch("time.sleep", side_effect=self.clock.advance)
+        self.mock_sleep = sleep_patcher.start()
+        self.addCleanup(sleep_patcher.stop)
+
+        monotonic_patcher = patch("time.monotonic", side_effect=self.clock.monotonic)
+        monotonic_patcher.start()
+        self.addCleanup(monotonic_patcher.stop)
+
+    def _hanging_client(self) -> MagicMock:
+        """A client where every request hangs for the full timeout, then fails.
+
+        This is the observed failure mode, not a 4xx: the source stopped
+        answering rather than refusing, so each attempt cost `timeout_seconds`
+        in full before `_post_with_retry` saw an exception at all.
+        """
+        client = MagicMock()
+
+        def side_effect(url: str, **kwargs: object) -> MagicMock:
+            self.clock.advance(30)  # timeout_seconds
+            raise httpx.TimeoutException("hung")
+
+        client.post.side_effect = side_effect
+        return client
+
+    def _source(
+        self,
+        client: MagicMock,
+        queries: list[str],
+        pages_per_query: int,
+        max_elapsed: float,
+    ) -> VietnamWorksSource:
+        source = VietnamWorksSource(client=client)
+        source._queries = queries
+        source._pages_per_query = pages_per_query
+        source._max_elapsed = max_elapsed
+        return source
+
+    def _production_shape_source(self, client: MagicMock) -> VietnamWorksSource:
+        """8 queries x 2 pages x a 600s budget — the shipped config's shape."""
+        return self._source(
+            client,
+            queries=[f"q{i}" for i in range(8)],
+            pages_per_query=2,
+            max_elapsed=600,
+        )
+
+    def test_total_outage_finishes_inside_the_job_ceiling(self) -> None:
+        # The regression. Unbounded, 16 pages x 96.6s each is ~1546s, which
+        # overruns the 900s ceiling and gets the job cancelled instead of failed.
+        client = self._hanging_client()
+        source = self._production_shape_source(client)
+        started = self.clock.now
+
+        results = list(source.fetch())
+
+        elapsed = self.clock.now - started
+        self.assertEqual(results, [])
+        self.assertLess(elapsed, self.JOB_CEILING_SECONDS)
+        # Bound is the budget plus at most one page's worst case, not the budget
+        # exactly — the check runs between pages, never mid-retry-ladder.
+        self.assertLessEqual(elapsed, 600 + 96.6)
+
+    def test_total_outage_stops_early_instead_of_attempting_every_page(self) -> None:
+        client = self._hanging_client()
+        source = self._production_shape_source(client)
+
+        list(source.fetch())
+
+        # 16 pages would be 48 attempts; the budget cuts it to 7 pages (21).
+        attempted_pages = client.post.call_count / 3
+        self.assertLess(attempted_pages, 16)
+        self.assertEqual(client.post.call_count, 21)
+
+    def test_fetch_returns_so_the_caller_can_reach_its_abort_path(self) -> None:
+        # main() only logs `ingestion.aborted` if fetch() hands control back.
+        # Under the outage it never did, which is why the run had no diagnostic.
+        client = self._hanging_client()
+        source = self._production_shape_source(client)
+
+        results = list(source.fetch())
+
+        self.assertEqual(results, [])
+        self.assertTrue(source.budget_exhausted)
+
+    def test_budget_exhaustion_is_logged_once_not_per_check(self) -> None:
+        client = self._hanging_client()
+        source = self._production_shape_source(client)
+
+        with patch("src.services.ingestion.sources.vietnamworks.logger") as mock_logger:
+            list(source.fetch())
+
+        budget_events = [
+            c for c in mock_logger.warning.call_args_list
+            if c.args and c.args[0] == "ingestion.budget_exhausted"
+        ]
+        self.assertEqual(len(budget_events), 1)
+
+    def test_expired_budget_stops_the_run_before_any_request(self) -> None:
+        client = self._hanging_client()
+        source = self._source(client, queries=["q"], pages_per_query=2, max_elapsed=0)
+
+        results = list(source.fetch())
+
+        self.assertEqual(results, [])
+        client.post.assert_not_called()
+
+    def test_healthy_run_is_untouched_by_the_budget(self) -> None:
+        # The budget must be inert in the normal case: a real run fetches in
+        # ~40s against a 600s budget, so it must never truncate a good night.
+        client = _mock_client(self.fixture)
+        source = self._production_shape_source(client)
+
+        results = list(source.fetch())
+
+        self.assertEqual(client.post.call_count, 16)
+        self.assertFalse(source.budget_exhausted)
+        self.assertTrue(results)
+
+    def test_budget_state_resets_across_successive_fetch_calls(self) -> None:
+        source = self._production_shape_source(self._hanging_client())
+        list(source.fetch())
+        self.assertTrue(source.budget_exhausted)
+
+        source._client = _mock_client(self.fixture)
+        list(source.fetch())
+
+        self.assertFalse(source.budget_exhausted)
+
+
 if __name__ == "__main__":
     unittest.main()

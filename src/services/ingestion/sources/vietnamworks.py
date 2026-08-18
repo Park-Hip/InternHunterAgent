@@ -38,11 +38,14 @@ class VietnamWorksSource(JobSource):
         self._user_agent: str = cfg["api"]["user_agent"]
         self._retry_attempts: int = cfg["api"]["retry_attempts"]
         self._retry_backoff: float = cfg["api"]["retry_backoff_seconds"]
+        self._max_elapsed: float = cfg["api"]["max_elapsed_seconds"]
         self._queries: list[str] = cfg["queries"]
         self._parent_id: int = cfg["job_function"]["parent_id"]
         self._child_ids: set[int] = set(cfg["job_function"]["child_ids"])
         self._max_jobs: int = cfg["max_jobs"]
         self._client = client
+        self._deadline: float | None = None
+        self.budget_exhausted = False
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -118,6 +121,31 @@ class VietnamWorksSource(JobSource):
             )
             return None
 
+    def _out_of_budget(self) -> bool:
+        """True once the run has spent its whole wall-clock budget.
+
+        Checked before each request rather than mid-page, so a page already in
+        flight always finishes its retry ladder — tearing one down partway would
+        buy at most ~96s and cost the clean per-page accounting that
+        `pages_failed` depends on. The bound is therefore the budget plus one
+        page's worst case, which is what config/ingestion.yaml sizes against the
+        workflow's timeout-minutes.
+
+        Logged once per fetch, not once per check, so a bounded run leaves
+        exactly one line saying why it stopped early.
+        """
+        if self._deadline is None or time.monotonic() < self._deadline:
+            return False
+        if not self.budget_exhausted:
+            self.budget_exhausted = True
+            logger.warning(
+                "ingestion.budget_exhausted",
+                source=self.source,
+                max_elapsed_seconds=self._max_elapsed,
+                pages_failed=self.pages_failed,
+            )
+        return True
+
     def _is_ai_data(self, job: dict) -> bool:
         fn = job.get("jobFunction") or {}
         child_ids = {
@@ -142,10 +170,10 @@ class VietnamWorksSource(JobSource):
         seen_ids: set[int] = set()
         kept = 0
         for page in range(self._pages_per_query):
-            if kept >= self._max_jobs:
+            if kept >= self._max_jobs or self._out_of_budget():
                 break
             for query in self._queries:
-                if kept >= self._max_jobs:
+                if kept >= self._max_jobs or self._out_of_budget():
                     break
                 try:
                     jobs = self._post_with_retry(client, query, page)
@@ -179,6 +207,8 @@ class VietnamWorksSource(JobSource):
 
     def fetch(self) -> Iterator[RawPosting]:
         self.pages_failed = 0
+        self.budget_exhausted = False
+        self._deadline = time.monotonic() + self._max_elapsed
         if self._client is not None:
             yield from self._collect(self._client)
         else:

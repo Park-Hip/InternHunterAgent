@@ -85,6 +85,7 @@ prompts:
 behavior_glossary:
   NEGOTIABLE_SALARY: "This posting lists its salary as negotiable / doesn't disclose a figure, so I don't have a number to share for it."
   ABSENT_FIELD: "That isn't something the data captures, so I can't answer it \u2014 I only have the posting's role, company, tech stack, location, seniority level, and salary when it's disclosed. For example, application deadlines and applicant counts aren't captured here."
+  LISTING_EXPIRY_NOT_DEADLINE: "The date shown is the source listing's expiry date, not an application deadline."
   FRESHNESS_REFUSAL: "I can't be certain whether this posting is still open \u2014 its listing-expiry date isn't recorded here, so treat the status as unconfirmed."
   CREATED_ON_CAVEAT: "I ordered these by when the posting was recorded on VietnamWorks (created_on) \u2014 that's the record-creation date, not a guaranteed publish or role-open date."
   FREE_TEXT_HEDGE: "There's no dedicated field for that. I can look for it in the posting text, but the match is based on wording and may be imperfect."

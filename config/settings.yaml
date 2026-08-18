@@ -51,6 +51,14 @@ agent:
   query:
     max_rows: 20
     max_detail_ids: 3
+    obligations:
+      enabled: true
+      zero_results: true
+      created_on: true
+      free_text: true
+      cross_currency: true
+      negotiable_salary: true
+      listing_expiry: true
 
 eval:
   judge:

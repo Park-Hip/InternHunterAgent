@@ -11,11 +11,12 @@ from src.agents.runtime.prompts import (
     load_system_prompt,
 )
 
-# The frozen G47 token set (18 entries, frozen 2026-07-11 by T0015.2). Recovered from
+# The G47 token set includes the listing-expiry schema fact added by T0024.2. Recovered from
 # archive/t0015.2-behavior-glossary. Adding or removing a token is a behavior-spec change,
 # not a code change - update docs/Agent_Behavior_Spec.md first.
 FROZEN_GLOSSARY_TOKENS = frozenset({
     "NEGOTIABLE_SALARY", "ABSENT_FIELD", "FRESHNESS_REFUSAL", "CREATED_ON_CAVEAT",
+    "LISTING_EXPIRY_NOT_DEADLINE",
     "FREE_TEXT_HEDGE", "SENIOR_TITLE_HEDGE", "CROSS_CURRENCY", "TRUNCATION",
     "ZERO_RESULTS", "E1_CLARIFY", "OFF_TOPIC_REDIRECT", "DESTRUCTIVE_REFUSAL",
     "INJECTION_REFUSAL", "SECRET_REFUSAL", "SQL_DESCRIBE_ONLY", "FUTURE_FEATURE",

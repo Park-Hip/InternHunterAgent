@@ -5,15 +5,20 @@ from langchain.messages import HumanMessage
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
 
-from src.agents.runtime.prompts import load_schema_context, load_sql_generation_prompt
+from src.agents.runtime.prompts import (
+    load_behavior_glossary,
+    load_schema_context,
+    load_sql_generation_prompt,
+)
 from src.agents.runtime.provider import AgentProvider
 from src.core.config import settings
 from src.core.logger import logger
-from src.services.query.executor import ExecutorError, execute_validated_sql
-from src.services.query.models import TableArtifact
+from src.services.query.executor import ExecutorError, UndefinedColumnError, execute_validated_sql
+from src.services.query.models import QueryRefusal, QueryToolResult, TableArtifact
+from src.services.query.obligations import detect_obligations, filter_enabled_obligations
 from src.services.query.row_bound import resolve_bounds
 from src.services.query.sql_validator import validate_sql
-from src.services.query.table_formatter import format_rows
+from src.services.query.table_formatter import format_rows, render_tool_result
 
 
 def load_max_rows() -> int:
@@ -63,7 +68,7 @@ async def generate_sql(question: str, config: RunnableConfig | None = None) -> s
 
 def _build_answer(table: TableArtifact) -> str:
     if table.row_count == 0:
-        return "I didn't find any postings matching that in the data."
+        return load_behavior_glossary()["ZERO_RESULTS"]
 
     if table.truncated:
         header = (
@@ -100,9 +105,19 @@ async def query_clean_jobs(question: str, config: RunnableConfig) -> str:
 
     try:
         rows = await asyncio.to_thread(execute_validated_sql, bounds.sql)
+    except UndefinedColumnError as exc:
+        logger.warning("query_clean_jobs.unknown_column", error=str(exc))
+        return render_tool_result(
+            QueryToolResult(refusal=QueryRefusal(reason="", glossary_token="ABSENT_FIELD")),
+            load_behavior_glossary(),
+        )
     except ExecutorError as exc:
         logger.error("query_clean_jobs.db_error", error=str(exc))
         return "I couldn't retrieve the requested data due to a database error. Please try again later."
 
     table = format_rows(rows, bounds.display_cap)
-    return _build_answer(table)
+    obligations = filter_enabled_obligations(detect_obligations(validation.sql, table))
+    return render_tool_result(
+        QueryToolResult(table=table, obligations=obligations),
+        load_behavior_glossary(),
+    )

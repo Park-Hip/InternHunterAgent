@@ -3029,6 +3029,62 @@ reflow, orphan, and scenario-id checks.
   invocation alongside `--sample`.
 
 <!-- generated:reports:begin -->
+## T0024.2 - Obligation seam and listing-expiry honesty guard
+
+*Completed 2026-08-18.*
+
+**Summary**
+
+Added deterministic query obligations and model-facing mandatory-caveat rendering.
+The implementation now distinguishes the source listing expiry from an application deadline.
+It maps generated unknown-column queries to the canonical absent-field response.
+It also removes the duplicated zero-results response literal from the query tool.
+
+**Files**
+
+- Modified `config/prompts.yaml`.
+- Modified `config/settings.yaml`.
+- Modified `docs/Agent_Behavior_Spec.md`.
+- Modified `docs/roadmap.yaml` to include the affected prompt-surface regression test.
+- Modified query models, rendering, executor, and both agent tools.
+- Added `src/services/query/obligations.py` and focused regression coverage.
+
+**Commands**
+
+- Ran focused query, tool, prompt, model, formatter, executor, and obligation tests.
+- Used temporary placeholder settings for the focused tests.
+- Ran the complete non-evaluation test suite with temporary placeholder settings.
+- Ran Ruff for `src` and `tests`.
+- Ran mypy for `src`.
+- Ran `python scripts/docs_lint.py`.
+
+**Build and test**
+
+- Focused tests passed: 62 tests and 41 subtests.
+- The non-document test suite passed after the prompt-surface inventory was updated.
+- The run covered 471 tests, 1 skip, and 30 deselected evaluation tests.
+- The two generated-register freshness tests remain for the integration step.
+- Ruff passed.
+- Mypy passed with no issues.
+- Documentation lint passed except for stale frozen generated registers.
+
+**Risks**
+
+- Live end-to-end verification was not run.
+- This worktree has no fixture services or credentials.
+- The final-answer relay behavior remains the measurement responsibility of T0024.4.
+
+**Follow-ups**
+
+- T0024.3 adds the system-prompt caveat-relay contract.
+- T0024.4 measures whether the model preserves these tool-message caveats.
+
+**Docs**
+
+- `docs/Agent_Behavior_Spec.md` now lists the listing-expiry-not-deadline phrase identifier.
+
+---
+
 ## T0030.1 - Give the replay format a writer
 
 *Completed 2026-08-17.*

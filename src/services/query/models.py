@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TableArtifact(BaseModel):
@@ -10,12 +10,18 @@ class TableArtifact(BaseModel):
 
 class QueryRefusal(BaseModel):
     reason: str
+    glossary_token: str | None = None
+
+
+class HedgeObligation(BaseModel):
+    glossary_token: str
 
 
 class QueryToolResult(BaseModel):
-    answer: str
+    answer: str = ""
     table: TableArtifact | None = None
     refusal: QueryRefusal | None = None
+    obligations: list[HedgeObligation] = Field(default_factory=list)
 
 
 class ValidationResult(BaseModel):

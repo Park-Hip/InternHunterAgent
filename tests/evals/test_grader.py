@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from evals.grader import (
-    BEHAVIOR_GLOSSARY,
     Evidence,
     FAIL,
     INFRA,

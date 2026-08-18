@@ -142,6 +142,14 @@ developer to create, and the text is not editable here anyway.
    the source path without creating output.
 4. Inspect the replay and confirm it contains no `trace_id`, `latency_ms`, or token-usage field.
 
+### T0024.3: Caveat-relay prompt contract
+
+- Configure the fixture database, a selected-provider key, and Langfuse credentials.
+- Start the app and ask a salary-ranking question that returns multiple currencies.
+- Inspect the tool trace and confirm it includes a `MANDATORY CAVEATS` block.
+- Confirm the final answer does not crown a cross-currency salary winner.
+- Confirm the final answer preserves the caveat's uncertainty in natural language.
+
 ### T0024.2: Obligation seam and listing-expiry honesty guard
 
 - Configure the fixture database, a selected-provider key, and Langfuse credentials.

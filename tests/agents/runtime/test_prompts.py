@@ -134,6 +134,14 @@ class SystemPromptScopeTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertNotIn(phrase, system_prompt)
 
+    def test_system_prompt_requires_mandatory_caveats_to_survive_the_relay(self) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn("MANDATORY CAVEATS", system_prompt)
+        self.assertIn("reflect every caveat", system_prompt)
+        self.assertIn("must not weaken or omit", system_prompt)
+        self.assertIn("the caveat wins", system_prompt)
+
 
 class LoadPromptVersionTests(unittest.TestCase):
     @patch("src.agents.runtime.prompts.settings")
@@ -157,7 +165,7 @@ class LoadPromptVersionTests(unittest.TestCase):
             load_prompt_version()
 
     def test_yaml_declares_a_prompt_version(self) -> None:
-        self.assertEqual(load_prompt_version(), "v2")
+        self.assertEqual(load_prompt_version(), "v3")
 
 
 class LoadBehaviorGlossaryTests(unittest.TestCase):

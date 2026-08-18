@@ -3085,6 +3085,53 @@ It also removes the duplicated zero-results response literal from the query tool
 
 ---
 
+## T0024.3 - Caveat-relay prompt contract
+
+*Completed 2026-08-18.*
+
+**Summary**
+
+Replaced the existing generic honesty instruction with the caveat-relay contract.
+The rule requires every `MANDATORY CAVEATS` item to be reflected without weakening or omission.
+It makes a caveat take priority when it conflicts with a direct answer.
+Bumped `prompt_version` from `v2` to `v3`.
+
+**Files**
+
+- Modified `config/prompts.yaml`.
+- Modified `tests/agents/runtime/test_prompts.py`.
+- Created `docs/entries/T0024.3.md`.
+
+**Commands**
+
+- Ran focused prompt, query-tool, and obligation tests with temporary placeholder settings.
+- Ran the complete non-evaluation test suite with temporary placeholder settings.
+- Ran Ruff for `src` and `tests`.
+- Ran mypy for `src`.
+
+**Build and test**
+
+- Focused tests passed: 43 tests and 41 subtests.
+- Full non-evaluation tests passed: 543 tests and 2 skips.
+- Ruff passed.
+- Mypy passed with no issues.
+
+**Risks**
+
+- Live end-to-end verification was not run.
+- This worktree has no fixture services or credentials.
+- T0024.4 must measure whether the model follows the new contract consistently.
+
+**Follow-ups**
+
+- T0024.4 is the evaluation gate for the new prompt and obligation mechanism.
+
+**Docs**
+
+- No additional documentation updates are required.
+
+---
+
 ## T0030.1 - Give the replay format a writer
 
 *Completed 2026-08-17.*

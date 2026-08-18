@@ -40,17 +40,16 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M24-M32, M34-M37 - 31 of 34 milestones.
+Complete: M0, M6-M22, M24-M32, M34-M38 - 32 of 34 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
 | M23 | v1.0 Release Cut | planned |
 | M33 | Vietnamese Language Milestone | planned |
-| M38 | Grader Correctness | planned |
 <!-- generated:milestones:end -->
 
-**Nothing is in progress.** Six milestones closed on 2026-08-18 and the three that remain - M23,
-M33, and M38 - are planned and unstarted.
+**Nothing is in progress.** Seven milestones closed on 2026-08-18 and the two that remain - M23 and
+M33 - are planned and unstarted.
 
 **M24** closed with its whole mechanism shipped and its gate short of a clean pass. The obligation
 seam exists end to end: `detect_obligations` over the validated SQL and result set (`.2`, PR #68),
@@ -68,9 +67,9 @@ full timeout, so a whole-source outage needed ~26 minutes to give up and `main()
 own abort path. `api.max_elapsed_seconds: 600` now bounds the whole fetch, verified against a real
 non-routable blackhole at 21.8s against an unbounded worst case of 336s.
 
-**M38** is planned before M33. Its research plan records the measured disagreement between the
-deterministic grader and a human read of the frozen M24 honesty replay, and scopes the correction to
-glossary-anchored rules, explicit seam comparison modes, and an offline re-grade.
+**M38** closed before M33. Its corrected rules resolve glossary and registry anchors, expose honesty
+seam 3 when seam 2 fails, and re-grade the frozen v3 obligation replay at 15 PASS / 3 FAIL without
+a new capture. The judge remains off pending broader v3 human agreement.
 
 **M35** closed last, and closes the labelling half of M24's missing control: `prompt_version` is
 now recorded in the capture manifest, required by `freeze_capture`, validated at replay
@@ -232,10 +231,9 @@ resolution records: [Resolved Issues](Resolved_Issues.md).
 
 ## Next recommended ticket
 
-T0038.1 - anchor every textual evaluation rule in the glossary. M38 is sequenced before M33 because
-the Vietnamese milestone would otherwise rebuild its lexicons on top of a grader already shown to
-disagree with a human read. The maintainer must first confirm the anchor-term extension in
-[`research/grader-correctness-plan.md`](../research/grader-correctness-plan.md).
+T0033.1 - promote the Vietnamese output-language rule and vocabulary block. M38 is now complete,
+so M33 can proceed against a grader whose textual rules are glossary-anchored and whose v3 honesty
+calibration is recorded.
 
 Two things sit beside it, both small and both about M24's residue rather than new capability.
 `KI-2026-08-18-absent-field-grader-stale` is the cheapest useful work in the repository right now:
@@ -245,8 +243,8 @@ with M35 landed, re-capturing the missing `v2` control
 (`KI-2026-08-18-honesty-gate-has-no-control`) would now produce a correctly labelled baseline at
 M27's measured 5m20s for about $0.04.
 
-**M23** (v1.0 release cut) remains unblocked on the cron but should follow the M38 grader correction
-and its honesty re-grade: its DoD sweep owes decision **D9** a read on trustworthy honesty numbers.
+**M23** (v1.0 release cut) remains unblocked on the cron but should follow M33: its DoD sweep owes
+decision **D9** a read on trustworthy honesty numbers.
 
 Whatever is taken next: M24's phrasings all resolve through `load_behavior_glossary()[TOKEN]` with
 no inlined literals, which is the property M33's Vietnamese glossary was waiting on. M33 is free of

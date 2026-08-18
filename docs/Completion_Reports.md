@@ -4093,6 +4093,62 @@ known-issues registers.
 
 ---
 
+## T0034.1 - Reproduce the serving memory-window eviction boundary
+
+*Completed 2026-08-18.*
+
+**Summary**
+
+Added deterministic agent-boundary tests for the message-count trimming policy.
+The one-tool path evicts the first turn from the model's input when the sixth turn begins.
+The sequential two-tool path evicts the first turn from the final model call in turn four.
+The tests prove that the defect is independent of Vietnamese output and provider variation.
+
+**Files**
+
+- Modified `tests/agents/runtime/test_memory.py`.
+- Added `docs/entries/T0034.1.md`.
+
+**Commands**
+
+- `$env:LANGFUSE_PUBLIC_KEY='test'; $env:LANGFUSE_SECRET_KEY='test'`
+- `uv run pytest tests/agents/runtime/test_memory.py tests/agents/runtime/test_trimming.py -q`
+- `uv run pytest -q`
+- `uv run ruff check .`
+- `uv run mypy src`
+- `uv run python scripts/docs_build.py`
+- `uv run python scripts/docs_build.py --check`
+- `uv run python scripts/docs_lint.py`
+- `git diff --check`
+
+**Build and test**
+
+| Command | Result |
+|---|---|
+| Focused memory and trimming tests | 15 passed |
+| Ruff | Passed |
+| Mypy | Passed for 44 source files |
+| Full non-evaluation pytest suite | Timed out after 124 seconds without a result |
+| Documentation checks | Passed after generator rendering |
+
+**Risks**
+
+This ticket intentionally preserves the existing context-window behavior.
+The deterministic reproduction does not measure provider-specific tool-selection quality.
+The full non-evaluation suite did not complete within the 124-second command limit.
+
+**Follow-ups**
+
+- T0034.2 must select and implement a remedy from this acceptance baseline.
+- Investigate `KI-2026-08-18-full-pytest-timeout` before relying on a full-suite result.
+
+**Docs**
+
+No further document change is required for T0034.1.
+The integration step should publish M34's registry outcome after T0034.2 completes.
+
+---
+
 ## T0035.1 - Stamp prompt_version into the capture manifest and the viewer header
 
 *Completed 2026-08-18.*

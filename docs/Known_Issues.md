@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 16 | 1 | 3 |
+| MED | 17 | 1 | 3 |
 | LOW | 18 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -35,6 +35,11 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
+- `KI-2026-08-18-full-pytest-timeout` **`[MED - OPEN]` Full pytest suite timed out.**
+  - **Found:** `uv run pytest -q` exceeded the 124-second command limit without reporting a result.
+  - **Impact:** The ticket branch lacks a current full-suite verification result.
+  - **Next:** Identify the slow or blocked test and restore a bounded full-suite check.
+  - **History:** The focused memory and trimming tests completed in 1.43 seconds on 2026-08-18.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 

@@ -9,14 +9,13 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `integration/docs-publish-20260818` at `8726193` - Merge pull request #74 from
-  Park-Hip/feature/t0034.2-memory-window-fix (2026-08-18).
-- Branches not merged into `main`: 10 - `feature/t0022.10-prune-dead-docs`,
+- Checked out: `main` at `ce9f1f5` - docs(integration): publish M34 memory-window outcome
+  (2026-08-18).
+- Branches not merged into `main`: 7 - `feature/t0022.10-prune-dead-docs`,
   `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
-  `feature/t0031-parallel-agent-docs`, `feature/t0034.1-memory-window`,
-  `feature/t0034.2-memory-window-fix`, `integration/docs-publish-20260818`,
-  `integration/t0031.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
-- Worktrees: 14.
+  `feature/t0031-parallel-agent-docs`, `integration/t0031.4-publish`, `merge/t0024.6-with-main`,
+  `merge/t0025.7-with-main`.
+- Worktrees: 15.
 <!-- generated:snapshot:end -->
 
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
@@ -41,16 +40,17 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M24-M32, M34-M37 - 31 of 33 milestones.
+Complete: M0, M6-M22, M24-M32, M34-M37 - 31 of 34 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
 | M23 | v1.0 Release Cut | planned |
 | M33 | Vietnamese Language Milestone | planned |
+| M38 | Grader Correctness | planned |
 <!-- generated:milestones:end -->
 
-**Nothing is in progress.** Six milestones closed on 2026-08-18 and the two that remain - M23 and
-M33 - are planned, unscoped, and unstarted.
+**Nothing is in progress.** Six milestones closed on 2026-08-18 and the three that remain - M23,
+M33, and M38 - are planned and unstarted.
 
 **M24** closed with its whole mechanism shipped and its gate short of a clean pass. The obligation
 seam exists end to end: `detect_obligations` over the validated SQL and result set (`.2`, PR #68),
@@ -67,6 +67,10 @@ at the workflow's 15-minute ceiling rather than failing: every VietnamWorks requ
 full timeout, so a whole-source outage needed ~26 minutes to give up and `main()` never reached its
 own abort path. `api.max_elapsed_seconds: 600` now bounds the whole fetch, verified against a real
 non-routable blackhole at 21.8s against an unbounded worst case of 336s.
+
+**M38** is planned before M33. Its research plan records the measured disagreement between the
+deterministic grader and a human read of the frozen M24 honesty replay, and scopes the correction to
+glossary-anchored rules, explicit seam comparison modes, and an offline re-grade.
 
 **M35** closed last, and closes the labelling half of M24's missing control: `prompt_version` is
 now recorded in the capture manifest, required by `freeze_capture`, validated at replay

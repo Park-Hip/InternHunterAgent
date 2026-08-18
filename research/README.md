@@ -21,6 +21,7 @@ Completed research is historical evidence, not current implementation guidance, 
 | [Documentation prune and structure plan](docs-prune-and-structure-plan.md) | Measured file-level prune and per-file restructuring plan for M22 phase 2 (T0022.10-.14). |
 | [Prompt refinement methods](prompt-refinement-methods.md) | How production teams refine prompts, the tradeoffs of prompt length and instruction count, and the decision on where the `behavior_glossary` belongs. |
 | [Honesty enforcement design](honesty-enforcement-design.md) | M24's unimplemented design for keeping generated job-search answers faithful to available evidence. |
+| [Grader correctness plan](grader-correctness-plan.md) | Why the deterministic grader disagreed with a human read on 10 of 18 turns at the M24 gate, the five decisions taken from it, and the three tickets that correct it before the Vietnamese milestone. |
 | [DeepSeek as an agent provider](deepseek-provider-evaluation.md) | Feasibility evidence for swapping `agent.provider` from Groq to DeepSeek: pricing, the thinking-mode tool-calling landmines, the file-level change surface, and the spike that must pass first. |
 | [Job-site comparison](job-site-comparison.md) | Source-market scorecard. VietnamWorks is decided; competing sources remain candidates for future spikes. |
 

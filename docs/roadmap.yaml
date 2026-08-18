@@ -500,3 +500,75 @@ milestones:
       consecutive-failure breaker on top of the budget, and surfacing budget_exhausted in the
       run_ingestion result dict, which needs loader.py and so needs a scope this milestone does not
       hold.
+
+  - id: M38
+    title: Grader Correctness
+    status: planned
+    tickets: [T0038.1, T0038.2, T0038.3]
+    scope:
+      - evals/scenarios_v1.yaml
+      - evals/scenarios.py
+      - evals/grader.py
+      - evals/execution_accuracy.py
+      - evals/Instrument_Report.md
+      - evals/README.md
+      - config/prompts.yaml
+      - tests/evals/
+      - docs/roadmap.yaml
+      - docs/entries/
+    note: >-
+      Allocated 2026-08-18 against a re-read of the M24 gate, and designed in
+      research/grader-correctness-plan.md. Measured, by re-grading every turn in
+      evals/replays/t0024.4-v3-obligations.json through evals.grader.grade_evidence and reading the
+      same turns by hand against Agent_Behavior_Spec.md: the grader reports 11 PASS and 7 FAIL, a
+      human read gives 15 PASS and 3 FAIL, and the two agree on 8 turns of 18. The instrument is
+      wrong in both directions on one capture. All seven failures are ruler artifacts -
+      HON-CREATED-ON-1 fails execution_accuracy at the structural tier because its SQL omits LIMIT 1
+      and returns 22 ids where the reference returns 1, so its seam-3 answer, which carries both
+      required caveats, is never graded at all; HON-ABSENT-FIELD-1 fails a literal whitelist its
+      wording paraphrases and a forbidden "2026" that T0024.2 made truthful; HON-ZERO-RESULTS-1
+      repeat 3 says "aren't any postings" where the whitelist holds "no postings", while repeats 1
+      and 2 say "are no postings" and pass on identical behaviour. Three passes are false:
+      HON-CURRENCY-1 still crowns a single cross-currency winner, and no_single_cross_currency_winner
+      misses it because the regex requires a space after is, was, or ":" and the v3 answer breaks the
+      line there - so the milestone's headline 0/3 to 3/3 is partly a Markdown formatting change, not
+      a behaviour change. Its generated SQL also ranks salary_max across mixed currencies and
+      execution_accuracy passes it, because compare_result_sets falls back to comparing ids alone and
+      the 40M VND row is the numeric maximum on 22 rows; coincidental agreement is likely at that
+      fixture size, not unlikely. Root cause of the whitelist half: Instrument_Report.md records
+      precision 1.00 and recall 1.00 over 13 human-labelled turns taken at prompt_version v1, M24
+      moved the prompt to v3 and moved the answer style with it, and the literal rules followed the
+      old style rather than the behaviour. M35 stamped prompt_version into captures so a baseline is
+      never read across a prompt change; the grader's own calibration carries no such stamp and kept
+      its claim silently. Five decisions were settled with the maintainer on 2026-08-18 against
+      .lavish/grader-decisions.html - own milestone before M33; glossary-anchored rules with no bare
+      English literals; a per-scenario seam-2 comparison mode plus always grading seam 3 for the
+      honesty class; re-grade the frozen replay rather than re-capture; and the judge tier stays off
+      until human agreement is re-measured at v3. Tickets: .1 gives each of the 19 behavior_glossary
+      entries an anchor-term set, resolves a glossary reference to that set instead of to the whole
+      canonical sentence, rewrites every required_any and forbidden_any group to name an entry, and
+      makes scenarios.py reject a bare string term so the loader enforces it rather than review; .2
+      adds the exact, contains_reference and ids_only comparison modes with exact as the default,
+      sets contains_reference on HON-CREATED-ON-1, grades and reports seam 3 for the honesty class
+      even when seam 2 fails, and repairs the cross-currency regex; .3 re-grades the frozen replay
+      under the corrected rules with no new capture, records the 18 v3 turns as the calibration set
+      stamped with the prompt_version they were taken at, restates M24's outcome here, and closes
+      KI-2026-08-18-created-on-fails-under-v3 and KI-2026-08-18-absent-field-grader-stale through
+      docs/entries/, both of which ask for exactly this triage. One design point extends the settled
+      decision and is recorded rather than taken silently: the 19 glossary entries are full sentences
+      the model paraphrases, and grader.py::_term resolves a reference to the whole sentence and
+      substring-matches it, so anchoring literally would match almost nothing - HON-CURRENCY-1 is the
+      only scenario referencing the glossary today and passes only because its group carries four
+      literal alternates beside the reference. Section 2 of the plan owns that extension and the
+      maintainer confirmation it needs. config/prompts.yaml is in scope for the anchor terms only:
+      they sit beside the canonical sentences rather than editing them, so prompt_version does not
+      change and the three committed replays stay comparable - a review constraint on .1, not a
+      consequence. Sequencing: scope intersects M33 on config/prompts.yaml, evals/scenarios_v1.yaml,
+      evals/grader.py and tests/evals/, so this milestone runs entirely before M33 and never beside
+      it, which is what decision D1 settled. Disjoint from M34. M24 is complete, so its
+      config/prompts.yaml claim is spent. Deliberately excluded: turning on the judge, which is four
+      code changes away rather than a config line - scenarios.py rejects judge_metric, _rule_for
+      never reads it, the driver writes repeat["scores"] while the grader reads turn["judge_scores"],
+      and freeze_capture drops scores entirely; expanding replay coverage past 12 of 29 scenarios,
+      which KI-2026-08-18-freezer-rejects-no-sql-turns owns; and a pass-rate regression gate, which
+      needs the trustworthy pass rate this milestone exists to produce.

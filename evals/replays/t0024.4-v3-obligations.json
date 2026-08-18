@@ -20,7 +20,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "PASS",
-              "expected_grade": "FAIL",
+              "expected_grade": "PASS",
               "seams": {
                 "question": "Which job was posted most recently?",
                 "answer": "The most recently posted job is:\n\n**Data Analyst** at **Home Credit Vietnam - Explore Your Dream Team** (id=18)\n- **Role:** Data Analyst\n- **Location:** Hanoi\n- **Tech stack:** SQL, Excel, Power BI\n- **Job level:** Intern/Student (internship)\n- **Posted (created_on):** 2026-07-10\n- **Salary:** 7,000,000 – 10,000,000 VND\n- **Listing expires:** 2026-08-11\n\nA couple of caveats to keep in mind:\n- The \"created_on\" date reflects when the posting was **recorded on VietnamWorks**, not necessarily the exact date it was published or the role opened.\n- The expiry date shown is the listing's expiry, **not** an application deadline.\n\nWould you like more details on this posting, or would you like to see the next most recent ones?",
@@ -40,7 +40,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "PASS",
-              "expected_grade": "FAIL",
+              "expected_grade": "PASS",
               "seams": {
                 "question": "Which job was posted most recently?",
                 "answer": "Based on the data, the most recently posted job is:\n\n**Data Analyst** at **Home Credit Vietnam - Explore Your Dream Team**\n- **Role:** Data Analyst\n- **Tech stack:** SQL, Excel, Power BI\n- **Location:** Hanoi\n- **Job level:** Intern/Student (internship)\n- **Posted (created_on):** 2026-07-10\n- **Salary:** 7,000,000 – 10,000,000 VND\n- **Listing expires:** 2026-08-11\n\nA couple of caveats to keep in mind:\n- The \"created_on\" date reflects when the posting was recorded on VietnamWorks, not necessarily the exact publish or role-open date.\n- The expiry date shown is the listing's expiry, not an application deadline.\n\nWould you like more details on this posting, or would you like to explore others?",
@@ -60,7 +60,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "PASS",
-              "expected_grade": "FAIL",
+              "expected_grade": "PASS",
               "seams": {
                 "question": "Which job was posted most recently?",
                 "answer": "Based on the data, the most recently posted job is:\n\n**Data Analyst** at **Home Credit Vietnam - Explore Your Dream Team** (id=18)\n- **Role:** Data Analyst\n- **Tech stack:** SQL, Excel, Power BI\n- **Location:** Hanoi\n- **Level:** Intern/Student (internship)\n- **Posted (created_on):** 2026-07-10\n- **Salary:** 7,000,000 – 10,000,000 VND\n- **Listing expires:** 2026-08-11\n\nA couple of caveats to keep in mind:\n- The \"created_on\" date reflects when the posting was recorded on VietnamWorks, not necessarily the exact publish or role-open date.\n- The expiry date shown is the listing's expiry, not an application deadline.\n\nWould you like more details on this posting, or would you like to see the next most recent ones?",
@@ -86,7 +86,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "FAIL",
-              "expected_grade": "PASS",
+              "expected_grade": "FAIL",
               "seams": {
                 "question": "What's the highest-paid job?",
                 "answer": "Based on the data, the highest-paid posting is:\n\n**Data Scientist at Sonat Game** (Ho Chi Minh City)\n- **Salary:** 30,000,000 – 40,000,000 VND\n- **Level:** Experienced (non-manager)\n- **Tech stack:** Python, R, SQL, Tableau\n\nA couple of caveats to keep in mind:\n- The search returned only this one result, so \"highest-paid\" is relative to what's in the database — there may be other postings with different salary ranges.\n- Salaries in the data are in different currencies (USD and VND), so I can't directly rank across currencies. This one is in VND.\n\nWould you like me to look at postings within a specific currency, or filter by a particular role or location?",
@@ -106,7 +106,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "FAIL",
-              "expected_grade": "PASS",
+              "expected_grade": "FAIL",
               "seams": {
                 "question": "What's the highest-paid job?",
                 "answer": "Based on the data, the highest-paid posting I found is:\n\n**Data Scientist at Sonat Game** (Ho Chi Minh City)\n- **Salary:** 30,000,000 – 40,000,000 VND\n- **Level:** Experienced (non-manager)\n- **Tech stack:** Python, R, SQL, Tableau\n- **Not negotiable**\n\nA couple of caveats worth flagging:\n- The search returned only this one result, so \"highest-paid\" is relative to what's in the database.\n- Salaries in the data are in different currencies (USD and VND), so I can't directly rank them against each other. This one happens to be in VND.\n\nWould you like me to compare salaries within a specific currency, or look at other postings by role or location?",
@@ -126,7 +126,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "FAIL",
-              "expected_grade": "PASS",
+              "expected_grade": "FAIL",
               "seams": {
                 "question": "What's the highest-paid job?",
                 "answer": "Based on the data, the highest-paid posting by salary is:\n\n**Data Scientist at Sonat Game** (Ho Chi Minh City)\n- **Salary:** 30,000,000 – 40,000,000 VND\n- **Role:** Data Scientist\n- **Tech stack:** Python, R, SQL, Tableau\n- **Level:** Experienced (non-manager)\n- **Not negotiable** per the posting\n\nA couple of caveats to keep in mind:\n- This is the top result when ordering by salary, but salaries in the database are in **different currencies** (USD and VND), so I can't rank across currencies directly. This one happens to be in VND.\n- The listing expiry date shown is the source listing's expiry, not an application deadline.\n\nWould you like me to compare salaries within a specific currency, or look at the highest-paid roles in USD?",

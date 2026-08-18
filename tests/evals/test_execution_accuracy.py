@@ -44,7 +44,24 @@ def test_id_projection_ignores_extra_columns_and_aliases(monkeypatch) -> None:
         ),
     )
 
-    assert compare_result_sets("generated", "reference")["status"] == "PASS"
+    assert compare_result_sets("generated", "reference")["status"] == "FAIL"
+    assert compare_result_sets("generated", "reference", comparison_mode="ids_only")["status"] == "PASS"
+
+
+def test_contains_reference_accepts_extra_generated_rows(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: (
+            [{"id": 1, "created_on": "2026-01-02", "title": "One"},
+             {"id": 2, "created_on": "2026-01-01", "title": "Two"}]
+            if sql == "generated"
+            else [{"id": 1, "created_on": "2026-01-02", "title": "One"}]
+        ),
+    )
+
+    assert compare_result_sets(
+        "generated", "reference", comparison_mode="contains_reference"
+    )["status"] == "PASS"
 
 
 def test_aggregate_aliases_are_not_part_of_the_result_identity(monkeypatch) -> None:

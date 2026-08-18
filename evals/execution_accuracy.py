@@ -43,25 +43,38 @@ def compare_result_sets(
     generated_sql: str,
     reference_sql: str,
     database_url: str | None = None,
+    comparison_mode: str = "exact",
 ) -> dict[str, Any]:
-    """Compare query results as unordered row multisets, including duplicates."""
+    """Compare query results using the scenario's explicit semantic contract."""
     try:
         generated_rows = execute_query(generated_sql, database_url)
         reference_rows = execute_query(reference_sql, database_url)
     except SQLAlchemyError as exc:
         return {"status": "INFRA", "error": str(exc)}
 
-    compare_ids = bool(generated_rows and reference_rows) and all(
-        "id" in row for row in generated_rows + reference_rows
-    )
-    generated = Counter(_result_key(row, compare_ids) for row in generated_rows)
-    reference = Counter(_result_key(row, compare_ids) for row in reference_rows)
+    if comparison_mode == "ids_only":
+        generated = Counter(_value_key(row["id"]) for row in generated_rows if "id" in row)
+        reference = Counter(_value_key(row["id"]) for row in reference_rows if "id" in row)
+    elif comparison_mode == "contains_reference":
+        generated = Counter(
+            _result_key({key: row[key] for key in reference_rows[0]}, False)
+            for row in generated_rows
+            if reference_rows and all(key in row for key in reference_rows[0])
+        )
+        reference = Counter(_result_key(row, False) for row in reference_rows)
+    elif comparison_mode == "exact":
+        generated = Counter(_result_key(row, False) for row in generated_rows)
+        reference = Counter(_result_key(row, False) for row in reference_rows)
+    else:
+        raise ValueError(f"Unknown comparison mode: {comparison_mode!r}")
+    matches = reference <= generated if comparison_mode == "contains_reference" else generated == reference
     return {
-        "status": "PASS" if generated == reference else "FAIL",
+        "status": "PASS" if matches else "FAIL",
         "generated_row_count": len(generated_rows),
         "reference_row_count": len(reference_rows),
         "generated_rows": generated_rows,
         "reference_rows": reference_rows,
+        "comparison_mode": comparison_mode,
     }
 
 
@@ -83,7 +96,13 @@ def grade_turn(
         return {"status": "UNRUN", "error": "No generated SQL was persisted"}
     if not isinstance(reference_sql, str):
         return {"status": "INFRA", "error": "Scenario has no turn reference SQL"}
-    result = compare_result_sets(generated_sql, reference_sql, database_url)
+    comparison_mode = scenario.get("grading", {}).get("execution_comparison", "exact")
+    if comparison_mode == "exact":
+        result = compare_result_sets(generated_sql, reference_sql, database_url)
+    else:
+        result = compare_result_sets(
+            generated_sql, reference_sql, database_url, comparison_mode
+        )
     return {"status": result.pop("status"), "reference_sql": reference_sql, **result}
 
 

@@ -496,3 +496,24 @@ milestones:
       consecutive-failure breaker on top of the budget, and surfacing budget_exhausted in the
       run_ingestion result dict, which needs loader.py and so needs a scope this milestone does not
       hold.
+  - id: M38
+    title: Grader Correctness
+    status: complete
+    tickets: [T0038.1, T0038.2, T0038.3]
+    scope:
+      - evals/scenarios_v1.yaml
+      - evals/scenarios.py
+      - evals/grader.py
+      - evals/execution_accuracy.py
+      - evals/Instrument_Report.md
+      - config/prompts.yaml
+      - tests/evals/
+      - docs/roadmap.yaml
+      - docs/entries/
+    note: >-
+      Allocated 2026-08-18 from the M24 grader re-read and completed 2026-08-18. Glossary and
+      registry anchors replace bare textual rules, execution accuracy has explicit exact,
+      contains_reference, and ids_only modes, honesty seam 3 remains visible when seam 2 fails,
+      and the cross-currency detector handles Markdown line breaks. The frozen v3 honesty replay
+      was re-graded without a new capture: 15 PASS and 3 FAIL, matching the human labels. The
+      judge remains off until broader v3 human agreement is measured.

@@ -18,6 +18,7 @@ from typing import Any
 
 from evals.scenarios import load_scenarios, scenario_category
 from src.agents.runtime.prompts import load_behavior_glossary
+from src.core.config import settings
 
 PASS = "PASS"
 FAIL = "FAIL"
@@ -25,6 +26,8 @@ INFRA = "INFRA"
 UNRUN = "UNRUN"
 EXCLUDED_FROM_DENOMINATOR = frozenset({INFRA, UNRUN})
 BEHAVIOR_GLOSSARY = load_behavior_glossary()
+BEHAVIOR_GLOSSARY_ANCHORS = settings.prompts_yaml.get("behavior_glossary_anchors", {})
+EVALUATION_ANCHORS = settings.prompts_yaml.get("evaluation_anchors", {})
 
 
 @dataclass(frozen=True)
@@ -205,7 +208,7 @@ def _structural_checks(rule: ScenarioRule, evidence: Evidence) -> list[Check]:
         )
 
     if rule.forbid_single_salary_winner:
-        winner_pattern = r"\bhighest[- ]paid\s+(?:job|role|posting)\b[^.\n]{0,80}\b(?:is|was|:)[ ]+"
+        winner_pattern = r"\bhighest[- ]paid\s+(?:job|role|posting)\b[^.]{0,120}\b(?:is|was|:)\s*"
         crowned = re.search(winner_pattern, _text(evidence.answer), flags=re.IGNORECASE) is not None
         checks.append(
             Check(
@@ -248,27 +251,39 @@ def _registry_index() -> dict[str, dict[str, Any]]:
     return {scenario["id"]: scenario for scenario in load_scenarios()}
 
 
-def _term(scenario_id: str, term: str | dict[str, str]) -> str:
-    """Resolve one match term, following a glossary reference to its canonical phrasing.
+def _term(scenario_id: str, term: str | dict[str, str]) -> tuple[str, ...]:
+    """Resolve one glossary reference to its stable paraphrase anchors.
 
-    A rule that quotes the glossary must quote the live value: copying the sentence
-    into the registry would let the prompt's wording and the grader's expectation
-    drift apart without either file looking wrong.
+    The canonical sentence is model-facing and is intentionally too long for substring
+    matching. Anchors preserve the live prompt vocabulary while accepting faithful paraphrases.
     """
     if isinstance(term, str):
-        return term
+        return (term,)
     name = term["glossary"]
+    if name in EVALUATION_ANCHORS:
+        anchors = EVALUATION_ANCHORS[name]
+        if not isinstance(anchors, list) or not anchors or not all(isinstance(anchor, str) for anchor in anchors):
+            raise ValueError(f"Evaluation anchor {name!r} is invalid")
+        return tuple(anchors)
     if name not in BEHAVIOR_GLOSSARY:
         raise ValueError(f"Scenario {scenario_id} references unknown glossary term: {name!r}")
-    return BEHAVIOR_GLOSSARY[name]
+    anchors = BEHAVIOR_GLOSSARY_ANCHORS.get(name)
+    if not isinstance(anchors, list) or not anchors or not all(isinstance(anchor, str) for anchor in anchors):
+        raise ValueError(f"Glossary term {name!r} has no valid anchor terms")
+    canonical = BEHAVIOR_GLOSSARY[name].casefold()
+    if any(anchor.casefold() not in canonical for anchor in anchors):
+        raise ValueError(f"Glossary anchors for {name!r} must be substrings of its canonical sentence")
+    return tuple(anchors)
 
 
 def _text_rule(scenario_id: str, grading: dict[str, Any]) -> TextRule | None:
     required = tuple(
-        tuple(_term(scenario_id, term) for term in group)
+        tuple(anchor for term in group for anchor in _term(scenario_id, term))
         for group in grading.get("required_any", ())
     )
-    forbidden = tuple(_term(scenario_id, term) for term in grading.get("forbidden_any", ()))
+    forbidden = tuple(
+        anchor for term in grading.get("forbidden_any", ()) for anchor in _term(scenario_id, term)
+    )
     patterns = tuple(grading.get("forbidden_patterns", ()))
     if not (required or forbidden or patterns):
         return None
@@ -299,7 +314,7 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
 
 
 def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
-    """Grade one turn, stopping at the first failing or unavailable tier."""
+    """Grade one turn, retaining honesty text checks when structural SQL fails."""
     rule = _rule_for(scenario_id)
     if not evidence.answer:
         return Grade(
@@ -310,15 +325,18 @@ def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
         )
 
     structural = _structural_checks(rule, evidence)
-    if any(check.passed is False for check in structural):
+    structural_failed = any(check.passed is False for check in structural)
+    structural_unavailable = any(check.passed is None for check in structural)
+    grade_text = rule.text is not None and scenario_category(scenario_id) == "HON"
+    if structural_failed and not grade_text:
         return Grade(scenario_id, FAIL, "structural", structural)
-    if any(check.passed is None for check in structural):
+    if structural_unavailable and not grade_text:
         return Grade(scenario_id, INFRA, "structural", structural)
 
     textual = _text_checks(evidence.answer, rule.text) if rule.text else []
-    if any(check.passed is False for check in textual):
+    if any(check.passed is False for check in textual) or structural_failed:
         return Grade(scenario_id, FAIL, "textual", structural + textual)
-    if any(check.passed is None for check in textual):
+    if any(check.passed is None for check in textual) or structural_unavailable:
         return Grade(scenario_id, INFRA, "textual", structural + textual)
 
     judge = _judge_checks(rule, evidence)

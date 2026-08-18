@@ -232,10 +232,10 @@ resolution records: [Resolved Issues](Resolved_Issues.md).
 
 ## Next recommended ticket
 
-T0033.1 - the Vietnamese language milestone. M34 took the previous recommendation on 2026-08-18,
-closing `KI-2026-08-17-vietnamese-spike-multiturn` after reproducing and correcting its
-message-count eviction mechanism. M33 is the next planned milestone, while M23 remains the release
-cut and still owes its DoD sweep and terms posture.
+T0038.1 - anchor every textual evaluation rule in the glossary. M38 is sequenced before M33 because
+the Vietnamese milestone would otherwise rebuild its lexicons on top of a grader already shown to
+disagree with a human read. The maintainer must first confirm the anchor-term extension in
+[`research/grader-correctness-plan.md`](../research/grader-correctness-plan.md).
 
 Two things sit beside it, both small and both about M24's residue rather than new capability.
 `KI-2026-08-18-absent-field-grader-stale` is the cheapest useful work in the repository right now:
@@ -245,9 +245,8 @@ with M35 landed, re-capturing the missing `v2` control
 (`KI-2026-08-18-honesty-gate-has-no-control`) would now produce a correctly labelled baseline at
 M27's measured 5m20s for about $0.04.
 
-**M23** (v1.0 release cut) is unblocked on the cron but should still not be taken next: its DoD
-sweep owes decision **D9** a read on honesty, and that read is only worth making once those two
-failures are triaged. Answer D9 against numbers, not against a milestone status line.
+**M23** (v1.0 release cut) remains unblocked on the cron but should follow the M38 grader correction
+and its honesty re-grade: its DoD sweep owes decision **D9** a read on trustworthy honesty numbers.
 
 Whatever is taken next: M24's phrasings all resolve through `load_behavior_glossary()[TOKEN]` with
 no inlined literals, which is the property M33's Vietnamese glossary was waiting on. M33 is free of

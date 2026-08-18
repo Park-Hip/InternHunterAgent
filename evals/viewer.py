@@ -239,6 +239,7 @@ def run_header(manifest: dict[str, Any]) -> dict[str, Any]:
         "rows": rows,
         "facts": [
             ["Git SHA", _setting(manifest.get("git_sha"))],
+            ["Prompt version", _setting(manifest.get("prompt_version"))],
             ["Baseline eligible", _setting(manifest.get("baseline_eligible"))],
         ],
     }

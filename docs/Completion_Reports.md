@@ -4093,6 +4093,108 @@ known-issues registers.
 
 ---
 
+## T0035.1 - Stamp prompt_version into the capture manifest and the viewer header
+
+*Completed 2026-08-18.*
+
+**Summary**
+
+T0024.1 put a version label on the system prompt so runs recorded either side of a prompt change
+are never compared as if comparable, but nothing recorded it.
+The capture manifest carried `prompt_hash`, which proves two runs used different prompts without
+saying which prompt either one ran, and the replay manifest carried neither.
+T0024.6 changed the prompt and invalidated the T0025.7 baseline with no trace in the evidence.
+
+Three changes close that:
+
+- `build_manifest()` records `prompt_version` from `config/prompts.yaml`, through
+  `load_prompt_version()` rather than a second reader, imported below the fixture-environment bind
+  so it cannot freeze `Settings()` early.
+- `freeze_capture()` carries the version into the replay manifest and refuses a capture that has
+  none, so an unlabelled capture cannot become a labelled-looking replay. The replay
+  `schema_version` moves to 2, and `validate_replay` rejects a manifest that omits the field or
+  still declares 1.
+- The viewer draws `Prompt version` in the run header beside the Git SHA, using the existing
+  `_setting` helper, so an unstamped capture reads `not recorded` rather than blank.
+
+The three committed replays predate the stamp. Each was labelled from the prompt version in the
+commit its capture ran at, not from the current file: `evals/replays/t0025.7-acceptance.json` from
+its manifest `git_sha` `eb44936`, whose `config/prompts.yaml` declares `v1` and whose
+`worktree_state` is `clean`; `t0025.9-committed.json` from its adding commit `a130959`, also `v1`;
+`t0024.4-v3-obligations.json` from its adding commit `4c6508c`, `v3`.
+
+Scope widened in this PR by `evals/viewer.py`, `evals/replays/` and `docs/roadmap.yaml` - the
+header the milestone note asks for is built in the viewer, the schema change has to reach the
+committed evidence or CI fails on it, and the milestone's own registry row records the widening.
+
+**Files**
+
+- `evals/driver.py` - changed: `prompt_version` in `build_manifest()`, carried and required in
+  `freeze_capture()`, which now imports `REPLAY_SCHEMA_VERSION` alongside `validate_replay`.
+- `evals/replay.py` - changed: `REPLAY_SCHEMA_VERSION = 2`, `prompt_version` in the manifest key
+  set, and both validated.
+- `evals/viewer.py` - changed: `Prompt version` added to the run header facts.
+- `evals/replays/t0024.4-v3-obligations.json` - changed: backfilled `v3`, `schema_version` 2.
+- `evals/replays/t0025.7-acceptance.json` - changed: backfilled `v1`, `schema_version` 2.
+- `evals/replays/t0025.9-committed.json` - changed: backfilled `v1`, `schema_version` 2.
+- `evals/README.md` - changed: a `Capture lineage` section, the `replays/` row, and the stamp.
+- `tests/evals/test_driver.py` - changed: manifest and freeze assertions, two tests added.
+- `tests/evals/test_replay.py` - changed: three tests added.
+- `tests/evals/test_viewer.py` - changed: header fact assertions and the fixture manifest.
+- `docs/roadmap.yaml` - changed: M35 in-progress, branch, widened scope, and why.
+- `docs/entries/T0035.1.md` - created.
+
+**Commands**
+
+- `uv run ruff check .`
+- `uv run mypy`
+- `uv run pytest -q`
+- `uv run python -m evals.fixtures.loader`
+- `uv run python -m evals.replay`
+- `uv run python -m evals.viewer <stamped run>.json --output <viewer>.html`
+- `uv run python scripts/docs_build.py`
+- `uv run python scripts/docs_lint.py --diff-base origin/main`
+
+**Build and test**
+
+| Command | Result |
+|---|---|
+| `ruff check .` | All checks passed |
+| `mypy` | no issues in 44 source files |
+| `pytest -q` | 548 passed, 2 skipped, 30 deselected, 45 subtests passed |
+| `python -m evals.replay` | exit 0 against the re-stamped evidence |
+| `docs_lint.py --diff-base origin/main` | exit 0 |
+
+The two skips are the migration round-trip, which needs `SCRATCH_DATABASE_URL`, and
+`test_shared_skill_instructions_match`, skipped in every worktree because `.claude/` is gitignored.
+
+**Risks**
+
+The `schema_version` equality check makes a replay recorded before this ticket unloadable rather
+than merely unlabelled. That is the intent - an unlabelled artifact is not evidence about a prompt
+- but it means any replay held outside this repository needs the same two-line backfill before it
+will load.
+
+The three backfilled labels are derived from git, not from the run itself, because the runs did not
+record it. The derivation is sound for `t0025.7-acceptance.json`, whose manifest names a `git_sha`
+at a `clean` worktree, and is an inference from the adding commit for the other two.
+
+**Follow-ups**
+
+- `_assert_comparable` compares `prompt_hash` and not `prompt_version`. That is correct today,
+  since both live in `config/prompts.yaml` and the hash is strictly stronger, but if the version
+  ever moves to its own file the two would need to be compared separately.
+- `evals/runs/` captures on developer machines predate the stamp and stay unlabelled. Nothing reads
+  them as baselines, so no migration is proposed.
+
+**Docs**
+
+- `evals/README.md` - updated here.
+- `research/evaluation-strategy.md` records the measured run as being at `prompt_version: v1`,
+  which this ticket confirms rather than changes. No edit needed.
+
+---
+
 ## T0036.1 - Exempt rebuilt registers from the scope check
 
 *Completed 2026-08-18.*

@@ -1,9 +1,10 @@
 {
   "manifest": {
     "run_id": "885553d6-746e-4b39-a682-8b3d8735657c",
-    "schema_version": 1,
+    "schema_version": 2,
     "source_capture": "t0024.4-v3-obligations.json",
-    "sanitized": true
+    "sanitized": true,
+    "prompt_version": "v3"
   },
   "status": "COMPLETE",
   "scenarios": {

@@ -106,6 +106,10 @@ from evals import harness  # noqa: E402
 from evals.scenarios import load_scenarios, repeat_count  # noqa: E402
 from evals.sanitization import FORBIDDEN_CONTENT  # noqa: E402
 
+# Below the bind because it reads config/prompts.yaml through src.core.config, which
+# must not be frozen before the fixture environment is in place.
+from src.agents.runtime.prompts import load_prompt_version  # noqa: E402
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -203,6 +207,10 @@ def build_manifest() -> dict[str, Any]:
         "baseline_eligible": worktree_state == "clean",
         "database_name": database_name,
         "database_row_count": database_row_count,
+        # prompt_hash detects that the prompt changed; prompt_version names which prompt
+        # produced the run. A capture that cannot name its prompt cannot be read as the
+        # baseline for a later one, which is what T0024.1's version label is for.
+        "prompt_version": load_prompt_version(),
         "prompt_hash": _sha256(prompts_path),
         "config_hash": _sha256(settings_path),
         # Provider is recorded per profile because a profile may override agent.provider,
@@ -352,6 +360,11 @@ def _expected_execution_accuracy(
 
 def freeze_capture(capture_path: Path, grade_path: Path, output: Path) -> dict[str, Any]:
     """Project completed capture evidence into the narrow, committed replay format."""
+    # Importing the replay runner also imports its deterministic grader, which
+    # reads runtime settings. Native capture imports must stay independent of
+    # that path so they can bind the fixture environment before configuration.
+    from evals.replay import REPLAY_SCHEMA_VERSION, validate_replay
+
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite existing replay: {output}")
 
@@ -366,15 +379,22 @@ def freeze_capture(capture_path: Path, grade_path: Path, output: Path) -> dict[s
     run_id = capture["manifest"].get("run_id")
     if not isinstance(run_id, str) or not run_id:
         raise ValueError("Capture manifest must contain a run_id")
+    prompt_version = capture["manifest"].get("prompt_version")
+    if not isinstance(prompt_version, str) or not prompt_version.strip():
+        raise ValueError(
+            "Capture manifest must contain a prompt_version; a capture recorded before "
+            "T0035.1 cannot be frozen without stamping the version it actually ran"
+        )
     grades = _grade_index(grade, run_id)
     scenarios_by_id = {scenario["id"]: scenario for scenario in load_scenarios()}
 
     replay: dict[str, Any] = {
         "manifest": {
             "run_id": run_id,
-            "schema_version": 1,
+            "schema_version": REPLAY_SCHEMA_VERSION,
             "source_capture": capture_path.name,
             "sanitized": True,
+            "prompt_version": prompt_version.strip(),
         },
         "status": "COMPLETE",
         "scenarios": {},
@@ -425,11 +445,6 @@ def freeze_capture(capture_path: Path, grade_path: Path, output: Path) -> dict[s
             "status": "COMPLETE",
             "repeats": frozen_repeats,
         }
-
-    # Importing the replay runner also imports its deterministic grader, which
-    # reads runtime settings. Native capture imports must stay independent of
-    # that path so they can bind the fixture environment before configuration.
-    from evals.replay import validate_replay
 
     validate_replay(replay)
     _write_json(output, replay)

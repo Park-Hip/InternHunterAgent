@@ -367,7 +367,7 @@ def _capture_and_grade_from_replay() -> tuple[dict, dict]:
                         "checks": [
                             {
                                 "name": "execution_accuracy",
-                                "passed": True,
+                                "passed": turn["expected_execution_accuracy"] != "FAIL",
                                 "detail": f"execution accuracy {turn['expected_execution_accuracy']}",
                             }
                         ],

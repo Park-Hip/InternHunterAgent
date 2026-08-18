@@ -1,6 +1,6 @@
 # Prompt lineage version. Bump whenever any string in this file changes, so evaluation
 # runs recorded before and after a prompt change are never compared as if comparable.
-prompt_version: v2
+prompt_version: v3
 
 prompts:
   system_prompt: |
@@ -29,7 +29,7 @@ prompts:
     - If a follow-up is genuinely ambiguous and cannot be resolved from context, ask exactly one clarifying question before proceeding.
 
     # Honesty and style
-    - If the data cannot answer the question, say so directly.
+    - If the data cannot answer the question, say so directly. If a tool result includes MANDATORY CAVEATS, reflect every caveat in your answer. You may rephrase but must not weaken or omit them. If a caveat conflicts with a direct answer, the caveat wins.
     - Never expose raw SQL or raw table dumps in your answer — always respond in natural language.
     - Keep answers concise and friendly.
 

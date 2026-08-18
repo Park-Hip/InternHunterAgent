@@ -9,13 +9,13 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `main` at `4159da2` - Merge pull request #67 from
-  Park-Hip/codex/t0032.2-prompt-inventory (2026-08-18).
-- Branches not merged into `main`: 7 - `feature/t0022.10-prune-dead-docs`,
+- Checked out: `main` at `9672906` - Merge pull request #71 from
+  Park-Hip/feature/t0037.1-ingestion-budget (2026-08-18).
+- Branches not merged into `main`: 8 - `feature/t0022.10-prune-dead-docs`,
   `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
-  `feature/t0031-parallel-agent-docs`, `integration/t0031.4-publish`, `merge/t0024.6-with-main`,
-  `merge/t0025.7-with-main`.
-- Worktrees: 6.
+  `feature/t0031-parallel-agent-docs`, `feature/t0035.1-capture-lineage`,
+  `integration/t0031.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+- Worktrees: 11.
 <!-- generated:snapshot:end -->
 
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
@@ -40,32 +40,42 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M25-M32, M36 - 27 of 33 milestones.
+Complete: M0, M6-M22, M24-M32, M36-M37 - 29 of 33 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
-| M24 | Honesty Enforcement (obligation seam) | in-progress |
-| M37 | Ingestion Failure Bounding | in-progress |
 | M23 | v1.0 Release Cut | planned |
 | M33 | Vietnamese Language Milestone | planned |
 | M34 | Serving Memory Window Hardening | planned |
 | M35 | Capture Lineage Stamp | planned |
 <!-- generated:milestones:end -->
 
-M24 is the only milestone in progress: T0024.1 and T0024.6 shipped on 2026-08-17 as `73b058a`, and
-the 2026-08-18 integration pass re-scoped the four open blocks against the instrument and the
-T0032.4 spike. M33, M34, and M35 were allocated out of that spike's triage.
-M32 and M36 both closed on 2026-08-18. M32 shipped all four blocks - an AST-enforced inventory of
-the model-facing strings, the sixteen-column list pinned across the three prompt blocks and against
-the `CleanJob` model, decision #10 extended to the two Python sites, and the Vietnamese prompt
-question settled from 72 recorded spike runs - changing no prompt wording and pruning no
-instruction, both deliberately. M36 was allocated and closed the same day against a deadlock
-between two M31 checks that left a ticket branch adding a `docs/entries/` file with no passing
-state. M30 closed on 2026-08-17 (PR #61):
-the `freeze` command exists, the surviving T0025.7 capture is committed at
-`evals/replays/t0025.7-acceptance.json`, and **D-046** settles what a frozen replay keeps. The
-capture-preservation entry it closed is in [Resolved Issues](Resolved_Issues.md); the T0027.3
-DeepSeek capture that motivated it was already lost and stays lost.
+**Nothing is in progress.** Four milestones closed on 2026-08-18 and the four that remain - M23,
+M33, M34, M35 - are planned, unscoped, and unstarted.
+
+**M24** closed with its whole mechanism shipped and its gate short of a clean pass. The obligation
+seam exists end to end: `detect_obligations` over the validated SQL and result set (`.2`, PR #68),
+a `MANDATORY CAVEATS` block both tools render, the caveat-relay contract in the system prompt with
+`prompt_version` at `v3` (`.3`, PR #69), and a frozen replay that re-grades with no model call
+(`.4`, PR #70). `T0024.5` was allocated, measured out by `.4`, and never built. The gate reads
+**11 PASS / 7 FAIL over 18 turns**: `HON-CURRENCY-1` went 0/3 to 3/3, which is the design's
+motivating failure closed, while `HON-CREATED-ON-1` and `HON-ABSENT-FIELD-1` each fail 3/3 and no
+`v2` control was captured. Read the milestone as a measured honesty limitation, not as honesty
+enforced; the four residuals are filed in [Known Issues](Known_Issues.md).
+
+**M37** was allocated and closed the same day against the 2026-08-18 nightly, which was cancelled
+at the workflow's 15-minute ceiling rather than failing: every VietnamWorks request hung for its
+full timeout, so a whole-source outage needed ~26 minutes to give up and `main()` never reached its
+own abort path. `api.max_elapsed_seconds: 600` now bounds the whole fetch, verified against a real
+non-routable blackhole at 21.8s against an unbounded worst case of 336s.
+
+**M32** and **M36** also closed on 2026-08-18: M32 made the model-facing string surface knowable
+without changing a word of it, and M36 broke the M31 check deadlock that left a ticket branch
+adding a `docs/entries/` file with no passing state. M33, M34, and M35 were allocated out of the
+T0032.4 spike's triage. **M30** closed on 2026-08-17 - the `freeze` command, the surviving T0025.7
+capture at `evals/replays/t0025.7-acceptance.json`, and **D-046** on what a replay keeps; the
+T0027.3 DeepSeek capture that motivated it was already lost and stays lost. Per-milestone detail
+is in [Tickets](Tickets.md) and the [ticket archive](archive/Tickets_Archive.md).
 
 ## Archive tags
 
@@ -90,9 +100,9 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
   T0031.1 prevents. Its §1.1 also concludes the 2026-08-13 outage was a model-provider failure,
   which the direct probes recorded in [Resolved Issues](Resolved_Issues.md) disprove: that section
   is wrong, not merely stale.
-- The primary worktree also holds a staged one-line `.env.example` edit that adds a second
-  `DEEPSEEK_API_KEY` line, single-quoted, beside the double-quoted one already on the line above.
-  It is a duplicate rather than a change, so it is noted here rather than carried forward.
+- The duplicate `DEEPSEEK_API_KEY` line in `.env.example` is **gone as of 2026-08-18**, discarded
+  by the integration step rather than carried a third time, along with an uncommitted
+  `docs/roadmap.yaml` that was an older draft of the M37 block already merged through PR #71.
 - The legacy HTTP runner stays archived; the driver took its orchestration as a pattern only and
   runs the agent in-process (D-043). The 2026-07-14 answer artifact is answer-only, so replaying it
   still grades `INFRA` at the structural tier - only a driver capture carries tools and SQL.
@@ -181,11 +191,11 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Exit 1 on 2026-08-18 in this clone, on the untracked production-readiness plan only - four `link-path` findings and one `orphan`, all inside the superseded document [Carried work](#carried-work) records. It is untracked, so CI never sees it and every other check passed. Naming its path here reproduced the same finding from the other direction, which is why this row describes it instead |
+| `python scripts/docs_lint.py` | Exit 1 on 2026-08-18 in this clone, on the untracked production-readiness plan only - four `link-path` findings and one `orphan`, all inside the superseded document [Carried work](#carried-work) records. It is untracked, so CI never sees it and every other check passed. Naming its path here reproduced the same finding from the other direction, which is why this row describes it instead. The `frozen` findings an integration session also sees are the check working: it fires on any write to a frozen register, and the integration step is the one writer allowed to make them |
 | `python scripts/docs_build.py --check` | Exit 0 on 2026-08-18; every generated region current |
-| `uv run pytest -q` | 537 passed, 1 skipped, 30 deselected, and 43 subtests passed on 2026-08-18, in 13 s |
+| `uv run pytest -q` | 551 passed, 1 skipped, 30 deselected, and 45 subtests passed on 2026-08-18, in 10.5 s |
 | `uv run ruff check .` | Passed on 2026-08-18 |
-| `uv run mypy` | Success: no issues in 43 source files on 2026-08-18 |
+| `uv run mypy` | Success: no issues in 44 source files on 2026-08-18 |
 | `uv run python -m evals.replay` | Exit 0 on 2026-08-17 against the frozen evidence, with a database up. Not re-run by the integration step that published T0031.3: Docker was not running, so nothing listened on 5432 or 5433, which is the recorded precondition rather than a result |
 
 The one skip is environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`. The default
@@ -210,20 +220,26 @@ resolution records: [Resolved Issues](Resolved_Issues.md).
 
 ## Next recommended ticket
 
-T0024.2 - the obligation seam. M32 closed on 2026-08-18, which was its stated blocker, so the
-recommendation moves here: `.2` is the head of M24's remaining chain, `.3` and `.4` both sit
-behind it, and it now owns three things at once - `detect_obligations` and the revived
-`QueryToolResult`, the `listing_expires_on`-as-application-deadline mislabel the T0032.4 spike saw
-in all three absent-field probes, and the collapse of the duplication T0032.1 deliberately left
-between `_build_answer`'s zero-results literal and the `ZERO_RESULTS` glossary entry. That last
-item is why `src/agents/tools/` is in M24's scope, and why it could not start until M32 merged.
+T0035.1 - the capture lineage stamp. M24 closing retires the previous recommendation and promotes
+this one for a sharper reason than "cheap and disjoint", which it also is. M24's gate shipped with
+no `v2` control (`KI-2026-08-18-honesty-gate-has-no-control`), so the repository now holds a frozen
+capture whose comparison baseline is a capture the milestone itself declared incomparable. If that
+control is ever re-captured - and at M27's measured 5m20s for about $0.04 it should be - the stamp
+has to exist first, or the second attempt inherits the same labelling problem the first one had.
+Landing it now is the difference between fixing the gap and reproducing it.
 
-Two sequencing facts to carry into it. **T0035.1** (capture lineage stamp) is best landed before
-T0024.4 captures its `v2` control, so that control is the first correctly-labelled baseline -
-cheap, disjoint from everything open, and worth taking first if T0024.2 is not started
-immediately. And every phrasing T0024.2 introduces must resolve through
-`load_behavior_glossary()[TOKEN]` rather than an inlined literal, because M33's Vietnamese
-glossary is what makes that indirection pay.
+Two candidates sit behind it. **T0034.1/.2** own the five-turn memory window
+(`KI-2026-08-17-vietnamese-spike-multiturn`), a `[MED · OPEN]` with a mechanism already measured
+down to `max_messages: 20` at four messages per turn - the largest ready-to-scope defect on the
+board, and the M24 middleware intersection that used to complicate it is gone, because T0024.5 was
+never built. **M23** (v1.0 release cut) is unblocked on the cron but should not be taken next: its
+DoD sweep owes decision **D9** a read on honesty, and two of M24's seven failures are not yet
+triaged into pass-or-defect - `KI-2026-08-18-absent-field-grader-stale` is the block, and it is
+small. Answer D9 against numbers, not against a milestone status line.
+
+Whatever is taken next: M24's phrasings all resolve through `load_behavior_glossary()[TOKEN]` with
+no inlined literals, which is the property M33's Vietnamese glossary was waiting on. M33 is free of
+M24.
 
 M31 and M36 closed, retiring the recommendation to build the protocol gate: `registry`, `scope`,
 and `frozen` run in CI and a ticket branch can now satisfy all three. What is not retired is that
@@ -235,10 +251,10 @@ file: the table is the result of running commands rather than a reading of the t
 it needs a recorded result the build can read. Elsewhere, `Tickets.md` and the judgement of where
 a raised issue belongs are what remain by hand - and only the second is a judgement.
 
-T0023 - the release path - remains open, but is less blocked than it was: the cron activation
-closed on 2026-08-17, when `Nightly ingestion` was found to have run unattended on `schedule` and
-succeeded four nights running (2026-08-14 through 08-17, the last at 03:02 UTC). That satisfies the
-last row of [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 and the D-038 live
-schedule requirement, so what T0023 still owes is its DoD sweep and terms posture. M24 owns the
-behavior failures M25 and T0027.3 measured, triaged in [Known Issues](Known_Issues.md) as 23 real
-behavior and 10 grader phrasing artifacts.
+T0023 - the release path - is unblocked on the cron: `Nightly ingestion` ran unattended on
+`schedule` and succeeded four nights running (2026-08-14 through 08-17, the last at 03:02 UTC),
+which satisfies the last row of [the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 and
+the D-038 live schedule requirement. What it owes is its DoD sweep and terms posture. Of the
+behavior failures M25 and T0027.3 measured - triaged in [Known Issues](Known_Issues.md) as 23 real
+behavior and 10 grader phrasing artifacts - M24 closed the honesty subset it scoped and left the
+helpfulness ones untouched and unowned.

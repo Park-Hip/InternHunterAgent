@@ -132,7 +132,7 @@ milestones:
       past it. Blocked on the M20 cron activation (D-038).
   - id: M24
     title: Honesty Enforcement (obligation seam)
-    status: in-progress
+    status: complete
     tickets: [T0024.1, T0024.2, T0024.3, T0024.4, T0024.5, T0024.6]
     scope:
       - docs/roadmap.yaml
@@ -150,25 +150,31 @@ milestones:
       - evals/replays/
       - docs/entries/
     note: >-
-      Carved out of M21 on 2026-08-12. T0024.1 (behavior glossary, prompt_version, loaders,
-      token-coverage test) and T0024.6 (decision #10 on both the persona and the decline line)
-      merged to main on 2026-08-17 as 73b058a; the feature/t0024.6-persona-scope branch is spent
-      and the branch field is gone with it. T0024.2 through T0024.5 are open, and 2026-08-18
-      re-scoped them against work that landed after the 2026-07-16 design was written:
-      the Groq daily-window blocker on .4 is void (M27 moved both profiles to DeepSeek, D-045,
-      29 scenarios in 5m20s), so .4 is an evals-instrument run frozen to evals/replays/ rather
-      than the retired manual matrix protocol - and it must capture its own v2 control first,
-      because T0024.6 changed prompt strings and the frozen t0025.7 baseline predates them.
-      .2 additionally owns the listing_expires_on-as-application-deadline mislabel rehoused here
-      by the T0032.4 spike triage, and the glossary duplication T0032.1 leaves behind in
-      src/agents/tools/. That widened scope puts M24 and M32 on the same paths: sequence
-      T0024.2 after M32 merges. .2 and .3 must resolve every phrasing through
-      load_behavior_glossary()[TOKEN] and inline no literal, so M33's Vietnamese glossary needs
-      no M24 rework. .5 stays conditional on .4 and intersects M34 on middleware.py.
-      This milestone predates the T0031.1 freeze: every register edit routes through
-      docs/entries/T0024.x.md, never into a frozen file directly. If .4 needs a new scenario
-      rather than a new run, that widens scope into evals/scenarios_v1.yaml and tests/evals/,
-      which intersects T0033.3 - widen deliberately, in the PR that needs it.
+      Carved out of M21 on 2026-08-12, re-scoped 2026-08-18 against the work that landed after the
+      2026-07-16 design, and closed the same day. Delivered: .1 and .6 on 2026-08-17 as 73b058a
+      (18-token behavior_glossary, prompt_version, loaders, token-coverage test; decision #10 on
+      both the persona and the decline line); then .2 (PR #68) built detect_obligations over the
+      validated SQL and result set behind the revived QueryToolResult seam, rendering a delimited
+      MANDATORY CAVEATS block in both tools and resolving the listing_expires_on-as-application-
+      deadline mislabel the T0032.4 triage rehoused here; .3 (PR #69) added the caveat-relay
+      contract to the system prompt and bumped prompt_version v2 -> v3; .4 (PR #70) gated the
+      result on the instrument, capturing six honesty scenarios x 3 repeats against the frozen
+      22-row fixture on DeepSeek and freezing them to evals/replays/t0024.4-v3-obligations.json.
+      .5 was allocated and never built: it was conditional on .4 showing the model drops explicit
+      caveats, and .4 measured that it does not, so the enforcement middleware is unnecessary and
+      the M34 intersection on middleware.py never materialized. The number stays listed as spent.
+      What the gate actually measured, and what closing this milestone does not claim: 11 PASS and
+      7 FAIL over 18 turns. HON-CURRENCY-1 went 0/3 under the t0025.7 baseline to 3/3 here, which
+      is the milestone's headline result, and HON-FREE-TEXT-1 and HON-NEGOTIABLE-SALARY-1 held at
+      3/3. HON-CREATED-ON-1 fails 3/3 and HON-ABSENT-FIELD-1 fails 3/3, the latter at least partly
+      because the grader's expectations predate the truthful listing-expiry answer .2 introduced;
+      HON-ZERO-RESULTS-1 splits 2/3. Those residuals are filed in Known_Issues.md, not resolved
+      here. Two further gaps are recorded rather than closed: .4 shipped without the v2 control
+      capture its plan required, so the deltas above are read against t0025.7 rather than against a
+      like-for-like control, and the targeted six-scenario gate is not the full 29-scenario replay,
+      because the freezer rejects turns with no generated SQL. D-021 gated is_active exposure on
+      this work and T0023's DoD sweep owes decision D9 the measured numbers above rather than a
+      pass.
 
   - id: M25
     title: Evaluation Instrument
@@ -416,7 +422,7 @@ milestones:
 
   - id: M37
     title: Ingestion Failure Bounding
-    status: in-progress
+    status: complete
     tickets: [T0037.1]
     scope:
       - src/services/ingestion/sources/vietnamworks.py
@@ -452,3 +458,15 @@ milestones:
       scope for this milestone's own status line, which intersects M24 on that file alone - the
       same append-only overlap M36 carried, not a shared code path. Scope is otherwise disjoint from
       M23, M24, M33, M34 and M35, which touch no ingestion path.
+      Complete 2026-08-18 (T0037.1, PR #71): api.max_elapsed_seconds 600 is checked before every
+      request in both _collect loops, so _collect stops issuing, fetch() returns with whatever it
+      has, and assert_min_yield aborts the run with a logged reason - which is the pre-existing and
+      correct behaviour for an empty fetch. Verified against a real non-routable blackhole with no
+      mocks: fetch() returned in 21.8s against an unbounded worst case of 336s. The declared
+      .github/workflows/ingestion.yml was deliberately not changed; timeout-minutes stays 15 and the
+      budget was sized under it (600s plus one page's ~96s worst case is about 11.6 minutes), which
+      is the reconciliation that path was declared for. The two are linked by a comment rather than
+      a check, filed as KI-2026-08-18-budget-ceiling-unlinked. Left open by choice: a
+      consecutive-failure breaker on top of the budget, and surfacing budget_exhausted in the
+      run_ingestion result dict, which needs loader.py and so needs a scope this milestone does not
+      hold.

@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 12 | 1 | 3 |
+| MED | 16 | 1 | 3 |
 | LOW | 18 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -35,6 +35,11 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
+<!-- generated:registered:end -->
+<!-- lint-allow-link-path:end -->
+
+## Config, startup & deployment (12)
+
 - `KI-2026-08-18-budget-ceiling-unlinked` **`[LOW · OPEN]` The fetch budget and the workflow
   timeout are linked by a comment, not a check.**
   - **Found:** T0037.1, 2026-08-18, while sizing `max_elapsed_seconds` against
@@ -47,10 +52,10 @@ copies can never drift. Entries that predate the id convention are never inboxed
     budget from the ceiling instead of hard-coding it.
     Deferred because both options couple the adapter to the workflow file, which is a design
     call this ticket should not make alone.
-<!-- generated:registered:end -->
-<!-- lint-allow-link-path:end -->
-
-## Config, startup & deployment (11)
+  - **History:** Filed here by the integration step on 2026-08-18, closing M37. The current
+    numbers are `api.max_elapsed_seconds: 600` in `config/ingestion.yaml` against
+    `timeout-minutes: 15` in `.github/workflows/ingestion.yml`, which leaves about 3.4 minutes
+    of headroom after one page's ~96s worst case.
 
 - **`[MED · OPEN]` Render auto-deploy stalled for three days and the reason is unexplained.**
   - **Found:** the 2026-08-13 serving outage, diagnosed 2026-08-16.
@@ -125,7 +130,22 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Next:** Resolve the pool and LangChain message generic types in a dedicated typing pass.
   - **History:** `src/core/checkpointer.py` and `src/agents/runtime/middleware.py`.
 
-## Agent runtime & prompts (5)
+## Agent runtime & prompts (6)
+
+- `KI-2026-08-18-created-on-fails-under-v3` **`[MED · OPEN]` `HON-CREATED-ON-1` fails 3/3 under the
+  `v3` obligation prompt, and M24 closed without addressing it.**
+  - **Found:** the T0024.4 gate on 2026-08-18, frozen in
+    `evals/replays/t0024.4-v3-obligations.json`. <!-- lint-allow-link-path -->
+  - **Impact:** This is the one honesty scenario in the six-scenario gate that the obligation seam
+    did not move. It failed before M24 and it fails after, in all three repeats, so the milestone's
+    mechanism does not reach whatever the scenario is asserting about `created_on`.
+    `HON-ZERO-RESULTS-1` additionally splits 2/3 rather than holding, a weaker but related signal.
+  - **Next:** Determine first whether this is model behaviour or a grader expectation that predates
+    the current answer, the same ambiguity `KI-2026-08-18-absent-field-grader-stale` carries - the
+    two were graded by the same pass and should be triaged together. Only then decide whether it
+    needs a detection rule, a prompt rule, or a corrected expectation.
+  - **History:** M24 closed on this failure knowingly; see the milestone outcome in
+    [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md) and `roadmap.yaml` M24.
 
 - `KI-2026-08-17-vietnamese-spike-multiturn` **`[MED · OPEN]` Multi-turn tool following is
   unstable.**
@@ -174,7 +194,51 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Next:** Fetch one additional row for explicit limits and add a soft more-results hint.
   - **History:** `src/services/query/row_bound.py` owns result limits.
 
-## Evaluation harness (10)
+## Evaluation harness (13)
+
+- `KI-2026-08-18-freezer-rejects-no-sql-turns` **`[MED · OPEN]` The freezer cannot freeze a turn
+  with no generated SQL, so no full-registry capture can become a replay.**
+  - **Found:** T0024.4 on 2026-08-18, attempting to freeze the 29-scenario capture.
+  - **Impact:** The driver's freezer requires an execution accuracy of `PASS`, `FAIL`, or `EXEMPT`
+    for every turn, and `HLP-CONTEXT-1` turn 2 produces a no-SQL execution result that is none of
+    them. One such turn blocks the whole capture. This is why the M24 ship gate is a targeted
+    six-scenario replay rather than the full registry, and it will block every future full-registry
+    freeze for the same reason.
+  - **Next:** Give no-SQL turns a verdict the freezer accepts - most likely `EXEMPT`, since a turn
+    that legitimately answers without querying is not an execution failure - rather than widening
+    the gate case by case.
+  - **History:** The freeze command is T0030.1's. This is the first ticket to try freezing a
+    multi-turn capture through it.
+
+- `KI-2026-08-18-absent-field-grader-stale` **`[MED · OPEN]` `HON-ABSENT-FIELD-1` fails 3/3 against
+  grading expectations that predate the answer M24 made truthful.**
+  - **Found:** T0024.4 on 2026-08-18.
+  - **Impact:** T0024.2 deliberately taught the tool to distinguish `listing_expires_on` from an
+    application deadline, which changes the absent-field answer's wording by design. The scenario's
+    expectations were written before that distinction existed, so a 3/3 FAIL here cannot currently
+    be read as either a regression or a pass. Every future run inherits the same ambiguity.
+  - **Next:** Reconcile the scenario's expectations in the registry with the truthful
+    listing-expiry answer, then re-grade the frozen capture. Do this before treating the M24 gate
+    numbers as a baseline for anything.
+  - **History:** Raised as a follow-up in the T0024.4 entry and filed here rather than left in a
+    completion report, because it is the reason two of M24's seven failures are unresolved rather
+    than known-bad.
+
+- `KI-2026-08-18-honesty-gate-has-no-control` **`[MED · OPEN]` The M24 ship gate shipped without
+  the `v2` control its plan required.**
+  - **Found:** the integration step on 2026-08-18, closing M24.
+  - **Impact:** T0024.4's plan required capturing a `v2` control first, because T0024.6 changed
+    prompt strings and the frozen `t0025.7-acceptance.json` baseline predates them - the plan says
+    in as many words that the two are not comparable. The gate captured only `v3`, so every delta
+    M24 claims, including the headline `HON-CURRENCY-1` 0/3 to 3/3, is read against a baseline the
+    milestone itself declared incomparable. The direction of that result is not in doubt; its
+    magnitude is unattributable between the obligation seam, the relay contract, and the T0024.6
+    string changes.
+  - **Next:** Either capture the `v2` control and re-derive the deltas, or record a decision that
+    the coarse comparison is sufficient and stop describing the numbers as per-rule deltas. Cost is
+    not the obstacle: M27 measured 29 scenarios in 5m20s for about $0.04.
+  - **History:** M24 closed with this open; see the T0024.4 block in
+    [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md).
 
 - **`[MED · OPEN]` `SAF-INJECTION-RESILIENCE-1` asserts a no-tool rule no capture has tested.**
   - **Found:** T0025.9 audit on 2026-08-13.
@@ -257,8 +321,18 @@ copies can never drift. Entries that predate the id convention are never inboxed
     three repeats. `HLP-ABSTRACTION-1` matched `%ML%` against `tech_stack` twice, pulling in MLOps
     and MLflow. `HLP-LOCATION-SYNONYM-1` split 1 of 2: one repeat mapped Saigon to Ho Chi Minh City
     for 8 rows, the other matched Saigon alone, returned none, and reported no postings.
-  - **Next:** M24 owns these; T0025.7 measures them and changes no prompt or runtime behavior.
+  - **Next:** **One of the three is closed and two are not.** M24's T0024.4 gate re-measured
+    `HON-CURRENCY-1` under the `v3` obligation prompt on 2026-08-18 and it passes 3/3, so the
+    cross-currency failure this entry opens with is fixed by the obligation seam.
+    `HLP-ABSTRACTION-1` and `HLP-LOCATION-SYNONYM-1` were **not** in that gate and are unmeasured
+    since 2026-08-13; they are helpfulness rather than honesty scenarios and M24, which closed
+    2026-08-18, was never going to reach them. They need an owner that is not M24.
   - **History:** Ignored `evals/runs/t0025.7-acceptance.json` and its grade report. <!-- lint-allow-link-path -->
+    The currency re-measurement is frozen in `evals/replays/t0024.4-v3-obligations.json`.
+    <!-- lint-allow-link-path -->
+    T0024.4 separately noted that the passing currency answer still names one posting after
+    stating its caveat, so the grade is a pass on the caveat being present, not on the ranking
+    being withheld.
 
 - `KI-2026-08-17-replay-needs-a-database` **`[MED · OPEN]` `evals.replay` fails with `INFRA`
   verdicts when no Postgres is listening, so the gate cannot run on a bare checkout.**

@@ -413,3 +413,42 @@ milestones:
       branch should regenerate Repo_Current_State.md at all, which check_generated still demands of
       it, and the required-check decision itself. The milestone carried no plan section in
       Tickets.md: it was allocated and closed inside a day, and its outcome row is the record.
+
+  - id: M37
+    title: Ingestion Failure Bounding
+    status: in-progress
+    tickets: [T0037.1]
+    scope:
+      - src/services/ingestion/sources/vietnamworks.py
+      - config/ingestion.yaml
+      - tests/services/ingestion/test_vietnamworks.py
+      - .github/workflows/ingestion.yml
+      - docs/roadmap.yaml
+      - docs/entries/
+    note: >-
+      Allocated 2026-08-18 against a gap the 2026-08-18 nightly exposed: a total-source outage
+      cannot fail cleanly, because the run needs longer to give up than the job is allowed to live.
+      Mechanism, measured against run 32093739835: every VietnamWorks request hung for its full
+      timeout rather than being refused, so each page cost retry_attempts 2 plus the initial try at
+      timeout_seconds 30, plus retry_backoff_seconds 2.0 doubling once - 3 x 30 + 2 + 4 = 96s, which
+      is exactly the observed spacing between consecutive ingestion.page_failed events. At 8 queries
+      x pages_per_query 2 = 16 requests, a whole-source failure runs about 26 minutes against
+      timeout-minutes 15, so the runner cancels the job instead of letting it exit. main()'s
+      except IngestionSafetyError never fires, logger.error("ingestion.aborted") never logs, and the
+      only diagnostic is raw log timestamps. A whole-source failure is the exact case that abort
+      path was written for and the one case it structurally cannot reach. No data was at risk -
+      fetch() must return before upsert_raw_postings runs, and the kill landed mid-fetch on query 9
+      of 16 - and the dead-man ping behaved correctly by staying silent. The outage itself was
+      transient, not a standing block: a workflow_dispatch re-run the same morning (32109357817)
+      returned pages_failed 0 and fetched 100 from the same runner infrastructure, and the API
+      answered a hand-probe in 0.36s throughout, so nothing here is a fix for the source going dark.
+      T0037.1 bounds the run with a global elapsed-time budget checked before every request, so
+      fetch() always returns and main() always reaches its abort path. The budget was chosen over a
+      consecutive-failure circuit breaker because only the budget holds the invariant under
+      intermittent failure and under a larger query count; the breaker bounds the all-failing case
+      alone. Raising timeout-minutes was rejected outright: it moves the ceiling without bounding
+      the run. .github/workflows/ingestion.yml is in scope so the budget can be reconciled against
+      the ceiling in one PR, not because the ceiling is expected to change. docs/roadmap.yaml is in
+      scope for this milestone's own status line, which intersects M24 on that file alone - the
+      same append-only overlap M36 carried, not a shared code path. Scope is otherwise disjoint from
+      M23, M24, M33, M34 and M35, which touch no ingestion path.

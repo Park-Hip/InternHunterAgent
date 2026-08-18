@@ -7,6 +7,17 @@ api:
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
   retry_attempts: 2          # retries after the initial attempt (so 3 tries max per page)
   retry_backoff_seconds: 2.0 # base delay; doubles per retry (2s, then 4s)
+  # Wall-clock ceiling for the whole fetch, across every query and page. It exists
+  # so a dead source ends the run instead of outliving the job that hosts it: on
+  # 2026-08-18 every request hung for its full timeout_seconds, which costs
+  # 3 x 30 + 2 + 4 = 96s per page, and 16 pages of that is ~26 minutes against the
+  # 15-minute timeout-minutes ceiling in .github/workflows/ingestion.yml. The runner
+  # cancelled the job, so main() never reached its abort path and logged no reason.
+  #
+  # The budget is checked before each request, never mid-page, so the true bound is
+  # this value plus one page's worst case (~96s) - about 11.6 minutes here, leaving
+  # real headroom under the 15-minute ceiling. Raise them together, never this alone.
+  max_elapsed_seconds: 600
 
 queries:
   - "data scientist"

@@ -165,7 +165,7 @@ class LoadPromptVersionTests(unittest.TestCase):
             load_prompt_version()
 
     def test_yaml_declares_a_prompt_version(self) -> None:
-        self.assertEqual(load_prompt_version(), "v3")
+        self.assertEqual(load_prompt_version(), "v4")
 
 
 class LoadBehaviorGlossaryTests(unittest.TestCase):

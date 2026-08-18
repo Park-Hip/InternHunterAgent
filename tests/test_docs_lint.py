@@ -517,6 +517,33 @@ def test_scope_accepts_a_declared_path_and_rejects_an_undeclared_one(repo: Path)
     assert "M7" in findings[0].message
 
 
+def test_scope_allows_a_change_confined_to_a_generated_region(repo: Path) -> None:
+    """A ticket branch that runs the mandatory generator must not be rejected for the result.
+
+    `check_frozen` already exempts these bytes. Without the same exemption here, a branch that
+    adds a docs/entries/ file deadlocks: the `generated` check fails if it does not rebuild the
+    registers, and this check fails if it does.
+    """
+    tickets = repo / "docs" / "Tickets.md"
+    tickets.write_text(
+        tickets.read_text(encoding="utf-8").replace("old", "regenerated"), encoding="utf-8"
+    )
+    git(repo, "add", "-A")
+
+    assert docs_lint.check_scope([], "main", repo) == []
+
+
+def test_scope_still_rejects_a_hand_edit_to_an_undeclared_register(repo: Path) -> None:
+    """The exemption is the generated region and nothing wider."""
+    tickets = repo / "docs" / "Tickets.md"
+    tickets.write_text(tickets.read_text(encoding="utf-8") + "a hand edit\n", encoding="utf-8")
+    git(repo, "add", "-A")
+
+    findings = docs_lint.check_scope([], "main", repo)
+
+    assert [finding.path.name for finding in findings] == ["Tickets.md"]
+
+
 def test_scope_reports_nothing_when_no_base_resolves(repo: Path) -> None:
     """A clone with no comparable base has no change set to judge, so the check is silent."""
     assert docs_lint.check_scope([], "no/such/ref", repo) == []

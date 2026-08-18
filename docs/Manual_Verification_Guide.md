@@ -24,6 +24,16 @@ developer to create, and the text is not editable here anyway.
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:checklists:begin -->
+### T0036.1: Exempt rebuilt registers from the scope check
+
+1. On this branch, `uv run python scripts/docs_build.py` then
+   `uv run python scripts/docs_lint.py --diff-base origin/main`. It must exit 0 with no output.
+2. Append a line to `docs/Known_Issues.md` **outside** any `<!-- generated:...-->` region, stage
+   it, and re-run the lint. Both `scope` and `frozen` must report that file. Revert the line.
+3. Check out `codex/t0032.1-tool-surface`, copy this branch's `scripts/docs_lint.py` over it, run
+   `docs_build.py` and then the lint with `--diff-base origin/main`. It must exit 0, where before
+   this ticket it reported three registers as out of scope.
+
 ### T0031.4: Enforce the protocol in CI
 
 1. `python scripts/docs_lint.py` exits 0 on a clean checkout and reports fifteen checks' worth of

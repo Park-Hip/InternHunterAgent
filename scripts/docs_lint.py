@@ -741,7 +741,15 @@ def within_scope(path: str, scope: list[str]) -> bool:
 def check_scope(
     _: list[Path], explicit: str | None = None, root: Path = ROOT
 ) -> list[Finding]:
-    """Keep a branch inside the paths its milestone declared."""
+    """Keep a branch inside the paths its milestone declared.
+
+    A rebuilt register is exempt for the reason `check_frozen` already exempts it: the generator
+    wrote those bytes and the `generated` check makes running it mandatory, so a ticket branch
+    that adds an entry file has no way to be silent about them. Without this, every branch that
+    adds a `docs/entries/` file is rejected whether or not it runs `docs_build.py`, and the only
+    escape is for a milestone to claim a frozen path in its own `scope:` - which the M31 note in
+    docs/roadmap.yaml forbids.
+    """
     roadmap = root / "docs" / "roadmap.yaml"
     if not roadmap.exists():
         return []
@@ -766,7 +774,7 @@ def check_scope(
             f"outside {milestone['id']}'s declared scope; widen scope: in docs/roadmap.yaml or move the change",
         )
         for path in sorted(paths)
-        if not within_scope(path, scope)
+        if not within_scope(path, scope) and not only_generated_changed(path, base, root)
     ]
 
 

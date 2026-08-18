@@ -376,3 +376,23 @@ milestones:
       T0035.1 stamps prompt_version into the capture manifest and surfaces it in the viewer
       header. Scope is disjoint from M24, M32, M33 and M34. Best landed before T0024.4 captures
       its v2 control, so that control is the first correctly-labelled baseline; not a blocker.
+
+  - id: M36
+    title: Scope Check Generated-Region Exemption
+    status: in-progress
+    tickets: [T0036.1]
+    branch: feature/t0036.1-scope-generated
+    scope:
+      - scripts/docs_lint.py
+      - tests/test_docs_lint.py
+      - docs/roadmap.yaml
+      - docs/entries/
+    note: >-
+      Allocated 2026-08-18 against a deadlock M31 left between two of its own checks. `generated`
+      fails a branch that adds a docs/entries/ file without rebuilding the registers; `scope`
+      failed the same branch for the rebuilt registers, because they sit outside every milestone's
+      declared paths and the M31 note forbids any later milestone from claiming a frozen path in
+      its own scope:. The only escape was the one PR #63 took - merge with a red docs job, which
+      is how the deadlock reached main unnoticed. T0036.1 gives check_scope the
+      only_generated_changed exemption check_frozen has carried since T0031.2. It blocks the three
+      open M32 PRs, so it lands first. Scope is disjoint from M24, M32, M33, M34 and M35.

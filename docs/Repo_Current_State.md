@@ -40,12 +40,13 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M25-M31 - 25 of 31 milestones.
+Complete: M0, M6-M22, M25-M31 - 25 of 32 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
 | M24 | Honesty Enforcement (obligation seam) | in-progress |
 | M32 | Prompt Surface Pass | in-progress |
+| M36 | Scope Check Generated-Region Exemption | in-progress |
 | M23 | v1.0 Release Cut | planned |
 | M33 | Vietnamese Language Milestone | planned |
 | M34 | Serving Memory Window Hardening | planned |

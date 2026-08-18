@@ -3774,4 +3774,75 @@ Address application-deadline honesty and the multi-turn tool instability in a be
 
 The integration step must fold this entry into the frozen completion, manual-verification, and
 known-issues registers.
+
+---
+
+## T0036.1 - Exempt rebuilt registers from the scope check
+
+*Completed 2026-08-18.*
+
+**Summary**
+
+`check_frozen` has exempted a change confined to a generated region since T0031.2: the
+generator wrote those bytes, and the `generated` check makes running `scripts/docs_build.py`
+mandatory, so a ticket branch has no way to be silent about them.
+`check_scope` carried no such exemption.
+
+A ticket branch that adds an entry file therefore had no passing state.
+Skip `docs_build.py` and `generated` fails with stale registers.
+Run it and `scope` fails, because the registers sit outside every milestone's declared paths and
+the M31 note in `docs/roadmap.yaml` forbids a later milestone from claiming a frozen path in its
+own `scope:`.
+
+The fix is one condition: `check_scope` now skips a path whose change `only_generated_changed`
+confirms is confined to the generated regions, which is the same predicate `check_frozen` uses.
+A hand edit to the same register outside those regions is still reported, by both checks.
+
+**Files**
+
+- `scripts/docs_lint.py` - changed: `check_scope` gains the `only_generated_changed` exemption and
+  a docstring recording why.
+- `tests/test_docs_lint.py` - changed: two tests added, one for the exemption and one pinning that
+  it is the generated region and nothing wider.
+- `docs/roadmap.yaml` - changed: M36 allocated.
+- `docs/entries/T0036.1.md` - created.
+
+**Commands**
+
+- `uv run python -m pytest tests/test_docs_lint.py tests/test_docs_build.py -q`
+- `uv run python scripts/docs_build.py`
+- `uv run python scripts/docs_lint.py --diff-base origin/main`
+
+**Build and test**
+
+| Command | Result |
+|---|---|
+| `pytest tests/test_docs_lint.py tests/test_docs_build.py -q` | 71 passed, 1 skipped |
+| `docs_lint.py --diff-base origin/main` | exit 0 |
+
+The skip is `test_shared_skill_instructions_match`, which is skipped in every worktree because
+`.claude/` is gitignored.
+
+**Risks**
+
+The exemption widens what a ticket branch may carry into a frozen register from nothing to the
+generated regions. That is not new trust - `check_frozen` already granted it, and the bytes are
+reproducible by running the generator - but it does mean `scope` no longer reports those paths at
+all, so a reviewer reading the check's output alone cannot tell whether a branch rebuilt a
+register. The diff still shows it.
+
+**Follow-ups**
+
+- PR #63 merged on 2026-08-17 with a red `docs` job caused by this deadlock. Its registers were
+  published by the integration commit that followed, so nothing is unpublished, but the red run is
+  the standing evidence that a merge-blocking check is not enforced as one. Worth a decision on
+  whether `docs` should be a required status check.
+- `check_generated` reports `docs/Repo_Current_State.md` as stale on a ticket branch, which is the
+  register a ticket agent is furthest from owning. Whether ticket branches should regenerate it at
+  all is unsettled.
+
+**Docs**
+
+None. `CLAUDE.md` and `AGENTS.md` describe the protocol, not the checks that enforce it, and
+neither statement changes.
 <!-- generated:reports:end -->

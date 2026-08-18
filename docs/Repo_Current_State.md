@@ -1,6 +1,6 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-17 against the checked-out commit, active registers, and
+> **Last verified:** 2026-08-18 against the checked-out commit, active registers, and
 > [`Operations.md`](Operations.md).
 
 > **Eviction:** A current-state fact leaves when the checked-out repository or active operational
@@ -9,13 +9,13 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `main` at `5a33ebb` - docs(integration): publish T0032.4 prompt spike (2026-08-17).
-- Branches not merged into `main`: 10 - `codex/t0032.1-tool-surface`,
-  `codex/t0032.2-prompt-inventory`, `codex/t0032.3-prompt-consistency`,
-  `feature/t0022.10-prune-dead-docs`, `feature/t0024.1-behavior-glossary`,
-  `feature/t0024.6-persona-scope`, `feature/t0031-parallel-agent-docs`,
-  `integration/t0031.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
-- Worktrees: 5.
+- Checked out: `main` at `4159da2` - Merge pull request #67 from
+  Park-Hip/codex/t0032.2-prompt-inventory (2026-08-18).
+- Branches not merged into `main`: 7 - `feature/t0022.10-prune-dead-docs`,
+  `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
+  `feature/t0031-parallel-agent-docs`, `integration/t0031.4-publish`, `merge/t0024.6-with-main`,
+  `merge/t0025.7-with-main`.
+- Worktrees: 6.
 <!-- generated:snapshot:end -->
 
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
@@ -40,22 +40,27 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M25-M31 - 25 of 32 milestones.
+Complete: M0, M6-M22, M25-M32, M36 - 27 of 32 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
 | M24 | Honesty Enforcement (obligation seam) | in-progress |
-| M32 | Prompt Surface Pass | in-progress |
-| M36 | Scope Check Generated-Region Exemption | in-progress |
 | M23 | v1.0 Release Cut | planned |
 | M33 | Vietnamese Language Milestone | planned |
 | M34 | Serving Memory Window Hardening | planned |
 | M35 | Capture Lineage Stamp | planned |
 <!-- generated:milestones:end -->
 
-M24 is in progress: T0024.1 and T0024.6 shipped on 2026-08-17 as `73b058a`, and the 2026-08-18
-integration pass re-scoped the four open blocks against the instrument and the T0032.4 spike.
-M33, M34, and M35 were allocated out of that spike's triage. M30 closed on 2026-08-17 (PR #61):
+M24 is the only milestone in progress: T0024.1 and T0024.6 shipped on 2026-08-17 as `73b058a`, and
+the 2026-08-18 integration pass re-scoped the four open blocks against the instrument and the
+T0032.4 spike. M33, M34, and M35 were allocated out of that spike's triage.
+M32 and M36 both closed on 2026-08-18. M32 shipped all four blocks - an AST-enforced inventory of
+the model-facing strings, the sixteen-column list pinned across the three prompt blocks and against
+the `CleanJob` model, decision #10 extended to the two Python sites, and the Vietnamese prompt
+question settled from 72 recorded spike runs - changing no prompt wording and pruning no
+instruction, both deliberately. M36 was allocated and closed the same day against a deadlock
+between two M31 checks that left a ticket branch adding a `docs/entries/` file with no passing
+state. M30 closed on 2026-08-17 (PR #61):
 the `freeze` command exists, the surviving T0025.7 capture is committed at
 `evals/replays/t0025.7-acceptance.json`, and **D-046** settles what a frozen replay keeps. The
 capture-preservation entry it closed is in [Resolved Issues](Resolved_Issues.md); the T0027.3
@@ -175,17 +180,21 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Passed on 2026-08-17 (all twelve checks, exit 0) |
-| `python scripts/docs_build.py --check` | Exit 0 on 2026-08-17; every generated region current |
-| `uv run pytest -q` | 502 passed, 2 skipped, 30 deselected, and 4 subtests passed on 2026-08-17, in 10 s |
-| `uv run ruff check .` | Passed on 2026-08-17 |
-| `uv run mypy` | Success: no issues in 43 source files on 2026-08-17 |
+| `python scripts/docs_lint.py` | Exit 1 on 2026-08-18 in this clone, on the untracked production-readiness plan only - four `link-path` findings and one `orphan`, all inside the superseded document [Carried work](#carried-work) records. It is untracked, so CI never sees it and every other check passed. Naming its path here reproduced the same finding from the other direction, which is why this row describes it instead |
+| `python scripts/docs_build.py --check` | Exit 0 on 2026-08-18; every generated region current |
+| `uv run pytest -q` | 537 passed, 1 skipped, 30 deselected, and 43 subtests passed on 2026-08-18, in 13 s |
+| `uv run ruff check .` | Passed on 2026-08-18 |
+| `uv run mypy` | Success: no issues in 43 source files on 2026-08-18 |
 | `uv run python -m evals.replay` | Exit 0 on 2026-08-17 against the frozen evidence, with a database up. Not re-run by the integration step that published T0031.3: Docker was not running, so nothing listened on 5432 or 5433, which is the recorded precondition rather than a result |
 
-Both skips are environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, and skill
-parity needs the gitignored `.claude/` copy; the default suite deselects live eval tests by design.
-A run with the fixture Postgres unreachable reports 10 skips and takes minutes instead of seconds -
-the hang [Known Issues](Known_Issues.md) records.
+The one skip is environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`. The default
+suite deselects live eval tests by design. A run with the fixture Postgres unreachable reports 10
+skips and takes minutes instead of seconds - the hang [Known Issues](Known_Issues.md) records.
+
+The skill-parity skip became a **failure** and was fixed on 2026-08-18: the gitignored
+`.claude/` copy of the ticket-prompt skill predated T0031.1 and still told coders to take their
+number from `Tickets.md`. See [Known Issues](Known_Issues.md); only the tracked
+`skills/generate-ticket-prompt/SKILL.md` is authoritative.
 
 Two command traps, both measured on 2026-08-17. A bare `python -m pytest` cannot import `slowapi`
 and fails collection on 23 modules, so use `uv run`. And a fresh worktree has no `.env`, since it
@@ -200,13 +209,25 @@ resolution records: [Resolved Issues](Resolved_Issues.md).
 
 ## Next recommended ticket
 
-T0031.4 - the registry, scope, and frozen lint checks, open as PR #62. It is the last M31 ticket,
-and until it lands the protocol is a document rather than a gate: nothing detects a branch that
-hand-writes a frozen register, allocates a number the registry never issued, or drifts outside its
-declared scope.
+T0024.2 - the obligation seam. M32 closed on 2026-08-18, which was its stated blocker, so the
+recommendation moves here: `.2` is the head of M24's remaining chain, `.3` and `.4` both sit
+behind it, and it now owns three things at once - `detect_obligations` and the revived
+`QueryToolResult`, the `listing_expires_on`-as-application-deadline mislabel the T0032.4 spike saw
+in all three absent-field probes, and the collapse of the duplication T0032.1 deliberately left
+between `_build_answer`'s zero-results literal and the `ZERO_RESULTS` glossary entry. That last
+item is why `src/agents/tools/` is in M24's scope, and why it could not start until M32 merged.
 
-M30 closed on 2026-08-17 (PR #61), retiring the standing recommendation to build it: a completed
-capture is one `freeze` command from being committed.
+Two sequencing facts to carry into it. **T0035.1** (capture lineage stamp) is best landed before
+T0024.4 captures its `v2` control, so that control is the first correctly-labelled baseline -
+cheap, disjoint from everything open, and worth taking first if T0024.2 is not started
+immediately. And every phrasing T0024.2 introduces must resolve through
+`load_behavior_glossary()[TOKEN]` rather than an inlined literal, because M33's Vietnamese
+glossary is what makes that indirection pay.
+
+M31 and M36 closed, retiring the recommendation to build the protocol gate: `registry`, `scope`,
+and `frozen` run in CI and a ticket branch can now satisfy all three. What is not retired is that
+the `docs` job is advisory rather than required - `KI-2026-08-18-docs-job-not-required`, a
+maintainer decision rather than a ticket.
 
 Since T0031.3 (PR #59), this section and the build-status table are all a human writes in this
 file: the table is the result of running commands rather than a reading of the tree, so deriving

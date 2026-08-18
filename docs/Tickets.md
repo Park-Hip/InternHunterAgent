@@ -1,6 +1,6 @@
 # InternHunter — Tickets & Roadmap
 
-> **Last verified:** 2026-08-17 against the active ticket plan and completion records.
+> **Last verified:** 2026-08-18 against the active ticket plan and completion records.
 
 > **Eviction:** A ticket plan leaves when its completion report is recorded and its historical scope
 > is moved to the ticket archive.
@@ -43,7 +43,8 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 29 | T0029 | Evaluation Readability | ✅ | .1 complete 2026-08-15: the verdict, the run's identity, and telemetry rendered in the viewer. Spent no quota; changed no rule |
 | 30 | T0030 | Evaluation Evidence Durability | ✅ | Complete 2026-08-17 (PR #61): .1 the `freeze` command, .2 the surviving T0025.7 capture frozen to `evals/replays/`, .3 **D-046** on telemetry · closed the `[HIGH · DECISION]` capture-preservation entry. The lost T0027.3 capture stays lost |
 | 31 | T0031 | Parallel Agent Workflow | ✅ | Complete 2026-08-17 (.1 PR #53 registry, frozen registers, per-ticket entries · .2 PR #57 three registers generated from the entries · .3 PR #59 `Repo_Current_State.md` derived from the tree · .4 PR #62 `registry`, `scope`, and `frozen` checks in CI). Build status and the branch check stayed undone, both recorded |
-| 32 | T0032 | Prompt Surface Pass | 🔄 | T0032.4 complete 2026-08-17 (PR #63): selected the English prompt plus a Vietnamese-output rule for later promotion; .1-.3 remain open |
+| 32 | T0032 | Prompt Surface Pass | ✅ | Complete 2026-08-18 (.4 PR #63 selected the English prompt plus a Vietnamese-output rule for later promotion · .1 PR #65 finished decision #10 on the two Python sites · .3 PR #66 pinned the column list across the three prompt blocks · .2 PR #67 recorded the model-facing string surface behind an AST scan). Prompt wording in `config/prompts.yaml` is unchanged and no instruction was pruned, both by design |
+| 36 | T0036 | Scope Check Generated-Region Exemption | ✅ | Complete 2026-08-18 (.1 PR #64): `check_scope` gained the `only_generated_changed` exemption `check_frozen` has carried since T0031.2, so a ticket branch that adds a `docs/entries/` file can run the mandatory generator and still pass. Unblocked the three M32 PRs; the docs job being advisory rather than required is left open as a maintainer decision |
 | — | Backlog | Custom domain | 📋 | deferred until after v1.0; cosmetic only |
 
 > **Numbers are allocated in [`roadmap.yaml`](roadmap.yaml), not here.** This table is a reader's
@@ -137,180 +138,3 @@ not here.
 A v1.0 tag that records a measured honesty limitation is a legitimate outcome; this milestone is how
 the limitation gets closed afterward.
 
----
-
-## T0032: Milestone 32 - Prompt Surface Pass
-
-The prompt this agent runs on is spread across a YAML file and three Python modules, and nothing
-records that.
-A settled behavior decision is half-applied because two of its four sites are Python source rather
-than configuration, and the sixteen-column schema list is hand-maintained in three separate prompt
-blocks with no test that they agree.
-Each of those is a defect today and a multiplier the moment a second language exists.
-
-This milestone makes the surface knowable, finishes the decision that is already settled, and runs
-the throwaway measurement that decides how the Vietnamese prompt should be written.
-It changes no prompt wording in `config/prompts.yaml` and prunes no instructions.
-
----
-
-#### T0032.1: Finish decision #10 across the tool surface - 📋 Planned
-
-**Objective.** Apply behavior-spec decision #10 to the two sites that carry the internship bias in
-Python, so the persona scope is consistent on every surface the model reads.
-
-**In scope.**
-`src/agents/tools/query_clean_jobs.py` - rewrite the `query_clean_jobs` tool docstring to the
-standard its sibling already sets.
-`get_job_details.__doc__` is 268 characters and states purpose, a selection rule, and where the
-arguments come from; `query_clean_jobs.__doc__` is 78 characters and states a wrong scope.
-The replacement states the correct scope (AI and data job and internship postings), when to prefer
-this tool over `get_job_details`, and what the `question` argument should contain.
-Correct `_build_answer`'s zero-results string to cover job postings, and align its
-wording with the `ZERO_RESULTS` glossary entry.
-Tests in `tests/agents/tools/` asserting that neither string narrows the scope, and that the
-zero-results text matches the glossary entry's meaning.
-
-**Out of scope.**
-Loading the glossary in the tool.
-Replacing the literal with `load_behavior_glossary()["ZERO_RESULTS"]` is **T0024.2's** work, named
-explicitly in `research/honesty-enforcement-design.md` §8, and doing it here would be implementing
-a future ticket.
-This ticket leaves a deliberate, tested duplication between the code string and the glossary entry,
-which T0024.2 collapses.
-Also out: any edit to `config/prompts.yaml`, the `get_current_time` docstring, and the truncation
-header.
-
-**Manual verification.**
-Start the app against the fixture database and ask a question with no matches - for example "Do you
-have any COBOL jobs?".
-The answer must not contain the word "internship".
-Ask "What can you help with?" and confirm the reply describes AI and data roles rather than
-internships specifically.
-Inspect the Langfuse trace for either turn and confirm the tool schema sent to the model carries the
-new description.
-
-**Blockers.** None.
-Independent of `feature/t0024.6-persona-scope`, which fixes the other two sites in YAML.
-
----
-
-#### T0032.2: Record the model-facing string surface - 📋 Planned
-
-**Objective.** Make it impossible to answer "where is the prompt?" wrongly, and impossible to add a
-new model-facing string without noticing.
-
-**In scope.**
-`tests/test_prompt_surface.py` holding an explicit inventory of every string that reaches a model: <!-- lint-allow-link-path -->
-the four `config/prompts.yaml` blocks, the three tool docstrings, and the returned literals in
-`query_clean_jobs.py`, `get_job_details.py`, and `time.py`.
-An AST scan over `src/agents/tools/` that collects every string literal returned from a function or
-used as a docstring, and asserts the set is exactly the recorded inventory - so a new string fails
-the suite until it is recorded.
-The inventory carries, per entry, the owning file and whether the string is user-visible,
-model-visible, or both.
-
-**Out of scope.**
-Moving any string.
-Introducing a message catalogue, an i18n library, or any indirection layer - the deliverable is a
-list and an assertion, not an abstraction.
-Scanning `src/services/` or `src/api/`; the tool modules are the surface that reaches the model, and
-widening the scan is a follow-up if it ever pays.
-
-**Manual verification.**
-Add a throwaway `return "test string"` to any tool function and run `uv run pytest
-tests/test_prompt_surface.py` - it must fail and name the unrecorded string.
-Remove it and confirm the suite passes.
-Read the inventory top to bottom and confirm it matches what a Langfuse trace shows being sent.
-
-**Blockers.** None.
-Best sequenced after T0032.1 so the inventory records the corrected strings rather than the ones
-being replaced.
-
----
-
-#### T0032.3: Pin the column list across the three prompt blocks - 📋 Planned
-
-**Objective.** Stop three hand-maintained copies of the sixteen-column schema from drifting, and
-pin them against a translation that might move one copy and not the others.
-
-**In scope.**
-`tests/test_prompt_consistency.py` asserting that the column names named in <!-- lint-allow-link-path -->
-`prompts.system_prompt` ("The database exposes these columns: ..."), in `prompts.schema_context`,
-and in `prompts.sql_generation` ("Reference only real columns: ...") are the same set.
-The test parses the three blocks from `config/prompts.yaml` and compares sets, so wording may differ
-and membership may not.
-A second assertion that the set matches the `clean_jobs` columns the SQLAlchemy model declares, so
-the prompts cannot drift from the schema either.
-
-**Out of scope.**
-Generating the three blocks from one source.
-Deduplicating them, or removing the duplicate list from `sql_generation`, which is instruction-count
-work and belongs to the deferred pruning ticket.
-Editing `config/prompts.yaml` at all - this ticket only reads it.
-A new test file rather than `tests/agents/runtime/test_prompts.py`, because that path is inside
-M24's declared scope.
-
-**Manual verification.**
-Temporarily remove one column name from the `sql_generation` list and run `uv run pytest
-tests/test_prompt_consistency.py` - it must fail and name the missing column.
-Restore it.
-Run the whole suite and confirm it is green.
-
-**Blockers.** None.
-
----
-
-#### T0032.4: Vietnamese prompt spike - ✅ Complete 2026-08-17 (PR #63)
-
-**Objective.** Decide, on measured evidence rather than argument, whether the system prompt's
-instructions should be written in Vietnamese or stay English with an explicit output-language rule -
-and whether the serving model can hold a Vietnamese conversation past the turn where multilingual
-instruction following is reported to decay.
-
-**In scope.**
-`scripts/vietnamese_prompt_spike.py`, a throwaway spike in the shape of <!-- lint-allow-link-path -->
-`scripts/deepseek_provider_spike.py`, run against the fixture database.
-Five arms:
-
-| Arm | Prompt language | Output language | Questions | Settles |
-|---|---|---|---|---|
-| A0 | English | English | control subset | today's behaviour, measured on the same day as the rest |
-| A1 | English plus one output-language rule | Vietnamese | same subset, translated | whether an English prompt holds when the answer is Vietnamese |
-| A2 | Vietnamese | Vietnamese | same subset, translated | whether a Vietnamese prompt follows better or worse |
-| A3 | winner of A1/A2 | Vietnamese | conversational cases, extended past turn 6 | the multi-turn gap, which single-turn probes cannot see |
-| A4 | winner of A1/A2, plus the VI vocabulary | Vietnamese | Vietnamese place and role questions | whether SQL literals stay canonical English |
-
-Recorded per run: the answer, **the generated SQL string**, the tools called, answer-language purity
-(any English fragment inside a Vietnamese answer counts as a failure, not a rounding error), and
-per-rule instruction compliance rather than an aggregate score.
-Findings written to `research/vietnamese-prompt-spike.md` with an explicit recommendation on the <!-- lint-allow-link-path -->
-prompt-language question.
-
-**Out of scope.**
-Translating `evals/scenarios_v1.yaml`.
-The spike carries its own hand-translated subset - roughly ten cases covering the honesty class and
-the conversational class - inside the script, because building the eval registry to run the spike
-would invert the dependency the spike exists to inform.
-Promoting anything to `config/settings.yaml` or `config/prompts.yaml`.
-Changing the shipped prompt in any way.
-Using the DeepEval judge as the sole instrument: its Vietnamese grading is itself unmeasured, so the
-honesty cases are graded by hand and the judge's agreement with those hand grades is recorded as a
-side finding.
-
-**Manual verification.**
-`uv run python scripts/vietnamese_prompt_spike.py --arm A0` completes and its output matches the
-recorded English behaviour for the same questions.
-Each of A1-A4 completes and writes a row per run.
-The written research record names a winner between A1 and A2, or states plainly that the arms did
-not separate.
-
-**Blockers.**
-A running fixture database.
-Provider budget for roughly five arms of ten cases with three runs each on the honesty probes.
-
-**Outcome.**
-All five arms completed with 72 recorded rows.
-The research record selects A1: retain the English system prompt and add one Vietnamese-output
-rule only when a later ticket defines the source-value language policy.
-The spike made no production prompt or settings changes.

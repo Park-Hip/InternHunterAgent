@@ -13,7 +13,7 @@ resolution detail and a `Verified:` line where relevant. Severity is carried ove
 original register entry (omitted where none was assigned).
 
 ## Categories
-- [Documentation drift](#documentation-drift) — 5
+- [Documentation drift](#documentation-drift) — 6
 - [Config, startup & deployment](#config-startup--deployment) — 12
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
@@ -28,6 +28,25 @@ original register entry (omitted where none was assigned).
 ---
 
 ## Documentation drift
+- **`[MED · RESOLVED · T0036.1, 2026-08-18]` Generated registers failed the M32 scope check.**
+  (`KI-2026-08-17-generated-register-scope`)
+  - **Found:** T0032.1 on 2026-08-17, raised in [`entries/T0032.1.md`](entries/T0032.1.md), and hit
+    again by T0032.2 and T0032.3 on the same day.
+  - **Cause:** two M31 checks contradicted each other. `check_generated` makes running
+    `scripts/docs_build.py` mandatory for any branch that adds a `docs/entries/` file, and
+    `check_scope` then failed that branch for the rebuilt `Completion_Reports.md` and
+    `Manual_Verification_Guide.md`, because those paths sit outside every milestone's declared
+    `scope:` and the M31 note forbids a later milestone from claiming a frozen path in its own.
+    A ticket branch adding an entry therefore had no passing state, whichever way it turned.
+  - **Resolution:** M36 gave `check_scope` the `only_generated_changed` exemption `check_frozen`
+    has carried since T0031.2. The entry asked for either an exemption or an explicit scope
+    listing; the exemption is the right half, because a scope listing would have to be repeated in
+    every future milestone and would hand ticket branches a frozen path.
+  - **Verified:** T0032.1, T0032.2 and T0032.3 merged on 2026-08-18 as PRs #65, #66 and #67, each
+    with a green `docs` job - the first ticket branches in this repository to do so.
+    The merge that carried the deadlock to `main` is recorded separately as
+    `KI-2026-08-18-docs-job-not-required`, which is a different defect and stays open.
+
 - **`[MED · RESOLVED · Integration, 2026-08-18]` Two built M24 tickets sat unmerged and
   unreviewed from 2026-08-13 to 2026-08-17.**
   - **Found:** the integration step on 2026-08-17, auditing worktrees before pruning them.

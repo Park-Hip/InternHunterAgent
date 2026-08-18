@@ -55,7 +55,9 @@ naming which branches and worktrees are open. T0031.3 moved it to 210 for the op
 branch, milestone, dependency, and script facts are generated from `git`, `roadmap.yaml`,
 `pyproject.toml`, and `scripts/`, and a derived inventory runs longer than the prose it replaced.
 The M30 pass then measured 210 exactly - a cap with no headroom rather than one that fits - so it
-moves to 230. A generated document grows when the repository does.
+moves to 230. A generated document grows when the repository does. The M32/M36 pass hit the same
+wall from the other side: 222 lines with 230 as the cap is eight lines of room for a pass that
+closed two milestones and rewrote the next-ticket call, so 230 → 260, measured at 243.
 
 `entries/` is indexed here as a directory, the same way `archive/` is. A per-ticket file cannot
 take a per-file cap row without recreating the shared-table edit the directory exists to remove.
@@ -64,8 +66,9 @@ take a per-file cap row without recreating the shared-table edit the directory e
 archived, and to 375 on the T0031.3 publish.
 M32's four ticket bodies then brought the document to 408 lines, so its cap moved to 425.
 When M31 closed, its archived plan reduced the document to 320 lines, and the cap moved to 350.
-A plan leaves when its **milestone** closes, not when its ticket does, so the cap retains headroom
-for the active M24 and M32 plans without prematurely archiving either.
+A plan leaves when its **milestone** closes, not when its ticket does.
+Archiving M32's plan on 2026-08-18 left 140 lines against 350, so the cap moves to 250: M24's plan
+is the only one live, and M33's five ticket bodies are the next thing to arrive.
 
 <!-- caps:begin -->
 | Doc | Owns | Tier | Cap | Reader |
@@ -80,9 +83,9 @@ for the active M24 and M32 plans without prematurely archiving either.
 | [Tech Stack](Tech_Stack.md) | Languages, services, versions, and dependencies | T1 | 150 | New contributors |
 | [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | 450 | Decision makers |
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
-| [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 230 | All contributors |
+| [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 260 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T4 | Uncapped | Maintainers |
-| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 350 | Delivery planning |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 250 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T4 | Uncapped | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |

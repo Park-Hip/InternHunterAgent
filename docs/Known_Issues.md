@@ -1,5 +1,5 @@
 # Known Issues & Risks
-> **Last verified:** 2026-08-17 against checked-out code, tests, configuration, and active runbooks.
+> **Last verified:** 2026-08-18 against checked-out code, tests, configuration, and active runbooks.
 
 This register holds actionable risks that are open, blocked, or awaiting a maintainer decision.
 > **Eviction:** An entry leaves when fixed, superseded, or reclassified in its owning document.
@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 13 | 1 | 2 |
+| MED | 12 | 1 | 3 |
 | LOW | 17 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -35,30 +35,6 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
-- `KI-2026-08-17-generated-register-scope` **`[MED · OPEN]` Generated registers fail M32 scope
-  validation.**
-  - **Found:** `docs_lint.py` reports generated `Completion_Reports.md` and
-    `Manual_Verification_Guide.md` changes outside M32's scope after `docs_build.py` renders this
-    entry.
-  - **Impact:** A ticket branch following the required entry-generation workflow cannot pass the
-    full documentation linter.
-  - **Next:** A follow-up should permit generated register changes in the scope check or explicitly
-    include the generated registers in applicable milestone scopes.
-  - **History:** First observed while completing T0032.1 on 2026-08-17.
-
-- `KI-2026-08-17-vietnamese-spike-multiturn` **`[MED - OPEN]` Multi-turn tool following is
-  unstable.**
-  - **Found:** A3 used `get_current_time` for an application-deadline question in two of three runs.
-  - **Impact:** A Vietnamese conversation can lose reliable tool selection after turn six.
-  - **Next:** Add a behavior ticket that reproduces and corrects the instability.
-  - **History:** Found during T0032.4 on 2026-08-17 against the fixture database and DeepSeek.
-
-- `KI-2026-08-18-docs-job-not-required` **`[MED · OPEN]` The CI docs job is not a required check.**
-  - **Found:** 2026-08-18, while investigating why the three open M32 branches fail the lint.
-  - **Impact:** PR #63 merged with both `docs` and `checks` red and nothing blocked it, so a lint
-    the protocol treats as binding is advisory in practice.
-  - **Next:** decide whether to mark `docs` and `checks` as required status checks on `main`.
-  - **History:** raised by T0036.1.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 
@@ -137,7 +113,22 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Next:** Resolve the pool and LangChain message generic types in a dedicated typing pass.
   - **History:** `src/core/checkpointer.py` and `src/agents/runtime/middleware.py`.
 
-## Agent runtime & prompts (4)
+## Agent runtime & prompts (5)
+
+- `KI-2026-08-17-vietnamese-spike-multiturn` **`[MED · OPEN]` Multi-turn tool following is
+  unstable.**
+  - **Found:** A3 used `get_current_time` for an application-deadline question in two of three runs.
+  - **Impact:** A Vietnamese conversation can lose reliable tool selection after turn six.
+  - **Next:** **M34** owns this. The 2026-08-17 scoping measured the real mechanism against
+    `TrimMessagesMiddleware` and it is not multilingual decay: `max_messages: 20` with
+    `strategy="last"` and `token_counter=len` holds exactly five turns at four messages per turn,
+    so turn six is the first eviction and the referent chain rooted in turn one loses its
+    antecedent there. T0034.1 reproduces it in English first and re-files this entry to describe
+    the window; T0034.2 chooses the remedy.
+  - **History:** Found during T0032.4 on 2026-08-17 against the fixture database and DeepSeek.
+    Filed here by the integration step on 2026-08-18 rather than left unfiled, since the
+    description it carries is the one M34 exists to correct. See
+    [`roadmap.yaml`](roadmap.yaml) M34.
 
 - **`[MED · OPEN]` The model does not reliably refuse to invent posting freshness.**
   - **Found:** T0009.8 repeated probe.
@@ -269,7 +260,36 @@ copies can never drift. Entries that predate the id convention are never inboxed
     distinguishable from an absent database.
   - **History:** Same root cause as the fixture-Postgres hang already recorded for the test suite.
 
-## Workflow & documentation (8)
+## Workflow & documentation (10)
+
+- `KI-2026-08-18-skill-copy-drifts` **`[MED · OPEN]` The gitignored skill copy drifts and only a
+  test notices.**
+  - **Found:** the integration step on 2026-08-18, closing M32 and M36.
+  - **Impact:** `skills/generate-ticket-prompt/SKILL.md` is tracked; the
+    `.claude/skills/` copy the harness actually loads is gitignored, so it never receives a commit.
+    That copy predated T0031.1 and still told coder sessions to take their ticket number from
+    `Tickets.md` - the exact drift §3 of `CLAUDE.md` exists to prevent - and it had been handing
+    out that instruction since 2026-08-16. `test_shared_skill_instructions_match` catches it, but
+    only on a clone where the untracked copy exists, and it skips silently everywhere else,
+    including CI.
+  - **Next:** Either symlink the `.claude/` copy to the tracked file, or have the test fail rather
+    than skip when the copy is missing on a developer machine. Copying by hand is what just
+    happened and is not a fix.
+  - **History:** Same class as `AGENTS.md`/`CLAUDE.md`, which are both tracked and so cannot drift
+    this way. `tests/test_docs_lint.py::test_shared_skill_instructions_match`.
+
+- `KI-2026-08-18-docs-job-not-required` **`[MED · DECISION]` The CI `docs` job is not a required
+  check.**
+  - **Found:** 2026-08-18 by T0036.1, while investigating why the three open M32 branches fail the
+    lint.
+  - **Impact:** PR #63 merged with both `docs` and `checks` red and nothing blocked it, so a lint
+    the protocol treats as binding is advisory in practice. That merge is how the M31 scope-check
+    deadlock reached `main` unnoticed.
+  - **Next:** A maintainer decides whether `docs` and `checks` become required status checks on
+    `main`. It is the same branch-protection decision M20 has open, so take both together.
+  - **History:** Raised by T0036.1 and filed 2026-08-18. Restated from `OPEN` to `DECISION` on
+    filing: nothing here is implementable by a ticket, since branch protection is a repository
+    setting only the maintainer can change.
 
 - **`[MED · OPEN]` A fresh worktree cannot run the test suite.**
   - **Found:** T0031.1 on 2026-08-16.
@@ -310,6 +330,8 @@ copies can never drift. Entries that predate the id convention are never inboxed
     this file, so an issue the integrator *fixes* rather than files has to be named here anyway,
     with a pointer to [Resolved Issues](Resolved_Issues.md), or it stays listed as unfiled forever.
     `KI-2026-08-17-tickets-names-resolved-issues` is the first case and is handled exactly that way.
+    `KI-2026-08-17-generated-register-scope` is the second, resolved by M36 on 2026-08-18 and named
+    here for the same reason. Two occurrences in two days is the argument for fixing the dedup.
   - **Next:** Let the dedup also read `Resolved_Issues.md`, or give the inbox a closed state.
     Fold it into T0031.4, which already owns the un-id'd-bullet check.
   - **History:** `scripts/docs_build.py::render_registered`.

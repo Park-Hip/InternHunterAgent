@@ -265,7 +265,7 @@ milestones:
 
   - id: M32
     title: Prompt Surface Pass
-    status: in-progress
+    status: complete
     tickets: [T0032.1, T0032.2, T0032.3, T0032.4]
     scope:
       - src/agents/tools/
@@ -282,9 +282,16 @@ milestones:
       because T0024.2 collapses the glossary duplication T0032.1 deliberately leaves behind. M32
       runs first and T0024.2 is sequenced after it. Instruction-count pruning is deliberately
       excluded
-      and sequenced after M24; see the follow-ups in the ticket plan. T0032.4 merged as PR #63 on
-      2026-08-17 and selected the English prompt plus a Vietnamese-output rule for a later
-      promotion ticket. T0032.1 through T0032.3 remain open.
+      and sequenced after M24; see the follow-ups in the ticket plan. Closed 2026-08-18 with all
+      four tickets merged: .4 as PR #63 on 2026-08-17, which selected the English prompt plus a
+      Vietnamese-output rule for a later promotion ticket, then .1 as PR #65, .3 as PR #66 and .2
+      as PR #67 on 2026-08-18, and the ticket plan archived the same day. The three later PRs
+      waited on M36, which they blocked on rather than caused: .1 raised the scope-check deadlock
+      as KI-2026-08-17-generated-register-scope and M36 fixed it, so .1, .2 and .3 are the first
+      ticket branches in this repository to have merged with a green docs job. The deliberate
+      duplication .1 leaves between _build_answer's zero-results literal and the ZERO_RESULTS
+      glossary entry is still open and is T0024.2's to collapse. The scope list stays as a record
+      of what the milestone was allowed to touch and confers nothing now that it is complete.
 
   - id: M33
     title: Vietnamese Language Milestone
@@ -379,9 +386,8 @@ milestones:
 
   - id: M36
     title: Scope Check Generated-Region Exemption
-    status: in-progress
+    status: complete
     tickets: [T0036.1]
-    branch: feature/t0036.1-scope-generated
     scope:
       - scripts/docs_lint.py
       - tests/test_docs_lint.py
@@ -395,4 +401,13 @@ milestones:
       its own scope:. The only escape was the one PR #63 took - merge with a red docs job, which
       is how the deadlock reached main unnoticed. T0036.1 gives check_scope the
       only_generated_changed exemption check_frozen has carried since T0031.2. It blocks the three
-      open M32 PRs, so it lands first. Scope is disjoint from M24, M32, M33, M34 and M35.
+      open M32 PRs, so it lands first. Scope is disjoint from M24, M32, M33, M34 and M35. Closed
+      2026-08-18 with .1 as PR #64, and the three M32 PRs it unblocked merged behind it the same
+      day with a green docs job, which is the evidence the deadlock is gone. It resolved
+      KI-2026-08-17-generated-register-scope and raised
+      KI-2026-08-18-docs-job-not-required in its place: the deadlock reached main only because the
+      docs job is advisory rather than a required check, and that is a maintainer decision this
+      milestone deliberately did not take. Two follow-ups stay open and unowned - whether a ticket
+      branch should regenerate Repo_Current_State.md at all, which check_generated still demands of
+      it, and the required-check decision itself. The milestone carried no plan section in
+      Tickets.md: it was allocated and closed inside a day, and its outcome row is the record.

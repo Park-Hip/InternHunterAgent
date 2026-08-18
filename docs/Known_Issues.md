@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 11 | 1 | 3 |
+| MED | 11 | 1 | 2 |
 | LOW | 17 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -251,7 +251,7 @@ copies can never drift. Entries that predate the id convention are never inboxed
     distinguishable from an absent database.
   - **History:** Same root cause as the fixture-Postgres hang already recorded for the test suite.
 
-## Workflow & documentation (9)
+## Workflow & documentation (8)
 
 - **`[MED · OPEN]` A fresh worktree cannot run the test suite.**
   - **Found:** T0031.1 on 2026-08-16.
@@ -267,16 +267,6 @@ copies can never drift. Entries that predate the id convention are never inboxed
     work that keeps arriving and nothing arbitrates that.
   - **Next:** A maintainer decides where M23 sits; sequencing is not a ticket's call.
   - **History:** [Tickets](Tickets.md) M23; [`roadmap.yaml`](roadmap.yaml).
-
-- **`[MED · DECISION]` Two built M24 tickets have sat unmerged and unreviewed since 2026-08-13.**
-  - **Found:** the integration step on 2026-08-17, auditing worktrees before pruning them.
-  - **Impact:** `feature/t0024.6-persona-scope` carries T0024.1 and T0024.6 - the behavior
-    glossary, the prompt version, and the persona-scope fix, with tests - across 11 files. The
-    roadmap called M24 `planned` with no branch, so this work was invisible to anyone reading it.
-  - **Next:** Decide whether to review and land it or to abandon it. It also writes frozen
-    registers, because it predates the T0031.1 freeze, so landing it means routing those edits
-    through an entry first.
-  - **History:** [`roadmap.yaml`](roadmap.yaml) now records M24 as in progress on that branch.
 
 - `KI-2026-08-17-section-counts-are-hand-tallies` **`[LOW · OPEN]` The per-section counts in the
   headings of this register are hand tallies that nothing checks.**

@@ -35,7 +35,7 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 | 21 | T0021 | Serving-Path Hardening | ✅ | .1-.4 complete 2026-08-12; historical plans archived |
 | 22 | T0022 | **Docs Hygiene & Documentation System** | ✅ | Phase 1 (.1-.9) complete 2026-08-10: lint gate, front door, Decision Log, research prune · Phase 2 (.10-.14) complete 2026-08-12: prune, archive collapse, register rebuild, restructure, enforcement |
 | 23 | T0023 | v1.0 Release Cut | 📋 | DoD sweep, ToS posture, **live cron (D-038)**, tag — renumbered from T0022 on 2026-08-09 |
-| 24 | T0024 | Honesty Enforcement (obligation seam) | 📋 | Carved out of M21 on 2026-08-12; designed, indexed, sequenced after T0023 |
+| 24 | T0024 | Honesty Enforcement (obligation seam) | 🚧 | .1 glossary + `prompt_version` and .6 decision #10 shipped 2026-08-17 (`73b058a`) · .2-.5 re-scoped 2026-08-18: the deadline mislabel joins .2, .2 is sequenced after M32, and .4 is an unblocked instrument run |
 | 25 | T0025 | **Evaluation Instrument** | ✅ | .0-.10 complete 2026-08-13: registry, driver, viewer, execution accuracy, three-tier grader, replay CI gate · .7 closed partial (13 of 19 turns; 2 scenarios need a paid tier) |
 | 26 | T0026 | Evaluation Workspace Hygiene | ✅ | Complete 2026-08-14 (.1 front door and one fixture-URL owner, .2 tests into `tests/evals/`, .3 grading rules into the registry). No verdict changed |
 | 27 | T0027 | DeepSeek Provider Integration | ✅ | Complete 2026-08-15 (.1-.4), following the deferred T0015.6 procedure · the spike passed, the arm measured 29/29 scenarios in 5m20s for ~$0.04, and .4 flipped both profiles to DeepSeek (D-045) with pacing at 0 and no provider key required at boot · the Groq branch stays selectable |
@@ -67,87 +67,77 @@ current snapshot lives in [`Repo_Current_State.md`](Repo_Current_State.md).
 
 ---
 
-## T0024: Milestone 24 - Honesty Enforcement (obligation seam) — 📋 Named, indexed, not scoped
-**Carved out of M21 on 2026-08-12.** The model-honesty half of the former *Serving-Path Hardening &
-Honesty Baseline* milestone, separated because its blockers are unrelated to the serving path: it
-needs the frozen `behavior_glossary` landed in `config/prompts.yaml`, a detection mechanism, and
-repeated Groq daily-quota windows for its measurement gate.
+## T0024: Milestone 24 - Honesty Enforcement (obligation seam) - 🚧 In progress (.1 and .6 shipped)
+**Carved out of M21 on 2026-08-12.**
+The model-honesty half of the former *Serving-Path Hardening & Honesty Baseline* milestone,
+separated because its blockers are unrelated to the serving path.
 
 **The design is already written** and must be read before any block below is scoped:
-[`research/honesty-enforcement-design.md`](../research/honesty-enforcement-design.md). It measures
-the 2026-07-14 scenario matrix (C-category 0/7), rejects prompt few-shots as the primary locus, and
-adopts deterministic hedge-obligation detection over the validated SQL and result set — the
-mechanism the passing truncation notice already proves in this repo. Its §8 proposes five blocks
-under the milestone number **T0020**, which reconciliation took; they are re-indexed here and
-carry no other change:
+[`research/honesty-enforcement-design.md`](../research/honesty-enforcement-design.md).
+It measures the 2026-07-14 scenario matrix (C-category 0/7), rejects prompt few-shots as the
+primary locus, and adopts deterministic hedge-obligation detection over the validated SQL and
+result set - the mechanism the passing truncation notice already proves in this repo.
+Its §8 proposes five blocks under the milestone number **T0020**, which reconciliation took;
+they are re-indexed here.
 
-* **T0024.1** — land `behavior_glossary` and `prompt_version` on the deploy lineage from
-  `archive/t0015.2-behavior-glossary`, with a loader and a token-coverage test. **As a loaded
-  artifact, not as system-prompt text** — see
-  [`research/prompt-refinement-methods.md`](../research/prompt-refinement-methods.md), which finds
-  18 rules sits past the ~8–10 instruction knee and splits data-driven hedges (injected when the
-  obligation fires) from request-driven refusals (the five that stay in the prompt). No blockers.
-* **T0024.2** — `detect_obligations(sql, table)` plus the revived `QueryToolResult` seam, rendered
-  as a delimited caveat block in both tools' output. Blocked on .1.
-* **T0024.3** — the caveat-relay rule in the system prompt and a `prompt_version` bump. Blocked
-  on .2.
-* **T0024.4** — re-run the 29-scenario matrix against the fixture database as the ship gate, and
-  record the per-rule deltas. Blocked on .3 and one Groq daily window.
-* **T0024.5** — verify-and-append enforcement middleware, built **only** if .4 shows the model drops
+**Re-scoped 2026-08-18** against everything that landed after the design was written
+(M25-M31, the DeepSeek move, and the T0032.4 Vietnamese spike).
+The changes are recorded per block below; the design's architecture is unchanged.
+
+* **T0024.1** - ✅ **Shipped 2026-08-17** (merged as `73b058a`).
+  `prompt_version: v2` and the 18-token `behavior_glossary` live in `config/prompts.yaml`, with
+  `load_prompt_version()` / `load_behavior_glossary()` in `src/agents/runtime/prompts.py` and a
+  token-coverage test.
+  Landed as a loaded artifact, not as system-prompt text, per
+  [`research/prompt-refinement-methods.md`](../research/prompt-refinement-methods.md).
+* **T0024.6** - ✅ **Shipped 2026-08-17** (same merge).
+  Decision **#10** applied to `config/prompts.yaml`, and the open question is answered: the sibling
+  decline line inherited the fix, so both lines now read "AI/Data job and internship postings".
+  The Python half of the same bias is **T0032.1's** work and is still open on an unmerged branch.
+* **T0024.2** - `detect_obligations(sql, table)` plus the revived `QueryToolResult` seam, rendered
+  as a delimited caveat block in both tools' output.
+  Three additions on 2026-08-18.
+  First, it owns the `listing_expires_on`-as-application-deadline mislabel, rehoused here by the
+  T0032.4 spike triage: the spike saw it in all three absent-field probes of both Vietnamese arms,
+  it is C7 in the design, and it is obligation-shaped, so it becomes a detection rule resolving
+  `ABSENT_FIELD` rather than its own ticket.
+  Second, it collapses the duplication T0032.1 deliberately leaves between `_build_answer`'s
+  zero-results string and the `ZERO_RESULTS` glossary entry, which puts `src/agents/tools/` in
+  scope and makes this block **blocked on M32 merging** as well as on .1.
+  Third, every phrasing must resolve through `load_behavior_glossary()[TOKEN]` with no inlined
+  literal, so M33's Vietnamese glossary needs no rework here.
+* **T0024.3** - the caveat-relay rule in the system prompt and a `prompt_version` bump to `v3`.
+  Blocked on .2.
+  Decide here whether the edit is net-neutral on instruction count: the prompt is already past the
+  ~8-10 knee, M33.1 adds an output-language rule of its own, and M32 deliberately excluded pruning
+  and sequenced it after this milestone.
+* **T0024.4** - the ship gate.
+  **The Groq daily-window blocker is void**: M27 moved both profiles to DeepSeek (**D-045**) and
+  measured 29 scenarios in 5m20s for about $0.04, so the gate is an `evals/` instrument run against
+  the registry with registry-owned grading, frozen to `evals/replays/` per T0030.1 - not the
+  retired manual matrix protocol.
+  It must **capture its own `v2` control first**: T0024.6 changed prompt strings, so the frozen
+  `t0025.7-acceptance.json` baseline predates the current prompt and is not comparable to it.
+  Record the per-rule deltas.
+  Blocked on .3.
+* **T0024.5** - verify-and-append enforcement middleware, built **only** if .4 shows the model drops
   explicit caveats.
-* **T0024.6** — apply settled decision **#10** to `config/prompts.yaml`. The persona line still
-  opens "helps users explore internship and job postings", and the T0015.5 edit that was to correct
-  it never landed. T0025.2 measured the cost in
-  [`evals/archive/v1_error_analysis.md`](../evals/archive/v1_error_analysis.md): six turns of
-  `INTERNSHIP_SCOPE_NARROWING` and `INTERNSHIP_PERSONA_WORDING` across HON-ZERO-RESULTS-1,
-  HON-FREE-TEXT-1, HLP-LOCATION-SYNONYM-1, and HLP-REFERENT-2. Decide
-  explicitly whether the sibling decline line inherits the fix — decision #10 names the persona line
-  alone, while the measured narrowing implicates both. **Class 3 wording, not obligation-seam
-  work**, so it neither blocks nor is blocked by .2-.5. Blocked on .1 for `prompt_version`, which
-  exists nowhere today; **run immediately after it**, and before T0025.3's first capture run, so no
-  two runs straddle an unversioned prompt change.
+  It touches `src/agents/runtime/middleware.py` and therefore intersects M34; sequence the two only
+  if this block is actually built.
 
-**Sequenced after T0023, except .1 and .6**, which are pulled ahead: T0025.6 needs .1's glossary
-tokens, and .6 must land before T0025.3's first capture run. D-021 gates `is_active` exposure
-behind this work, and the release bar
-for the honesty Definition-of-Done bullet is decision **D9** in the readiness plan — answered during
-T0023's sweep, not here. A v1.0 tag that records a measured honesty limitation is a legitimate
-outcome; this milestone is how the limitation gets closed afterward.
+**Sequencing.**
+M32 lands first, then .2, .3, .4, and .5 only if measured necessary.
+M33's T0033.1 and T0033.2 follow this milestone, and T0033.2 owes either a re-gate of the honesty
+scenarios after translation or a recorded decision not to re-measure.
+**M35** (capture lineage stamp) is best landed before .4 captures its control, so that control is
+the first correctly-labelled baseline.
+D-021 gates `is_active` exposure behind this work, and the release bar for the honesty
+Definition-of-Done bullet is decision **D9** in the readiness plan - answered during T0023's sweep,
+not here.
+A v1.0 tag that records a measured honesty limitation is a legitimate outcome; this milestone is how
+the limitation gets closed afterward.
 
 ---
-
-## T0028: Milestone 28 - Evaluation Documentation Ownership - Complete 2026-08-14
-
-The four ticket plans are archived in
-[`archive/Tickets_Archive.md`](archive/Tickets_Archive.md); their outcomes are in
-[Completion Reports](Completion_Reports.md).
-
-**What the milestone delivered.** Three Fact Ledger rows in [`README.md`](README.md) name an
-owner for scenario definitions, behavior requirements, and dated graded outcomes, enforced by a
-new `scenario-id` lint check. `docs/Agent_Behavior_Spec.md` §4a-4c links to the registry instead
-of duplicating it. The two dated snapshots moved into `evals/archive/`; the grader audit and
-holdout report merged into [`evals/Instrument_Report.md`](../evals/Instrument_Report.md). A new
-[`evals/Operating_Manual.md`](../evals/Operating_Manual.md) explains why the instrument exists,
-the three seams, grading, and its stated limits, and `Offline_Pipelines_Design.md` §8.6-8.7 now
-names the shipped CI replay gate and the configured model.
-No scenario, grading rule, threshold, or replay artifact changed.
-
----
-
-## T0029: Milestone 29 - Evaluation Readability - Complete 2026-08-15
-
-The T0029.1 plan is archived in
-[`archive/Tickets_Archive.md`](archive/Tickets_Archive.md); its outcome is in
-[Completion Reports](Completion_Reports.md).
-
-**What the milestone delivered.** `uv run python -m evals.viewer <run>.json --grade <grade>.json`
-joins a grader report per turn, so one capture is answerable in the viewer alone: each turn shows
-its verdict and tier with every non-passing check drawn beside the seam it judges, the toolbar
-filters by grade status separately from capture status, a manifest-built run header names provider,
-model, and sampling per profile, and telemetry renders as labelled fields rather than one blob.
-The work it removes is real: triaging the measured arm's 33 failures into 23 real behaviors and 10
-grader phrasing artifacts had been done with throwaway Python at a terminal.
-No rule, threshold, verdict, or replay artifact changed, and it spent no quota.
 
 ## T0032: Milestone 32 - Prompt Surface Pass
 

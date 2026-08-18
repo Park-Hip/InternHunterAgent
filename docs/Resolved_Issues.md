@@ -13,7 +13,7 @@ resolution detail and a `Verified:` line where relevant. Severity is carried ove
 original register entry (omitted where none was assigned).
 
 ## Categories
-- [Documentation drift](#documentation-drift) — 4
+- [Documentation drift](#documentation-drift) — 5
 - [Config, startup & deployment](#config-startup--deployment) — 12
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
@@ -28,6 +28,19 @@ original register entry (omitted where none was assigned).
 ---
 
 ## Documentation drift
+- **`[MED · RESOLVED · Integration, 2026-08-18]` Two built M24 tickets sat unmerged and
+  unreviewed from 2026-08-13 to 2026-08-17.**
+  - **Found:** the integration step on 2026-08-17, auditing worktrees before pruning them.
+  - **Cause:** `feature/t0024.6-persona-scope` carried T0024.1 and T0024.6 - the behavior glossary,
+    the prompt version, and the persona-scope fix, with tests - while the roadmap recorded M24 as
+    `planned` with no branch, so the work was invisible to anyone reading the registry.
+  - **Resolution:** the branch merged to `main` on 2026-08-17 as `73b058a`, and the 2026-08-18
+    integration pass recorded both blocks as shipped in [`roadmap.yaml`](roadmap.yaml) and
+    [Tickets](Tickets.md), removed the spent `branch:` field, and re-scoped the four open blocks.
+  - **Verified:** `prompt_version: v2` and the 18-token `behavior_glossary` are in
+    `config/prompts.yaml`; both the persona and the decline line read "AI/Data job and internship
+    postings".
+
 - **`[LOW · RESOLVED · Integration, 2026-08-17]` The T0031.2 ticket body promised a register the
   milestone never generates.** (`KI-2026-08-17-tickets-names-resolved-issues`)
   - **Found:** T0031.2, reading its own ticket against the M31 design record, and raised in

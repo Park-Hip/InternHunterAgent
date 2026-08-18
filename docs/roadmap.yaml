@@ -134,19 +134,39 @@ milestones:
     title: Honesty Enforcement (obligation seam)
     status: in-progress
     tickets: [T0024.1, T0024.2, T0024.3, T0024.4, T0024.5, T0024.6]
-    branch: feature/t0024.6-persona-scope
     scope:
       - config/prompts.yaml
       - src/agents/runtime/prompts.py
-      - tests/agents/runtime/test_prompts.py
+      - src/agents/runtime/middleware.py
+      - src/agents/tools/
+      - src/services/query/
+      - config/settings.yaml
+      - tests/agents/runtime/
+      - tests/agents/tools/
+      - tests/services/query/
       - docs/Agent_Behavior_Spec.md
+      - evals/replays/
+      - docs/entries/
     note: >-
-      Carved out of M21 on 2026-08-12. Scoped in docs/Tickets.md, sequenced after M23. Recorded
-      as planned with no branch until 2026-08-17, when the integration step found T0024.1 and
-      T0024.6 already built on feature/t0024.6-persona-scope since 2026-08-13 - the behavior
-      glossary, the prompt version, and the persona-scope fix, with tests - unmerged and unreviewed.
-      That branch also writes frozen registers, because it predates the T0031.1 freeze; whoever
-      lands it must route those edits through an entry instead.
+      Carved out of M21 on 2026-08-12. T0024.1 (behavior glossary, prompt_version, loaders,
+      token-coverage test) and T0024.6 (decision #10 on both the persona and the decline line)
+      merged to main on 2026-08-17 as 73b058a; the feature/t0024.6-persona-scope branch is spent
+      and the branch field is gone with it. T0024.2 through T0024.5 are open, and 2026-08-18
+      re-scoped them against work that landed after the 2026-07-16 design was written:
+      the Groq daily-window blocker on .4 is void (M27 moved both profiles to DeepSeek, D-045,
+      29 scenarios in 5m20s), so .4 is an evals-instrument run frozen to evals/replays/ rather
+      than the retired manual matrix protocol - and it must capture its own v2 control first,
+      because T0024.6 changed prompt strings and the frozen t0025.7 baseline predates them.
+      .2 additionally owns the listing_expires_on-as-application-deadline mislabel rehoused here
+      by the T0032.4 spike triage, and the glossary duplication T0032.1 leaves behind in
+      src/agents/tools/. That widened scope puts M24 and M32 on the same paths: sequence
+      T0024.2 after M32 merges. .2 and .3 must resolve every phrasing through
+      load_behavior_glossary()[TOKEN] and inline no literal, so M33's Vietnamese glossary needs
+      no M24 rework. .5 stays conditional on .4 and intersects M34 on middleware.py.
+      This milestone predates the T0031.1 freeze: every register edit routes through
+      docs/entries/T0024.x.md, never into a frozen file directly. If .4 needs a new scenario
+      rather than a new run, that widens scope into evals/scenarios_v1.yaml and tests/evals/,
+      which intersects T0033.3 - widen deliberately, in the PR that needs it.
 
   - id: M25
     title: Evaluation Instrument
@@ -256,10 +276,103 @@ milestones:
       - research/vietnamese-prompt-spike.md
       - docs/entries/
     note: >-
-      Everything that must be true before the Vietnamese language milestone starts. Scope is
-      disjoint from M24's (config/prompts.yaml, src/agents/runtime/prompts.py,
-      tests/agents/runtime/test_prompts.py, docs/Agent_Behavior_Spec.md), so the two milestones
-      are independent and may run in parallel. Instruction-count pruning is deliberately excluded
+      Everything that must be true before the Vietnamese language milestone starts. The
+      "disjoint from M24, so the two may run in parallel" claim recorded here on 2026-08-17 was
+      corrected on 2026-08-18: M24's scope now includes src/agents/tools/ and tests/agents/tools/,
+      because T0024.2 collapses the glossary duplication T0032.1 deliberately leaves behind. M32
+      runs first and T0024.2 is sequenced after it. Instruction-count pruning is deliberately
+      excluded
       and sequenced after M24; see the follow-ups in the ticket plan. T0032.4 merged as PR #63 on
       2026-08-17 and selected the English prompt plus a Vietnamese-output rule for a later
       promotion ticket. T0032.1 through T0032.3 remain open.
+
+  - id: M33
+    title: Vietnamese Language Milestone
+    status: planned
+    tickets: [T0033.1, T0033.2, T0033.3, T0033.4, T0033.5]
+    scope:
+      - config/prompts.yaml
+      - docs/Agent_Behavior_Spec.md
+      - evals/scenarios_v1.yaml
+      - evals/grader.py
+      - tests/evals/
+      - src/api/static/
+      - src/agents/tools/
+      - docs/entries/
+    note: >-
+      Allocated 2026-08-17 against the two scoping briefs (.lavish/vietnamese-turn.html, then
+      .lavish/vietnamese-m33.html) and the four decisions the T0032.4 spike settled: Vietnamese
+      output only with the fixed "Always answer in Vietnamese" rule exactly as arm A1 spiked it;
+      purity measured on agent prose only, with canonical column values and source values passing
+      through verbatim; both language-independent defects rehoused out of this milestone; and the
+      A0 control re-run at three runs before scoping. Tickets: .1 the output-language rule plus a
+      VI vocabulary block sourced from the accented city_alias_map, with a prompt_version bump;
+      .2 the 18 behavior_glossary strings in Vietnamese; .3 the eval registry (Vietnamese inputs
+      and lexicons, Vietnamese number words in _answer_count, the row-aware purity check,
+      probes on unaccented input); .4 the demo UI (lang="vi", copy and chips, a Vietnamese-complete self-hosted
+      serif, line-height for stacked diacritics); .5 the tool-message strings in _build_answer and
+      the error literals. Sequencing: T0033.1 and T0033.2 sit inside M24's declared scope
+      (config/prompts.yaml, docs/Agent_Behavior_Spec.md) and must be sequenced after it, never run
+      beside it - T0033.2 is a head-on collision, because M24 closes its 29-scenario gate on those
+      exact 18 strings. T0033.3, T0033.4 and T0033.5 are disjoint from M24 and unblocked, but
+      src/agents/tools/ intersects M32, so T0033.5 must be sequenced after M32 rather than run
+      beside it. Two items are deliberately not here: the memory-window instability (the trim
+      window holds exactly five turns) needs its own serving-hardening milestone and its own
+      number, and the listing_expires_on deadline honesty failure goes to M24. Prerequisite before
+      any ticket body is written: re-run the spike at --arm A0 --runs 3 and read the HON-ABSENT
+      rows. Raised and not folded in: the "InternHunter" name over-promises on internships.
+      Added 2026-08-18: M24 closes its gate against the English glossary, so T0033.2 owes either a
+      re-gate of the honesty scenarios after translation or a recorded decision not to re-measure.
+
+  - id: M34
+    title: Serving Memory Window Hardening
+    status: planned
+    tickets: [T0034.1, T0034.2]
+    scope:
+      - src/agents/runtime/middleware.py
+      - config/settings.yaml
+      - tests/agents/runtime/test_memory.py
+      - docs/entries/
+    note: >-
+      Allocated 2026-08-17 out of M33 by decision D2 of the T0032.4 spike triage
+      (.lavish/vietnamese-m33.html): the multi-turn instability the spike observed is a
+      serving-path defect that predates any Vietnamese work, and it must not ship reviewed as a
+      Vietnamese feature. Mechanism, measured against the real TrimMessagesMiddleware over nine
+      turns: agent.memory.max_messages 20 with trim_messages(strategy="last", token_counter=len)
+      holds exactly five turns when each turn calls one tool (4 messages per turn), so turn 6 is
+      the first eviction, and a turn calling both query_clean_jobs and get_job_details costs six
+      messages and drops the window to three turns - the pattern the demo invites. The system
+      prompt survives trimming at every depth. What the spike saw "after turn six" is that
+      boundary, not multilingual decay: at MT-6 the referent chain rooted in MT-1 lost its
+      antecedent and two of three runs called get_current_time. Tickets: .1 reproduces the
+      eviction in English first, against the recording model, and re-files
+      KI-2026-08-17-vietnamese-spike-multiturn to describe the window rather than a multilingual
+      decay - routed through docs/entries/, because Known_Issues.md is frozen; .2 fixes the
+      window, and the remedy is deliberately not chosen here - counting turns rather than messages,
+      raising the cap, and summarising evicted history are all open, and .1's reproduction is the
+      input to that call. Scope is disjoint from M32 and M33, and from M24 except on
+      src/agents/runtime/middleware.py, which T0024.5 would touch - .5 is conditional on T0024.4's
+      result, so sequence the two only if it is actually built. If .1's reproduction is better
+      expressed as a multi-turn eval scenario, that
+      widens scope into evals/scenarios_v1.yaml and tests/evals/, which intersects T0033.3 and must
+      then be sequenced against it - make that widening deliberately, in the PR that needs it.
+
+  - id: M35
+    title: Capture Lineage Stamp
+    status: planned
+    tickets: [T0035.1]
+    scope:
+      - evals/driver.py
+      - evals/replay.py
+      - evals/README.md
+      - tests/evals/
+      - docs/entries/
+    note: >-
+      Allocated 2026-08-18 out of the M24 re-scope. T0024.1 landed prompt_version so that runs
+      recorded before and after a prompt change are never compared as if comparable, but no
+      capture records it: the frozen evals/replays/t0025.7-acceptance.json manifest carries
+      run_id, schema_version, source_capture and sanitized only. The doctrine is therefore
+      unenforced, and T0024.6's prompt change already invalidated that baseline silently.
+      T0035.1 stamps prompt_version into the capture manifest and surfaces it in the viewer
+      header. Scope is disjoint from M24, M32, M33 and M34. Best landed before T0024.4 captures
+      its v2 control, so that control is the first correctly-labelled baseline; not a blocker.

@@ -9,15 +9,13 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `integration/t0032.4-publish` at `b4d8880` - Merge pull request #63 from
-  Park-Hip/feature/t0032.4-vietnamese-prompt-spike (2026-08-17).
-- Branches not merged into `main`: 12 - `codex/t0032.1-tool-surface`,
+- Checked out: `main` at `5a33ebb` - docs(integration): publish T0032.4 prompt spike (2026-08-17).
+- Branches not merged into `main`: 10 - `codex/t0032.1-tool-surface`,
   `codex/t0032.2-prompt-inventory`, `codex/t0032.3-prompt-consistency`,
   `feature/t0022.10-prune-dead-docs`, `feature/t0024.1-behavior-glossary`,
   `feature/t0024.6-persona-scope`, `feature/t0031-parallel-agent-docs`,
-  `feature/t0032.4-vietnamese-prompt-spike`, `integration/t0031.4-publish`,
-  `integration/t0032.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
-- Worktrees: 15.
+  `integration/t0031.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+- Worktrees: 5.
 <!-- generated:snapshot:end -->
 
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
@@ -26,9 +24,7 @@ differ between a developer machine and CI, and a check that must pass on both ca
 
 - Numbers, milestone scopes, and the frozen register list live in
   [`roadmap.yaml`](roadmap.yaml) as of T0031.1.
-- `feature/t0024.6-persona-scope` carries the unreviewed T0024.1 and T0024.6 work from 2026-08-13,
-  recorded in [Known Issues](Known_Issues.md). `t0031-parallel-docs-workflow` is locked by a dead
-  pid.
+- `t0031-parallel-docs-workflow` is locked by a dead pid.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>, re-probed 2026-08-17: a real answer with a
   Langfuse trace in 10.6 s, and its static assets hash-match `main`. Re-probed again by the
@@ -44,16 +40,21 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M25-M31 - 25 of 28 milestones.
+Complete: M0, M6-M22, M25-M31 - 25 of 31 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
 | M24 | Honesty Enforcement (obligation seam) | in-progress |
 | M32 | Prompt Surface Pass | in-progress |
 | M23 | v1.0 Release Cut | planned |
+| M33 | Vietnamese Language Milestone | planned |
+| M34 | Serving Memory Window Hardening | planned |
+| M35 | Capture Lineage Stamp | planned |
 <!-- generated:milestones:end -->
 
-M24 is in progress on an unreviewed branch rather than planned. M30 closed on 2026-08-17 (PR #61):
+M24 is in progress: T0024.1 and T0024.6 shipped on 2026-08-17 as `73b058a`, and the 2026-08-18
+integration pass re-scoped the four open blocks against the instrument and the T0032.4 spike.
+M33, M34, and M35 were allocated out of that spike's triage. M30 closed on 2026-08-17 (PR #61):
 the `freeze` command exists, the surviving T0025.7 capture is committed at
 `evals/replays/t0025.7-acceptance.json`, and **D-046** settles what a frozen replay keeps. The
 capture-preservation entry it closed is in [Resolved Issues](Resolved_Issues.md); the T0027.3

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.agents.runtime.prompts import load_behavior_glossary
-from src.services.query.executor import ExecutorError
+from src.services.query.executor import ExecutorError, UndefinedColumnError
 from src.services.query.models import ValidationResult
 
 
@@ -125,6 +125,24 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(mock_logger.error.call_args.args[0], "query_clean_jobs.db_error")
         self.assertIn("connection refused", mock_logger.error.call_args.kwargs["error"])
 
+    @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_unknown_column_returns_absent_field_glossary(
+        self, mock_generate_sql, mock_validate_sql, mock_execute_validated_sql
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import query_clean_jobs
+
+        mock_generate_sql.return_value = "SELECT application_deadline FROM clean_jobs"
+        mock_validate_sql.return_value = ValidationResult(
+            valid=True, sql="SELECT application_deadline FROM clean_jobs"
+        )
+        mock_execute_validated_sql.side_effect = UndefinedColumnError("unknown column")
+
+        result = await query_clean_jobs.ainvoke({"question": "What is the deadline?"})
+
+        self.assertEqual(result, load_behavior_glossary()["ABSENT_FIELD"])
+
     @patch("src.agents.tools.query_clean_jobs.load_max_rows")
     @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
     @patch("src.agents.tools.query_clean_jobs.validate_sql")
@@ -145,8 +163,7 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
         result = await query_clean_jobs.ainvoke({"question": "jobs in Hanoi"})
 
-        self.assertIn("Showing the first 2 results", result)
-        self.assertIn("there are more", result)
+        self.assertIn(load_behavior_glossary()["TRUNCATION"], result)
         self.assertNotIn("long blob", result)
 
     @patch("src.agents.tools.query_clean_jobs.load_max_rows")

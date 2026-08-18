@@ -58,7 +58,8 @@ the target.
 The verbatim strings live in [`research/archive/agent-behavior-question-bank.md`
 §10](../research/archive/agent-behavior-question-bank.md) and the `behavior_glossary` block of
 `config/prompts.yaml`. Phrase IDs referenced below:
-`NEGOTIABLE-SALARY`, `ABSENT-FIELD`, `FRESHNESS-REFUSAL`, `CREATED-ON-CAVEAT`, `FREE-TEXT-HEDGE`,
+`NEGOTIABLE-SALARY`, `ABSENT-FIELD`, `LISTING-EXPIRY-NOT-DEADLINE`, `FRESHNESS-REFUSAL`,
+`CREATED-ON-CAVEAT`, `FREE-TEXT-HEDGE`,
 `SENIOR-TITLE-HEDGE`, `CROSS-CURRENCY`, `TRUNCATION`, `ZERO-RESULTS`, `E1-CLARIFY`,
 `OFF-TOPIC-REDIRECT`, `DESTRUCTIVE-REFUSAL`, `INJECTION-REFUSAL`, `SECRET-REFUSAL`,
 `SQL-DESCRIBE-ONLY`, `FUTURE-FEATURE`, `GENERAL-KNOWLEDGE-DECLINE`, `DISCRIMINATORY-DECLINE`.

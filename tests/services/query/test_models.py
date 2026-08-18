@@ -28,7 +28,9 @@ class QueryRefusalTests(unittest.TestCase):
     def test_query_refusal_serializes(self) -> None:
         refusal = QueryRefusal(reason="unsafe SQL")
 
-        self.assertEqual(refusal.model_dump(), {"reason": "unsafe SQL"})
+        self.assertEqual(
+            refusal.model_dump(), {"reason": "unsafe SQL", "glossary_token": None}
+        )
 
 
 class QueryToolResultTests(unittest.TestCase):
@@ -47,5 +49,6 @@ class QueryToolResultTests(unittest.TestCase):
                     "truncated": False,
                 },
                 "refusal": None,
+                "obligations": [],
             },
         )

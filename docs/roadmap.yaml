@@ -135,6 +135,7 @@ milestones:
     status: in-progress
     tickets: [T0024.1, T0024.2, T0024.3, T0024.4, T0024.5, T0024.6]
     scope:
+      - docs/roadmap.yaml
       - config/prompts.yaml
       - src/agents/runtime/prompts.py
       - src/agents/runtime/middleware.py
@@ -144,6 +145,7 @@ milestones:
       - tests/agents/runtime/
       - tests/agents/tools/
       - tests/services/query/
+      - tests/test_prompt_surface.py
       - docs/Agent_Behavior_Spec.md
       - evals/replays/
       - docs/entries/

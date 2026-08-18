@@ -1,4 +1,4 @@
-from src.services.query.models import TableArtifact
+from src.services.query.models import QueryToolResult, TableArtifact
 
 
 def format_rows(rows: list[dict], max_rows: int) -> TableArtifact:
@@ -15,3 +15,44 @@ def format_rows(rows: list[dict], max_rows: int) -> TableArtifact:
         row_count=len(formatted_rows),
         truncated=truncated,
     )
+
+
+def render_tool_result(result: QueryToolResult, glossary: dict[str, str]) -> str:
+    """Render a structured query result for the model-facing tool contract."""
+    if result.refusal is not None:
+        token = result.refusal.glossary_token
+        return glossary[token] if token is not None else result.refusal.reason
+
+    if result.table is None:
+        return result.answer
+
+    table = result.table
+    if table.row_count == 0:
+        return glossary["ZERO_RESULTS"]
+
+    if table.truncated:
+        header = f"{glossary['TRUNCATION']} Columns: {', '.join(table.columns)}."
+    else:
+        header = f"Found {table.row_count} result(s) with columns: {', '.join(table.columns)}."
+
+    lines = [header]
+    for row in table.rows:
+        pairs = ", ".join(f"{column}={value}" for column, value in zip(table.columns, row))
+        lines.append(f"- {pairs}")
+
+    if result.obligations:
+        lines.append("MANDATORY CAVEATS:")
+        lines.extend(
+            f"[{obligation.glossary_token}] {glossary[obligation.glossary_token]}"
+            for obligation in result.obligations
+            if obligation.glossary_token != "ZERO_RESULTS"
+        )
+
+    return "\n".join(lines)
+
+
+def render_obligations(answer: str, obligations: list[str], glossary: dict[str, str]) -> str:
+    if not obligations:
+        return answer
+    caveats = "\n".join(f"[{token}] {glossary[token]}" for token in obligations)
+    return f"{answer}\nMANDATORY CAVEATS:\n{caveats}"

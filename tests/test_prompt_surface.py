@@ -90,12 +90,6 @@ INVENTORY = frozenset(
         ),
         PromptSurface(
             path="src/agents/tools/query_clean_jobs.py",
-            symbol="_build_answer",
-            text="I didn't find any postings matching that in the data.",
-            visibility="model-visible",
-        ),
-        PromptSurface(
-            path="src/agents/tools/query_clean_jobs.py",
             symbol="query_clean_jobs",
             text='f"I can\'t run that query: {validation.reason}"',
             visibility="model-visible",

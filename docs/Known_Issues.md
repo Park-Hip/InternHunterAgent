@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 11 | 1 | 2 |
+| MED | 12 | 1 | 2 |
 | LOW | 17 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -41,6 +41,13 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Impact:** A Vietnamese conversation can lose reliable tool selection after turn six.
   - **Next:** Add a behavior ticket that reproduces and corrects the instability.
   - **History:** Found during T0032.4 on 2026-08-17 against the fixture database and DeepSeek.
+
+- `KI-2026-08-18-docs-job-not-required` **`[MED · OPEN]` The CI docs job is not a required check.**
+  - **Found:** 2026-08-18, while investigating why the three open M32 branches fail the lint.
+  - **Impact:** PR #63 merged with both `docs` and `checks` red and nothing blocked it, so a lint
+    the protocol treats as binding is advisory in practice.
+  - **Next:** decide whether to mark `docs` and `checks` as required status checks on `main`.
+  - **History:** raised by T0036.1.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 

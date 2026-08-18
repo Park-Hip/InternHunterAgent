@@ -374,8 +374,7 @@ milestones:
 
   - id: M35
     title: Capture Lineage Stamp
-    status: in-progress
-    branch: feature/t0035.1-capture-lineage
+    status: complete
     tickets: [T0035.1]
     scope:
       - evals/driver.py
@@ -398,7 +397,21 @@ milestones:
       Scope widened 2026-08-18 by the PR that needed it, by two paths the note already implied:
       evals/viewer.py, because "surfaces it in the viewer header" is a change to the header the
       viewer builds, and evals/replays/, because the stamp changes the replay schema and the three
-      committed replays have to carry it or CI fails on its own evidence. T0024.4 merged first, so
+      committed replays have to carry it or CI fails on its own evidence.
+      Complete 2026-08-18 (T0035.1, PR #72): build_manifest() records prompt_version through
+      load_prompt_version() rather than a second reader, freeze_capture() carries it into the
+      replay manifest and refuses a capture that lacks it, the replay schema_version moves to 2
+      with validate_replay rejecting a manifest that omits the field or still declares 1, and the
+      viewer draws it in the run header beside the git SHA, reading "not recorded" rather than
+      blank. The three committed replays predate the stamp and were backfilled from the prompt
+      version in the commit each capture ran at, not from the current file: t0025.7-acceptance
+      v1 from its manifest git_sha eb44936 at a clean worktree, t0025.9-committed v1 and
+      t0024.4-v3-obligations v3 from their adding commits, which is a derivation from git rather
+      than a fact the runs recorded - sound for the first, an inference for the other two.
+      Left open: _assert_comparable still compares prompt_hash rather than prompt_version, which
+      is correct only while both live in config/prompts.yaml. This closes the labelling half of
+      KI-2026-08-18-honesty-gate-has-no-control; the missing v2 control itself stays open, and a
+      re-capture would now be born labelled. T0024.4 merged first, so
       its v3 capture is backfilled with the rest rather than being born labelled.
 
   - id: M36

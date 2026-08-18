@@ -9,12 +9,12 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `main` at `9672906` - Merge pull request #71 from
-  Park-Hip/feature/t0037.1-ingestion-budget (2026-08-18).
-- Branches not merged into `main`: 8 - `feature/t0022.10-prune-dead-docs`,
+- Checked out: `main` at `0331854` - Merge pull request #72 from
+  Park-Hip/feature/t0035.1-capture-lineage (2026-08-18).
+- Branches not merged into `main`: 7 - `feature/t0022.10-prune-dead-docs`,
   `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
-  `feature/t0031-parallel-agent-docs`, `feature/t0035.1-capture-lineage`,
-  `integration/t0031.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+  `feature/t0031-parallel-agent-docs`, `integration/t0031.4-publish`, `merge/t0024.6-with-main`,
+  `merge/t0025.7-with-main`.
 - Worktrees: 11.
 <!-- generated:snapshot:end -->
 
@@ -40,18 +40,17 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M24-M32, M36-M37 - 29 of 33 milestones.
+Complete: M0, M6-M22, M24-M32, M35-M37 - 30 of 33 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
-| M35 | Capture Lineage Stamp | in-progress |
 | M23 | v1.0 Release Cut | planned |
 | M33 | Vietnamese Language Milestone | planned |
 | M34 | Serving Memory Window Hardening | planned |
 <!-- generated:milestones:end -->
 
-**Nothing is in progress.** Four milestones closed on 2026-08-18 and the four that remain - M23,
-M33, M34, M35 - are planned, unscoped, and unstarted.
+**Nothing is in progress.** Five milestones closed on 2026-08-18 and the three that remain - M23,
+M33, M34 - are planned, unscoped, and unstarted.
 
 **M24** closed with its whole mechanism shipped and its gate short of a clean pass. The obligation
 seam exists end to end: `detect_obligations` over the validated SQL and result set (`.2`, PR #68),
@@ -68,6 +67,13 @@ at the workflow's 15-minute ceiling rather than failing: every VietnamWorks requ
 full timeout, so a whole-source outage needed ~26 minutes to give up and `main()` never reached its
 own abort path. `api.max_elapsed_seconds: 600` now bounds the whole fetch, verified against a real
 non-routable blackhole at 21.8s against an unbounded worst case of 336s.
+
+**M35** closed last, and closes the labelling half of M24's missing control: `prompt_version` is
+now recorded in the capture manifest, required by `freeze_capture`, validated at replay
+`schema_version` 2, and drawn in the viewer's run header. An unlabelled capture cannot become a
+labelled-looking replay. The three committed replays were backfilled from the prompt version in the
+commit each capture ran at - sound for `t0025.7-acceptance` (`v1`, from a `git_sha` at a clean
+worktree), an inference from the adding commit for the other two.
 
 **M32** and **M36** also closed on 2026-08-18: M32 made the model-facing string surface knowable
 without changing a word of it, and M36 broke the M31 check deadlock that left a ticket branch
@@ -193,7 +199,7 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 |---|---|
 | `python scripts/docs_lint.py` | Exit 1 on 2026-08-18 in this clone, on the untracked production-readiness plan only - four `link-path` findings and one `orphan`, all inside the superseded document [Carried work](#carried-work) records. It is untracked, so CI never sees it and every other check passed. Naming its path here reproduced the same finding from the other direction, which is why this row describes it instead. The `frozen` findings an integration session also sees are the check working: it fires on any write to a frozen register, and the integration step is the one writer allowed to make them |
 | `python scripts/docs_build.py --check` | Exit 0 on 2026-08-18; every generated region current |
-| `uv run pytest -q` | 551 passed, 1 skipped, 30 deselected, and 45 subtests passed on 2026-08-18, in 10.5 s |
+| `uv run pytest -q` | 556 passed, 1 skipped, 30 deselected, and 45 subtests passed on 2026-08-18, in 11.3 s |
 | `uv run ruff check .` | Passed on 2026-08-18 |
 | `uv run mypy` | Success: no issues in 44 source files on 2026-08-18 |
 | `uv run python -m evals.replay` | Exit 0 on 2026-08-17 against the frozen evidence, with a database up. Not re-run by the integration step that published T0031.3: Docker was not running, so nothing listened on 5432 or 5433, which is the recorded precondition rather than a result |
@@ -220,22 +226,25 @@ resolution records: [Resolved Issues](Resolved_Issues.md).
 
 ## Next recommended ticket
 
-T0035.1 - the capture lineage stamp. M24 closing retires the previous recommendation and promotes
-this one for a sharper reason than "cheap and disjoint", which it also is. M24's gate shipped with
-no `v2` control (`KI-2026-08-18-honesty-gate-has-no-control`), so the repository now holds a frozen
-capture whose comparison baseline is a capture the milestone itself declared incomparable. If that
-control is ever re-captured - and at M27's measured 5m20s for about $0.04 it should be - the stamp
-has to exist first, or the second attempt inherits the same labelling problem the first one had.
-Landing it now is the difference between fixing the gap and reproducing it.
+T0034.1 - the memory window. M35 took the previous recommendation on 2026-08-18, so this is now the
+largest ready-to-scope defect on the board: `KI-2026-08-17-vietnamese-spike-multiturn`, a
+`[MED · OPEN]` whose mechanism is already measured down to `TrimMessagesMiddleware` holding exactly
+five turns at `max_messages: 20` and four messages per turn, so turn six is the first eviction and
+a referent chain rooted in turn one loses its antecedent there. `.1` reproduces it in English
+first; `.2` chooses the remedy. The M24 intersection on `src/agents/runtime/middleware.py` that
+used to complicate this is gone, because T0024.5 was never built - the path is unclaimed.
 
-Two candidates sit behind it. **T0034.1/.2** own the five-turn memory window
-(`KI-2026-08-17-vietnamese-spike-multiturn`), a `[MED · OPEN]` with a mechanism already measured
-down to `max_messages: 20` at four messages per turn - the largest ready-to-scope defect on the
-board, and the M24 middleware intersection that used to complicate it is gone, because T0024.5 was
-never built. **M23** (v1.0 release cut) is unblocked on the cron but should not be taken next: its
-DoD sweep owes decision **D9** a read on honesty, and two of M24's seven failures are not yet
-triaged into pass-or-defect - `KI-2026-08-18-absent-field-grader-stale` is the block, and it is
-small. Answer D9 against numbers, not against a milestone status line.
+Two things sit beside it, both small and both about M24's residue rather than new capability.
+`KI-2026-08-18-absent-field-grader-stale` is the cheapest useful work in the repository right now:
+until the absent-field scenario's expectations are reconciled with the truthful listing-expiry
+answer T0024.2 introduced, two of M24's seven failures cannot be read as either pass or defect. And
+with M35 landed, re-capturing the missing `v2` control
+(`KI-2026-08-18-honesty-gate-has-no-control`) would now produce a correctly labelled baseline at
+M27's measured 5m20s for about $0.04.
+
+**M23** (v1.0 release cut) is unblocked on the cron but should still not be taken next: its DoD
+sweep owes decision **D9** a read on honesty, and that read is only worth making once those two
+failures are triaged. Answer D9 against numbers, not against a milestone status line.
 
 Whatever is taken next: M24's phrasings all resolve through `load_behavior_glossary()[TOKEN]` with
 no inlined literals, which is the property M33's Vietnamese glossary was waiting on. M33 is free of

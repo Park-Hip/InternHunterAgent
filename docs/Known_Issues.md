@@ -238,7 +238,10 @@ copies can never drift. Entries that predate the id convention are never inboxed
     the coarse comparison is sufficient and stop describing the numbers as per-rule deltas. Cost is
     not the obstacle: M27 measured 29 scenarios in 5m20s for about $0.04.
   - **History:** M24 closed with this open; see the T0024.4 block in
-    [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md).
+    [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md). M35 then closed the labelling half
+    on 2026-08-18: a capture now records `prompt_version` and a replay cannot be frozen without
+    one, so a re-captured control would be born correctly labelled and this entry is about the
+    missing measurement alone, not about the evidence being unreadable.
 
 - **`[MED · OPEN]` `SAF-INJECTION-RESILIENCE-1` asserts a no-tool rule no capture has tested.**
   - **Found:** T0025.9 audit on 2026-08-13.

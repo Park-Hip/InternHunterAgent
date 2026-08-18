@@ -3775,6 +3775,58 @@ No additional documentation changes are needed.
 
 ---
 
+## T0032.2 - Record the model-facing string surface
+
+*Completed 2026-08-17.*
+
+**Summary**
+
+Added an explicit inventory of the prompt configuration blocks and tool-module string surfaces.
+The test parses each tool module with the Python AST and compares all function docstrings and direct
+returned literals with that inventory.
+The test also rejects an added prompt block in `config/prompts.yaml` until it is recorded.
+
+**Files**
+
+- Created `tests/test_prompt_surface.py`.
+- Created `docs/entries/T0032.2.md`.
+
+**Commands**
+
+- Focused prompt-surface test.
+- Focused prompt-surface and query-tool regression suite with placeholder Langfuse settings.
+- Full non-evaluation test suite with placeholder Langfuse settings.
+- Focused Ruff check.
+- A deliberate real-tool negative test with a temporary returned literal.
+- `uv run python scripts/docs_build.py`.
+- `uv run python scripts/docs_lint.py`.
+
+**Build and test**
+
+| Command | Result |
+|---|---|
+| Focused prompt-surface test | 2 passed |
+| Prompt-surface and query-tool suite | 15 passed |
+| Full non-evaluation test suite | 532 passed, 2 skipped, 30 deselected, 43 subtests passed |
+| Focused Ruff check | Passed |
+| Real-tool negative test | Failed as expected and named the unrecorded literal |
+| Documentation build | Rebuilt the completion report and manual verification guide |
+| Documentation lint | Fails only because M32 does not scope generated register outputs |
+
+**Risks**
+
+- Live Langfuse-trace verification was not run because the isolated worktree lacks credentials.
+
+**Follow-ups**
+
+None.
+
+**Docs**
+
+No additional documentation changes are needed.
+
+---
+
 ## T0032.3 - Pin the column list across the three prompt blocks
 
 *Completed 2026-08-17.*

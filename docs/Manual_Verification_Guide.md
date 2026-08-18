@@ -34,6 +34,15 @@ developer to create, and the text is not editable here anyway.
    `docs_build.py` and then the lint with `--diff-base origin/main`. It must exit 0, where before
    this ticket it reported three registers as out of scope.
 
+### T0032.2: Record the model-facing string surface
+
+- Add a temporary `return "test string"` to a tool function and run
+  `uv run pytest tests/test_prompt_surface.py`.
+- Confirm the inventory comparison fails and names the new literal.
+- Remove the temporary literal and confirm the suite passes.
+- Compare the inventory with a Langfuse trace before release to confirm every listed string reaches
+  the model as expected.
+
 ### T0032.1: Finish decision 10 across the tool surface
 
 - Configure the fixture database, the selected provider key, and Langfuse credentials.

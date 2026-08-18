@@ -5,8 +5,9 @@ import uuid
 from unittest.mock import AsyncMock
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
+from langchain_core.tools import tool
 from pydantic import PrivateAttr
 
 from langchain.agents import create_agent
@@ -38,10 +39,61 @@ class RecordingChatModel(BaseChatModel):
         return self._seen
 
 
-def _build_agent(model: BaseChatModel, checkpointer, middleware=None):
+@tool
+def record_query() -> str:
+    """Return a deterministic job-query result for a memory-window test."""
+    return "query result"
+
+
+@tool
+def record_details() -> str:
+    """Return deterministic job details for a memory-window test."""
+    return "job details"
+
+
+class ToolCallingRecordingChatModel(RecordingChatModel):
+    """A recording model that drives one- and two-tool turns like the runtime.
+
+    A two-tool turn calls its tools sequentially, matching the message shape produced
+    when the agent first searches and then fetches details from that search.
+    """
+
+    def bind_tools(self, tools, *, tool_choice=None, **kwargs):
+        return self
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        self._seen.append(list(messages))
+        latest_human_index = max(
+            index for index, message in enumerate(messages) if isinstance(message, HumanMessage)
+        )
+        latest_human = messages[latest_human_index]
+        tools_after_human = [
+            message
+            for message in messages[latest_human_index + 1 :]
+            if isinstance(message, ToolMessage)
+        ]
+
+        if not tools_after_human:
+            tool_name = "record_details" if latest_human.content.startswith("details") else "record_query"
+            reply = AIMessage(
+                content="",
+                tool_calls=[{"name": tool_name, "args": {}, "id": "call-query"}],
+            )
+        elif latest_human.content.startswith("details") and len(tools_after_human) == 1:
+            reply = AIMessage(
+                content="",
+                tool_calls=[{"name": "record_details", "args": {}, "id": "call-details"}],
+            )
+        else:
+            reply = AIMessage(content="done")
+
+        return ChatResult(generations=[ChatGeneration(message=reply)])
+
+
+def _build_agent(model: BaseChatModel, checkpointer, middleware=None, tools=None):
     return create_agent(
         model=model,
-        tools=[],
+        tools=tools or [],
         system_prompt="sys",
         checkpointer=checkpointer,
         middleware=middleware or [],
@@ -165,6 +217,64 @@ class TrimmingCapHoldsTests(unittest.IsolatedAsyncioTestCase):
         state = await agent.aget_state(config)
         self.assertGreater(len(state.values["messages"]), max_messages)
         self.assertIn("turn-0", _contents(state.values["messages"]))
+
+
+class ToolTurnWindowBoundaryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_six_one_tool_turns_evict_the_first_turn_from_model_context(self) -> None:
+        model = ToolCallingRecordingChatModel()
+        agent = _build_agent(
+            model,
+            InMemorySaver(),
+            middleware=[build_trim_middleware(20)],
+            tools=[record_query],
+        )
+        config = {"configurable": {"thread_id": "one-tool-window"}}
+
+        for turn in range(1, 7):
+            await agent.ainvoke(
+                {"messages": [HumanMessage(content=f"turn-{turn} reference")]},
+                config=config,
+            )
+
+        sixth_turn_first_model_input = _contents(model.seen[-2])
+        self.assertNotIn("turn-1 reference", sixth_turn_first_model_input)
+        self.assertEqual(
+            [content for content in sixth_turn_first_model_input if content and "reference" in content],
+            [
+                "turn-2 reference",
+                "turn-3 reference",
+                "turn-4 reference",
+                "turn-5 reference",
+                "turn-6 reference",
+            ],
+        )
+
+    async def test_four_sequential_two_tool_turns_evict_the_first_turn_from_final_call(self) -> None:
+        model = ToolCallingRecordingChatModel()
+        agent = _build_agent(
+            model,
+            InMemorySaver(),
+            middleware=[build_trim_middleware(20)],
+            tools=[record_query, record_details],
+        )
+        config = {"configurable": {"thread_id": "two-tool-window"}}
+
+        for turn in range(1, 5):
+            await agent.ainvoke(
+                {"messages": [HumanMessage(content=f"details turn-{turn} reference")]},
+                config=config,
+            )
+
+        fourth_turn_final_model_input = _contents(model.seen[-1])
+        self.assertNotIn("details turn-1 reference", fourth_turn_final_model_input)
+        self.assertEqual(
+            [content for content in fourth_turn_final_model_input if content and "reference" in content],
+            [
+                "details turn-2 reference",
+                "details turn-3 reference",
+                "details turn-4 reference",
+            ],
+        )
 
 
 if __name__ == "__main__":

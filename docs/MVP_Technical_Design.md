@@ -195,10 +195,10 @@ across turns within a conversation. It is **not** the whole agent, and it is del
   "only the Python ones" becomes a refined `query_clean_jobs` question). There is no special
   memory-reasoning code — refinement quality is a function of the model and prompt, not a bespoke
   feature.
-- **Bound.** A configurable cap (`config/settings.yaml`, e.g. `agent.memory.max_messages`) trims how
-  many recent messages are sent to the model. This trims *what the model sees per turn*; the stored
-  thread may still retain fuller history. The cap protects latency and token cost; message trimming
-  — not long-term memory — is the intended first optimization if context grows.
+- **Bound.** A configurable cap (`config/settings.yaml`, e.g. `agent.memory.max_turns`) retains
+  complete recent user turns in the model context. This trims *what the model sees per turn*; the
+  stored thread may retain fuller history. The cap protects latency and token cost.
+  Turn trimming - not long-term memory - is the intended first optimization if context grows.
 - **Boundary.** This is short-term, within-conversation memory only. Cross-session recall, user
   profiles, and resume/embedding retrieval are **long-term memory**, a distinct mechanism and an
   explicit future phase (see `MVP_Spec.md` §6) — they must not be bolted onto the thread
@@ -264,7 +264,7 @@ T0010.1 (see §5) — a blank/whitespace-only `query` returns a clean `400`, dis
   that needs them, so a checkout runs with only the selected provider's key.
 - **Tunable parameters** live in `config/settings.yaml` (read through `src/core/config.py`):
   `agent.react.*` for the outer ReAct model, `agent.sql_generation.*` for the nested SQL-generation
-  model, and `agent.memory.*` (`max_messages`) for memory. Per project convention, parameters are
+  model, and `agent.memory.*` (`max_turns`) for memory. Per project convention, parameters are
   configured here, not hard-coded.
 
 **Schema evolution.** *Status: implemented (T0009 enriched `clean_jobs`; T0013 froze the v1 contract

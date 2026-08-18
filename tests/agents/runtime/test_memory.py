@@ -193,13 +193,13 @@ class PersistenceAcrossRestartTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("remember-me", _contents(state.values["messages"]))
 
 
-class TrimmingCapHoldsTests(unittest.IsolatedAsyncioTestCase):
-    async def test_only_recent_messages_reach_model_while_store_keeps_all(self) -> None:
-        max_messages = 4
+class TurnCapHoldsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_only_recent_turns_reach_model_while_store_keeps_all(self) -> None:
+        max_turns = 2
         model = RecordingChatModel()
         checkpointer = InMemorySaver()
         agent = _build_agent(
-            model, checkpointer, middleware=[build_trim_middleware(max_messages)]
+            model, checkpointer, middleware=[build_trim_middleware(max_turns)]
         )
         config = {"configurable": {"thread_id": "long-session"}}
 
@@ -209,23 +209,22 @@ class TrimmingCapHoldsTests(unittest.IsolatedAsyncioTestCase):
                 config=config,
             )
 
-        # The model never sees more than the cap on any turn.
-        self.assertTrue(all(len(seen) <= max_messages for seen in model.seen))
-        self.assertEqual(len(model.seen[-1]), max_messages)
+        # The model sees complete turns, regardless of the number of messages per turn.
+        self.assertEqual(_contents(model.seen[-1]), ["sys", "turn-4", "ok", "turn-5"])
 
         # The store still holds the full conversation (well beyond the cap).
         state = await agent.aget_state(config)
-        self.assertGreater(len(state.values["messages"]), max_messages)
+        self.assertGreater(len(state.values["messages"]), 2 * max_turns)
         self.assertIn("turn-0", _contents(state.values["messages"]))
 
 
-class ToolTurnWindowBoundaryTests(unittest.IsolatedAsyncioTestCase):
-    async def test_six_one_tool_turns_evict_the_first_turn_from_model_context(self) -> None:
+class ToolTurnWindowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_six_one_tool_turns_retain_the_first_turn_in_model_context(self) -> None:
         model = ToolCallingRecordingChatModel()
         agent = _build_agent(
             model,
             InMemorySaver(),
-            middleware=[build_trim_middleware(20)],
+            middleware=[build_trim_middleware(6)],
             tools=[record_query],
         )
         config = {"configurable": {"thread_id": "one-tool-window"}}
@@ -237,10 +236,11 @@ class ToolTurnWindowBoundaryTests(unittest.IsolatedAsyncioTestCase):
             )
 
         sixth_turn_first_model_input = _contents(model.seen[-2])
-        self.assertNotIn("turn-1 reference", sixth_turn_first_model_input)
+        self.assertIn("turn-1 reference", sixth_turn_first_model_input)
         self.assertEqual(
             [content for content in sixth_turn_first_model_input if content and "reference" in content],
             [
+                "turn-1 reference",
                 "turn-2 reference",
                 "turn-3 reference",
                 "turn-4 reference",
@@ -249,12 +249,12 @@ class ToolTurnWindowBoundaryTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
-    async def test_four_sequential_two_tool_turns_evict_the_first_turn_from_final_call(self) -> None:
+    async def test_four_sequential_two_tool_turns_retain_the_first_turn_in_final_call(self) -> None:
         model = ToolCallingRecordingChatModel()
         agent = _build_agent(
             model,
             InMemorySaver(),
-            middleware=[build_trim_middleware(20)],
+            middleware=[build_trim_middleware(6)],
             tools=[record_query, record_details],
         )
         config = {"configurable": {"thread_id": "two-tool-window"}}
@@ -266,10 +266,11 @@ class ToolTurnWindowBoundaryTests(unittest.IsolatedAsyncioTestCase):
             )
 
         fourth_turn_final_model_input = _contents(model.seen[-1])
-        self.assertNotIn("details turn-1 reference", fourth_turn_final_model_input)
+        self.assertIn("details turn-1 reference", fourth_turn_final_model_input)
         self.assertEqual(
             [content for content in fourth_turn_final_model_input if content and "reference" in content],
             [
+                "details turn-1 reference",
                 "details turn-2 reference",
                 "details turn-3 reference",
                 "details turn-4 reference",

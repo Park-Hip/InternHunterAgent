@@ -1,10 +1,10 @@
 from langchain.agents.middleware import AgentMiddleware, ModelRequest
-from langchain_core.messages import trim_messages
+from langchain_core.messages import HumanMessage
 
 from src.core.config import settings
 
 
-def load_max_messages() -> int:
+def load_max_turns() -> int:
     agent_cfg = settings.config_yaml.get("agent")
     if not isinstance(agent_cfg, dict):
         raise ValueError("Missing 'agent' section in config/settings.yaml")
@@ -13,39 +13,38 @@ def load_max_messages() -> int:
     if not isinstance(memory_cfg, dict):
         raise ValueError("Missing 'agent.memory' section in config/settings.yaml")
 
-    max_messages = memory_cfg.get("max_messages")
-    if isinstance(max_messages, bool) or not isinstance(max_messages, int) or max_messages <= 0:
+    max_turns = memory_cfg.get("max_turns")
+    if isinstance(max_turns, bool) or not isinstance(max_turns, int) or max_turns <= 0:
         raise ValueError(
-            "agent.memory.max_messages must be a positive integer in config/settings.yaml"
+            "agent.memory.max_turns must be a positive integer in config/settings.yaml"
         )
 
-    return max_messages
+    return max_turns
 
 
-class TrimMessagesMiddleware(AgentMiddleware):
-    """Trim the per-turn model input to the most recent ``max_messages`` messages.
+class TrimTurnsMiddleware(AgentMiddleware):
+    """Trim the per-turn model input to the most recent complete user turns.
 
-    Wraps each model call with LangChain's native ``trim_messages`` (strategy ``last``,
-    count-based) so only the inbound model request is trimmed — the stored checkpoint
-    history is left untouched. Both the sync and async hooks are implemented because the
-    runtime drives the agent through ``ainvoke``.
+    A turn begins with a human message and includes every later message up to the next
+    human message. Only the inbound model request is trimmed, leaving stored checkpoint
+    history untouched. Both sync and async hooks are implemented because the runtime
+    drives the agent through ``ainvoke``.
     """
 
-    def __init__(self, max_messages: int) -> None:
+    def __init__(self, max_turns: int) -> None:
         super().__init__()
-        self._max_messages = max_messages
+        self._max_turns = max_turns
 
     def _trim(self, request: ModelRequest) -> ModelRequest:
-        trimmed = trim_messages(
-            request.messages,
-            strategy="last",
-            token_counter=len,
-            max_tokens=self._max_messages,
-            start_on="human",
-            include_system=False,
-            allow_partial=False,
-        )
-        return request.override(messages=trimmed)  # type: ignore[arg-type]
+        turn_starts = [
+            index
+            for index, message in enumerate(request.messages)
+            if isinstance(message, HumanMessage)
+        ]
+        if len(turn_starts) <= self._max_turns:
+            return request
+
+        return request.override(messages=request.messages[turn_starts[-self._max_turns] :])
 
     def wrap_model_call(self, request, handler):
         return handler(self._trim(request))
@@ -54,5 +53,5 @@ class TrimMessagesMiddleware(AgentMiddleware):
         return await handler(self._trim(request))
 
 
-def build_trim_middleware(max_messages: int) -> AgentMiddleware:
-    return TrimMessagesMiddleware(max_messages)
+def build_trim_middleware(max_turns: int) -> AgentMiddleware:
+    return TrimTurnsMiddleware(max_turns)

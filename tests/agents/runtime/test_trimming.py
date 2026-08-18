@@ -3,13 +3,12 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 
-from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRequest
-
-from src.agents.runtime.middleware import build_trim_middleware, load_max_messages
+from src.agents.runtime.middleware import build_trim_middleware, load_max_turns
 
 
 def _make_request(messages: list) -> ModelRequest:
@@ -26,39 +25,37 @@ def _make_request(messages: list) -> ModelRequest:
     )
 
 
-class LoadMaxMessagesTests(unittest.TestCase):
+class LoadMaxTurnsTests(unittest.TestCase):
     def test_reads_positive_int_from_config(self) -> None:
-        with patch(
-            "src.agents.runtime.middleware.settings"
-        ) as mock_settings:
-            mock_settings.config_yaml = {"agent": {"memory": {"max_messages": 8}}}
-            self.assertEqual(load_max_messages(), 8)
+        with patch("src.agents.runtime.middleware.settings") as mock_settings:
+            mock_settings.config_yaml = {"agent": {"memory": {"max_turns": 6}}}
+            self.assertEqual(load_max_turns(), 6)
 
     def test_rejects_missing_memory_section(self) -> None:
         with patch("src.agents.runtime.middleware.settings") as mock_settings:
             mock_settings.config_yaml = {"agent": {}}
             with self.assertRaises(ValueError):
-                load_max_messages()
+                load_max_turns()
 
     def test_rejects_non_positive_value(self) -> None:
         with patch("src.agents.runtime.middleware.settings") as mock_settings:
-            mock_settings.config_yaml = {"agent": {"memory": {"max_messages": 0}}}
+            mock_settings.config_yaml = {"agent": {"memory": {"max_turns": 0}}}
             with self.assertRaises(ValueError):
-                load_max_messages()
+                load_max_turns()
 
     def test_rejects_boolean_value(self) -> None:
         with patch("src.agents.runtime.middleware.settings") as mock_settings:
-            mock_settings.config_yaml = {"agent": {"memory": {"max_messages": True}}}
+            mock_settings.config_yaml = {"agent": {"memory": {"max_turns": True}}}
             with self.assertRaises(ValueError):
-                load_max_messages()
+                load_max_turns()
 
 
-class TrimMiddlewareTests(unittest.TestCase):
-    def test_trims_inbound_model_messages_to_most_recent_cap(self) -> None:
+class TrimTurnsMiddlewareTests(unittest.TestCase):
+    def test_trims_to_recent_complete_turns(self) -> None:
         history: list = []
-        for i in range(5):
-            history.append(HumanMessage(content=f"q{i}"))
-            history.append(AIMessage(content=f"a{i}"))
+        for index in range(5):
+            history.append(HumanMessage(content=f"q{index}"))
+            history.append(AIMessage(content=f"a{index}"))
 
         seen: dict = {}
 
@@ -66,36 +63,34 @@ class TrimMiddlewareTests(unittest.TestCase):
             seen["messages"] = request.messages
             return AIMessage(content="final")
 
-        middleware = build_trim_middleware(4)
+        middleware = build_trim_middleware(2)
         middleware.wrap_model_call(_make_request(history), handler)
 
-        self.assertEqual(len(seen["messages"]), 4)
         self.assertEqual(
-            [m.content for m in seen["messages"]],
+            [message.content for message in seen["messages"]],
             ["q3", "a3", "q4", "a4"],
         )
 
-    def test_short_conversation_under_cap_is_unchanged(self) -> None:
+    def test_short_conversation_under_turn_cap_is_unchanged(self) -> None:
         history = [HumanMessage(content="hi"), AIMessage(content="hello")]
-
         seen: dict = {}
 
         def handler(request: ModelRequest):
             seen["messages"] = request.messages
             return AIMessage(content="final")
 
-        middleware = build_trim_middleware(20)
+        middleware = build_trim_middleware(2)
         middleware.wrap_model_call(_make_request(history), handler)
 
-        self.assertEqual([m.content for m in seen["messages"]], ["hi", "hello"])
+        self.assertEqual([message.content for message in seen["messages"]], ["hi", "hello"])
 
 
-class TrimMiddlewareAsyncTests(unittest.IsolatedAsyncioTestCase):
-    async def test_atrims_inbound_model_messages_to_most_recent_cap(self) -> None:
+class TrimTurnsMiddlewareAsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_atrims_to_recent_complete_turns(self) -> None:
         history: list = []
-        for i in range(5):
-            history.append(HumanMessage(content=f"q{i}"))
-            history.append(AIMessage(content=f"a{i}"))
+        for index in range(5):
+            history.append(HumanMessage(content=f"q{index}"))
+            history.append(AIMessage(content=f"a{index}"))
 
         seen: dict = {}
 
@@ -103,33 +98,32 @@ class TrimMiddlewareAsyncTests(unittest.IsolatedAsyncioTestCase):
             seen["messages"] = request.messages
             return AIMessage(content="final")
 
-        middleware = build_trim_middleware(4)
+        middleware = build_trim_middleware(2)
         await middleware.awrap_model_call(_make_request(history), handler)
 
-        self.assertEqual([m.content for m in seen["messages"]], ["q3", "a3", "q4", "a4"])
+        self.assertEqual(
+            [message.content for message in seen["messages"]],
+            ["q3", "a3", "q4", "a4"],
+        )
 
 
-class TrimMiddlewareLeavesStateIntactTests(unittest.IsolatedAsyncioTestCase):
-    async def test_stored_state_retains_full_history_while_model_sees_trimmed(self) -> None:
+class TrimTurnsMiddlewareLeavesStateIntactTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stored_state_retains_full_history_while_model_sees_recent_turns(self) -> None:
         model = GenericFakeChatModel(messages=iter([AIMessage(content="final answer")]))
         agent = create_agent(
             model=model,
             tools=[],
             system_prompt="sys",
-            middleware=[build_trim_middleware(4)],
+            middleware=[build_trim_middleware(2)],
         )
 
         history: list = []
-        for i in range(5):
-            history.append(HumanMessage(content=f"q{i}"))
-            history.append(AIMessage(content=f"a{i}"))
+        for index in range(5):
+            history.append(HumanMessage(content=f"q{index}"))
+            history.append(AIMessage(content=f"a{index}"))
 
-        # Driven through ainvoke, matching how the runtime invokes the agent.
         result = await agent.ainvoke({"messages": history})
 
-        # The full 10-message history plus the new answer survive in state
-        # (what the checkpointer would persist) — trimming touched only the
-        # per-turn model input, not stored history.
         self.assertEqual(len(result["messages"]), 11)
         self.assertEqual(result["messages"][0].content, "q0")
         self.assertEqual(result["messages"][-1].content, "final answer")

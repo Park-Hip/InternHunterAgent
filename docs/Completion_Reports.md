@@ -4128,19 +4128,18 @@ The tests prove that the defect is independent of Vietnamese output and provider
 | Focused memory and trimming tests | 15 passed |
 | Ruff | Passed |
 | Mypy | Passed for 44 source files |
-| Full non-evaluation pytest suite | Timed out after 124 seconds without a result |
+| Full non-evaluation pytest suite | Local run timed out; CI passed 557 tests, with 2 skipped and 30 deselected |
 | Documentation checks | Passed after generator rendering |
 
 **Risks**
 
 This ticket intentionally preserves the existing context-window behavior.
 The deterministic reproduction does not measure provider-specific tool-selection quality.
-The full non-evaluation suite did not complete within the 124-second command limit.
+The local full-suite command did not complete within the 124-second command limit.
 
 **Follow-ups**
 
 - T0034.2 must select and implement a remedy from this acceptance baseline.
-- Investigate `KI-2026-08-18-full-pytest-timeout` before relying on a full-suite result.
 
 **Docs**
 

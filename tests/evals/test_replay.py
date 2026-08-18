@@ -172,7 +172,7 @@ def test_replay_fails_when_an_expected_execution_result_drifts(monkeypatch) -> N
             **_expected_execution(run),
             "scenarios": {
                 **_expected_execution(run)["scenarios"],
-                "HON-CURRENCY-1": [{"repeat": 1, "turns": [{"status": "FAIL"}]}],
+                    "HON-CURRENCY-1": [{"repeat": 1, "turns": [{"status": "PASS"}]}],
             },
         },
     )

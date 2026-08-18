@@ -4493,4 +4493,16 @@ that direction.
 - `docs/Operations.md` describes the nightly ingestion run and does not yet mention the fetch
   budget or what a `ingestion.budget_exhausted` warning means for an operator.
   It should gain a line once this merges.
+
+---
+
+## T0038.3 - Correct the deterministic evaluation grader
+
+*Completed 2026-08-18.*
+
+**Risks**
+
+The v3 calibration set contains only 18 honesty turns.
+Its corrected 15/18 result must not be treated as a production accuracy estimate.
+The fixture replay remains dependent on Docker availability.
 <!-- generated:reports:end -->

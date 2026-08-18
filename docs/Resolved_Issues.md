@@ -288,6 +288,17 @@ original register entry (omitted where none was assigned).
     answer, so the fallback branch was unreachable. No change to service.py/query.py.
 
 ## Agent runtime & prompts
+- `KI-2026-08-17-vietnamese-spike-multiturn` **`[MED · RESOLVED · 2026-08-18]`** Message-count
+  trimming evicted referents from tool-heavy multi-turn conversations.
+  - **Found:** T0032.4 observed unreliable tool following after turn six.
+  - **Resolution:** T0034.1 reproduced the boundary in English with the real middleware, and
+    T0034.2 replaced the 20-message cap with a six-turn policy that retains every message from
+    each selected user turn through the next user turn.
+  - **Verified:** The one-tool and sequential-two-tool tests retain the first turn at their former
+    eviction boundaries, while the system prompt and full checkpoint history remain intact.
+  - **Trade-off:** Six complete turns can contain more messages and tokens than the old cap, so
+    the bounded turn window is retained as the deliberate policy.
+
 - **`[HIGH · RESOLVED · 2026-07-15]` `generate_sql` returned empty content when qwen spent the whole
   `max_tokens` budget on hidden reasoning.**
   - `AgentProvider.build_model(...)` now accepts a per-call `reasoning_effort` override and only

@@ -5,6 +5,28 @@ The live roadmap retains the full milestone index and all open work.
 
 ---
 
+## T0034: Milestone 34 - Serving Memory Window Hardening - Complete 2026-08-18
+
+**Objective.** Reproduce and resolve the serving-path memory-window eviction observed during the
+T0032.4 Vietnamese prompt spike.
+
+**Outcome.** T0034.1 reproduced message-count eviction with the real asynchronous agent graph and
+a recording model, proving the defect was independent of Vietnamese output and provider choice.
+T0034.2 replaced the 20-message cap with a six-turn retention policy that keeps every message in
+each selected turn, regardless of tool shape.
+The one-tool and sequential-two-tool boundaries now retain the first turn, while the system prompt
+and checkpoint storage remain intact.
+
+**Manual verification.** Start the application with `agent.memory.max_turns: 6`, ask six related job
+questions in one session with one or two tool calls per turn, and confirm that the sixth answer can
+resolve a reference introduced in the first question.
+
+**Risks and follow-ups.** Six complete turns can contain more messages and tokens than the old
+20-message cap.
+The six-turn bound is the intentional trade-off, and no follow-up ticket is required for M34.
+
+---
+
 ## T0000: Milestone 0 - Foundation — ✅ Done
 **Objective:** Establish the stable local base for the MVP by wiring FastAPI, config loading, logging, and a health check.
 **In Scope:** 

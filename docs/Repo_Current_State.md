@@ -9,13 +9,14 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `main` at `0331854` - Merge pull request #72 from
-  Park-Hip/feature/t0035.1-capture-lineage (2026-08-18).
-- Branches not merged into `main`: 7 - `feature/t0022.10-prune-dead-docs`,
+- Checked out: `integration/docs-publish-20260818` at `8726193` - Merge pull request #74 from
+  Park-Hip/feature/t0034.2-memory-window-fix (2026-08-18).
+- Branches not merged into `main`: 10 - `feature/t0022.10-prune-dead-docs`,
   `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
-  `feature/t0031-parallel-agent-docs`, `integration/t0031.4-publish`, `merge/t0024.6-with-main`,
-  `merge/t0025.7-with-main`.
-- Worktrees: 11.
+  `feature/t0031-parallel-agent-docs`, `feature/t0034.1-memory-window`,
+  `feature/t0034.2-memory-window-fix`, `integration/docs-publish-20260818`,
+  `integration/t0031.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+- Worktrees: 14.
 <!-- generated:snapshot:end -->
 
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
@@ -40,17 +41,16 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M24-M32, M35-M37 - 30 of 33 milestones.
+Complete: M0, M6-M22, M24-M32, M34-M37 - 31 of 33 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
 | M23 | v1.0 Release Cut | planned |
 | M33 | Vietnamese Language Milestone | planned |
-| M34 | Serving Memory Window Hardening | planned |
 <!-- generated:milestones:end -->
 
-**Nothing is in progress.** Five milestones closed on 2026-08-18 and the three that remain - M23,
-M33, M34 - are planned, unscoped, and unstarted.
+**Nothing is in progress.** Six milestones closed on 2026-08-18 and the two that remain - M23 and
+M33 - are planned, unscoped, and unstarted.
 
 **M24** closed with its whole mechanism shipped and its gate short of a clean pass. The obligation
 seam exists end to end: `detect_obligations` over the validated SQL and result set (`.2`, PR #68),
@@ -77,8 +77,10 @@ worktree), an inference from the adding commit for the other two.
 
 **M32** and **M36** also closed on 2026-08-18: M32 made the model-facing string surface knowable
 without changing a word of it, and M36 broke the M31 check deadlock that left a ticket branch
-adding a `docs/entries/` file with no passing state. M33, M34, and M35 were allocated out of the
-T0032.4 spike's triage. **M30** closed on 2026-08-17 - the `freeze` command, the surviving T0025.7
+adding a `docs/entries/` file with no passing state. M33 and M35 were allocated out of the T0032.4
+spike's triage. **M34** then closed its serving-path defect on 2026-08-18: the message-count cap
+became a six-turn window that retains complete user turns. **M30** closed on 2026-08-17 - the
+`freeze` command, the surviving T0025.7
 capture at `evals/replays/t0025.7-acceptance.json`, and **D-046** on what a replay keeps; the
 T0027.3 DeepSeek capture that motivated it was already lost and stays lost. Per-milestone detail
 is in [Tickets](Tickets.md) and the [ticket archive](archive/Tickets_Archive.md).
@@ -226,13 +228,10 @@ resolution records: [Resolved Issues](Resolved_Issues.md).
 
 ## Next recommended ticket
 
-T0034.1 - the memory window. M35 took the previous recommendation on 2026-08-18, so this is now the
-largest ready-to-scope defect on the board: `KI-2026-08-17-vietnamese-spike-multiturn`, a
-`[MED · OPEN]` whose mechanism is already measured down to `TrimMessagesMiddleware` holding exactly
-five turns at `max_messages: 20` and four messages per turn, so turn six is the first eviction and
-a referent chain rooted in turn one loses its antecedent there. `.1` reproduces it in English
-first; `.2` chooses the remedy. The M24 intersection on `src/agents/runtime/middleware.py` that
-used to complicate this is gone, because T0024.5 was never built - the path is unclaimed.
+T0033.1 - the Vietnamese language milestone. M34 took the previous recommendation on 2026-08-18,
+closing `KI-2026-08-17-vietnamese-spike-multiturn` after reproducing and correcting its
+message-count eviction mechanism. M33 is the next planned milestone, while M23 remains the release
+cut and still owes its DoD sweep and terms posture.
 
 Two things sit beside it, both small and both about M24's residue rather than new capability.
 `KI-2026-08-18-absent-field-grader-stale` is the cheapest useful work in the repository right now:

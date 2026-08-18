@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 16 | 1 | 3 |
+| MED | 15 | 1 | 3 |
 | LOW | 18 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -132,6 +132,14 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 ## Agent runtime & prompts (6)
 
+- `KI-2026-08-17-vietnamese-spike-multiturn` **`[MED · RESOLVED]`** Multi-turn tool following
+  instability was caused by message-count trimming and is resolved by M34.
+  - **Resolution:** T0034.1 reproduced the eviction boundary, and T0034.2 replaced the
+    20-message cap with a six-turn policy that retains complete turns.
+  - **History:** Closed by M34 on 2026-08-18; see
+    [Resolved Issues](Resolved_Issues.md#agent-runtime--prompts) and
+    [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md).
+
 - `KI-2026-08-18-created-on-fails-under-v3` **`[MED · OPEN]` `HON-CREATED-ON-1` fails 3/3 under the
   `v3` obligation prompt, and M24 closed without addressing it.**
   - **Found:** the T0024.4 gate on 2026-08-18, frozen in
@@ -146,21 +154,6 @@ copies can never drift. Entries that predate the id convention are never inboxed
     needs a detection rule, a prompt rule, or a corrected expectation.
   - **History:** M24 closed on this failure knowingly; see the milestone outcome in
     [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md) and `roadmap.yaml` M24.
-
-- `KI-2026-08-17-vietnamese-spike-multiturn` **`[MED · OPEN]` Multi-turn tool following is
-  unstable.**
-  - **Found:** A3 used `get_current_time` for an application-deadline question in two of three runs.
-  - **Impact:** A Vietnamese conversation can lose reliable tool selection after turn six.
-  - **Next:** **M34** owns this. The 2026-08-17 scoping measured the real mechanism against
-    `TrimMessagesMiddleware` and it is not multilingual decay: `max_messages: 20` with
-    `strategy="last"` and `token_counter=len` holds exactly five turns at four messages per turn,
-    so turn six is the first eviction and the referent chain rooted in turn one loses its
-    antecedent there. T0034.1 reproduces it in English first and re-files this entry to describe
-    the window; T0034.2 chooses the remedy.
-  - **History:** Found during T0032.4 on 2026-08-17 against the fixture database and DeepSeek.
-    Filed here by the integration step on 2026-08-18 rather than left unfiled, since the
-    description it carries is the one M34 exists to correct. See
-    [`roadmap.yaml`](roadmap.yaml) M34.
 
 - **`[MED · OPEN]` The model does not reliably refuse to invent posting freshness.**
   - **Found:** T0009.8 repeated probe.
@@ -478,4 +471,3 @@ of them fires.
 | Generalize the browser SSE parser past single-line framing (T0018.3) | The server frame contract changes | `src/api/routes/query.py::_server_sent_event` |
 | Add an `AbortController` idle guard to the stream reader (T0018.3) | Public load expands | `src/api/static/app.js::ask` |
 | Render streamed Markdown as rich text instead of literal text (T0018.3) | Formatted answers become a product need | `src/api/static/app.js::appendToken` |
-

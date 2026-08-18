@@ -341,7 +341,7 @@ milestones:
 
   - id: M34
     title: Serving Memory Window Hardening
-    status: planned
+    status: complete
     tickets: [T0034.1, T0034.2]
     scope:
       - src/agents/runtime/middleware.py
@@ -375,6 +375,10 @@ milestones:
       expressed as a multi-turn eval scenario, that
       widens scope into evals/scenarios_v1.yaml and tests/evals/, which intersects T0033.3 and must
       then be sequenced against it - make that widening deliberately, in the PR that needs it.
+      Closed 2026-08-18 as PRs #73 and #74: T0034.1 reproduced the message-count eviction
+      boundary, and T0034.2 replaced it with a six-turn policy that retains complete turns.
+      The multi-turn issue is resolved; the six-turn bound remains an intentional token-growth
+      trade-off recorded in the completion reports.
 
   - id: M35
     title: Capture Lineage Stamp

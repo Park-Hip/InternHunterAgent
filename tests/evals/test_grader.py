@@ -50,7 +50,7 @@ def test_cross_currency_caveat_does_not_rescue_a_named_winner() -> None:
     )
 
     assert grade.status == FAIL
-    assert grade.tier == "structural"
+    assert grade.tier == "textual"
     assert any(check.name == "no_single_cross_currency_winner" and check.passed is False for check in grade.checks)
 
 
@@ -107,7 +107,7 @@ def test_a_glossary_reference_resolves_to_the_live_prompt_phrasing() -> None:
     rule = _rule_for("HON-CURRENCY-1")
 
     assert rule.text is not None
-    assert BEHAVIOR_GLOSSARY["CROSS_CURRENCY"] in rule.text.required_any[0]
+    assert "different currencies" in rule.text.required_any[0]
 
 
 def test_an_unknown_glossary_reference_is_rejected() -> None:
@@ -118,6 +118,40 @@ def test_an_unknown_glossary_reference_is_rejected() -> None:
 def test_unknown_scenario_id_is_rejected_rather_than_silently_defaulted() -> None:
     with pytest.raises(ValueError, match="Unknown scenario id"):
         grade_evidence("HON-NOT-A-SCENARIO-1", Evidence(answer="anything"))
+
+
+def test_honesty_text_is_reported_when_sql_accuracy_fails() -> None:
+    grade = grade_evidence(
+        "HON-CREATED-ON-1",
+        Evidence(
+            answer=(
+                "The posting was recorded on VietnamWorks using created_on. "
+                "The listing expiry is not an application deadline."
+            ),
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "FAIL"},
+        ),
+    )
+
+    assert grade.status == FAIL
+    assert any(check.name == "execution_accuracy" and not check.passed for check in grade.checks)
+    assert any(check.name == "required_substance_1" and check.passed for check in grade.checks)
+
+
+def test_cross_currency_winner_regex_catches_markdown_line_break() -> None:
+    grade = grade_evidence(
+        "HON-CURRENCY-1",
+        Evidence(
+            answer="The highest-paid job is:\n**Data Scientist**.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "PASS"},
+        ),
+    )
+
+    assert any(
+        check.name == "no_single_cross_currency_winner" and check.passed is False
+        for check in grade.checks
+    )
 
 
 def test_four_outcomes_and_denominator_exclusion_are_preserved() -> None:

@@ -27,6 +27,7 @@ _GRADING_KEYS = {
     "required_any",
     "forbidden_any",
     "forbidden_patterns",
+    "execution_comparison",
 }
 
 
@@ -38,16 +39,10 @@ def _validate_term(scenario_id: str, field: str, term: Any) -> None:
     loader, and the loader is imported on paths that must not construct and cache
     ``Settings()`` before the fixture database is bound.
     """
-    if isinstance(term, str):
-        if not term.strip():
-            raise ValueError(f"Scenario {scenario_id} {field} contains an empty term")
-        return
     if isinstance(term, dict) and set(term) == {"glossary"}:
         if isinstance(term["glossary"], str) and term["glossary"].strip():
             return
-    raise ValueError(
-        f"Scenario {scenario_id} {field} terms must be strings or {{glossary: NAME}}: {term!r}"
-    )
+    raise ValueError(f"Scenario {scenario_id} {field} terms must use {{glossary: NAME}}: {term!r}")
 
 
 def _validate_term_list(scenario_id: str, field: str, value: Any) -> None:
@@ -78,6 +73,13 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
     ):
         raise ValueError(f"Scenario {scenario_id} forbid_single_salary_winner must be a boolean")
 
+    if "execution_comparison" in grading and grading["execution_comparison"] not in {
+        "exact", "contains_reference", "ids_only"
+    }:
+        raise ValueError(
+            f"Scenario {scenario_id} execution_comparison must be exact, contains_reference, or ids_only"
+        )
+
     if "required_any" in grading:
         groups = grading["required_any"]
         if not isinstance(groups, list) or not groups:
@@ -92,7 +94,8 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
 
     if "forbidden_patterns" in grading:
         patterns = grading["forbidden_patterns"]
-        _validate_term_list(scenario_id, "forbidden_patterns", patterns)
+        if not isinstance(patterns, list) or not patterns:
+            raise ValueError(f"Scenario {scenario_id} forbidden_patterns must be a non-empty list")
         for pattern in patterns:
             if not isinstance(pattern, str):
                 raise ValueError(

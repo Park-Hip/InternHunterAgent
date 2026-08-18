@@ -2,6 +2,18 @@
 
 > **Last verified:** 2026-08-17.
 
+## v3 honesty calibration (M38)
+
+The frozen replay `replays/t0024.4-v3-obligations.json` was re-graded on 2026-08-18 without a new
+model capture.
+The capture manifest records `prompt_version: v3`.
+The corrected deterministic grader reports 15 PASS and 3 FAIL across 18 honesty turns.
+The three failures are the three `HON-CURRENCY-1` turns, which name a single winner across mixed
+currencies.
+The result is a targeted assertion check against the human labels, not a production accuracy
+estimate.
+The judge tier remains disabled until human agreement is re-measured on a broader v3 set.
+
 > **Eviction:** This report leaves the active evaluation record when a replacement grader,
 > scenario registry, or holdout supersedes its assertions, replay provenance, or calibration.
 

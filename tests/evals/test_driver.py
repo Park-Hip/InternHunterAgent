@@ -9,7 +9,8 @@ import pytest
 
 from evals import driver
 from evals.harness import ProviderTelemetryCallback, SeamRun
-from evals.replay import load_replay, validate_replay
+from evals.replay import REPLAY_SCHEMA_VERSION, load_replay, validate_replay
+from src.agents.runtime.prompts import load_prompt_version
 
 
 def test_resolving_the_fixture_url_never_freezes_settings(
@@ -79,6 +80,22 @@ def test_manifest_records_reproducibility_inputs(monkeypatch: pytest.MonkeyPatch
     assert manifest["models"]["react"]
     assert manifest["sampling"]["sql_generation"]["temperature"] == 0.0
     assert manifest["scorer_version"] == driver.SCORER_VERSION
+    assert manifest["prompt_version"] == load_prompt_version()
+
+
+def test_manifest_names_the_prompt_it_ran(monkeypatch: pytest.MonkeyPatch) -> None:
+    """prompt_hash proves two runs used different prompts; only the version says which.
+
+    T0024.1 put a version label on the prompt so runs recorded either side of a prompt
+    change are never compared as if comparable. A capture that omits it leaves the
+    doctrine unenforced, which is how T0024.6's change invalidated the T0025.7 baseline
+    silently (M35).
+    """
+    monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
+    _stub_fingerprint(monkeypatch)
+    monkeypatch.setattr(driver, "load_prompt_version", lambda: "v9")
+
+    assert driver.build_manifest()["prompt_version"] == "v9"
 
 
 def test_driver_persists_all_seams_and_resumes_completed_scenario(
@@ -323,7 +340,7 @@ def test_provider_telemetry_marks_missing_provider_fields_unavailable() -> None:
 def _capture_and_grade_from_replay() -> tuple[dict, dict]:
     replay = load_replay()
     capture = {
-        "manifest": {"run_id": "capture-123"},
+        "manifest": {"run_id": "capture-123", "prompt_version": "v-test"},
         "status": "COMPLETE",
         "scenarios": {},
     }
@@ -376,13 +393,30 @@ def test_freeze_projects_a_capture_into_a_valid_sanitized_replay(tmp_path: Path)
     validate_replay(frozen)
     assert frozen["manifest"] == {
         "run_id": "capture-123",
-        "schema_version": 1,
+        "schema_version": REPLAY_SCHEMA_VERSION,
         "source_capture": "capture.json",
         "sanitized": True,
+        "prompt_version": "v-test",
     }
     encoded = output.read_text(encoding="utf-8")
     assert "trace_id" not in encoded
     assert "latency_ms" not in encoded
+
+
+def test_freeze_refuses_a_capture_that_cannot_name_its_prompt(tmp_path: Path) -> None:
+    """An unlabelled capture must not become a labelled-looking replay."""
+    capture, grade = _capture_and_grade_from_replay()
+    del capture["manifest"]["prompt_version"]
+    capture_path = tmp_path / "capture.json"
+    grade_path = tmp_path / "grade.json"
+    output = tmp_path / "frozen.json"
+    capture_path.write_text(json.dumps(capture), encoding="utf-8")
+    grade_path.write_text(json.dumps(grade), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="prompt_version"):
+        driver.freeze_capture(capture_path, grade_path, output)
+
+    assert not output.exists()
 
 
 def test_freeze_refuses_a_capture_with_a_live_trace_id(tmp_path: Path) -> None:

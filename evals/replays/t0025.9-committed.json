@@ -1,9 +1,10 @@
 {
   "manifest": {
     "run_id": "t0025.9-committed-replay",
-    "schema_version": 1,
+    "schema_version": 2,
     "source_capture": "T0025.7 accepted turns plus registry-derived safety and conversational coverage",
-    "sanitized": true
+    "sanitized": true,
+    "prompt_version": "v1"
   },
   "status": "COMPLETE",
   "scenarios": {

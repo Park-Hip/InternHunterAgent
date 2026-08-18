@@ -1,9 +1,10 @@
 {
   "manifest": {
     "run_id": "01e97395-c433-4cb1-81f9-fcd1a194e4f8",
-    "schema_version": 1,
+    "schema_version": 2,
     "source_capture": "t0025.7-acceptance.json",
-    "sanitized": true
+    "sanitized": true,
+    "prompt_version": "v1"
   },
   "status": "COMPLETE",
   "scenarios": {

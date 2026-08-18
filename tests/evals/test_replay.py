@@ -5,7 +5,13 @@ from datetime import date
 
 import pytest
 
-from evals.replay import REPLAY_PATH, load_replay, run_replay, validate_replay
+from evals.replay import (
+    REPLAY_PATH,
+    REPLAY_SCHEMA_VERSION,
+    load_replay,
+    run_replay,
+    validate_replay,
+)
 
 
 def _expected_execution(replay: dict) -> dict:
@@ -60,6 +66,32 @@ def test_committed_replay_is_sanitized_and_covers_required_cases() -> None:
     assert "trace_id" not in encoded
     assert "postgresql://" not in encoded
     assert "api_key" not in encoded
+
+
+def test_committed_replay_names_the_prompt_that_produced_it() -> None:
+    """Every committed replay carries the prompt version its capture ran (M35)."""
+    replay = load_replay()
+
+    assert replay["manifest"]["schema_version"] == REPLAY_SCHEMA_VERSION
+    assert replay["manifest"]["prompt_version"] == "v1"
+
+
+def test_replay_rejects_a_manifest_that_cannot_name_its_prompt() -> None:
+    """An unlabelled replay is not evidence: it cannot be placed against a prompt change."""
+    replay = load_replay()
+    del replay["manifest"]["prompt_version"]
+
+    with pytest.raises(ValueError, match="prompt_version"):
+        validate_replay(replay)
+
+
+def test_replay_rejects_a_pre_stamp_schema_version() -> None:
+    """A schema_version 1 artifact predates the stamp and must not pass as a stamped one."""
+    replay = load_replay()
+    replay["manifest"]["schema_version"] = 1
+
+    with pytest.raises(ValueError, match="schema_version"):
+        validate_replay(replay)
 
 
 def test_replay_rejects_trace_data() -> None:

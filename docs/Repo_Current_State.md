@@ -44,10 +44,10 @@ Complete: M0, M6-M22, M24-M32, M36-M37 - 29 of 33 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
+| M35 | Capture Lineage Stamp | in-progress |
 | M23 | v1.0 Release Cut | planned |
 | M33 | Vietnamese Language Milestone | planned |
 | M34 | Serving Memory Window Hardening | planned |
-| M35 | Capture Lineage Stamp | planned |
 <!-- generated:milestones:end -->
 
 **Nothing is in progress.** Four milestones closed on 2026-08-18 and the four that remain - M23,

@@ -1,6 +1,6 @@
 # `evals/` - The Evaluation Instrument
 
-> **Last verified:** 2026-08-17.
+> **Last verified:** 2026-08-18.
 
 > **Eviction:** A description here leaves when its module is removed or its command changes.
 > This file describes the layout only; findings live in the records listed at the bottom.
@@ -45,6 +45,20 @@ the toolbar narrows the run to one status, and every check that did not pass is 
 seam it judges with the `detail` that says what the rule wanted. The run header names the provider,
 model, and sampling per profile, so two arms are told apart on screen.
 
+## Capture lineage
+
+Every capture manifest records `prompt_version` from `config/prompts.yaml`, and `freeze` carries it
+into the replay manifest, which is `schema_version` 2.
+`prompt_hash` already proves that two runs used different prompts; the version says which prompt
+each one ran, so a baseline is never read as comparable across a prompt change.
+The viewer draws it in the run header beside the Git SHA.
+
+`freeze` refuses a capture that has no `prompt_version`, and the replay validator refuses a manifest
+that omits it or that still declares `schema_version` 1.
+The three replays recorded before the stamp were labelled from the prompt version in the commit
+each capture ran at: `v1` for `t0025.7-acceptance.json` and `t0025.9-committed.json`, `v3` for
+`t0024.4-v3-obligations.json`.
+
 ## The pipeline
 
 ```text
@@ -73,7 +87,7 @@ against recorded turns, not by paying for a new capture.
 | `grader.py` | Deterministic three-tier grading (structural, textual, judge) with `PASS`/`FAIL`/`INFRA`/`UNRUN`. The last two are excluded from denominators. Owns how a rule is applied, never what a scenario expects |
 | `holdout.py` | Six-scenario contract suite, authored against the behavior spec rather than from the registry or the recorded answers |
 | `replay.py` | Validates the committed artifact, executes its SQL, grades it, and checks expected PASS, FAIL, or EXEMPT execution outcomes. What CI runs |
-| `replays/` | The committed sanitized evidence the gate replays. It retains questions, answers, tools, SQL, and expected outcomes, never telemetry or trace identifiers |
+| `replays/` | The committed sanitized evidence the gate replays. It retains questions, answers, tools, SQL, expected outcomes, and the `prompt_version` its capture ran, never telemetry or trace identifiers |
 | `judge.py` | `DeepEvalBaseLLM` adapter with an RPM throttle. No scenario rule reaches the judge tier yet |
 | `writeback.py` | Langfuse score writeback. Called by `harness.py`; not part of the deterministic path |
 | `fixtures/loader.py` | Builds and resets the frozen fixture through Alembic plus `seed_eval_db.sql`. Owns `fixture_database_url()` |

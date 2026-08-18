@@ -374,13 +374,17 @@ milestones:
 
   - id: M35
     title: Capture Lineage Stamp
-    status: planned
+    status: in-progress
+    branch: feature/t0035.1-capture-lineage
     tickets: [T0035.1]
     scope:
       - evals/driver.py
       - evals/replay.py
+      - evals/viewer.py
+      - evals/replays/
       - evals/README.md
       - tests/evals/
+      - docs/roadmap.yaml
       - docs/entries/
     note: >-
       Allocated 2026-08-18 out of the M24 re-scope. T0024.1 landed prompt_version so that runs
@@ -391,6 +395,11 @@ milestones:
       T0035.1 stamps prompt_version into the capture manifest and surfaces it in the viewer
       header. Scope is disjoint from M24, M32, M33 and M34. Best landed before T0024.4 captures
       its v2 control, so that control is the first correctly-labelled baseline; not a blocker.
+      Scope widened 2026-08-18 by the PR that needed it, by two paths the note already implied:
+      evals/viewer.py, because "surfaces it in the viewer header" is a change to the header the
+      viewer builds, and evals/replays/, because the stamp changes the replay schema and the three
+      committed replays have to carry it or CI fails on its own evidence. T0024.4 merged first, so
+      its v3 capture is backfilled with the rest rather than being born labelled.
 
   - id: M36
     title: Scope Check Generated-Region Exemption

@@ -13,7 +13,12 @@ from evals.scenarios import load_scenarios
 from evals.sanitization import FORBIDDEN_CONTENT as _FORBIDDEN_CONTENT
 
 REPLAY_PATH = Path(__file__).with_name("replays") / "t0025.9-committed.json"
-_MANIFEST_KEYS = {"run_id", "schema_version", "source_capture", "sanitized"}
+
+# 2 (T0035.1) added prompt_version. The bump is checked rather than tolerated: a
+# schema_version 1 artifact predates the lineage stamp, so accepting it would let an
+# unlabelled replay pass as a labelled one - the silent invalidation M35 exists to stop.
+REPLAY_SCHEMA_VERSION = 2
+_MANIFEST_KEYS = {"run_id", "schema_version", "source_capture", "sanitized", "prompt_version"}
 _SCENARIO_KEYS = {"scenario_type", "status", "repeats"}
 _REPEAT_KEYS = {"repeat", "status", "turns"}
 _TURN_KEYS = {
@@ -53,8 +58,15 @@ def validate_replay(replay: dict[str, Any]) -> None:
         and isinstance(manifest["schema_version"], int)
         and isinstance(manifest["source_capture"], str)
         and manifest["sanitized"] is True
+        and isinstance(manifest["prompt_version"], str)
+        and manifest["prompt_version"].strip()
     ):
         raise ValueError("Replay manifest has invalid provenance fields")
+    if manifest["schema_version"] != REPLAY_SCHEMA_VERSION:
+        raise ValueError(
+            f"Replay schema_version is {manifest['schema_version']}, "
+            f"expected {REPLAY_SCHEMA_VERSION}"
+        )
     if replay["status"] != "COMPLETE":
         raise ValueError("Replay status must be COMPLETE")
     if _FORBIDDEN_CONTENT.search(json.dumps(replay)):

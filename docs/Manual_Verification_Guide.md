@@ -34,6 +34,20 @@ developer to create, and the text is not editable here anyway.
    `docs_build.py` and then the lint with `--diff-base origin/main`. It must exit 0, where before
    this ticket it reported three registers as out of scope.
 
+### T0035.1: Stamp prompt_version into the capture manifest and the viewer header
+
+1. `uv run python -m evals.replay` must exit 0. Then set
+   `evals/replays/t0025.9-committed.json`'s `schema_version` back to `1` and re-run: it must fail
+   naming `schema_version`. Revert.
+2. Delete the `prompt_version` line from the same file and re-run `evals.replay`: it must fail
+   naming `prompt_version`. Revert.
+3. Grade and view any capture recorded before this ticket:
+   `uv run python -m evals.viewer evals/runs/<run>.json`. The run header must show
+   `PROMPT VERSION not recorded` between the Git SHA and Baseline eligible. Add
+   `"prompt_version": "v1"` to that run's manifest, re-render, and the same slot must read `v1`.
+4. `uv run python -c "from evals import driver; print(driver.build_manifest()['prompt_version'])"`
+   with the fixture Postgres up must print the value in `config/prompts.yaml` (`v3` today).
+
 ### T0032.2: Record the model-facing string surface
 
 - Add a temporary `return "test string"` to a tool function and run

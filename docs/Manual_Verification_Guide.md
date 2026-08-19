@@ -48,6 +48,17 @@ developer to create, and the text is not editable here anyway.
 4. `uv run python -c "from evals import driver; print(driver.build_manifest()['prompt_version'])"`
    with the fixture Postgres up must print the value in `config/prompts.yaml` (`v3` today).
 
+### T0033.5: Translate user-facing tool literals to Vietnamese
+
+- Run the demo against the fixture database and force a multi-row result to confirm the Vietnamese
+  result header while column names and source values remain unchanged.
+- Force a truncated result and confirm the Vietnamese truncation notice.
+- Submit invalid SQL through the tool and confirm the Vietnamese refusal preserves the validator
+  reason.
+- Request a nonexistent posting id and confirm the Vietnamese missing-posting message.
+- Trigger a database failure and confirm the Vietnamese safe error without leaking the underlying
+  exception.
+
 ### T0032.2: Record the model-facing string surface
 
 - Add a temporary `return "test string"` to a tool function and run

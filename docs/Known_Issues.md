@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 16 | 1 | 3 |
+| MED | 17 | 1 | 3 |
 | LOW | 18 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -42,6 +42,15 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Next:** Re-run with the evaluation fixture database available.
   Diagnose the setup stall if it persists.
   - **History:** Not caused or fixed by T0033.3.
+
+- `KI-2026-08-19-m38-scope-conflict` **`[MED · OPEN]` The documentation linter still reports the
+  active M38 scope and frozen-register conflicts for this ticket's changed paths.
+  - **Found:** `uv run python scripts/docs_lint.py` reported the conflicts after the focused tests
+    and Ruff checks passed.
+  - **Impact:** The ticket cannot report a clean repository-wide documentation lint result from this
+    branch.
+  - **Next:** The integration or roadmap owner should reconcile the active scope before merging the
+    ticket.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 

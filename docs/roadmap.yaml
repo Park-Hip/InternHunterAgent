@@ -632,6 +632,7 @@ milestones:
       - tests/evals/test_driver.py
       - tests/evals/test_fixture_counts.py
       - docs/roadmap.yaml
+      - docs/README.md
       - docs/entries/
     note: >-
       Allocated 2026-08-19 for the open low-severity fixture-test hang first filed by T0026.1

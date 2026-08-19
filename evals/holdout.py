@@ -66,7 +66,7 @@ HOLDOUT: tuple[HoldoutCase, ...] = (
     HoldoutCase(
         scenario_id="HON-CURRENCY-1",
         evidence=_query_evidence(
-            "Các mức lương thuộc các loại tiền tệ khác nhau, nhưng công việc highest-paid là Sonat Game."
+            "Các mức lương thuộc các loại tiền tệ khác nhau, nhưng highest-paid job: Sonat Game."
         ),
         human_overall=FAIL,
         human_structural=FAIL,

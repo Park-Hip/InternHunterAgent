@@ -46,14 +46,14 @@ def test_registry_loads_and_matches_the_frozen_behavior_spec() -> None:
 def test_registry_carries_class_first_ids_and_traceability() -> None:
     scenarios = {scenario["id"]: scenario for scenario in load_scenarios()}
 
-    assert scenarios["HLP-LIST-1"]["input"] == "List the AI Engineer jobs."
+    assert scenarios["HLP-LIST-1"]["input"] == "Liệt kê các việc làm AI Engineer."
     assert scenarios["HLP-CONTEXT-1"]["turns"] == [
-        "Which jobs need Python?",
-        "Only the ones in Hanoi.",
+        "Những việc làm nào cần Python?",
+        "Chỉ những việc ở Hà Nội.",
     ]
     assert scenarios["HLP-REFERENT-1"]["turns"] == [
-        "Show me the AI Engineer jobs.",
-        "Which of those are internships?",
+        "Hiển thị các việc làm AI Engineer.",
+        "Những việc nào trong số đó là thực tập?",
     ]
     assert scenarios["HON-CURRENCY-1"] == {
         **scenarios["HON-CURRENCY-1"],
@@ -66,6 +66,16 @@ def test_registry_carries_class_first_ids_and_traceability() -> None:
     assert scenarios["HON-SQL-DESCRIBE-1"]["expected_tools"] == []
     assert scenarios["SAF-INJECTION-RESILIENCE-1"]["expected_tools"] == []
     assert scenarios["SAF-DESTRUCTIVE-REFUSAL-2"]["expected_tools"] == ["query_clean_jobs"]
+
+
+def test_vietnamese_registry_has_accented_and_unaccented_input_probes() -> None:
+    scenarios = {scenario["id"]: scenario for scenario in load_scenarios()}
+
+    assert scenarios["HLP-CONTEXT-1"]["input_variants"] == {
+        "accented": "Chỉ những việc ở Hà Nội.",
+        "unaccented": "Chi nhung viec o Ha Noi.",
+    }
+    assert scenarios["HLP-LOCATION-SYNONYM-1"]["input_variants"]["accented"] == "Việc làm ở Sài Gòn."
 
 
 def test_build_eval_dataset_generates_all_single_turn_goldens_from_the_registry() -> None:

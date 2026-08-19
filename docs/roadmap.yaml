@@ -311,6 +311,7 @@ milestones:
       - docs/Agent_Behavior_Spec.md
       - evals/scenarios_v1.yaml
       - evals/grader.py
+      - evals/holdout.py
       - evals/replays/
       - tests/evals/
       - src/api/static/

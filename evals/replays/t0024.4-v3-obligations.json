@@ -2,7 +2,7 @@
   "manifest": {
     "run_id": "885553d6-746e-4b39-a682-8b3d8735657c",
     "schema_version": 2,
-    "source_capture": "t0024.4-v3-obligations.json",
+    "source_capture": "t0024.4-v3-obligations.json; English capture graded against Vietnamese glossary anchors after T0033.2",
     "sanitized": true,
     "prompt_version": "v3"
   },
@@ -218,7 +218,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "PASS",
-              "expected_grade": "PASS",
+              "expected_grade": "FAIL",
               "seams": {
                 "question": "Which jobs are remote?",
                 "answer": "Based on the posting text, here are the jobs that appear to be remote or work-from-home:\n\n1. **AI Engineer** — Công Ty Cổ Phần ITL Aviation Logistics\n   - **Location:** Ho Chi Minh City\n   - **Tech stack:** Python, TensorFlow, AWS\n   - **Salary:** $2,000–$3,500 USD/month\n   - **Level:** Experienced (non-manager)\n\n2. **Home Racer - Data Engineer** — Home Credit Vietnam\n   - **Location:** Ho Chi Minh City\n   - **Tech stack:** Java, Spark, Kafka, SQL\n   - **Salary:** 20,000,000–28,000,000 VND/month\n   - **Level:** Experienced (non-manager)\n\nA couple of caveats to keep in mind:\n- There's no dedicated \"remote\" field in the data — I matched these based on the posting text (e.g., the \"Home Racer\" title suggests work-from-home). The match is based on wording and may be imperfect; a posting could mention the term only in passing.\n- The dates shown are the listings' expiry dates, not application deadlines.\n\nWould you like more details on either of these postings?",
@@ -238,7 +238,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "PASS",
-              "expected_grade": "PASS",
+              "expected_grade": "FAIL",
               "seams": {
                 "question": "Which jobs are remote?",
                 "answer": "Based on the posting text, here are the jobs that appear to be remote or work-from-home:\n\n1. **AI Engineer** — Công Ty Cổ Phần ITL Aviation Logistics\n   - Location: Ho Chi Minh City\n   - Tech stack: Python, TensorFlow, AWS\n   - Salary: $2,000–$3,500 USD/month\n   - Level: Experienced (non-manager)\n\n2. **Home Racer - Data Engineer** — Home Credit Vietnam\n   - Location: Ho Chi Minh City\n   - Tech stack: Java, Spark, Kafka, SQL\n   - Salary: 20,000,000–28,000,000 VND/month\n   - Level: Experienced (non-manager)\n\nA couple of caveats to keep in mind:\n- There's no dedicated \"remote\" field in the data — I matched these based on the posting text, so the match may be imperfect. A posting could mention \"remote\" only in passing.\n- The listing expiry dates shown are the source listing's expiry dates, not application deadlines.\n\nWould you like more details on either of these postings?",
@@ -258,7 +258,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "PASS",
-              "expected_grade": "PASS",
+              "expected_grade": "FAIL",
               "seams": {
                 "question": "Which jobs are remote?",
                 "answer": "Based on the posting text, here are the jobs that appear to be remote or work-from-home:\n\n1. **AI Engineer** — Công Ty Cổ Phần ITL Aviation Logistics\n   - Location: Ho Chi Minh City\n   - Tech stack: Python, TensorFlow, AWS\n   - Salary: $2,000–$3,500 USD/month\n   - Level: Experienced (non-manager)\n\n2. **Home Racer - Data Engineer** — Home Credit Vietnam\n   - Location: Ho Chi Minh City\n   - Tech stack: Java, Spark, Kafka, SQL\n   - Salary: 20,000,000–28,000,000 VND/month\n   - Level: Experienced (non-manager)\n\nA couple of caveats to keep in mind:\n- There's no dedicated \"remote\" field in the data — I matched these based on the posting text, so the match may be imperfect (a posting could mention the term only in passing).\n- The dates shown are when the posting was recorded on VietnamWorks, not necessarily when the role opened.\n\nWould you like more details on either of these postings?",
@@ -284,7 +284,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "PASS",
-              "expected_grade": "PASS",
+              "expected_grade": "FAIL",
               "seams": {
                 "question": "What does the AI Engineer internship in Da Nang pay?",
                 "answer": "I found the posting you're referring to. Here's what the data shows:\n\n**AI Engineer (Fresher/Junior)** at **K&M Holdings** in **Da Nang**\n- Job level: Intern/Student (listed as an internship)\n- Tech stack: Python, scikit-learn, Pandas\n\n**Regarding salary:** This posting does not disclose a specific salary figure — the salary is listed as **negotiable**. So I don't have a number to share for this role. If you're interested, you'd likely need to discuss compensation directly with the company.\n\nA couple of caveats worth noting:\n- The posting was recorded on VietnamWorks on 2026-05-26 (that's the record-creation date, not necessarily when the role opened).\n- There's no application deadline in the data — the listing expiry date isn't shown.\n\nWould you like me to pull up the full job description for this posting, or search for other AI/data roles in Da Nang?",
@@ -304,7 +304,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "PASS",
-              "expected_grade": "PASS",
+              "expected_grade": "FAIL",
               "seams": {
                 "question": "What does the AI Engineer internship in Da Nang pay?",
                 "answer": "I found the posting you're referring to. Here's what I can tell you:\n\n**AI Engineer (Fresher/Junior)** at **K&M Holdings** in Da Nang — this is listed as an internship-level role.\n\nRegarding the pay: this posting **does not disclose a specific salary figure**, and it's marked as **salary negotiable**. So I don't have a number to share for it — the salary would need to be discussed directly with the employer.\n\nA couple of notes on the data:\n- The posting was recorded on VietnamWorks on **2026-05-26** (that's the record-creation date, not necessarily when the role opened).\n- The tech stack listed is **Python, scikit-learn, and Pandas**.\n\nWould you like me to pull up the full description for this posting, or search for other AI Engineer roles in Da Nang that might have salary information?",
@@ -324,7 +324,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "PASS",
-              "expected_grade": "PASS",
+              "expected_grade": "FAIL",
               "seams": {
                 "question": "What does the AI Engineer internship in Da Nang pay?",
                 "answer": "I found the posting you're referring to. Here's what I can tell you:\n\n**AI Engineer (Fresher/Junior) at K&M Holdings** — Da Nang\n- This is an internship-level position (job level: Intern/Student).\n- **Salary:** The posting does not disclose a specific salary figure — it's marked as **negotiable**. So there's no number I can share for this role.\n\nA couple of caveats worth noting:\n- The salary being \"negotiable\" means the figure isn't listed, so you'd likely need to discuss compensation directly with the employer.\n- The posting was recorded on VietnamWorks on 2026-05-26 (that's the record-creation date, not necessarily when the role opened).\n\nWould you like me to pull up the full description for this posting, or search for other AI Engineer roles in Da Nang that do list a salary?",

@@ -4195,6 +4195,79 @@ The behavior specification was updated in scope for this ticket.
 
 ---
 
+## T0033.3 - Vietnamese evaluation scenarios and row-aware purity grading
+
+*Completed 2026-08-19.*
+
+**Summary**
+
+Translated all 29 evaluation scenario inputs into Vietnamese.
+Marked every scenario as a Vietnamese-language scenario.
+Added accented and unaccented probes for Hà Nội and Sài Gòn.
+Added validated registry lexicon terms without weakening the glossary-reference contract.
+Extended answer-count grading with Vietnamese number words from zero through twelve.
+The table includes unaccented forms.
+Added row-aware agent-prose purity grading.
+It removes canonical and source values before checking for English prose.
+Updated committed replay questions to match the translated registry inputs.
+Replay coverage was not expanded.
+
+**Files**
+
+- `evals/grader.py` changed.
+- `evals/scenarios.py` changed.
+- `evals/scenarios_v1.yaml` changed.
+- `evals/replays/t0025.9-committed.json` changed.
+- `tests/evals/test_grader.py` changed.
+- `tests/evals/test_scenarios.py` changed.
+- `docs/entries/T0033.3.md` created.
+
+**Commands**
+
+- `uv run pytest -q tests/evals/test_scenarios.py tests/evals/test_grader.py`
+- `uv run pytest -q tests/evals/test_replay.py tests/evals/test_execution_accuracy.py`
+- `uv run pytest -q tests/evals/test_scenarios.py tests/evals/test_grader.py`
+- `uv run ruff check evals/grader.py evals/scenarios.py`
+- `uv run ruff check tests/evals/test_grader.py tests/evals/test_scenarios.py`
+- `uv run python -c "from evals.scenarios import load_scenarios;`
+  `assert len(load_scenarios()) == 29"`
+- `uv run python scripts/docs_lint.py`
+- `uv run pytest -q tests/evals`
+
+**Build and test**
+
+The targeted scenario and grader suite passed with 31 tests.
+The replay, execution-accuracy, scenario, and grader suite passed with 52 tests.
+Ruff passed for all changed Python files.
+The registry load check passed and confirmed 29 Vietnamese scenarios.
+The full `tests/evals` run stalled in fixture and database setup and was terminated.
+The documentation linter did not pass because the existing M38 scope declaration excludes frozen
+documentation and research registers.
+No frozen register was changed by this ticket.
+
+**Risks**
+
+The deterministic purity detector intentionally uses a conservative English stop-word set.
+It is not a general language classifier.
+Purity is evaluated only when returned row evidence is present.
+This preserves existing replay behavior for answer-only artifacts.
+The committed replay still contains English answers and has not been recaptured against a
+Vietnamese model response.
+
+**Follow-ups**
+
+T0033.2 should land the Vietnamese glossary and its Vietnamese anchor terms before a live capture
+is graded.
+The full 29-scenario Vietnamese capture remains out of scope and requires a separate quota decision.
+
+**Docs**
+
+The integration session should fold this entry into the frozen completion, manual-verification, and
+known-issues registers.
+No other documentation update is required from this ticket.
+
+---
+
 ## T0034.1 - Reproduce the serving memory-window eviction boundary
 
 *Completed 2026-08-18.*

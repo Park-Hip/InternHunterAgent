@@ -41,7 +41,10 @@ class StaticServingTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('data_snapshot_date_provenance === "measured"', response.text)
-        self.assertIn("refresh date unavailable", response.text)
+        self.assertIn(
+            "Dữ liệu thử nghiệm · chưa có ngày cập nhật · tin tuyển dụng công khai, có thể không chính xác.",
+            response.text,
+        )
 
 
 if __name__ == "__main__":

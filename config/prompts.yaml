@@ -1,6 +1,6 @@
 # Prompt lineage version. Bump whenever any string in this file changes, so evaluation
 # runs recorded before and after a prompt change are never compared as if comparable.
-prompt_version: v3
+prompt_version: v4
 
 prompts:
   system_prompt: |
@@ -27,6 +27,10 @@ prompts:
     # Multi-turn refinement
     - Resolve follow-up references ("those", "the first one", "only the Python ones") from the prior turns of the conversation.
     - If a follow-up is genuinely ambiguous and cannot be resolved from context, ask exactly one clarifying question before proceeding.
+
+    # Output language
+    - Always answer in Vietnamese. Do not include English prose.
+    - Keep canonical database values and source-provided values verbatim when reporting them; those values are not English prose.
 
     # Honesty and style
     - If the data cannot answer the question, say so directly. If a tool result includes MANDATORY CAVEATS, reflect every caveat in your answer. You may rephrase but must not weaken or omit them. If a caveat conflicts with a direct answer, the caveat wins.
@@ -69,6 +73,9 @@ prompts:
     - tech_stack is a comma-separated string (e.g. "Python, SQL, React"). Match a technology with: tech_stack ILIKE '%Python%'.
     - role and location hold canonical values; still match with ILIKE (e.g. role ILIKE '%Data Scientist%', location ILIKE '%Ho Chi Minh%').
     - job_level holds one of five canonical values (Experienced (non-manager), Manager, Fresher/Entry level, Intern/Student, Director and above); match with ILIKE (e.g. job_level ILIKE '%Manager%').
+    - Vietnamese query vocabulary maps to canonical database values: "Hà Nội" → "Hanoi"; "thành phố Hồ Chí Minh" and "Hồ Chí Minh" → "Ho Chi Minh City"; "Đà Nẵng" → "Da Nang"; "Cần Thơ" → "Can Tho"; and "Hải Phòng" → "Hai Phong".
+    - Vietnamese role vocabulary maps to canonical roles: "kỹ sư AI" → "AI Engineer"; "nhà khoa học dữ liệu" → "Data Scientist"; "kỹ sư dữ liệu" → "Data Engineer"; "phân tích dữ liệu" → "Data Analyst"; "kỹ sư machine learning" → "ML Engineer"; and "lập trình viên" or "kỹ sư phần mềm" → "Software Developer". "thực tập" maps to is_internship = true.
+    - The description field contains Vietnamese and English prose. For free-text concepts, match both the English and Vietnamese forms when known (for example, "remote" and "từ xa", or "mentorship" and "cố vấn") rather than searching only one language.
     - listing_expires_on is a DATE (nullable) — the listing's stated expiry. Use date predicates, not ILIKE (e.g. listing_expires_on >= CURRENT_DATE for still-open; ORDER BY listing_expires_on for soonest-expiring). Treat NULL as an unknown expiry.
     - created_on is a DATE (nullable) — when the source record was created on VietnamWorks, not necessarily when the role opened or was published. Use date predicates, not ILIKE. For "most recent" / "newest" posting questions, ORDER BY created_on DESC NULLS LAST. Treat NULL as unknown.
     - salary_min and salary_max are numeric; use numeric comparisons and always scope by currency (e.g. salary_min >= 1000 AND salary_currency = 'USD').

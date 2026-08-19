@@ -306,6 +306,7 @@ milestones:
     status: planned
     tickets: [T0033.1, T0033.2, T0033.3, T0033.4, T0033.5]
     scope:
+      - docs/roadmap.yaml
       - config/prompts.yaml
       - docs/Agent_Behavior_Spec.md
       - evals/scenarios_v1.yaml

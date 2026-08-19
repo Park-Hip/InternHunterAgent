@@ -85,19 +85,19 @@ INVENTORY = frozenset(
         PromptSurface(
             path="src/agents/tools/get_job_details.py",
             symbol="get_job_details",
-            text="I couldn't retrieve the requested data due to a database error. Please try again later.",
+            text="Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau.",
             visibility="model-visible",
         ),
         PromptSurface(
             path="src/agents/tools/query_clean_jobs.py",
             symbol="query_clean_jobs",
-            text='f"I can\'t run that query: {validation.reason}"',
+            text='f"Tôi không thể chạy truy vấn đó: {validation.reason}"',
             visibility="model-visible",
         ),
         PromptSurface(
             path="src/agents/tools/query_clean_jobs.py",
             symbol="query_clean_jobs",
-            text="I couldn't retrieve the requested data due to a database error. Please try again later.",
+            text="Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau.",
             visibility="model-visible",
         ),
     }

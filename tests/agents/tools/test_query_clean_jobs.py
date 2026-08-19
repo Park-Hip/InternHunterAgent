@@ -29,7 +29,7 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
         result = await query_clean_jobs.ainvoke({"question": "What internships are available?"})
 
-        self.assertIn("Found 2 result(s)", result)
+        self.assertIn("Tìm thấy 2 kết quả", result)
         self.assertIn("title", result)
         self.assertIn("company", result)
         self.assertIn("Acme", result)
@@ -80,7 +80,7 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
         result = await query_clean_jobs.ainvoke({"question": "Delete everything"})
 
-        self.assertIn("I can't run that query", result)
+        self.assertIn("Tôi không thể chạy truy vấn đó", result)
         self.assertIn("Only SELECT statements are allowed", result)
         mock_execute_validated_sql.assert_not_called()
         mock_logger.warning.assert_called_once_with(
@@ -103,7 +103,7 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
         result = await query_clean_jobs.ainvoke({"question": "What internships are available?"})
 
-        self.assertIn("database error", result)
+        self.assertIn("lỗi cơ sở dữ liệu", result)
         self.assertNotIn("connection refused", result)
 
     @patch("src.agents.tools.query_clean_jobs.logger")
@@ -186,8 +186,8 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
         result = await query_clean_jobs.ainvoke({"question": "show me the top 2 highest-paying internships"})
 
-        self.assertIn("Found 2 result(s)", result)
-        self.assertNotIn("there are more", result)
+        self.assertIn("Tìm thấy 2 kết quả", result)
+        self.assertNotIn("vẫn còn kết quả phù hợp", result)
 
     @patch("src.agents.tools.query_clean_jobs.execute_validated_sql")
     @patch("src.agents.tools.query_clean_jobs.validate_sql")
@@ -204,7 +204,7 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
         result = await query_clean_jobs.ainvoke({"question": "how many jobs are there?"})
 
         self.assertIn("42", result)
-        self.assertNotIn("Showing", result)
+        self.assertNotIn("Đang hiển thị", result)
 
 
 class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):

@@ -37,13 +37,15 @@ def load_max_detail_ids() -> int:
 def _build_answer(ids: list[int], capped_ids: list[int], rows: list[dict]) -> str:
     lines = []
     if len(capped_ids) < len(ids):
-        lines.append(f"Showing details for {len(capped_ids)} of {len(ids)} requested.")
+        lines.append(
+            f"Đang hiển thị thông tin chi tiết của {len(capped_ids)} trong số {len(ids)} tin tuyển dụng được yêu cầu."
+        )
 
     rows_by_id = {row.get("id"): row for row in rows}
     for job_id in capped_ids:
         row = rows_by_id.get(job_id)
         if row is None:
-            lines.append(f"No posting found for id {job_id}.")
+            lines.append(f"Không tìm thấy tin tuyển dụng nào với mã {job_id}.")
             continue
         pairs = ", ".join(f"{column}={value}" for column, value in row.items())
         lines.append(f"- {pairs}")
@@ -78,7 +80,7 @@ async def get_job_details(ids: list[int]) -> str:
         rows = await asyncio.to_thread(fetch_job_details, capped_ids)
     except ExecutorError as exc:
         logger.error("get_job_details.db_error", error=str(exc))
-        return "I couldn't retrieve the requested data due to a database error. Please try again later."
+        return "Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau."
 
     obligations = filter_enabled_obligations(detect_row_obligations(_table_from_detail_rows(rows)))
     return render_obligations(

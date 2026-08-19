@@ -4836,4 +4836,198 @@ that direction.
 The v3 calibration set contains only 18 honesty turns.
 Its corrected 15/18 result must not be treated as a production accuracy estimate.
 The fixture replay remains dependent on Docker availability.
+
+---
+
+## T0039.1 - Aggregate cost and latency from recorded telemetry
+
+*Completed 2026-08-19.*
+
+**Summary**
+
+Added `evals.telemetry`, which aggregates per-turn latency and token p50, p95, and totals.
+Unavailable values are excluded.
+The report includes the capture run id, prompt version, provider, configured prices, and calculated
+USD cost.
+Corrected the evaluation command table to identify DeepSeek as the serving provider.
+
+**Files**
+
+- Created `evals/telemetry.py`.
+- Created `tests/evals/test_telemetry.py`.
+- Changed `config/settings.yaml` and `evals/README.md`.
+
+**Commands**
+
+- `uv run pytest -q tests/evals/test_telemetry.py`.
+- `uv run pytest -q tests/evals/test_driver.py tests/evals/test_replay.py` was attempted.
+  Collection requires local Langfuse credentials.
+- No DeepSeek or other provider command was run.
+
+**Build and test**
+
+The focused telemetry tests pass.
+The broader evaluation tests are blocked at collection by missing `LANGFUSE_PUBLIC_KEY` and
+`LANGFUSE_SECRET_KEY` in this worktree.
+
+**Risks**
+
+The current capture schema labels telemetry per turn and provider call, but does not identify
+routing, SQL, and synthesis calls as separate semantic seams.
+This report therefore does not invent seam labels that the artifact cannot support.
+
+**Follow-ups**
+
+T0039.2 and T0039.3 are complete, and T0039.4 points CI at the selected v4 replay.
+The remaining integration action is maintainer branch protection and register publication.
+
+**Docs**
+
+The evaluation README command table now reflects DeepSeek serving and documents the offline
+telemetry command.
+
+---
+
+## T0039.2 - Let the freezer accept legitimate no-SQL turns
+
+*Completed 2026-08-19.*
+
+**Summary**
+
+No generated SQL now produces an `EXEMPT` execution-accuracy verdict with an explicit reason.
+The change is in `grade_turn`, so the freezer remains a projection of verdicts rather than a list
+of special cases.
+
+**Files**
+
+- Changed `evals/execution_accuracy.py`.
+- Added coverage in `tests/evals/test_execution_accuracy.py` for the HLP-CONTEXT-1 shape.
+
+**Commands**
+
+- `uv run pytest -q tests/evals/test_execution_accuracy.py`.
+- No DeepSeek or other provider command was run.
+
+**Build and test**
+
+The focused execution-accuracy tests pass.
+
+**Risks**
+
+The execution verdict is exempt even when a scenario expected a query.
+The structural grader still checks required tool calls, so a missing required tool remains visible
+as a separate failure.
+
+**Follow-ups**
+
+T0039.3 and T0039.4 are complete using the maintainer-selected v4 replay artifact.
+The remaining integration action is maintainer branch protection and register publication.
+
+**Docs**
+
+No documentation update is required beyond the generated completion and
+manual-verification registers.
+
+---
+
+## T0039.3 - Capture the full DeepSeek baseline
+
+*Completed 2026-08-19.*
+
+**Summary**
+
+The full capture completed with 29 of 29 scenarios and 77 of 77 turns.
+The run used DeepSeek for both profiles and completed without a quota error.
+The capture was graded offline and frozen as `evals/replays/t0039.3-deepseek-v4.json`.
+The maintainer selected the observed `prompt_version: v4` result as the M39 baseline.
+It measured 4 PASS and 73 FAIL under the current Vietnamese ruleset.
+The artifact is promoted as the v4 quality baseline without changing any observed grades.
+
+**Files**
+
+- Created `evals/replays/t0039.3-deepseek-v4.json`.
+- Created `docs/entries/T0039.3.md`.
+- Runtime captures, grade output, execution output, and telemetry remain under ignored
+  `evals/runs/`.
+
+**Commands**
+
+- `uv run python -m evals.fixtures.loader`.
+- `uv run python -m evals.driver --output evals/runs/t0039.3-deepseek-v3.json`.
+- `uv run python -m evals.execution_accuracy ... --output ...`.
+- Offline grading and `uv run python -m evals.driver freeze ...`.
+- `uv run python -m evals.replay --replay evals/replays/t0039.3-deepseek-v4.json`.
+- `uv run python -m evals.telemetry ...`.
+
+**Build and test**
+
+| Check | Result |
+|---|---|
+| Capture | 29/29 scenarios, 77/77 turns, complete |
+| Provider | DeepSeek on both profiles, no quota error |
+| Grading | 4 PASS, 73 FAIL, no empty answers |
+| Replay | Passed deterministic validation and outcome checks |
+| Telemetry | 303,132 input tokens, 35,141 output tokens, $0.052278 upper-bound cost |
+| Latency | p50 5,325 ms, p95 7,948.6 ms |
+
+**Risks**
+
+The capture was run against the Vietnamese `v4` prompt and current Vietnamese registry rules.
+Its failure rate is a v4 baseline observation, not a general product-quality pass threshold.
+The capture cost was incurred and the replay is retained to avoid repeating that spend without
+a deliberate decision.
+
+**Follow-ups**
+
+T0039.4 now points CI at the selected v4 replay.
+The remaining integration action is maintainer branch protection and register publication.
+
+**Docs**
+
+The T0039.3 evidence and maintainer baseline decision are recorded here for integration.
+
+---
+
+## T0039.4 - Point CI at the v4 baseline replay
+
+*Completed 2026-08-19.*
+
+**Summary**
+
+The default replay path now points to `t0039.3-deepseek-v4.json`.
+The selected replay contains all 29 scenarios and 77 turns from the DeepSeek capture.
+Replay validation passed without making a provider call.
+
+**Files**
+
+- Changed `evals/replay.py`.
+- Changed `tests/evals/test_replay.py`.
+- Added `docs/entries/T0039.4.md`.
+
+**Commands**
+
+- `uv run python -m evals.replay --replay evals/replays/t0039.3-deepseek-v4.json`.
+- `uv run python -m evals.replay` with the evaluation database available.
+- `uv run pytest -q tests/evals/test_replay.py`.
+- `uv run ruff check evals/replay.py tests/evals/test_replay.py`.
+
+**Build and test**
+
+The frozen v4 replay completed deterministic validation and outcome checks.
+The focused replay test passed.
+No provider API call is required by the CI replay path.
+
+**Risks**
+
+The selected baseline records 4 PASS and 73 FAIL.
+This is an observed v4 quality signal and must not be interpreted as a clean release gate.
+
+**Follow-ups**
+
+The integration session must publish the generated registers and update the repository snapshot.
+The maintainer must configure branch protection for the CI gate.
+
+**Docs**
+
+The generated completion and manual-verification registers need regeneration during integration.
 <!-- generated:reports:end -->

@@ -622,10 +622,36 @@ milestones:
       evals/Instrument_Report.md. The judge remains off pending broader v3 human agreement.
 
   - id: M39
+    title: Operational Telemetry and Quality Gate
+    status: in-progress
+    tickets: [T0039.1, T0039.2, T0039.3, T0039.4]
+    branch: codex/t0039.1-telemetry
+    scope:
+      - evals/telemetry.py
+      - evals/driver.py
+      - evals/replay.py
+      - evals/execution_accuracy.py
+      - evals/viewer.py
+      - evals/replays/
+      - evals/README.md
+      - evals/Operating_Manual.md
+      - evals/Instrument_Report.md
+      - config/settings.yaml
+      - tests/evals/
+      - .github/workflows/ci.yml
+      - docs/roadmap.yaml
+      - docs/entries/
+    note: >-
+      Allocated 2026-08-19. T0039.1 aggregates recorded telemetry without spending provider
+      quota. T0039.2 unblocks no-SQL freezes. T0039.3 captured 29 scenarios and 77 turns for
+      $0.052278, and the maintainer selected its observed v4 result as the baseline. T0039.4 points
+      CI at the frozen v4 replay without provider calls.
+
+  - id: M40
     title: Fixture Test Reliability
     status: claimed
-    tickets: [T0039.1]
-    branch: codex/t0039.1-fixture-test-reliability
+    tickets: [T0040.1]
+    branch: codex/t0040.1-fixture-test-reliability
     scope:
       - evals/fixtures/loader.py
       - tests/evals/conftest.py
@@ -640,7 +666,12 @@ milestones:
       Allocated 2026-08-19 for the open low-severity fixture-test hang first filed by T0026.1
       on 2026-08-14. When the dedicated Postgres fixture is unavailable on port 5433, the
       fixture-backed eval tests wait on the database driver's connection timeout instead of
-      reporting an environmental skip. T0039.1 adds a bounded reachability guard before fixture
+      reporting an environmental skip. T0040.1 adds a bounded reachability guard before fixture
       rebuilds, makes the affected tests skip with the documented `docker compose up -d`
       recovery path, and covers both the unreachable and reachable branches without changing
       fixture data, agent behavior, or production database handling.
+      Renumbered 2026-08-19 from M39/T0039.1, which was allocated the same day and collided with
+      the telemetry milestone above: codex/t0039.1-telemetry branched at the PR #77 merge, before
+      the fixture allocation reached main, so both claimed M39 for unrelated work. The telemetry
+      milestone kept the number because its four tickets were already complete and measured, while
+      this one had no entry file, no branch, and no code. No work is lost by the move.

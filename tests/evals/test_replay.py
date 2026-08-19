@@ -73,7 +73,7 @@ def test_committed_replay_names_the_prompt_that_produced_it() -> None:
     replay = load_replay()
 
     assert replay["manifest"]["schema_version"] == REPLAY_SCHEMA_VERSION
-    assert replay["manifest"]["prompt_version"] == "v1"
+    assert replay["manifest"]["prompt_version"] == "v4"
 
 
 def test_replay_rejects_a_manifest_that_cannot_name_its_prompt() -> None:

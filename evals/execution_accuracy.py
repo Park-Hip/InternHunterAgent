@@ -93,7 +93,10 @@ def grade_turn(
         }
     reference_sql = reference_sql or scenario.get("reference_sql")
     if not generated_sql:
-        return {"status": "UNRUN", "error": "No generated SQL was persisted"}
+        return {
+            "status": "EXEMPT",
+            "reason": "No generated SQL was persisted; execution accuracy does not apply.",
+        }
     if not isinstance(reference_sql, str):
         return {"status": "INFRA", "error": "Scenario has no turn reference SQL"}
     comparison_mode = scenario.get("grading", {}).get("execution_comparison", "exact")

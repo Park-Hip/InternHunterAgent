@@ -100,6 +100,18 @@ def test_exemption_preserves_reason() -> None:
     assert result == {"status": "EXEMPT", "reason": "No query is expected."}
 
 
+def test_no_sql_turn_is_exempt_from_execution_accuracy() -> None:
+    result = grade_turn(
+        {"id": "HLP-CONTEXT-1", "reference_sql": "SELECT 1"},
+        None,
+    )
+
+    assert result == {
+        "status": "EXEMPT",
+        "reason": "No generated SQL was persisted; execution accuracy does not apply.",
+    }
+
+
 def test_conversational_turns_can_use_turn_specific_references(monkeypatch) -> None:
     from evals.execution_accuracy import grade_run
 

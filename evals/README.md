@@ -18,8 +18,8 @@ the point of the design - a capture is expensive and rare, and grading it is fre
 
 | Command | Spends |
 |---|---|
-| `uv run python -m evals.driver` | **Groq serving quota.** One turn reserves ~9.2K tokens against an 8000 TPM ceiling |
-| `uv run python -m evals.driver --score` | Groq **and** Gemini judge quota |
+| `uv run python -m evals.driver` | **DeepSeek serving quota.** One capture calls the paid serving provider |
+| `uv run python -m evals.driver --score` | DeepSeek **and** Gemini judge quota |
 | `uv run pytest -m eval` / `deepeval test run evals/test_three_seams.py` | **Gemini judge quota** |
 | everything below | nothing - no network, no provider |
 
@@ -27,6 +27,7 @@ the point of the design - a capture is expensive and rare, and grading it is fre
 docker compose up -d                          # fixture Postgres on 5433
 uv run python -m evals.fixtures.loader        # build/reset the frozen fixture
 uv run python -m evals.replay                 # the CI gate: replay committed evidence
+uv run python -m evals.telemetry evals/runs/<run>.json  # aggregate recorded cost and latency
 uv run python -m evals.scenarios --scenario HON-CURRENCY-1
 uv run python -m evals.viewer --sample        # a viewer sample with no recorded run
 ```

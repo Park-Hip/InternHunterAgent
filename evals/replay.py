@@ -12,7 +12,7 @@ from evals.grader import grade_persisted_run
 from evals.scenarios import load_scenarios
 from evals.sanitization import FORBIDDEN_CONTENT as _FORBIDDEN_CONTENT
 
-REPLAY_PATH = Path(__file__).with_name("replays") / "t0025.9-committed.json"
+REPLAY_PATH = Path(__file__).with_name("replays") / "t0039.3-deepseek-v4.json"
 
 # 2 (T0035.1) added prompt_version. The bump is checked rather than tolerated: a
 # schema_version 1 artifact predates the lineage stamp, so accepting it would let an
@@ -169,8 +169,18 @@ def _assert_expected_outcomes(
         execution_repeats = execution_accuracy["scenarios"][scenario_id]
         grade_turns = grades["scenarios"][scenario_id]
         for repeat_index, repeat in enumerate(scenario_record["repeats"]):
+            if repeat_index >= len(execution_repeats):
+                mismatches.append(
+                    f"{scenario_id} r{repeat['repeat']} execution repeat is missing"
+                )
+                continue
             execution_turns = execution_repeats[repeat_index]["turns"]
             for turn_index, turn in enumerate(repeat["turns"]):
+                if turn_index >= len(execution_turns):
+                    mismatches.append(
+                        f"{scenario_id} r{repeat['repeat']} t{turn['turn']} execution turn is missing"
+                    )
+                    continue
                 execution_status = execution_turns[turn_index]["status"]
                 if execution_status != turn["expected_execution_accuracy"]:
                     mismatches.append(
@@ -178,11 +188,19 @@ def _assert_expected_outcomes(
                         f"expected {turn['expected_execution_accuracy']}, got {execution_status}"
                     )
                 grade = next(
-                    item
-                    for item in grade_turns
-                    if item["repeat"] == repeat["repeat"]
-                    and item["turn"] == turn["turn"]
+                    (
+                        item
+                        for item in grade_turns
+                        if item["repeat"] == repeat["repeat"]
+                        and item["turn"] == turn["turn"]
+                    ),
+                    None,
                 )
+                if grade is None:
+                    mismatches.append(
+                        f"{scenario_id} r{repeat['repeat']} t{turn['turn']} grade is missing"
+                    )
+                    continue
                 if grade["status"] != turn["expected_grade"]:
                     mismatches.append(
                         f"{scenario_id} r{repeat['repeat']} t{turn['turn']} grade "

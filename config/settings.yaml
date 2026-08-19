@@ -78,3 +78,8 @@ eval:
     # and the driver runs one turn at a time - so the serving default needs no pacing.
     # Restore 75 together with the groq arm; the T0027.3 capture ran 77 turns at 0.
     turn_pacing_seconds: 0
+  telemetry:
+    prices:
+      deepseek:
+        input_usd_per_million: 0.14
+        output_usd_per_million: 0.28

@@ -12,7 +12,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
 | MED | 17 | 1 | 3 |
-| LOW | 18 | 2 | 0 |
+| LOW | 19 | 2 | 0 |
 <!-- generated:triage:end -->
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
@@ -51,6 +51,13 @@ copies can never drift. Entries that predate the id convention are never inboxed
     branch.
   - **Next:** The integration or roadmap owner should reconcile the active scope before merging the
     ticket.
+
+- `KI-2026-08-19-langfuse-env-in-worktree` **`[LOW · OPEN]` Evaluation test collection requires
+  local Langfuse credentials.**
+  - **Found:** The fresh ticket worktree has no `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY`.
+  - **Impact:** Existing driver and replay tests cannot collect here.
+  - **Next:** Provide test credentials or use the repository's configured test environment.
+  - **History:** No code change was made to bypass the normal configuration contract.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 

@@ -24,6 +24,34 @@ developer to create, and the text is not editable here anyway.
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:checklists:begin -->
+### T0039.4: Point CI at the v4 baseline replay
+
+- Run `uv run python -m evals.replay` with the evaluation database available.
+- Confirm the output identifies `t0039.3-deepseek-v4.json` and `prompt_version: v4`.
+- Confirm the command exits successfully without a DeepSeek request.
+- Configure branch protection to require the CI replay gate before merging.
+
+### T0039.3: Capture the full DeepSeek baseline
+
+- Inspect the replay manifest and confirm `prompt_version: v4`.
+- Open the capture in the viewer with its grade report.
+- Review the 73 failures by class before drawing any quality conclusion.
+- Treat the v4 prompt version and 4/77 result as the selected quality baseline.
+
+### T0039.2: Let the freezer accept legitimate no-SQL turns
+
+- Construct a completed capture turn with `seams.sql_text` set to `null`.
+- Grade the capture with `uv run python -m evals.execution_accuracy <capture>.json`.
+- Confirm the turn reports `EXEMPT` with the no-generated-SQL reason.
+- Freeze the graded capture and confirm no freezer whitelist change is required.
+
+### T0039.1: Aggregate cost and latency from recorded telemetry
+
+- Run `uv run python -m evals.telemetry evals/runs/<run>.json` against a recorded capture.
+- Confirm the output names the capture run id and prompt version.
+- Confirm latency and token p50/p95 values are present and cost uses the configured provider prices.
+- Confirm no provider API call occurs.
+
 ### T0036.1: Exempt rebuilt registers from the scope check
 
 1. On this branch, `uv run python scripts/docs_build.py` then

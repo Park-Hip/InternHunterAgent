@@ -67,13 +67,13 @@ its gate costs more lines to state honestly than one that simply worked.
 `entries/` is indexed here as a directory, the same way `archive/` is. A per-ticket file cannot
 take a per-file cap row without recreating the shared-table edit the directory exists to remove.
 
-`Tickets.md` moved from 300 to 400 on 2026-08-17, then to 350 after the M28 and M29 plans were
-archived, and to 375 on the T0031.3 publish.
-M32's four ticket bodies then brought the document to 408 lines, so its cap moved to 425.
-When M31 closed, its archived plan reduced the document to 320 lines, and the cap moved to 350.
+`Tickets.md` has moved with its live plans: 300 to 400 on 2026-08-17, to 350 once the M28 and M29
+plans were archived, to 375 on the T0031.3 publish, to 425 when M32's four ticket bodies reached 408
+lines, and back to 350 when M31's archived plan cut it to 320.
 A plan leaves when its **milestone** closes, not when its ticket does.
-Archiving M32's plan on 2026-08-18 left 140 lines against 350, so the cap moves to 250: M24's plan
-is the only one live, and M33's five ticket bodies are the next thing to arrive.
+Archiving M32's plan on 2026-08-18 left 140 lines and the cap moved to 250, budgeting for M33.
+M33's five ticket bodies arrived on 2026-08-19 at 307 lines, so 250 to 325, and that plan is the
+only one live.
 
 <!-- caps:begin -->
 | Doc | Owns | Tier | Cap | Reader |
@@ -90,7 +90,7 @@ is the only one live, and M33's five ticket bodies are the next thing to arrive.
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 280 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T4 | Uncapped | Maintainers |
-| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 250 | Delivery planning |
+| [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 325 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |
 | [Manual Verification Guide](Manual_Verification_Guide.md) | Re-runnable developer checks | T4 | Uncapped | Developers |
 | [T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md) | Pending cron activation gates | T3 | 600 | Maintainers |

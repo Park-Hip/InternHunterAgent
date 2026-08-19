@@ -310,9 +310,13 @@ milestones:
       - docs/Agent_Behavior_Spec.md
       - evals/scenarios_v1.yaml
       - evals/grader.py
+      - evals/replays/
       - tests/evals/
       - src/api/static/
       - src/agents/tools/
+      - tests/agents/runtime/
+      - tests/agents/tools/
+      - docs/roadmap.yaml
       - docs/entries/
     note: >-
       Allocated 2026-08-17 against the two scoping briefs (.lavish/vietnamese-turn.html, then
@@ -338,6 +342,29 @@ milestones:
       rows. Raised and not folded in: the "InternHunter" name over-promises on internships.
       Added 2026-08-18: M24 closes its gate against the English glossary, so T0033.2 owes either a
       re-gate of the honesty scenarios after translation or a recorded decision not to re-measure.
+      Scoped into ticket bodies 2026-08-19 and reconciled against the merged tree rather than
+      against the briefs, which changed three things. Every sequencing constraint above is spent:
+      M24, M32, M34 and M38 all closed on 2026-08-18, so T0033.1 and T0033.2 are no longer held
+      behind M24's prompt scope and T0033.5 is no longer held behind M32; the milestone is
+      parallelisable across all five tickets, subject only to the coupling below. The glossary is 19
+      entries rather than the 18 the brief counted, and M38 gave each one an anchor-term set in
+      behavior_glossary_anchors that evals/grader.py loads at import and validates as a substring of
+      its canonical sentence - so a Vietnamese glossary with English anchors raises ValueError
+      before a scenario is graded, T0033.2 owns 38 strings, and both halves move in one commit. That
+      coupling reaches CI: evals/replays/t0025.9-committed.json carries a per-turn expected_grade
+      re-graded live against config/prompts.yaml, so translating the glossary flips honesty turns to
+      FAIL on captures whose English answers are correct. Scope widened in the same edit by four
+      paths the tickets need and the original scope omitted: evals/replays/, for T0033.2 to re-state
+      those expectations rather than land red; tests/agents/runtime/ and tests/agents/tools/, for
+      T0033.1's and T0033.5's own tests; and docs/roadmap.yaml, for this milestone's status line -
+      the same append-only overlap M36 and M37 carried, not a shared code path. The D4 prerequisite
+      stays open and unmet: --arm A0 --runs 3 has not been re-run, and it gates T0033.1's wording
+      only. M38 answered its English half - the HON-ABSENT-FIELD-1 failure was a grader artifact and
+      the frozen v3 replay now grades 15 PASS / 3 FAIL - and left the Vietnamese half unmeasured.
+      T0033.4 additionally owes a typography decision the brief assumed away: src/api/static is
+      deliberately font-file-free and CSP-clean, and Charter, the first face in its serif stack, has
+      no Vietnamese coverage, so self-hosting a covering serif or reordering the stack is a choice
+      that ticket makes and records.
 
   - id: M34
     title: Serving Memory Window Hardening

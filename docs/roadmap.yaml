@@ -620,3 +620,24 @@ milestones:
       Completed 2026-08-18: T0038.1-.3 landed, the frozen v3 obligation replay was re-graded without
       a new capture at 15 PASS and 3 FAIL, and the corrected calibration is recorded in
       evals/Instrument_Report.md. The judge remains off pending broader v3 human agreement.
+
+  - id: M39
+    title: Fixture Test Reliability
+    status: claimed
+    tickets: [T0039.1]
+    branch: codex/t0039.1-fixture-test-reliability
+    scope:
+      - evals/fixtures/loader.py
+      - tests/evals/conftest.py
+      - tests/evals/test_driver.py
+      - tests/evals/test_fixture_counts.py
+      - docs/roadmap.yaml
+      - docs/entries/
+    note: >-
+      Allocated 2026-08-19 for the open low-severity fixture-test hang first filed by T0026.1
+      on 2026-08-14. When the dedicated Postgres fixture is unavailable on port 5433, the
+      fixture-backed eval tests wait on the database driver's connection timeout instead of
+      reporting an environmental skip. T0039.1 adds a bounded reachability guard before fixture
+      rebuilds, makes the affected tests skip with the documented `docker compose up -d`
+      recovery path, and covers both the unreachable and reachable branches without changing
+      fixture data, agent behavior, or production database handling.

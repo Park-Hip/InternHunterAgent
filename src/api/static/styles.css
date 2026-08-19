@@ -1,6 +1,10 @@
 /* ===========================================================================
    InternHunter — Editorial demo UI (T0018.3)
-   Light theme only. System serif stack only (no font files, CSP-clean).
+   Light theme only. Vietnamese-capable system serif stack only (no font files,
+   CSP-clean): Charter is intentionally excluded because it lacks Vietnamese
+   coverage and would cause mid-paragraph fallback. Times New Roman and Georgia
+   are established system faces with Vietnamese coverage; DejaVu Serif covers
+   Linux installations where either Microsoft face is unavailable.
    One accent: vermilion, spent on the "verified column" rule beside answers.
    =========================================================================== */
 
@@ -16,7 +20,7 @@
   --accent-ink: #A5341A;   /* accent on light fills, AA text */
   --user-fill:  #F3EFE6;   /* the reader's own words */
 
-  --serif: Charter, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --serif: 'Times New Roman', Georgia, 'DejaVu Serif', serif;
 
   --measure: 34rem;        /* reading column width */
   --space:   1.5rem;
@@ -35,7 +39,7 @@ body {
   color: var(--ink);
   font-family: var(--serif);
   font-size: 1.0625rem;
-  line-height: 1.6;
+  line-height: 1.7;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -79,7 +83,7 @@ input { font: inherit; color: inherit; }
   margin: 0;
   font-size: clamp(2.75rem, 11vw, 4.75rem);
   font-weight: 700;
-  line-height: 0.94;
+  line-height: 1.02;
   letter-spacing: -0.02em;
 }
 
@@ -232,7 +236,7 @@ input { font: inherit; color: inherit; }
   padding-left: 0.6rem;
 }
 .chip__tag {
-  /* wide enough for the longest tag ("Boundaries") — a narrower gutter lets
+  /* wide enough for the longest tag ("Mức lương") - a narrower gutter lets
      that one row push its question out of alignment with the others */
   flex: 0 0 6.75rem;
   font-size: 0.66rem;

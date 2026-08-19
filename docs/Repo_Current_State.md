@@ -42,10 +42,11 @@ milestone delivered is in [Completion Reports](Completion_Reports.md); completed
 preserved in the [ticket archive](archive/Tickets_Archive.md).
 
 <!-- generated:milestones:begin -->
-Complete: M0, M6-M22, M24-M38 - 33 of 34 milestones.
+Complete: M0, M6-M22, M24-M38 - 33 of 35 milestones.
 
 | Milestone | Title | Status |
 |---|---|---|
+| M39 | Fixture Test Reliability | claimed |
 | M23 | v1.0 Release Cut | planned |
 <!-- generated:milestones:end -->
 

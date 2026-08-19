@@ -60,9 +60,9 @@ wall from the other side: 222 lines with 230 as the cap is eight lines of room f
 closed two milestones and rewrote the next-ticket call, so 230 → 260, measured at 243.
 The M24/M37 pass landed on 260 exactly - the no-headroom case the M30 pass names above - after
 already collapsing the M30, M32, and M36 paragraphs into one, so the next trim would have cut
-current facts rather than stale ones. 260 → 280, measured at 260. The growth is real: M24 closed
-on a measured limitation rather than a pass, and a milestone that ships its mechanism and misses
-its gate costs more lines to state honestly than one that simply worked.
+current facts rather than stale ones. 260 → 290, measured at 281. The growth is real: M24 closed
+on a measured limitation rather than a pass, and M39 adds an active claimed milestone whose
+fixture-test reliability scope must remain visible while it is in flight.
 
 `entries/` is indexed here as a directory, the same way `archive/` is. A per-ticket file cannot
 take a per-file cap row without recreating the shared-table edit the directory exists to remove.
@@ -88,7 +88,7 @@ only one live.
 | [Tech Stack](Tech_Stack.md) | Languages, services, versions, and dependencies | T1 | 150 | New contributors |
 | [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | 450 | Decision makers |
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | 150 | Documentation authors |
-| [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 280 | All contributors |
+| [Repository Current State](Repo_Current_State.md) | Current repository facts and next ticket | T3 | 290 | All contributors |
 | [Known Issues](Known_Issues.md) | Open risks and follow-ups | T4 | Uncapped | Maintainers |
 | [Tickets](Tickets.md) | Active ticket plans and delivery sequence | T3 | 325 | Delivery planning |
 | [Operations](Operations.md) | Deployment, configuration, cron, and incident procedures | T3 | 175 | Operators |

@@ -17,7 +17,7 @@ import re
 from typing import Any
 
 from evals.scenarios import load_scenarios, scenario_category
-from src.agents.runtime.prompts import load_behavior_glossary
+from src.agents.runtime.prompts import load_behavior_glossary, load_prompt_version
 from src.core.config import settings
 
 PASS = "PASS"
@@ -40,12 +40,14 @@ class Evidence:
     execution_accuracy: dict[str, Any] | None = None
     judge_scores: dict[str, Any] | None = None
     returned_rows: list[dict[str, Any]] | None = None
+    capture_prompt_version: str | None = None
 
     @classmethod
     def from_turn(
         cls,
         turn: dict[str, Any],
         execution_accuracy: dict[str, Any] | None = None,
+        capture_prompt_version: str | None = None,
     ) -> "Evidence":
         seams = turn.get("seams") or {}
         return cls(
@@ -59,6 +61,7 @@ class Evidence:
                 or turn.get("returned_rows")
                 or (execution_accuracy or turn.get("execution_accuracy") or {}).get("generated_rows")
             ),
+            capture_prompt_version=capture_prompt_version,
         )
 
 
@@ -371,6 +374,19 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
     )
 
 
+def _prompt_is_current(evidence: Evidence) -> bool:
+    """Report whether a capture was taken under the prompt now in config/prompts.yaml.
+
+    Answer language is a property of the prompt that produced it, so a capture frozen before
+    the Vietnamese output rule would read as a behaviour failure when it is only a prompt
+    change. T0035.1 stamps every capture with its prompt version precisely so a baseline is
+    never read across one. An unstamped evidence object (a constructed holdout case, or a
+    live turn) is treated as current, so this narrows nothing but stale replays.
+    """
+    stamped = evidence.capture_prompt_version
+    return stamped is None or stamped == load_prompt_version()
+
+
 def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
     """Grade one turn, retaining honesty text checks when structural SQL fails."""
     rule = _rule_for(scenario_id)
@@ -383,7 +399,7 @@ def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
         )
 
     structural = _structural_checks(rule, evidence)
-    if rule.require_vietnamese and evidence.returned_rows is not None:
+    if rule.require_vietnamese and evidence.returned_rows is not None and _prompt_is_current(evidence):
         purity = _answer_language_pure(evidence.answer, evidence.returned_rows)
         structural.append(
             Check(
@@ -467,6 +483,7 @@ def grade_persisted_run(
 ) -> dict[str, Any]:
     """Grade a T0025.3 run artifact and optional T0025.5 result artifact."""
     known_ids = {scenario["id"] for scenario in load_scenarios()}
+    capture_prompt_version = (run.get("manifest") or {}).get("prompt_version")
     grades: list[Grade] = []
     results: dict[str, list[dict[str, Any]]] = {}
     for scenario_id, scenario_record in run.get("scenarios", {}).items():
@@ -501,7 +518,10 @@ def grade_persisted_run(
                 continue
             for turn_number, turn in enumerate(repeat.get("turns", []), start=1):
                 execution = _execution_for_turn(execution_accuracy, scenario_id, repeat_number, turn_number)
-                grade = grade_evidence(scenario_id, Evidence.from_turn(turn, execution))
+                grade = grade_evidence(
+                    scenario_id,
+                    Evidence.from_turn(turn, execution, capture_prompt_version),
+                )
                 grades.append(grade)
                 scenario_grades.append({"repeat": repeat_number, "turn": turn_number, **grade.to_dict()})
         results[scenario_id] = scenario_grades

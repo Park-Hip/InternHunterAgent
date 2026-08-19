@@ -4148,3 +4148,232 @@ against during T0023's sweep rather than a milestone status to read.
 
 
 ---
+
+## T0033: Milestone 33 - Vietnamese Language Milestone (T0033.1-.5)
+
+The agent answers in English, against a corpus whose company names and descriptions are Vietnamese,
+for users who type Vietnamese.
+T0032.4 measured five prompt arms on 2026-08-17 and settled the shape: arm A1 - the existing English
+system prompt plus one explicit output-language rule - beat the fully translated A2 prompt, kept the
+canonical `Hanoi` literal in generated SQL on all three list probes, and held its canonical literals
+in all nine vocabulary rows.
+This milestone promotes that measured arm.
+It does not translate the system prompt, and it does not touch the SQL-generation prompt's English.
+
+**The release criterion.** Purity is measured on agent prose only.
+Three-way token split: the agent's own prose must be Vietnamese; canonical column values (`role`,
+`location`, `job_level`) and source values (company names, titles, descriptions) pass through
+verbatim and are exempt.
+Purity is therefore measured on the remainder after stripping, by lookup against the returned row,
+every value the answer quotes back.
+A correct Vietnamese answer necessarily contains English, so an answer-level detector cannot pass
+one; the spike's `ENGLISH_FRAGMENT` regex is replaced by a row-aware check rather than tightened.
+
+**Vietnamese only.** The fixed `Always answer in Vietnamese` rule exactly as A1 spiked it.
+Not bilingual: no arm ever measured a mirror-the-user rule, so there is no measurement to ship.
+
+**What the milestone does not carry.** The turn-six instability was the conversation memory
+window, not multilingual decay, and closed as M34 on 2026-08-18.
+The `listing_expires_on`-as-application-deadline error is an honesty defect and went to M24.
+
+**Reconciled 2026-08-19, against the tree rather than against the brief.** Three facts moved since
+M33 was allocated, and each changes a ticket body:
+
+* Every sequencing block is spent. M24, M32, M34 and M38 all closed on 2026-08-18, so T0033.1 and
+  T0033.2 are free of M24's prompt scope, and T0033.5 is free of M32.
+* The glossary is 19 entries, not 18, and M38 gave each one an anchor-term set in
+  `behavior_glossary_anchors`. `evals/grader.py` loads both at import and enforces that every anchor
+  is a substring of its canonical sentence, so a translated glossary with English anchors raises
+  `ValueError` before a single scenario is graded. T0033.2 owns 38 strings, and both halves must
+  move in the same commit.
+* That coupling reaches the CI gate. `evals/replays/t0025.9-committed.json` carries a per-turn
+  `expected_grade` that CI re-grades live against `config/prompts.yaml`, so translating the glossary
+  flips the honesty turns to FAIL on captures whose answers are English and correct. The frozen
+  replays are evidence of English behaviour and stay that way; T0033.2 re-states their expectations
+  or the milestone lands red.
+
+**Prerequisite, still open.** Decision D4 of the scoping brief asks for
+`uv run python scripts/vietnamese_prompt_spike.py --arm A0 --runs 3` and a hand read of the
+`HON-ABSENT` rows before ticket work starts. <!-- lint-allow-scenario-id -->
+A0 shipped one run against A1's and A2's three, and the spike never reported what A0 did on the
+deadline probe, so it is still unknown whether answering in Vietnamese caused that regression or
+merely displayed a pre-existing English one.
+M38 answered half of it from the English side - the `HON-ABSENT-FIELD-1` failure was a grader
+artifact, and the frozen v3 replay now grades 15 PASS / 3 FAIL - but the Vietnamese side is
+unmeasured.
+The re-run costs one arm and gates T0033.1's wording only; T0033.3, T0033.4 and T0033.5 do not wait
+on it.
+
+---
+
+### T0033.1: The Vietnamese output rule and the vocabulary bridge
+
+**Objective.** Promote arm A1 exactly as it was measured, and give the SQL generator the accented
+Vietnamese vocabulary it needs to keep emitting canonical English literals.
+
+**In scope.**
+`config/prompts.yaml` - append the fixed `Always answer in Vietnamese` output-language rule to
+`system_prompt`, verbatim as A1 spiked it.
+Add a Vietnamese vocabulary block sourced from the accented `city_alias_map` and `role_taxonomy`
+already in `config/ingestion.yaml`: the map exists, is accented, and the spike hand-wrote an
+unaccented subset of it, so this is a promotion rather than an authoring job.
+Add one bilingual free-text rule to `sql_generation` stating that `description` holds Vietnamese
+prose and that a free-text concept must be matched in both its English and Vietnamese forms.
+Bump `prompt_version` `v3` to `v4`.
+Tests in `tests/agents/runtime/test_prompts.py` pinning the rule's presence and the vocabulary
+block's agreement with `config/ingestion.yaml`.
+
+**Out of scope.**
+Translating `system_prompt`, `schema_context` or `sql_generation` - A2 measured worse and is ruled
+out on this evidence.
+The behaviour glossary, which is T0033.2.
+Lifting `city_alias_map` out of ingestion ownership into a shared module: A4 shows a prompt block is
+sufficient, so the move is optional and not required by this milestone.
+Accent-insensitive SQL (`unaccent`), which the brief leaves conditional.
+
+**Manual verification.**
+Ask a Vietnamese Data Engineer question naming Hanoi with full diacritics against the fixture
+database, and confirm the answer is Vietnamese prose while the generated SQL still holds `Hanoi`,
+not `Ha Noi`.
+Ask the same question unaccented and confirm the same canonical literal - A4 never ran against
+accented input, and accented input is what the product receives.
+Ask a remote-work question in Vietnamese and confirm the generated SQL matches both the English and
+the Vietnamese form of the concept.
+
+**Blockers.** The D4 A0 re-run above, which decides whether the rule ships alone or with a
+reinforcing honesty clause.
+Bumping `prompt_version` invalidates the three committed replays as a comparison baseline, which is
+what the M35 stamp exists to make visible - re-run the gate rather than comparing across it.
+
+---
+
+### T0033.2: The behaviour glossary in Vietnamese, with its grader anchors
+
+**Objective.** Translate the agent's canonical caveat sentences, which are agent prose and therefore
+unambiguously inside the purity criterion, without silently breaking the instrument that grades
+them.
+
+**In scope.**
+`config/prompts.yaml` - all 19 `behavior_glossary` sentences in Vietnamese, and all 19
+`behavior_glossary_anchors` sets re-derived from the translated sentences.
+`evals/grader.py` validates that each anchor is a substring of its canonical sentence, so the two
+move together or nothing grades at all.
+`docs/Agent_Behavior_Spec.md` - the glossary table restated against the translated strings.
+`evals/replays/` - re-state the `expected_grade` values the translation moves, and record in the
+replay why an English capture now grades against Vietnamese anchors.
+
+**Out of scope.**
+Re-capturing the honesty scenarios against a live model, which is T0033.3's call and this ticket's
+follow-up.
+Changing any caveat's meaning or adding a new one: this is a translation, and a behaviour change
+smuggled into it would invalidate M24's gate silently.
+Turning the judge tier on.
+
+**Manual verification.**
+Ask about a posting with no disclosed salary and confirm the negotiable-salary caveat appears in
+Vietnamese and reads naturally rather than as a literal gloss.
+Run `uv run pytest tests/evals` and confirm the committed replay gate is green on the re-stated
+expectations rather than skipped.
+Ask about an application deadline and confirm the absent-field and listing-expiry caveats both read
+as Vietnamese refusals.
+
+**Blockers.** None on sequencing - M24 and M38 both closed on 2026-08-18.
+The head-on collision this ticket was allocated behind is spent; the anchor coupling M38 introduced
+replaced it and is the real constraint.
+
+---
+
+### T0033.3: The eval registry in Vietnamese, and a purity check that can pass
+
+**Objective.** Make the instrument able to measure a correct Vietnamese answer, which today it
+cannot.
+
+**In scope.**
+`evals/scenarios_v1.yaml` - Vietnamese inputs across the 29 scenarios, with translated
+`required_any` and `forbidden_any` lexicons, and new probes on accented input that A4 never ran.
+`evals/grader.py` - Vietnamese number words in `_answer_count`, whose table today holds `one`
+through `twelve` in English only, and the row-aware purity check that strips every canonical and
+source value found in the returned row before judging the remainder.
+`tests/evals/` - coverage for the purity check on a constructed answer that mixes Vietnamese prose
+with verbatim English values, which must pass.
+
+**Out of scope.**
+Spending a full 29-scenario capture, which is a quota decision rather than a code change.
+Expanding replay coverage past the 12 scenarios `KI-2026-08-18-freezer-rejects-no-sql-turns` owns.
+Any prompt edit - this ticket measures, it does not steer.
+
+**Manual verification.**
+Run the purity check by hand over the worked specimen in the scoping brief - Vietnamese prose around
+`Data Engineer`, `Hanoi`, a Vietnamese company name and `Python, SQL` - and confirm it passes.
+Run it over an answer carrying a genuine English prose fragment and confirm it fails.
+Confirm `_answer_count` accepts the Vietnamese word for three where it accepts `three`.
+
+**Blockers.** None. Disjoint from M24's spent scope and unblocked today.
+
+---
+
+### T0033.4: The demo UI in Vietnamese
+
+**Objective.** Make the front end match the language the agent now answers in, and render stacked
+diacritics without clipping.
+
+**In scope.**
+`src/api/static/index.html` - `lang="vi"`, the masthead, standfirst, lede, composer placeholder and
+the four example chips in Vietnamese.
+`src/api/static/app.js` - the status and error strings: the dateline fallback, the reading-listings
+placeholder, the send-button busy label, the trace link, and the two failure messages.
+`src/api/static/styles.css` - the typography decision this ticket owes.
+Today the stack is `Charter, Georgia, 'Iowan Old Style', 'Times New Roman', serif` with a deliberate
+`no font files, CSP-clean` comment, and Charter has no Vietnamese coverage, so accented text falls
+through to a system fallback mid-paragraph.
+Either self-host a Vietnamese-complete serif and record the CSP consequence, or reorder the stack
+onto faces that do cover Vietnamese and record why no file was added.
+Raise `line-height` where stacked diacritics need the room.
+
+**Out of scope.**
+Any language switcher: D3 settled Vietnamese-only, and a switcher is a second product surface no
+measurement supports.
+A CDN font link, which the same-origin static posture rules out.
+Renaming the product - the `InternHunter` name over-promising on internships is raised, unowned, and
+deliberately not folded in here.
+
+**Manual verification.**
+Load the demo and confirm no English string survives in the shell.
+Compare a heading carrying stacked diacritics against the body serif at 400% browser zoom and
+confirm one face renders the whole line.
+Confirm the diacritics on a two-line heading do not collide with the line above.
+
+**Blockers.** None. Disjoint from every other ticket in this milestone.
+
+---
+
+### T0033.5: The tool literals in Vietnamese
+
+**Objective.** Close the last surface that reaches the user in English - the strings the tools
+return directly, which no prompt rule can restyle because the model relays them.
+
+**In scope.**
+`src/agents/tools/query_clean_jobs.py` - `_build_answer`'s truncation header and its
+`Found N result(s) with columns:` header, the `I can't run that query:` refusal, and the database
+error literal.
+`src/agents/tools/get_job_details.py` - `_build_answer`'s `Showing details for N of M requested.`
+and `No posting found for id N.`.
+`tests/agents/tools/` - assertions on the translated wording.
+
+**Out of scope.**
+The `ZERO_RESULTS` and `ABSENT_FIELD` paths, which T0024.2 already routed through
+`load_behavior_glossary()` and which T0033.2 therefore translates at the source.
+Tool docstrings, which are model-facing instructions rather than user-facing prose and stay English
+under the A1 result.
+`tests/test_prompt_surface.py`'s inventory beyond the entries these strings already occupy.
+
+**Manual verification.**
+Force a truncated result and confirm the header is Vietnamese while the column names stay canonical.
+Ask a question that trips SQL validation and confirm the refusal is Vietnamese.
+Ask for details on an id that does not exist and confirm the miss line is Vietnamese.
+
+**Blockers.** None - M32 closed on 2026-08-18.
+Check the registry's pinned lexicons before starting, and sequence after T0033.3 if any of these
+literals is pinned there.
+
+---

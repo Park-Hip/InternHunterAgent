@@ -303,7 +303,7 @@ milestones:
 
   - id: M33
     title: Vietnamese Language Milestone
-    status: planned
+    status: complete
     tickets: [T0033.1, T0033.2, T0033.3, T0033.4, T0033.5]
     scope:
       - docs/roadmap.yaml
@@ -370,7 +370,17 @@ milestones:
       T0033.4 additionally owes a typography decision the brief assumed away: src/api/static is
       deliberately font-file-free and CSP-clean, and Charter, the first face in its serif stack, has
       no Vietnamese coverage, so self-hosting a covering serif or reordering the stack is a choice
-      that ticket makes and records.
+      that ticket makes and records. Closed 2026-08-19 as PRs #77, #78, #79, #80 and #81, merged in
+      that order after each head was rebased onto main and re-run green. Three of the open questions
+      above are now answered: T0033.4 reordered the stack rather than self-hosting a face, dropping
+      Charter for a Times New Roman / Georgia / DejaVu Serif system stack that keeps src/api/static
+      font-file-free and CSP-clean; T0033.2 re-stated the replay expectations in the same commit as
+      the glossary, so the coupling to evals/replays/ never landed red; and the milestone is
+      parallelisable in practice, since the only cross-ticket conflicts were on the generated
+      registers. Two carry forward and need their own numbers: the D4 prerequisite is still unmet -
+      --arm A0 --runs 3 has not been re-run, and the milestone shipped without it - and no full
+      29-scenario Vietnamese capture has been graded, which needs a quota decision rather than a
+      code change.
 
   - id: M34
     title: Serving Memory Window Hardening

@@ -4093,6 +4093,52 @@ known-issues registers.
 
 ---
 
+## T0033.1 - Promote Vietnamese output language and query vocabulary
+
+*Completed 2026-08-18.*
+
+**Summary**
+
+Promoted the A1 output-language rule so the agent answers in Vietnamese without translating
+canonical database values or source-provided values.
+Added Vietnamese accented location and role mappings to the SQL-generation prompt.
+The mappings use the existing ingestion vocabulary as the source of truth.
+Added bilingual free-text guidance for Vietnamese and English description searches.
+Bumped `prompt_version` from `v3` to `v4`.
+Re-ran the required A0 control at three runs before implementation.
+All three absent-field honesty answers stated that application deadlines are not captured and did
+not invent a deadline.
+
+**Files**
+
+- Modified `config/prompts.yaml`.
+- Modified `tests/agents/runtime/test_prompts.py` to assert the new prompt version.
+- Modified `docs/roadmap.yaml` to declare the prompt-version test and roadmap scope needed by this
+  ticket.
+- Added `docs/entries/T0033.1.md`.
+
+**Commands**
+
+- `docker compose up -d`
+- `Test-NetConnection localhost -Port 5433`
+- `uv run python scripts/vietnamese_prompt_spike.py --arm A0 --runs 3 --output
+  $env:TEMP\\internhunter-m33-a0.json`
+- `uv run pytest -q tests/agents/runtime/test_prompts.py tests/test_prompt_surface.py
+  tests/test_prompt_consistency.py`
+- `python scripts/docs_lint.py --check scope --check frozen --check registry`
+- `git diff --check`
+
+**Risks**
+
+The vocabulary is prompt guidance rather than deterministic normalization.
+An evaluation ticket must measure accented input and canonical SQL behavior.
+The free-text bilingual examples do not solve accent-insensitive matching when neither language
+form occurs in the source text.
+The output rule increases the prompt surface and can affect the pending Vietnamese glossary and
+evaluation captures.
+
+---
+
 ## T0034.1 - Reproduce the serving memory-window eviction boundary
 
 *Completed 2026-08-18.*

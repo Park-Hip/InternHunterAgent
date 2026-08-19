@@ -313,6 +313,7 @@ milestones:
       - evals/grader.py
       - evals/holdout.py
       - evals/replays/
+      - evals/scenarios.py
       - tests/evals/
       - src/api/static/
       - src/agents/tools/

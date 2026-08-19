@@ -28,6 +28,7 @@ _GRADING_KEYS = {
     "forbidden_any",
     "forbidden_patterns",
     "execution_comparison",
+    "require_vietnamese",
 }
 
 
@@ -42,7 +43,14 @@ def _validate_term(scenario_id: str, field: str, term: Any) -> None:
     if isinstance(term, dict) and set(term) == {"glossary"}:
         if isinstance(term["glossary"], str) and term["glossary"].strip():
             return
-    raise ValueError(f"Scenario {scenario_id} {field} terms must use {{glossary: NAME}}: {term!r}")
+    if isinstance(term, dict) and set(term) == {"lexicon"}:
+        if isinstance(term["lexicon"], list) and term["lexicon"] and all(
+            isinstance(item, str) and item.strip() for item in term["lexicon"]
+        ):
+            return
+    raise ValueError(
+        f"Scenario {scenario_id} {field} terms must use {{glossary: NAME}} or {{lexicon: [...]}}: {term!r}"
+    )
 
 
 def _validate_term_list(scenario_id: str, field: str, value: Any) -> None:
@@ -72,6 +80,9 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
         grading["forbid_single_salary_winner"], bool
     ):
         raise ValueError(f"Scenario {scenario_id} forbid_single_salary_winner must be a boolean")
+
+    if "require_vietnamese" in grading and not isinstance(grading["require_vietnamese"], bool):
+        raise ValueError(f"Scenario {scenario_id} require_vietnamese must be a boolean")
 
     if "execution_comparison" in grading and grading["execution_comparison"] not in {
         "exact", "contains_reference", "ids_only"

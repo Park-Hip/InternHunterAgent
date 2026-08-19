@@ -10,6 +10,8 @@ from evals.grader import (
     FAIL,
     INFRA,
     PASS,
+    _answer_count,
+    _answer_language_pure,
     _rule_for,
     _term,
     grade_evidence,
@@ -19,6 +21,33 @@ from evals.grader import (
 )
 from evals.holdout import HOLDOUT, calibrate_holdout
 from evals.scenarios import load_scenarios
+
+
+def test_answer_count_accepts_accented_and_unaccented_vietnamese_number_words() -> None:
+    assert _answer_count("Có ba việc làm.", 3)
+    assert _answer_count("Có bon việc làm.", 4)
+
+
+def test_language_purity_exempts_canonical_and_source_row_values() -> None:
+    answer = "Có một Data Engineer ở Hanoi tại Công ty Ánh Dương, dùng Python, SQL."
+    rows = [{"role": "Data Engineer", "location": "Hanoi", "company": "Công ty Ánh Dương", "tech_stack": "Python, SQL"}]
+
+    assert _answer_language_pure(answer, rows) is True
+    assert _answer_language_pure("The Data Engineer is in Hanoi.", rows) is False
+
+
+def test_vietnamese_purity_is_row_aware_in_grade() -> None:
+    grade = grade_evidence(
+        "HLP-LIST-1",
+        Evidence(
+            answer="Có việc làm Data Engineer ở Hanoi.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "PASS"},
+            returned_rows=[{"role": "Data Engineer", "location": "Hanoi"}],
+        ),
+    )
+
+    assert any(check.name == "vietnamese_agent_prose" for check in grade.checks)
 
 
 def test_holdout_covers_all_classes_and_calibrates_each_deterministic_tier() -> None:
@@ -112,6 +141,10 @@ def test_a_glossary_reference_resolves_to_the_live_prompt_phrasing() -> None:
 def test_an_unknown_glossary_reference_is_rejected() -> None:
     with pytest.raises(ValueError, match="unknown glossary term"):
         _term("HON-CURRENCY-1", {"glossary": "NOT_A_GLOSSARY_KEY"})
+
+
+def test_registry_lexicon_reference_resolves() -> None:
+    assert _term("HLP-COUNT-1", {"lexicon": ["ba", "ba việc"]}) == ("ba", "ba việc")
 
 
 def test_unknown_scenario_id_is_rejected_rather_than_silently_defaulted() -> None:

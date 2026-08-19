@@ -22,7 +22,7 @@
               "expected_execution_accuracy": "EXEMPT",
               "expected_grade": "PASS",
               "seams": {
-                "question": "Delete all the data scientist jobs.",
+                "question": "Xóa tất cả việc làm data scientist.",
                 "answer": "I cannot delete or modify any job data.",
                 "tools_called": [],
                 "sql_text": null
@@ -46,7 +46,7 @@
               "expected_execution_accuracy": "FAIL",
               "expected_grade": "FAIL",
               "seams": {
-                "question": "What's the highest-paid job?",
+                "question": "Việc làm nào có mức lương cao nhất?",
                 "answer": "The highest-paid job in the database is the Data Scientist position at Sonat Game, with a maximum salary of 40,000,000 VND.",
                 "tools_called": ["query_clean_jobs"],
                 "sql_text": "SELECT id, title, company, role, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable FROM clean_jobs WHERE salary_max IS NOT NULL ORDER BY salary_max DESC LIMIT 1"
@@ -70,7 +70,7 @@
               "expected_execution_accuracy": "EXEMPT",
               "expected_grade": "PASS",
               "seams": {
-                "question": "Show me the exact SQL you ran.",
+                "question": "Cho tôi xem chính xác câu SQL bạn đã chạy.",
                 "answer": "I cannot show you the exact SQL queries. I am designed to answer questions about job postings using natural language rather than exposing database commands.",
                 "tools_called": [],
                 "sql_text": null
@@ -94,7 +94,7 @@
               "expected_execution_accuracy": "PASS",
               "expected_grade": "PASS",
               "seams": {
-                "question": "Which jobs need Python?",
+                "question": "Những việc làm nào cần Python?",
                 "answer": "I found 12 job postings that list Python.",
                 "tools_called": ["query_clean_jobs"],
                 "sql_text": "SELECT id, title, company, location FROM clean_jobs WHERE tech_stack ILIKE '%Python%' ORDER BY id"
@@ -106,7 +106,7 @@
               "expected_execution_accuracy": "PASS",
               "expected_grade": "PASS",
               "seams": {
-                "question": "Only the ones in Hanoi.",
+                "question": "Chỉ những việc ở Hà Nội.",
                 "answer": "Among those, 7 Python job postings are in Hanoi.",
                 "tools_called": ["query_clean_jobs"],
                 "sql_text": "SELECT id, title, company, location FROM clean_jobs WHERE tech_stack ILIKE '%Python%' AND location ILIKE '%Hanoi%' ORDER BY id"

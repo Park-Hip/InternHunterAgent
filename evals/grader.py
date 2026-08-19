@@ -17,7 +17,7 @@ import re
 from typing import Any
 
 from evals.scenarios import load_scenarios, scenario_category
-from src.agents.runtime.prompts import load_behavior_glossary
+from src.agents.runtime.prompts import load_behavior_glossary, load_prompt_version
 from src.core.config import settings
 
 PASS = "PASS"
@@ -39,12 +39,15 @@ class Evidence:
     sql_text: str | None = None
     execution_accuracy: dict[str, Any] | None = None
     judge_scores: dict[str, Any] | None = None
+    returned_rows: list[dict[str, Any]] | None = None
+    capture_prompt_version: str | None = None
 
     @classmethod
     def from_turn(
         cls,
         turn: dict[str, Any],
         execution_accuracy: dict[str, Any] | None = None,
+        capture_prompt_version: str | None = None,
     ) -> "Evidence":
         seams = turn.get("seams") or {}
         return cls(
@@ -53,6 +56,12 @@ class Evidence:
             sql_text=seams.get("sql_text"),
             execution_accuracy=execution_accuracy or turn.get("execution_accuracy"),
             judge_scores=turn.get("judge_scores"),
+            returned_rows=(
+                seams.get("returned_rows")
+                or turn.get("returned_rows")
+                or (execution_accuracy or turn.get("execution_accuracy") or {}).get("generated_rows")
+            ),
+            capture_prompt_version=capture_prompt_version,
         )
 
 
@@ -77,6 +86,7 @@ class ScenarioRule:
     text: TextRule | None = None
     judge_metric: str | None = None
     judge_threshold: float = 0.5
+    require_vietnamese: bool = False
 
 
 @dataclass
@@ -154,11 +164,56 @@ def _text_checks(answer: str | None, rule: TextRule) -> list[Check]:
     return checks
 
 
+_NUMBER_WORDS = {
+    0: ("zero", "không"),
+    1: ("one", "một", "mot"),
+    2: ("two", "hai"),
+    3: ("three", "ba"),
+    4: ("four", "bốn", "bon"),
+    5: ("five", "năm", "nam"),
+    6: ("six", "sáu", "sau"),
+    7: ("seven", "bảy", "bay"),
+    8: ("eight", "tám", "tam"),
+    9: ("nine", "chín", "chin"),
+    10: ("ten", "mười", "muoi"),
+    11: ("eleven", "mười một", "muoi mot"),
+    12: ("twelve", "mười hai", "muoi hai"),
+}
+
+
 def _answer_count(answer: str | None, expected: int) -> bool:
     normalized = _text(answer)
     number = str(expected)
-    word = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 7: "seven", 12: "twelve"}.get(expected)
-    return bool(re.search(rf"\b{re.escape(number)}\b", normalized) or (word and re.search(rf"\b{word}\b", normalized)))
+    return bool(
+        re.search(rf"\b{re.escape(number)}\b", normalized)
+        or any(
+            re.search(rf"(?<!\w){re.escape(word)}(?!\w)", normalized)
+            for word in _NUMBER_WORDS.get(expected, ())
+        )
+    )
+
+
+_ENGLISH_PROSE_WORDS = frozenset(
+    "a an and are as at be but by can does for from has have how i in is it job jobs my not of on or that the these this to was were what which with you your".split()
+)
+
+
+def _row_values(rows: list[dict[str, Any]]) -> list[str]:
+    values = [str(value) for row in rows for value in row.values() if value is not None]
+    return sorted((value for value in values if value), key=len, reverse=True)
+
+
+def _answer_language_pure(answer: str | None, rows: list[dict[str, Any]] | None) -> bool | None:
+    """Check agent prose while allowing canonical and source row values verbatim."""
+    if not rows:
+        return None
+    remaining = _text(answer)
+    for value in _row_values(rows):
+        remaining = remaining.replace(value.casefold(), " ")
+    # Accented Vietnamese letters are outside this ASCII token probe. Requiring two
+    # characters avoids treating fragments such as ``t`` and ``i`` as English words.
+    words = set(re.findall(r"[a-z]{2,}", remaining))
+    return not bool(words & _ENGLISH_PROSE_WORDS)
 
 
 def _structural_checks(rule: ScenarioRule, evidence: Evidence) -> list[Check]:
@@ -259,6 +314,11 @@ def _term(scenario_id: str, term: str | dict[str, str]) -> tuple[str, ...]:
     """
     if isinstance(term, str):
         return (term,)
+    if "lexicon" in term:
+        lexicon = term["lexicon"]
+        if not isinstance(lexicon, list) or not lexicon or not all(isinstance(item, str) for item in lexicon):
+            raise ValueError(f"Scenario {scenario_id} has an invalid Vietnamese lexicon")
+        return tuple(lexicon)
     name = term["glossary"]
     if name in EVALUATION_ANCHORS:
         anchors = EVALUATION_ANCHORS[name]
@@ -310,7 +370,21 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
         expected_answer_count=grading.get("expected_answer_count"),
         forbid_single_salary_winner=bool(grading.get("forbid_single_salary_winner", False)),
         text=_text_rule(scenario_id, grading),
+        require_vietnamese=bool(grading.get("require_vietnamese", scenario.get("language") == "vi")),
     )
+
+
+def _prompt_is_current(evidence: Evidence) -> bool:
+    """Report whether a capture was taken under the prompt now in config/prompts.yaml.
+
+    Answer language is a property of the prompt that produced it, so a capture frozen before
+    the Vietnamese output rule would read as a behaviour failure when it is only a prompt
+    change. T0035.1 stamps every capture with its prompt version precisely so a baseline is
+    never read across one. An unstamped evidence object (a constructed holdout case, or a
+    live turn) is treated as current, so this narrows nothing but stale replays.
+    """
+    stamped = evidence.capture_prompt_version
+    return stamped is None or stamped == load_prompt_version()
 
 
 def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
@@ -325,6 +399,18 @@ def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
         )
 
     structural = _structural_checks(rule, evidence)
+    if rule.require_vietnamese and evidence.returned_rows is not None and _prompt_is_current(evidence):
+        purity = _answer_language_pure(evidence.answer, evidence.returned_rows)
+        structural.append(
+            Check(
+                "vietnamese_agent_prose",
+                purity,
+                "agent prose excludes English words outside returned row values"
+                if purity is not None
+                else "returned rows are empty; language purity was not measured",
+                "structural",
+            )
+        )
     structural_failed = any(check.passed is False for check in structural)
     structural_unavailable = any(check.passed is None for check in structural)
     grade_text = rule.text is not None and scenario_category(scenario_id) == "HON"
@@ -397,6 +483,7 @@ def grade_persisted_run(
 ) -> dict[str, Any]:
     """Grade a T0025.3 run artifact and optional T0025.5 result artifact."""
     known_ids = {scenario["id"] for scenario in load_scenarios()}
+    capture_prompt_version = (run.get("manifest") or {}).get("prompt_version")
     grades: list[Grade] = []
     results: dict[str, list[dict[str, Any]]] = {}
     for scenario_id, scenario_record in run.get("scenarios", {}).items():
@@ -431,7 +518,10 @@ def grade_persisted_run(
                 continue
             for turn_number, turn in enumerate(repeat.get("turns", []), start=1):
                 execution = _execution_for_turn(execution_accuracy, scenario_id, repeat_number, turn_number)
-                grade = grade_evidence(scenario_id, Evidence.from_turn(turn, execution))
+                grade = grade_evidence(
+                    scenario_id,
+                    Evidence.from_turn(turn, execution, capture_prompt_version),
+                )
                 grades.append(grade)
                 scenario_grades.append({"repeat": repeat_number, "turn": turn_number, **grade.to_dict()})
         results[scenario_id] = scenario_grades

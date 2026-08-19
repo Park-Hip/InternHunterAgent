@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 15 | 1 | 3 |
+| MED | 16 | 1 | 3 |
 | LOW | 18 | 2 | 0 |
 <!-- generated:triage:end -->
 
@@ -35,6 +35,13 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 <!-- lint-allow-link-path:begin -->
 <!-- generated:registered:begin -->
+- `KI-2026-08-19-evals-full-suite-stalled` **`[MED · OPEN]` The evaluation suite stalled during
+  fixture and database setup.**
+  - **Found:** 2026-08-19 during T0033.3 verification.
+  - **Impact:** The targeted evaluation suites pass, but the complete result is unavailable.
+  - **Next:** Re-run with the evaluation fixture database available.
+  Diagnose the setup stall if it persists.
+  - **History:** Not caused or fixed by T0033.3.
 <!-- generated:registered:end -->
 <!-- lint-allow-link-path:end -->
 

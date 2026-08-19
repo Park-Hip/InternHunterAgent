@@ -4139,6 +4139,62 @@ evaluation captures.
 
 ---
 
+## T0033.2 - Translate the behavior glossary and grader anchors into Vietnamese
+
+*Completed 2026-08-19.*
+
+**Summary**
+
+Translated all 19 `behavior_glossary` sentences and all 19 `behavior_glossary_anchors` sets into
+Vietnamese.
+Updated the behavior specification to record the translated canonical strings and current glossary
+ownership.
+Updated the six affected expected grades in the frozen v3 replay because its English answers no
+longer match the Vietnamese glossary anchors.
+
+**Files**
+
+- Changed `config/prompts.yaml`.
+- Changed `docs/Agent_Behavior_Spec.md`.
+- Changed `evals/replays/t0024.4-v3-obligations.json`.
+- Created `docs/entries/T0033.2.md`.
+
+**Commands**
+
+- `uv run pytest -q tests/evals/test_replay.py`.
+- Inline Python validation of all glossary anchor substrings and replay grade outcomes.
+- `python scripts/docs_lint.py`.
+- `python scripts/docs_build.py --check`.
+
+**Build and test**
+
+The targeted replay, prompt loader, and prompt surface tests passed with 37 tests and 41 subtests.
+The glossary validation passed for 19 entries and 38 anchors.
+`python scripts/docs_lint.py` passed.
+`git diff --check` passed.
+`python scripts/docs_build.py --check` reports stale frozen generated registers, which ticket agents
+must not update.
+The repository-wide `uv run pytest -q` run exceeded the 120-second timeout before completion.
+The initial collection required placeholder `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and
+`DATABASE_URL` values because the isolated worktree had no `.env` file.
+
+**Risks**
+
+The frozen English capture is expected to fail the translated behavior-glossary rules for the six
+affected turns until T0033.3 captures and grades Vietnamese responses.
+No live provider capture was performed.
+
+**Follow-ups**
+
+T0033.3 must translate the scenario registry lexicons and capture Vietnamese behavior.
+
+**Docs**
+
+No frozen registers were edited.
+The behavior specification was updated in scope for this ticket.
+
+---
+
 ## T0034.1 - Reproduce the serving memory-window eviction boundary
 
 *Completed 2026-08-18.*

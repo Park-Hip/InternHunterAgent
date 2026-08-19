@@ -9,13 +9,16 @@
 ## Current branch
 
 <!-- generated:snapshot:begin -->
-- Checked out: `main` at `ce9f1f5` - docs(integration): publish M34 memory-window outcome
-  (2026-08-18).
-- Branches not merged into `main`: 7 - `feature/t0022.10-prune-dead-docs`,
+- Checked out: `main` at `d8e7f00` - docs(integration): scope M33 into five ticket bodies
+  (2026-08-19).
+- Branches not merged into `main`: 16 - `codex/t0033.1-output-language`,
+  `codex/t0033.2-behavior-glossary`, `codex/t0033.2-pr`, `codex/t0033.3-pr`,
+  `codex/t0033.3-vietnamese-evals`, `codex/t0033.4-demo-ui`, `codex/t0033.5-pr`,
+  `codex/t0033.5-tool-literals`, `feature/t0022.10-prune-dead-docs`,
   `feature/t0024.1-behavior-glossary`, `feature/t0024.6-persona-scope`,
-  `feature/t0031-parallel-agent-docs`, `integration/t0031.4-publish`, `merge/t0024.6-with-main`,
-  `merge/t0025.7-with-main`.
-- Worktrees: 15.
+  `feature/t0031-parallel-agent-docs`, `feature/t0038-grader-correctness`,
+  `integration/t0031.4-publish`, `merge/t0024.6-with-main`, `merge/t0025.7-with-main`.
+- Worktrees: 21.
 <!-- generated:snapshot:end -->
 
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was

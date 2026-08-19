@@ -583,6 +583,24 @@ def test_frozen_allows_the_integration_commit(repo: Path) -> None:
     assert docs_lint.check_frozen([], "main", repo) == []
 
 
+def test_integration_check_ignores_pull_request_merge_commit(repo: Path, monkeypatch) -> None:
+    """GitHub's synthetic PR merge commit must not invalidate an integration branch."""
+    calls = []
+
+    def fake_git_text(*args, **kwargs):
+        calls.append(args)
+        return "docs(integration): publish the entry"
+
+    monkeypatch.setattr(
+        docs_lint,
+        "git_text",
+        fake_git_text,
+    )
+
+    assert docs_lint.is_integration("main", repo)
+    assert "--no-merges" in calls[0]
+
+
 def test_frozen_ignores_paths_that_are_not_frozen(repo: Path) -> None:
     (repo / "scripts" / "docs_lint.py").write_text("# changed\n", encoding="utf-8")
     git(repo, "add", "-A")

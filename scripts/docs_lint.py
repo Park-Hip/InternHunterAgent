@@ -801,7 +801,10 @@ def only_generated_changed(path: str, base: str, root: Path = ROOT) -> bool:
 
 def is_integration(base: str, root: Path = ROOT) -> bool:
     """True when every commit on this branch is an integration commit."""
-    subjects = git_text("log", "--format=%s", f"{base}..HEAD", root=root)
+    # GitHub checks out a synthetic merge commit for pull-request workflows.  It is not a
+    # commit authored by the integration branch and must not make an otherwise valid branch
+    # fail the frozen-register guard.
+    subjects = git_text("log", "--no-merges", "--format=%s", f"{base}..HEAD", root=root)
     if not subjects:
         return False
     return all(line.startswith("docs(integration)") for line in subjects.split("\n") if line.strip())

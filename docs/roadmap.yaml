@@ -634,6 +634,8 @@ milestones:
       - docs/roadmap.yaml
       - docs/README.md
       - docs/entries/
+      - scripts/docs_lint.py
+      - tests/test_docs_lint.py
     note: >-
       Allocated 2026-08-19 for the open low-severity fixture-test hang first filed by T0026.1
       on 2026-08-14. When the dedicated Postgres fixture is unavailable on port 5433, the

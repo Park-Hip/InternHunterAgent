@@ -319,6 +319,8 @@ milestones:
       - src/agents/tools/
       - tests/agents/runtime/
       - tests/agents/tools/
+      - src/services/query/
+      - tests/test_prompt_surface.py
       - docs/roadmap.yaml
       - docs/entries/
     note: >-

@@ -34,7 +34,7 @@ let toastTimer = null;
 // ===========================================================================
 async function loadDateline() {
   const unknownFreshness =
-    "Demo data · refresh date unavailable · public listings, may be inaccurate.";
+    "Dữ liệu thử nghiệm · chưa có ngày cập nhật · tin tuyển dụng công khai, có thể không chính xác.";
   try {
     const res = await fetch("/api/v1/ready");
     if (!res.ok) return;                       // 503 if DB down — keep fallback
@@ -43,7 +43,7 @@ async function loadDateline() {
     const isMeasured = data && data.data_snapshot_date_provenance === "measured";
     if (date && isMeasured) {
       dateline.textContent =
-        `Demo data · snapshot ${date} · public listings, may be inaccurate.`;
+        `Dữ liệu thử nghiệm · ảnh chụp ${date} · tin tuyển dụng công khai, có thể không chính xác.`;
     } else {
       dateline.textContent = unknownFreshness;
     }
@@ -66,7 +66,7 @@ function startTurn(query) {
   // the reader's question
   const you = document.createElement("div");
   you.className = "turn__you";
-  you.innerHTML = '<span class="turn__label">You asked</span>';
+  you.innerHTML = '<span class="turn__label">Bạn hỏi</span>';
   const youText = document.createElement("p");
   youText.className = "turn__you-text";
   youText.textContent = query;
@@ -78,7 +78,7 @@ function startTurn(query) {
   agent.innerHTML = '<span class="turn__label">InternHunter</span>';
   const answer = document.createElement("p");
   answer.className = "turn__answer turn__answer--pending";
-  answer.textContent = "Reading the listings…";
+  answer.textContent = "Đang đọc các tin tuyển dụng…";
   agent.appendChild(answer);
 
   turn.appendChild(you);
@@ -108,7 +108,7 @@ function showTraceLink(ctx, traceUrl) {
   a.href = traceUrl;
   a.target = "_blank";
   a.rel = "noopener noreferrer";
-  a.textContent = "View the trace →";
+  a.textContent = "Xem dấu vết →";
   p.appendChild(a);
   ctx.agent.appendChild(p);
 }
@@ -119,7 +119,7 @@ function showErrorBubble(ctx, message) {
   ctx.agent.classList.add("is-error");
   ctx.answer.classList.remove("turn__answer--pending");
   ctx.answer.textContent =
-    message || "I couldn't complete that request right now. Please try again later.";
+    message || "Hiện chưa thể hoàn tất yêu cầu này. Vui lòng thử lại sau.";
 }
 
 // Finish a turn: drop the streaming cursor.
@@ -157,7 +157,7 @@ function setBusy(busy) {
   inFlight = busy;
   input.disabled = busy;
   sendBtn.disabled = busy;
-  sendBtn.textContent = busy ? "Asking…" : "Ask";
+  sendBtn.textContent = busy ? "Đang hỏi…" : "Hỏi";
   for (const chip of chipRow.querySelectorAll(".chip")) chip.disabled = busy;
 }
 
@@ -185,9 +185,9 @@ async function ask(query) {
     // Pre-stream failure: a real HTTP status before the stream body opens.
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}));
-      showErrorBubble(ctx, "That question didn’t go through.");
+      showErrorBubble(ctx, "Câu hỏi chưa được gửi đi.");
       endTurn(ctx);
-      showToast(payload.detail || "Something went wrong. Please try again.");
+      showToast(payload.detail || "Đã xảy ra lỗi. Vui lòng thử lại.");
       return;
     }
 
@@ -229,7 +229,7 @@ async function ask(query) {
     endTurn(ctx);
   } catch (err) {
     // Network drop mid-stream: degrade to a friendly bubble, never a crash.
-    showErrorBubble(ctx, "The connection dropped — please try again.");
+    showErrorBubble(ctx, "Kết nối bị gián đoạn - vui lòng thử lại.");
     endTurn(ctx);
   } finally {
     setBusy(false);

@@ -4274,6 +4274,92 @@ No other documentation update is required from this ticket.
 
 ---
 
+## T0033.4 - Translate the demo UI to Vietnamese
+
+*Completed 2026-08-19.*
+
+**Summary**
+
+Translated the masthead, standfirst, dateline, opening guidance, composer, and chips.
+
+Translated the accessibility labels and footer.
+
+Translated the dynamic dateline, pending state, busy label, and trace link in `app.js`.
+
+Translated the pre-stream, fallback, and network-drop errors in `app.js`.
+
+Changed the document language to `vi`.
+
+Removed Charter from the primary font stack because it lacks Vietnamese coverage.
+
+The maintained stack uses `Times New Roman`, `Georgia`, `DejaVu Serif`, and generic serif.
+
+This keeps the demo CSP-clean without a CDN or checked-in font files.
+
+The stack covers common Windows and Linux system-font environments.
+
+Raised body line-height to `1.7` and title line-height to `1.02`.
+
+The extra room prevents collisions between stacked Vietnamese diacritics.
+
+**Files**
+
+- Changed `src/api/static/index.html`.
+- Changed `src/api/static/app.js`.
+- Changed `src/api/static/styles.css`.
+- Created `docs/entries/T0033.4.md`.
+
+**Commands**
+
+- Started a local static demo server with `python -m http.server 8010 --directory src/api/static`.
+- Captured the pre-change browser baseline with Playwright.
+
+The artifact is `output/playwright/baseline-static.png`.
+- Captured the translated UI with Playwright.
+
+The artifact is `output/playwright/after-vi.png`.
+- Exercised the pre-stream failure path by clicking a suggested question against the static server.
+- Captured the failure state with Playwright.
+
+The artifact is `output/playwright/error-state.png`.
+- Checked the document language, computed font stack, visible body text, and horizontal overflow.
+- Ran `node --check src/api/static/app.js`.
+- Ran `uv run pytest tests/api/test_static_serving.py`.
+- Updated the static-serving test to assert the Vietnamese fallback dateline.
+- Re-ran `uv run pytest tests/api/test_static_serving.py`.
+- Ran `git diff --check`.
+
+**Build and test**
+
+| Check | Result |
+|---|---|
+| Playwright baseline reproduction | Passed. The original UI was visibly English and used the Charter-first stack. |
+| Playwright translated-shell inspection | Passed. The page reported `lang="vi"`, the expected Vietnamese font stack, and no horizontal overflow. |
+| Playwright failure-path interaction | Passed. The error bubble displayed `Câu hỏi chưa được gửi đi.` and the toast fallback displayed `Đã xảy ra lỗi. Vui lòng thử lại.`. |
+| JavaScript syntax check | Passed. |
+| `tests/api/test_static_serving.py` | 5 passed. |
+| `git diff --check` | Passed. |
+
+**Risks**
+
+The system-font decision depends on the platform's installed Microsoft or DejaVu font coverage.
+
+The static-server browser check cannot complete an API stream.
+
+The static server does not provide the FastAPI endpoints.
+
+**Follow-ups**
+
+- Run the successful streaming check after the other M33 tickets are merged.
+
+**Docs**
+
+No frozen registers or shared documentation were changed.
+
+The typography choice and verification evidence are recorded in this ticket entry for integration.
+
+---
+
 ## T0033.5 - Translate user-facing tool literals to Vietnamese
 
 *Completed 2026-08-19.*

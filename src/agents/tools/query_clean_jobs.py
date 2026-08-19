@@ -72,11 +72,11 @@ def _build_answer(table: TableArtifact) -> str:
 
     if table.truncated:
         header = (
-            f"Showing the first {table.row_count} results — there are more matches. "
-            f"Narrow your search to see the rest. Columns: {', '.join(table.columns)}."
+            f"Đang hiển thị {table.row_count} kết quả đầu tiên - vẫn còn kết quả phù hợp. "
+            f"Thu hẹp phạm vi tìm kiếm để xem phần còn lại. Các cột: {', '.join(table.columns)}."
         )
     else:
-        header = f"Found {table.row_count} result(s) with columns: {', '.join(table.columns)}."
+        header = f"Tìm thấy {table.row_count} kết quả với các cột: {', '.join(table.columns)}."
 
     lines = [header]
     for row in table.rows:
@@ -98,7 +98,7 @@ async def query_clean_jobs(question: str, config: RunnableConfig) -> str:
 
     if not validation.valid:
         logger.warning("query_clean_jobs.sql_rejected", reason=validation.reason)
-        return f"I can't run that query: {validation.reason}"
+        return f"Tôi không thể chạy truy vấn đó: {validation.reason}"
 
     max_rows = load_max_rows()
     bounds = resolve_bounds(validation.sql, max_rows)
@@ -113,7 +113,7 @@ async def query_clean_jobs(question: str, config: RunnableConfig) -> str:
         )
     except ExecutorError as exc:
         logger.error("query_clean_jobs.db_error", error=str(exc))
-        return "I couldn't retrieve the requested data due to a database error. Please try again later."
+        return "Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau."
 
     table = format_rows(rows, bounds.display_cap)
     obligations = filter_enabled_obligations(detect_obligations(validation.sql, table))

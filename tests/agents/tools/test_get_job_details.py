@@ -39,7 +39,7 @@ class GetJobDetailsToolTests(unittest.IsolatedAsyncioTestCase):
         result = await get_job_details.ainvoke({"ids": [1, 2, 3]})
 
         mock_fetch_job_details.assert_called_once_with([1, 2])
-        self.assertIn("2 of 3", result)
+        self.assertIn("2 trong số 3", result)
 
     @patch("src.agents.tools.get_job_details.fetch_job_details")
     async def test_missing_id_degrades_gracefully(self, mock_fetch_job_details) -> None:
@@ -49,7 +49,7 @@ class GetJobDetailsToolTests(unittest.IsolatedAsyncioTestCase):
 
         result = await get_job_details.ainvoke({"ids": [999999]})
 
-        self.assertIn("No posting found for id 999999", result)
+        self.assertIn("Không tìm thấy tin tuyển dụng nào với mã 999999", result)
 
     async def test_empty_ids_returns_guidance_without_hitting_db(self) -> None:
         from src.agents.tools.get_job_details import get_job_details
@@ -71,7 +71,7 @@ class GetJobDetailsToolTests(unittest.IsolatedAsyncioTestCase):
 
         result = await get_job_details.ainvoke({"ids": [1]})
 
-        self.assertIn("database error", result)
+        self.assertIn("lỗi cơ sở dữ liệu", result)
         self.assertNotIn("connection refused", result)
 
     @patch("src.agents.tools.get_job_details.logger")

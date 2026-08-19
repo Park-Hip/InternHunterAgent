@@ -31,9 +31,11 @@ def render_tool_result(result: QueryToolResult, glossary: dict[str, str]) -> str
         return glossary["ZERO_RESULTS"]
 
     if table.truncated:
-        header = f"{glossary['TRUNCATION']} Columns: {', '.join(table.columns)}."
+        header = (
+            f"{glossary['TRUNCATION']} Các cột: {', '.join(table.columns)}."
+        )
     else:
-        header = f"Found {table.row_count} result(s) with columns: {', '.join(table.columns)}."
+        header = f"Tìm thấy {table.row_count} kết quả với các cột: {', '.join(table.columns)}."
 
     lines = [header]
     for row in table.rows:

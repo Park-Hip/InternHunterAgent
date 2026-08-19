@@ -4274,6 +4274,70 @@ No other documentation update is required from this ticket.
 
 ---
 
+## T0033.5 - Translate user-facing tool literals to Vietnamese
+
+*Completed 2026-08-19.*
+
+**Summary**
+
+Translated the query result headers, SQL refusal, database error, detail-count notice, and
+missing-posting message into Vietnamese.
+Kept `ZERO_RESULTS` and `ABSENT_FIELD` routed through the behavior glossary.
+Updated the shared table renderer because it is the live path used by `query_clean_jobs` for result
+headers.
+The evaluation registry pins glossary tokens and scenario expectations, but none of the translated
+direct literals.
+
+**Files**
+
+- Modified `src/agents/tools/query_clean_jobs.py`.
+- Modified `src/agents/tools/get_job_details.py`.
+- Modified `src/services/query/table_formatter.py` for the live result-rendering path.
+- Modified `tests/agents/tools/test_query_clean_jobs.py`.
+- Modified `tests/agents/tools/test_get_job_details.py`.
+- Modified `tests/test_prompt_surface.py`.
+- Created `docs/entries/T0033.5.md`.
+
+**Commands**
+
+- Read `AGENTS.md`, `docs/Decision_Log.md`, `research/README.md`,
+  `research/vietnamese-prompt-spike.md`, and the M33 ticket and roadmap scope.
+- Searched `evals/scenarios_v1.yaml`, `evals/grader.py`, and tool tests for pinned literal coupling.
+- Ran the focused pytest suite with placeholder Langfuse credentials.
+- Ran Ruff on all changed Python files.
+- Ran `git diff --check`.
+- Ran `uv run python scripts/docs_lint.py`.
+
+**Build and test**
+
+| Check | Result |
+|---|---|
+| `uv run pytest tests/agents/tools tests/test_prompt_surface.py` | 23 passed with placeholder Langfuse credentials |
+| Focused Ruff check | Passed |
+| `git diff --check` | Passed |
+| `uv run python scripts/docs_lint.py` | Blocked by existing scope conflicts reporting M38 for the ticket files and frozen-register ownership |
+
+**Risks**
+
+- The shared table renderer is outside the M33 roadmap path list, but changing only the dead
+  `_build_answer` helper would leave the live `query_clean_jobs` result header in English.
+- The live demo and database failure path were not run because this worktree has no live service
+  session.
+
+**Follow-ups**
+
+- Integrate this entry and fold it into the frozen registers through the dedicated integration step.
+- Re-run the full evaluation suite after T0033.2 and T0033.3 are merged so the translated tool
+  surface is checked with the Vietnamese glossary and registry.
+
+**Docs**
+
+- No frozen documentation registers were edited.
+- The integration step should fold this entry into the generated completion and manual-verification
+  registers.
+
+---
+
 ## T0034.1 - Reproduce the serving memory-window eviction boundary
 
 *Completed 2026-08-18.*

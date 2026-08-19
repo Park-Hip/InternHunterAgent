@@ -106,7 +106,7 @@ def test_a_glossary_reference_resolves_to_the_live_prompt_phrasing() -> None:
     rule = _rule_for("HON-CURRENCY-1")
 
     assert rule.text is not None
-    assert "different currencies" in rule.text.required_any[0]
+    assert "loại tiền tệ khác nhau" in rule.text.required_any[0]
 
 
 def test_an_unknown_glossary_reference_is_rejected() -> None:

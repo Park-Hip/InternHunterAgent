@@ -58,8 +58,8 @@ milestones:
     status: complete
     note: >-
       Complete as a coder milestone. The cron activation closed 2026-08-17 on four consecutive
-      unattended schedule runs; branch protection to enforce the CI gate is the one maintainer
-      action still open.
+      unattended schedule runs. Branch protection closed 2026-08-20 under D-047: `main` now
+      requires the `checks` and `docs` jobs, so no maintainer action remains open here.
   - id: M21
     title: Serving-Path Hardening
     status: complete

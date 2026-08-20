@@ -1,6 +1,6 @@
 # Documentation Conventions
 
-> **Last verified:** 2026-08-14
+> **Last verified:** 2026-08-20
 
 Use these conventions for every Markdown document in this repository.
 
@@ -50,13 +50,14 @@ inside a backticked code span or add `<!-- lint-allow-encoding -->` on that line
 
 ## Documentation lifecycle
 
-- **Rule A - state the exit.** Every capped document has a header `> **Eviction:**` line that says
-  what content leaves and when.
+- **Rule A - state the exit.** Every living document has a header `> **Eviction:**` line that
+  says what content leaves and when.
 - **Rule B - collapse corrections.** Rewrite against current truth instead of appending a
-  correction.
-  Git retains the superseded version. The amendment check flags `no longer`, `read every`,
-  `correcting an earlier`, and `superseded above` outside code spans. Use
-  `<!-- lint-allow-amendment -->` only for a necessary historical reference.
+  correction. Git retains the superseded version.
+
+Both rules are conventions an author applies, not checks. The `amendment` check that used to
+flag correction-on-correction phrasing was retired by **D-047**, along with the
+`<!-- lint-allow-amendment -->` marker that suppressed it.
 
 The [planning skill](../skills/plan/SKILL.md) applies these conventions when it prepares a change
 plan.

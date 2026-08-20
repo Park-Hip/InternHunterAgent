@@ -1,4 +1,4 @@
-"""Render the derived documentation registers from the per-ticket entry files.
+"""Render the tree-derived regions of the repository state document.
 
 Only the tree-derived regions in ``docs/Repo_Current_State.md`` remain. Milestone status comes from
 ``docs/roadmap.yaml``, dependencies from ``pyproject.toml``, and scripts from ``scripts/``.

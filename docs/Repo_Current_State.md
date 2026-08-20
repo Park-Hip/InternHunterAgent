@@ -1,7 +1,8 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-19 against the checked-out commit, active registers, and
-> [`Operations.md`](Operations.md).
+> **Last verified:** 2026-08-20 against the checked-out commit, active registers, and
+> [`Operations.md`](Operations.md). The `snapshot` region below is clone-local and is
+> excluded from this stamp; see the note under it.
 
 > **Eviction:** A current-state fact leaves when the checked-out repository or active operational
 > register changes; replace it with the verified current fact.
@@ -23,9 +24,14 @@
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
 run in, so it is the one generated region the linter does not gate: branch and worktree facts
 differ between a developer machine and CI, and a check that must pass on both cannot read them.
+It was last refreshed on 2026-08-19 at `03b43ff` and therefore predates the three D-047
+migration merges (PRs #84, #85, #86). Refreshing it belongs to the next integration session,
+which is the only writer that runs `--snapshot` from a checkout of `main`. That it can lag
+silently is `KI-2026-08-17-snapshot-region-unverified`, still open.
 
-- Numbers, milestone scopes, and the frozen register list live in
-  [`roadmap.yaml`](roadmap.yaml) as of T0031.1.
+- Milestone identity, status, and named open obligations live in
+  [`roadmap.yaml`](roadmap.yaml). Ticket numbers, milestone `scope:` blocks, and the
+  `frozen:` register list were retired by **D-047** on 2026-08-20.
 - `t0031-parallel-docs-workflow` is locked by a dead pid.
 - `main` is the deployment source of truth and deploys the public service.
 - Live demo: <https://internhunteragent.onrender.com>, re-probed 2026-08-17: a real answer with a
@@ -107,7 +113,7 @@ is in the [documentation archive](archive/).
 
 ## Archive tags
 
-These tags preserve branches that are no longer active. <!-- lint-allow-amendment -->
+These tags preserve branches that are no longer active.
 
 | Tag | Commit | What it preserves |
 |---|---|---|
@@ -129,9 +135,11 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
   [Resolved Issues](archive/Resolved_Issues.md) disprove:
   that section is wrong, not merely stale.
 - The primary worktree carries untracked browser-capture screenshots and a `.playwright-mcp/` log
-  directory, plus an unstaged `AGENTS.md`/`CLAUDE.md` edit adding the `docs_build.py` step to the
-  completion-report rules. None are the integration step's to commit; all three trip `docs_lint`
-  locally and none reach CI.
+  directory, plus an unstaged `AGENTS.md`/`CLAUDE.md` edit adding the `docs_build.py` step to
+  the completion-report rules. That edit is superseded: **D-047** deleted the completion-report
+  requirement it amended, and both files are now generated from `CLAUDE.md`. Discard it rather
+  than commit it. The leftovers no longer trip `docs_lint`, because the `orphan` and `size-cap`
+  checks that flagged them were cut with the other nine.
 - The legacy HTTP runner stays archived; the driver took its orchestration as a pattern only and
   runs the agent in-process (D-043). The 2026-07-14 answer artifact is answer-only, so replaying it
   still grades `INFRA` at the structural tier - only a driver capture carries tools and SQL.
@@ -189,10 +197,14 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 - `uv run mypy` - type-check `src`.
 - `uv run alembic current` and `uv run alembic upgrade head` - inspect or migrate a database.
 - `docker compose up -d` - start local Postgres and the API.
-- `uv run python scripts/docs_lint.py` - run every documentation convention check.
-- `uv run python scripts/docs_build.py` - run the remaining documentation maintenance checks.
-  The `--snapshot` option refreshes the clone-local git block under
-  [Current branch](#current-branch).
+- `uv run python scripts/docs_lint.py` - run the four surviving documentation checks, each of
+  which compares a document against a machine-readable source of truth: `link-path`,
+  `encoding`, `stack`, and `scenario-id`.
+- `uv run python scripts/docs_build.py` - refresh the tree-derived regions of this document;
+  `--check` reports them stale without writing. The `--snapshot` option refreshes the
+  clone-local git block under [Current branch](#current-branch) and is integration-only.
+- `uv run python scripts/sync_agent_instructions.py` - regenerate `AGENTS.md` from
+  `CLAUDE.md`; `--check` fails when they differ, and the CI `docs` job runs it.
 
 ### Maintenance scripts
 
@@ -202,8 +214,7 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 - `scripts/build_tech_vocabulary.py` - No module docstring.
 - `scripts/deepseek_provider_spike.py` - Throwaway spike (T0027.1): decide whether DeepSeek can
   serve this agent at all.
-- `scripts/docs_build.py` - Render the derived documentation registers from the per-ticket entry
-  files.
+- `scripts/docs_build.py` - Render the tree-derived regions of the repository state document.
 - `scripts/docs_lint.py` - Check repository documentation hygiene without external dependencies.
 - `scripts/eval_judge_spike.py` - Throwaway spike (T0011.1): pick a DeepEval judge that reliably
   returns schema-valid JSON.
@@ -221,12 +232,13 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Exit 1 on 2026-08-19 in this clone, on untracked leftovers only - the superseded production-readiness plan [Carried work](#carried-work) records, plus browser-capture screenshots and a `.playwright-mcp/` log directory left in the working tree, and an uncommitted edit to `AGENTS.md` and `CLAUDE.md`. All are untracked or unstaged, so CI never sees them and every other check passed. Naming its path here reproduced the same finding from the other direction, which is why this row describes it instead. The `frozen` findings an integration session also sees are the check working: it fires on any write to a frozen register, and the integration step is the one writer allowed to make them |
-| `python scripts/docs_build.py --check` | Exit 0 on 2026-08-19; every generated region current |
-| `uv run pytest -q` | 558 passed, 9 skipped, 30 deselected, and 45 subtests passed on 2026-08-19, in 4 m 31 s. The nine skips and the runtime are both the fixture Postgres being unreachable in this clone, not a regression; CI ran the same suite green on all five M33 heads |
-| `uv run ruff check .` | Passed on 2026-08-19 |
-| `uv run mypy` | Success: no issues in 44 source files on 2026-08-19 |
-| `uv run python -m evals.replay` | Exit 0 in CI on 2026-08-19 on each of the five M33 heads, which is where the frozen evidence is actually re-graded. Not re-run locally by the integration step that published M33: Docker Desktop was not running, so nothing listened on 5433 - the recorded precondition rather than a result |
+| `python scripts/docs_lint.py` | Exit 0 on 2026-08-20, on the four surviving checks. The untracked working-tree leftovers under [Carried work](#carried-work) no longer produce findings: the `orphan` and `size-cap` checks that flagged them were cut by **D-047** |
+| `python scripts/docs_build.py --check` | Exit 0 on 2026-08-20; the three tree-derived regions current |
+| `python scripts/sync_agent_instructions.py --check` | Exit 0 on 2026-08-20; `AGENTS.md` is byte-identical to `CLAUDE.md`. Runs in the CI `docs` job |
+| `uv run pytest -q` | 513 passed, 9 skipped, 30 deselected, and 45 subtests passed on 2026-08-20, in 4 m 33 s. The count fell from 558 because **D-047** removed the tests for the eleven cut lint checks and the entry half of the generator. The nine skips are the fixture Postgres and `SCRATCH_DATABASE_URL` being unavailable in this clone, not a regression |
+| `uv run ruff check .` | Passed on 2026-08-20 |
+| `uv run mypy` | Success: no issues in 44 source files on 2026-08-20 |
+| `uv run python -m evals.replay` | Exit 0 in CI on 2026-08-20 on the three D-047 migration heads (PRs #84, #85, #86), where the frozen evidence is re-graded. Not re-run locally: nothing listens on 5433 in this clone - the recorded precondition rather than a result |
 
 The skips are environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, and the rest
 need the fixture Postgres. The default suite deselects live eval tests by design. A run with the
@@ -266,9 +278,11 @@ with M35 landed, re-capturing the missing `v2` control
 (`KI-2026-08-18-honesty-gate-has-no-control`) would now produce a correctly labelled baseline at
 M27's measured 5m20s for about $0.04.
 
-The protocol gate is built and running in CI (`registry`, `scope`, `frozen`), but the `docs` job
-that runs it is advisory rather than required - `KI-2026-08-18-docs-job-not-required`, a maintainer
-decision rather than a ticket.
+The pipeline now has an enforced gate at the pull request. Branch protection on `main` was
+enabled on 2026-08-20 and requires both the `checks` and the `docs` job, closing
+`KI-2026-08-18-docs-job-not-required` and the last M20 maintainer action. The `registry`,
+`scope`, and `frozen` checks it used to run were themselves retired by **D-047**; what `docs`
+enforces now is the four-check linter plus `AGENTS.md`/`CLAUDE.md` parity.
 
 This section and the build-status table are maintained as recorded facts.
 

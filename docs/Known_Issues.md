@@ -10,7 +10,7 @@ Closed history is preserved in [Resolved Issues](archive/Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 16 | 1 | 2 |
+| MED | 17 | 1 | 2 |
 | LOW | 16 | 2 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
@@ -183,7 +183,24 @@ topic section or resolves them.
   - **Next:** Fetch one additional row for explicit limits and add a soft more-results hint.
   - **History:** `src/services/query/row_bound.py` owns result limits.
 
-## Evaluation harness (13)
+## Evaluation harness (14)
+
+- `KI-2026-08-20-stale-replays` **`[MED · OPEN]` Two of the three committed replays no longer
+  validate, and the CI gate does not replay them.**
+  - **Found:** 2026-08-20, running T0030.2's archived checklist during the D-048 sweep.
+  - **Impact:** `evals/replays/t0025.7-acceptance.json` and
+    `evals/replays/t0024.4-v3-obligations.json` fail `validate_replay` with "question does not
+    match the frozen registry", because T0033.3 translated `evals/scenarios_v1.yaml` to Vietnamese
+    and refreshed only `evals/replays/t0025.9-committed.json`. The registry-drift guard is working
+    exactly as designed; the two files are the drift. CI runs `evals.replay` with no argument, which
+    replays only the committed default, so nothing surfaced this. Both files are cited as durable
+    evidence, including from D-046, and neither can currently be replayed to support that citation.
+  - **Next:** Decide per file whether it is live evidence or history. A live replay must be
+    re-captured against the Vietnamese registry, which costs a provider run. History should move out
+    of `evals/replays/` so the directory holds only what the gate can prove. Either way, make the
+    gate iterate the directory rather than default to one path, so a stale replay fails loudly.
+  - **History:** Not caused by D-047 or the design merge; the drift dates to T0033.3 on 2026-08-19
+    and was invisible until the checklist was actually run.
 
 - `KI-2026-08-18-freezer-rejects-no-sql-turns` **`[MED · OPEN]` The freezer cannot freeze a turn
   with no generated SQL, so no full-registry capture can become a replay.**

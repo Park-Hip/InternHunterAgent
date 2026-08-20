@@ -7,6 +7,13 @@ The living documentation surface is hand-maintained.
 Historical ticket plans, completion records, checklists, and per-ticket entries are preserved under
 [`archive/`](archive/).
 
+Five paths in this directory are redirects rather than documents: `MVP_Spec.md`,
+`Full_Design_Document.md`, `MVP_Technical_Design.md`, `Offline_Pipelines_Design.md`, and
+`Tech_Stack.md`.
+Each merged into [Design](Design.md) and is retained only so the section citations in archived
+research still resolve; each names the design section that now owns its content.
+They own no facts and are not listed below.
+
 | Doc | Owns | Tier | Reader |
 |---|---|---:|---|
 | [Documentation Map](README.md) | Document ownership and readers | T3 | All contributors |

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Generate Ticket Prompt"
-  short_description: "Draft grounded prompts for single repo tickets"
-  default_prompt: "Use $generate-ticket-prompt to turn one ticket from docs/Tickets.md into a self-sufficient implementation prompt for another coder session."

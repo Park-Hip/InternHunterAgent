@@ -58,5 +58,5 @@ inside a backticked code span or add `<!-- lint-allow-encoding -->` on that line
   `correcting an earlier`, and `superseded above` outside code spans. Use
   `<!-- lint-allow-amendment -->` only for a necessary historical reference.
 
-The [ticket-writing skill](../skills/generate-ticket-prompt/SKILL.md) applies these conventions
-when it generates a ticket prompt.
+The [planning skill](../skills/plan/SKILL.md) applies these conventions when it prepares a change
+plan.

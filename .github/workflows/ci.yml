@@ -25,6 +25,8 @@ jobs:
 
       - run: uv run python scripts/docs_lint.py
 
+      - run: python scripts/sync_agent_instructions.py --check
+
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15

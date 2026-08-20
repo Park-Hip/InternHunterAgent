@@ -284,6 +284,12 @@ enabled on 2026-08-20 and requires both the `checks` and the `docs` job, closing
 `scope`, and `frozen` checks it used to run were themselves retired by **D-047**; what `docs`
 enforces now is the four-check linter plus `AGENTS.md`/`CLAUDE.md` parity.
 
+One new defect joins that list. The **D-048** sweep of the fourteen archived verification
+checklists found that two of the three committed replays no longer validate against the Vietnamese
+scenario registry, and that the CI gate replays only the third
+(`KI-2026-08-20-stale-replays`). It is a decision before it is work: each file is either live
+evidence that needs re-capturing or history that should leave `evals/replays/`.
+
 This section and the build-status table are maintained as recorded facts.
 
 T0023's cron precondition is satisfied: `Nightly ingestion` ran unattended on `schedule` four

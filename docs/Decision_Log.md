@@ -12,6 +12,7 @@
 
 | ID | Decision | Status |
 |---|---|---|
+| D-048 | The ticket-era verification queue is resolved, not archived open | Active |
 | D-047 | Retire the ticket workflow in favor of reviewable plans and derived state | Active |
 | D-046 | Frozen replays retain evidence, not per-turn telemetry | Active |
 | D-045 | DeepSeek serves the agent, on measured throughput | Active |
@@ -61,6 +62,45 @@
 | D-001 | The behavior question bank is exploratory, not a product commitment | Active |
 
 ## Active decisions
+
+### D-048 - The ticket-era verification queue is resolved, not archived open
+
+- **Decided:** 2026-08-20 - **Status:** Active. Completes the mitigation D-047 owed.
+- Retiring the ticket workflow archived `Manual_Verification_Guide.md` with fourteen entry
+  checklists still at `verified: no`. Burying an open queue is not the same as closing it, so each
+  was swept and given a disposition. The archived entries keep their original `verified: no`, since
+  an archived record is not edited to reflect a later outcome; this entry is the living owner of
+  what happened to them.
+- **Five were run and passed** against the merged tree on 2026-08-20. T0030.3 (replay telemetry
+  exclusion) verified by reading D-046, the `replays/` row in [`evals/README.md`](../evals/README.md),
+  and the replay files themselves; all three carry no trace identifier, latency, token usage,
+  finish reason, or tool output. T0030.1 step 4 and T0035.1's schema and prompt-version assertions
+  verified the same way. T0032.2 (model-facing string inventory) passed as
+  `tests/test_prompt_surface.py`. T0031.3 steps 1 and 5 passed as `docs_build.py --check`, which
+  still exits 0 clean and still refuses to verify the clone-local snapshot region.
+- **Four are superseded by automated coverage** that runs in CI on every pull request, which is a
+  stronger gate than a hand-run checklist. The freeze, sanitization, registry-drift, and
+  prompt-version steps of T0030.1, T0030.2, and T0035.1 are covered by twenty-five tests under
+  `tests/evals/`. The tool-surface half of T0024.2, T0024.3, T0032.1, and T0033.5 - glossary token
+  coverage, absent-field wording, the truncation notice, the mandatory-caveat block, and the
+  cross-currency rule - is covered under `tests/agents/` and `tests/evals/test_grader.py`.
+- **The model-behavior half of those four belongs to the scenario registry, not to a checklist.**
+  Whether the final answer preserves a caveat or declines to relabel listing expiry is exactly what
+  the twenty-nine honesty scenarios in `evals/scenarios_v1.yaml` measure, under D-041. A hand-run
+  question was the wrong instrument for it, and re-running one would not produce evidence anyone
+  could compare.
+- **Five are obsolete**, because the machinery they verify was deleted by D-047. T0031.1, T0031.2,
+  T0031.4, and T0036.1 test the `size-cap`, `orphan`, `generated`, `scope`, `frozen`, and
+  `registry` lint checks, the entry-fed generated regions, and the ticket-prompt skill - none of
+  which exist. T0036.1's entire subject was the `scope` check. T0031.3 steps 2, 4, and 6 fall the
+  same way, which is why only its steps 1 and 5 were run above.
+- **The sweep found one live defect**, filed as `KI-2026-08-20-stale-replays` in
+  [Known Issues](Known_Issues.md). Running T0030.2's checklist as written fails: two of the three
+  committed replays no longer validate against the scenario registry, and the CI gate replays only
+  the third. That is the return on doing the sweep rather than archiving the queue silently.
+- **Full record:** [`docs/archive/Manual_Verification_Guide.md`](archive/Manual_Verification_Guide.md)
+  holds the fourteen checklists as written, and the entries under
+  [`docs/archive/entries/`](archive/entries/README.md) hold their originating context.
 
 ### D-047 - Retire the ticket workflow in favor of reviewable plans and derived state
 

@@ -3,38 +3,28 @@
 
 This register holds actionable risks that are open, blocked, or awaiting a maintainer decision.
 > **Eviction:** An entry leaves when fixed, superseded, or reclassified in its owning document.
-Closed history is preserved in [Resolved Issues](Resolved_Issues.md).
+Closed history is preserved in [Resolved Issues](archive/Resolved_Issues.md).
 
 ## Triage
 
-<!-- generated:triage:begin -->
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
 | MED | 17 | 1 | 3 |
 | LOW | 18 | 2 | 0 |
-<!-- generated:triage:end -->
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
 
-The table is counted from the `[SEVERITY · STATE]` badge on every entry below, including the
-unfiled ones, by `scripts/docs_build.py`. It is a tally of this register rather than a claim about
-it. The counts were recounted by hand on 2026-08-17 rather than incremented, because every pass
-until then had adjusted them from what that pass alone had changed, and they had drifted; since
-T0031.2 they cannot drift again. The per-section counts in the headings below are still hand
-tallies. The seven deferred preferences at the foot of this document carry no badge and so are
-excluded from the table, which is the behaviour that pass chose for them: nothing is owed on them.
+The table is a hand-maintained summary of the badges on the entries below.
+Update it when an issue changes state.
+The seven deferred preferences at the foot of this document carry no badge and are excluded.
 
 ## Raised, not yet filed
 
-Issues a ticket recorded in its file under [`entries/`](entries/README.md) that no maintainer has
-filed into a topic section yet. Filing one means moving it into the section it belongs to,
-**keeping its `KI-` id**: the id is what drops it from this region on the next build, so the two
-copies can never drift. Entries that predate the id convention are never inboxed here.
+These issues were raised during recent work and remain here until a maintainer files them into a
+topic section or resolves them.
 
-<!-- lint-allow-link-path:begin -->
-<!-- generated:registered:begin -->
 - `KI-2026-08-19-evals-full-suite-stalled` **`[MED · OPEN]` The evaluation suite stalled during
   fixture and database setup.**
   - **Found:** 2026-08-19 during T0033.3 verification.
@@ -51,8 +41,6 @@ copies can never drift. Entries that predate the id convention are never inboxed
     branch.
   - **Next:** The integration or roadmap owner should reconcile the active scope before merging the
     ticket.
-<!-- generated:registered:end -->
-<!-- lint-allow-link-path:end -->
 
 ## Config, startup & deployment (12)
 
@@ -80,7 +68,8 @@ copies can never drift. Entries that predate the id convention are never inboxed
     reports it, because `/health` and `/ready` both pass on a broken build.
   - **Next:** After the next merge that changes `src/`, compare the deployed static-asset hashes
     against `main`; if they differ, check the GitHub hook and Render's deploy history.
-  - **History:** [Resolved Issues](Resolved_Issues.md) records the outage and its elimination trail.
+  - **History:** [Resolved Issues](archive/Resolved_Issues.md) records the outage and its
+    elimination trail.
 
 - **`[LOW · OPEN]` A retired serving-model pin would fail the tool loop with no advance warning.**
   - **Found:** T0011.5 preparation.
@@ -138,7 +127,7 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Found:** T0020.3.
   - **Impact:** A failing CI run does not necessarily prevent a merge to `main`.
   - **Next:** Require the CI check in GitHub branch protection and prove it with a red test PR.
-  - **History:** `.github/workflows/ci.yml` and [Tickets](Tickets.md) M20.
+  - **History:** `.github/workflows/ci.yml` and [archived ticket plans](archive/Tickets.md) M20.
 
 - **`[LOW · OPEN]` Two targeted mypy ignores conceal third-party generic mismatches.**
   - **Found:** T0020.3.
@@ -153,7 +142,7 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Resolution:** T0034.1 reproduced the eviction boundary, and T0034.2 replaced the
     20-message cap with a six-turn policy that retains complete turns.
   - **History:** Closed by M34 on 2026-08-18; see
-    [Resolved Issues](Resolved_Issues.md#agent-runtime--prompts) and
+    [Resolved Issues](archive/Resolved_Issues.md#agent-runtime--prompts) and
     [`archive/Tickets_Archive.md`](archive/Tickets_Archive.md).
 
 - `KI-2026-08-18-created-on-fails-under-v3` **`[MED · OPEN]` `HON-CREATED-ON-1` fails 3/3 under the
@@ -263,7 +252,8 @@ copies can never drift. Entries that predate the id convention are never inboxed
 
 - `KI-2026-08-17-deepseek-capture-lost` **`[HIGH · RESOLVED]` Captures are unpreserved, and one has
   already been lost.** Closed by M30 on 2026-08-17; the record is in
-  [Resolved Issues](Resolved_Issues.md#evaluation-harness). The T0027.3 capture stays lost - what
+  [Resolved Issues](archive/Resolved_Issues.md#evaluation-harness).
+  The T0027.3 capture stays lost - what
   closed is the exposure, not the loss.
 
 - **`[LOW · OPEN]` DeepEval live commands require UTF-8 output and an explicit `-m eval`.**
@@ -402,7 +392,7 @@ copies can never drift. Entries that predate the id convention are never inboxed
   - **Impact:** M26 through M31 all shipped past the v1.0 release cut, so the release sits behind
     work that keeps arriving and nothing arbitrates that.
   - **Next:** A maintainer decides where M23 sits; sequencing is not a ticket's call.
-  - **History:** [Tickets](Tickets.md) M23; [`roadmap.yaml`](roadmap.yaml).
+  - **History:** [archived ticket plans](archive/Tickets.md) M23; [`roadmap.yaml`](roadmap.yaml).
 
 - `KI-2026-08-17-section-counts-are-hand-tallies` **`[LOW · OPEN]` The per-section counts in the
   headings of this register are hand tallies that nothing checks.**
@@ -420,13 +410,14 @@ copies can never drift. Entries that predate the id convention are never inboxed
     cannot be used to audit whether an older entry was fully filed.
   - **Next:** Nothing, unless an entry is ever found to have been missed. Recorded so the gap in
     coverage is stated rather than assumed away.
-  - **History:** [`entries/T0031.1.md`](entries/T0031.1.md) `## Known issues`.
+  - **History:** [`archive/entries/T0031.1.md`](archive/entries/T0031.1.md) `## Known issues`.
 
 - **`[LOW · OPEN]` An issue fixed on arrival has no way out of the generated inbox.**
   - **Found:** the integration step on 2026-08-17, folding T0031.2.
   - **Impact:** `render_registered` drops an id once it appears outside the generated regions of
     this file, so an issue the integrator *fixes* rather than files has to be named here anyway,
-    with a pointer to [Resolved Issues](Resolved_Issues.md), or it stays listed as unfiled forever.
+    with a pointer to [Resolved Issues](archive/Resolved_Issues.md), or it stays listed as
+    unfiled forever.
     `KI-2026-08-17-tickets-names-resolved-issues` is the first case and is handled exactly that way.
     `KI-2026-08-17-generated-register-scope` is the second, resolved by M36 on 2026-08-18 and named
     here for the same reason. Two occurrences in two days is the argument for fixing the dedup.

@@ -93,7 +93,7 @@ For Neon, set `ALEMBIC_DATABASE_URL` to the direct, non-pooled Neon connection U
 running Alembic.
 Do not use a `-pooler` host for migrations.
 The guarded production adoption sequence remains in
-[the cron activation runbook](T0020.4_Cron_Activation_Runbook.md), section 3 D6.
+[the cron activation runbook](archive/T0020.4_Cron_Activation_Runbook.md), section 3 D6.
 
 ## Ingestion cron
 
@@ -106,7 +106,7 @@ gates clear.
 
 Do not enable the schedule or set its secrets from this document.
 The activation gates, their evidence, order, and sign-off state are maintained in
-[T0020.4 Cron Activation Runbook](T0020.4_Cron_Activation_Runbook.md).
+[T0020.4 Cron Activation Runbook](archive/T0020.4_Cron_Activation_Runbook.md).
 The workflow's `DATABASE_URL` must use Neon's direct, non-pooled host because it writes data
 and runs schema safety checks against production.
 

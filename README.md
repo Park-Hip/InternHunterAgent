@@ -58,7 +58,7 @@ Browser ──POST /api/v1/agent/chat/stream──▶ FastAPI ──▶ Agent se
 
 The layers stay strictly separated: the API never knows how the agent is built, routes own no
 LangChain logic, and tracing does not leak across the codebase. See
-[`docs/Full_Design_Document.md`](docs/Full_Design_Document.md).
+[`docs/Design.md`](docs/Design.md).
 
 ## Quickstart
 
@@ -98,10 +98,8 @@ and interactive API docs at `/docs`.
 | Doc | What it answers |
 |---|---|
 | [`docs/README.md`](docs/README.md) | Map of every document and which one owns what |
-| [`docs/Tech_Stack.md`](docs/Tech_Stack.md) | What this is built with, and what was deliberately avoided |
+| [`docs/Design.md`](docs/Design.md) | Product scope, architecture, stack, and deliberate exclusions |
 | [`docs/Operations.md`](docs/Operations.md) | How the deployed service, database, and ingestion cron are operated |
-| [`docs/MVP_Spec.md`](docs/MVP_Spec.md) | What the product must do, and why |
-| [`docs/Full_Design_Document.md`](docs/Full_Design_Document.md) | Permanent system laws and layer boundaries |
 | [`docs/Repo_Current_State.md`](docs/Repo_Current_State.md) | Where the work stands right now |
 
 ## Status

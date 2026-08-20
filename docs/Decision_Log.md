@@ -1,6 +1,6 @@
 # Decision Log
 
-> **Last verified:** 2026-08-17.
+> **Last verified:** 2026-08-20.
 > This is the compact index of durable project decisions harvested from executed research.
 > It records the choice and points to the preserved reasoning.
 > Current operational facts belong in the document that owns them.
@@ -12,6 +12,7 @@
 
 | ID | Decision | Status |
 |---|---|---|
+| D-047 | Retire the ticket workflow in favor of reviewable plans and derived state | Active |
 | D-046 | Frozen replays retain evidence, not per-turn telemetry | Active |
 | D-045 | DeepSeek serves the agent, on measured throughput | Active |
 | D-044 | Temperature 0 is rejected for the ReAct seam | Active |
@@ -60,6 +61,16 @@
 | D-001 | The behavior question bank is exploratory, not a product commitment | Active |
 
 ## Active decisions
+
+### D-047 - Retire the ticket workflow in favor of reviewable plans and derived state
+
+- **Decided:** 2026-08-20 - **Status:** Active.
+- Reviewed pull-request bodies, a tiered planning workflow, branch protection, and a small set of
+  derived state checks replace ticket allocation, numbered ticket scopes, entry-fed registers, and
+  frozen-document ownership rules.
+- The scenario registry, roadmap milestones, documentation map, and generated agent instructions
+  remain explicit sources of truth where they provide durable value.
+- **Full record:** [workflow retirement research](../research/archive/workflow-retirement.md).
 
 ### D-046 - Frozen replays retain evidence, not per-turn telemetry
 
@@ -160,7 +171,7 @@
   active and observed before the `v1.0.0` tag is cut.
 - This settles D10 in the cron runbook and makes every activation gate release-blocking, including
   the terms posture that gates rearming the schedule.
-- **Full record:** [MVP Spec](MVP_Spec.md), sections 2, 4, and 5.
+- **Full record:** [Design](Design.md), product and MVP bar.
 
 ### D-037 - Evaluation baselines freeze fixture data with the agent-visible contract
 

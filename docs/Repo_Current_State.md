@@ -157,7 +157,7 @@ tests/         automated tests, including tests/evals for the deterministic eval
 ## Dependencies
 
 Declared in `pyproject.toml`, which is authoritative for the version specifier; what each package
-is for is in [Tech Stack](Tech_Stack.md).
+is for is in [Design](Design.md).
 
 <!-- generated:dependencies:begin -->
 Runtime (18): `alembic`, `beautifulsoup4`, `cloudscraper`, `fastapi`, `httpx`, `langchain`,

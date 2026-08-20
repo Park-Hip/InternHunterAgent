@@ -1,5 +1,5 @@
 # Known Issues & Risks
-> **Last verified:** 2026-08-18 against checked-out code, tests, configuration, and active runbooks.
+> **Last verified:** 2026-08-20 against checked-out code, tests, configuration, and active runbooks.
 
 This register holds actionable risks that are open, blocked, or awaiting a maintainer decision.
 > **Eviction:** An entry leaves when fixed, superseded, or reclassified in its owning document.
@@ -10,8 +10,8 @@ Closed history is preserved in [Resolved Issues](archive/Resolved_Issues.md).
 | Severity | Open | Blocked | Decision |
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
-| MED | 17 | 1 | 3 |
-| LOW | 18 | 2 | 0 |
+| MED | 16 | 1 | 2 |
+| LOW | 16 | 2 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
@@ -32,15 +32,6 @@ topic section or resolves them.
   - **Next:** Re-run with the evaluation fixture database available.
   Diagnose the setup stall if it persists.
   - **History:** Not caused or fixed by T0033.3.
-
-- `KI-2026-08-19-m38-scope-conflict` **`[MED · OPEN]` The documentation linter still reports the
-  active M38 scope and frozen-register conflicts for this ticket's changed paths.
-  - **Found:** `uv run python scripts/docs_lint.py` reported the conflicts after the focused tests
-    and Ruff checks passed.
-  - **Impact:** The ticket cannot report a clean repository-wide documentation lint result from this
-    branch.
-  - **Next:** The integration or roadmap owner should reconcile the active scope before merging the
-    ticket.
 
 ## Config, startup & deployment (12)
 
@@ -348,7 +339,7 @@ topic section or resolves them.
     distinguishable from an absent database.
   - **History:** Same root cause as the fixture-Postgres hang already recorded for the test suite.
 
-## Workflow & documentation (10)
+## Workflow & documentation (7)
 
 - `KI-2026-08-18-skill-copy-drifts` **`[MED · OPEN]` The gitignored skill copy drifts and only a
   test notices.**
@@ -357,27 +348,15 @@ topic section or resolves them.
     `.claude/skills/` copy the harness actually loads is gitignored, so it never receives a commit.
     That copy predated T0031.1 and still told coder sessions to take their ticket number from
     `Tickets.md` - the exact drift §3 of `CLAUDE.md` exists to prevent - and it had been handing
-    out that instruction since 2026-08-16. `test_shared_skill_instructions_match` catches it, but
-    only on a clone where the untracked copy exists, and it skips silently everywhere else,
-    including CI.
-  - **Next:** Either symlink the `.claude/` copy to the tracked file, or have the test fail rather
-    than skip when the copy is missing on a developer machine. Copying by hand is what just
-    happened and is not a fix.
-  - **History:** Same class as `AGENTS.md`/`CLAUDE.md`, which are both tracked and so cannot drift
-    this way. `tests/test_docs_lint.py::test_shared_skill_instructions_match`.
-
-- `KI-2026-08-18-docs-job-not-required` **`[MED · DECISION]` The CI `docs` job is not a required
-  check.**
-  - **Found:** 2026-08-18 by T0036.1, while investigating why the three open M32 branches fail the
-    lint.
-  - **Impact:** PR #63 merged with both `docs` and `checks` red and nothing blocked it, so a lint
-    the protocol treats as binding is advisory in practice. That merge is how the M31 scope-check
-    deadlock reached `main` unnoticed.
-  - **Next:** A maintainer decides whether `docs` and `checks` become required status checks on
-    `main`. It is the same branch-protection decision M20 has open, so take both together.
-  - **History:** Raised by T0036.1 and filed 2026-08-18. Restated from `OPEN` to `DECISION` on
-    filing: nothing here is implementable by a ticket, since branch protection is a repository
-    setting only the maintainer can change.
+    out that instruction since 2026-08-16. Nothing detects the drift as of 2026-08-20: the
+    `test_shared_skill_instructions_match` test that caught it - and only on a clone where the
+    untracked copy existed - was deleted with the rest of the M31 lint suite under D-047.
+  - **Next:** Either symlink the `.claude/` copy to the tracked file, or restore a check that fails
+    rather than skips when the copy is missing. Copying by hand is what just happened and is not a
+    fix.
+  - **History:** Same class as `AGENTS.md`/`CLAUDE.md`, which are both tracked and are now held
+    identical by `scripts/sync_agent_instructions.py --check` in the CI `docs` job. Restated
+    2026-08-20: the severity is unchanged but the detector is gone.
 
 - **`[MED · OPEN]` A fresh worktree cannot run the test suite.**
   - **Found:** T0031.1 on 2026-08-16.
@@ -402,28 +381,6 @@ topic section or resolves them.
     to recount these by hand in the same sitting.
   - **Next:** Either generate the heading counts or drop them. Cheap either way.
   - **History:** The triage table is generated as of T0031.2; these are what is left.
-
-- `KI-2026-08-17-entries-lack-issue-ids` **`[LOW · OPEN]` T0031.1's five known issues predate the
-  id convention and can never be inboxed.**
-  - **Found:** T0031.2, writing the dedup rule.
-  - **Impact:** None today, because all five were filed by hand on 2026-08-17. It means the inbox
-    cannot be used to audit whether an older entry was fully filed.
-  - **Next:** Nothing, unless an entry is ever found to have been missed. Recorded so the gap in
-    coverage is stated rather than assumed away.
-  - **History:** [`archive/entries/T0031.1.md`](archive/entries/T0031.1.md) `## Known issues`.
-
-- **`[LOW · OPEN]` An issue fixed on arrival has no way out of the generated inbox.**
-  - **Found:** the integration step on 2026-08-17, folding T0031.2.
-  - **Impact:** `render_registered` drops an id once it appears outside the generated regions of
-    this file, so an issue the integrator *fixes* rather than files has to be named here anyway,
-    with a pointer to [Resolved Issues](archive/Resolved_Issues.md), or it stays listed as
-    unfiled forever.
-    `KI-2026-08-17-tickets-names-resolved-issues` is the first case and is handled exactly that way.
-    `KI-2026-08-17-generated-register-scope` is the second, resolved by M36 on 2026-08-18 and named
-    here for the same reason. Two occurrences in two days is the argument for fixing the dedup.
-  - **Next:** Let the dedup also read `Resolved_Issues.md`, or give the inbox a closed state.
-    Fold it into T0031.4, which already owns the un-id'd-bullet check.
-  - **History:** `scripts/docs_build.py::render_registered`.
 
 - **`[LOW · OPEN]` A worktree lock can outlive the session that took it.**
   - **Found:** T0031.1 on 2026-08-16; the prune sweep ran on 2026-08-17.

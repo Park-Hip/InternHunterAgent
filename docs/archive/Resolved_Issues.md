@@ -13,7 +13,7 @@ resolution detail and a `Verified:` line where relevant. Severity is carried ove
 original register entry (omitted where none was assigned).
 
 ## Categories
-- [Documentation drift](#documentation-drift) — 6
+- [Documentation drift](#documentation-drift) — 10
 - [Config, startup & deployment](#config-startup--deployment) — 12
 - [API layer](#api-layer) — 2
 - [Agent runtime & prompts](#agent-runtime--prompts) — 6
@@ -28,6 +28,53 @@ original register entry (omitted where none was assigned).
 ---
 
 ## Documentation drift
+- **`[MED · RESOLVED · D-047, 2026-08-20]` The CI `docs` job is not a required check.**
+  (`KI-2026-08-18-docs-job-not-required`)
+  - **Found:** 2026-08-18 by T0036.1, while investigating why the three open M32 branches fail the
+    lint.
+  - **Cause:** `main` carried no branch protection at all. Neither `docs` nor `checks` was
+    required, so PR #63 merged with both red and nothing blocked it.
+  - **Resolution:** the maintainer enabled branch protection on `main` during the D-047 migration.
+    Both `checks` and `docs` are now required status checks with `strict: true`. This also closes
+    the branch-protection maintainer action M20 had carried open since 2026-08-09.
+  - **Verified:** `gh api repos/Park-Hip/InternHunterAgent/branches/main/protection/required_status_checks`
+    returns `contexts: ["checks", "docs"]` on 2026-08-20, where it returned `404 Branch not
+    protected` before.
+
+- **`[MED · RESOLVED · D-047, 2026-08-20]` The documentation linter reported M38 scope and
+  frozen-register conflicts.** (`KI-2026-08-19-m38-scope-conflict`)
+  - **Found:** 2026-08-19, when `uv run python scripts/docs_lint.py` reported the conflicts after
+    the focused tests and Ruff checks passed.
+  - **Cause:** `check_scope` and `check_frozen` policed milestone `scope:` blocks and the
+    `frozen:` register list in `roadmap.yaml`, both of which a ticket branch could not satisfy
+    while it also had to write the registers.
+  - **Resolution:** the D-047 migration deleted both checks along with the `scope:` and `frozen:`
+    keys they read. Eleven of fifteen checks were cut; the four that survive each compare a
+    document against a machine-readable source of truth.
+  - **Verified:** `uv run python scripts/docs_lint.py` exits 0 on a clean `main` at `67349be`.
+
+- **`[LOW · RESOLVED · D-047, 2026-08-20]` T0031.1's five known issues predate the id convention
+  and can never be inboxed.** (`KI-2026-08-17-entries-lack-issue-ids`)
+  - **Found:** T0031.2, writing the dedup rule.
+  - **Cause:** the generated inbox read `## Known issues` sections out of `docs/entries/`, and the
+    five issues predated the `KI-YYYY-MM-DD-slug` convention that dedup keyed on.
+  - **Resolution:** moot under D-047. `docs/entries/` is archived and the `registered` and
+    `triage` regions were removed with the entry half of `docs_build.py`, so there is no generated
+    inbox to be absent from. `Known_Issues.md` is hand-maintained again and the id convention now
+    lives in `.github/pull_request_template.md`.
+  - **Verified:** `docs/archive/entries/` holds all 26 entries; `scripts/docs_build.py` renders
+    only the `milestones`, `dependencies`, and `scripts` regions.
+
+- **`[LOW · RESOLVED · D-047, 2026-08-20]` An issue fixed on arrival has no way out of the
+  generated inbox.**
+  - **Found:** the integration step on 2026-08-17, folding T0031.2.
+  - **Cause:** `render_registered` dropped an id only once it appeared outside the generated
+    regions, so an issue the integrator fixed rather than filed had to be named in the register
+    anyway or stay listed as unfiled forever.
+  - **Resolution:** moot under D-047, which deleted `render_registered` with the rest of the entry
+    machinery. An issue fixed on arrival is now simply recorded here.
+  - **Verified:** `scripts/docs_build.py` defines no `render_registered`.
+
 - **`[MED · RESOLVED · T0036.1, 2026-08-18]` Generated registers failed the M32 scope check.**
   (`KI-2026-08-17-generated-register-scope`)
   - **Found:** T0032.1 on 2026-08-17, raised in [`entries/T0032.1.md`](entries/T0032.1.md), and hit

@@ -191,8 +191,10 @@
 ### D-035 - The tracked `skills/` copy is canonical
 
 - **Decided:** 2026-08-11 - **Status:** Active.
-- `.claude/` is gitignored, so `skills/generate-ticket-prompt/` is the only version-controlled
-  copy and must remain tracked.
+- `.claude/` is gitignored, so the tracked `skills/` copy of a skill is the only
+  version-controlled one and must remain tracked. The rule was settled against
+  `skills/generate-ticket-prompt/`, retired by D-047; it now governs `skills/plan/` and
+  `skills/integrate/`.
 - CI on PR #41 exposed the invalid deletion premise when the ignored local copy was absent.
 - **Full record:** [documentation prune plan §3.1.1](../research/docs-prune-and-structure-plan.md).
 

@@ -184,7 +184,7 @@ rows is acceptable. If probes stay flaky after the T0015.5 few-shots, record the
 
 > **Provenance (restored 2026-07-22).** Recovered from `archive/t0015.4-scenario-matrix`
 > (`eba3e1f`) during a branch-cleanup pass. It had been stranded on an unmerged branch since
-> T0015.2 — `docs/Tickets.md` marks that ticket *(done)*, but neither this file nor the
+> T0015.2 — `docs/archive/Tickets.md` marks that ticket *(done)*, but neither this file nor the
 > `behavior_glossary` it names had ever reached the mainline.
 >
 > **⚠️ The "machine source of truth" referenced below is frozen but NOT LANDED.**

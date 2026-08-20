@@ -4,7 +4,7 @@
 > `.github/workflows/ingestion.yml`, and the active migration/runbook records.
 > This document is the single owner of deploy topology, operational configuration, database
 > procedures, cron status, and incident response.
-> For service selections and their rationale, see [Tech_Stack.md](Tech_Stack.md).
+> For service selections and their rationale, see [Design](Design.md).
 
 > **Eviction:** An operational procedure leaves when the deployed configuration or provider workflow
 > it governs is retired and the replacement runbook is verified.
@@ -101,7 +101,7 @@ The schedule is currently disabled: the two `schedule:` / `cron:` lines in
 `.github/workflows/ingestion.yml` remain commented out.
 Manual `workflow_dispatch` is available.
 This is a gated pause, not the intended steady state: an active schedule is a required MVP
-capability under [MVP Spec](MVP_Spec.md) section 2, so the demo runs below specification until the
+capability under [Design](Design.md), so the demo runs below specification until the
 gates clear.
 
 Do not enable the schedule or set its secrets from this document.

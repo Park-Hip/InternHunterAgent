@@ -10,13 +10,9 @@ Historical ticket plans, completion records, checklists, and per-ticket entries 
 | Doc | Owns | Tier | Reader |
 |---|---|---:|---|
 | [Documentation Map](README.md) | Document ownership and readers | T3 | All contributors |
-| [MVP Spec](MVP_Spec.md) | Product capabilities and quality bar | T2 | Product and engineering |
-| [Full Design](Full_Design_Document.md) | Permanent system laws and layer boundaries | T2 | Engineering |
-| [Technical Design](MVP_Technical_Design.md) | Serving-path build blueprint | T2 | Engineering |
-| [Offline Pipelines Design](Offline_Pipelines_Design.md) | Ingestion and evaluation build blueprint | T2 | Engineering |
+| [Design](Design.md) | Product scope, architecture, serving, offline pipelines, and stack | T2 | Product and engineering |
 | [Schema Contract](Schema_Contract.md) | Frozen v1 `clean_jobs` columns | T2 | Engineering and evaluation |
 | [Agent Behavior Spec](Agent_Behavior_Spec.md) | Frozen agent behavior requirements | T2 | Agent and evaluation work |
-| [Tech Stack](Tech_Stack.md) | Languages, services, versions, and dependencies | T1 | New contributors |
 | [Decision Log](Decision_Log.md) | Durable decision rationale | T3 | Decision makers |
 | [Documentation Conventions](Docs_Conventions.md) | Documentation rules and exemptions | T1 | Documentation authors |
 | [Repository Current State](Repo_Current_State.md) | Current repository facts and next work | T3 | All contributors |
@@ -31,11 +27,7 @@ Historical ticket plans, completion records, checklists, and per-ticket entries 
 
 | Fact class | Sole owner |
 |---|---|
-| What the product must do | `MVP_Spec.md` |
-| Permanent laws and layer boundaries | `Full_Design_Document.md` |
-| How the serving path is built | `MVP_Technical_Design.md` |
-| How the offline pipelines are built | `Offline_Pipelines_Design.md` |
-| Languages, frameworks, versions, and services | `Tech_Stack.md` |
+| Product scope, architectural laws, serving, pipelines, and stack | `Design.md` |
 | `clean_jobs` column contract | `Schema_Contract.md` |
 | Deploy topology, environment variables, runbooks, and cron | `Operations.md` |
 | What is true right now | `Repo_Current_State.md` |
@@ -51,9 +43,9 @@ Historical ticket plans, completion records, checklists, and per-ticket entries 
 
 ## Suggested reading order
 
-1. [MVP Spec](MVP_Spec.md) - understand the product.
-2. [Full Design](Full_Design_Document.md) - learn the permanent laws.
-3. [Technical Design](MVP_Technical_Design.md) - see the serving-path blueprint.
-4. [Offline Pipelines Design](Offline_Pipelines_Design.md) - see ingestion and evaluation.
+1. [Design](Design.md) - understand product scope, architecture, and operating model.
+2. [Schema Contract](Schema_Contract.md) - learn the frozen data surface.
+3. [Agent Behavior Spec](Agent_Behavior_Spec.md) - learn the behavior requirements.
+4. [Operations](Operations.md) - learn deployment and incident procedures.
 5. [Repository Current State](Repo_Current_State.md) - find active work and verified facts.
 6. [Known Issues](Known_Issues.md) - review open risks before changing behavior.

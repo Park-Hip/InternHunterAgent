@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan a Change"
+  short_description: "Create reviewable implementation plans"
+  default_prompt: "Use $plan to prepare an approval-ready plan for this repository change."

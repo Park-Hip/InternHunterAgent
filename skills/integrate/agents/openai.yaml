@@ -1,0 +1,4 @@
+interface:
+  display_name: "Integrate Changes"
+  short_description: "Merge ready pull requests and publish repository state"
+  default_prompt: "Use $integrate to merge the ready pull requests and refresh derived repository state."

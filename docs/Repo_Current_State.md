@@ -212,6 +212,7 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 - `scripts/scrape_topcv_spike.py` - Scraping spike - TopCV internship listings via cloudscraper.
 - `scripts/scrape_topdev_spike.py` - Scraping spike - TopDev AI/Data IT jobs via RSC payload
   parsing.
+- `scripts/sync_agent_instructions.py` - Keep AGENTS.md byte-for-byte identical to CLAUDE.md.
 - `scripts/vietnamese_prompt_spike.py` - Measure Vietnamese prompt variants against the
   fixture-backed production agent.
 <!-- generated:scripts:end -->
@@ -232,7 +233,7 @@ need the fixture Postgres. The default suite deselects live eval tests by design
 fixture Postgres unreachable reports nine skips and takes minutes instead of seconds - the hang
 [Known Issues](Known_Issues.md) records, and the shape of the 2026-08-19 run above.
 
-Only the tracked `skills/generate-ticket-prompt/SKILL.md` is authoritative; the gitignored
+Only the tracked `skills/plan/SKILL.md` is authoritative; the gitignored
 `.claude/` copy drifted once and was fixed on 2026-08-18.
 
 Two command traps, both measured on 2026-08-17. A bare `python -m pytest` cannot import `slowapi`

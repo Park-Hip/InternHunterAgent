@@ -217,5 +217,5 @@ rows is acceptable. If probes stay flaky after the T0015.5 few-shots, record the
 > `G01`–`G47`; settled decisions in §12; final glossary in §10).
 > - Machine source of truth for the canonical strings: the `behavior_glossary` block in
 > [`config/prompts.yaml`](../config/prompts.yaml).
-> - This doc does **not** replace `skills/generate-ticket-prompt/SKILL.md`, the separate
+> - This doc does **not** replace `skills/plan/SKILL.md`, the separate
 > ticket-template artifact.

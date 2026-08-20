@@ -353,7 +353,7 @@ topic section or resolves them.
 - `KI-2026-08-18-skill-copy-drifts` **`[MED · OPEN]` The gitignored skill copy drifts and only a
   test notices.**
   - **Found:** the integration step on 2026-08-18, closing M32 and M36.
-  - **Impact:** `skills/generate-ticket-prompt/SKILL.md` is tracked; the
+  - **Impact:** `skills/plan/SKILL.md` is tracked; the
     `.claude/skills/` copy the harness actually loads is gitignored, so it never receives a commit.
     That copy predated T0031.1 and still told coder sessions to take their ticket number from
     `Tickets.md` - the exact drift §3 of `CLAUDE.md` exists to prevent - and it had been handing

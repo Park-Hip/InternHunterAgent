@@ -37,9 +37,8 @@ differ between a developer machine and CI, and a check that must pass on both ca
 
 ## Milestones
 
-Status is read from [`roadmap.yaml`](roadmap.yaml), which owns milestone identity. What each
-milestone delivered is in [Completion Reports](Completion_Reports.md); completed ticket plans are
-preserved in the [ticket archive](archive/Tickets_Archive.md).
+Status and named open obligations are maintained in [`roadmap.yaml`](roadmap.yaml).
+Completed historical plans and reports are preserved in [`archive/`](archive/).
 
 <!-- generated:milestones:begin -->
 Complete: M0, M6-M22, M24-M38 - 33 of 35 milestones.
@@ -97,13 +96,14 @@ worktree), an inference from the adding commit for the other two.
 
 **M32** and **M36** also closed on 2026-08-18: M32 made the model-facing string surface knowable
 without changing a word of it, and M36 broke the M31 check deadlock that left a ticket branch
-adding a `docs/entries/` file with no passing state. M33 and M35 were allocated out of the T0032.4
+adding an archived per-ticket entry with no passing state.
+M33 and M35 were allocated out of the T0032.4
 spike's triage. **M34** then closed its serving-path defect on 2026-08-18: the message-count cap
 became a six-turn window that retains complete user turns. **M30** closed on 2026-08-17 - the
 `freeze` command, the surviving T0025.7
 capture at `evals/replays/t0025.7-acceptance.json`, and **D-046** on what a replay keeps; the
 T0027.3 DeepSeek capture that motivated it was already lost and stays lost. Per-milestone detail
-is in [Tickets](Tickets.md) and the [ticket archive](archive/Tickets_Archive.md).
+is in the [documentation archive](archive/).
 
 ## Archive tags
 
@@ -125,7 +125,8 @@ These tags preserve branches that are no longer active. <!-- lint-allow-amendmen
   operational telemetry, and a production evaluation loop as T0027-T0029 - numbers already spent.
   Superseded as written; re-numbering it through [`roadmap.yaml`](roadmap.yaml) is the only way it
   lands, and it is the drift T0031.1 prevents. Its §1.1 also concludes the 2026-08-13 outage was a
-  model-provider failure, which the direct probes in [Resolved Issues](Resolved_Issues.md) disprove:
+  model-provider failure, which the direct probes in
+  [Resolved Issues](archive/Resolved_Issues.md) disprove:
   that section is wrong, not merely stale.
 - The primary worktree carries untracked browser-capture screenshots and a `.playwright-mcp/` log
   directory, plus an unstaged `AGENTS.md`/`CLAUDE.md` edit adding the `docs_build.py` step to the
@@ -189,9 +190,9 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 - `uv run alembic current` and `uv run alembic upgrade head` - inspect or migrate a database.
 - `docker compose up -d` - start local Postgres and the API.
 - `uv run python scripts/docs_lint.py` - run every documentation convention check.
-- `uv run python scripts/docs_build.py` - regenerate the register regions from `docs/entries/`
-  and this file's derived regions; `--check` fails instead of writing, and `--snapshot` also
-  refreshes the git block under [Current branch](#current-branch).
+- `uv run python scripts/docs_build.py` - run the remaining documentation maintenance checks.
+  The `--snapshot` option refreshes the clone-local git block under
+  [Current branch](#current-branch).
 
 ### Maintenance scripts
 
@@ -243,7 +244,7 @@ collection with `ConfigLoadError`. The dummy values in
 ## Registers
 
 Open risks and maintainer actions: [Known Issues](Known_Issues.md). Closed entries and their
-resolution records: [Resolved Issues](Resolved_Issues.md).
+resolution records: [Resolved Issues](archive/Resolved_Issues.md).
 
 ## Next recommended ticket
 
@@ -268,14 +269,11 @@ The protocol gate is built and running in CI (`registry`, `scope`, `frozen`), bu
 that runs it is advisory rather than required - `KI-2026-08-18-docs-job-not-required`, a maintainer
 decision rather than a ticket.
 
-Since T0031.3 (PR #59), this section and the build-status table are all a human writes in this
-file: the table reports command results rather than a reading of the tree, so deriving it needs a
-recorded result the build can read. Elsewhere only `Tickets.md` and the judgement of where a raised
-issue belongs remain by hand.
+This section and the build-status table are maintained as recorded facts.
 
 T0023's cron precondition is satisfied: `Nightly ingestion` ran unattended on `schedule` four
 nights running (2026-08-14 through 08-17, the last at 03:02 UTC), meeting the last row of
-[the activation runbook](T0020.4_Cron_Activation_Runbook.md) §7 and the D-038 live schedule
+[the activation runbook](archive/T0020.4_Cron_Activation_Runbook.md) §7 and the D-038 live schedule
 requirement. Of the behavior failures M25 and T0027.3 measured - triaged in
 [Known Issues](Known_Issues.md) as 23 real behavior and 10 grader phrasing artifacts - M24 closed
 the honesty subset it scoped and left the helpfulness ones untouched and unowned.

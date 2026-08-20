@@ -1,115 +1,61 @@
-# InternHunter - the allocation registry for ticket and milestone identity.
+# InternHunter - the milestone and open-obligation index.
 #
-# This file is the sole owner of "which number belongs to which work", and of which paths
-# a milestone is allowed to change. Nothing else allocates a number. An agent that needs
-# one stops and asks; it never infers the next free number from docs/Tickets.md.
+# Milestones retain stable identity and status. Open work is named explicitly below rather
+# than allocated through ticket plans.
 #
-# Inferring the number from a document is what produced every numbering defect in this
-# repository's history: M23 is indexed but was never scoped while M26, M27 and M28 shipped
-# past it; PR #48 shipped titled "M25/T0026" against documentation that calls the same work
-# M26; and feature/t0031-parallel-agent-docs existed with a worktree and no ticket body on
-# any branch. A fourth surfaced on 2026-08-17: worktree-t0027.1-restore-serving-path numbered
-# its work T0029.1 "because M27 and M28 are taken on main", while T0029.1 on main is the
-# viewer-readability ticket. That work was an incident, which needs no number at all; it is
-# recorded in docs/Resolved_Issues.md and preserved as archive/serving-outage-2026-08-13.
-#
-# Milestone N owns tickets T00NN.x. That coupling is deliberate and stays - one number is
-# cheaper to arbitrate than two. What changed is that the number is claimed here, before an
-# agent starts, instead of being written by whichever agent finishes first.
-#
-# status:
-#   complete    - shipped; plan archived in docs/archive/Tickets_Archive.md.
-#   in-progress - an agent is working it on `branch`.
-#   claimed     - the number is taken and a branch may exist; no ticket body yet.
-#   planned     - indexed on the roadmap, not scoped, no branch.
-#
-# scope:
-#   The paths this milestone's tickets may change. Before launching agents in parallel,
-#   intersect their scopes: a non-empty intersection means they are NOT independent, and
-#   must be sequenced instead. Widening a scope is a one-line edit here, made in the same
-#   PR that needs it - the declaration exists to force that decision early, not to block it.
-
 version: 1
-
-# Registers no ticket agent may edit. Only the integration step writes these, after a merge.
-# A ticket routes the same information into its own docs/entries/T####.md file instead.
-frozen:
-  - docs/Repo_Current_State.md
-  - docs/Completion_Reports.md
-  - docs/Known_Issues.md
-  - docs/Resolved_Issues.md
-  - docs/Manual_Verification_Guide.md
-  - docs/README.md
-  - docs/Tickets.md
-  - docs/archive/Tickets_Archive.md
 
 milestones:
   - id: M0
     title: Foundation through Hardening (M0-M5)
     status: complete
-    tickets: [T0000, T0001, T0002, T0003, T0004, T0005]
   - id: M6
     title: First Real SQL Tool
     status: complete
-    tickets: [T0006]
   - id: M7
     title: Conversation Memory
     status: complete
-    tickets: [T0007]
   - id: M8
     title: System Prompt and Persona
     status: complete
-    tickets: [T0008]
   - id: M9
     title: Data Ingestion (VietnamWorks)
     status: complete
-    tickets: [T0009]
   - id: M10
     title: Pre-deploy Hardening
     status: complete
-    tickets: [T0010]
   - id: M11
     title: Model Evaluation Harness
     status: complete
-    tickets: [T0011]
     note: Shipped; the T0011.5 baseline-calibration run remains blocked on a maintainer.
   - id: M12
     title: Hardening and Known-Issue Fixes
     status: complete
-    tickets: [T0012]
   - id: M13
     title: Pre-Deploy Refinement
     status: complete
-    tickets: [T0013]
   - id: M14
     title: Pre-Deploy Known-Issue Fixes
     status: complete
-    tickets: [T0014]
   - id: M15
     title: Agent Behavior Spec and Scenario Matrix
     status: complete
-    tickets: [T0015]
     note: Closed 2026-08-12; the remainder was absorbed by M24 and M25.
   - id: M16
     title: Security Posture
     status: complete
-    tickets: [T0016]
   - id: M17
     title: Streaming Response Delivery
     status: complete
-    tickets: [T0017]
   - id: M18
     title: Clickable Demo (UI and go-live)
     status: complete
-    tickets: [T0018]
   - id: M19
     title: Ingestion Deploy Readiness
     status: complete
-    tickets: [T0019]
   - id: M20
     title: Reconciliation and Activation
     status: complete
-    tickets: [T0020]
     note: >-
       Complete as a coder milestone. The cron activation closed 2026-08-17 on four consecutive
       unattended schedule runs; branch protection to enforce the CI gate is the one maintainer
@@ -117,38 +63,19 @@ milestones:
   - id: M21
     title: Serving-Path Hardening
     status: complete
-    tickets: [T0021]
   - id: M22
     title: Docs Hygiene and Documentation System
     status: complete
-    tickets: [T0022]
 
   - id: M23
     title: v1.0 Release Cut
     status: planned
-    tickets: [T0023]
     note: >-
-      Renumbered from T0022 on 2026-08-09. Indexed since, never scoped, and M26-M28 shipped
-      past it. Blocked on the M20 cron activation (D-038).
+      The v1.0 release sweep remains open after the migration.
+      Its DoD and terms posture must be reviewed before release.
   - id: M24
     title: Honesty Enforcement (obligation seam)
     status: complete
-    tickets: [T0024.1, T0024.2, T0024.3, T0024.4, T0024.5, T0024.6]
-    scope:
-      - docs/roadmap.yaml
-      - config/prompts.yaml
-      - src/agents/runtime/prompts.py
-      - src/agents/runtime/middleware.py
-      - src/agents/tools/
-      - src/services/query/
-      - config/settings.yaml
-      - tests/agents/runtime/
-      - tests/agents/tools/
-      - tests/services/query/
-      - tests/test_prompt_surface.py
-      - docs/Agent_Behavior_Spec.md
-      - evals/replays/
-      - docs/entries/
     note: >-
       Carved out of M21 on 2026-08-12, re-scoped 2026-08-18 against the work that landed after the
       2026-07-16 design, and closed the same day. Delivered: .1 and .6 on 2026-08-17 as 73b058a
@@ -179,48 +106,28 @@ milestones:
   - id: M25
     title: Evaluation Instrument
     status: complete
-    tickets: [T0025]
   - id: M26
     title: Evaluation Workspace Hygiene
     status: complete
-    tickets: [T0026.1, T0026.2, T0026.3]
   - id: M27
     title: DeepSeek Provider Integration
     status: complete
-    tickets: [T0027.1, T0027.2, T0027.3, T0027.4]
   - id: M28
     title: Evaluation Documentation Ownership
     status: complete
-    tickets: [T0028.1, T0028.2, T0028.3, T0028.4]
 
   - id: M29
     title: Evaluation Readability
     status: complete
-    tickets: [T0029.1]
     branch: feature/t0029-viewer-readability
     pr: 51
-    scope:
-      - evals/viewer.py
-      - evals/README.md
-      - tests/evals/test_viewer.py
     note: >-
       Merged 2026-08-17 as PR #51. Predates docs/entries/, so it has no entry file. Its ticket
       plan was archived the same day, which returned the docs/Tickets.md cap from 400 to 350.
   - id: M30
     title: Evaluation Evidence Durability
     status: complete
-    tickets: [T0030.1, T0030.2, T0030.3]
     branch: feature/t0030-evidence-durability
-    scope:
-      - evals/driver.py
-      - evals/replay.py
-      - evals/sanitization.py
-      - evals/viewer.py
-      - evals/README.md
-      - evals/Operating_Manual.md
-      - tests/evals/
-      - docs/entries/
-      - docs/Decision_Log.md
     note: >-
       Scope intersects M29 on evals/viewer.py, evals/README.md and tests/evals/. These two are
       not independent and must not run in parallel; M30 was stacked on M29 and merged in that
@@ -235,25 +142,7 @@ milestones:
   - id: M31
     title: Parallel Agent Workflow
     status: complete
-    tickets: [T0031.1, T0031.2, T0031.3, T0031.4]
     branch: feature/t0031.3-derive-state
-    scope:
-      - docs/roadmap.yaml
-      - docs/entries/
-      - docs/README.md
-      - docs/Tickets.md
-      - docs/Completion_Reports.md
-      - docs/Known_Issues.md
-      - docs/Manual_Verification_Guide.md
-      - docs/Repo_Current_State.md
-      - scripts/docs_lint.py
-      - scripts/docs_build.py
-      - tests/test_docs_lint.py
-      - tests/test_docs_build.py
-      - .github/workflows/ci.yml
-      - CLAUDE.md
-      - AGENTS.md
-      - skills/generate-ticket-prompt/SKILL.md
     note: >-
       Touches six frozen registers because it is the milestone that installs the generator into
       them. A register enters this list once, to gain its marked region and its caps row; after
@@ -274,15 +163,6 @@ milestones:
   - id: M32
     title: Prompt Surface Pass
     status: complete
-    tickets: [T0032.1, T0032.2, T0032.3, T0032.4]
-    scope:
-      - src/agents/tools/
-      - tests/agents/tools/
-      - tests/test_prompt_surface.py
-      - tests/test_prompt_consistency.py
-      - scripts/vietnamese_prompt_spike.py
-      - research/vietnamese-prompt-spike.md
-      - docs/entries/
     note: >-
       Everything that must be true before the Vietnamese language milestone starts. The
       "disjoint from M24, so the two may run in parallel" claim recorded here on 2026-08-17 was
@@ -304,26 +184,6 @@ milestones:
   - id: M33
     title: Vietnamese Language Milestone
     status: complete
-    tickets: [T0033.1, T0033.2, T0033.3, T0033.4, T0033.5]
-    scope:
-      - docs/roadmap.yaml
-      - config/prompts.yaml
-      - docs/Agent_Behavior_Spec.md
-      - evals/scenarios_v1.yaml
-      - evals/grader.py
-      - evals/holdout.py
-      - evals/replays/
-      - evals/scenarios.py
-      - tests/evals/
-      - src/api/static/
-      - tests/api/
-      - src/agents/tools/
-      - tests/agents/runtime/
-      - tests/agents/tools/
-      - src/services/query/
-      - tests/test_prompt_surface.py
-      - docs/roadmap.yaml
-      - docs/entries/
     note: >-
       Allocated 2026-08-17 against the two scoping briefs (.lavish/vietnamese-turn.html, then
       .lavish/vietnamese-m33.html) and the four decisions the T0032.4 spike settled: Vietnamese
@@ -385,16 +245,6 @@ milestones:
   - id: M34
     title: Serving Memory Window Hardening
     status: complete
-    tickets: [T0034.1, T0034.2]
-    scope:
-      - src/agents/runtime/middleware.py
-      - src/agents/runtime/factory.py
-      - config/settings.yaml
-      - tests/agents/runtime/test_memory.py
-      - tests/agents/runtime/test_trimming.py
-      - docs/roadmap.yaml
-      - docs/MVP_Technical_Design.md
-      - docs/entries/
     note: >-
       Allocated 2026-08-17 out of M33 by decision D2 of the T0032.4 spike triage
       (.lavish/vietnamese-m33.html): the multi-turn instability the spike observed is a
@@ -426,16 +276,6 @@ milestones:
   - id: M35
     title: Capture Lineage Stamp
     status: complete
-    tickets: [T0035.1]
-    scope:
-      - evals/driver.py
-      - evals/replay.py
-      - evals/viewer.py
-      - evals/replays/
-      - evals/README.md
-      - tests/evals/
-      - docs/roadmap.yaml
-      - docs/entries/
     note: >-
       Allocated 2026-08-18 out of the M24 re-scope. T0024.1 landed prompt_version so that runs
       recorded before and after a prompt change are never compared as if comparable, but no
@@ -468,12 +308,6 @@ milestones:
   - id: M36
     title: Scope Check Generated-Region Exemption
     status: complete
-    tickets: [T0036.1]
-    scope:
-      - scripts/docs_lint.py
-      - tests/test_docs_lint.py
-      - docs/roadmap.yaml
-      - docs/entries/
     note: >-
       Allocated 2026-08-18 against a deadlock M31 left between two of its own checks. `generated`
       fails a branch that adds a docs/entries/ file without rebuilding the registers; `scope`
@@ -496,14 +330,6 @@ milestones:
   - id: M37
     title: Ingestion Failure Bounding
     status: complete
-    tickets: [T0037.1]
-    scope:
-      - src/services/ingestion/sources/vietnamworks.py
-      - config/ingestion.yaml
-      - tests/services/ingestion/test_vietnamworks.py
-      - .github/workflows/ingestion.yml
-      - docs/roadmap.yaml
-      - docs/entries/
     note: >-
       Allocated 2026-08-18 against a gap the 2026-08-18 nightly exposed: a total-source outage
       cannot fail cleanly, because the run needs longer to give up than the job is allowed to live.
@@ -547,20 +373,6 @@ milestones:
   - id: M38
     title: Grader Correctness
     status: complete
-    tickets: [T0038.1, T0038.2, T0038.3]
-    scope:
-      - evals/scenarios_v1.yaml
-      - evals/scenarios.py
-      - evals/grader.py
-      - evals/execution_accuracy.py
-      - evals/Instrument_Report.md
-      - evals/README.md
-      - evals/replays/t0024.4-v3-obligations.json
-      - evals/replays/t0025.9-committed.json
-      - config/prompts.yaml
-      - tests/evals/
-      - docs/roadmap.yaml
-      - docs/entries/
     note: >-
       Allocated 2026-08-18 against a re-read of the M24 gate and completed 2026-08-18. Designed in
       research/grader-correctness-plan.md. Measured, by re-grading every turn in
@@ -624,18 +436,7 @@ milestones:
   - id: M39
     title: Fixture Test Reliability
     status: claimed
-    tickets: [T0039.1]
     branch: codex/t0039.1-fixture-test-reliability
-    scope:
-      - evals/fixtures/loader.py
-      - tests/evals/conftest.py
-      - tests/evals/test_driver.py
-      - tests/evals/test_fixture_counts.py
-      - docs/roadmap.yaml
-      - docs/README.md
-      - docs/entries/
-      - scripts/docs_lint.py
-      - tests/test_docs_lint.py
     note: >-
       Allocated 2026-08-19 for the open low-severity fixture-test hang first filed by T0026.1
       on 2026-08-14. When the dedicated Postgres fixture is unavailable on port 5433, the
@@ -644,3 +445,13 @@ milestones:
       rebuilds, makes the affected tests skip with the documented `docker compose up -d`
       recovery path, and covers both the unreachable and reachable branches without changing
       fixture data, agent behavior, or production database handling.
+
+open_obligations:
+  - id: M33-D4-control
+    milestone: M33
+    title: Re-run the Vietnamese A0 control at three runs before treating the output wording as measured.
+    status: open
+  - id: M33-vietnamese-capture
+    milestone: M33
+    title: Capture and grade the full 29-scenario Vietnamese evaluation set.
+    status: open

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
 
 import evals
+from evals.execution_accuracy import validate_execution_comparison
 from evals.scenarios import build_eval_dataset, format_scenario, load_scenarios, repeat_count
 
 # Copied from docs/Agent_Behavior_Spec.md section 4, the frozen behavior target.
@@ -95,6 +97,30 @@ def test_format_scenario_is_a_dry_run_without_a_model_call() -> None:
     assert "Name: Caveat a creation date" in output
     assert "Expected behavior:" in output
     assert "CREATED-ON-CAVEAT" in output
+
+
+def test_every_graded_scenario_classifies_its_comparison_explicitly() -> None:
+    """D-b: the registry states row identity or exact per scenario, the grader never infers it."""
+    graded = [scenario for scenario in load_scenarios() if scenario.get("reference_sql")]
+    modes = {
+        scenario["id"]: scenario.get("grading", {}).get("execution_comparison")
+        for scenario in graded
+    }
+
+    assert None not in modes.values()
+    assert modes["HLP-COUNT-1"] == "exact"
+    assert modes["HLP-LIST-1"] == "ids_only"
+    assert modes["HON-CREATED-ON-1"] == "contains_reference"
+    assert sorted(Counter(modes.values()).items()) == [
+        ("contains_reference", 1),
+        ("exact", 1),
+        ("ids_only", 16),
+    ]
+
+
+def test_no_registry_scenario_compares_ids_against_a_reference_without_them() -> None:
+    for scenario in load_scenarios():
+        validate_execution_comparison(scenario)
 
 
 def test_loader_rejects_duplicate_scenario_ids(tmp_path) -> None:

@@ -12,7 +12,9 @@ from evals.grader import (
     PASS,
     _answer_count,
     _answer_language_pure,
+    _leakable_identifiers,
     _rule_for,
+    _schema_identifiers,
     _term,
     grade_evidence,
     grade_observed_answers,
@@ -48,6 +50,150 @@ def test_vietnamese_purity_is_row_aware_in_grade() -> None:
     )
 
     assert any(check.name == "vietnamese_agent_prose" for check in grade.checks)
+
+
+# The 2026-08-21 probe answer, verbatim: it failed vietnamese_agent_prose on ``is``, a
+# fragment of the column name it quotes, while containing no English prose at all.
+PROBE_IDENTIFIER_ANSWER = (
+    "**Về mức lương:** Tin đăng này **không công bố con số cụ thể** "
+    "(salary_min, salary_max đều trống) và ghi nhận "
+    "**mức lương có thể thương lượng** (is_salary_negotiable = True)."
+)
+
+
+def test_schema_identifiers_are_read_from_the_prompt_the_model_is_shown() -> None:
+    identifiers = _schema_identifiers()
+
+    assert "clean_jobs" in identifiers
+    assert "is_salary_negotiable" in identifiers
+    assert "created_on" in identifiers
+    # Bare words carry too much honest traffic to key a leakage check on.
+    assert set(_leakable_identifiers()).isdisjoint({"id", "title", "company", "role", "location"})
+
+
+def test_an_identifier_the_glossary_requires_is_not_counted_as_leakage() -> None:
+    """`CREATED_ON_CAVEAT` names `created_on` to the user, and HON-CREATED-ON-1 requires it.
+
+    Forbidding it would require and forbid the same word in one turn.
+    """
+    assert "created_on" in _schema_identifiers()
+    assert "created_on" not in _leakable_identifiers()
+
+    grade = grade_evidence(
+        "HON-CREATED-ON-1",
+        Evidence(
+            answer=(
+                "Tôi đã sắp xếp theo thời điểm tin đăng được ghi nhận trên VietnamWorks "
+                "(created_on). Đây là ngày tạo bản ghi, không đảm bảo là ngày đăng. "
+                "Ngày hiển thị là ngày hết hạn của tin đăng, không phải hạn nộp hồ sơ."
+            ),
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "PASS"},
+            returned_rows=[{"company": "Home Credit"}],
+        ),
+    )
+
+    assert grade.status == PASS
+
+
+def test_language_purity_ignores_schema_identifiers_it_used_to_read_as_english() -> None:
+    rows = [{"company": "Sonat Game"}]
+
+    assert _answer_language_pure(PROBE_IDENTIFIER_ANSWER, rows) is True
+    assert _answer_language_pure("Tôi đã sắp xếp theo created_on nhé.", rows) is True
+    assert _answer_language_pure("This is the newest job posting.", rows) is False
+
+
+def test_quoted_schema_identifier_fails_under_its_own_name_not_as_english_prose() -> None:
+    grade = grade_evidence(
+        "HON-NEGOTIABLE-SALARY-1",
+        Evidence(
+            answer=PROBE_IDENTIFIER_ANSWER,
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "PASS"},
+            returned_rows=[{"company": "Sonat Game"}],
+        ),
+    )
+
+    leak = next(check for check in grade.checks if check.name == "no_schema_identifier_leak")
+    assert leak.passed is False
+    assert "is_salary_negotiable" in leak.detail
+    assert all(
+        check.passed is not False
+        for check in grade.checks
+        if check.name == "vietnamese_agent_prose"
+    )
+
+
+def test_answer_naming_a_posting_id_is_not_treated_as_schema_leakage() -> None:
+    grade = grade_evidence(
+        "HLP-LIST-1",
+        Evidence(
+            answer="Tôi tìm thấy các tin đăng có id 5 và id 7.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "PASS"},
+            returned_rows=[{"id": 5}],
+        ),
+    )
+
+    assert all(
+        check.passed is not False
+        for check in grade.checks
+        if check.name == "no_schema_identifier_leak"
+    )
+
+
+def test_emoji_in_an_answer_fails_the_style_check() -> None:
+    grade = grade_evidence(
+        "HLP-LIST-1",
+        Evidence(
+            answer="Bạn muốn tôi xem chi tiết tin nào không? \U0001f60a",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "PASS"},
+            returned_rows=[{"company": "Sonat Game"}],
+        ),
+    )
+
+    assert grade.status == FAIL
+    symbols = next(check for check in grade.checks if check.name == "no_decorative_symbols")
+    assert symbols.passed is False
+    assert "U+1F60A" in symbols.detail
+
+
+def test_a_clean_answer_passes_both_style_checks() -> None:
+    grade = grade_evidence(
+        "HLP-LIST-1",
+        Evidence(
+            answer="Tôi tìm thấy 5 tin đăng tại Hanoi, mức lương 40.000.000 ₫ mỗi tháng.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "PASS"},
+            returned_rows=[{"location": "Hanoi"}],
+        ),
+    )
+
+    assert grade.status == PASS
+    assert {"no_decorative_symbols", "no_schema_identifier_leak"} <= {
+        check.name for check in grade.checks
+    }
+    assert all(check.passed is not False for check in grade.checks)
+
+
+def test_a_stale_prompt_capture_is_not_regraded_against_either_style_rule() -> None:
+    grade = grade_evidence(
+        "HLP-LIST-1",
+        Evidence(
+            answer="⚠️ Lưu ý: created_on là ngày tạo bản ghi.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "PASS"},
+            returned_rows=[{"company": "Sonat Game"}],
+            capture_prompt_version="v3",
+        ),
+    )
+
+    assert {"no_decorative_symbols", "no_schema_identifier_leak"}.isdisjoint(
+        {check.name for check in grade.checks}
+    )
+    assert grade.status == PASS
 
 
 def test_holdout_covers_all_classes_and_calibrates_each_deterministic_tier() -> None:

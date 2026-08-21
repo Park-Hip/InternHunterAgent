@@ -24,6 +24,7 @@ def _agent_config(
                 "timeout": 30,
                 "max_retries": 2,
                 "streaming": True,
+                "stream_usage": True,
                 "reasoning_format": "hidden",
                 "reasoning_effort": react_reasoning_effort,
             },
@@ -34,6 +35,7 @@ def _agent_config(
                 "timeout": 15,
                 "max_retries": 1,
                 "streaming": False,
+                "stream_usage": False,
                 "reasoning_format": "hidden",
                 "reasoning_effort": sql_reasoning_effort,
             },
@@ -180,6 +182,35 @@ class DeepSeekProviderTests(unittest.TestCase):
         self.assertEqual(kwargs["api_key"], "fake-deepseek-key")
         self.assertNotIn("reasoning_format", kwargs)
         self.assertNotIn("groq_api_key", kwargs)
+        self.assertIs(kwargs["stream_usage"], True)
+
+    @patch("src.agents.runtime.provider.ChatGroq")
+    @patch("src.agents.runtime.provider.settings")
+    def test_stream_usage_is_provider_specific(
+        self, mock_settings, mock_chat_groq
+    ) -> None:
+        mock_settings.config_yaml = _agent_config()
+        mock_settings.GROQ_API_KEY = "fake-key"
+
+        AgentProvider().build_model("react")
+
+        _, kwargs = mock_chat_groq.call_args
+        self.assertNotIn("stream_usage", kwargs)
+
+    @patch("langchain_deepseek.ChatDeepSeek")
+    @patch("src.agents.runtime.provider.settings")
+    def test_disabled_stream_usage_is_passed_to_deepseek(
+        self, mock_settings, mock_chat_deepseek
+    ) -> None:
+        config = _agent_config()
+        config["agent"]["sql_generation"]["provider"] = "deepseek"
+        mock_settings.config_yaml = config
+        mock_settings.DEEPSEEK_API_KEY = "fake-deepseek-key"
+
+        AgentProvider().build_model("sql_generation")
+
+        _, kwargs = mock_chat_deepseek.call_args
+        self.assertIs(kwargs["stream_usage"], False)
 
     @patch("src.agents.runtime.provider.ChatGroq")
     @patch("langchain_deepseek.ChatDeepSeek")

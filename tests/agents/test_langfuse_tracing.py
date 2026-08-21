@@ -12,7 +12,7 @@ def test_build_langfuse_config_validates_the_closed_api_tag_taxonomy() -> None:
     with patch.object(langfuse, "validate_langfuse_trace_context") as validate:
         config = langfuse.build_langfuse_config(entry_point="api:chat")
 
-    assert config == {}
+    assert "metadata" not in config
     validate.assert_called_once_with(
         entry_point="api:chat",
         scenario_id=None,

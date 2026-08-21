@@ -250,8 +250,8 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
 
 class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
-    @patch("src.agents.tools.query_clean_jobs.get_langfuse_client")
-    @patch("src.agents.tools.query_clean_jobs.get_sql_generation_prompt_reference")
+    @patch("src.agents.tracing.langfuse.get_langfuse_client")
+    @patch("src.agents.tracing.langfuse.get_sql_generation_prompt_reference")
     @patch(
         "src.agents.tools.query_clean_jobs.load_sql_generation_prompt",
         return_value="YAML PROMPT",
@@ -260,7 +260,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         "src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA"
     )
     @patch("src.agents.tools.query_clean_jobs.AgentProvider")
-    async def test_generate_sql_creates_a_linked_child_generation_without_using_remote_prompt_text(
+    async def test_generate_sql_creates_a_linked_child_span_without_using_remote_prompt_text(
         self,
         mock_provider,
         _mock_schema_context,
@@ -285,11 +285,21 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(await generate_sql("any question"), "SELECT 1")
 
+        # Regression guard: this must stay a span. The LangChain callback handler
+        # already emits the real generation for this same call, so a second
+        # "generation" here double-counts every SQL generation in the Langfuse
+        # generation, usage and cost aggregates.
         client.start_as_current_observation.assert_called_once_with(
-            as_type="generation",
+            as_type="span",
             name="sql_generation",
             input={"question": "any question"},
-            prompt=prompt_reference,
+            metadata={
+                "langfuse_prompt_name": "resumi-sql-generation",
+                "langfuse_prompt_version": 4,
+            },
+        )
+        self.assertEqual(
+            client.start_as_current_observation.call_args.kwargs["as_type"], "span"
         )
         client.start_as_current_observation.return_value.__enter__.return_value.update.assert_called_once_with(
             output="SELECT 1"
@@ -298,9 +308,9 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("YAML PROMPT", model_messages[0].content)
         self.assertNotIn("REMOTE PROMPT", model_messages[0].content)
 
-    @patch("src.agents.tools.query_clean_jobs.get_langfuse_client", return_value=None)
+    @patch("src.agents.tracing.langfuse.get_langfuse_client", return_value=None)
     @patch(
-        "src.agents.tools.query_clean_jobs.get_sql_generation_prompt_reference",
+        "src.agents.tracing.langfuse.get_sql_generation_prompt_reference",
         return_value=None,
     )
     @patch(
@@ -322,6 +332,39 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(await generate_sql("any question"), "SELECT 1")
         fake_model.ainvoke.assert_awaited_once()
+
+    @patch("src.agents.tracing.langfuse.get_langfuse_client")
+    @patch(
+        "src.agents.tracing.langfuse.get_sql_generation_prompt_reference",
+        return_value=None,
+    )
+    @patch(
+        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt",
+        return_value="PROMPT",
+    )
+    @patch(
+        "src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA"
+    )
+    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
+    async def test_generate_sql_is_unchanged_when_prompt_reference_is_missing(
+        self,
+        mock_provider,
+        _mock_schema_context,
+        _mock_sql_prompt,
+        _mock_prompt_reference,
+        mock_langfuse_client,
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import generate_sql
+
+        fake_model = MagicMock()
+        fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 1"))
+        mock_provider.return_value.build_model.return_value = fake_model
+        client = MagicMock()
+        mock_langfuse_client.return_value = client
+
+        self.assertEqual(await generate_sql("any question"), "SELECT 1")
+        fake_model.ainvoke.assert_awaited_once()
+        client.start_as_current_observation.assert_not_called()
 
     @patch(
         "src.agents.tools.query_clean_jobs.load_sql_generation_prompt",

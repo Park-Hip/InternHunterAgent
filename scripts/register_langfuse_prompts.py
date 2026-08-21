@@ -7,16 +7,16 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import yaml
-from langfuse import Langfuse
 from langfuse.api import NotFoundError
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.agents.tracing.langfuse import create_langfuse_client
 from src.agents.tracing.prompt_registry import LANGFUSE_PROMPT_NAMES
 
 PROMPTS_PATH = ROOT / "config" / "prompts.yaml"
@@ -24,7 +24,8 @@ PROMPT_LABEL = "production"
 
 
 class PromptClient(Protocol):
-    prompt: str
+    @property
+    def prompt(self) -> str: ...
 
 
 class LangfusePromptClient(Protocol):
@@ -34,7 +35,7 @@ class LangfusePromptClient(Protocol):
         name: str,
         prompt: str,
         labels: list[str],
-        type: str,
+        type: Literal["text"],
         commit_message: str | None,
     ) -> PromptClient: ...
 
@@ -43,7 +44,7 @@ class LangfusePromptClient(Protocol):
         name: str,
         *,
         label: str,
-        type: str,
+        type: Literal["text"],
         cache_ttl_seconds: int,
         max_retries: int,
     ) -> PromptClient: ...
@@ -159,9 +160,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
 
+    try:
+        client = create_langfuse_client()
+    except ValueError as exc:
+        print(f"prompt registration: {exc}", file=sys.stderr)
+        return 1
+
     commit_message = args.commit_message or git_commit()
     created, unchanged = synchronize_prompts(
-        Langfuse(), definitions, commit_message=commit_message
+        client, definitions, commit_message=commit_message
     )
     print(f"prompt registration complete: {created} created, {unchanged} unchanged")
     return 0

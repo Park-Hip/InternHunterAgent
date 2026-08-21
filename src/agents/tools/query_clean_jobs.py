@@ -11,10 +11,7 @@ from src.agents.runtime.prompts import (
     load_sql_generation_prompt,
 )
 from src.agents.runtime.provider import AgentProvider
-from src.agents.tracing.langfuse import (
-    get_langfuse_client,
-    get_sql_generation_prompt_reference,
-)
+from src.agents.tracing.langfuse import sql_generation_observation
 from src.core.config import settings
 from src.core.logger import logger
 from src.services.query.executor import (
@@ -74,22 +71,11 @@ async def generate_sql(question: str, config: RunnableConfig | None = None) -> s
             content=f"{sql_generation_prompt}\n\n{schema_context}\n\nQuestion: {question}"
         )
     ]
-    prompt_reference = await get_sql_generation_prompt_reference()
-    langfuse_client = get_langfuse_client()
-
-    if prompt_reference is None or langfuse_client is None:
-        response = await model.ainvoke(messages, config=config)
-        return _content_to_text(response.content).strip()
-
-    with langfuse_client.start_as_current_observation(
-        as_type="generation",
-        name="sql_generation",
-        input={"question": question},
-        prompt=prompt_reference,
-    ) as observation:
+    async with sql_generation_observation(question) as observation:
         response = await model.ainvoke(messages, config=config)
         sql = _content_to_text(response.content).strip()
-        observation.update(output=sql)
+        if observation is not None:
+            observation.update(output=sql)
         return sql
 
 

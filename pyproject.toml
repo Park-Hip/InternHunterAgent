@@ -37,13 +37,32 @@ dev = [
 
 [tool.ruff]
 # Throwaway scraping spikes are excluded from lint (see research/ plan notes).
-extend-exclude = ["scripts"]
+# Ruff ignores negated exclude patterns, so the spikes are listed one by one and
+# every other script in scripts/ (register_langfuse_prompts.py) stays linted.
+extend-exclude = [
+    "scripts/audit_fields.py",
+    "scripts/build_tech_vocabulary.py",
+    "scripts/deepseek_provider_spike.py",
+    "scripts/docs_build.py",
+    "scripts/docs_lint.py",
+    "scripts/eval_judge_spike.py",
+    "scripts/scrape_itviec_spike.py",
+    "scripts/scrape_spike.py",
+    "scripts/scrape_topcv_spike.py",
+    "scripts/scrape_topdev_spike.py",
+    "scripts/sync_agent_instructions.py",
+    "scripts/vietnamese_prompt_spike.py",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The src.* imports must follow the sys.path bootstrap so the script runs standalone.
+"scripts/register_langfuse_prompts.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
-files = ["src"]
+files = ["src", "scripts/register_langfuse_prompts.py"]
 
 [tool.pytest.ini_options]
 markers = [

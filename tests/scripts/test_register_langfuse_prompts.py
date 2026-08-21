@@ -93,7 +93,7 @@ def test_dry_run_validates_yaml_without_creating_a_langfuse_client(
 ) -> None:
     monkeypatch.setattr(
         register_langfuse_prompts,
-        "Langfuse",
+        "create_langfuse_client",
         lambda: (_ for _ in ()).throw(AssertionError("must not construct client")),
     )
 

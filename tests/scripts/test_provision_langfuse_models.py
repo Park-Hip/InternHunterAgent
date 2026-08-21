@@ -97,6 +97,28 @@ def test_committed_definition_is_dated_and_cannot_price_another_model() -> None:
     assert not provision.re.fullmatch(definition.match_pattern, "qwen/qwen3.6-27b")
 
 
+def test_evidence_records_first_party_corroboration_for_cached_price() -> None:
+    with provision.DEFAULT_DEFINITIONS_PATH.open(encoding="utf-8") as file:
+        evidence = provision.yaml.safe_load(file)["evidence"]
+
+    assert evidence["source"] == "https://api-docs.deepseek.com/quick_start/pricing/"
+    assert evidence["corroborating_source"] == (
+        "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/"
+    )
+
+
+def test_validate_cli_does_not_require_langfuse_credentials(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("sys.argv", ["provision_langfuse_models.py", "--validate"])
+    monkeypatch.setattr(
+        provision,
+        "_build_api_from_environment",
+        lambda: pytest.fail("validation must not build a Langfuse client"),
+    )
+
+    assert provision.main() == 0
+    assert capsys.readouterr().out == "Validated 1 model definition(s)\n"
+
+
 def test_provision_creates_missing_definition_with_exact_pricing_tier() -> None:
     api = FakeModelsAPI()
     definition = provision.load_definitions()[0]

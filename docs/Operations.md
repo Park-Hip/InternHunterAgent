@@ -57,6 +57,27 @@ provider named in `config/settings.yaml` is missing.
 values, and the presence of dashboard-managed secrets.
 It does not create or update secret values in Render.
 
+## Langfuse model definitions
+
+The version-controlled pricing definitions live in
+[`config/langfuse_models.yaml`](../config/langfuse_models.yaml).
+The committed DeepSeek V4 Flash rates were checked against both the
+[English pricing page](https://api-docs.deepseek.com/quick_start/pricing/) and the
+[Chinese pricing page](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) on 2026-08-21.
+
+Validate the YAML locally without Langfuse credentials before reviewing or provisioning a change:
+
+```bash
+uv run python scripts/provision_langfuse_models.py --validate
+```
+
+The default command provisions missing definitions and refuses to overwrite a mismatched existing
+definition.
+Use `--check-remote` to compare the committed definitions with Langfuse without creating models.
+Both provisioning modes require `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and
+`LANGFUSE_HOST` or `LANGFUSE_BASE_URL`.
+Run provisioning deliberately after confirming the pricing source and the target Langfuse project.
+
 ## Database operations
 
 ### Initialise a local database

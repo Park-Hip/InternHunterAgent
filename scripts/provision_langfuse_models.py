@@ -113,6 +113,7 @@ def load_definitions(
         raise ProvisioningError("evidence must be a mapping")
     _required_string(evidence, "retrieved_on", "evidence")
     _required_string(evidence, "source", "evidence")
+    _required_string(evidence, "corroborating_source", "evidence")
     if not isinstance(models, list) or not models:
         raise ProvisioningError("models must be a non-empty list")
 
@@ -269,16 +270,29 @@ def _build_api_from_environment() -> ModelsAPI:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--definitions", type=Path, default=DEFAULT_DEFINITIONS_PATH)
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Validate without creating models"
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--dry-run",
+        "--validate",
+        dest="validate_only",
+        action="store_true",
+        help="Load and validate definitions without contacting Langfuse",
+    )
+    mode.add_argument(
+        "--check-remote",
+        action="store_true",
+        help="Compare definitions with Langfuse without creating models",
     )
     args = parser.parse_args()
     definitions = load_definitions(args.definitions)
+    if args.validate_only:
+        print(f"Validated {len(definitions)} model definition(s)")
+        return 0
     result = provision_definitions(
-        _build_api_from_environment(), definitions, dry_run=args.dry_run
+        _build_api_from_environment(), definitions, dry_run=args.check_remote
     )
     for model_name in result["created"]:
-        action = "Would create" if args.dry_run else "Created"
+        action = "Would create" if args.check_remote else "Created"
         print(f"{action} {model_name}")
     for model_name in result["unchanged"]:
         print(f"Unchanged {model_name}")

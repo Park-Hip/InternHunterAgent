@@ -46,6 +46,19 @@ class StaticServingTests(unittest.TestCase):
             response.text,
         )
 
+    def test_demo_loads_pinned_same_origin_markdown_dependencies(self) -> None:
+        index = self.client.get("/")
+        marked = self.client.get("/vendor/marked-18.0.10.min.js")
+        dompurify = self.client.get("/vendor/dompurify-3.4.14.min.js")
+        app = self.client.get("/app.js")
+
+        self.assertEqual(marked.status_code, 200)
+        self.assertEqual(dompurify.status_code, 200)
+        self.assertIn('src="./vendor/marked-18.0.10.min.js"', index.text)
+        self.assertIn('src="./vendor/dompurify-3.4.14.min.js"', index.text)
+        self.assertIn("DOMPurify.sanitize", app.text)
+        self.assertIn("renderMarkdown(ctx)", app.text)
+
 
 if __name__ == "__main__":
     unittest.main()

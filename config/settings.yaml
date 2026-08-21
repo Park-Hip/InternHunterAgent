@@ -30,6 +30,7 @@ agent:
     timeout: 30
     max_retries: 2
     streaming: true
+    stream_usage: true
     reasoning_format: hidden
     reasoning_effort: null
     thinking: disabled  # deepseek ignores temperature while thinking is on (T0027.1)
@@ -42,6 +43,7 @@ agent:
     timeout: 30
     max_retries: 2
     streaming: false
+    stream_usage: false
     reasoning_format: hidden
     reasoning_effort: none
     thinking: disabled  # this profile's determinism depends on temperature: 0.0

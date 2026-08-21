@@ -100,6 +100,7 @@ class AgentProvider:
                 **common_kwargs,
                 "api_key": settings.DEEPSEEK_API_KEY,
             }
+            deepseek_kwargs["stream_usage"] = profile_cfg.get("stream_usage", False)
             extra_body = deepseek_extra_body(thinking_mode(profile_cfg, profile))
             if extra_body:
                 deepseek_kwargs["extra_body"] = extra_body

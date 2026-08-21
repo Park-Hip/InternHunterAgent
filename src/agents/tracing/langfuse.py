@@ -174,6 +174,8 @@ async def langfuse_request_trace(
     *,
     entry_point: str,
     trace_name: str,
+    scenario_id: str | None = None,
+    repeat: int | None = None,
     session_id: str | None = None,
     user_id: str | None = None,
 ) -> AsyncIterator[str | None]:
@@ -185,6 +187,8 @@ async def langfuse_request_trace(
     with langfuse_trace_attributes(
         entry_point=entry_point,
         trace_name=trace_name,
+        scenario_id=scenario_id,
+        repeat=repeat,
         session_id=session_id,
         user_id=user_id,
     ):

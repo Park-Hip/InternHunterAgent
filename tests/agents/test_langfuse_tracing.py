@@ -101,6 +101,39 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
 
 
 @pytest.mark.asyncio
+async def test_request_trace_tags_an_evaluation_scenario_and_repeat() -> None:
+    """`evals/harness.py` names `scenario_id` and `repeat` at this call site.
+
+    Every test that drives the harness replaces this function with a `**kwargs`
+    stub, so the real signature was never bound and a capture failed with a
+    `TypeError` before reaching the model. Exercise the real function.
+    """
+    client = MagicMock()
+    client.get_current_trace_id.return_value = "trace-eval"
+    client.start_as_current_observation.return_value.__enter__.return_value = None
+    client.start_as_current_observation.return_value.__exit__.return_value = None
+
+    with (
+        patch.object(langfuse, "_langfuse_handler", object()),
+        patch.object(langfuse, "get_langfuse_client", return_value=client),
+        patch.object(langfuse, "propagate_attributes") as propagate,
+    ):
+        propagate.return_value.__enter__.return_value = None
+        propagate.return_value.__exit__.return_value = None
+
+        async with langfuse.langfuse_request_trace(
+            entry_point="eval:driver",
+            scenario_id="HLP-COUNT-1",
+            repeat=2,
+            trace_name="eval-HLP-COUNT-1",
+        ) as trace_id:
+            assert trace_id == "trace-eval"
+
+    tags = propagate.call_args.kwargs["tags"]
+    assert tags[-2:] == ["scenario:HLP-COUNT-1", "repeat:2"]
+
+
+@pytest.mark.asyncio
 async def test_request_trace_is_a_no_op_when_tracing_is_disabled() -> None:
     with (
         patch.object(langfuse, "_langfuse_handler", None),

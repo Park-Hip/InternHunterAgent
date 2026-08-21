@@ -1,0 +1,22 @@
+evidence:
+  retrieved_on: "2026-08-21"
+  source: https://api-docs.deepseek.com/quick_start/pricing/
+  unit: USD per token
+  notes: >-
+    DeepSeek publishes these prices per one million tokens. Cache-hit input is a separate,
+    mutually exclusive usage bucket from cache-miss input.
+
+models:
+  - model_name: deepseek-v4-flash
+    match_pattern: "(?i)^deepseek-v4-flash$"
+    start_date: "2026-08-21T00:00:00Z"
+    unit: TOKENS
+    pricing_tiers:
+      - name: default
+        is_default: true
+        priority: 0
+        conditions: []
+        prices:
+          input: 0.00000014
+          input_cached_tokens: 0.0000000028
+          output: 0.00000028

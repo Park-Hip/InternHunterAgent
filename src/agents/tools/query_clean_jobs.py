@@ -11,11 +11,19 @@ from src.agents.runtime.prompts import (
     load_sql_generation_prompt,
 )
 from src.agents.runtime.provider import AgentProvider
+from src.agents.tracing.langfuse import sql_generation_observation
 from src.core.config import settings
 from src.core.logger import logger
-from src.services.query.executor import ExecutorError, UndefinedColumnError, execute_validated_sql
+from src.services.query.executor import (
+    ExecutorError,
+    UndefinedColumnError,
+    execute_validated_sql,
+)
 from src.services.query.models import QueryRefusal, QueryToolResult, TableArtifact
-from src.services.query.obligations import detect_obligations, filter_enabled_obligations
+from src.services.query.obligations import (
+    detect_obligations,
+    filter_enabled_obligations,
+)
 from src.services.query.row_bound import resolve_bounds
 from src.services.query.sql_validator import validate_sql
 from src.services.query.table_formatter import format_rows, render_tool_result
@@ -58,12 +66,17 @@ async def generate_sql(question: str, config: RunnableConfig | None = None) -> s
     schema_context = load_schema_context()
     sql_generation_prompt = load_sql_generation_prompt()
     model = AgentProvider().build_model("sql_generation")
-
-    response = await model.ainvoke(
-        [HumanMessage(content=f"{sql_generation_prompt}\n\n{schema_context}\n\nQuestion: {question}")],
-        config=config,
-    )
-    return _content_to_text(response.content).strip()
+    messages = [
+        HumanMessage(
+            content=f"{sql_generation_prompt}\n\n{schema_context}\n\nQuestion: {question}"
+        )
+    ]
+    async with sql_generation_observation(question) as observation:
+        response = await model.ainvoke(messages, config=config)
+        sql = _content_to_text(response.content).strip()
+        if observation is not None:
+            observation.update(output=sql)
+        return sql
 
 
 def _build_answer(table: TableArtifact) -> str:
@@ -80,7 +93,9 @@ def _build_answer(table: TableArtifact) -> str:
 
     lines = [header]
     for row in table.rows:
-        pairs = ", ".join(f"{column}={value}" for column, value in zip(table.columns, row))
+        pairs = ", ".join(
+            f"{column}={value}" for column, value in zip(table.columns, row)
+        )
         lines.append(f"- {pairs}")
     return "\n".join(lines)
 
@@ -108,7 +123,9 @@ async def query_clean_jobs(question: str, config: RunnableConfig) -> str:
     except UndefinedColumnError as exc:
         logger.warning("query_clean_jobs.unknown_column", error=str(exc))
         return render_tool_result(
-            QueryToolResult(refusal=QueryRefusal(reason="", glossary_token="ABSENT_FIELD")),
+            QueryToolResult(
+                refusal=QueryRefusal(reason="", glossary_token="ABSENT_FIELD")
+            ),
             load_behavior_glossary(),
         )
     except ExecutorError as exc:

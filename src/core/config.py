@@ -24,8 +24,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str = Field(..., min_length=1)
     HEALTHCHECKS_URL: str | None = None
 
-    LANGFUSE_SECRET_KEY: str
-    LANGFUSE_PUBLIC_KEY: str
+    # Tracing is optional at boot. The tracing layer emits a non-fatal startup
+    # diagnostic when these are absent or invalid.
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_PUBLIC_KEY: str | None = None
     LANGFUSE_BASE_URL: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(

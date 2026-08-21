@@ -19,6 +19,9 @@ def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:
         return 0
 
     lf = get_langfuse_client()
+    if lf is None:
+        return 0
+
     written = 0
     for seam_name, metric_scores in results.items():
         for metric_name, payload in metric_scores.items():

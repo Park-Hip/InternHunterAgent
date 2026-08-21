@@ -90,6 +90,23 @@ class ConfigLoadTests(unittest.TestCase):
         self.assertIsNone(settings.GROQ_API_KEY)
         self.assertIsNone(settings.GOOGLE_API_KEY)
 
+    def test_load_settings_allows_missing_langfuse_credentials(self) -> None:
+        required_env = {
+            "DATABASE_URL": "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter",
+            "DEEPSEEK_API_KEY": "deepseek-test-key",
+        }
+        config_module.Settings.model_config = SettingsConfigDict(
+            env_file=None,
+            env_file_encoding="utf-8",
+            extra="ignore",
+        )
+
+        with patch.dict(os.environ, required_env, clear=True):
+            settings = config_module.load_settings(force_reload=True)
+
+        self.assertIsNone(settings.LANGFUSE_SECRET_KEY)
+        self.assertIsNone(settings.LANGFUSE_PUBLIC_KEY)
+
     def test_importing_config_module_does_not_validate_env_at_import_time(self) -> None:
         with patch.dict(
             os.environ,

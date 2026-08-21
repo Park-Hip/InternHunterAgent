@@ -98,6 +98,7 @@ class AgentRuntime:
             except Exception as exc:
                 await events.put(exc)
 
+        client = get_langfuse_client()
         producer = asyncio.create_task(_produce_stream())
         try:
             while True:
@@ -109,13 +110,15 @@ class AgentRuntime:
                     break
                 yield event
         finally:
+            # Flushing here - and never after the metadata yield - keeps the
+            # trace readable the moment its URL reaches the client, and still
+            # drains the exporter when the consumer disconnects and closes the
+            # generator instead of draining it.
             if not producer.done():
                 producer.cancel()
             await asyncio.gather(producer, return_exceptions=True)
-
-        client = get_langfuse_client()
-        if client is not None:
-            await asyncio.to_thread(client.flush)
+            if client is not None:
+                await asyncio.to_thread(client.flush)
 
         trace_url = None
         if trace_id is not None and client is not None:

@@ -63,6 +63,7 @@ async def stream_agent_response(
 
     saw_token = False
     metadata_event = {"type": "metadata", "trace_id": None, "trace_url": None}
+    metadata_emitted = False
 
     try:
         async for event in runtime.astream(
@@ -72,6 +73,15 @@ async def stream_agent_response(
         ):
             if event["type"] == "metadata":
                 metadata_event = event
+                if not saw_token:
+                    logger.warning(
+                        "stream_agent_response.empty_answer_fallback",
+                        session_id=session_id,
+                    )
+                    yield {"type": "token", "text": FALLBACK_ANSWER}
+                    saw_token = True
+                yield metadata_event
+                metadata_emitted = True
                 continue
 
             if event["type"] == "token":
@@ -86,7 +96,8 @@ async def stream_agent_response(
             )
             yield {"type": "token", "text": FALLBACK_ANSWER}
 
-        yield metadata_event
+        if not metadata_emitted:
+            yield metadata_event
     except Exception as exc:
         provider_busy = classify_provider_busy_error(exc)
         logger.error(

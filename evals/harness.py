@@ -259,8 +259,8 @@ async def _run_turn(agent, message: str, config: dict, span_name: str) -> SeamRu
     telemetry_handler = ProviderTelemetryCallback()
     run_config = {**config, "callbacks": [*config.get("callbacks", []), telemetry_handler]}
     try:
-        if lf_handler is not None:
-            lf = get_langfuse_client()
+        lf = get_langfuse_client() if lf_handler is not None else None
+        if lf is not None:
             with lf.start_as_current_observation(name=span_name) as span:
                 trace_id = span.trace_id
                 run_config = {**run_config, "callbacks": [*run_config["callbacks"], lf_handler]}

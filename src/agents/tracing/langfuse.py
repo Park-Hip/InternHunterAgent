@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from typing import Any
 
 from langfuse import Langfuse, get_client, propagate_attributes
@@ -21,7 +21,9 @@ def _langfuse_taxonomy() -> dict[str, Any]:
         raise ValueError("Missing 'observability' section in config/settings.yaml")
     langfuse = observability.get("langfuse")
     if not isinstance(langfuse, dict):
-        raise ValueError("Missing 'observability.langfuse' section in config/settings.yaml")
+        raise ValueError(
+            "Missing 'observability.langfuse' section in config/settings.yaml"
+        )
     return langfuse
 
 
@@ -74,7 +76,9 @@ def build_langfuse_tags(
 
     entry_points = taxonomy.get("entry_points")
     if not isinstance(entry_points, list):
-        raise ValueError("Invalid 'observability.langfuse.tag_taxonomy.entry_points' configuration")
+        raise ValueError(
+            "Invalid 'observability.langfuse.tag_taxonomy.entry_points' configuration"
+        )
     if entry_point not in entry_points:
         raise ValueError(f"Unsupported Langfuse entry point: {entry_point}")
 
@@ -105,12 +109,29 @@ def build_langfuse_tags(
     return tags
 
 
+def validate_langfuse_trace_context(
+    *,
+    entry_point: str,
+    scenario_id: str | None = None,
+    repeat: int | None = None,
+) -> None:
+    """Validate the configured Langfuse vocabulary before invoking LangChain."""
+    build_langfuse_tags(
+        entry_point=entry_point,
+        scenario_id=scenario_id,
+        repeat=repeat,
+    )
+
+
 @contextmanager
 def langfuse_trace_attributes(
     *,
     entry_point: str,
     scenario_id: str | None = None,
     repeat: int | None = None,
+    trace_name: str | None = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> Iterator[None]:
     """Attach Session 3's tags and prompt version without exposing Langfuse to routes."""
     tags = build_langfuse_tags(
@@ -118,12 +139,56 @@ def langfuse_trace_attributes(
         scenario_id=scenario_id,
         repeat=repeat,
     )
-    with propagate_attributes(tags=tags, version=load_prompt_version()):
+    attributes: dict[str, Any] = {
+        "tags": tags,
+        "version": load_prompt_version(),
+    }
+    if trace_name is not None:
+        attributes["trace_name"] = trace_name
+    if session_id is not None:
+        attributes["session_id"] = session_id
+    if user_id is not None:
+        attributes["user_id"] = user_id
+
+    with propagate_attributes(**attributes):
         yield
 
+
+@asynccontextmanager
+async def langfuse_request_trace(
+    *,
+    entry_point: str,
+    trace_name: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
+) -> AsyncIterator[str | None]:
+    """Scope one root Langfuse observation to an asynchronous agent request."""
+    if _langfuse_handler is None:
+        yield None
+        return
+
+    with langfuse_trace_attributes(
+        entry_point=entry_point,
+        trace_name=trace_name,
+        session_id=session_id,
+        user_id=user_id,
+    ):
+        client = get_langfuse_client()
+        with client.start_as_current_observation(as_type="span", name=trace_name):
+            yield client.get_current_trace_id()
+
+
 try:
-    tracing_disabled = os.getenv("LANGFUSE_ENABLED", "true").lower() in {"0", "false", "no"}
-    if not tracing_disabled and settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY:
+    tracing_disabled = os.getenv("LANGFUSE_ENABLED", "true").lower() in {
+        "0",
+        "false",
+        "no",
+    }
+    if (
+        not tracing_disabled
+        and settings.LANGFUSE_PUBLIC_KEY
+        and settings.LANGFUSE_SECRET_KEY
+    ):
         _langfuse = create_langfuse_client()
         _langfuse_handler = CallbackHandler()
     elif tracing_disabled:
@@ -135,6 +200,7 @@ except Exception as exc:
 
 
 def get_langfuse_handler() -> CallbackHandler | None:
+    """Return the callback handler for eval writeback compatibility."""
     return _langfuse_handler
 
 
@@ -143,8 +209,6 @@ def get_langfuse_client():
 
 
 def build_langfuse_config(
-    session_id: str | None = None,
-    user_id: str | None = None,
     *,
     entry_point: str,
     scenario_id: str | None = None,
@@ -155,18 +219,9 @@ def build_langfuse_config(
     if _langfuse_handler is not None:
         config["callbacks"] = [_langfuse_handler]
 
-    metadata: dict[str, object] = {}
-    if session_id:
-        metadata["langfuse_session_id"] = session_id
-    if user_id:
-        metadata["langfuse_user_id"] = user_id
-    metadata["langfuse_tags"] = build_langfuse_tags(
+    validate_langfuse_trace_context(
         entry_point=entry_point,
         scenario_id=scenario_id,
         repeat=repeat,
     )
-
-    if metadata:
-        config["metadata"] = metadata
-
     return config

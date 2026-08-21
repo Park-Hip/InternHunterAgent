@@ -8,8 +8,7 @@ from src.agents.runtime.factory import agent_factory
 from src.agents.tracing.langfuse import (
     build_langfuse_config,
     get_langfuse_client,
-    get_langfuse_handler,
-    langfuse_trace_attributes,
+    langfuse_request_trace,
 )
 
 
@@ -24,22 +23,20 @@ class AgentRuntime:
         session_id: str | None = None,
     ) -> dict[str, str | None]:
         config = build_langfuse_config(
-            session_id=session_id,
-            user_id=user_id,
             entry_point="api:chat",
         )
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
 
-        with langfuse_trace_attributes(entry_point="api:chat"):
+        async with langfuse_request_trace(
+            entry_point="api:chat",
+            trace_name="agent-chat",
+            session_id=session_id,
+            user_id=user_id,
+        ) as trace_id:
             response = await self.agent.ainvoke(messages, config=config or None)
         answer = self._extract_answer(response)
-
-        trace_id = None
-        handler = get_langfuse_handler()
-        if handler is not None:
-            trace_id = handler.last_trace_id
 
         client = get_langfuse_client()
         if client is not None:
@@ -62,32 +59,59 @@ class AgentRuntime:
         session_id: str | None = None,
     ) -> AsyncIterator[dict[str, str | None]]:
         config = build_langfuse_config(
-            session_id=session_id,
-            user_id=user_id,
             entry_point="api:chat-stream",
         )
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
 
-        with langfuse_trace_attributes(entry_point="api:chat-stream"):
-            async for chunk, metadata in self.agent.astream(
-                messages,
-                config=config or None,
-                stream_mode="messages",
-            ):
-                if metadata.get("langgraph_node") != "model":
-                    continue
-                content = getattr(chunk, "content", None)
-                tool_call_chunks = getattr(chunk, "tool_call_chunks", None)
-                if not isinstance(content, str) or not content or tool_call_chunks:
-                    continue
-                yield {"type": "token", "text": content}
+        trace_id: str | None = None
+        events: asyncio.Queue[dict[str, str | None] | Exception] = asyncio.Queue(
+            maxsize=1
+        )
 
-        trace_id = None
-        handler = get_langfuse_handler()
-        if handler is not None:
-            trace_id = handler.last_trace_id
+        async def _produce_stream() -> None:
+            try:
+                async with langfuse_request_trace(
+                    entry_point="api:chat-stream",
+                    trace_name="agent-chat-stream",
+                    session_id=session_id,
+                    user_id=user_id,
+                ) as trace_id:
+                    async for chunk, metadata in self.agent.astream(
+                        messages,
+                        config=config or None,
+                        stream_mode="messages",
+                    ):
+                        if metadata.get("langgraph_node") != "model":
+                            continue
+                        content = getattr(chunk, "content", None)
+                        tool_call_chunks = getattr(chunk, "tool_call_chunks", None)
+                        if (
+                            not isinstance(content, str)
+                            or not content
+                            or tool_call_chunks
+                        ):
+                            continue
+                        await events.put({"type": "token", "text": content})
+                await events.put({"type": "complete", "trace_id": trace_id})
+            except Exception as exc:
+                await events.put(exc)
+
+        producer = asyncio.create_task(_produce_stream())
+        try:
+            while True:
+                event = await events.get()
+                if isinstance(event, Exception):
+                    raise event
+                if event["type"] == "complete":
+                    trace_id = event["trace_id"]
+                    break
+                yield event
+        finally:
+            if not producer.done():
+                producer.cancel()
+            await asyncio.gather(producer, return_exceptions=True)
 
         client = get_langfuse_client()
         if client is not None:

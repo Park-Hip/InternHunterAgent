@@ -218,6 +218,8 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 - `scripts/docs_lint.py` - Check repository documentation hygiene without external dependencies.
 - `scripts/eval_judge_spike.py` - Throwaway spike (T0011.1): pick a DeepEval judge that reliably
   returns schema-valid JSON.
+- `scripts/provision_langfuse_models.py` - Provision version-controlled Langfuse model-pricing
+  definitions.
 - `scripts/scrape_itviec_spike.py` - Scraping spike - ITviec AI/Data IT jobs via cloudscraper.
 - `scripts/scrape_spike.py` - Scraping experiment - VietnamWorks AI/Data IT jobs.
 - `scripts/scrape_topcv_spike.py` - Scraping spike - TopCV internship listings via cloudscraper.

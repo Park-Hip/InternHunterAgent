@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -34,7 +35,9 @@ def test_resolving_the_fixture_url_never_freezes_settings(
     assert driver.fixture_database_url().startswith("postgresql")
 
 
-def test_driver_binds_tracing_to_the_evaluation_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_driver_binds_tracing_to_the_evaluation_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("LANGFUSE_TRACING_ENVIRONMENT", "production")
     monkeypatch.setenv("LANGFUSE_ENABLED", "false")
 
@@ -54,12 +57,68 @@ def test_capture_case_passes_the_driver_repeat_to_evaluation_tracing(
         captured["repeat"] = repeat
         return SeamRun(question="q", answer="a")
 
-    monkeypatch.setattr(driver.harness, "run_single_turn_case", fake_run_single_turn_case)
+    monkeypatch.setattr(
+        driver.harness, "run_single_turn_case", fake_run_single_turn_case
+    )
 
     runs = asyncio.run(driver._capture_case(_case(), repeat_index=2))
 
     assert len(runs) == 1
     assert captured == {"case": _case(), "repeat": 2}
+
+
+def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trace_calls: list[dict] = []
+    validations: list[dict] = []
+    observed: dict[str, object] = {}
+
+    @asynccontextmanager
+    async def request_trace(**kwargs):
+        trace_calls.append(kwargs)
+        yield "trace-request-scoped"
+
+    async def fake_run_turn(
+        agent, message: str, config: dict, trace_id: str
+    ) -> SeamRun:
+        observed.update(
+            {
+                "agent": agent,
+                "message": message,
+                "callbacks": config["callbacks"],
+                "trace_id": trace_id,
+            }
+        )
+        return SeamRun(question=message, answer="a", trace_id=trace_id)
+
+    agent = object()
+    monkeypatch.setattr(driver.harness, "agent_factory", lambda: agent)
+    monkeypatch.setattr(driver.harness, "CallbackHandler", lambda **kwargs: object())
+    monkeypatch.setattr(
+        driver.harness,
+        "validate_langfuse_trace_context",
+        lambda **kwargs: validations.append(kwargs),
+    )
+    monkeypatch.setattr(driver.harness, "langfuse_request_trace", request_trace)
+    monkeypatch.setattr(driver.harness, "_run_turn", fake_run_turn)
+
+    result = asyncio.run(driver.harness.run_single_turn_case(_case(), repeat=2))
+
+    assert result.trace_id == "trace-request-scoped"
+    assert observed["agent"] is agent
+    assert observed["trace_id"] == "trace-request-scoped"
+    assert validations == [
+        {"entry_point": "eval:driver", "scenario_id": "HLP-TEST-1", "repeat": 2}
+    ]
+    assert trace_calls == [
+        {
+            "entry_point": "eval:driver",
+            "scenario_id": "HLP-TEST-1",
+            "repeat": 2,
+            "trace_name": "eval-HLP-TEST-1",
+        }
+    ]
 
 
 def _stub_fingerprint(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -86,7 +145,9 @@ def _case(scenario_id: str = "HLP-TEST-1", probe: bool = False) -> dict:
     }
 
 
-def test_manifest_records_reproducibility_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_manifest_records_reproducibility_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("LANGFUSE_ENABLED", "false")
     monkeypatch.setattr(driver, "_git_sha", lambda: "abc123")
     monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
@@ -150,8 +211,18 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
     output = tmp_path / "run.json"
     case = _case()
 
-    first = asyncio.run(driver.run([case], output, sleep=lambda _: asyncio.sleep(0), pacing_seconds=0))
-    second = asyncio.run(driver.run([case], output, resume=True, sleep=lambda _: asyncio.sleep(0), pacing_seconds=0))
+    first = asyncio.run(
+        driver.run([case], output, sleep=lambda _: asyncio.sleep(0), pacing_seconds=0)
+    )
+    second = asyncio.run(
+        driver.run(
+            [case],
+            output,
+            resume=True,
+            sleep=lambda _: asyncio.sleep(0),
+            pacing_seconds=0,
+        )
+    )
 
     assert calls == 2
     assert first["status"] == "COMPLETE"
@@ -159,7 +230,64 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
     turn = first["scenarios"][case["id"]]["repeats"][0]["turns"][0]
     assert turn["seams"]["sql_text"] == "SELECT COUNT(*) FROM clean_jobs"
     assert turn["telemetry"] == {}
-    assert json.loads(output.read_text(encoding="utf-8"))["manifest"]["run_id"] == first["manifest"]["run_id"]
+    assert (
+        json.loads(output.read_text(encoding="utf-8"))["manifest"]["run_id"]
+        == first["manifest"]["run_id"]
+    )
+
+
+def test_driver_links_each_capture_and_its_scores_to_the_repeat_dataset_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
+        return [SeamRun(question="q", answer="a", trace_id=f"trace-{repeat_index}")]
+
+    links: list[dict] = []
+    score_writes: list[dict] = []
+    client = SimpleNamespace()
+    mirror = SimpleNamespace()
+
+    def fake_link_capture(_client, _mirror, **kwargs) -> str:
+        assert _client is client
+        assert _mirror is mirror
+        links.append(kwargs)
+        return f"dataset-run-{kwargs['repeat']}"
+
+    def fake_write_scores(
+        trace_id: str | None, results: dict, *, dataset_run_id: str | None = None
+    ) -> int:
+        score_writes.append(
+            {
+                "trace_id": trace_id,
+                "results": results,
+                "dataset_run_id": dataset_run_id,
+            }
+        )
+        return 1
+
+    monkeypatch.setattr(driver, "_capture_case", fake_capture)
+    monkeypatch.setattr(driver, "_dataset_mirror", lambda: (client, mirror))
+    monkeypatch.setattr(driver, "link_capture", fake_link_capture)
+    monkeypatch.setattr(
+        driver, "_score_case", lambda case, runs: {"seam": {"metric": {"score": 1.0}}}
+    )
+    monkeypatch.setattr(driver, "write_scores", fake_write_scores)
+    _stub_fingerprint(monkeypatch)
+
+    result = asyncio.run(
+        driver.run(
+            [_case()], tmp_path / "run.json", capture_only=False, pacing_seconds=0
+        )
+    )
+
+    assert [link["trace_id"] for link in links] == ["trace-1", "trace-2"]
+    assert [link["repeat"] for link in links] == [1, 2]
+    assert all(link["turn"] == 1 for link in links)
+    assert all(link["capture_run_id"] == result["manifest"]["run_id"] for link in links)
+    assert [write["dataset_run_id"] for write in score_writes] == [
+        "dataset-run-1",
+        "dataset-run-2",
+    ]
 
 
 def test_quota_exhaustion_marks_remaining_scenarios_unrun(
@@ -173,14 +301,18 @@ def test_quota_exhaustion_marks_remaining_scenarios_unrun(
     output = tmp_path / "run.json"
     cases = [_case("HLP-TEST-1"), _case("HLP-TEST-2")]
 
-    result = asyncio.run(driver.run(cases, output, sleep=lambda _: asyncio.sleep(0), pacing_seconds=0))
+    result = asyncio.run(
+        driver.run(cases, output, sleep=lambda _: asyncio.sleep(0), pacing_seconds=0)
+    )
 
     assert result["status"] == "PARTIAL_QUOTA"
     assert result["scenarios"]["HLP-TEST-1"]["status"] == "INFRA"
     assert result["scenarios"]["HLP-TEST-2"]["status"] == "UNRUN"
 
 
-def test_manifest_records_tracing_when_operator_opts_in(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_manifest_records_tracing_when_operator_opts_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """An operator who enables Langfuse must not get a manifest claiming tracing was off."""
     monkeypatch.setenv("LANGFUSE_ENABLED", "true")
     monkeypatch.setattr(driver, "_git_sha", lambda: "abc123")
@@ -207,7 +339,10 @@ def test_quota_backoff_without_a_hint_outlasts_a_per_minute_window() -> None:
 
 
 def test_retry_hint_is_capped_and_non_quota_errors_keep_the_short_ladder() -> None:
-    assert driver._retry_delay(RuntimeError("try again in 3600s"), 0) == driver.MAX_BACKOFF_SECONDS
+    assert (
+        driver._retry_delay(RuntimeError("try again in 3600s"), 0)
+        == driver.MAX_BACKOFF_SECONDS
+    )
     assert driver._retry_delay(RuntimeError("connection reset"), 0) == 1.0
     assert driver._retry_delay(RuntimeError("connection reset"), 1) == 2.0
 
@@ -225,10 +360,15 @@ def test_quota_retry_records_the_delay_it_actually_waited(
 
     monkeypatch.setattr(driver, "_capture_case", quota_capture)
     _stub_fingerprint(monkeypatch)
-    result = asyncio.run(driver.run([_case()], tmp_path / "run.json", sleep=record, pacing_seconds=0))
+    result = asyncio.run(
+        driver.run([_case()], tmp_path / "run.json", sleep=record, pacing_seconds=0)
+    )
 
     assert slept == [13.0, 13.0]
-    assert [event["delay_seconds"] for event in result["manifest"]["retry_events"]] == [13.0, 13.0]
+    assert [event["delay_seconds"] for event in result["manifest"]["retry_events"]] == [
+        13.0,
+        13.0,
+    ]
 
 
 def test_diff_refuses_different_inputs(tmp_path: Path) -> None:
@@ -253,7 +393,9 @@ def test_diff_refuses_different_inputs(tmp_path: Path) -> None:
         driver.compare_runs(left, right)
 
 
-def test_dirty_worktree_is_not_baseline_eligible_or_comparable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_dirty_worktree_is_not_baseline_eligible_or_comparable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(driver, "_worktree_state", lambda: "dirty")
     _stub_fingerprint(monkeypatch)
     manifest = driver.build_manifest()
@@ -271,7 +413,15 @@ def test_turns_are_paced_so_each_meets_an_unspent_quota_window(
     waited: list[float] = []
 
     async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
-        return [SeamRun(question="q", answer="a", tools_called=[], tool_output=None, sql_text=None)]
+        return [
+            SeamRun(
+                question="q",
+                answer="a",
+                tools_called=[],
+                tool_output=None,
+                sql_text=None,
+            )
+        ]
 
     async def record(delay: float) -> None:
         waited.append(delay)
@@ -300,7 +450,13 @@ def test_conversational_turns_pace_between_themselves(
                 await pause()
                 paused_before_turn.append(turn_index)
         return [
-            SeamRun(question="q", answer="a", tools_called=[], tool_output=None, sql_text=None)
+            SeamRun(
+                question="q",
+                answer="a",
+                tools_called=[],
+                tool_output=None,
+                sql_text=None,
+            )
         ], None
 
     async def record(delay: float) -> None:
@@ -310,7 +466,9 @@ def test_conversational_turns_pace_between_themselves(
     monkeypatch.setattr(driver, "repeat_count", lambda case: 1)
     _stub_fingerprint(monkeypatch)
     case = {**_case(), "type": "conversational", "turns": ["first", "second"]}
-    asyncio.run(driver.run([case], tmp_path / "run.json", sleep=record, pacing_seconds=60.0))
+    asyncio.run(
+        driver.run([case], tmp_path / "run.json", sleep=record, pacing_seconds=60.0)
+    )
 
     assert paused_before_turn == [1]
     assert waited == [60.0]
@@ -321,7 +479,10 @@ def test_pacing_is_recorded_in_the_manifest(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
     _stub_fingerprint(monkeypatch)
 
-    assert driver.build_manifest()["turn_pacing_seconds"] == driver.load_turn_pacing_seconds()
+    assert (
+        driver.build_manifest()["turn_pacing_seconds"]
+        == driver.load_turn_pacing_seconds()
+    )
 
 
 def test_provider_telemetry_preserves_reported_usage_and_finish_reason() -> None:
@@ -332,7 +493,13 @@ def test_provider_telemetry_preserves_reported_usage_and_finish_reason() -> None
     )
     callback.on_llm_end(
         SimpleNamespace(
-            llm_output={"token_usage": {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18}},
+            llm_output={
+                "token_usage": {
+                    "prompt_tokens": 11,
+                    "completion_tokens": 7,
+                    "total_tokens": 18,
+                }
+            },
             generations=[[SimpleNamespace(message=message, generation_info={})]],
         )
     )
@@ -401,13 +568,24 @@ def _capture_and_grade_from_replay() -> tuple[dict, dict]:
                         ],
                     }
                 )
-            capture_repeats.append({"repeat": repeat["repeat"], "status": "COMPLETE", "turns": capture_turns})
-        capture["scenarios"][scenario_id] = {"status": "COMPLETE", "repeats": capture_repeats}
+            capture_repeats.append(
+                {
+                    "repeat": repeat["repeat"],
+                    "status": "COMPLETE",
+                    "turns": capture_turns,
+                }
+            )
+        capture["scenarios"][scenario_id] = {
+            "status": "COMPLETE",
+            "repeats": capture_repeats,
+        }
         grade["scenarios"][scenario_id] = grade_entries
     return capture, grade
 
 
-def test_freeze_projects_a_capture_into_a_valid_sanitized_replay(tmp_path: Path) -> None:
+def test_freeze_projects_a_capture_into_a_valid_sanitized_replay(
+    tmp_path: Path,
+) -> None:
     capture, grade = _capture_and_grade_from_replay()
     capture_path = tmp_path / "capture.json"
     grade_path = tmp_path / "grade.json"
@@ -415,7 +593,9 @@ def test_freeze_projects_a_capture_into_a_valid_sanitized_replay(tmp_path: Path)
     capture_path.write_text(json.dumps(capture), encoding="utf-8")
     grade_path.write_text(json.dumps(grade), encoding="utf-8")
 
-    driver.main(["freeze", str(capture_path), "--grade", str(grade_path), "-o", str(output)])
+    driver.main(
+        ["freeze", str(capture_path), "--grade", str(grade_path), "-o", str(output)]
+    )
     frozen = json.loads(output.read_text(encoding="utf-8"))
 
     validate_replay(frozen)
@@ -449,7 +629,9 @@ def test_freeze_refuses_a_capture_that_cannot_name_its_prompt(tmp_path: Path) ->
 
 def test_freeze_refuses_a_capture_with_a_live_trace_id(tmp_path: Path) -> None:
     capture, grade = _capture_and_grade_from_replay()
-    capture["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]["seams"]["trace_id"] = "live-trace"
+    capture["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]["seams"][
+        "trace_id"
+    ] = "live-trace"
     capture_path = tmp_path / "capture.json"
     grade_path = tmp_path / "grade.json"
     output = tmp_path / "frozen.json"
@@ -482,7 +664,9 @@ def test_freeze_preserves_a_failed_execution_result(tmp_path: Path) -> None:
     assert turn["expected_execution_accuracy"] == "FAIL"
 
 
-def test_freeze_derives_an_exempt_execution_result_from_the_registry(tmp_path: Path) -> None:
+def test_freeze_derives_an_exempt_execution_result_from_the_registry(
+    tmp_path: Path,
+) -> None:
     capture, grade = _capture_and_grade_from_replay()
     grade["scenarios"]["HON-SQL-DESCRIBE-1"][0]["checks"] = []
     capture_path = tmp_path / "capture.json"
@@ -497,7 +681,9 @@ def test_freeze_derives_an_exempt_execution_result_from_the_registry(tmp_path: P
     assert turn["expected_execution_accuracy"] == "EXEMPT"
 
 
-def test_freeze_projects_completed_evidence_from_a_partial_quota_capture(tmp_path: Path) -> None:
+def test_freeze_projects_completed_evidence_from_a_partial_quota_capture(
+    tmp_path: Path,
+) -> None:
     capture, grade = _capture_and_grade_from_replay()
     capture["status"] = "PARTIAL_QUOTA"
     capture["scenarios"]["HLP-COUNT-1"] = {"status": "INFRA", "repeats": []}

@@ -34,6 +34,8 @@ It never contains secret values.
 | `LANGFUSE_SECRET_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |
 | `LANGFUSE_PUBLIC_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |
 | `LANGFUSE_BASE_URL` | `.env`; Render dashboard | Dashboard value, `sync: false` | Not used | Local default targets a local Langfuse endpoint. |
+| `LANGFUSE_TRACING_ENVIRONMENT` | `.env`; `render.yaml` | Tracked `production` value | Not used | Defaults to `local`; allowed values are `local`, `production`, and `evaluation`. |
+| `LANGFUSE_RELEASE` | Optional `.env`; eval driver | Deliberately undeclared | Eval driver supplies its current git SHA | Optional local release override; Render's automatic `RENDER_GIT_COMMIT` takes precedence. |
 | `HEALTHCHECKS_URL` | Optional `.env` only | Deliberately undeclared | GitHub `HEALTHCHECKS_URL` secret | Dead-man ping URL; not declared for Render. |
 | `WEB_CONCURRENCY` | Render `render.yaml` | Tracked value | Not used | Fixed at `1` for the Free web service. |
 | `PORT` | Render `render.yaml` | Tracked value | Not used | Fixed at `8000`. |
@@ -169,6 +171,10 @@ and runs schema safety checks against production.
   dashboard-managed unless the maintainer deliberately performs a Blueprint sync.
 - A failed Langfuse initialization logs a startup warning and disables tracing for that process;
   serving continues and the incident response table is the recovery path.
+- The evaluation driver intentionally enables Langfuse in the `evaluation` environment.
+  Each capture can therefore consume Langfuse Hobby-plan event ingestion and retained trace storage.
+  Run the smallest scenario selection needed, and disable tracing explicitly only when an offline
+  capture does not need trace, dataset-run, or score linkage.
 
 ## Keep-alive and idle pools
 

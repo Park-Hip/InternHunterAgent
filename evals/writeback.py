@@ -11,7 +11,12 @@ from src.agents.tracing.langfuse import get_langfuse_client, get_langfuse_handle
 from src.core.logger import logger
 
 
-def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:
+def write_scores(
+    trace_id: str | None,
+    results: dict[str, dict],
+    *,
+    dataset_run_id: str | None = None,
+) -> int:
     """Write every non-None metric score in `results` onto the Langfuse trace
     `trace_id`. Returns the number of scores written; no-ops (returns 0, never
     raises) when `trace_id` is None or Langfuse is disabled (missing creds)."""
@@ -33,6 +38,7 @@ def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:
                     name=f"{seam_name}/{metric_name}",
                     value=score,
                     trace_id=trace_id,
+                    dataset_run_id=dataset_run_id,
                     data_type="NUMERIC",
                     score_id=f"{trace_id}-{seam_name}-{metric_name}",
                     comment=payload.get("reason"),
@@ -45,5 +51,8 @@ def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:
                     error=str(exc),
                 )
 
-    lf.flush()
+    try:
+        lf.flush()
+    except Exception as exc:  # noqa: BLE001 - export draining must not break an eval capture
+        logger.warning("Langfuse score flush failed", error=str(exc))
     return written

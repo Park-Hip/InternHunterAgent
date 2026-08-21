@@ -33,5 +33,7 @@ services:
         sync: false
       - key: LANGFUSE_BASE_URL
         sync: false
+      - key: LANGFUSE_TRACING_ENVIRONMENT
+        value: production
       # GOOGLE_API_KEY (optional Gemini provider) and HEALTHCHECKS_URL
       # (ingestion cron only) are intentionally not declared for the web service.

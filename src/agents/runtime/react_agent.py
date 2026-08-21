@@ -5,7 +5,12 @@ from typing import Any
 from langchain.messages import HumanMessage
 
 from src.agents.runtime.factory import agent_factory
-from src.agents.tracing.langfuse import build_langfuse_config, get_langfuse_client, get_langfuse_handler
+from src.agents.tracing.langfuse import (
+    build_langfuse_config,
+    get_langfuse_client,
+    get_langfuse_handler,
+    langfuse_trace_attributes,
+)
 
 
 class AgentRuntime:
@@ -18,12 +23,17 @@ class AgentRuntime:
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> dict[str, str | None]:
-        config = build_langfuse_config(session_id=session_id, user_id=user_id)
+        config = build_langfuse_config(
+            session_id=session_id,
+            user_id=user_id,
+            entry_point="api:chat",
+        )
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
 
-        response = await self.agent.ainvoke(messages, config=config or None)
+        with langfuse_trace_attributes(entry_point="api:chat"):
+            response = await self.agent.ainvoke(messages, config=config or None)
         answer = self._extract_answer(response)
 
         trace_id = None
@@ -51,23 +61,28 @@ class AgentRuntime:
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> AsyncIterator[dict[str, str | None]]:
-        config = build_langfuse_config(session_id=session_id, user_id=user_id)
+        config = build_langfuse_config(
+            session_id=session_id,
+            user_id=user_id,
+            entry_point="api:chat-stream",
+        )
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
 
-        async for chunk, metadata in self.agent.astream(
-            messages,
-            config=config or None,
-            stream_mode="messages",
-        ):
-            if metadata.get("langgraph_node") != "model":
-                continue
-            content = getattr(chunk, "content", None)
-            tool_call_chunks = getattr(chunk, "tool_call_chunks", None)
-            if not isinstance(content, str) or not content or tool_call_chunks:
-                continue
-            yield {"type": "token", "text": content}
+        with langfuse_trace_attributes(entry_point="api:chat-stream"):
+            async for chunk, metadata in self.agent.astream(
+                messages,
+                config=config or None,
+                stream_mode="messages",
+            ):
+                if metadata.get("langgraph_node") != "model":
+                    continue
+                content = getattr(chunk, "content", None)
+                tool_call_chunks = getattr(chunk, "tool_call_chunks", None)
+                if not isinstance(content, str) or not content or tool_call_chunks:
+                    continue
+                yield {"type": "token", "text": content}
 
         trace_id = None
         handler = get_langfuse_handler()

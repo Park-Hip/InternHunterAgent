@@ -1,6 +1,6 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-20 against the checked-out commit, active registers, and
+> **Last verified:** 2026-08-21 against the checked-out commit, active registers, and
 > [`Operations.md`](Operations.md). The `snapshot` region below is clone-local and is
 > excluded from this stamp; see the note under it.
 
@@ -24,10 +24,17 @@
 The block above is refreshed by `scripts/docs_build.py --snapshot`. It reports the clone it was
 run in, so it is the one generated region the linter does not gate: branch and worktree facts
 differ between a developer machine and CI, and a check that must pass on both cannot read them.
-It was last refreshed on 2026-08-19 at `03b43ff` and therefore predates the three D-047
-migration merges (PRs #84, #85, #86). Refreshing it belongs to the next integration session,
-which is the only writer that runs `--snapshot` from a checkout of `main`. That it can lag
-silently is `KI-2026-08-17-snapshot-region-unverified`, still open.
+It was last refreshed on 2026-08-19 at `03b43ff` and now lags by eleven merges: the three D-047
+migration merges (PRs #84, #85, #86) and the eight Langfuse observability merges (PRs #89-#95).
+The 2026-08-21 integration session did not refresh it either, and the reason is worth recording
+rather than repeating. `render_snapshot()` reads `git rev-parse --abbrev-ref HEAD` and compares
+against the *local* `main` ref. An integration session works on a branch in a linked worktree,
+so running `--snapshot` there would publish that branch name as the checked-out branch and count
+unmerged branches against a stale local `main` - a worse value than the one it replaces. The only
+truthful writer is a clone whose primary worktree is on an up-to-date `main`, and this repository's
+primary worktree carries unrelated uncommitted work that an integration session must not disturb.
+That it can lag silently is `KI-2026-08-17-snapshot-region-unverified`, still open; that the
+generator cannot be run truthfully from where integration actually happens is the newer half of it.
 
 - Milestone identity, status, and named open obligations live in
   [`roadmap.yaml`](roadmap.yaml). Ticket numbers, milestone `scope:` blocks, and the
@@ -57,6 +64,24 @@ Complete: M0, M6-M22, M24-M38 - 33 of 35 milestones.
 
 **Nothing is in progress.** M33 closed on 2026-08-19, leaving M23 - the v1.0 release cut - as the
 only milestone still planned.
+
+**Eight Langfuse observability merges are not represented above, because no milestone claims
+them.** PRs #89-#95 landed between 2026-08-20 and 2026-08-21 across eight Codex sessions:
+streamed DeepSeek usage (#90), traffic classification and release tagging plus keeping tags off
+request failures (#91), version-controlled model pricing and separated definition validation
+(#92), async-scoped request traces (#93), lifecycle reliability (#94), and the prompt registry
+with SQL generation spans (#95). They are real, merged, gate-green capability with no milestone
+number, no status line, and therefore no closing note - the milestone table above counts 35
+milestones and none of them is this. Allocating a number is a maintainer decision the integration
+step may not take on its own, so it is raised under
+[Next recommended ticket](#next-recommended-ticket) rather than invented here.
+
+**M39 is claimed by two different pieces of work.** [`roadmap.yaml`](roadmap.yaml) records M39 as
+*Fixture Test Reliability*, `status: claimed`, against `codex/t0039.1-fixture-test-reliability`,
+allocated by PR #82. PR #83 then opened on `codex/t0039.1-telemetry` as *"add M39 telemetry and v4
+quality gate"* - a different scope reusing the same milestone and ticket number. PR #83 was closed
+unmerged on 2026-08-21, so the number now points at fixture-test work that nobody has built. Which
+scope M39 actually names is unresolved.
 
 **M33** shipped Vietnamese across the whole user-facing surface in five tickets merged the same
 day: the output-language rule and query vocabulary with a `prompt_version` bump (`.1`, PR #77), the
@@ -236,21 +261,27 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Exit 0 on 2026-08-20, on the four surviving checks. The untracked working-tree leftovers under [Carried work](#carried-work) no longer produce findings: the `orphan` and `size-cap` checks that flagged them were cut by **D-047** |
-| `python scripts/docs_build.py --check` | Exit 0 on 2026-08-20; the three tree-derived regions current |
-| `python scripts/sync_agent_instructions.py --check` | Exit 0 on 2026-08-20; `AGENTS.md` is byte-identical to `CLAUDE.md`. Runs in the CI `docs` job |
-| `uv run pytest -q` | 513 passed, 9 skipped, 30 deselected, and 45 subtests passed on 2026-08-20, in 4 m 33 s. The count fell from 558 because **D-047** removed the tests for the eleven cut lint checks and the entry half of the generator. The nine skips are the fixture Postgres and `SCRATCH_DATABASE_URL` being unavailable in this clone, not a regression |
-| `uv run ruff check .` | Passed on 2026-08-20 |
-| `uv run mypy` | Success: no issues in 44 source files on 2026-08-20 |
-| `uv run python -m evals.replay` | Exit 0 in CI on 2026-08-20 on the three D-047 migration heads (PRs #84, #85, #86), where the frozen evidence is re-graded. Not re-run locally: nothing listens on 5433 in this clone - the recorded precondition rather than a result |
+| `python scripts/docs_lint.py` | Exit 0 on 2026-08-21, on the four surviving checks. The untracked working-tree leftovers under [Carried work](#carried-work) no longer produce findings: the `orphan` and `size-cap` checks that flagged them were cut by **D-047** |
+| `python scripts/docs_build.py --check` | Exit 0 on 2026-08-21; the three tree-derived regions current. The publish pass rendered no diff: the merged branches had already regenerated them |
+| `python scripts/sync_agent_instructions.py --check` | Exit 0 on 2026-08-21; `AGENTS.md` is byte-identical to `CLAUDE.md`. Runs in the CI `docs` job |
+| `uv run pytest -q` | 563 passed, 1 skipped, 30 deselected, and 45 subtests passed on 2026-08-21, in 18 s. The count rose from 513 with the Langfuse observability merges (PRs #89-#95). Only one skip this time, not nine, because the fixture Postgres was running: the eight fixture-backed tests that normally skip actually ran. The remaining skip is `SCRATCH_DATABASE_URL` |
+| `uv run ruff check .` | Passed on 2026-08-21 |
+| `uv run mypy` | Success: no issues in 46 source files on 2026-08-21. Two modules more than 2026-08-20, both from PR #95: `src/agents/tracing/prompt_registry.py` and `scripts/register_langfuse_prompts.py` |
+| `uv run python -m evals.replay` | Exit 0 **locally** on 2026-08-21, the first local run recorded here: 4 PASS and 1 FAIL over 5 graded turns (HLP 2/2, HON 1/2, SAF 1/1). The single FAIL is frozen expected evidence, which is why the gate still exits 0 - it is not a regression this pass introduced |
 
 The skips are environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, and the rest
-need the fixture Postgres. The default suite deselects live eval tests by design. A run with the
-fixture Postgres unreachable reports nine skips and takes minutes instead of seconds - the hang
-[Known Issues](Known_Issues.md) records, and the shape of the 2026-08-19 run above.
+need the fixture Postgres. The default suite deselects live eval tests by design. With the fixture
+Postgres down the same suite reports nine skips and takes minutes instead of seconds - the hang
+[Known Issues](Known_Issues.md) records, and measured again on 2026-08-21 at 4 m 39 s before the
+container was started. That is the difference between the 18 s row above and the 2026-08-20 row it
+replaced: the container, not the code.
 
-Only the tracked `skills/plan/SKILL.md` is authoritative; the gitignored
-`.claude/` copy drifted once and was fixed on 2026-08-18.
+Only the tracked `skills/plan/SKILL.md` and `skills/integrate/SKILL.md` are authoritative. The
+gitignored `.claude/` copies drift, and both have now been caught doing it: the plan copy on
+2026-08-18, and the integrate copy on 2026-08-21, still instructing a session to fold
+`docs/entries/` into `docs/Tickets.md`, archive into `Tickets_Archive.md`, and move size caps in
+`docs/README.md` - a workflow **D-047** retired and files that no longer exist. Because `.claude/`
+is gitignored, a drifted copy there has no history to diff against and no check can see it.
 
 Two command traps, both measured on 2026-08-17. A bare `python -m pytest` cannot import `slowapi`
 and fails collection on 23 modules, so use `uv run`. And a fresh worktree has no `.env`, since it
@@ -265,10 +296,23 @@ resolution records: [Resolved Issues](archive/Resolved_Issues.md).
 
 ## Next recommended ticket
 
+**Two maintainer decisions come before any of the work below, because both are about what the
+registers are allowed to say.** Neither can be taken by an integration session.
+
+1. **Give the Langfuse observability work a milestone number, or decide it does not get one.**
+   Eight merged PRs (#89-#95) currently exist in the tree and in no register. Until a number
+   exists, the milestone table undercounts what shipped and there is nowhere to write the closing
+   note that says what was measured and what was not.
+2. **Resolve the M39 double-claim.** The number names *Fixture Test Reliability* in
+   [`roadmap.yaml`](roadmap.yaml) but was also used by the now-closed PR #83 for telemetry and a v4
+   quality gate. Either M39 keeps its allocated scope and the telemetry work gets its own number,
+   or M39 was repurposed and its note is wrong.
+
 **M23** - the v1.0 release cut - is the only milestone left, and with M33 closed the sequencing
 argument for deferring it is spent. What it owes is its DoD sweep and terms posture; decision
 **D9** wants a read on trustworthy honesty numbers, which the two items below are the cheapest
-route to.
+route to. Note that M23 cannot honestly close while the two decisions above are open: a release
+cut that omits eight merged PRs from its own milestone record is not a complete cut.
 
 M33's two unmet obligations, recorded above, are both measurement rather than code and neither has
 a ticket; the Vietnamese capture needs a quota decision before it needs an implementer.

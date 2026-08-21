@@ -34,6 +34,34 @@ def test_resolving_the_fixture_url_never_freezes_settings(
     assert driver.fixture_database_url().startswith("postgresql")
 
 
+def test_driver_binds_tracing_to_the_evaluation_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LANGFUSE_TRACING_ENVIRONMENT", "production")
+    monkeypatch.setenv("LANGFUSE_ENABLED", "false")
+
+    driver._bind_fixture_environment()
+
+    assert driver.os.environ["LANGFUSE_TRACING_ENVIRONMENT"] == "evaluation"
+    assert driver.os.environ["LANGFUSE_ENABLED"] == "false"
+
+
+def test_capture_case_passes_the_driver_repeat_to_evaluation_tracing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_run_single_turn_case(case: dict, *, repeat: int) -> SeamRun:
+        captured["case"] = case
+        captured["repeat"] = repeat
+        return SeamRun(question="q", answer="a")
+
+    monkeypatch.setattr(driver.harness, "run_single_turn_case", fake_run_single_turn_case)
+
+    runs = asyncio.run(driver._capture_case(_case(), repeat_index=2))
+
+    assert len(runs) == 1
+    assert captured == {"case": _case(), "repeat": 2}
+
+
 def _stub_fingerprint(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep build_manifest() off a live database.
 
@@ -103,7 +131,7 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
 ) -> None:
     calls = 0
 
-    async def fake_capture(case: dict, pause=None) -> list[SeamRun]:
+    async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
         nonlocal calls
         calls += 1
         return [
@@ -137,7 +165,7 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
 def test_quota_exhaustion_marks_remaining_scenarios_unrun(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def quota_capture(case: dict, pause=None) -> list[SeamRun]:
+    async def quota_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
         raise RuntimeError("429 quota exceeded")
 
     monkeypatch.setattr(driver, "_capture_case", quota_capture)
@@ -189,7 +217,7 @@ def test_quota_retry_records_the_delay_it_actually_waited(
 ) -> None:
     slept: list[float] = []
 
-    async def quota_capture(case: dict, pause=None) -> list[SeamRun]:
+    async def quota_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
         raise RuntimeError("429 tokens per minute. Please try again in 12s.")
 
     async def record(delay: float) -> None:
@@ -242,7 +270,7 @@ def test_turns_are_paced_so_each_meets_an_unspent_quota_window(
     predecessor, so every turn after the first waits the window out."""
     waited: list[float] = []
 
-    async def fake_capture(case: dict, pause=None) -> list[SeamRun]:
+    async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
         return [SeamRun(question="q", answer="a", tools_called=[], tool_output=None, sql_text=None)]
 
     async def record(delay: float) -> None:
@@ -266,7 +294,7 @@ def test_conversational_turns_pace_between_themselves(
     waited: list[float] = []
     paused_before_turn: list[int] = []
 
-    async def fake_conversational(case: dict, pause=None):
+    async def fake_conversational(case: dict, repeat: int, pause=None):
         for turn_index in range(2):
             if turn_index and pause is not None:
                 await pause()

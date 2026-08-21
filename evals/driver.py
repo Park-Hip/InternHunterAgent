@@ -72,13 +72,23 @@ SEEDED_COLUMNS = (
 )
 
 
+def _git_sha() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+
+
 def _bind_fixture_environment() -> None:
     """Bind native driver runs before any src module can freeze Settings()."""
     os.environ["DATABASE_URL"] = fixture_database_url()
-    # Default tracing off so a capture costs no Langfuse quota, but let an operator
-    # opt in with LANGFUSE_ENABLED=true. Forcing it off unconditionally made every
-    # captured trace_id None, so the viewer's trace field was structurally dead.
-    os.environ.setdefault("LANGFUSE_ENABLED", "false")
+    # Evaluation traffic is intentionally traced in its own environment. This retains
+    # trace IDs for score writeback without mixing captures with serving traffic.
+    os.environ["LANGFUSE_TRACING_ENVIRONMENT"] = "evaluation"
+    os.environ.setdefault("LANGFUSE_ENABLED", "true")
+    os.environ.setdefault("LANGFUSE_RELEASE", _git_sha())
 
 
 @contextmanager
@@ -117,15 +127,6 @@ def _utc_now() -> str:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _git_sha() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL
-        ).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
 
 
 def load_turn_pacing_seconds() -> float:
@@ -486,12 +487,18 @@ def _seam_dict(run: harness.SeamRun) -> dict[str, Any]:
 
 
 async def _capture_case(
-    case: dict[str, Any], pause: Callable[[], Awaitable[None]] | None = None
+    case: dict[str, Any],
+    repeat_index: int,
+    pause: Callable[[], Awaitable[None]] | None = None,
 ) -> list[harness.SeamRun]:
     with _native_provider_environment():
         if case["type"] == "single":
-            return [await harness.run_single_turn_case(case)]
-        runs, _ = await harness.run_conversational_case(case, pause=pause)
+            return [await harness.run_single_turn_case(case, repeat=repeat_index)]
+        runs, _ = await harness.run_conversational_case(
+            case,
+            repeat=repeat_index,
+            pause=pause,
+        )
         return runs
 
 
@@ -504,7 +511,7 @@ async def _capture_with_retry(
 ) -> list[harness.SeamRun]:
     for attempt in range(MAX_RETRIES + 1):
         try:
-            return await _capture_case(case, pause=pause)
+            return await _capture_case(case, repeat_index, pause=pause)
         except Exception as exc:  # noqa: BLE001 - persisted as infrastructure evidence
             if attempt >= MAX_RETRIES:
                 raise

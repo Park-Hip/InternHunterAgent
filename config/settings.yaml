@@ -10,6 +10,18 @@ api:
     allowed_methods: ["GET", "POST", "OPTIONS"]
     allowed_headers: ["*"]
 
+observability:
+  langfuse:
+    # Environments partition whole processes. The evaluation driver binds its
+    # own environment before importing the agent runtime.
+    environments:
+      default: local
+      allowed: [local, production, evaluation]
+    # These are the only dimensions allowed to become Langfuse tags. Keep this
+    # vocabulary intentionally small so trace filtering remains usable.
+    tag_taxonomy:
+      entry_points: ["api:chat", "api:chat-stream", "eval:driver", "eval:spike"]
+
 agent:
   # Default provider for every profile. A profile may override it with its own
   # `provider:` key, which is how one profile moves arms while the other stays put.

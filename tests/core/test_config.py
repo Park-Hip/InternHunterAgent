@@ -103,3 +103,16 @@ class ConfigLoadTests(unittest.TestCase):
 
         self.assertTrue(hasattr(module, "settings"))
         self.assertEqual(module.settings.__class__.__name__, "_SettingsProxy")
+
+    def test_observability_taxonomy_rejects_duplicate_entry_points(self) -> None:
+        config = {
+            "observability": {
+                "langfuse": {
+                    "environments": {"default": "local", "allowed": ["local"]},
+                    "tag_taxonomy": {"entry_points": ["api:chat", "api:chat"]},
+                }
+            }
+        }
+
+        with self.assertRaisesRegex(config_module.ConfigLoadError, "Duplicate values"):
+            config_module._validate_observability_config(config)

@@ -52,7 +52,11 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         mock_client.get_trace_url.assert_called_once_with(trace_id="trace-123")
-        mock_build_langfuse_config.assert_called_once_with(session_id="session-1", user_id="user-1")
+        mock_build_langfuse_config.assert_called_once_with(
+            session_id="session-1",
+            user_id="user-1",
+            entry_point="api:chat",
+        )
         fake_agent.ainvoke.assert_awaited_once_with(
             {"messages": [HumanMessage(content="what time is it?")]},
             config={
@@ -120,7 +124,11 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 },
             ],
         )
-        mock_build_langfuse_config.assert_called_once_with(session_id="session-1", user_id="user-1")
+        mock_build_langfuse_config.assert_called_once_with(
+            session_id="session-1",
+            user_id="user-1",
+            entry_point="api:chat-stream",
+        )
         mock_client.flush.assert_called_once()
         mock_client.get_trace_url.assert_called_once_with(trace_id="trace-123")
 

@@ -34,7 +34,12 @@ from evals.judge import build_judge
 from evals.writeback import write_scores
 from src.agents.runtime.factory import agent_factory
 from src.agents.runtime.prompts import load_schema_context
-from src.agents.tracing.langfuse import get_langfuse_client, get_langfuse_handler
+from src.agents.tracing.langfuse import (
+    build_langfuse_config,
+    get_langfuse_client,
+    get_langfuse_handler,
+    langfuse_trace_attributes,
+)
 
 QUERY_TOOL_NAME = "query_clean_jobs"
 GENERATE_SQL_SPAN_NAME = "generate_sql"
@@ -298,16 +303,33 @@ async def _run_turn(agent, message: str, config: dict, span_name: str) -> SeamRu
     )
 
 
-async def run_single_turn_case(case: dict) -> SeamRun:
+async def run_single_turn_case(case: dict, *, repeat: int = 1) -> SeamRun:
     agent = agent_factory()
     handler = CallbackHandler(name=case["id"])
-    return await _run_turn(
-        agent, case["input"], {"callbacks": [handler]}, span_name=f"eval-{case['id']}"
+    langfuse_config = build_langfuse_config(
+        entry_point="eval:driver",
+        scenario_id=case["id"],
+        repeat=repeat,
     )
+    config = {key: value for key, value in langfuse_config.items() if key != "callbacks"}
+    with langfuse_trace_attributes(
+        entry_point="eval:driver",
+        scenario_id=case["id"],
+        repeat=repeat,
+    ):
+        return await _run_turn(
+            agent,
+            case["input"],
+            {**config, "callbacks": [handler]},
+            span_name=f"eval-{case['id']}",
+        )
 
 
 async def run_conversational_case(
-    case: dict, pause: Callable[[], Awaitable[None]] | None = None
+    case: dict,
+    *,
+    repeat: int = 1,
+    pause: Callable[[], Awaitable[None]] | None = None,
 ) -> tuple[list[SeamRun], ConversationalTestCase]:
     """Run every turn against one persistent thread; return each turn's
     SeamRun plus a ConversationalTestCase transcript of the whole exchange.
@@ -318,7 +340,15 @@ async def run_conversational_case(
     """
     agent = agent_factory(checkpointer=InMemorySaver())
     thread_id = case["id"]
-    config = {"configurable": {"thread_id": thread_id}}
+    langfuse_config = build_langfuse_config(
+        entry_point="eval:driver",
+        scenario_id=case["id"],
+        repeat=repeat,
+    )
+    config = {
+        **{key: value for key, value in langfuse_config.items() if key != "callbacks"},
+        "configurable": {"thread_id": thread_id},
+    }
 
     runs: list[SeamRun] = []
     turns: list[Turn] = []
@@ -326,12 +356,17 @@ async def run_conversational_case(
         if turn_index and pause is not None:
             await pause()
         handler = CallbackHandler(thread_id=thread_id)
-        seam_run = await _run_turn(
-            agent,
-            message,
-            {**config, "callbacks": [handler]},
-            span_name=f"eval-{thread_id}-turn-{turn_index}",
-        )
+        with langfuse_trace_attributes(
+            entry_point="eval:driver",
+            scenario_id=case["id"],
+            repeat=repeat,
+        ):
+            seam_run = await _run_turn(
+                agent,
+                message,
+                {**config, "callbacks": [handler]},
+                span_name=f"eval-{thread_id}-turn-{turn_index}",
+            )
         runs.append(seam_run)
         turns.append(Turn(role="user", content=message))
         turns.append(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ from evals import driver
 from evals.harness import ProviderTelemetryCallback, SeamRun
 from evals.replay import REPLAY_SCHEMA_VERSION, load_replay, validate_replay
 from src.agents.runtime.prompts import load_prompt_version
+from src.agents.tracing import langfuse
 
 
 def test_resolving_the_fixture_url_never_freezes_settings(
@@ -76,6 +78,10 @@ def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
 
     @asynccontextmanager
     async def request_trace(**kwargs):
+        # A bare **kwargs stub accepts a call the real function rejects, which is
+        # how a capture-breaking signature mismatch reached main. Bind the real
+        # signature so the keywords asserted below stay checked against it.
+        inspect.signature(langfuse.langfuse_request_trace).bind(**kwargs)
         trace_calls.append(kwargs)
         yield "trace-request-scoped"
 

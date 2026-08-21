@@ -4,7 +4,14 @@ import json
 from datetime import date
 from decimal import Decimal
 
-from evals.execution_accuracy import compare_result_sets, grade_turn
+import pytest
+
+from evals.execution_accuracy import (
+    compare_result_sets,
+    grade_turn,
+    selects_id,
+    validate_execution_comparison,
+)
 
 
 def test_equivalent_queries_pass_when_where_terms_are_reordered(monkeypatch) -> None:
@@ -46,6 +53,146 @@ def test_id_projection_ignores_extra_columns_and_aliases(monkeypatch) -> None:
 
     assert compare_result_sets("generated", "reference")["status"] == "FAIL"
     assert compare_result_sets("generated", "reference", comparison_mode="ids_only")["status"] == "PASS"
+
+
+def test_ids_only_passes_a_superset_projection_over_the_same_rows(monkeypatch) -> None:
+    """The 2026-08-21 probe's failure: same postings, the model's own wider column list."""
+    reference = [
+        {"id": 3, "title": "AI Engineer", "company": "One", "location": "Hanoi"},
+        {"id": 7, "title": "AI Engineer Intern", "company": "Two", "location": "Da Nang"},
+    ]
+    generated = [
+        {"id": 7, "location": "Da Nang", "title": "AI Engineer Intern", "company": "Two",
+         "tech_stack": "Python", "is_salary_negotiable": True},
+        {"id": 3, "location": "Hanoi", "title": "AI Engineer", "company": "One",
+         "tech_stack": "Python", "is_salary_negotiable": False},
+    ]
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: generated if sql == "generated" else reference,
+    )
+
+    assert compare_result_sets("generated", "reference")["status"] == "FAIL"
+    assert compare_result_sets("generated", "reference", comparison_mode="ids_only")["status"] == "PASS"
+
+
+def test_ids_only_still_fails_a_different_row_set(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: (
+            [{"id": 3}, {"id": 8}] if sql == "generated" else [{"id": 3}, {"id": 7}]
+        ),
+    )
+
+    assert compare_result_sets("generated", "reference", comparison_mode="ids_only")["status"] == "FAIL"
+
+
+@pytest.mark.parametrize(
+    ("sql", "expected"),
+    [
+        ("SELECT id, title FROM clean_jobs", True),
+        ("select ID from clean_jobs", True),
+        ("SELECT DISTINCT id FROM clean_jobs", True),
+        ("SELECT clean_jobs.id, title FROM clean_jobs", True),
+        ("SELECT job_id AS id FROM clean_jobs", True),
+        ("SELECT * FROM clean_jobs", True),
+        ("SELECT COUNT(*) AS count FROM clean_jobs", False),
+        ("SELECT title, company FROM clean_jobs", False),
+        ("SELECT MAX(id) FROM clean_jobs", False),
+        ("not a select statement", False),
+    ],
+)
+def test_selects_id_reads_the_reference_projection(sql: str, expected: bool) -> None:
+    assert selects_id(sql) is expected
+
+
+def test_ids_only_over_a_count_reference_is_rejected() -> None:
+    scenario = {
+        "id": "HLP-COUNT-1",
+        "reference_sql": "SELECT COUNT(*) AS count FROM clean_jobs",
+        "grading": {"execution_comparison": "ids_only"},
+    }
+
+    with pytest.raises(ValueError, match="does not select id"):
+        grade_turn(scenario, "SELECT COUNT(*) FROM clean_jobs")
+
+
+def test_ids_only_fails_a_generated_query_that_does_not_project_id(monkeypatch) -> None:
+    """The mirror of the registry guard: an id-less *generated* query must not pass either.
+
+    HON-ZERO-RESULTS-1 is the live case. Its reference finds no COBOL posting, so without this
+    check a query that ignored the filter entirely compares an empty multiset against an empty one.
+    """
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: (
+            [{"title": "Java Engineer"}, {"title": "Python Engineer"}] if sql == "generated" else []
+        ),
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="ids_only")
+
+    assert result["status"] == "FAIL"
+    assert result["error"] == "Generated query does not project id, so row identity cannot be compared"
+    assert result["generated_row_count"] == 2
+
+
+def test_ids_only_names_the_projection_instead_of_a_row_mismatch(monkeypatch) -> None:
+    """An id-less generated query reads as a projection defect, not as the wrong postings."""
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: (
+            [{"title": "AI Engineer"}] if sql == "generated" else [{"id": 3, "title": "AI Engineer"}]
+        ),
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="ids_only")
+
+    assert result["status"] == "FAIL"
+    assert "does not project id" in result["error"]
+
+
+def test_ids_only_passes_when_both_sides_are_legitimately_empty(monkeypatch) -> None:
+    """An empty result has no projection to check, so HON-ZERO-RESULTS-1 still passes correctly."""
+    monkeypatch.setattr("evals.execution_accuracy.execute_query", lambda sql, database_url=None: [])
+
+    assert compare_result_sets("generated", "reference", comparison_mode="ids_only")["status"] == "PASS"
+
+
+def test_ids_only_rejects_a_reference_whose_rows_carry_no_id(monkeypatch) -> None:
+    """A registry mistake, not a model defect, so it raises rather than grading the turn."""
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: [{"count": 5}],
+    )
+
+    with pytest.raises(ValueError, match="without an id column"):
+        compare_result_sets("generated", "reference", comparison_mode="ids_only")
+
+
+def test_ids_only_guard_checks_every_conversational_turn() -> None:
+    scenario = {
+        "id": "HLP-CONTEXT-1",
+        "reference_sql": [
+            "SELECT id, title FROM clean_jobs",
+            "SELECT title FROM clean_jobs WHERE location ILIKE '%Hanoi%'",
+        ],
+        "grading": {"execution_comparison": "ids_only"},
+    }
+
+    with pytest.raises(ValueError, match="turn 2"):
+        validate_execution_comparison(scenario)
+
+
+def test_the_guard_leaves_the_other_comparison_modes_alone() -> None:
+    for mode in ("exact", "contains_reference"):
+        validate_execution_comparison(
+            {
+                "id": "HLP-COUNT-1",
+                "reference_sql": "SELECT COUNT(*) AS count FROM clean_jobs",
+                "grading": {"execution_comparison": mode},
+            }
+        )
 
 
 def test_contains_reference_accepts_extra_generated_rows(monkeypatch) -> None:

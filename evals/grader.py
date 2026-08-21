@@ -17,7 +17,11 @@ import re
 from typing import Any
 
 from evals.scenarios import load_scenarios, scenario_category
-from src.agents.runtime.prompts import load_behavior_glossary, load_prompt_version
+from src.agents.runtime.prompts import (
+    load_behavior_glossary,
+    load_prompt_version,
+    load_schema_context,
+)
 from src.core.config import settings
 
 PASS = "PASS"
@@ -203,6 +207,35 @@ def _row_values(rows: list[dict[str, Any]]) -> list[str]:
     return sorted((value for value in values if value), key=len, reverse=True)
 
 
+@lru_cache(maxsize=1)
+def _schema_identifiers() -> tuple[str, ...]:
+    """Every table and column name the model is shown, read from the prompt it is shown in.
+
+    The list is derived from ``prompts.schema_context`` rather than restated here, so it
+    cannot drift from the schema the agent actually sees.
+    """
+    context = load_schema_context()
+    identifiers = set(re.findall(r"^Table:\s*(\w+)", context, flags=re.MULTILINE))
+    identifiers.update(re.findall(r"^-\s+(\w+)\s+\(", context, flags=re.MULTILINE))
+    if not identifiers:
+        raise ValueError("No table or column identifiers found in prompts.schema_context")
+    return tuple(sorted(identifiers))
+
+
+def _strip_schema_identifiers(text: str) -> str:
+    """Remove whole-token schema identifiers, leaving surrounding prose intact.
+
+    ``is_salary_negotiable`` and ``created_on`` are not English prose, but the ASCII token
+    probe below splits them on the underscore and finds ``is`` and ``on``. Removing the
+    identifier first is what keeps the language check about language.
+    """
+    for identifier in _schema_identifiers():
+        text = re.sub(
+            rf"(?<![a-z0-9_]){re.escape(identifier)}(?![a-z0-9_])", " ", text
+        )
+    return text
+
+
 def _answer_language_pure(answer: str | None, rows: list[dict[str, Any]] | None) -> bool | None:
     """Check agent prose while allowing canonical and source row values verbatim."""
     if not rows:
@@ -210,10 +243,116 @@ def _answer_language_pure(answer: str | None, rows: list[dict[str, Any]] | None)
     remaining = _text(answer)
     for value in _row_values(rows):
         remaining = remaining.replace(value.casefold(), " ")
+    remaining = _strip_schema_identifiers(remaining)
     # Accented Vietnamese letters are outside this ASCII token probe. Requiring two
     # characters avoids treating fragments such as ``t`` and ``i`` as English words.
     words = set(re.findall(r"[a-z]{2,}", remaining))
     return not bool(words & _ENGLISH_PROSE_WORDS)
+
+
+# Emoji and dingbat blocks only. Arrows, bullets, the em dash and the dong sign are left out:
+# they are punctuation the answers legitimately use, and the prompt rule is about decoration.
+_DECORATIVE_SYMBOL_PATTERN = re.compile(
+    "["
+    "\U0001f000-\U0001faff"  # emoticons, pictographs, transport, symbols extended-A
+    "\u2600-\u27bf"  # miscellaneous symbols and dingbats
+    "\u2b00-\u2bff"  # miscellaneous symbols and arrows
+    "\ufe0f"  # variation selector-16, the emoji presentation marker
+    "\u20e3"  # combining enclosing keycap
+    "]"
+)
+
+
+def _decorative_symbols(answer: str | None) -> list[str]:
+    """Report every emoji or decorative symbol in an answer, in order of appearance."""
+    return _DECORATIVE_SYMBOL_PATTERN.findall(answer or "")
+
+
+def _codepoints(symbols: list[str]) -> list[str]:
+    """Name the offending symbols as codepoints.
+
+    A grade lands in a JSON artifact that a person reads. Some of these characters are
+    invisible on their own - a variation selector renders as nothing - so the detail
+    string names them rather than reprinting them.
+    """
+    return [f"U+{ord(symbol):04X}" for symbol in symbols]
+
+
+@lru_cache(maxsize=1)
+def _sanctioned_identifier_text() -> str:
+    """Every phrasing the project tells the agent to say, as one casefolded haystack."""
+    return " ".join(
+        [*BEHAVIOR_GLOSSARY.values()]
+        + [anchor for anchors in BEHAVIOR_GLOSSARY_ANCHORS.values() for anchor in anchors]
+        + [anchor for anchors in EVALUATION_ANCHORS.values() for anchor in anchors]
+    ).casefold()
+
+
+@lru_cache(maxsize=1)
+def _leakable_identifiers() -> tuple[str, ...]:
+    """The schema identifiers whose presence in an answer can only be leakage.
+
+    Two exclusions, both derived rather than listed, so this cannot drift from the schema
+    or from the behavior contract.
+
+    Only compound identifiers qualify. ``id``, ``title``, ``company``, ``role``,
+    ``location`` and ``description`` are ordinary words that appear in answers for honest
+    reasons - the SQL rules require ``id`` to be selected first so postings can be
+    referenced later - so keying on them would manufacture the same false signal this
+    check exists to remove.
+
+    An identifier the behavior glossary itself quotes is excluded too. ``CREATED_ON_CAVEAT``
+    names ``created_on`` to the user on purpose, and ``HON-CREATED-ON-1`` requires that
+    anchor to be present, so forbidding it here would require and forbid the same word in
+    one turn.
+    """
+    sanctioned = _sanctioned_identifier_text()
+    return tuple(
+        name
+        for name in _schema_identifiers()
+        if "_" in name and name not in sanctioned
+    )
+
+
+def _leaked_identifiers(answer: str | None) -> list[str]:
+    """Report every schema identifier the answer quotes to the user."""
+    normalized = _text(answer)
+    return [
+        identifier
+        for identifier in _leakable_identifiers()
+        if re.search(rf"(?<![a-z0-9_]){re.escape(identifier)}(?![a-z0-9_])", normalized)
+    ]
+
+
+def _answer_style_checks(evidence: Evidence) -> list[Check]:
+    """Cross-scenario answer-style assertions, gated on the capture's prompt version.
+
+    Both rules are properties of the prompt that produced the answer, so a capture frozen
+    before the rule existed must not be regraded against it. This is the
+    ``vietnamese_agent_prose`` precedent in ``_prompt_is_current``.
+    """
+    if not _prompt_is_current(evidence):
+        return []
+    symbols = _decorative_symbols(evidence.answer)
+    identifiers = _leaked_identifiers(evidence.answer)
+    return [
+        Check(
+            "no_decorative_symbols",
+            not symbols,
+            "answer contains no emoji or decorative symbols"
+            if not symbols
+            else f"answer contains decorative symbols: {_codepoints(symbols)}",
+            "structural",
+        ),
+        Check(
+            "no_schema_identifier_leak",
+            not identifiers,
+            "answer quotes no schema identifier"
+            if not identifiers
+            else f"answer quotes schema identifiers: {identifiers!r}",
+            "structural",
+        ),
+    ]
 
 
 def _structural_checks(rule: ScenarioRule, evidence: Evidence) -> list[Check]:
@@ -399,6 +538,7 @@ def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
         )
 
     structural = _structural_checks(rule, evidence)
+    structural.extend(_answer_style_checks(evidence))
     if rule.require_vietnamese and evidence.returned_rows is not None and _prompt_is_current(evidence):
         purity = _answer_language_pure(evidence.answer, evidence.returned_rows)
         structural.append(

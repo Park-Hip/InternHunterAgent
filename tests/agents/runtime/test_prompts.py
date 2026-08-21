@@ -142,6 +142,11 @@ class SystemPromptScopeTests(unittest.TestCase):
         self.assertIn("must not weaken or omit", system_prompt)
         self.assertIn("the caveat wins", system_prompt)
 
+    def test_system_prompt_forbids_emoji_and_decorative_symbols(self) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn("Do not use emoji or decorative symbols", system_prompt)
+
 
 class LoadPromptVersionTests(unittest.TestCase):
     @patch("src.agents.runtime.prompts.settings")
@@ -165,7 +170,7 @@ class LoadPromptVersionTests(unittest.TestCase):
             load_prompt_version()
 
     def test_yaml_declares_a_prompt_version(self) -> None:
-        self.assertEqual(load_prompt_version(), "v4")
+        self.assertEqual(load_prompt_version(), "v5")
 
 
 class LoadBehaviorGlossaryTests(unittest.TestCase):

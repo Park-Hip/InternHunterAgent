@@ -46,7 +46,9 @@ def test_skips_none_scored_metrics(monkeypatch):
     fake = FakeLangfuseClient()
     _enable_fake_langfuse(monkeypatch, fake)
 
-    results = {"seam1_routing": {"Argument Correctness": {"score": None, "error": "boom"}}}
+    results = {
+        "seam1_routing": {"Argument Correctness": {"score": None, "error": "boom"}}
+    }
 
     written = writeback.write_scores("trace-123", results)
 
@@ -68,7 +70,9 @@ def test_trace_id_none_is_a_noop(monkeypatch):
 def test_disabled_langfuse_is_a_noop(monkeypatch):
     monkeypatch.setattr(writeback, "get_langfuse_handler", lambda: None)
 
-    written = writeback.write_scores("trace-123", {"seam1_routing": {"X": {"score": 1.0}}})
+    written = writeback.write_scores(
+        "trace-123", {"seam1_routing": {"X": {"score": 1.0}}}
+    )
 
     assert written == 0
 

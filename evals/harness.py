@@ -31,14 +31,12 @@ from deepeval.test_case.conversational_test_case import ConversationalTestCase
 from deepeval.tracing.trace_test_manager import trace_testing_manager
 
 from evals.judge import build_judge
-from evals.writeback import write_scores
 from src.agents.runtime.factory import agent_factory
 from src.agents.runtime.prompts import load_schema_context
 from src.agents.tracing.langfuse import (
-    build_langfuse_config,
-    get_langfuse_client,
     get_langfuse_handler,
-    langfuse_trace_attributes,
+    langfuse_request_trace,
+    validate_langfuse_trace_context,
 )
 
 QUERY_TOOL_NAME = "query_clean_jobs"
@@ -168,26 +166,43 @@ class ProviderTelemetryCallback(BaseCallbackHandler):
         generations = getattr(response, "generations", None)
         generation = (
             generations[0][0]
-            if isinstance(generations, list) and generations and isinstance(generations[0], list) and generations[0]
+            if isinstance(generations, list)
+            and generations
+            and isinstance(generations[0], list)
+            and generations[0]
             else None
         )
         message = getattr(generation, "message", None)
         message_usage = getattr(message, "usage_metadata", None)
         response_metadata = getattr(message, "response_metadata", None)
-        response_metadata = response_metadata if isinstance(response_metadata, dict) else {}
-        usage = llm_output.get("token_usage") or llm_output.get("usage") or message_usage
+        response_metadata = (
+            response_metadata if isinstance(response_metadata, dict) else {}
+        )
+        usage = (
+            llm_output.get("token_usage") or llm_output.get("usage") or message_usage
+        )
         usage = usage if isinstance(usage, dict) else {}
 
         record: dict[str, Any] = {}
         for token_field, aliases in _TOKEN_FIELDS.items():
-            value = next((usage[key] for key in aliases if isinstance(usage.get(key), int)), None)
+            value = next(
+                (usage[key] for key in aliases if isinstance(usage.get(key), int)), None
+            )
             record[token_field] = value if value is not None else _UNAVAILABLE
 
         finish_reason = response_metadata.get("finish_reason")
         generation_info = getattr(generation, "generation_info", None)
         if not isinstance(finish_reason, str) or not finish_reason:
-            finish_reason = generation_info.get("finish_reason") if isinstance(generation_info, dict) else None
-        record["finish_reason"] = finish_reason if isinstance(finish_reason, str) and finish_reason else _UNAVAILABLE
+            finish_reason = (
+                generation_info.get("finish_reason")
+                if isinstance(generation_info, dict)
+                else None
+            )
+        record["finish_reason"] = (
+            finish_reason
+            if isinstance(finish_reason, str) and finish_reason
+            else _UNAVAILABLE
+        )
         self.calls.append(record)
 
     def snapshot(self, latency_ms: int) -> dict[str, Any]:
@@ -202,7 +217,8 @@ class ProviderTelemetryCallback(BaseCallbackHandler):
         return {
             "latency_ms": latency_ms,
             "provider_token_usage": {"calls": self.calls, "aggregate": aggregate},
-            "finish_reasons": [call["finish_reason"] for call in self.calls] or [_UNAVAILABLE],
+            "finish_reasons": [call["finish_reason"] for call in self.calls]
+            or [_UNAVAILABLE],
         }
 
 
@@ -251,35 +267,33 @@ def _llm_output_text(span: dict | None) -> str | None:
     return None
 
 
-async def _run_turn(agent, message: str, config: dict, span_name: str) -> SeamRun:
+async def _run_turn(
+    agent,
+    message: str,
+    config: dict,
+    trace_id: str | None,
+) -> SeamRun:
     trace_testing_manager.test_name = "three-seam-eval"
     trace_testing_manager.test_dict = None
     lf_handler = get_langfuse_handler()
-    trace_id: str | None = None
     telemetry_handler = ProviderTelemetryCallback()
-    run_config = {**config, "callbacks": [*config.get("callbacks", []), telemetry_handler]}
+    run_config = {
+        **config,
+        "callbacks": [*config.get("callbacks", []), telemetry_handler],
+    }
     try:
-        lf = get_langfuse_client() if lf_handler is not None else None
-        if lf is not None:
-            with lf.start_as_current_observation(name=span_name) as span:
-                trace_id = span.trace_id
-                run_config = {**run_config, "callbacks": [*run_config["callbacks"], lf_handler]}
-                started_at = perf_counter()
-                response = await agent.ainvoke(
-                    {"messages": [HumanMessage(content=message)]},
-                    config=run_config,
-                )
-                latency_ms = round((perf_counter() - started_at) * 1000)
-                trace_dict = await trace_testing_manager.wait_for_test_dict()
-        else:
-            # unchanged existing path — DeepEval handler only, no Langfuse
-            started_at = perf_counter()
-            response = await agent.ainvoke(
-                {"messages": [HumanMessage(content=message)]},
-                config=run_config,
-            )
-            latency_ms = round((perf_counter() - started_at) * 1000)
-            trace_dict = await trace_testing_manager.wait_for_test_dict()
+        if lf_handler is not None:
+            run_config = {
+                **run_config,
+                "callbacks": [*run_config["callbacks"], lf_handler],
+            }
+        started_at = perf_counter()
+        response = await agent.ainvoke(
+            {"messages": [HumanMessage(content=message)]},
+            config=run_config,
+        )
+        latency_ms = round((perf_counter() - started_at) * 1000)
+        trace_dict = await trace_testing_manager.wait_for_test_dict()
     finally:
         trace_testing_manager.test_name = None
         trace_testing_manager.test_dict = None
@@ -306,22 +320,22 @@ async def _run_turn(agent, message: str, config: dict, span_name: str) -> SeamRu
 async def run_single_turn_case(case: dict, *, repeat: int = 1) -> SeamRun:
     agent = agent_factory()
     handler = CallbackHandler(name=case["id"])
-    langfuse_config = build_langfuse_config(
+    validate_langfuse_trace_context(
         entry_point="eval:driver",
         scenario_id=case["id"],
         repeat=repeat,
     )
-    config = {key: value for key, value in langfuse_config.items() if key != "callbacks"}
-    with langfuse_trace_attributes(
+    async with langfuse_request_trace(
         entry_point="eval:driver",
         scenario_id=case["id"],
         repeat=repeat,
-    ):
+        trace_name=f"eval-{case['id']}",
+    ) as trace_id:
         return await _run_turn(
             agent,
             case["input"],
-            {**config, "callbacks": [handler]},
-            span_name=f"eval-{case['id']}",
+            {"callbacks": [handler]},
+            trace_id,
         )
 
 
@@ -340,13 +354,12 @@ async def run_conversational_case(
     """
     agent = agent_factory(checkpointer=InMemorySaver())
     thread_id = case["id"]
-    langfuse_config = build_langfuse_config(
+    validate_langfuse_trace_context(
         entry_point="eval:driver",
         scenario_id=case["id"],
         repeat=repeat,
     )
     config = {
-        **{key: value for key, value in langfuse_config.items() if key != "callbacks"},
         "configurable": {"thread_id": thread_id},
     }
 
@@ -356,16 +369,17 @@ async def run_conversational_case(
         if turn_index and pause is not None:
             await pause()
         handler = CallbackHandler(thread_id=thread_id)
-        with langfuse_trace_attributes(
+        async with langfuse_request_trace(
             entry_point="eval:driver",
             scenario_id=case["id"],
             repeat=repeat,
-        ):
+            trace_name=f"eval-{thread_id}-turn-{turn_index + 1}",
+        ) as trace_id:
             seam_run = await _run_turn(
                 agent,
                 message,
                 {**config, "callbacks": [handler]},
-                span_name=f"eval-{thread_id}-turn-{turn_index}",
+                trace_id,
             )
         runs.append(seam_run)
         turns.append(Turn(role="user", content=message))
@@ -401,7 +415,11 @@ def build_seam2_case(run: SeamRun) -> LLMTestCase | None:
         input=run.question,
         actual_output=run.sql_text,
         context=[load_schema_context()],
-        tools_called=[ToolCall(name=GENERATE_SQL_SPAN_NAME, input_parameters={"sql": run.sql_text})],
+        tools_called=[
+            ToolCall(
+                name=GENERATE_SQL_SPAN_NAME, input_parameters={"sql": run.sql_text}
+            )
+        ],
     )
 
 
@@ -422,7 +440,10 @@ def score(metrics: list, test_case: LLMTestCase) -> dict[str, dict]:
     for metric in metrics:
         try:
             metric.measure(test_case)
-            results[metric.__name__] = {"score": metric.score, "reason": getattr(metric, "reason", None)}
+            results[metric.__name__] = {
+                "score": metric.score,
+                "reason": getattr(metric, "reason", None),
+            }
         except Exception as exc:  # noqa: BLE001 - report, don't abort the run
             results[metric.__name__] = {"score": None, "error": str(exc)}
     return results
@@ -449,8 +470,6 @@ async def run_case(case: dict) -> dict:
     seam3_case = build_seam3_case(case, final_run)
     results["seam3_synthesis"] = score(seam3_metrics(), seam3_case)
 
-    scores_written = write_scores(final_run.trace_id, results)
-
     return {
         "case_id": case["id"],
         "answer": final_run.answer,
@@ -459,5 +478,7 @@ async def run_case(case: dict) -> dict:
         "conversation": conversation,
         "results": results,
         "trace_id": final_run.trace_id,
-        "scores_written": scores_written,
+        # The scenario driver is the sole score writer because only it can
+        # associate scores with the derived Langfuse dataset run.
+        "scores_written": 0,
     }

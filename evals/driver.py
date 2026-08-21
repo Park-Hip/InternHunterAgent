@@ -41,7 +41,9 @@ DEFAULT_BACKOFF_SECONDS = (1.0, 2.0)
 QUOTA_BACKOFF_SECONDS = (20.0, 40.0)
 MAX_BACKOFF_SECONDS = 90.0
 RETRY_HINT_MARGIN_SECONDS = 1.0
-_RETRY_HINT_PATTERN = re.compile(r"try again in\s+([0-9]+(?:\.[0-9]+)?)\s*(ms|s)\b", re.IGNORECASE)
+_RETRY_HINT_PATTERN = re.compile(
+    r"try again in\s+([0-9]+(?:\.[0-9]+)?)\s*(ms|s)\b", re.IGNORECASE
+)
 
 # The 19 columns `evals/fixtures/seed_eval_db.sql` writes, in seed-file order.
 # The three lifecycle columns are excluded deliberately: is_active, first_seen_at,
@@ -107,18 +109,30 @@ def _native_provider_environment():
 
 def _tracing_enabled() -> bool:
     """Mirror src/agents/tracing/langfuse.py so the manifest cannot disagree with the run."""
-    return os.environ.get("LANGFUSE_ENABLED", "true").lower() not in {"0", "false", "no"}
+    return os.environ.get("LANGFUSE_ENABLED", "true").lower() not in {
+        "0",
+        "false",
+        "no",
+    }
 
 
 _bind_fixture_environment()
 
 from evals import harness  # noqa: E402
+from evals.langfuse_dataset import (  # noqa: E402
+    DatasetMirror,
+    LangfuseDatasetClient,
+    link_capture,
+    mirror_for_capture,
+)
 from evals.scenarios import load_scenarios, repeat_count  # noqa: E402
 from evals.sanitization import FORBIDDEN_CONTENT  # noqa: E402
+from evals.writeback import write_scores  # noqa: E402
 
 # Below the bind because it reads config/prompts.yaml through src.core.config, which
 # must not be frozen before the fixture environment is in place.
 from src.agents.runtime.prompts import load_prompt_version  # noqa: E402
+from src.agents.tracing.langfuse import get_langfuse_client, get_langfuse_handler  # noqa: E402
 
 
 def _utc_now() -> str:
@@ -131,7 +145,9 @@ def _sha256(path: Path) -> str:
 
 def load_turn_pacing_seconds() -> float:
     """Seconds to idle before each turn so it meets an unspent per-minute window."""
-    settings = yaml.safe_load((ROOT / "config" / "settings.yaml").read_text(encoding="utf-8"))
+    settings = yaml.safe_load(
+        (ROOT / "config" / "settings.yaml").read_text(encoding="utf-8")
+    )
     return float(settings["eval"]["driver"]["turn_pacing_seconds"])
 
 
@@ -162,7 +178,9 @@ def _database_fingerprint(database_url: str) -> tuple[str, str, int]:
     engine = create_engine(database_url)
     try:
         with engine.connect() as connection:
-            actual_name = connection.execute(text("SELECT current_database()")).scalar_one()
+            actual_name = connection.execute(
+                text("SELECT current_database()")
+            ).scalar_one()
             if actual_name != expected_name:
                 raise RuntimeError(
                     f"Fixture database mismatch: expected {expected_name!r}, got {actual_name!r}"
@@ -173,15 +191,21 @@ def _database_fingerprint(database_url: str) -> tuple[str, str, int]:
                 dict(row)
                 for row in connection.execute(
                     text(f"SELECT {projection} FROM clean_jobs ORDER BY id")
-                ).mappings().all()
+                )
+                .mappings()
+                .all()
             ]
     except RuntimeError:
         raise
     except Exception as exc:  # noqa: BLE001 - make provenance failure explicit
-        raise RuntimeError(f"Cannot fingerprint fixture database {expected_name!r}: {exc}") from exc
+        raise RuntimeError(
+            f"Cannot fingerprint fixture database {expected_name!r}: {exc}"
+        ) from exc
     finally:
         engine.dispose()
-    payload = json.dumps(rows, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    payload = json.dumps(rows, ensure_ascii=False, sort_keys=True, default=str).encode(
+        "utf-8"
+    )
     return hashlib.sha256(payload).hexdigest(), actual_name, len(rows)
 
 
@@ -255,13 +279,20 @@ def build_manifest() -> dict[str, Any]:
 
 
 def _new_run(manifest: dict[str, Any]) -> dict[str, Any]:
-    return {"manifest": manifest, "status": "RUNNING", "scenarios": {}, "checkpoint": {}}
+    return {
+        "manifest": manifest,
+        "status": "RUNNING",
+        "scenarios": {},
+        "checkpoint": {},
+    }
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     temporary.replace(path)
 
 
@@ -273,7 +304,10 @@ def load_run(path: Path) -> dict[str, Any]:
 
 
 def _assert_comparable(left: dict[str, Any], right: dict[str, Any]) -> None:
-    if left["manifest"].get("worktree_state") != "clean" or right["manifest"].get("worktree_state") != "clean":
+    if (
+        left["manifest"].get("worktree_state") != "clean"
+        or right["manifest"].get("worktree_state") != "clean"
+    ):
         raise ValueError("Runs are incomparable: dirty or unknown worktree state")
     fields = (
         "fixture_hash",
@@ -283,7 +317,11 @@ def _assert_comparable(left: dict[str, Any], right: dict[str, Any]) -> None:
         "config_hash",
         "scenario_registry_hash",
     )
-    differences = [field for field in fields if left["manifest"].get(field) != right["manifest"].get(field)]
+    differences = [
+        field
+        for field in fields
+        if left["manifest"].get(field) != right["manifest"].get(field)
+    ]
     if differences:
         raise ValueError("Runs are incomparable: " + ", ".join(differences) + " differ")
 
@@ -292,7 +330,11 @@ def compare_runs(left_path: Path, right_path: Path) -> dict[str, Any]:
     left = load_run(left_path)
     right = load_run(right_path)
     _assert_comparable(left, right)
-    return {"comparable": True, "left": left["manifest"]["run_id"], "right": right["manifest"]["run_id"]}
+    return {
+        "comparable": True,
+        "left": left["manifest"]["run_id"],
+        "right": right["manifest"]["run_id"],
+    }
 
 
 def _forbidden_capture_field(value: Any, path: str = "capture") -> str | None:
@@ -319,7 +361,9 @@ def _forbidden_capture_field(value: Any, path: str = "capture") -> str | None:
     return None
 
 
-def _grade_index(grade: dict[str, Any], capture_run_id: str) -> dict[tuple[str, int, int], dict[str, Any]]:
+def _grade_index(
+    grade: dict[str, Any], capture_run_id: str
+) -> dict[tuple[str, int, int], dict[str, Any]]:
     if grade.get("run_id") != capture_run_id:
         raise ValueError("Grade report run_id does not match the capture manifest")
     scenarios = grade.get("scenarios")
@@ -330,11 +374,17 @@ def _grade_index(grade: dict[str, Any], capture_run_id: str) -> dict[tuple[str, 
         if not isinstance(entries, list):
             raise ValueError(f"Grade report scenario {scenario_id} must contain a list")
         for entry in entries:
-            if not isinstance(entry, dict) or not isinstance(entry.get("repeat"), int) or not isinstance(entry.get("turn"), int):
+            if (
+                not isinstance(entry, dict)
+                or not isinstance(entry.get("repeat"), int)
+                or not isinstance(entry.get("turn"), int)
+            ):
                 continue
             key = (scenario_id, entry["repeat"], entry["turn"])
             if key in indexed:
-                raise ValueError(f"Grade report has duplicate evidence for {scenario_id} r{entry['repeat']} t{entry['turn']}")
+                raise ValueError(
+                    f"Grade report has duplicate evidence for {scenario_id} r{entry['repeat']} t{entry['turn']}"
+                )
             indexed[key] = entry
     return indexed
 
@@ -359,7 +409,9 @@ def _expected_execution_accuracy(
     )
 
 
-def freeze_capture(capture_path: Path, grade_path: Path, output: Path) -> dict[str, Any]:
+def freeze_capture(
+    capture_path: Path, grade_path: Path, output: Path
+) -> dict[str, Any]:
     """Project completed capture evidence into the narrow, committed replay format."""
     # Importing the replay runner also imports its deterministic grader, which
     # reads runtime settings. Native capture imports must stay independent of
@@ -406,7 +458,9 @@ def freeze_capture(capture_path: Path, grade_path: Path, output: Path) -> dict[s
             raise ValueError(f"Capture contains unknown scenario id: {scenario_id}")
         capture_repeats = record.get("repeats", [])
         if record.get("status") in {"UNRUN", "INFRA"} and not any(
-            repeat.get("turns") for repeat in capture_repeats if isinstance(repeat, dict)
+            repeat.get("turns")
+            for repeat in capture_repeats
+            if isinstance(repeat, dict)
         ):
             continue
         if record.get("status") != "COMPLETE":
@@ -415,7 +469,9 @@ def freeze_capture(capture_path: Path, grade_path: Path, output: Path) -> dict[s
         for repeat in capture_repeats:
             repeat_number = repeat.get("repeat")
             if not isinstance(repeat_number, int) or repeat.get("status") != "COMPLETE":
-                raise ValueError(f"Capture scenario {scenario_id} has an incomplete repeat")
+                raise ValueError(
+                    f"Capture scenario {scenario_id} has an incomplete repeat"
+                )
             turns: list[dict[str, Any]] = []
             for turn_number, turn in enumerate(repeat.get("turns", []), start=1):
                 label = f"{scenario_id} r{repeat_number} t{turn_number}"
@@ -425,7 +481,9 @@ def freeze_capture(capture_path: Path, grade_path: Path, output: Path) -> dict[s
                 if grade_entry is None:
                     raise ValueError(f"Grade report has no evidence for {label}")
                 if grade_entry.get("status") not in {"PASS", "FAIL"}:
-                    raise ValueError(f"Grade report has an unusable verdict for {label}")
+                    raise ValueError(
+                        f"Grade report has an unusable verdict for {label}"
+                    )
                 seams = turn.get("seams")
                 if not isinstance(seams, dict):
                     raise ValueError(f"Capture turn {label} has no seam evidence")
@@ -437,10 +495,20 @@ def freeze_capture(capture_path: Path, grade_path: Path, output: Path) -> dict[s
                             grade_entry, scenario, label
                         ),
                         "expected_grade": grade_entry["status"],
-                        "seams": {key: seams.get(key) for key in ("question", "answer", "tools_called", "sql_text")},
+                        "seams": {
+                            key: seams.get(key)
+                            for key in (
+                                "question",
+                                "answer",
+                                "tools_called",
+                                "sql_text",
+                            )
+                        },
                     }
                 )
-            frozen_repeats.append({"repeat": repeat_number, "status": "COMPLETE", "turns": turns})
+            frozen_repeats.append(
+                {"repeat": repeat_number, "status": "COMPLETE", "turns": turns}
+            )
         replay["scenarios"][scenario_id] = {
             "scenario_type": scenario["type"],
             "status": "COMPLETE",
@@ -454,7 +522,17 @@ def freeze_capture(capture_path: Path, grade_path: Path, output: Path) -> dict[s
 
 def _is_quota_error(exc: BaseException) -> bool:
     text = str(exc).lower()
-    return any(token in text for token in ("429", "rate limit", "rate_limit", "quota", "tpm", "tokens per minute"))
+    return any(
+        token in text
+        for token in (
+            "429",
+            "rate limit",
+            "rate_limit",
+            "quota",
+            "tpm",
+            "tokens per minute",
+        )
+    )
 
 
 def _parse_retry_hint(message: str) -> float | None:
@@ -517,7 +595,14 @@ async def _capture_with_retry(
                 raise
             delay = _retry_delay(exc, attempt)
             manifest["retry_events"].append(
-                {"scenario_id": case["id"], "repeat": repeat_index, "attempt": attempt + 1, "error": str(exc), "at": _utc_now(), "delay_seconds": delay}
+                {
+                    "scenario_id": case["id"],
+                    "repeat": repeat_index,
+                    "attempt": attempt + 1,
+                    "error": str(exc),
+                    "at": _utc_now(),
+                    "delay_seconds": delay,
+                }
             )
             await sleep(delay)
     raise AssertionError("unreachable")
@@ -526,13 +611,25 @@ async def _capture_with_retry(
 def _score_case(case: dict[str, Any], runs: list[harness.SeamRun]) -> dict[str, Any]:
     final = runs[-1]
     result: dict[str, Any] = {
-        "seam1_routing": harness.score(harness.seam1_metrics(), harness.build_seam1_case(case, final)),
-        "seam3_synthesis": harness.score(harness.seam3_metrics(), harness.build_seam3_case(case, final)),
+        "seam1_routing": harness.score(
+            harness.seam1_metrics(), harness.build_seam1_case(case, final)
+        ),
+        "seam3_synthesis": harness.score(
+            harness.seam3_metrics(), harness.build_seam3_case(case, final)
+        ),
     }
     seam2 = harness.build_seam2_case(final)
     if seam2 is not None:
         result["seam2_nl_to_sql"] = harness.score(harness.seam2_metrics(), seam2)
     return result
+
+
+def _dataset_mirror() -> tuple[LangfuseDatasetClient | None, DatasetMirror | None]:
+    """Build the derived projection only while evaluation tracing is available."""
+    if get_langfuse_handler() is None:
+        return None, None
+    client = get_langfuse_client()
+    return client, mirror_for_capture(client, load_scenarios())
 
 
 async def run(
@@ -543,11 +640,14 @@ async def run(
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     pacing_seconds: float | None = None,
 ) -> dict[str, Any]:
-    artifact = load_run(output) if resume and output.exists() else _new_run(build_manifest())
+    artifact = (
+        load_run(output) if resume and output.exists() else _new_run(build_manifest())
+    )
     manifest = artifact["manifest"]
     if not resume and output.exists():
         raise FileExistsError(f"Refusing to overwrite existing run: {output}")
 
+    dataset_client, dataset_mirror = _dataset_mirror()
     pacing = load_turn_pacing_seconds() if pacing_seconds is None else pacing_seconds
     spent_a_window = False
 
@@ -557,16 +657,28 @@ async def run(
 
     for scenario_index, case in enumerate(scenarios):
         scenario_id = case["id"]
-        record = artifact["scenarios"].setdefault(scenario_id, {"status": "UNRUN", "repeats": []})
+        record = artifact["scenarios"].setdefault(
+            scenario_id, {"status": "UNRUN", "repeats": []}
+        )
         needed = repeat_count(case)
         if record["status"] == "COMPLETE" and len(record["repeats"]) >= needed:
             continue
-        completed_repeats = [item for item in record["repeats"] if item["status"] == "COMPLETE"]
+        completed_repeats = [
+            item for item in record["repeats"] if item["status"] == "COMPLETE"
+        ]
         record["repeats"] = completed_repeats
         for repeat_index in range(len(completed_repeats), needed):
-            repeat_record: dict[str, Any] = {"repeat": repeat_index + 1, "status": "RUNNING", "turns": []}
+            repeat_record: dict[str, Any] = {
+                "repeat": repeat_index + 1,
+                "status": "RUNNING",
+                "turns": [],
+            }
             record["repeats"].append(repeat_record)
-            artifact["checkpoint"] = {"scenario_id": scenario_id, "scenario_index": scenario_index, "repeat": repeat_index + 1}
+            artifact["checkpoint"] = {
+                "scenario_id": scenario_id,
+                "scenario_index": scenario_index,
+                "repeat": repeat_index + 1,
+            }
             _write_json(output, artifact)
             try:
                 if spent_a_window:
@@ -575,6 +687,7 @@ async def run(
                 runs = await _capture_with_retry(
                     case, manifest, repeat_index + 1, sleep=sleep, pause=pause
                 )
+                dataset_run_id: str | None = None
                 for turn_index, seam in enumerate(runs):
                     repeat_record["turns"].append(
                         {
@@ -586,8 +699,28 @@ async def run(
                     )
                     artifact["checkpoint"]["turn"] = turn_index + 1
                     _write_json(output, artifact)
+                    linked_run_id = (
+                        link_capture(
+                            dataset_client,
+                            dataset_mirror,
+                            capture_run_id=manifest["run_id"],
+                            scenario_id=scenario_id,
+                            repeat=repeat_index + 1,
+                            turn=turn_index + 1,
+                            trace_id=seam.trace_id,
+                        )
+                        if dataset_client is not None
+                        else None
+                    )
+                    if linked_run_id is not None:
+                        dataset_run_id = linked_run_id
                 if not capture_only:
                     repeat_record["scores"] = _score_case(case, runs)
+                    write_scores(
+                        runs[-1].trace_id,
+                        repeat_record["scores"],
+                        dataset_run_id=dataset_run_id,
+                    )
                 repeat_record["status"] = "COMPLETE"
             except Exception as exc:  # noqa: BLE001 - preserve partial runs
                 repeat_record["status"] = "INFRA"
@@ -598,7 +731,12 @@ async def run(
                     _write_json(output, artifact)
                     return artifact
             _write_json(output, artifact)
-        record["status"] = "COMPLETE" if len(record["repeats"]) >= needed and all(r["status"] == "COMPLETE" for r in record["repeats"]) else "INFRA"
+        record["status"] = (
+            "COMPLETE"
+            if len(record["repeats"]) >= needed
+            and all(r["status"] == "COMPLETE" for r in record["repeats"])
+            else "INFRA"
+        )
         _write_json(output, artifact)
 
     artifact["status"] = "COMPLETE"
@@ -607,21 +745,41 @@ async def run(
     return artifact
 
 
-def _mark_unrun(artifact: dict[str, Any], scenarios: list[dict[str, Any]], index: int, current_id: str) -> None:
+def _mark_unrun(
+    artifact: dict[str, Any],
+    scenarios: list[dict[str, Any]],
+    index: int,
+    current_id: str,
+) -> None:
     for case in scenarios[index + 1 :]:
         artifact["scenarios"].setdefault(case["id"], {"status": "UNRUN", "repeats": []})
     artifact["scenarios"][current_id]["status"] = "INFRA"
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Run evaluation scenarios over the in-process harness.")
-    parser.add_argument("--output", "-o", type=Path, default=DEFAULT_OUTPUT / "run.json")
+    parser = argparse.ArgumentParser(
+        description="Run evaluation scenarios over the in-process harness."
+    )
+    parser.add_argument(
+        "--output", "-o", type=Path, default=DEFAULT_OUTPUT / "run.json"
+    )
     parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--score", action="store_true", help="Run the judge after each captured repeat.")
+    parser.add_argument(
+        "--score", action="store_true", help="Run the judge after each captured repeat."
+    )
     parser.add_argument("--ids", help="Comma-separated scenario IDs to run.")
-    parser.add_argument("--grade", type=Path, help="Deterministic grader report for freeze.")
-    parser.add_argument("command", nargs="?", choices=("run", "diff", "freeze"), default="run")
-    parser.add_argument("other", nargs="?", type=Path, help="Second run artifact for diff, or capture artifact for freeze.")
+    parser.add_argument(
+        "--grade", type=Path, help="Deterministic grader report for freeze."
+    )
+    parser.add_argument(
+        "command", nargs="?", choices=("run", "diff", "freeze"), default="run"
+    )
+    parser.add_argument(
+        "other",
+        nargs="?",
+        type=Path,
+        help="Second run artifact for diff, or capture artifact for freeze.",
+    )
     args = parser.parse_args(argv)
     if args.command == "diff":
         if args.other is None:
@@ -641,7 +799,9 @@ def main(argv: list[str] | None = None) -> None:
         scenarios = [case for case in scenarios if case["id"] in wanted]
     if not scenarios:
         parser.error("No scenarios selected")
-    asyncio.run(run(scenarios, args.output, capture_only=not args.score, resume=args.resume))
+    asyncio.run(
+        run(scenarios, args.output, capture_only=not args.score, resume=args.resume)
+    )
 
 
 if __name__ == "__main__":

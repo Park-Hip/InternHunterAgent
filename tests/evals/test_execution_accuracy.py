@@ -117,14 +117,57 @@ def test_ids_only_over_a_count_reference_is_rejected() -> None:
         grade_turn(scenario, "SELECT COUNT(*) FROM clean_jobs")
 
 
-def test_ids_only_over_a_count_reference_would_otherwise_pass_anything(monkeypatch) -> None:
-    """Why the guard exists: with no id column, both multisets are empty and everything matches."""
+def test_ids_only_fails_a_generated_query_that_does_not_project_id(monkeypatch) -> None:
+    """The mirror of the registry guard: an id-less *generated* query must not pass either.
+
+    HON-ZERO-RESULTS-1 is the live case. Its reference finds no COBOL posting, so without this
+    check a query that ignored the filter entirely compares an empty multiset against an empty one.
+    """
     monkeypatch.setattr(
         "evals.execution_accuracy.execute_query",
-        lambda sql, database_url=None: [{"count": 999}] if sql == "generated" else [{"count": 5}],
+        lambda sql, database_url=None: (
+            [{"title": "Java Engineer"}, {"title": "Python Engineer"}] if sql == "generated" else []
+        ),
     )
 
+    result = compare_result_sets("generated", "reference", comparison_mode="ids_only")
+
+    assert result["status"] == "FAIL"
+    assert result["error"] == "Generated query does not project id, so row identity cannot be compared"
+    assert result["generated_row_count"] == 2
+
+
+def test_ids_only_names_the_projection_instead_of_a_row_mismatch(monkeypatch) -> None:
+    """An id-less generated query reads as a projection defect, not as the wrong postings."""
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: (
+            [{"title": "AI Engineer"}] if sql == "generated" else [{"id": 3, "title": "AI Engineer"}]
+        ),
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="ids_only")
+
+    assert result["status"] == "FAIL"
+    assert "does not project id" in result["error"]
+
+
+def test_ids_only_passes_when_both_sides_are_legitimately_empty(monkeypatch) -> None:
+    """An empty result has no projection to check, so HON-ZERO-RESULTS-1 still passes correctly."""
+    monkeypatch.setattr("evals.execution_accuracy.execute_query", lambda sql, database_url=None: [])
+
     assert compare_result_sets("generated", "reference", comparison_mode="ids_only")["status"] == "PASS"
+
+
+def test_ids_only_rejects_a_reference_whose_rows_carry_no_id(monkeypatch) -> None:
+    """A registry mistake, not a model defect, so it raises rather than grading the turn."""
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: [{"count": 5}],
+    )
+
+    with pytest.raises(ValueError, match="without an id column"):
+        compare_result_sets("generated", "reference", comparison_mode="ids_only")
 
 
 def test_ids_only_guard_checks_every_conversational_turn() -> None:

@@ -119,8 +119,26 @@ def compare_result_sets(
         return {"status": "INFRA", "error": str(exc)}
 
     if comparison_mode == "ids_only":
-        generated = Counter(_value_key(row["id"]) for row in generated_rows if "id" in row)
-        reference = Counter(_value_key(row["id"]) for row in reference_rows if "id" in row)
+        # Dropping an id-less row would compare a short multiset against the reference, and when the
+        # reference legitimately returns nothing, two empty multisets match whatever was generated.
+        # That is the same silent false pass validate_execution_comparison prevents on the reference
+        # side, so neither side may be filtered.
+        if any("id" not in row for row in reference_rows):
+            raise ValueError(
+                "Reference query for an ids_only comparison returned rows without an id column"
+            )
+        if any("id" not in row for row in generated_rows):
+            return {
+                "status": "FAIL",
+                "error": "Generated query does not project id, so row identity cannot be compared",
+                "generated_row_count": len(generated_rows),
+                "reference_row_count": len(reference_rows),
+                "generated_rows": generated_rows,
+                "reference_rows": reference_rows,
+                "comparison_mode": comparison_mode,
+            }
+        generated = Counter(_value_key(row["id"]) for row in generated_rows)
+        reference = Counter(_value_key(row["id"]) for row in reference_rows)
     elif comparison_mode == "contains_reference":
         generated = Counter(
             _result_key({key: row[key] for key in reference_rows[0]}, False)

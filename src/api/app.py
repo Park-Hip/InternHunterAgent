@@ -49,16 +49,28 @@ async def lifespan(app: FastAPI):
 
     pool = build_checkpointer_pool()
     await pool.open()
+    diagnostic_task: asyncio.Task[None] | None = None
     try:
         checkpointer = await build_checkpointer(pool)
         app.state.runtime = AgentRuntime(agent=agent_factory(checkpointer=checkpointer))
-        await diagnose_langfuse_startup()
+        # Fire-and-track: diagnose_langfuse_startup() is a non-fatal diagnostic, so
+        # boot must not block on a network round-trip to Langfuse to complete it.
+        diagnostic_task = asyncio.create_task(diagnose_langfuse_startup())
         yield
     finally:
         try:
-            await shutdown_langfuse()
+            if diagnostic_task is not None:
+                if not diagnostic_task.done():
+                    diagnostic_task.cancel()
+                try:
+                    await diagnostic_task
+                except asyncio.CancelledError:
+                    pass
         finally:
-            await pool.close()
+            try:
+                await shutdown_langfuse()
+            finally:
+                await pool.close()
 
 
 def _load_cors_config() -> dict[str, Any]:

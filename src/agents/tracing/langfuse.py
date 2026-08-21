@@ -8,8 +8,10 @@ from typing import Any
 
 from langfuse import Langfuse, propagate_attributes
 from langfuse.langchain import CallbackHandler
+from langfuse.model import PromptClient
 
 from src.agents.runtime.prompts import load_prompt_version
+from src.agents.tracing.prompt_registry import SQL_GENERATION_PROMPT_NAME
 from src.core.config import settings
 from src.core.logger import logger
 
@@ -212,6 +214,32 @@ def get_langfuse_handler() -> CallbackHandler | None:
 def get_langfuse_client() -> Langfuse | None:
     """Return the process client only when tracing initialized successfully."""
     return _langfuse
+
+
+async def get_sql_generation_prompt_reference() -> PromptClient | None:
+    """Fetch only the Langfuse reference used to link the direct SQL generation.
+
+    The agent always reads prompt text from config/prompts.yaml.  This best-effort
+    lookup supplies only the server-assigned numeric version the Langfuse SDK needs
+    to attach prompt lineage to a generation observation.
+    """
+    client = get_langfuse_client()
+    if client is None:
+        return None
+
+    try:
+        return await asyncio.to_thread(
+            client.get_prompt,
+            SQL_GENERATION_PROMPT_NAME,
+            label="production",
+            type="text",
+            cache_ttl_seconds=60,
+            max_retries=0,
+            fetch_timeout_seconds=250,
+        )
+    except Exception as exc:
+        logger.warning("Langfuse SQL prompt reference unavailable", error=str(exc))
+        return None
 
 
 async def diagnose_langfuse_startup() -> None:

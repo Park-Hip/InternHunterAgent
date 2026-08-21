@@ -220,6 +220,8 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
   returns schema-valid JSON.
 - `scripts/provision_langfuse_models.py` - Provision version-controlled Langfuse model-pricing
   definitions.
+- `scripts/register_langfuse_prompts.py` - Register the git-authoritative prompts.yaml content in
+  Langfuse.
 - `scripts/scrape_itviec_spike.py` - Scraping spike - ITviec AI/Data IT jobs via cloudscraper.
 - `scripts/scrape_spike.py` - Scraping experiment - VietnamWorks AI/Data IT jobs.
 - `scripts/scrape_topcv_spike.py` - Scraping spike - TopCV internship listings via cloudscraper.

@@ -1,6 +1,6 @@
 # Operations
 
-> **Last verified:** 2026-08-15 against `render.yaml`, `.env.example`,
+> **Last verified:** 2026-08-21 against `render.yaml`, `.env.example`,
 > `.github/workflows/ingestion.yml`, and the active migration/runbook records.
 > This document is the single owner of deploy topology, operational configuration, database
 > procedures, cron status, and incident response.
@@ -77,6 +77,24 @@ Use `--check-remote` to compare the committed definitions with Langfuse without 
 Both provisioning modes require `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and
 `LANGFUSE_HOST` or `LANGFUSE_BASE_URL`.
 Run provisioning deliberately after confirming the pricing source and the target Langfuse project.
+
+## Langfuse prompt registry
+
+`config/prompts.yaml` is the reviewed source of truth for every model-visible prompt.
+After a reviewed prompt change is merged or deployed, run the registry command with the Langfuse
+credentials for the target project:
+
+```bash
+uv run python scripts/register_langfuse_prompts.py
+```
+
+The command assigns the `production` label and records the checked-out git commit on a changed
+prompt version.
+An exact rerun creates no new version.
+Use `--dry-run` to validate and list the YAML inputs without credentials or a Langfuse request.
+The running agent always uses the YAML text.
+It only fetches the matching registered prompt reference to link the SQL generation observation.
+If that optional lookup fails, SQL generation continues without a Langfuse prompt link.
 
 ## Database operations
 

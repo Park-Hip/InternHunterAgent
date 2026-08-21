@@ -23,6 +23,9 @@ const sendBtn = document.getElementById("send");
 const dateline = document.getElementById("dateline");
 const toast = document.getElementById("toast");
 
+const markdownRenderer = new window.marked.Renderer();
+markdownRenderer.html = () => "";
+
 // --- conversation state ----------------------------------------------------
 let sessionId = null;   // pinned from the first `session` event; reused after
 let inFlight = false;   // one stream at a time; lock the inputs while it runs
@@ -76,7 +79,7 @@ function startTurn(query) {
   const agent = document.createElement("div");
   agent.className = "turn__agent is-streaming";
   agent.innerHTML = '<span class="turn__label">InternHunter</span>';
-  const answer = document.createElement("p");
+  const answer = document.createElement("div");
   answer.className = "turn__answer turn__answer--pending";
   answer.textContent = "Đang đọc các tin tuyển dụng…";
   agent.appendChild(answer);
@@ -86,7 +89,7 @@ function startTurn(query) {
   conversation.appendChild(turn);
 
   scrollToEnd();
-  return { turn, agent, answer, gotToken: false };
+  return { turn, agent, answer, gotToken: false, rawAnswer: "" };
 }
 
 // Append one token, clearing the pending placeholder on the first one.
@@ -96,8 +99,37 @@ function appendToken(ctx, text) {
     ctx.answer.classList.remove("turn__answer--pending");
     ctx.answer.textContent = "";
   }
-  ctx.answer.textContent += text;
+  ctx.rawAnswer += text;
+  ctx.answer.textContent = ctx.rawAnswer;
   scrollToEnd();
+}
+
+// Render only the complete response so unfinished Markdown never causes the
+// stream to jump between malformed intermediate layouts. Raw HTML is removed
+// by the Marked renderer and DOMPurify sanitizes the generated HTML before it
+// is assigned to the page.
+function renderMarkdown(ctx) {
+  if (!ctx.gotToken || typeof window.marked?.parse !== "function" || !window.DOMPurify) {
+    return;
+  }
+
+  try {
+    const html = window.marked.parse(ctx.rawAnswer, {
+      breaks: true,
+      gfm: true,
+      renderer: markdownRenderer,
+    });
+    ctx.answer.innerHTML = DOMPurify.sanitize(html, {
+      ALLOW_DATA_ATTR: false,
+      FORBID_ATTR: ["style"],
+      FORBID_TAGS: ["math", "style", "svg"],
+      USE_PROFILES: { html: true },
+    });
+    ctx.answer.classList.add("turn__answer--markdown");
+  } catch {
+    // Plain text is a safe and readable fallback if a future parser upgrade
+    // cannot render a particular response.
+  }
 }
 
 // Show the trailing "view trace" link only when trace_url is a real URL.
@@ -220,6 +252,7 @@ async function ask(query) {
           endTurn(ctx);
           return;                                 // stop; no reconnect
         } else if (ev === "done") {
+          renderMarkdown(ctx);
           endTurn(ctx);
           return;                                 // terminal
         }

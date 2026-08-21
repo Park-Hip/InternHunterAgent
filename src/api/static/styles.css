@@ -167,6 +167,77 @@ input { font: inherit; color: inherit; }
   word-break: break-word;
 }
 
+/* Markdown is applied after the terminal stream event. The response keeps the
+   same editorial measure while making structure easy to scan. */
+.turn__answer--markdown {
+  white-space: normal;
+}
+.turn__answer--markdown > :first-child { margin-top: 0; }
+.turn__answer--markdown > :last-child { margin-bottom: 0; }
+.turn__answer--markdown h1,
+.turn__answer--markdown h2,
+.turn__answer--markdown h3,
+.turn__answer--markdown h4 {
+  margin: 1.35em 0 0.5em;
+  line-height: 1.2;
+}
+.turn__answer--markdown h1 { font-size: 1.5em; }
+.turn__answer--markdown h2 { font-size: 1.28em; }
+.turn__answer--markdown h3,
+.turn__answer--markdown h4 { font-size: 1.08em; }
+.turn__answer--markdown p,
+.turn__answer--markdown ul,
+.turn__answer--markdown ol,
+.turn__answer--markdown blockquote,
+.turn__answer--markdown pre,
+.turn__answer--markdown table {
+  margin: 0 0 1em;
+}
+.turn__answer--markdown ul,
+.turn__answer--markdown ol { padding-left: 1.4em; }
+.turn__answer--markdown li + li { margin-top: 0.25em; }
+.turn__answer--markdown a {
+  color: var(--accent-ink);
+  text-decoration-color: var(--accent);
+  text-underline-offset: 0.15em;
+}
+.turn__answer--markdown blockquote {
+  margin-left: 0;
+  padding-left: 0.9em;
+  border-left: 1px solid var(--hairline);
+  color: var(--ink-soft);
+}
+.turn__answer--markdown code {
+  padding: 0.08em 0.3em;
+  background: var(--hairline-2);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.88em;
+}
+.turn__answer--markdown pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  background: var(--hairline-2);
+}
+.turn__answer--markdown pre code {
+  padding: 0;
+  background: transparent;
+}
+.turn__answer--markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.turn__answer--markdown th,
+.turn__answer--markdown td {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+.turn__answer--markdown th { background: var(--hairline-2); }
+
 /* streaming cursor: a thin vermilion tick while tokens arrive */
 .turn__agent.is-streaming .turn__answer::after {
   content: "";

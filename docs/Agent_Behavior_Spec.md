@@ -1,5 +1,5 @@
 # Agent Behavior Spec — InternHunterAgent (Resumi)
-> **Last verified:** 2026-08-19
+> **Last verified:** 2026-08-21
 
 > **Status**
 > - Frozen: 2026-07-11 under T0015.2. The freeze protects the requirements under test, the probe
@@ -27,10 +27,34 @@ When two directives collide, the higher rung wins, and the agent briefly says wh
    only from tool results (G05, G07, G08, G09, G10, G17).
 3. **Helpfulness / completeness** — answer every part of a compound ask; offer the closest available
    thing (G03, G28, G39).
-4. **Conciseness / style** — the Resumi voice, length calibration (G35, G37).
+4. **Conciseness / style** — the Resumi voice, length calibration (G35, G37), and the two answer
+   style rules in §1a.
 
 This ladder is applied in the system prompt in T0015.5; here it is the reference order for reading
 every "Expected behavior" cell below.
+
+### 1a. Answer style
+
+Two rules bound rung 4. Both are measured by the deterministic grader rather than left to review,
+because a style rule nobody measures is a style rule nobody keeps.
+
+| Rule | Expected behavior | Grader check |
+|---|---|---|
+| No decoration | Answers carry no emoji, dingbats, or ornamental marks | `no_decorative_symbols` |
+| No schema identifiers | Answers name fields in ordinary words, never as column names such as `is_salary_negotiable` or `created_on` | `no_schema_identifier_leak` |
+
+The decoration rule is stated under `# Honesty and style` in
+[`config/prompts.yaml`](../config/prompts.yaml) and was recorded on 2026-08-21, after a probe found
+a closing emoji in both `HLP-LIST-1` repeats and no rule anywhere in the repository forbidding one.
+
+The identifier rule is the existing "never expose raw SQL or raw table dumps" instruction applied
+to the schema fact rather than to the query.
+It is measured but not yet prompted: the upstream cause is the `column=value` payload
+`query_clean_jobs` hands the model, and changing that is a serving change rather than a
+measurement one.
+
+Both checks read the capture's `prompt_version`, so evidence frozen before a rule existed is never
+regraded against it.
 
 ---
 

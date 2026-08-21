@@ -16,6 +16,7 @@ from src.api.routes import query, health
 from src.api.schema_guard import assert_serving_schema
 from src.agents.runtime.factory import agent_factory
 from src.agents.runtime.react_agent import AgentRuntime
+from src.agents.tracing.langfuse import diagnose_langfuse_startup, shutdown_langfuse
 from src.core.checkpointer import build_checkpointer, build_checkpointer_pool
 from src.core.config import load_settings, settings
 from src.core.errors import BUSY_MESSAGE
@@ -51,9 +52,13 @@ async def lifespan(app: FastAPI):
     try:
         checkpointer = await build_checkpointer(pool)
         app.state.runtime = AgentRuntime(agent=agent_factory(checkpointer=checkpointer))
+        await diagnose_langfuse_startup()
         yield
     finally:
-        await pool.close()
+        try:
+            await shutdown_langfuse()
+        finally:
+            await pool.close()
 
 
 def _load_cors_config() -> dict[str, Any]:

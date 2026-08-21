@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from typing import Any
 
-from langfuse import Langfuse, get_client, propagate_attributes
+from langfuse import Langfuse, propagate_attributes
 from langfuse.langchain import CallbackHandler
 
 from src.agents.runtime.prompts import load_prompt_version
@@ -13,6 +14,7 @@ from src.core.config import settings
 from src.core.logger import logger
 
 _langfuse_handler: CallbackHandler | None = None
+_langfuse: Langfuse | None = None
 
 
 def _langfuse_taxonomy() -> dict[str, Any]:
@@ -174,6 +176,9 @@ async def langfuse_request_trace(
         user_id=user_id,
     ):
         client = get_langfuse_client()
+        if client is None:
+            yield None
+            return
         with client.start_as_current_observation(as_type="span", name=trace_name):
             yield client.get_current_trace_id()
 
@@ -204,8 +209,40 @@ def get_langfuse_handler() -> CallbackHandler | None:
     return _langfuse_handler
 
 
-def get_langfuse_client():
-    return get_client()
+def get_langfuse_client() -> Langfuse | None:
+    """Return the process client only when tracing initialized successfully."""
+    return _langfuse
+
+
+async def diagnose_langfuse_startup() -> None:
+    """Log non-fatal credential diagnostics after the application starts."""
+    client = get_langfuse_client()
+    if client is None:
+        logger.info("Langfuse startup authentication skipped: tracing disabled")
+        return
+
+    try:
+        authenticated = await asyncio.to_thread(client.auth_check)
+    except Exception as exc:
+        logger.warning("Langfuse startup authentication failed", error=str(exc))
+        return
+
+    if authenticated:
+        logger.info("Langfuse startup authentication succeeded")
+    else:
+        logger.warning("Langfuse startup authentication failed")
+
+
+async def shutdown_langfuse() -> None:
+    """Drain tracing events during app shutdown without blocking teardown."""
+    client = get_langfuse_client()
+    if client is None:
+        return
+
+    try:
+        await asyncio.to_thread(client.shutdown)
+    except Exception as exc:
+        logger.warning("Langfuse shutdown failed", error=str(exc))
 
 
 def build_langfuse_config(

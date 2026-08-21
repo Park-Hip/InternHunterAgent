@@ -114,9 +114,6 @@ class AgentRuntime:
             await asyncio.gather(producer, return_exceptions=True)
 
         client = get_langfuse_client()
-        if client is not None:
-            await asyncio.to_thread(client.flush)
-
         trace_url = None
         if trace_id is not None and client is not None:
             trace_url = client.get_trace_url(trace_id=trace_id)
@@ -126,6 +123,9 @@ class AgentRuntime:
             "trace_id": trace_id,
             "trace_url": trace_url,
         }
+
+        if client is not None:
+            await asyncio.to_thread(client.flush)
 
     def _build_messages(self, query: str) -> dict[str, list[HumanMessage]]:
         return {"messages": [HumanMessage(content=query)]}

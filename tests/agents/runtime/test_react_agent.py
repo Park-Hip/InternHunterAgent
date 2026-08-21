@@ -10,7 +10,11 @@ from unittest.mock import AsyncMock, patch
 from langchain.messages import AIMessage, HumanMessage
 
 from src.agents.runtime.react_agent import AgentRuntime
-from src.agents.service import FALLBACK_ANSWER, generate_agent_response
+from src.agents.service import (
+    FALLBACK_ANSWER,
+    generate_agent_response,
+    stream_agent_response,
+)
 
 
 class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
@@ -143,6 +147,46 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
         mock_client.flush.assert_called_once()
         mock_client.get_trace_url.assert_called_once_with(trace_id="trace-123")
+
+    @patch("src.agents.runtime.react_agent.get_langfuse_client")
+    @patch("src.agents.runtime.react_agent.langfuse_request_trace")
+    @patch("src.agents.runtime.react_agent.build_langfuse_config")
+    async def test_streaming_metadata_reaches_the_service_before_export_flush(
+        self,
+        mock_build_langfuse_config,
+        mock_langfuse_request_trace,
+        mock_get_langfuse_client,
+    ) -> None:
+        """The final SSE metadata is available before Langfuse drains exports."""
+
+        async def _fake_stream(*_args, **_kwargs):
+            yield (self._chunk(content="answer"), {"langgraph_node": "model"})
+
+        fake_agent = AsyncMock()
+        fake_agent.astream = _fake_stream
+        mock_build_langfuse_config.return_value = {"callbacks": ["handler"]}
+        mock_langfuse_request_trace.return_value = self._trace_context("trace-123")
+        mock_client = mock_get_langfuse_client.return_value
+        mock_client.get_trace_url.return_value = "https://traces/trace-123"
+        runtime = AgentRuntime(agent=fake_agent)
+
+        stream = stream_agent_response("hello", runtime=runtime, session_id="session-1")
+        self.assertEqual(
+            await anext(stream), {"type": "session", "session_id": "session-1"}
+        )
+        self.assertEqual(await anext(stream), {"type": "token", "text": "answer"})
+        self.assertEqual(
+            await anext(stream),
+            {
+                "type": "metadata",
+                "trace_id": "trace-123",
+                "trace_url": "https://traces/trace-123",
+            },
+        )
+        mock_client.flush.assert_not_called()
+
+        self.assertEqual(await anext(stream), {"type": "done"})
+        mock_client.flush.assert_called_once()
 
     @patch("src.agents.runtime.react_agent.get_langfuse_client")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")

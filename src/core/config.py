@@ -67,6 +67,48 @@ def _load_yaml_file(path: Path) -> dict[str, Any]:
     return data
 
 
+def _validate_string_list(value: Any, *, name: str) -> list[str]:
+    if not isinstance(value, list) or not value or not all(
+        isinstance(item, str) and item for item in value
+    ):
+        raise ConfigLoadError(f"Invalid '{name}' configuration")
+    if len(value) != len(set(value)):
+        raise ConfigLoadError(f"Duplicate values in '{name}' configuration")
+    return value
+
+
+def _validate_observability_config(config: dict[str, Any]) -> None:
+    """Reject malformed closed Langfuse taxonomy before serving requests."""
+    observability = config.get("observability")
+    if not isinstance(observability, dict):
+        raise ConfigLoadError("Missing 'observability' section in config/settings.yaml")
+    langfuse = observability.get("langfuse")
+    if not isinstance(langfuse, dict):
+        raise ConfigLoadError("Missing 'observability.langfuse' section in config/settings.yaml")
+
+    environments = langfuse.get("environments")
+    if not isinstance(environments, dict) or not isinstance(
+        environments.get("default"), str
+    ):
+        raise ConfigLoadError("Invalid 'observability.langfuse.environments' configuration")
+    allowed_environments = _validate_string_list(
+        environments.get("allowed"),
+        name="observability.langfuse.environments.allowed",
+    )
+    if environments["default"] not in allowed_environments:
+        raise ConfigLoadError(
+            "The default Langfuse environment must be in the allowed environments"
+        )
+
+    taxonomy = langfuse.get("tag_taxonomy")
+    if not isinstance(taxonomy, dict):
+        raise ConfigLoadError("Missing 'observability.langfuse.tag_taxonomy' configuration")
+    _validate_string_list(
+        taxonomy.get("entry_points"),
+        name="observability.langfuse.tag_taxonomy.entry_points",
+    )
+
+
 def _format_validation_error(exc: ValidationError) -> str:
     missing_fields: list[str] = []
     invalid_fields: list[str] = []
@@ -108,6 +150,7 @@ def load_settings(*, force_reload: bool = False) -> Settings:
         raise ConfigLoadError(_format_validation_error(exc)) from exc
 
     settings.config_yaml = _load_yaml_file(_config_path("settings.yaml"))
+    _validate_observability_config(settings.config_yaml)
     settings.prompts_yaml = _load_yaml_file(_config_path("prompts.yaml"))
     settings.ingestion_yaml = _load_yaml_file(_config_path("ingestion.yaml"))
     settings.tech_vocabulary_yaml = _load_yaml_file(_config_path("tech_vocabulary.yaml"))

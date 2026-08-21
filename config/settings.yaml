@@ -21,8 +21,6 @@ observability:
     # vocabulary intentionally small so trace filtering remains usable.
     tag_taxonomy:
       entry_points: ["api:chat", "api:chat-stream", "eval:driver", "eval:spike"]
-      providers: [deepseek, groq]
-      models: [deepseek-v4-flash, qwen/qwen3.6-27b]
 
 agent:
   # Default provider for every profile. A profile may override it with its own

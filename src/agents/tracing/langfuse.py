@@ -15,12 +15,6 @@ from src.core.logger import logger
 _langfuse_handler: CallbackHandler | None = None
 
 
-def _string_list(value: Any, *, name: str) -> list[str]:
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ValueError(f"Invalid '{name}' configuration")
-    return value
-
-
 def _langfuse_taxonomy() -> dict[str, Any]:
     observability = settings.config_yaml.get("observability")
     if not isinstance(observability, dict):
@@ -39,10 +33,9 @@ def get_langfuse_environment() -> str:
     default = environments.get("default")
     if not isinstance(default, str):
         raise ValueError("Invalid 'observability.langfuse.environments' configuration")
-    allowed = _string_list(
-        environments.get("allowed"),
-        name="observability.langfuse.environments",
-    )
+    allowed = environments.get("allowed")
+    if not isinstance(allowed, list):
+        raise ValueError("Invalid 'observability.langfuse.environments' configuration")
 
     environment = os.getenv("LANGFUSE_TRACING_ENVIRONMENT", default).strip().lower()
     if environment not in allowed:
@@ -79,18 +72,9 @@ def build_langfuse_tags(
     if not isinstance(taxonomy, dict):
         raise ValueError("Missing 'observability.langfuse.tag_taxonomy' configuration")
 
-    entry_points = _string_list(
-        taxonomy.get("entry_points"),
-        name="observability.langfuse.tag_taxonomy.entry_points",
-    )
-    providers = _string_list(
-        taxonomy.get("providers"),
-        name="observability.langfuse.tag_taxonomy.providers",
-    )
-    models = _string_list(
-        taxonomy.get("models"),
-        name="observability.langfuse.tag_taxonomy.models",
-    )
+    entry_points = taxonomy.get("entry_points")
+    if not isinstance(entry_points, list):
+        raise ValueError("Invalid 'observability.langfuse.tag_taxonomy.entry_points' configuration")
     if entry_point not in entry_points:
         raise ValueError(f"Unsupported Langfuse entry point: {entry_point}")
 
@@ -100,8 +84,8 @@ def build_langfuse_tags(
     react = agent["react"]
     provider = react.get("provider", agent.get("provider"))
     model = react.get("model")
-    if provider not in providers or model not in models:
-        raise ValueError("Agent provider/model is outside the Langfuse tag taxonomy")
+    if not isinstance(provider, str) or not isinstance(model, str):
+        raise ValueError("Invalid 'agent.react' provider/model configuration")
 
     if (scenario_id is None) != (repeat is None):
         raise ValueError("Langfuse evaluation tags require both scenario_id and repeat")

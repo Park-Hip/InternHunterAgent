@@ -64,6 +64,18 @@ def test_build_langfuse_config_rejects_unknown_entry_points() -> None:
         langfuse.build_langfuse_config(entry_point="api:debug")
 
 
+def test_build_langfuse_config_uses_the_configured_provider_and_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(
+        langfuse.settings.config_yaml["agent"]["react"], "model", "deepseek-v4.1-flash"
+    )
+
+    config = langfuse.build_langfuse_config(entry_point="api:chat")
+
+    assert config["metadata"]["langfuse_tags"][-1] == "model:deepseek-v4.1-flash"
+
+
 def test_langfuse_environment_is_closed_and_defaults_to_local(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LANGFUSE_TRACING_ENVIRONMENT", raising=False)
     assert langfuse.get_langfuse_environment() == "local"

@@ -207,6 +207,7 @@ def test_run_header_names_the_provider_and_sampling_per_profile() -> None:
         ["Git SHA", "abc1234"],
         ["Prompt version", "v3"],
         ["Baseline eligible", "True"],
+        ["Scenarios", "not recorded"],
     ]
 
 
@@ -218,7 +219,23 @@ def test_run_header_survives_a_manifest_without_a_provider_block() -> None:
         ["Git SHA", "not recorded"],
         ["Prompt version", "not recorded"],
         ["Baseline eligible", "not recorded"],
+        ["Scenarios", "not recorded"],
     ]
+
+
+def test_run_header_says_how_much_of_the_registry_succeeded() -> None:
+    """`Capture: COMPLETE` now means "reached the end", not "all passed".
+
+    A capture that survived a 429 must not look identical on screen to a clean one.
+    """
+    header = viewer.run_header({"scenario_status_counts": {"INFRA": 1, "COMPLETE": 28}})
+
+    # Lifecycle order, not dict order, so two runs are comparable at a glance.
+    assert ["Scenarios", "28 COMPLETE, 1 INFRA"] in header["facts"]
+
+    halted = viewer.run_header({"scenario_status_counts": {"UNRUN": 21, "INFRA": 3}})
+
+    assert ["Scenarios", "3 INFRA, 21 UNRUN"] in halted["facts"]
 
 
 def test_telemetry_becomes_labelled_fields_not_one_blob() -> None:

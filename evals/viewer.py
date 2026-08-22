@@ -132,6 +132,22 @@ def _setting(value: Any) -> str:
     return "not recorded" if value is None else _text(value)
 
 
+def _scenario_outcome(manifest: dict[str, Any]) -> str:
+    """Say how much of the registry succeeded, since the capture status no longer does.
+
+    The screen shows `Capture: COMPLETE`, which after R6.1 means the run reached the
+    end of the registry rather than that every scenario in it passed. Without this
+    row a capture that survived a 429 is indistinguishable from a clean one.
+    """
+    counts = manifest.get("scenario_status_counts")
+    if not isinstance(counts, dict) or not counts:
+        return _setting(None)
+    order = ["COMPLETE", "INFRA", "UNRUN"]
+    keys = [key for key in order if key in counts]
+    keys += sorted(key for key in counts if key not in order)
+    return ", ".join(f"{counts[key]} {key}" for key in keys)
+
+
 def _seam_for_check(name: str) -> str:
     """Name the seam a check judges; scenario-level checks judge the run itself."""
     if name in _CHECK_SEAMS:
@@ -241,6 +257,7 @@ def run_header(manifest: dict[str, Any]) -> dict[str, Any]:
             ["Git SHA", _setting(manifest.get("git_sha"))],
             ["Prompt version", _setting(manifest.get("prompt_version"))],
             ["Baseline eligible", _setting(manifest.get("baseline_eligible"))],
+            ["Scenarios", _scenario_outcome(manifest)],
         ],
     }
 

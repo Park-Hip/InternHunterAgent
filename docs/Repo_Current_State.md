@@ -1,6 +1,6 @@
 # Repository Current State
 
-> **Last verified:** 2026-08-21 against the checked-out commit, active registers, and
+> **Last verified:** 2026-08-22 against the checked-out commit, active registers, and
 > [`Operations.md`](Operations.md). The `snapshot` region below is clone-local and is
 > excluded from this stamp; see the note under it.
 
@@ -75,6 +75,18 @@ number, no status line, and therefore no closing note - the milestone table abov
 milestones and none of them is this. Allocating a number is a maintainer decision the integration
 step may not take on its own, so it is raised under
 [Next recommended ticket](#next-recommended-ticket) rather than invented here.
+
+**Five eval-readiness merges are unrepresented for the same reason.** PRs #98-#102 landed between
+2026-08-21 and 2026-08-22 against the two remediation plans PR #97 put on `main`: Langfuse dataset
+linking (#98), execution accuracy measured by row identity (#99), forbidden answer decoration and
+schema-leakage grading (#100), the capture-trace signature fix (#101), and scoring moved out of the
+capture loop (#102). They belong to a plan, not to a milestone, so nothing records what they close.
+
+**Judge scoring is now a separate pass.** `evals.driver --score` is gone: a capture writes the
+artifact, and `python -m evals.score --run run.json` judges it, resumably and re-runnably, posting
+onto the Langfuse trace and dataset run the capture linked. The split is measured, not asserted -
+29 s to capture four turns against 191 s to score them. `LANGFUSE_BASE_URL` also lost its
+`localhost` default, so a missing value disables tracing by name instead of exporting nowhere.
 
 **M39 is claimed by two different pieces of work.** [`roadmap.yaml`](roadmap.yaml) records M39 as
 *Fixture Test Reliability*, `status: claimed`, against `codex/t0039.1-fixture-test-reliability`,
@@ -261,13 +273,13 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 
 | Check | Most recent recorded result |
 |---|---|
-| `python scripts/docs_lint.py` | Exit 0 on 2026-08-21, on the four surviving checks. The untracked working-tree leftovers under [Carried work](#carried-work) no longer produce findings: the `orphan` and `size-cap` checks that flagged them were cut by **D-047** |
-| `python scripts/docs_build.py --check` | Exit 0 on 2026-08-21; the three tree-derived regions current. The publish pass rendered no diff: the merged branches had already regenerated them |
-| `python scripts/sync_agent_instructions.py --check` | Exit 0 on 2026-08-21; `AGENTS.md` is byte-identical to `CLAUDE.md`. Runs in the CI `docs` job |
-| `uv run pytest -q` | 563 passed, 1 skipped, 30 deselected, and 45 subtests passed on 2026-08-21, in 18 s. The count rose from 513 with the Langfuse observability merges (PRs #89-#95). Only one skip this time, not nine, because the fixture Postgres was running: the eight fixture-backed tests that normally skip actually ran. The remaining skip is `SCRATCH_DATABASE_URL` |
-| `uv run ruff check .` | Passed on 2026-08-21 |
-| `uv run mypy` | Success: no issues in 46 source files on 2026-08-21. Two modules more than 2026-08-20, both from PR #95: `src/agents/tracing/prompt_registry.py` and `scripts/register_langfuse_prompts.py` |
-| `uv run python -m evals.replay` | Exit 0 **locally** on 2026-08-21, the first local run recorded here: 4 PASS and 1 FAIL over 5 graded turns (HLP 2/2, HON 1/2, SAF 1/1). The single FAIL is frozen expected evidence, which is why the gate still exits 0 - it is not a regression this pass introduced |
+| `python scripts/docs_lint.py` | Exit 0 on 2026-08-22, on the four surviving checks. The untracked working-tree leftovers under [Carried work](#carried-work) no longer produce findings: the `orphan` and `size-cap` checks that flagged them were cut by **D-047** |
+| `python scripts/docs_build.py --check` | Exit 0 on 2026-08-22; the three tree-derived regions current. The publish pass rendered no diff again: PRs #98-#102 changed no tree-derived fact, so nothing regenerated |
+| `python scripts/sync_agent_instructions.py --check` | Exit 0 on 2026-08-22; `AGENTS.md` is byte-identical to `CLAUDE.md`. Runs in the CI `docs` job |
+| `uv run pytest -q` | 626 passed, 1 skipped, 30 deselected, and 45 subtests passed on 2026-08-22, in 11 s. The count rose from 563 with the eval-readiness merges (PRs #98-#102), which are test-heavy by construction: the row-identity, answer-style and offline-scoring phases each land their measurement with their code. The fixture Postgres was running, so the eight fixture-backed tests ran rather than skipped, and the one remaining skip is `SCRATCH_DATABASE_URL` |
+| `uv run ruff check .` | Passed on 2026-08-22 |
+| `uv run mypy` | Success: no issues in 46 source files on 2026-08-22. The count is unchanged: `evals/score.py` is new but `evals/` is not on the checked path |
+| `uv run python -m evals.replay` | Exit 0 **locally** on 2026-08-22, unchanged from 2026-08-21: 4 PASS and 1 FAIL over 5 graded turns (HLP 2/2, HON 1/2, SAF 1/1). The single FAIL is frozen expected evidence, which is why the gate still exits 0 - it is not a regression this pass introduced |
 
 The skips are environmental: the migration round-trip needs `SCRATCH_DATABASE_URL`, and the rest
 need the fixture Postgres. The default suite deselects live eval tests by design. With the fixture
@@ -296,14 +308,18 @@ resolution records: [Resolved Issues](archive/Resolved_Issues.md).
 
 ## Next recommended ticket
 
-**Two maintainer decisions come before any of the work below, because both are about what the
-registers are allowed to say.** Neither can be taken by an integration session.
+**Three maintainer decisions come before any of the work below, because all three are about what
+the registers are allowed to say.** None can be taken by an integration session.
 
 1. **Give the Langfuse observability work a milestone number, or decide it does not get one.**
    Eight merged PRs (#89-#95) currently exist in the tree and in no register. Until a number
    exists, the milestone table undercounts what shipped and there is nowhere to write the closing
    note that says what was measured and what was not.
-2. **Resolve the M39 double-claim.** The number names *Fixture Test Reliability* in
+2. **Decide whether a remediation phase is a milestone.** PRs #98-#102 executed the plans PR #97
+   landed, and the plan file is the only place their scope is written down. That works while the
+   plan is live and leaves nothing behind once it is spent, which is the same gap as item 1 in a
+   different shape. Deciding it once settles both.
+3. **Resolve the M39 double-claim.** The number names *Fixture Test Reliability* in
    [`roadmap.yaml`](roadmap.yaml) but was also used by the now-closed PR #83 for telemetry and a v4
    quality gate. Either M39 keeps its allocated scope and the telemetry work gets its own number,
    or M39 was repurposed and its note is wrong.
@@ -311,8 +327,8 @@ registers are allowed to say.** Neither can be taken by an integration session.
 **M23** - the v1.0 release cut - is the only milestone left, and with M33 closed the sequencing
 argument for deferring it is spent. What it owes is its DoD sweep and terms posture; decision
 **D9** wants a read on trustworthy honesty numbers, which the two items below are the cheapest
-route to. Note that M23 cannot honestly close while the two decisions above are open: a release
-cut that omits eight merged PRs from its own milestone record is not a complete cut.
+route to. Note that M23 cannot honestly close while the three decisions above are open: a release
+cut that omits thirteen merged PRs from its own milestone record is not a complete cut.
 
 M33's two unmet obligations, recorded above, are both measurement rather than code and neither has
 a ticket; the Vietnamese capture needs a quota decision before it needs an implementer.

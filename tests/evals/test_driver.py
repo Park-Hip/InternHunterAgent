@@ -364,24 +364,106 @@ def test_a_completed_capture_records_whether_its_traces_were_ingested(
     assert ingestion["checked_at"]
 
 
-def test_quota_exhaustion_marks_remaining_scenarios_unrun(
+def test_one_quota_failure_does_not_end_the_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A single 429 costs its own repeat, not the rest of the capture (D-e, R6.1).
+
+    DeepSeek's 429 is concurrency backpressure, so the next scenario will likely
+    succeed. Halting here is what turned a blip into a PARTIAL artifact.
+    """
+
+    async def one_bad_scenario(
+        case: dict, repeat_index: int, pause=None
+    ) -> list[SeamRun]:
+        if case["id"] == "HLP-TEST-1":
+            raise RuntimeError("429 quota exceeded")
+        return [SeamRun(question="q", answer="a")]
+
+    monkeypatch.setattr(driver, "_capture_case", one_bad_scenario)
+    _stub_fingerprint(monkeypatch)
+    cases = [_case("HLP-TEST-1"), _case("HLP-TEST-2")]
+
+    result = asyncio.run(
+        driver.run(
+            cases,
+            tmp_path / "run.json",
+            sleep=lambda _: asyncio.sleep(0),
+            pacing_seconds=0,
+        )
+    )
+
+    assert result["status"] == "COMPLETE"
+    assert result["scenarios"]["HLP-TEST-1"]["status"] == "INFRA"
+    assert result["scenarios"]["HLP-TEST-2"]["status"] == "COMPLETE"
+
+
+def test_consecutive_quota_failures_still_halt_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An exhausted account stops at the threshold instead of burning every scenario (R6.2)."""
+
     async def quota_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
         raise RuntimeError("429 quota exceeded")
 
     monkeypatch.setattr(driver, "_capture_case", quota_capture)
     _stub_fingerprint(monkeypatch)
-    output = tmp_path / "run.json"
-    cases = [_case("HLP-TEST-1"), _case("HLP-TEST-2")]
+    threshold = driver.CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT
+    cases = [_case(f"HLP-TEST-{i + 1}") for i in range(threshold + 2)]
 
     result = asyncio.run(
-        driver.run(cases, output, sleep=lambda _: asyncio.sleep(0), pacing_seconds=0)
+        driver.run(
+            cases,
+            tmp_path / "run.json",
+            sleep=lambda _: asyncio.sleep(0),
+            pacing_seconds=0,
+        )
     )
 
     assert result["status"] == "PARTIAL_QUOTA"
-    assert result["scenarios"]["HLP-TEST-1"]["status"] == "INFRA"
-    assert result["scenarios"]["HLP-TEST-2"]["status"] == "UNRUN"
+    # The threshold counts failed repeats, and a scenario carries more than one, so
+    # assert on the repeats rather than on which scenario happened to be current.
+    failed_repeats = [
+        repeat
+        for record in result["scenarios"].values()
+        for repeat in record["repeats"]
+        if repeat["status"] == "INFRA"
+    ]
+    assert len(failed_repeats) == threshold
+    # The run stopped rather than burning the whole registry.
+    assert result["scenarios"][cases[-1]["id"]]["status"] == "UNRUN"
+
+
+def test_a_success_between_quota_failures_resets_the_halt_counter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The threshold counts a run of failures, not a total, so a recovering account finishes."""
+    threshold = driver.CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT
+    # Alternating failure and success never reaches the threshold, however long the run.
+    cases = [_case(f"HLP-TEST-{i + 1}") for i in range(threshold * 2 + 2)]
+    failing = {case["id"] for case in cases[::2]}
+
+    async def alternating(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
+        if case["id"] in failing:
+            raise RuntimeError("429 quota exceeded")
+        return [SeamRun(question="q", answer="a")]
+
+    monkeypatch.setattr(driver, "_capture_case", alternating)
+    _stub_fingerprint(monkeypatch)
+
+    result = asyncio.run(
+        driver.run(
+            cases,
+            tmp_path / "run.json",
+            sleep=lambda _: asyncio.sleep(0),
+            pacing_seconds=0,
+        )
+    )
+
+    assert result["status"] == "COMPLETE"
+    assert not any(
+        record["status"] == "UNRUN" for record in result["scenarios"].values()
+    )
 
 
 def test_manifest_records_tracing_when_operator_opts_in(
@@ -405,11 +487,35 @@ def test_quota_backoff_honors_the_providers_own_retry_hint() -> None:
     assert driver._retry_delay(quota, 0) == pytest.approx(15.1675)
 
 
-def test_quota_backoff_without_a_hint_outlasts_a_per_minute_window() -> None:
+def _ceiling(low: float, high: float) -> float:
+    """Jitter stub taking the top of the band, so a wait reads as its ceiling."""
+    return high
+
+
+def test_quota_backoff_without_a_hint_starts_near_one_second() -> None:
+    """A hintless 429 is concurrency backpressure, not a window to outlast (R6.3).
+
+    The retired 20s/40s ladder was sized for Groq's per-minute token window. On
+    DeepSeek there is no window, so the first wait is about a second.
+    """
+    quota = RuntimeError("429 rate_limit_exceeded: quota exhausted")
+    ceiling = _ceiling
+
+    assert driver._retry_delay(quota, 0, jitter=ceiling) == pytest.approx(1.0)
+    assert driver._retry_delay(quota, 1, jitter=ceiling) == pytest.approx(2.0)
+    assert driver._retry_delay(quota, 2, jitter=ceiling) == pytest.approx(4.0)
+    # The cap still binds, so a long run of retries cannot wait unboundedly.
+    assert driver._retry_delay(quota, 40, jitter=ceiling) == driver.MAX_BACKOFF_SECONDS
+
+
+def test_quota_backoff_jitters_within_the_equal_jitter_band() -> None:
+    """Concurrent retries must not resynchronise on one instant."""
     quota = RuntimeError("429 rate_limit_exceeded: quota exhausted")
 
-    assert driver._retry_delay(quota, 0) >= 20.0
-    assert driver._retry_delay(quota, 1) >= 40.0
+    waits = {driver._retry_delay(quota, 3) for _ in range(50)}
+
+    assert len(waits) > 1
+    assert all(4.0 <= wait <= 8.0 for wait in waits)
 
 
 def test_retry_hint_is_capped_and_non_quota_errors_keep_the_short_ladder() -> None:
@@ -438,8 +544,12 @@ def test_quota_retry_records_the_delay_it_actually_waited(
         driver.run([_case()], tmp_path / "run.json", sleep=record, pacing_seconds=0)
     )
 
-    assert slept == [13.0, 13.0]
+    # Two waits per repeat, and both of the scenario's repeats now run: a 429 no
+    # longer ends the capture at the first one (R6.1).
+    assert slept == [13.0, 13.0, 13.0, 13.0]
     assert [event["delay_seconds"] for event in result["manifest"]["retry_events"]] == [
+        13.0,
+        13.0,
         13.0,
         13.0,
     ]

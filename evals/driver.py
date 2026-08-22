@@ -13,6 +13,7 @@ from contextlib import contextmanager
 import hashlib
 import json
 import os
+import random
 import re
 import subprocess
 import uuid
@@ -31,18 +32,39 @@ DEFAULT_OUTPUT = ROOT / "evals" / "runs"
 MAX_RETRIES = 2
 SDK_MAX_RETRIES = 0
 
-# A per-minute token quota is cleared by waiting out its window, not by a short
-# backoff: a 429 on Groq's 8000 TPM tier asks for 14-17s, so the 1s/2s ladder
-# below retried inside the same blocked window and burned tokens without ever
-# succeeding. Quota failures get their own ladder, and a provider that states
-# its own wait wins over both.
+# A provider that states its own wait wins over every ladder below, because only
+# it knows when its window clears. Groq does state one; DeepSeek does not.
+#
+# For a 429 carrying no hint, the wait is exponential with jitter from about one
+# second. The previous 20s/40s ladder was sized to outlast a 60-second per-minute
+# token window, which is Groq's shape under D-045's rejected arm. DeepSeek's 429 is
+# dynamic concurrency backpressure with no window to outlast, so a 20-second first
+# wait spends 20 seconds to learn what one second would have.
+# Jitter is the equal-jitter form: wait uniformly between half the ceiling and the
+# ceiling, so concurrent retries do not resynchronise on the same instant.
 DEFAULT_BACKOFF_SECONDS = (1.0, 2.0)
-QUOTA_BACKOFF_SECONDS = (20.0, 40.0)
+QUOTA_BACKOFF_BASE_SECONDS = 1.0
+QUOTA_BACKOFF_MULTIPLIER = 2.0
 MAX_BACKOFF_SECONDS = 90.0
 RETRY_HINT_MARGIN_SECONDS = 1.0
 _RETRY_HINT_PATTERN = re.compile(
     r"try again in\s+([0-9]+(?:\.[0-9]+)?)\s*(ms|s)\b", re.IGNORECASE
 )
+
+# How many quota failures in a row end the run, per D-e and R6.2.
+#
+# A single 429 no longer halts the capture: on DeepSeek the next scenario will
+# likely succeed, and finishing all 29 costs about four cents, so halting turns a
+# recoverable blip into a PARTIAL artifact and throws away the classification pass
+# that reads it. An account that is genuinely out of credit still has to stop
+# rather than burn 29 scenarios of identical failures, which is what this bounds.
+#
+# Three is a guess, not a measurement. The DeepSeek arm recorded zero 429s in 77
+# turns, so no observed rate exists to derive it from. It is chosen so that one
+# blip and one unlucky retry are both survivable while a hard stop is reached in
+# under a minute of wall clock. Revisit it the first time a real DeepSeek 429 is
+# recorded in a capture's retry_events.
+CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT = 3
 
 # The 19 columns `evals/fixtures/seed_eval_db.sql` writes, in seed-file order.
 # The three lifecycle columns are excluded deliberately: is_active, first_seen_at,
@@ -266,7 +288,10 @@ def build_manifest() -> dict[str, Any]:
         "retry_policy": {
             "max_retries_per_turn": MAX_RETRIES,
             "backoff_seconds": list(DEFAULT_BACKOFF_SECONDS),
-            "quota_backoff_seconds": list(QUOTA_BACKOFF_SECONDS),
+            "quota_backoff_base_seconds": QUOTA_BACKOFF_BASE_SECONDS,
+            "quota_backoff_multiplier": QUOTA_BACKOFF_MULTIPLIER,
+            "quota_backoff_jitter": "equal",
+            "consecutive_quota_failures_before_halt": CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT,
             "max_backoff_seconds": MAX_BACKOFF_SECONDS,
             "honors_provider_retry_hint": True,
             "provider_sdk_max_retries": SDK_MAX_RETRIES,
@@ -544,13 +569,29 @@ def _parse_retry_hint(message: str) -> float | None:
     return value / 1000 if match.group(2).lower() == "ms" else value
 
 
-def _retry_delay(exc: BaseException, attempt: int) -> float:
+def _quota_backoff(
+    attempt: int, jitter: Callable[[float, float], float] = random.uniform
+) -> float:
+    """Exponential backoff with equal jitter for a 429 the provider gave no hint for."""
+    ceiling = min(
+        QUOTA_BACKOFF_BASE_SECONDS * QUOTA_BACKOFF_MULTIPLIER**attempt,
+        MAX_BACKOFF_SECONDS,
+    )
+    return jitter(ceiling / 2, ceiling)
+
+
+def _retry_delay(
+    exc: BaseException,
+    attempt: int,
+    jitter: Callable[[float, float], float] = random.uniform,
+) -> float:
     """Pick the wait before retry `attempt` (0-based), preferring the provider's own hint."""
     hint = _parse_retry_hint(str(exc))
     if hint is not None:
         return min(hint + RETRY_HINT_MARGIN_SECONDS, MAX_BACKOFF_SECONDS)
-    ladder = QUOTA_BACKOFF_SECONDS if _is_quota_error(exc) else DEFAULT_BACKOFF_SECONDS
-    return ladder[min(attempt, len(ladder) - 1)]
+    if _is_quota_error(exc):
+        return _quota_backoff(attempt, jitter=jitter)
+    return DEFAULT_BACKOFF_SECONDS[min(attempt, len(DEFAULT_BACKOFF_SECONDS) - 1)]
 
 
 def _seam_dict(run: harness.SeamRun) -> dict[str, Any]:
@@ -633,6 +674,7 @@ async def run(
     dataset_client, dataset_mirror = _dataset_mirror()
     pacing = load_turn_pacing_seconds() if pacing_seconds is None else pacing_seconds
     spent_a_window = False
+    consecutive_quota_failures = 0
 
     async def pause() -> None:
         if pacing:
@@ -702,15 +744,28 @@ async def run(
                 # this capture linked its traces into in order to attach scores.
                 repeat_record["dataset_run_id"] = dataset_run_id
                 repeat_record["status"] = "COMPLETE"
+                consecutive_quota_failures = 0
             except Exception as exc:  # noqa: BLE001 - preserve partial runs
                 repeat_record["status"] = "INFRA"
                 repeat_record["error"] = str(exc)
                 if _is_quota_error(exc):
-                    artifact["status"] = "PARTIAL_QUOTA"
-                    _mark_unrun(artifact, scenarios, scenario_index, scenario_id)
-                    manifest["langfuse_ingestion"] = _verify_capture_ingestion(artifact)
-                    _write_json(output, artifact)
-                    return artifact
+                    # A 429 records this repeat as INFRA and the run continues, per
+                    # D-e. Only a run of them in a row reads as an exhausted account.
+                    consecutive_quota_failures += 1
+                    repeat_record["consecutive_quota_failures"] = (
+                        consecutive_quota_failures
+                    )
+                    if (
+                        consecutive_quota_failures
+                        >= CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT
+                    ):
+                        artifact["status"] = "PARTIAL_QUOTA"
+                        _mark_unrun(artifact, scenarios, scenario_index, scenario_id)
+                        manifest["langfuse_ingestion"] = _verify_capture_ingestion(
+                            artifact
+                        )
+                        _write_json(output, artifact)
+                        return artifact
             _write_json(output, artifact)
         record["status"] = (
             "COMPLETE"

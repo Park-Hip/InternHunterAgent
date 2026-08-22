@@ -1,6 +1,6 @@
 # Evaluation Operating Manual
 
-> **Last verified:** 2026-08-16.
+> **Last verified:** 2026-08-22.
 
 > **Eviction:** A claim here leaves when the module, statuses, or constraint it describes changes.
 > This file explains how the instrument works and why; [`README.md`](README.md) owns the module
@@ -90,13 +90,19 @@ A run from an uncommitted tree is still readable, but it is flagged `baseline_el
 
 **Checkpointing.** The artifact is rewritten to disk after every turn, and again after every
 repeat.
-When a call fails on quota, the driver marks that repeat `INFRA`, marks the artifact
-`status: PARTIAL_QUOTA`, marks every scenario after the current one `UNRUN`, and stops.
+When a call fails on quota, the driver marks that repeat `INFRA` and moves to the next scenario.
+A single 429 does not end the run: on DeepSeek it is concurrency backpressure rather than an
+exhausted budget, the next scenario will likely succeed, and finishing the registry costs about
+four cents (D-e).
+Only `CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT` failures in a row read as an exhausted account. That
+sets `status: PARTIAL_QUOTA`, marks every scenario after the current one `UNRUN`, and stops, so a
+genuinely dead key does not burn the whole registry.
 `--resume` reopens that artifact, keeps only the repeats already marked `COMPLETE`, and continues
 from there - so a scenario that completed 2 of its 3 probe repeats resumes on the third, not from
 scratch.
-This is not defensive over-engineering: every acceptance attempt so far has been interrupted by
-quota.
+Checkpointing is interrupt safety, not quota survival. A capture is five minutes of live model
+calls that cannot be reproduced, so anything that ends the process early - a halt, a lost network,
+a closed laptop - must leave readable evidence behind rather than nothing.
 
 **Execution accuracy.** Rather than comparing SQL text - where many different queries are all
 correct - `execution_accuracy.py` runs both the agent's query and the reference query against the
@@ -118,7 +124,7 @@ Exactly one of them spends money and cannot be repeated; everything else is free
    that block is the only thing that makes two arms comparable. Never capture from a dirty tree:
    the run is flagged `baseline_eligible: false` and `driver diff` will refuse it.
 2. **Capture.** `driver --output evals/runs/<arm>.json`, resumable with `--resume`. This is the
-   only step that costs quota and the only one that cannot be reproduced - the model is
+   only step that spends serving credit and the only one that cannot be reproduced - the model is
    non-deterministic, and `git_sha` and `prompt_hash` move underneath you, so a later run is a new
    arm rather than the same one. Treat the artifact as write-once.
 3. **Freeze, before reading anything.** Project the capture into a sanitized replay under
@@ -183,17 +189,9 @@ of unmeasured turns is reported separately so a thin result cannot masquerade as
 It can prove a specific behavior is wrong, show exactly which seam produced it, and reproduce that
 finding for free without spending quota again - `replay.py` is the committed-evidence gate CI runs
 on every pull request, with no model or judge call.
-It cannot yet produce an overall quality score, for four reasons that are constraints on what can
+It cannot yet produce an overall quality score, for three reasons that are constraints on what can
 be known rather than defects to fix:
 
-- **An 8,000 TPM ceiling is the binding constraint.** One agent turn asks Groq for roughly 9.2K
-  reserved tokens across its three calls, so a call is admitted only when tokens already spent this
-  minute plus the new call's reserve stays under 8,000. Because a turn's three calls happen within
-  seconds, the turn competes against itself; pacing 75 seconds between turns fixes that but does
-  nothing for a turn that exceeds 8,000 on its own. `HLP-CONTEXT-1` peaks at 10,231 tokens on
-  synthesis and `HLP-COMPOUND-1` spends 7,653 on routing alone, so both stay unreachable on the
-  free tier ([`Known_Issues.md`](../docs/Known_Issues.md)). The current acceptance capture measured
-  13 of 19 attempted turns across 5 of 7 scenarios before quota ended it.
 - **Two or three repeats cannot measure a rare event.** The historical symptom was 8 empty answers;
   the current capture saw none in 13 turns, which rules out a *common* fault and says nothing about
   a rare one. Recorded as "no recurrence observed in 13 turns", never as "fixed".

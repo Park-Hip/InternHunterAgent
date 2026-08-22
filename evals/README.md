@@ -1,6 +1,6 @@
 # `evals/` - The Evaluation Instrument
 
-> **Last verified:** 2026-08-18.
+> **Last verified:** 2026-08-22.
 
 > **Eviction:** A description here leaves when its module is removed or its command changes.
 > This file describes the layout only; findings live in the records listed at the bottom.
@@ -18,10 +18,14 @@ the point of the design - a capture is expensive and rare, and grading it is fre
 
 | Command | Spends |
 |---|---|
-| `uv run python -m evals.driver` | **Groq serving quota.** One turn reserves ~9.2K tokens against an 8000 TPM ceiling |
-| `uv run python -m evals.driver --score` | Groq **and** Gemini judge quota |
+| `uv run python -m evals.driver` | **Serving credit.** The full 29-scenario registry is 77 turns for about $0.04 on DeepSeek (D-045) |
+| `uv run python -m evals.score --run run.json` | **Gemini judge quota.** An offline pass over a recorded capture, throttled to the free tier's RPM |
 | `uv run pytest -m eval` / `deepeval test run evals/test_three_seams.py` | **Gemini judge quota** |
 | everything below | nothing - no network, no provider |
+
+Capture and scoring are separate commands on purpose. Capture is minutes and cents; scoring the
+same registry is hundreds of throttled judge calls and can take the better part of an hour, so it
+runs over the artifact afterwards rather than holding the capture open.
 
 ```powershell
 docker compose up -d                          # fixture Postgres on 5433
@@ -70,9 +74,11 @@ scenarios_v1.yaml -> driver.py -> execution_accuracy.py -> grader.py
            (read the turns and their verdict)          (re-grade in CI, no model)
 ```
 
-The split is deliberate. Capture spends quota once and writes evidence to disk; every later stage
-reads that evidence and can be re-run for free. A change to a grading rule is therefore verified
-against recorded turns, not by paying for a new capture.
+The split is deliberate. Capture spends serving credit once and writes evidence to disk; every
+later stage reads that evidence and can be re-run for free. A change to a grading rule is
+therefore verified against recorded turns, not by paying for a new capture.
+Judging is on the same side of that line: `score.py` is an offline pass over a recorded
+artifact, resumable and re-runnable, so a re-grade never costs a new capture.
 
 ## Modules
 
@@ -81,7 +87,7 @@ against recorded turns, not by paying for a new capture.
 | `scenarios_v1.yaml` | **The registry.** 29 scenarios with probe flags, requirements, reference SQL, `expected_tools`, and a `grading:` block holding what each answer must and must not say. The single source of truth (D-041) |
 | `scenarios.py` | Loads and validates the registry, rejecting an unknown tool or grading field; generates DeepEval goldens from it; no-model CLI |
 | `harness.py` | Three-seam capture and the DeepEval metrics. Owns the seam definitions so pytest and recorded runs cannot diverge |
-| `driver.py` | Orchestration: runs the registry over the harness, paces turns to fit the quota window, owns retries, writes a manifest, checkpoints and resumes, and freezes completed evidence into a sanitized replay |
+| `driver.py` | Orchestration: runs the registry over the harness, owns retries and the backoff ladder, writes a manifest, checkpoints and resumes, and freezes completed evidence into a sanitized replay. Turn pacing survives for the Groq branch and is 0 on the serving default |
 | `viewer.py` | Single-file HTML viewer - one turn per screen, all three seams, the joined grade verdict, run header, telemetry, and operator notes |
 | `execution_accuracy.py` | Executes generated and reference SQL against the fixture and compares result sets as unordered multisets |
 | `grader.py` | Deterministic three-tier grading (structural, textual, judge) with `PASS`/`FAIL`/`INFRA`/`UNRUN`. The last two are excluded from denominators. Owns how a rule is applied, never what a scenario expects |
@@ -89,7 +95,8 @@ against recorded turns, not by paying for a new capture.
 | `replay.py` | Validates the committed artifact, executes its SQL, grades it, and checks expected PASS, FAIL, or EXEMPT execution outcomes. What CI runs |
 | `replays/` | The committed sanitized evidence the gate replays. It retains questions, answers, tools, SQL, expected outcomes, and the `prompt_version` its capture ran, never telemetry or trace identifiers |
 | `judge.py` | `DeepEvalBaseLLM` adapter with an RPM throttle. No scenario rule reaches the judge tier yet |
-| `writeback.py` | Langfuse score writeback. Called by `harness.py`; not part of the deterministic path |
+| `score.py` | The offline judge pass over a recorded capture. Resumable, re-runnable, and the only caller of the writeback |
+| `writeback.py` | Langfuse score writeback and the ingestion probe. Called by `score.py` and `driver.py`; not part of the deterministic path |
 | `fixtures/loader.py` | Builds and resets the frozen fixture through Alembic plus `seed_eval_db.sql`. Owns `fixture_database_url()` |
 | `runs/` | Capture artifacts. **Git-ignored** - turns carry latency, token usage, and finish reasons |
 | `conftest.py` | Binds the two live test modules below to the fixture database, for the duration of each test |
@@ -140,7 +147,9 @@ Findings, not guidance. Each has an owner and a cap in the
 `settings` would freeze the cache against the serving database and make the bind a no-op - a
 capture would silently run against production data. `tests/evals/test_driver.py` pins this.
 
-**The free tier cannot run every scenario.** `HLP-CONTEXT-1` and `HLP-COMPOUND-1` exceed the
-8000 TPM admission ceiling inside a single turn. Lowering `max_tokens` or `agent.query.max_rows`
-would admit them and change what the instrument measures; see
-[Known Issues](../docs/Known_Issues.md).
+**Two scenarios do not fit a per-minute token ceiling.** `HLP-CONTEXT-1` and `HLP-COMPOUND-1`
+exceed an 8000 TPM admission ceiling inside a single turn, so they cannot be captured on the Groq
+free-tier branch. This is a property of that branch, not of the instrument: D-045 moved serving to
+DeepSeek, which publishes no TPM or TPD limit, and the full 29-scenario registry captured 77 of 77
+turns there. Lowering `max_tokens` or `agent.query.max_rows` would admit them on Groq and change
+what the instrument measures; see [Known Issues](../docs/Known_Issues.md).

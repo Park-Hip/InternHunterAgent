@@ -28,15 +28,17 @@ from src.core.logger import logger
 _INGESTION_RETRY_DELAYS = (0.0, 2.0, 5.0)
 
 
-def write_scores(
-    trace_id: str | None,
-    results: dict[str, dict],
-    *,
-    dataset_run_id: str | None = None,
-) -> int:
+def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:
     """Write every non-None metric score in `results` onto the Langfuse trace
     `trace_id`. Returns the number of scores written; no-ops (returns 0, never
-    raises) when `trace_id` is None or Langfuse is disabled (missing creds)."""
+    raises) when `trace_id` is None or Langfuse is disabled (missing creds).
+
+    A score names its trace and nothing else. Langfuse rejects a score carrying
+    both `traceId` and `datasetRunId` - "provide exactly one of the following" -
+    with a 400 the SDK reports asynchronously, so passing both silently wrote
+    nothing at all. The dataset run still gets these scores: its run item links
+    this trace, so scoring the trace is what puts them under the run.
+    """
     if trace_id is None or get_langfuse_handler() is None:
         return 0
 
@@ -55,7 +57,6 @@ def write_scores(
                     name=f"{seam_name}/{metric_name}",
                     value=score,
                     trace_id=trace_id,
-                    dataset_run_id=dataset_run_id,
                     data_type="NUMERIC",
                     score_id=f"{trace_id}-{seam_name}-{metric_name}",
                     comment=payload.get("reason"),
@@ -140,3 +141,23 @@ def verify_ingestion(
         logger.warning("Langfuse trace was never ingested", trace_id=trace_id)
 
     return record
+
+
+def count_trace_scores(trace_id: str | None) -> int | None:
+    """Count the scores Langfuse actually holds for `trace_id`, or None if unasked.
+
+    `write_scores` returns how many scores it *enqueued*. The SDK batches and
+    reports rejections asynchronously on its own logger, so a run can enqueue
+    fourteen scores, have every one refused, and still report fourteen. This is
+    the only cheap check that distinguishes those two outcomes.
+    """
+    if trace_id is None or get_langfuse_handler() is None:
+        return None
+    lf = get_langfuse_client()
+    if lf is None:
+        return None
+    try:
+        return len(lf.api.scores.get_many(trace_id=trace_id).data)
+    except Exception as exc:  # noqa: BLE001 - an unreachable Langfuse is not a count
+        logger.warning("Langfuse score count failed", trace_id=trace_id, error=str(exc))
+        return None

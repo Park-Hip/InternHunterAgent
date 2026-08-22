@@ -59,6 +59,7 @@ def _case() -> dict:
 def no_live_langfuse(monkeypatch: pytest.MonkeyPatch):
     """Keep the scoring pass off the network by default, for the same reason."""
     monkeypatch.setattr(score_module, "write_scores", lambda *a, **k: 0)
+    monkeypatch.setattr(score_module, "count_trace_scores", lambda *a, **k: None)
     monkeypatch.setattr(
         score_module,
         "verify_ingestion",
@@ -87,14 +88,8 @@ def stub_judge(monkeypatch: pytest.MonkeyPatch) -> list[tuple[dict, SeamRun]]:
 def posted(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     writes: list[dict] = []
 
-    def fake_write_scores(trace_id, results, *, dataset_run_id=None):
-        writes.append(
-            {
-                "trace_id": trace_id,
-                "results": results,
-                "dataset_run_id": dataset_run_id,
-            }
-        )
+    def fake_write_scores(trace_id, results):
+        writes.append({"trace_id": trace_id, "results": results})
         return 1
 
     monkeypatch.setattr(score_module, "write_scores", fake_write_scores)
@@ -134,17 +129,20 @@ def test_scores_a_completed_repeat_from_what_the_capture_recorded(
     assert repeat["scored_at"]
 
 
-def test_scores_reach_langfuse_on_the_captures_dataset_run(
+def test_scores_reach_langfuse_on_the_trace_the_capture_recorded(
     tmp_path: Path, stub_judge, posted
 ) -> None:
-    """R3.7. The capture recorded the dataset run; the scoring pass posts into it."""
+    """R3.7. A score names its trace and nothing else.
+
+    Langfuse rejects a score carrying both a trace and a dataset run. The dataset
+    run still gets these scores, because its run item links this trace.
+    """
     path = _write(tmp_path, _artifact())
 
     score_module.score_artifact(path, scenarios=[_case()])
 
     assert len(posted) == 1
     assert posted[0]["trace_id"] == "trace-1"
-    assert posted[0]["dataset_run_id"] == "dataset-run-1"
 
 
 def test_a_second_pass_over_a_scored_artifact_is_a_no_op(
@@ -320,4 +318,4 @@ def test_a_post_that_never_landed_is_retried_without_re_judging(
     assert summary["reposted"] == 1
     assert stub_judge == []
     assert len(posted) == 1
-    assert posted[0]["dataset_run_id"] == "dataset-run-1"
+    assert posted[0]["trace_id"] == "trace-1"

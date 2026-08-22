@@ -204,3 +204,40 @@ def test_verification_gives_up_after_the_ladder(monkeypatch):
     assert record["ingested"] is False
     assert len(trace_api.asked) == len(writeback._INGESTION_RETRY_DELAYS)
     assert waits == [2.0, 5.0]
+
+
+def test_a_score_names_its_trace_and_nothing_else(monkeypatch):
+    """Langfuse 400s a score carrying both a trace and a dataset run.
+
+    The SDK reports that rejection asynchronously on its own logger, so passing
+    both wrote nothing while every counter said it had worked.
+    """
+    fake = FakeLangfuseClient()
+    _enable_fake_langfuse(monkeypatch, fake)
+
+    writeback.write_scores(
+        "trace-123", {"seam1_routing": {"Tool Correctness": {"score": 1.0}}}
+    )
+
+    assert fake.scores[0]["trace_id"] == "trace-123"
+    assert "dataset_run_id" not in fake.scores[0]
+
+
+def test_counting_scores_reports_what_langfuse_kept(monkeypatch):
+    class Scores:
+        def get_many(self, trace_id: str):
+            assert trace_id == "trace-123"
+            return SimpleNamespace(data=[object(), object()])
+
+    fake = SimpleNamespace(api=SimpleNamespace(scores=Scores()))
+    monkeypatch.setattr(writeback, "get_langfuse_handler", lambda: object())
+    monkeypatch.setattr(writeback, "get_langfuse_client", lambda: fake)
+
+    assert writeback.count_trace_scores("trace-123") == 2
+
+
+def test_counting_scores_without_tracing_is_not_a_count(monkeypatch):
+    monkeypatch.setattr(writeback, "get_langfuse_handler", lambda: None)
+
+    assert writeback.count_trace_scores("trace-123") is None
+    assert writeback.count_trace_scores(None) is None

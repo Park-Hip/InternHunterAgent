@@ -36,9 +36,11 @@ def _bind_environment() -> None:
 
     Scoring never runs the agent, so it needs no database binding. It does need to
     post into the same Langfuse environment the capture traced into, otherwise the
-    scores land beside the traces they belong to rather than on them.
+    scores land beside the traces they belong to rather than on them. Set, not
+    `setdefault`, for exactly the reason `evals/driver.py` sets it: a developer
+    `.env` naming `local` would otherwise win and split the two apart.
     """
-    os.environ.setdefault("LANGFUSE_TRACING_ENVIRONMENT", "evaluation")
+    os.environ["LANGFUSE_TRACING_ENVIRONMENT"] = "evaluation"
 
 
 _bind_environment()
@@ -46,7 +48,11 @@ _bind_environment()
 from evals import harness  # noqa: E402
 from evals.harness import SCORER_VERSION  # noqa: E402
 from evals.scenarios import load_scenarios  # noqa: E402
-from evals.writeback import verify_ingestion, write_scores  # noqa: E402
+from evals.writeback import (  # noqa: E402
+    count_trace_scores,
+    verify_ingestion,
+    write_scores,
+)
 
 
 def _utc_now() -> str:
@@ -161,11 +167,7 @@ def score_artifact(
                 # cheap and idempotent; re-judging is 46 minutes of throttled calls.
                 summary["reposted"] += 1
 
-            written = write_scores(
-                final_run.trace_id,
-                repeat["scores"],
-                dataset_run_id=repeat.get("dataset_run_id"),
-            )
+            written = write_scores(final_run.trace_id, repeat["scores"])
             repeat["scores_written"] = written
             summary["scores_written"] += written
             _write_json(path, artifact)
@@ -181,6 +183,12 @@ def score_artifact(
     verified["checked_at"] = _utc_now()
     manifest["langfuse_ingestion_at_scoring"] = verified
     summary["traces_ingested"] = verified["ingested"]
+
+    # `scores_written` counts what was enqueued; this counts what Langfuse kept.
+    # They disagreed once, silently, and the whole pass wrote nothing.
+    confirmed = count_trace_scores(ingestion.get("trace_id"))
+    verified["scores_on_sampled_trace"] = confirmed
+    summary["scores_on_sampled_trace"] = confirmed
 
     manifest.setdefault("scoring_passes", []).append(
         {

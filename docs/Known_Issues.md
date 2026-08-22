@@ -1,5 +1,5 @@
 # Known Issues & Risks
-> **Last verified:** 2026-08-20 against checked-out code, tests, configuration, and active runbooks.
+> **Last verified:** 2026-08-22 against checked-out code, tests, configuration, and active runbooks.
 
 This register holds actionable risks that are open, blocked, or awaiting a maintainer decision.
 > **Eviction:** An entry leaves when fixed, superseded, or reclassified in its owning document.
@@ -11,7 +11,7 @@ Closed history is preserved in [Resolved Issues](archive/Resolved_Issues.md).
 |---|---:|---:|---:|
 | HIGH | 1 | 1 | 1 |
 | MED | 17 | 1 | 2 |
-| LOW | 16 | 2 | 0 |
+| LOW | 17 | 2 | 0 |
 
 **State key:** `OPEN` needs implementation or verification, and `BLOCKED` needs a live service,
 or maintainer action, and `DECISION` needs a product or operational choice.
@@ -32,6 +32,16 @@ topic section or resolves them.
   - **Next:** Re-run with the evaluation fixture database available.
   Diagnose the setup stall if it persists.
   - **History:** Not caused or fixed by T0033.3.
+
+- `KI-2026-08-22-evals-readme-stale-score-command` **`[LOW · OPEN]` The evaluation manual
+  documents a command that no longer exists.**
+  - **Found:** 2026-08-22, integrating PR #102, which removed `evals.driver --score`.
+  - **Impact:** [`evals/README.md`](../evals/README.md) line 22 still lists
+  `uv run python -m evals.driver --score` and the judge quota it spent.
+  Scoring is now a separate pass, `python -m evals.score --run run.json`.
+  - **Next:** Correct the row when the remediation plan's documentation phase lands, which owns
+  that file.
+  - **History:** Raised as a risk in PR #102 and left open there by file ownership, not missed.
 
 ## Config, startup & deployment (12)
 

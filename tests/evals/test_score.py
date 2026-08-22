@@ -319,3 +319,37 @@ def test_a_post_that_never_landed_is_retried_without_re_judging(
     assert stub_judge == []
     assert len(posted) == 1
     assert posted[0]["trace_id"] == "trace-1"
+
+
+def test_scoring_verifies_a_capture_taken_before_the_manifest_key_existed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stub_judge
+) -> None:
+    """Every artifact already on disk predates `manifest.langfuse_ingestion`.
+
+    Reading only that key reported `traces_ingested: None` for exactly the runs an
+    operator re-scores, even though their turns carry trace ids all along.
+    """
+    artifact = _artifact()
+    del artifact["manifest"]["langfuse_ingestion"]
+    path = _write(tmp_path, artifact)
+
+    asked: list[tuple] = []
+
+    def fake_verify(trace_id, *, dataset_run_id=None):
+        asked.append((trace_id, dataset_run_id))
+        return {"trace_id": trace_id, "ingested": True, "detail": "resolved"}
+
+    counted: list[str | None] = []
+    monkeypatch.setattr(score_module, "verify_ingestion", fake_verify)
+    def fake_count(trace_id):
+        counted.append(trace_id)
+        return 3
+
+    monkeypatch.setattr(score_module, "count_trace_scores", fake_count)
+
+    summary = score_module.score_artifact(path, scenarios=[_case()])
+
+    assert asked == [("trace-1", "dataset-run-1")]
+    assert counted == ["trace-1"]
+    assert summary["traces_ingested"] is True
+    assert summary["scores_on_sampled_trace"] == 3

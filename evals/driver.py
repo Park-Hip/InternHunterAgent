@@ -127,7 +127,7 @@ from evals.langfuse_dataset import (  # noqa: E402
 )
 from evals.scenarios import load_scenarios, repeat_count  # noqa: E402
 from evals.sanitization import FORBIDDEN_CONTENT  # noqa: E402
-from evals.writeback import verify_ingestion  # noqa: E402
+from evals.writeback import sample_verification_target, verify_ingestion  # noqa: E402
 
 # Below the bind because it reads config/prompts.yaml through src.core.config, which
 # must not be frozen before the fixture environment is in place.
@@ -727,25 +727,14 @@ async def run(
     return artifact
 
 
-def _first_linked_turn(artifact: dict[str, Any]) -> tuple[str | None, str | None]:
-    """Return the first recorded trace id, with the dataset run it was linked into."""
-    for record in artifact["scenarios"].values():
-        for repeat in record["repeats"]:
-            for turn in repeat["turns"]:
-                trace_id = turn["seams"].get("trace_id")
-                if trace_id is not None:
-                    return trace_id, repeat.get("dataset_run_id")
-    return None, None
-
-
 def _verify_capture_ingestion(artifact: dict[str, Any]) -> dict[str, Any]:
     """Resolve one of this capture's trace ids against Langfuse, per R3.9.
 
-    One is enough. Every turn in a run exports through the same client to the same
-    host, so a single lookup separates "these ids name real traces" from the probe's
-    failure mode, where all five named nothing.
+    One is enough, and `sample_verification_target` decides which one: the newest
+    turn, so a resumed capture is judged on the traces this process exported rather
+    than on the ones an interrupted session left behind.
     """
-    trace_id, dataset_run_id = _first_linked_turn(artifact)
+    trace_id, dataset_run_id = sample_verification_target(artifact)
     record = verify_ingestion(trace_id, dataset_run_id=dataset_run_id)
     record["checked_at"] = _utc_now()
     return record

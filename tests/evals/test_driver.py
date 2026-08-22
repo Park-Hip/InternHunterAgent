@@ -357,7 +357,8 @@ def test_a_completed_capture_records_whether_its_traces_were_ingested(
 
     result = asyncio.run(driver.run([_case()], tmp_path / "run.json", pacing_seconds=0))
 
-    assert asked == [("trace-1", None)]
+    # The last repeat captured, not the first: see `sample_verification_target`.
+    assert asked == [("trace-2", None)]
     ingestion = result["manifest"]["langfuse_ingestion"]
     assert ingestion["ingested"] is False
     assert ingestion["checked_at"]
@@ -770,3 +771,62 @@ def test_freeze_projects_completed_evidence_from_a_partial_quota_capture(
 
     validate_replay(frozen)
     assert "HLP-COUNT-1" not in frozen["scenarios"]
+
+
+def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The probe samples the newest turn, so a resume cannot inherit a stale verdict.
+
+    Session one traced fine and stopped; session two continues into a Langfuse that
+    is no longer reachable. Sampling the first recorded id would resolve session
+    one's trace and report the run as ingested.
+    """
+    output = tmp_path / "run.json"
+    output.write_text(
+        json.dumps(
+            {
+                "status": "PARTIAL_QUOTA",
+                "manifest": {"run_id": "run-1"},
+                "scenarios": {
+                    "COUNT-1": {
+                        "status": "COMPLETE",
+                        "repeats": [
+                            {
+                                "repeat": 1,
+                                "status": "COMPLETE",
+                                "dataset_run_id": "session-1-run",
+                                "turns": [
+                                    {"turn": 1, "seams": {"trace_id": "trace-session-1"}}
+                                ],
+                            }
+                        ],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
+        return [SeamRun(question="q", answer="a", trace_id="trace-session-2")]
+
+    asked: list[tuple] = []
+
+    def fake_verify(trace_id, *, dataset_run_id=None):
+        asked.append((trace_id, dataset_run_id))
+        return {"trace_id": trace_id, "ingested": False, "detail": "not there"}
+
+    monkeypatch.setattr(driver, "_capture_case", fake_capture)
+    monkeypatch.setattr(driver, "_dataset_mirror", lambda: (None, None))
+    monkeypatch.setattr(driver, "verify_ingestion", fake_verify)
+    _stub_fingerprint(monkeypatch)
+
+    result = asyncio.run(
+        driver.run(
+            [_case(), _case("HLP-LIST-1")], output, resume=True, pacing_seconds=0
+        )
+    )
+
+    assert asked == [("trace-session-2", None)]
+    assert result["manifest"]["langfuse_ingestion"]["ingested"] is False

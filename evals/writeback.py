@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from typing import Any
 
 from langfuse.api import NotFoundError
 
@@ -74,6 +75,31 @@ def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:
     except Exception as exc:  # noqa: BLE001 - export draining must not break an eval capture
         logger.warning("Langfuse score flush failed", error=str(exc))
     return written
+
+
+def sample_verification_target(
+    artifact: dict[str, Any],
+) -> tuple[str | None, str | None]:
+    """Pick the trace to probe this capture through, with the run it was linked into.
+
+    The most recently captured turn, not the first. Sampling one turn is sound
+    because every turn exports through the same client to the same host - but that
+    holds only within a single process. A `--resume` continues an artifact whose
+    earlier turns were exported by a previous run, possibly against a host that has
+    since changed, so probing the first id verifies the interrupted session and
+    reports the new traces as ingested when they went nowhere. Scenarios are walked
+    in registry order and turns are appended, so the last id recorded is the newest.
+    """
+    trace_id: str | None = None
+    dataset_run_id: str | None = None
+    for record in artifact.get("scenarios", {}).values():
+        for repeat in record.get("repeats", []):
+            for turn in repeat.get("turns", []):
+                recorded = turn.get("seams", {}).get("trace_id")
+                if recorded is not None:
+                    trace_id = recorded
+                    dataset_run_id = repeat.get("dataset_run_id")
+    return trace_id, dataset_run_id
 
 
 def verify_ingestion(

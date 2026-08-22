@@ -50,6 +50,7 @@ from evals.harness import SCORER_VERSION  # noqa: E402
 from evals.scenarios import load_scenarios  # noqa: E402
 from evals.writeback import (  # noqa: E402
     count_trace_scores,
+    sample_verification_target,
     verify_ingestion,
     write_scores,
 )
@@ -176,17 +177,19 @@ def score_artifact(
     summary["repeats_with_scores"] = _scored_repeats(artifact)
 
     manifest = artifact.setdefault("manifest", {})
-    ingestion = manifest.get("langfuse_ingestion") or {}
-    verified = verify_ingestion(
-        ingestion.get("trace_id"), dataset_run_id=ingestion.get("dataset_run_id")
-    )
+    # Sampled from the turns rather than read out of `manifest.langfuse_ingestion`:
+    # that key is newer than the captures already on disk, and trusting it alone
+    # left every artifact recorded before it existed unverifiable at scoring time,
+    # which is precisely the set an operator re-scores.
+    trace_id, dataset_run_id = sample_verification_target(artifact)
+    verified = verify_ingestion(trace_id, dataset_run_id=dataset_run_id)
     verified["checked_at"] = _utc_now()
     manifest["langfuse_ingestion_at_scoring"] = verified
     summary["traces_ingested"] = verified["ingested"]
 
     # `scores_written` counts what was enqueued; this counts what Langfuse kept.
     # They disagreed once, silently, and the whole pass wrote nothing.
-    confirmed = count_trace_scores(ingestion.get("trace_id"))
+    confirmed = count_trace_scores(trace_id)
     verified["scores_on_sampled_trace"] = confirmed
     summary["scores_on_sampled_trace"] = confirmed
 

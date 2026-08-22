@@ -241,3 +241,59 @@ def test_counting_scores_without_tracing_is_not_a_count(monkeypatch):
 
     assert writeback.count_trace_scores("trace-123") is None
     assert writeback.count_trace_scores(None) is None
+
+
+def _artifact(*scenarios) -> dict:
+    """Build a capture artifact from (scenario_id, dataset_run_id, [trace ids])."""
+    return {
+        "scenarios": {
+            scenario_id: {
+                "status": "COMPLETE",
+                "repeats": [
+                    {
+                        "repeat": 1,
+                        "status": "COMPLETE",
+                        "dataset_run_id": dataset_run_id,
+                        "turns": [
+                            {"turn": index + 1, "seams": {"trace_id": trace_id}}
+                            for index, trace_id in enumerate(trace_ids)
+                        ],
+                    }
+                ],
+            }
+            for scenario_id, dataset_run_id, trace_ids in scenarios
+        }
+    }
+
+
+def test_the_sampled_trace_is_the_newest_one_not_the_first():
+    """A resume exports through a client this process built, not the previous one.
+
+    Sampling the first id would verify the interrupted session's trace and call a
+    capture ingested when everything it just exported went nowhere.
+    """
+    artifact = _artifact(
+        ("COUNT-1", "run-session-1", ["trace-old"]),
+        ("HLP-LIST-1", "run-session-2", ["trace-mid", "trace-new"]),
+    )
+
+    assert writeback.sample_verification_target(artifact) == (
+        "trace-new",
+        "run-session-2",
+    )
+
+
+def test_sampling_skips_turns_that_recorded_no_trace():
+    artifact = _artifact(("COUNT-1", "run-1", ["trace-1"]))
+    artifact["scenarios"]["COUNT-1"]["repeats"][0]["turns"].append(
+        {"turn": 2, "seams": {}}
+    )
+
+    assert writeback.sample_verification_target(artifact) == ("trace-1", "run-1")
+
+
+def test_sampling_an_artifact_with_no_traces_is_no_target():
+    assert writeback.sample_verification_target({"scenarios": {}}) == (None, None)
+    assert writeback.sample_verification_target(
+        _artifact(("COUNT-1", None, []))
+    ) == (None, None)

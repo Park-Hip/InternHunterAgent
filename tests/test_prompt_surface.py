@@ -68,12 +68,6 @@ INVENTORY = frozenset(
             visibility="model-visible",
         ),
         PromptSurface(
-            path="src/agents/tools/time.py",
-            symbol="get_current_time.__doc__",
-            text="Return the current UTC time in HH:MM:SS format.",
-            visibility="model-visible",
-        ),
-        PromptSurface(
             path="src/agents/tools/get_job_details.py",
             symbol="get_job_details",
             text=(

@@ -111,28 +111,30 @@ class LoadSchemaContextTests(unittest.TestCase):
 class SystemPromptScopeTests(unittest.TestCase):
     """Settled behavior decision #10: the persona describes the corpus it actually has."""
 
-    NARROWING_PHRASES = (
-        "internship and job postings",
-        "outside internship/job postings",
-        "internship/job postings",
-    )
-
-    def test_persona_and_decline_lines_state_the_corrected_scope(self) -> None:
+    def test_persona_line_states_the_corrected_scope(self) -> None:
         system_prompt = str(load_system_prompt().content)
 
         self.assertIn(
             "helps users explore AI/Data job and internship postings", system_prompt
         )
-        self.assertIn(
-            "decline anything outside AI/Data job and internship postings", system_prompt
-        )
 
-    def test_system_prompt_carries_no_internship_first_narrowing(self) -> None:
+    def test_system_prompt_names_internships_only_in_its_identity_line(self) -> None:
         system_prompt = str(load_system_prompt().content)
 
-        for phrase in self.NARROWING_PHRASES:
-            with self.subTest(phrase=phrase):
-                self.assertNotIn(phrase, system_prompt)
+        self.assertEqual(system_prompt.lower().count("internship"), 1)
+
+    def test_system_prompt_states_date_semantics_and_absent_deadlines(self) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn("listing-expiry date is not an application deadline", system_prompt)
+        self.assertIn("creation date is not a publication date", system_prompt)
+        self.assertIn("does not contain application deadlines", system_prompt)
+
+    def test_system_prompt_clarifies_ambiguous_initial_requests(self) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn("If a request is genuinely ambiguous", system_prompt)
+        self.assertIn("ask exactly one clarifying question", system_prompt)
 
     def test_system_prompt_requires_mandatory_caveats_to_survive_the_relay(self) -> None:
         system_prompt = str(load_system_prompt().content)
@@ -170,7 +172,7 @@ class LoadPromptVersionTests(unittest.TestCase):
             load_prompt_version()
 
     def test_yaml_declares_a_prompt_version(self) -> None:
-        self.assertEqual(load_prompt_version(), "v5")
+        self.assertEqual(load_prompt_version(), "v6")
 
 
 class LoadBehaviorGlossaryTests(unittest.TestCase):

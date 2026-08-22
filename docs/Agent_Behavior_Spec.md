@@ -1,5 +1,5 @@
 # Agent Behavior Spec — InternHunterAgent (Resumi)
-> **Last verified:** 2026-08-21
+> **Last verified:** 2026-08-22
 
 > **Status**
 > - Frozen: 2026-07-11 under T0015.2. The freeze protects the requirements under test, the probe
@@ -53,8 +53,13 @@ It is measured but not yet prompted: the upstream cause is the `column=value` pa
 `query_clean_jobs` hands the model, and changing that is a serving change rather than a
 measurement one.
 
-Both checks read the capture's `prompt_version`, so evidence frozen before a rule existed is never
-regraded against it.
+The date-semantics rule is stated beside the available-information guidance in
+[`config/prompts.yaml`](../config/prompts.yaml): a source listing-expiry date never substitutes
+for an application deadline, the data has no application deadline, and a source-record creation
+date is never presented as a publication date.
+
+Both style checks read the capture's `prompt_version`, so evidence frozen before a rule existed is
+never regraded against it.
 
 ---
 

@@ -32,12 +32,6 @@ def comma_separated_columns(value: str) -> set[str]:
     return {column.strip() for column in value.split(",")}
 
 
-def system_prompt_columns(prompt: str) -> set[str]:
-    match = re.search(r"The database exposes these columns:\s*(.+?)\.", prompt, re.DOTALL)
-    assert match is not None, "system_prompt is missing its database column list"
-    return comma_separated_columns(match.group(1))
-
-
 def schema_context_columns(prompt: str) -> set[str]:
     return set(re.findall(r"^\s*-\s+([a-z_]+)\s+\(", prompt, re.MULTILINE))
 
@@ -56,10 +50,9 @@ def agent_visible_model_columns() -> set[str]:
     return model_columns - NON_AGENT_VISIBLE_COLUMNS
 
 
-def test_each_prompt_column_list_has_the_same_members() -> None:
+def test_sql_prompt_column_list_matches_schema_context() -> None:
     prompt_blocks = prompts()
     column_sets = {
-        "system_prompt": system_prompt_columns(prompt_blocks["system_prompt"]),
         "schema_context": schema_context_columns(prompt_blocks["schema_context"]),
         "sql_generation": sql_generation_columns(prompt_blocks["sql_generation"]),
     }
@@ -71,6 +64,5 @@ def test_prompt_column_lists_match_the_agent_visible_model_columns() -> None:
     prompt_blocks = prompts()
     expected_columns = agent_visible_model_columns()
 
-    assert system_prompt_columns(prompt_blocks["system_prompt"]) == expected_columns
     assert schema_context_columns(prompt_blocks["schema_context"]) == expected_columns
     assert sql_generation_columns(prompt_blocks["sql_generation"]) == expected_columns

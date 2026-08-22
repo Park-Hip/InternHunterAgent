@@ -321,10 +321,8 @@ Tools are how the agent acts on the world, under one contract: **natural languag
 string out**.
 Tools are registered exclusively in the factory.
 
-Three tools ship.
+Two tools ship.
 
-- **`get_current_time`** (`src/agents/tools/time.py`) returns the current time. Trivial; it exists
-  to keep the multi-tool path exercised.
 - **`query_clean_jobs`** (`src/agents/tools/query_clean_jobs.py`) answers structured questions:
   list, count, aggregate.
 - **`get_job_details`** (`src/agents/tools/get_job_details.py`) fetches full prose for a few

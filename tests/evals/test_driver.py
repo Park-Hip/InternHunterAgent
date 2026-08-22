@@ -396,6 +396,53 @@ def test_one_quota_failure_does_not_end_the_run(
     assert result["status"] == "COMPLETE"
     assert result["scenarios"]["HLP-TEST-1"]["status"] == "INFRA"
     assert result["scenarios"]["HLP-TEST-2"]["status"] == "COMPLETE"
+    # The run-level status now means "reached the end of the registry", so the
+    # manifest has to say how much of it actually succeeded.
+    assert result["manifest"]["scenario_status_counts"] == {"COMPLETE": 1, "INFRA": 1}
+
+
+def test_scenario_status_counts_a_clean_run_and_a_halted_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The tally is present on every terminal path, not just the survivable one."""
+
+    async def always_fine(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
+        return [SeamRun(question="q", answer="a")]
+
+    monkeypatch.setattr(driver, "_capture_case", always_fine)
+    _stub_fingerprint(monkeypatch)
+
+    clean = asyncio.run(
+        driver.run(
+            [_case("HLP-TEST-1"), _case("HLP-TEST-2")],
+            tmp_path / "clean.json",
+            sleep=lambda _: asyncio.sleep(0),
+            pacing_seconds=0,
+        )
+    )
+
+    assert clean["manifest"]["scenario_status_counts"] == {"COMPLETE": 2}
+
+    async def always_quota(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
+        raise RuntimeError("429 quota exceeded")
+
+    monkeypatch.setattr(driver, "_capture_case", always_quota)
+    cases = [_case(f"HLP-TEST-{index}") for index in range(1, 6)]
+
+    halted = asyncio.run(
+        driver.run(
+            cases,
+            tmp_path / "halted.json",
+            sleep=lambda _: asyncio.sleep(0),
+            pacing_seconds=0,
+        )
+    )
+
+    assert halted["status"] == "PARTIAL_QUOTA"
+    # The threshold counts failed repeats, not failed scenarios, so the first
+    # scenario's two repeats plus the second's first one trip it. The tally is what
+    # says how far the capture got: two scenarios attempted, three never reached.
+    assert halted["manifest"]["scenario_status_counts"] == {"INFRA": 2, "UNRUN": 3}
 
 
 def test_consecutive_quota_failures_still_halt_the_run(

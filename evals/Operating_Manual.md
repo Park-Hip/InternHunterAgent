@@ -97,6 +97,10 @@ four cents (D-e).
 Only `CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT` failures in a row read as an exhausted account. That
 sets `status: PARTIAL_QUOTA`, marks every scenario after the current one `UNRUN`, and stops, so a
 genuinely dead key does not burn the whole registry.
+Because a survivable 429 no longer changes the run's own status, `status: COMPLETE` means the run
+reached the end of the registry, not that every scenario in it succeeded.
+Read `manifest.scenario_status_counts` for that: it tallies the scenario records, so a capture that
+survived one blip reads `{"COMPLETE": 28, "INFRA": 1}` rather than requiring a walk through all 29.
 `--resume` reopens that artifact, keeps only the repeats already marked `COMPLETE`, and continues
 from there - so a scenario that completed 2 of its 3 probe repeats resumes on the third, not from
 scratch.

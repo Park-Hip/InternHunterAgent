@@ -773,9 +773,14 @@ async def run(
             and all(r["status"] == "COMPLETE" for r in record["repeats"])
             else "INFRA"
         )
+        _record_scenario_counts(artifact)
         _write_json(output, artifact)
 
     artifact["status"] = "COMPLETE"
+    # Also recorded here, not only per scenario: a --resume that finds every
+    # scenario already COMPLETE skips the loop body entirely and would otherwise
+    # carry the reopened artifact's stale counts.
+    _record_scenario_counts(artifact)
     manifest["finished_at"] = _utc_now()
     manifest["langfuse_ingestion"] = _verify_capture_ingestion(artifact)
     _write_json(output, artifact)
@@ -795,6 +800,22 @@ def _verify_capture_ingestion(artifact: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
+def _record_scenario_counts(artifact: dict[str, Any]) -> None:
+    """Tally scenario outcomes into the manifest, per R6.1's status semantics.
+
+    Since a 429 no longer halts the capture, `status: COMPLETE` means the run
+    reached the end of the registry, not that every scenario succeeded: a run that
+    survived one quota blip ends `COMPLETE` with a scenario recorded `INFRA`. The
+    evidence for that was only ever in the per-scenario records, so a reader had to
+    walk all 29 to learn a capture was short. This puts the count where the other
+    run-level facts already are.
+    """
+    counts: dict[str, int] = {}
+    for record in artifact["scenarios"].values():
+        counts[record["status"]] = counts.get(record["status"], 0) + 1
+    artifact["manifest"]["scenario_status_counts"] = counts
+
+
 def _mark_unrun(
     artifact: dict[str, Any],
     scenarios: list[dict[str, Any]],
@@ -804,6 +825,7 @@ def _mark_unrun(
     for case in scenarios[index + 1 :]:
         artifact["scenarios"].setdefault(case["id"], {"status": "UNRUN", "repeats": []})
     artifact["scenarios"][current_id]["status"] = "INFRA"
+    _record_scenario_counts(artifact)
 
 
 def main(argv: list[str] | None = None) -> None:

@@ -132,16 +132,19 @@ Exactly one of them spends money and cannot be repeated; everything else is free
    non-deterministic, and `git_sha` and `prompt_hash` move underneath you, so a later run is a new
    arm rather than the same one. Treat the artifact as write-once.
 3. **Freeze, before reading anything.** Project the capture into a sanitized replay under
-   [`replays/`](replays/) and commit it. Until this happens the measurement exists in one ignored
-   directory on one machine; after it, every downstream step is reproducible from the repository
-   alone. **This step has no command yet** - `replay.py` reads and validates the format but nothing
-   writes it, so the one committed replay was assembled by hand and covers 4 scenarios of 29.
-   T0030.1 is where the writer lands; until it does, this step is manual and therefore the step
-   most likely to be skipped.
-4. **Grade and read.** `grader` produces the report, and `viewer <run> --grade <grade>` joins it per
+   [`replays/`](replays/) with `evals.driver freeze` and commit it only after it validates. Until
+   this happens the measurement exists in one ignored directory on one machine; after it, every
+   downstream deterministic check is reproducible from the repository alone. The current freezer
+   cannot accept every legitimate no-SQL conversational turn, so a full-registry capture cannot
+   yet be frozen. This limitation is tracked in [Known Issues](../docs/Known_Issues.md).
+4. **Grade and read.** Run execution accuracy, then let `grader` produce the deterministic report.
+   `viewer <run> --grade <grade>` joins it per
    turn. Filter to `FAIL` and walk each one, reading the failing check's `detail` beside the seam it
    judges. That is how 33 failures separate into behavior and rule artifacts.
-5. **Write the dated record, then leave it alone.** It is evidence, superseded by re-measurement and
+5. **Optionally score.** `evals.score --run <run>` performs the Gemini judge pass and Langfuse score
+   writeback after capture. It is separate because judge scoring is slower than capture and no
+   scenario currently makes it part of the deterministic verdict.
+6. **Write the dated record, then leave it alone.** It is evidence, superseded by re-measurement and
    never edited. Route real defects to the behavior milestone and rule artifacts to the registry.
 
 Two rules carry the weight, and both have been learned the expensive way.

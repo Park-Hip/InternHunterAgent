@@ -28,7 +28,11 @@ class Settings(BaseSettings):
     # diagnostic when these are absent or invalid.
     LANGFUSE_SECRET_KEY: str | None = None
     LANGFUSE_PUBLIC_KEY: str | None = None
-    LANGFUSE_BASE_URL: str = "http://localhost:3000"
+    # No default, per D-029 and R3.1: the previous "http://localhost:3000" made a
+    # missing value fail toward a local address that nothing serves, so a capture
+    # recorded trace IDs for traces that were never ingested. Absent, tracing is
+    # disabled by name instead.
+    LANGFUSE_BASE_URL: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),

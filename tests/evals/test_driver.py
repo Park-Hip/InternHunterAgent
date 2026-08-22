@@ -10,10 +10,32 @@ from types import SimpleNamespace
 import pytest
 
 from evals import driver
+from evals import harness as harness_module
 from evals.harness import ProviderTelemetryCallback, SeamRun
 from evals.replay import REPLAY_SCHEMA_VERSION, load_replay, validate_replay
 from src.agents.runtime.prompts import load_prompt_version
 from src.agents.tracing import langfuse
+
+
+@pytest.fixture(autouse=True)
+def no_live_langfuse(monkeypatch: pytest.MonkeyPatch):
+    """Keep `driver.run` off the network in every test in this module.
+
+    The ingestion probe at the end of a capture is a real HTTPS call to Langfuse
+    Cloud on any checkout whose `.env` carries working credentials - which is
+    exactly the state the manual verification asks for. A test that forgot to patch
+    it would pass today only because a broken host makes the call fail fast.
+    Tests that assert on the probe override this with their own stub.
+    """
+    monkeypatch.setattr(
+        driver,
+        "verify_ingestion",
+        lambda trace_id, **kwargs: {
+            "trace_id": trace_id,
+            "ingested": None,
+            "detail": "stubbed in tests",
+        },
+    )
 
 
 def test_resolving_the_fixture_url_never_freezes_settings(
@@ -174,7 +196,7 @@ def test_manifest_records_reproducibility_inputs(
     assert manifest["baseline_eligible"] is True
     assert manifest["models"]["react"]
     assert manifest["sampling"]["sql_generation"]["temperature"] == 0.0
-    assert manifest["scorer_version"] == driver.SCORER_VERSION
+    assert manifest["scorer_version"] == harness_module.SCORER_VERSION
     assert manifest["prompt_version"] == load_prompt_version()
 
 
@@ -242,14 +264,19 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
     )
 
 
-def test_driver_links_each_capture_and_its_scores_to_the_repeat_dataset_run(
+def test_driver_links_each_capture_to_the_repeat_dataset_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The capture links traces and records the run id; it never scores.
+
+    Scoring left the capture loop at D-f, so the driver's remaining job here is to
+    persist the dataset run `evals/score.py` will attach its scores to.
+    """
+
     async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
         return [SeamRun(question="q", answer="a", trace_id=f"trace-{repeat_index}")]
 
     links: list[dict] = []
-    score_writes: list[dict] = []
     client = SimpleNamespace()
     mirror = SimpleNamespace()
 
@@ -259,41 +286,82 @@ def test_driver_links_each_capture_and_its_scores_to_the_repeat_dataset_run(
         links.append(kwargs)
         return f"dataset-run-{kwargs['repeat']}"
 
-    def fake_write_scores(
-        trace_id: str | None, results: dict, *, dataset_run_id: str | None = None
-    ) -> int:
-        score_writes.append(
-            {
-                "trace_id": trace_id,
-                "results": results,
-                "dataset_run_id": dataset_run_id,
-            }
-        )
-        return 1
-
     monkeypatch.setattr(driver, "_capture_case", fake_capture)
     monkeypatch.setattr(driver, "_dataset_mirror", lambda: (client, mirror))
     monkeypatch.setattr(driver, "link_capture", fake_link_capture)
-    monkeypatch.setattr(
-        driver, "_score_case", lambda case, runs: {"seam": {"metric": {"score": 1.0}}}
-    )
-    monkeypatch.setattr(driver, "write_scores", fake_write_scores)
+    monkeypatch.setattr(driver, "verify_ingestion", lambda *a, **k: {"ingested": True})
     _stub_fingerprint(monkeypatch)
 
-    result = asyncio.run(
-        driver.run(
-            [_case()], tmp_path / "run.json", capture_only=False, pacing_seconds=0
-        )
-    )
+    result = asyncio.run(driver.run([_case()], tmp_path / "run.json", pacing_seconds=0))
 
     assert [link["trace_id"] for link in links] == ["trace-1", "trace-2"]
     assert [link["repeat"] for link in links] == [1, 2]
     assert all(link["turn"] == 1 for link in links)
     assert all(link["capture_run_id"] == result["manifest"]["run_id"] for link in links)
-    assert [write["dataset_run_id"] for write in score_writes] == [
+
+    repeats = result["scenarios"][_case()["id"]]["repeats"]
+    assert [repeat["dataset_run_id"] for repeat in repeats] == [
         "dataset-run-1",
         "dataset-run-2",
     ]
+
+
+def test_capture_never_calls_the_judge_or_writes_scores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A five-minute capture must not be held open by a 46-minute judge pass.
+
+    The regression this guards is the shape, not a number: any judge call reachable
+    from `driver.run` puts scoring back inside the capture loop.
+    """
+
+    async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
+        return [SeamRun(question="q", answer="a", trace_id="trace-1")]
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("a capture must not judge or post scores")
+
+    monkeypatch.setattr(driver, "_capture_case", fake_capture)
+    monkeypatch.setattr(driver, "_dataset_mirror", lambda: (None, None))
+    monkeypatch.setattr(driver, "verify_ingestion", lambda *a, **k: {"ingested": None})
+    monkeypatch.setattr(harness_module, "score_seams", fail_if_called)
+    monkeypatch.setattr(harness_module, "score", fail_if_called)
+    _stub_fingerprint(monkeypatch)
+
+    result = asyncio.run(driver.run([_case()], tmp_path / "run.json", pacing_seconds=0))
+
+    assert not hasattr(driver, "_score_case")
+    assert not any(
+        repeat.get("scores") for repeat in result["scenarios"][_case()["id"]]["repeats"]
+    )
+
+
+def test_a_completed_capture_records_whether_its_traces_were_ingested(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R3.9. The probe recorded five trace ids that pointed at nothing."""
+
+    async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
+        return [SeamRun(question="q", answer="a", trace_id=f"trace-{repeat_index}")]
+
+    asked: list[tuple] = []
+
+    def fake_verify(trace_id, *, dataset_run_id=None):
+        asked.append((trace_id, dataset_run_id))
+        return {"trace_id": trace_id, "ingested": False, "detail": "not there"}
+
+    monkeypatch.setattr(driver, "_capture_case", fake_capture)
+    monkeypatch.setattr(driver, "_dataset_mirror", lambda: (None, None))
+    monkeypatch.setattr(driver, "verify_ingestion", fake_verify)
+    _stub_fingerprint(monkeypatch)
+
+    result = asyncio.run(driver.run([_case()], tmp_path / "run.json", pacing_seconds=0))
+
+    # The last repeat captured, not the first: see `sample_verification_target`.
+    assert asked == [("trace-2", None)]
+    ingestion = result["manifest"]["langfuse_ingestion"]
+    assert ingestion["ingested"] is False
+    assert ingestion["checked_at"]
 
 
 def test_quota_exhaustion_marks_remaining_scenarios_unrun(
@@ -703,3 +771,62 @@ def test_freeze_projects_completed_evidence_from_a_partial_quota_capture(
 
     validate_replay(frozen)
     assert "HLP-COUNT-1" not in frozen["scenarios"]
+
+
+def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The probe samples the newest turn, so a resume cannot inherit a stale verdict.
+
+    Session one traced fine and stopped; session two continues into a Langfuse that
+    is no longer reachable. Sampling the first recorded id would resolve session
+    one's trace and report the run as ingested.
+    """
+    output = tmp_path / "run.json"
+    output.write_text(
+        json.dumps(
+            {
+                "status": "PARTIAL_QUOTA",
+                "manifest": {"run_id": "run-1"},
+                "scenarios": {
+                    "COUNT-1": {
+                        "status": "COMPLETE",
+                        "repeats": [
+                            {
+                                "repeat": 1,
+                                "status": "COMPLETE",
+                                "dataset_run_id": "session-1-run",
+                                "turns": [
+                                    {"turn": 1, "seams": {"trace_id": "trace-session-1"}}
+                                ],
+                            }
+                        ],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
+        return [SeamRun(question="q", answer="a", trace_id="trace-session-2")]
+
+    asked: list[tuple] = []
+
+    def fake_verify(trace_id, *, dataset_run_id=None):
+        asked.append((trace_id, dataset_run_id))
+        return {"trace_id": trace_id, "ingested": False, "detail": "not there"}
+
+    monkeypatch.setattr(driver, "_capture_case", fake_capture)
+    monkeypatch.setattr(driver, "_dataset_mirror", lambda: (None, None))
+    monkeypatch.setattr(driver, "verify_ingestion", fake_verify)
+    _stub_fingerprint(monkeypatch)
+
+    result = asyncio.run(
+        driver.run(
+            [_case(), _case("HLP-LIST-1")], output, resume=True, pacing_seconds=0
+        )
+    )
+
+    assert asked == [("trace-session-2", None)]
+    assert result["manifest"]["langfuse_ingestion"]["ingested"] is False

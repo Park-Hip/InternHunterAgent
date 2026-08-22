@@ -11,6 +11,28 @@ measures against is [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.
 instrument is built the way it is, and what it can't yet tell you, is
 [`Operating_Manual.md`](Operating_Manual.md).
 
+## New to evaluation?
+
+Start with this file for the module layout, exact commands, and evidence boundary.
+
+Then read the [Operating Manual](Operating_Manual.md) for the three-seam model, verdict
+interpretation, and current limits.
+
+Read the [Agent Behavior Spec](../docs/Agent_Behavior_Spec.md) for the behavior under test, and
+the [scenario registry](scenarios_v1.yaml) for the exact scenarios and deterministic rules.
+
+Before changing or running an evaluation, read [Known Issues](../docs/Known_Issues.md), the
+[Decision Log](../docs/Decision_Log.md), and the relevant record in the
+[research index](../research/README.md).
+
+Raw captures in `evals/runs/` are local and must never be committed because they can contain
+telemetry, trace identifiers, and tool output.
+
+Committed replays in `evals/replays/` are the sanitized evidence that CI can reproduce without a
+model call.
+
+Do not start a baseline capture while its instrument blockers remain open.
+
 ## Read this first: what costs quota
 
 Only two things call a model. Everything else runs offline against recorded evidence, which is
@@ -35,13 +57,18 @@ uv run python -m evals.scenarios --scenario HON-CURRENCY-1
 uv run python -m evals.viewer --sample        # a viewer sample with no recorded run
 ```
 
-Reading a recorded capture takes two commands - grade it, then view it with the verdict joined:
+Grade a recorded capture with execution accuracy, then view it with the deterministic verdict
+joined:
 
 ```powershell
-uv run python -m evals.grader --run evals/runs/<run>.json > evals/runs/<run>-grade.json
+uv run python -m evals.execution_accuracy evals/runs/<run>.json --output evals/runs/<run>-execution.json
+uv run python -m evals.grader --run evals/runs/<run>.json --execution-accuracy evals/runs/<run>-execution.json > evals/runs/<run>-grade.json
 uv run python -m evals.viewer evals/runs/<run>.json --grade evals/runs/<run>-grade.json
 uv run python -m evals.driver freeze evals/runs/<run>.json --grade evals/runs/<run>-grade.json -o evals/replays/<run>.json
 ```
+
+`uv run python -m evals.score --run evals/runs/<run>.json` is an optional, separate judge pass.
+It does not determine the current deterministic verdict because no scenario activates a judge rule.
 
 `--grade` is optional; without it the viewer shows the capture and marks every turn `UNGRADED`.
 With it, each turn carries its `PASS`/`FAIL`/`INFRA`/`UNRUN` verdict and tier, the grade filter in
@@ -68,10 +95,10 @@ each capture ran at: `v1` for `t0025.7-acceptance.json` and `t0025.9-committed.j
 ```text
 scenarios_v1.yaml -> driver.py -> execution_accuracy.py -> grader.py
       (registry)     (capture)        (is the SQL right?)   (verdict)
-                         |                                    |    ^
-                         v                                    |    |
-                     viewer.py <----- grade report -----------+  replay.py
-           (read the turns and their verdict)          (re-grade in CI, no model)
+                         |                    |                 |    ^
+                         v                    v                 |    |
+                     score.py             viewer.py <-----------+  replay.py
+                 (optional judge)  (read the turns and verdict)    (CI, no model)
 ```
 
 The split is deliberate. Capture spends serving credit once and writes evidence to disk; every

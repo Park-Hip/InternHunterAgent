@@ -7,6 +7,9 @@ Never touches the request-path tracing handler.
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
+
 from langfuse.api import NotFoundError
 
 from src.agents.tracing.langfuse import get_langfuse_client, get_langfuse_handler
@@ -16,6 +19,13 @@ from src.core.logger import logger
 # The 2026-08-21 probe recorded five non-null ids against an export target that
 # was refusing connections, so every one of them pointed at nothing. This module
 # resolves one of them against Langfuse before anyone reads the run as traced.
+
+# Export is asynchronous and batched, and Cloud ingestion is not synchronous with
+# the API accepting the batch. A capture of two scenarios finishes in seconds, well
+# inside that window, so the probe flushes first and then retries: without this it
+# reports a healthy run as un-ingested. The ladder is short because the question is
+# "did this arrive at all", not "how fast".
+_INGESTION_RETRY_DELAYS = (0.0, 2.0, 5.0)
 
 
 def write_scores(
@@ -66,7 +76,10 @@ def write_scores(
 
 
 def verify_ingestion(
-    trace_id: str | None, *, dataset_run_id: str | None = None
+    trace_id: str | None,
+    *,
+    dataset_run_id: str | None = None,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, object]:
     """Report whether `trace_id` actually resolves in Langfuse.
 
@@ -96,18 +109,34 @@ def verify_ingestion(
         return record
 
     try:
-        lf.api.trace.get(trace_id)
-    except NotFoundError:
-        record["ingested"] = False
-        record["detail"] = "Langfuse has no trace with this id"
-        logger.warning("Langfuse trace was never ingested", trace_id=trace_id)
-    except Exception as exc:  # noqa: BLE001 - an unreachable Langfuse is not a verdict
-        record["detail"] = str(exc)
-        logger.warning(
-            "Langfuse trace verification failed", trace_id=trace_id, error=str(exc)
-        )
-    else:
+        lf.flush()
+    except Exception as exc:  # noqa: BLE001 - a failed drain is reported, not raised
+        logger.warning("Langfuse flush before verification failed", error=str(exc))
+
+    for attempt, delay in enumerate(_INGESTION_RETRY_DELAYS):
+        if delay:
+            sleep(delay)
+        try:
+            lf.api.trace.get(trace_id)
+        except NotFoundError:
+            record["ingested"] = False
+            record["detail"] = "Langfuse has no trace with this id"
+            continue
+        except Exception as exc:  # noqa: BLE001 - unreachable Langfuse is no verdict
+            record["ingested"] = None
+            record["detail"] = str(exc)
+            logger.warning(
+                "Langfuse trace verification failed",
+                trace_id=trace_id,
+                attempt=attempt + 1,
+                error=str(exc),
+            )
+            break
         record["ingested"] = True
         record["detail"] = "resolved in Langfuse"
+        break
+
+    if record["ingested"] is False:
+        logger.warning("Langfuse trace was never ingested", trace_id=trace_id)
 
     return record

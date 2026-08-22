@@ -9,6 +9,8 @@ from langfuse.api import NotFoundError
 
 from evals import writeback
 
+flushes: list[int] = []
+
 
 class FakeLangfuseClient:
     def __init__(self) -> None:
@@ -106,20 +108,23 @@ def test_flush_called_once_when_scores_written(monkeypatch):
 
 
 class FakeTraceAPI:
-    def __init__(self, known: set[str]) -> None:
+    def __init__(self, known: set[str], *, appears_on_attempt: int = 1) -> None:
         self.known = known
+        self.appears_on_attempt = appears_on_attempt
         self.asked: list[str] = []
 
     def get(self, trace_id: str):
         self.asked.append(trace_id)
-        if trace_id not in self.known:
+        if trace_id not in self.known or len(self.asked) < self.appears_on_attempt:
             raise NotFoundError(f"no trace {trace_id}")
         return {"id": trace_id}
 
 
-def _client_with_traces(monkeypatch, known: set[str]) -> FakeTraceAPI:
-    trace_api = FakeTraceAPI(known)
-    fake = SimpleNamespace(api=SimpleNamespace(trace=trace_api))
+def _client_with_traces(monkeypatch, known: set[str], **kwargs) -> FakeTraceAPI:
+    trace_api = FakeTraceAPI(known, **kwargs)
+    fake = SimpleNamespace(
+        api=SimpleNamespace(trace=trace_api), flush=lambda: flushes.append(1)
+    )
     monkeypatch.setattr(writeback, "get_langfuse_handler", lambda: object())
     monkeypatch.setattr(writeback, "get_langfuse_client", lambda: fake)
     return trace_api
@@ -128,7 +133,9 @@ def _client_with_traces(monkeypatch, known: set[str]) -> FakeTraceAPI:
 def test_an_ingested_trace_verifies(monkeypatch):
     trace_api = _client_with_traces(monkeypatch, {"trace-123"})
 
-    record = writeback.verify_ingestion("trace-123", dataset_run_id="run-9")
+    record = writeback.verify_ingestion(
+        "trace-123", dataset_run_id="run-9", sleep=lambda _: None
+    )
 
     assert record["ingested"] is True
     assert record["dataset_run_id"] == "run-9"
@@ -139,7 +146,7 @@ def test_a_trace_id_that_names_nothing_is_not_ingested(monkeypatch):
     """The 2026-08-21 probe recorded five ids exactly like this one."""
     _client_with_traces(monkeypatch, set())
 
-    record = writeback.verify_ingestion("trace-123")
+    record = writeback.verify_ingestion("trace-123", sleep=lambda _: None)
 
     assert record["ingested"] is False
     assert "no trace" in record["detail"]
@@ -152,11 +159,11 @@ def test_an_unreachable_langfuse_is_not_a_verdict(monkeypatch):
         def get(self, trace_id: str):
             raise RuntimeError("connection refused")
 
-    fake = SimpleNamespace(api=SimpleNamespace(trace=Exploding()))
+    fake = SimpleNamespace(api=SimpleNamespace(trace=Exploding()), flush=lambda: None)
     monkeypatch.setattr(writeback, "get_langfuse_handler", lambda: object())
     monkeypatch.setattr(writeback, "get_langfuse_client", lambda: fake)
 
-    record = writeback.verify_ingestion("trace-123")
+    record = writeback.verify_ingestion("trace-123", sleep=lambda _: None)
 
     assert record["ingested"] is None
     assert "connection refused" in record["detail"]
@@ -167,3 +174,33 @@ def test_verification_without_tracing_is_not_a_verdict(monkeypatch):
 
     assert writeback.verify_ingestion("trace-123")["ingested"] is None
     assert writeback.verify_ingestion(None)["ingested"] is None
+
+
+def test_verification_flushes_and_waits_for_asynchronous_ingestion(monkeypatch):
+    """Export is batched and Cloud ingestion is not synchronous with the API call.
+
+    A two-scenario capture finishes in seconds, well inside that window, so a probe
+    that asked once without draining would report a healthy run as un-ingested.
+    """
+    flushes.clear()
+    waits: list[float] = []
+    trace_api = _client_with_traces(monkeypatch, {"trace-123"}, appears_on_attempt=3)
+
+    record = writeback.verify_ingestion("trace-123", sleep=waits.append)
+
+    assert record["ingested"] is True
+    assert flushes == [1]
+    assert len(trace_api.asked) == 3
+    assert waits == [2.0, 5.0]
+
+
+def test_verification_gives_up_after_the_ladder(monkeypatch):
+    flushes.clear()
+    waits: list[float] = []
+    trace_api = _client_with_traces(monkeypatch, set())
+
+    record = writeback.verify_ingestion("trace-123", sleep=waits.append)
+
+    assert record["ingested"] is False
+    assert len(trace_api.asked) == len(writeback._INGESTION_RETRY_DELAYS)
+    assert waits == [2.0, 5.0]

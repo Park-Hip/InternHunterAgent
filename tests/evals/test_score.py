@@ -55,6 +55,21 @@ def _case() -> dict:
     return {"id": "COUNT-1", "type": "single", "expected": "a count"}
 
 
+@pytest.fixture(autouse=True)
+def no_live_langfuse(monkeypatch: pytest.MonkeyPatch):
+    """Keep the scoring pass off the network by default, for the same reason."""
+    monkeypatch.setattr(score_module, "write_scores", lambda *a, **k: 0)
+    monkeypatch.setattr(
+        score_module,
+        "verify_ingestion",
+        lambda trace_id, **kwargs: {
+            "trace_id": trace_id,
+            "ingested": None,
+            "detail": "stubbed in tests",
+        },
+    )
+
+
 @pytest.fixture
 def stub_judge(monkeypatch: pytest.MonkeyPatch) -> list[tuple[dict, SeamRun]]:
     """Replace the judge with a recorder, so no test spends a judge call."""
@@ -249,3 +264,60 @@ def test_the_pass_records_whether_the_traces_it_scored_exist(
     assert summary["traces_ingested"] is False
     persisted = json.loads(path.read_text(encoding="utf-8"))
     assert persisted["manifest"]["langfuse_ingestion_at_scoring"]["ingested"] is False
+
+
+def test_a_repeat_whose_metrics_all_failed_is_judged_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, posted
+) -> None:
+    """A 429 mid-pass must not cement a null repeat.
+
+    `harness.score` isolates a failing metric as `{"score": None, "error": ...}`,
+    which is truthy. If that counted as scored, one throttled call would null the
+    repeat for every later pass and the only way back would be re-spending the
+    whole registry with --rescore.
+    """
+    attempts: list[str] = []
+
+    def judge(case: dict, final_run: SeamRun) -> dict:
+        attempts.append(case["id"])
+        if len(attempts) == 1:
+            return {
+                "seam1_routing": {"Tool Correctness": {"score": None, "error": "429"}}
+            }
+        return {"seam1_routing": {"Tool Correctness": {"score": 1.0, "reason": "ok"}}}
+
+    monkeypatch.setattr(score_module.harness, "score_seams", judge)
+    path = _write(tmp_path, _artifact())
+
+    first = score_module.score_artifact(path, scenarios=[_case()])
+    second = score_module.score_artifact(path, scenarios=[_case()])
+
+    assert first["scored"] == 1
+    assert second["scored"] == 1
+    assert second["skipped"] == 0
+    assert attempts == ["COUNT-1", "COUNT-1"]
+
+    persisted = json.loads(path.read_text(encoding="utf-8"))
+    repeat = persisted["scenarios"]["COUNT-1"]["repeats"][0]
+    assert repeat["scores"]["seam1_routing"]["Tool Correctness"]["score"] == 1.0
+
+
+def test_a_post_that_never_landed_is_retried_without_re_judging(
+    tmp_path: Path, stub_judge, posted
+) -> None:
+    """R3.7. Scores are persisted before the writeback, so an interrupt between the
+    two leaves a judged repeat whose scores never reached Langfuse. Re-posting is
+    cheap and idempotent; re-judging is 46 minutes of throttled calls."""
+    artifact = _artifact()
+    repeat = artifact["scenarios"]["COUNT-1"]["repeats"][0]
+    repeat["scores"] = {"seam1_routing": {"Tool Correctness": {"score": 1.0}}}
+    repeat["scorer_version"] = SCORER_VERSION
+    path = _write(tmp_path, artifact)
+
+    summary = score_module.score_artifact(path, scenarios=[_case()])
+
+    assert summary["scored"] == 0
+    assert summary["reposted"] == 1
+    assert stub_judge == []
+    assert len(posted) == 1
+    assert posted[0]["dataset_run_id"] == "dataset-run-1"

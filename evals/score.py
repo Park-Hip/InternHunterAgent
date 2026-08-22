@@ -72,12 +72,30 @@ def _seam_run(turn: dict[str, Any]) -> harness.SeamRun:
     )
 
 
+def _has_usable_scores(repeat: dict[str, Any]) -> bool:
+    """True only when the judge actually returned a number for something.
+
+    `harness.score` isolates a failing metric by recording `{"score": None,
+    "error": ...}`, which is a truthy dict. Treating that as scored would cement a
+    429 or a judge JSON hiccup permanently: the repeat would be skipped by every
+    later pass, and the only way back would be re-spending the whole registry.
+    """
+    scores = repeat.get("scores")
+    if not scores:
+        return False
+    return any(
+        payload.get("score") is not None
+        for metric_scores in scores.values()
+        for payload in metric_scores.values()
+    )
+
+
 def _scored_repeats(artifact: dict[str, Any]) -> int:
     return sum(
         1
         for record in artifact["scenarios"].values()
         for repeat in record["repeats"]
-        if repeat.get("scores")
+        if _has_usable_scores(repeat)
     )
 
 
@@ -102,6 +120,7 @@ def score_artifact(
         "run": str(path),
         "scored": 0,
         "skipped": 0,
+        "reposted": 0,
         "unscorable": 0,
         "scores_written": 0,
         "started_at": _utc_now(),
@@ -119,23 +138,28 @@ def score_artifact(
                 repeat["scoring_error"] = "scenario is not in the current registry"
                 summary["unscorable"] += 1
                 continue
-            already_scored = (
-                repeat.get("scores") and repeat.get("scorer_version") == SCORER_VERSION
+            judged = _has_usable_scores(repeat) and (
+                repeat.get("scorer_version") == SCORER_VERSION
             )
-            if already_scored and not rescore:
+            posted = bool(repeat.get("scores_written"))
+            if judged and posted and not rescore:
                 summary["skipped"] += 1
                 continue
 
             final_run = _seam_run(repeat["turns"][-1])
-            repeat["scores"] = harness.score_seams(case, final_run)
-            repeat["scorer_version"] = SCORER_VERSION
-            repeat["scored_at"] = _utc_now()
-            repeat.pop("scoring_error", None)
-            summary["scored"] += 1
-
-            # Persisted before the writeback, so an interrupt during a Langfuse
-            # call costs the post and not the judge calls that paid for it.
-            _write_json(path, artifact)
+            if rescore or not judged:
+                repeat["scores"] = harness.score_seams(case, final_run)
+                repeat["scorer_version"] = SCORER_VERSION
+                repeat["scored_at"] = _utc_now()
+                repeat.pop("scoring_error", None)
+                summary["scored"] += 1
+                # Persisted before the writeback, so an interrupt during a Langfuse
+                # call costs the post and not the judge calls that paid for it.
+                _write_json(path, artifact)
+            else:
+                # Judged on an earlier pass whose post never landed. Re-posting is
+                # cheap and idempotent; re-judging is 46 minutes of throttled calls.
+                summary["reposted"] += 1
 
             written = write_scores(
                 final_run.trace_id,
@@ -161,7 +185,13 @@ def score_artifact(
     manifest.setdefault("scoring_passes", []).append(
         {
             key: summary[key]
-            for key in ("started_at", "finished_at", "scored", "skipped")
+            for key in (
+                "started_at",
+                "finished_at",
+                "scored",
+                "skipped",
+                "reposted",
+            )
         }
     )
     _write_json(path, artifact)

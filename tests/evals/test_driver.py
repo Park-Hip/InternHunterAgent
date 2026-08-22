@@ -17,6 +17,27 @@ from src.agents.runtime.prompts import load_prompt_version
 from src.agents.tracing import langfuse
 
 
+@pytest.fixture(autouse=True)
+def no_live_langfuse(monkeypatch: pytest.MonkeyPatch):
+    """Keep `driver.run` off the network in every test in this module.
+
+    The ingestion probe at the end of a capture is a real HTTPS call to Langfuse
+    Cloud on any checkout whose `.env` carries working credentials - which is
+    exactly the state the manual verification asks for. A test that forgot to patch
+    it would pass today only because a broken host makes the call fail fast.
+    Tests that assert on the probe override this with their own stub.
+    """
+    monkeypatch.setattr(
+        driver,
+        "verify_ingestion",
+        lambda trace_id, **kwargs: {
+            "trace_id": trace_id,
+            "ingested": None,
+            "detail": "stubbed in tests",
+        },
+    )
+
+
 def test_resolving_the_fixture_url_never_freezes_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -311,8 +332,7 @@ def test_capture_never_calls_the_judge_or_writes_scores(
 
     assert not hasattr(driver, "_score_case")
     assert not any(
-        repeat.get("scores")
-        for repeat in result["scenarios"][_case()["id"]]["repeats"]
+        repeat.get("scores") for repeat in result["scenarios"][_case()["id"]]["repeats"]
     )
 
 

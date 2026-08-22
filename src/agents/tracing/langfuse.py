@@ -69,6 +69,11 @@ def get_langfuse_release() -> str | None:
 
 def create_langfuse_client() -> Langfuse:
     """Build the process client with explicit deployment attribution."""
+    if not settings.LANGFUSE_BASE_URL:
+        raise ValueError(
+            "LANGFUSE_BASE_URL is not set. Set it to the Langfuse Cloud host from "
+            "D-029; the SDK's own default would export somewhere nobody reads."
+        )
     return Langfuse(
         public_key=settings.LANGFUSE_PUBLIC_KEY,
         secret_key=settings.LANGFUSE_SECRET_KEY,

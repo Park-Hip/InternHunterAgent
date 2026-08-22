@@ -28,7 +28,6 @@ from evals.fixtures.loader import fixture_database_url
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "evals" / "runs"
-SCORER_VERSION = "harness-score-v1"
 MAX_RETRIES = 2
 SDK_MAX_RETRIES = 0
 
@@ -119,6 +118,7 @@ def _tracing_enabled() -> bool:
 _bind_fixture_environment()
 
 from evals import harness  # noqa: E402
+from evals.harness import SCORER_VERSION  # noqa: E402
 from evals.langfuse_dataset import (  # noqa: E402
     DatasetMirror,
     LangfuseDatasetClient,
@@ -127,7 +127,7 @@ from evals.langfuse_dataset import (  # noqa: E402
 )
 from evals.scenarios import load_scenarios, repeat_count  # noqa: E402
 from evals.sanitization import FORBIDDEN_CONTENT  # noqa: E402
-from evals.writeback import write_scores  # noqa: E402
+from evals.writeback import verify_ingestion  # noqa: E402
 
 # Below the bind because it reads config/prompts.yaml through src.core.config, which
 # must not be frozen before the fixture environment is in place.
@@ -608,22 +608,6 @@ async def _capture_with_retry(
     raise AssertionError("unreachable")
 
 
-def _score_case(case: dict[str, Any], runs: list[harness.SeamRun]) -> dict[str, Any]:
-    final = runs[-1]
-    result: dict[str, Any] = {
-        "seam1_routing": harness.score(
-            harness.seam1_metrics(), harness.build_seam1_case(case, final)
-        ),
-        "seam3_synthesis": harness.score(
-            harness.seam3_metrics(), harness.build_seam3_case(case, final)
-        ),
-    }
-    seam2 = harness.build_seam2_case(final)
-    if seam2 is not None:
-        result["seam2_nl_to_sql"] = harness.score(harness.seam2_metrics(), seam2)
-    return result
-
-
 def _dataset_mirror() -> tuple[LangfuseDatasetClient | None, DatasetMirror | None]:
     """Build the derived projection only while evaluation tracing is available."""
     if get_langfuse_handler() is None:
@@ -635,7 +619,6 @@ def _dataset_mirror() -> tuple[LangfuseDatasetClient | None, DatasetMirror | Non
 async def run(
     scenarios: list[dict[str, Any]],
     output: Path,
-    capture_only: bool = True,
     resume: bool = False,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     pacing_seconds: float | None = None,
@@ -714,13 +697,10 @@ async def run(
                     )
                     if linked_run_id is not None:
                         dataset_run_id = linked_run_id
-                if not capture_only:
-                    repeat_record["scores"] = _score_case(case, runs)
-                    write_scores(
-                        runs[-1].trace_id,
-                        repeat_record["scores"],
-                        dataset_run_id=dataset_run_id,
-                    )
+                # The dataset run is recorded, not consumed here. Scoring is an
+                # offline pass over this artifact (D-c, D-f), and it needs the run
+                # this capture linked its traces into in order to attach scores.
+                repeat_record["dataset_run_id"] = dataset_run_id
                 repeat_record["status"] = "COMPLETE"
             except Exception as exc:  # noqa: BLE001 - preserve partial runs
                 repeat_record["status"] = "INFRA"
@@ -728,6 +708,7 @@ async def run(
                 if _is_quota_error(exc):
                     artifact["status"] = "PARTIAL_QUOTA"
                     _mark_unrun(artifact, scenarios, scenario_index, scenario_id)
+                    manifest["langfuse_ingestion"] = _verify_capture_ingestion(artifact)
                     _write_json(output, artifact)
                     return artifact
             _write_json(output, artifact)
@@ -741,8 +722,33 @@ async def run(
 
     artifact["status"] = "COMPLETE"
     manifest["finished_at"] = _utc_now()
+    manifest["langfuse_ingestion"] = _verify_capture_ingestion(artifact)
     _write_json(output, artifact)
     return artifact
+
+
+def _first_linked_turn(artifact: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Return the first recorded trace id, with the dataset run it was linked into."""
+    for record in artifact["scenarios"].values():
+        for repeat in record["repeats"]:
+            for turn in repeat["turns"]:
+                trace_id = turn["seams"].get("trace_id")
+                if trace_id is not None:
+                    return trace_id, repeat.get("dataset_run_id")
+    return None, None
+
+
+def _verify_capture_ingestion(artifact: dict[str, Any]) -> dict[str, Any]:
+    """Resolve one of this capture's trace ids against Langfuse, per R3.9.
+
+    One is enough. Every turn in a run exports through the same client to the same
+    host, so a single lookup separates "these ids name real traces" from the probe's
+    failure mode, where all five named nothing.
+    """
+    trace_id, dataset_run_id = _first_linked_turn(artifact)
+    record = verify_ingestion(trace_id, dataset_run_id=dataset_run_id)
+    record["checked_at"] = _utc_now()
+    return record
 
 
 def _mark_unrun(
@@ -764,9 +770,6 @@ def main(argv: list[str] | None = None) -> None:
         "--output", "-o", type=Path, default=DEFAULT_OUTPUT / "run.json"
     )
     parser.add_argument("--resume", action="store_true")
-    parser.add_argument(
-        "--score", action="store_true", help="Run the judge after each captured repeat."
-    )
     parser.add_argument("--ids", help="Comma-separated scenario IDs to run.")
     parser.add_argument(
         "--grade", type=Path, help="Deterministic grader report for freeze."
@@ -799,9 +802,7 @@ def main(argv: list[str] | None = None) -> None:
         scenarios = [case for case in scenarios if case["id"] in wanted]
     if not scenarios:
         parser.error("No scenarios selected")
-    asyncio.run(
-        run(scenarios, args.output, capture_only=not args.score, resume=args.resume)
-    )
+    asyncio.run(run(scenarios, args.output, resume=args.resume))
 
 
 if __name__ == "__main__":

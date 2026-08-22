@@ -7,8 +7,15 @@ Never touches the request-path tracing handler.
 
 from __future__ import annotations
 
+from langfuse.api import NotFoundError
+
 from src.agents.tracing.langfuse import get_langfuse_client, get_langfuse_handler
 from src.core.logger import logger
+
+# A trace id in a capture artifact is not evidence that the trace was ingested.
+# The 2026-08-21 probe recorded five non-null ids against an export target that
+# was refusing connections, so every one of them pointed at nothing. This module
+# resolves one of them against Langfuse before anyone reads the run as traced.
 
 
 def write_scores(
@@ -56,3 +63,51 @@ def write_scores(
     except Exception as exc:  # noqa: BLE001 - export draining must not break an eval capture
         logger.warning("Langfuse score flush failed", error=str(exc))
     return written
+
+
+def verify_ingestion(
+    trace_id: str | None, *, dataset_run_id: str | None = None
+) -> dict[str, object]:
+    """Report whether `trace_id` actually resolves in Langfuse.
+
+    `ingested` is True when the trace is there, False when Langfuse answered that
+    it is not, and None when the question could not be asked - tracing disabled,
+    no trace id recorded, or the lookup itself failed. None is deliberately not
+    False: "we did not check" and "it is not there" are different findings, and
+    collapsing them is how the probe's dead export target went unnoticed.
+    """
+    record: dict[str, object] = {
+        "trace_id": trace_id,
+        "dataset_run_id": dataset_run_id,
+        "ingested": None,
+        "detail": None,
+    }
+
+    if trace_id is None:
+        record["detail"] = "no trace id recorded"
+        return record
+    if get_langfuse_handler() is None:
+        record["detail"] = "tracing disabled"
+        return record
+
+    lf = get_langfuse_client()
+    if lf is None:
+        record["detail"] = "tracing disabled"
+        return record
+
+    try:
+        lf.api.trace.get(trace_id)
+    except NotFoundError:
+        record["ingested"] = False
+        record["detail"] = "Langfuse has no trace with this id"
+        logger.warning("Langfuse trace was never ingested", trace_id=trace_id)
+    except Exception as exc:  # noqa: BLE001 - an unreachable Langfuse is not a verdict
+        record["detail"] = str(exc)
+        logger.warning(
+            "Langfuse trace verification failed", trace_id=trace_id, error=str(exc)
+        )
+    else:
+        record["ingested"] = True
+        record["detail"] = "resolved in Langfuse"
+
+    return record

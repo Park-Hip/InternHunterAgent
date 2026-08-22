@@ -3,6 +3,10 @@ stands in for the real SDK so these run without creds or a live server."""
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+from langfuse.api import NotFoundError
+
 from evals import writeback
 
 
@@ -99,3 +103,67 @@ def test_flush_called_once_when_scores_written(monkeypatch):
     writeback.write_scores("trace-123", {"seam1_routing": {"X": {"score": 1.0}}})
 
     assert fake.flush_calls == 1
+
+
+class FakeTraceAPI:
+    def __init__(self, known: set[str]) -> None:
+        self.known = known
+        self.asked: list[str] = []
+
+    def get(self, trace_id: str):
+        self.asked.append(trace_id)
+        if trace_id not in self.known:
+            raise NotFoundError(f"no trace {trace_id}")
+        return {"id": trace_id}
+
+
+def _client_with_traces(monkeypatch, known: set[str]) -> FakeTraceAPI:
+    trace_api = FakeTraceAPI(known)
+    fake = SimpleNamespace(api=SimpleNamespace(trace=trace_api))
+    monkeypatch.setattr(writeback, "get_langfuse_handler", lambda: object())
+    monkeypatch.setattr(writeback, "get_langfuse_client", lambda: fake)
+    return trace_api
+
+
+def test_an_ingested_trace_verifies(monkeypatch):
+    trace_api = _client_with_traces(monkeypatch, {"trace-123"})
+
+    record = writeback.verify_ingestion("trace-123", dataset_run_id="run-9")
+
+    assert record["ingested"] is True
+    assert record["dataset_run_id"] == "run-9"
+    assert trace_api.asked == ["trace-123"]
+
+
+def test_a_trace_id_that_names_nothing_is_not_ingested(monkeypatch):
+    """The 2026-08-21 probe recorded five ids exactly like this one."""
+    _client_with_traces(monkeypatch, set())
+
+    record = writeback.verify_ingestion("trace-123")
+
+    assert record["ingested"] is False
+    assert "no trace" in record["detail"]
+
+
+def test_an_unreachable_langfuse_is_not_a_verdict(monkeypatch):
+    """None and False are different findings: not asked, versus asked and absent."""
+
+    class Exploding:
+        def get(self, trace_id: str):
+            raise RuntimeError("connection refused")
+
+    fake = SimpleNamespace(api=SimpleNamespace(trace=Exploding()))
+    monkeypatch.setattr(writeback, "get_langfuse_handler", lambda: object())
+    monkeypatch.setattr(writeback, "get_langfuse_client", lambda: fake)
+
+    record = writeback.verify_ingestion("trace-123")
+
+    assert record["ingested"] is None
+    assert "connection refused" in record["detail"]
+
+
+def test_verification_without_tracing_is_not_a_verdict(monkeypatch):
+    monkeypatch.setattr(writeback, "get_langfuse_handler", lambda: None)
+
+    assert writeback.verify_ingestion("trace-123")["ingested"] is None
+    assert writeback.verify_ingestion(None)["ingested"] is None

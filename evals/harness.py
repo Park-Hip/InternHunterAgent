@@ -39,6 +39,11 @@ from src.agents.tracing.langfuse import (
     validate_langfuse_trace_context,
 )
 
+# Owned here because `score_seams` below is what it versions. The driver stamps it
+# into a capture manifest and `evals/score.py` reads it to decide what is already
+# scored, so one definition keeps those two from disagreeing.
+SCORER_VERSION = "harness-score-v1"
+
 QUERY_TOOL_NAME = "query_clean_jobs"
 GENERATE_SQL_SPAN_NAME = "generate_sql"
 
@@ -449,6 +454,28 @@ def score(metrics: list, test_case: LLMTestCase) -> dict[str, dict]:
     return results
 
 
+def score_seams(case: dict, final_run: SeamRun) -> dict[str, dict]:
+    """Judge every seam observable in one recorded turn.
+
+    The single scoring implementation, per D-f. `evals/score.py` calls it over a
+    recorded artifact and `run_case` calls it over a turn it just captured, so the
+    two cannot drift into measuring different things. Neither writes to Langfuse
+    from here: the offline pass owns that side effect.
+    """
+    results: dict[str, dict] = {}
+
+    results["seam1_routing"] = score(seam1_metrics(), build_seam1_case(case, final_run))
+
+    seam2_case = build_seam2_case(final_run)
+    if seam2_case is not None:
+        results["seam2_nl_to_sql"] = score(seam2_metrics(), seam2_case)
+
+    results["seam3_synthesis"] = score(
+        seam3_metrics(), build_seam3_case(case, final_run)
+    )
+    return results
+
+
 async def run_case(case: dict) -> dict:
     """Run one golden end-to-end and score every seam it produced."""
     if case["type"] == "conversational":
@@ -458,17 +485,7 @@ async def run_case(case: dict) -> dict:
         final_run = await run_single_turn_case(case)
         conversation = None
 
-    results: dict[str, dict] = {}
-
-    seam1_case = build_seam1_case(case, final_run)
-    results["seam1_routing"] = score(seam1_metrics(), seam1_case)
-
-    seam2_case = build_seam2_case(final_run)
-    if seam2_case is not None:
-        results["seam2_nl_to_sql"] = score(seam2_metrics(), seam2_case)
-
-    seam3_case = build_seam3_case(case, final_run)
-    results["seam3_synthesis"] = score(seam3_metrics(), seam3_case)
+    results = score_seams(case, final_run)
 
     return {
         "case_id": case["id"],
@@ -478,7 +495,8 @@ async def run_case(case: dict) -> dict:
         "conversation": conversation,
         "results": results,
         "trace_id": final_run.trace_id,
-        # The scenario driver is the sole score writer because only it can
-        # associate scores with the derived Langfuse dataset run.
+        # `evals/score.py` is the sole score writer, per D-c and D-f: only a pass
+        # over a recorded artifact can re-post corrected scores, and only it knows
+        # the dataset run the capture linked its traces into.
         "scores_written": 0,
     }

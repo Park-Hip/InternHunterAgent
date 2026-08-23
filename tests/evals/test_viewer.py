@@ -183,6 +183,17 @@ def test_grade_joins_per_turn_and_places_checks_beside_their_seam() -> None:
     assert turn["checks"][1]["detail"] == "none of ('per year',) present"
 
 
+def test_viewer_preserves_a_not_evaluated_check_outcome() -> None:
+    grade = _grade()
+    grade["scenarios"]["HLP-COUNT-1"][0]["checks"][1][
+        "outcome"
+    ] = "NOT_EVALUATED"
+
+    turn = flatten_turns(_run(), None, grade)[0]
+
+    assert turn["checks"][0]["outcome"] == "NOT_EVALUATED"
+
+
 def test_ungraded_turns_are_labelled_rather_than_assumed_to_pass() -> None:
     turn = flatten_turns(_run())[0]
 

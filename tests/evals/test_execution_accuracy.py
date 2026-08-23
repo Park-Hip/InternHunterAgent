@@ -326,6 +326,18 @@ def test_exemption_preserves_reason() -> None:
     assert result == {"status": "EXEMPT", "reason": "No query is expected."}
 
 
+def test_missing_sql_is_not_evaluated_when_the_turn_completed() -> None:
+    result = grade_turn(
+        {"id": "HLP-COUNT-1", "reference_sql": "SELECT COUNT(*) FROM clean_jobs"},
+        None,
+    )
+
+    assert result == {
+        "status": "NOT_EVALUATED",
+        "reason": "No generated SQL was persisted, so SQL execution cannot be compared.",
+    }
+
+
 def test_conversational_turns_can_use_turn_specific_references(monkeypatch) -> None:
     from evals.execution_accuracy import grade_run
 

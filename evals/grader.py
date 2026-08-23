@@ -403,6 +403,16 @@ def _structural_checks(rule: ScenarioRule, evidence: Evidence) -> list[Check]:
                 checks.append(Check("execution_accuracy", True, f"execution accuracy {accuracy_status}", "structural"))
             elif accuracy_status in {INFRA, UNRUN}:
                 checks.append(Check("execution_accuracy", None, f"execution accuracy is {accuracy_status}", "structural"))
+            elif accuracy_status == NOT_EVALUATED:
+                checks.append(
+                    Check(
+                        "execution_accuracy",
+                        None,
+                        f"execution accuracy is {accuracy_status}",
+                        "structural",
+                        outcome=NOT_EVALUATED,
+                    )
+                )
             else:
                 checks.append(Check("execution_accuracy", False, f"execution accuracy is {accuracy_status}", "structural"))
 
@@ -761,6 +771,11 @@ def main() -> None:
     parser.add_argument("--run", type=Path, help="T0025.3 persisted run JSON")
     parser.add_argument("--observed", type=Path, help="Answer-only observed artifact")
     parser.add_argument("--execution-accuracy", type=Path)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Write the UTF-8 grader report to this file instead of standard output.",
+    )
     args = parser.parse_args()
     if bool(args.run) == bool(args.observed):
         parser.error("choose exactly one of --run or --observed")
@@ -769,7 +784,11 @@ def main() -> None:
         report = grade_persisted_run(_load_json(args.run), execution)
     else:
         report = grade_observed_answers(args.observed)
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    rendered = json.dumps(report, ensure_ascii=False, indent=2)
+    if args.output:
+        args.output.write_text(f"{rendered}\n", encoding="utf-8")
+    else:
+        print(rendered)
 
 
 if __name__ == "__main__":

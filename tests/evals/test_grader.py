@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -399,6 +400,24 @@ def test_four_outcomes_and_denominator_exclusion_are_preserved() -> None:
     assert summary["by_class"]["SAF"]["pass_rate"] == 1.0
 
 
+def test_missing_sql_is_not_evaluated_after_a_routing_failure() -> None:
+    grade = grade_evidence(
+        "HLP-COUNT-1",
+        Evidence(
+            answer="CÃ³ 5 viá»‡c lÃ m.",
+            tools_called=[],
+            execution_accuracy={"status": NOT_EVALUATED},
+        ),
+    )
+
+    execution = next(
+        check for check in grade.checks if check.name == "execution_accuracy"
+    )
+    assert grade.status == FAIL
+    assert grade.first_failing_seam == "structural"
+    assert execution.outcome == NOT_EVALUATED
+
+
 def test_persisted_empty_answer_is_infra_and_counted_explicitly() -> None:
     report = grade_persisted_run(
         {
@@ -500,3 +519,29 @@ def test_recorded_answer_replay_is_no_model_and_preserves_legacy_infra(tmp_path:
 
     assert report["summary"]["total"] == 2
     assert report["summary"]["counts"][INFRA] == 2
+
+
+def test_cli_writes_a_utf8_grader_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    import evals.grader as grader
+
+    run_path = tmp_path / "run.json"
+    output_path = tmp_path / "grade.json"
+    run_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        grader,
+        "grade_persisted_run",
+        lambda run, execution: {"run_id": "run-1", "summary": {"counts": {"PASS": 1}}},
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["grader", "--run", str(run_path), "--output", str(output_path)],
+    )
+
+    grader.main()
+
+    assert capsys.readouterr().out == ""
+    assert json.loads(output_path.read_text(encoding="utf-8")) == {
+        "run_id": "run-1",
+        "summary": {"counts": {"PASS": 1}},
+    }

@@ -247,15 +247,21 @@ def _evidence_coverage(
 def _checks(grade: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Return the checks that did not pass, tagged with the seam each one judges.
 
-    `passed is None` is not a failure but an unavailable judgement - it is what makes
-    a turn `INFRA` rather than `FAIL` - so the two are carried separately.
+    The grader distinguishes unavailable evidence from a check that did not apply.
+    Preserve that distinction in the viewer instead of deriving a label from
+    `passed`, because both states use `None` for that field.
     """
     return [
         {
             "name": str(check.get("name", "unnamed check")),
             "detail": _text(check.get("detail"), "No detail recorded"),
             "tier": str(check.get("tier", "unknown")),
-            "outcome": "FAILED" if check.get("passed") is False else "UNAVAILABLE",
+            "outcome": str(
+                check.get(
+                    "outcome",
+                    "FAILED" if check.get("passed") is False else "UNAVAILABLE",
+                )
+            ),
             "seam": _seam_for_check(str(check.get("name", ""))),
         }
         for check in (grade or {}).get("checks", [])
@@ -462,7 +468,7 @@ def build_viewer_html(
     .notes { margin-top:16px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; } textarea { width:100%; min-height:110px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:8px; } .saved { color:var(--muted); font-size:12px; margin-top:6px; }
     .empty { text-align:center; padding:70px 20px; color:var(--muted); } @media (max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:16px; } .header-row { align-items:flex-start; flex-direction:column; } }
     .runbar { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px; } .facts { display:flex; flex-wrap:wrap; gap:18px; } .fact { font-size:13px; overflow-wrap:anywhere; } .fact label { color:var(--muted); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-right:6px; }
-    .badge { display:inline-block; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; letter-spacing:.04em; border:1px solid transparent; } .b-PASS,.b-CAPTURED { background:#e7f6ec; color:#11633a; border-color:#b6e0c6; } .b-FAIL,.b-CAPTURE_FAILED { background:#fdeaea; color:#93231f; border-color:#f3c2c0; } .b-INFRA,.b-PROVIDER_DID_NOT_EMIT { background:#fff3df; color:#7c4a00; border-color:#f0d28c; } .b-UNRUN,.b-UNGRADED,.b-UNKNOWN,.b-NOT_CONFIGURED,.b-NOT_APPLICABLE { background:#eef1f5; color:#4a5769; border-color:var(--line); }
+    .badge { display:inline-block; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; letter-spacing:.04em; border:1px solid transparent; } .b-PASS,.b-CAPTURED { background:#e7f6ec; color:#11633a; border-color:#b6e0c6; } .b-FAIL,.b-CAPTURE_FAILED { background:#fdeaea; color:#93231f; border-color:#f3c2c0; } .b-INFRA,.b-PROVIDER_DID_NOT_EMIT { background:#fff3df; color:#7c4a00; border-color:#f0d28c; } .b-UNRUN,.b-UNGRADED,.b-UNKNOWN,.b-NOT_CONFIGURED,.b-NOT_APPLICABLE,.b-NOT_EVALUATED { background:#eef1f5; color:#4a5769; border-color:var(--line); }
     .verdict { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:14px; font-size:13px; color:var(--muted); }
     .checks { margin-top:14px; display:grid; gap:10px; } .check { border:1px solid var(--line); border-left-width:4px; border-radius:8px; padding:10px 12px; background:#fcfdfe; } .check-fail { border-left-color:#c9403a; } .check-na { border-left-color:#c78b21; }
     .check-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:13px; } .check-head .tier { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; } .check-detail { margin-top:6px; font-size:13px; overflow-wrap:anywhere; white-space:pre-wrap; }
@@ -495,10 +501,11 @@ def build_viewer_html(
       if (!tele.calls.length) return grid + '<div class="row-count" style="margin-top:10px">No per-call usage was reported.</div>';
       return `${grid}<div class="row-count" style="margin-top:12px">${tele.calls.length} model call${tele.calls.length === 1 ? '' : 's'} in this turn</div>${table(['Call', 'Input', 'Output', 'Total', 'Finish reason'], tele.calls)}`;
     };
+    const checkBadgeStatus = outcome => ({FAILED: 'FAIL', UNAVAILABLE: 'INFRA', NOT_EVALUATED: 'NOT_EVALUATED'})[outcome] || outcome;
     const checksFor = (turn, seam) => {
       const items = turn.checks.filter(check => check.seam === seam);
       if (!items.length) return '';
-      return `<div class="checks">${items.map(check => `<div class="check ${check.outcome === 'FAILED' ? 'check-fail' : 'check-na'}"><div class="check-head"><strong>${esc(check.name)}</strong>${badge(check.outcome === 'FAILED' ? 'FAIL' : 'INFRA', check.outcome)}<span class="tier">${esc(check.tier)} tier</span></div><div class="check-detail">${esc(check.detail)}</div></div>`).join('')}</div>`;
+      return `<div class="checks">${items.map(check => `<div class="check ${check.outcome === 'FAILED' ? 'check-fail' : 'check-na'}"><div class="check-head"><strong>${esc(check.name)}</strong>${badge(checkBadgeStatus(check.outcome), check.outcome)}<span class="tier">${esc(check.tier)} tier</span></div><div class="check-detail">${esc(check.detail)}</div></div>`).join('')}</div>`;
     };
     const rowsBlock = rows => {
       if (rows.kind === 'text') return `<div class="rows-text">${esc(rows.text)}</div>`;

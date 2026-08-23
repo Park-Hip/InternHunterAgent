@@ -1,218 +1,118 @@
 # Evaluation Operating Manual
 
-> **Last verified:** 2026-08-22.
+> **Last verified:** 2026-08-23.
 
-> **Eviction:** A claim here leaves when the module, statuses, or constraint it describes changes.
-> This file explains how the instrument works and why; [`README.md`](README.md) owns the module
-> layout and the exact commands, [`scenarios_v1.yaml`](scenarios_v1.yaml) owns what gets asked, and
-> [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md) owns what correct behavior is.
+> **Eviction:** This manual leaves when the review process, authority boundary, or evidence states change.
 
-Reading final answers only tells you *that* something went wrong, never *where*.
-If the agent says "3 machine learning jobs" and the truth is 5, the answer alone cannot say
-whether it picked the wrong tool, wrote a bad query, or summarized good data badly - three
-different bugs with three different fixes.
-That is not hypothetical: an earlier evaluation round captured only final answers, and when eight
-of them came back empty, the evidence could not say why.
-So this instrument records the agent's work at three internal points and grades each one
-separately against a frozen, known-correct database.
+This manual tells a maintainer how to review an evaluation result without confusing a model failure, a missing observation, and a grader disagreement.
+Use [`README.md`](README.md) for the exact commands and the glossary of terms.
+Use [`Instrument_Report.md`](Instrument_Report.md) for the current baseline and open cases.
 
-## The three seams
+## What the instrument observes
 
-One user question produces one **turn**.
-Inside that turn the agent typically makes three model calls, and each is a **seam** where
-evidence gets captured.
+Every user question is a turn with up to three seams.
 
-1. **Routing.** The agent has three tools: `query_clean_jobs`, `get_job_details`, and
-   `get_current_time`. Some questions should call no tool at all - a request to delete data, or to
-   reveal the raw SQL - and this seam records which tool, if any, actually ran.
-2. **NL to SQL.** A second call turns the question into a SQL query. This seam records the exact
-   query text and the rows it returned. It is where a real bug was caught: matching `%ML%` against
-   `tech_stack` silently pulled in *MLOps* and *MLflow*.
-3. **Synthesis.** The rows come back and a third call writes the human answer, which this seam
-   records. Correct rows can still produce a dishonest answer - naming one "highest paid" job
-   across salaries in different currencies, for instance.
+1. Routing records whether the agent chose the required tool or correctly chose no tool.
+2. SQL generation records generated SQL and the fixture rows it returned.
+3. Synthesis records the answer presented to the user.
 
-The evaluation does not call the web API or wrap the agent in special code.
-It builds the same agent the product builds, runs it in-process, and reads the seams out of the
-tracing spans the agent already emits.
-A telemetry callback rides along on the same call to record tokens, latency, and each call's
-finish reason.
+The earliest failed seam is the primary diagnosis.
+If routing failed, a later missing SQL comparison is `NOT_EVALUATED`, not a second infrastructure failure.
+If generated SQL failed execution accuracy, an incorrect answer downstream remains evidence of that earlier SQL failure.
 
-The rule that shapes everything downstream: mark the **earliest** wrong seam and stop.
-If the SQL was wrong, the bad answer downstream is not a second bug - it is the same bug, observed
-later.
-This is why the deterministic grader stops at the first failing tier (below), and why the viewer
-shows one turn per screen in seam order.
+The evaluator creates the same agent used by the product and binds it to a frozen 22-row fixture database.
+The fixture makes the SQL contract repeatable and manually inspectable, but it is not a production-corpus quality sample.
 
-## The three scenario classes
+## Authority and the three kinds of check
 
-Every question lives in `scenarios_v1.yaml`, 29 entries.
-The ID carries its own class, so `HON-CURRENCY-1` reads as honesty without a lookup table.
+Structural assertions check observable facts such as tool use, SQL result contracts, row counts, and prohibited identifiers.
+Literal assertions check fixed, reviewable text conditions such as a secret-like pattern.
+Semantic assertions ask whether the response satisfied a behavior requirement over the complete conversational trajectory.
 
-| Class | Count | Should |
-|---|---:|---|
-| `SAF` - Safety | 6 | Refuse or redirect: destructive requests, prompt injection, off-topic questions, discriminatory filtering. Correct behavior usually means no tool call at all. |
-| `HON` - Honesty | 9 | Not overclaim: no cross-currency salary comparison, no record-creation date read as a posting date, no invented results, no leaked raw SQL. |
-| `HLP` - Helpfulness | 14 | Actually answer: counts, lists, follow-ups that build on context, location synonyms like Saigon and Ho Chi Minh City, abbreviations like ML. |
+Structural results take precedence over literal and semantic results.
+The semantic judge has no authority to overwrite a structural result.
+The judge result is diagnostic while calibration is being measured.
 
-Fifteen of the 29 are **probes** - cases judged most likely to wobble, so the determinism protocol
-(`docs/Agent_Behavior_Spec.md` §5) runs each three times instead of two.
-Two are **conversational**, sharing one memory thread across turns to test whether a follow-up
-keeps earlier context.
-Eighteen carry **reference SQL**: the query a correct agent's own query should be equivalent to,
-by result set rather than by text.
-The other eleven are exempt - a refusal has no correct SQL.
-A full run is therefore 77 turns: 45 repeats from the 15 probes, 28 from the 14 non-probes, plus
-one extra turn for each of the two conversational scenarios' two repeats.
+During calibration, human review wins over both deterministic and semantic results.
+Each disagreement requires a new or corrected labelled corpus case and a written disposition.
+Only a maintainer can authorize a calibrated metric for a stated use after reviewing the published report.
+An authorization to report a diagnostic metric is not authorization to impose a release gate.
 
-## From command to graded artifact
+## Outcome interpretation
 
-```powershell
-uv run python -m evals.driver --output evals/runs/run.json
-```
-
-One command starts a run.
-Everything after that is designed around one assumption: the run will probably be interrupted, so
-no completed work may ever be lost.
-
-**The fixture.** The agent is not pointed at the real job database.
-It queries a frozen 22-row copy built through the same Alembic migrations as production, so its
-schema cannot silently drift from the real thing.
-22 rows is deliberate: small enough that a human can verify every expected answer by hand, large
-enough to contain the awkward cases - missing expiry dates, salaries in two currencies, Vietnamese
-company names.
-
-**The manifest.** Before the first model call, the run records what produced it: the Git commit,
-hashes of the prompt, the settings, the scenario file, and the fixture, plus whether the working
-tree was clean.
-A run from an uncommitted tree is still readable, but it is flagged `baseline_eligible: false` and
-`uv run python -m evals.driver diff` refuses to compare it with another run.
-
-**Checkpointing.** The artifact is rewritten to disk after every turn, and again after every
-repeat.
-When a call fails on quota, the driver marks that repeat `INFRA` and moves to the next scenario.
-A single 429 does not end the run: on DeepSeek it is concurrency backpressure rather than an
-exhausted budget, the next scenario will likely succeed, and finishing the registry costs about
-four cents (D-e).
-Only `CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT` failures in a row read as an exhausted account. That
-sets `status: PARTIAL_QUOTA`, marks every scenario after the current one `UNRUN`, and stops, so a
-genuinely dead key does not burn the whole registry.
-Because a survivable 429 no longer changes the run's own status, `status: COMPLETE` means the run
-reached the end of the registry, not that every scenario in it succeeded.
-Read `manifest.scenario_status_counts` for that: it tallies the scenario records, so a capture that
-survived one blip reads `{"COMPLETE": 28, "INFRA": 1}` rather than requiring a walk through all 29.
-`--resume` reopens that artifact, keeps only the repeats already marked `COMPLETE`, and continues
-from there - so a scenario that completed 2 of its 3 probe repeats resumes on the third, not from
-scratch.
-Checkpointing is interrupt safety, not quota survival. A capture is five minutes of live model
-calls that cannot be reproduced, so anything that ends the process early - a halt, a lost network,
-a closed laptop - must leave readable evidence behind rather than nothing.
-
-**Execution accuracy.** Rather than comparing SQL text - where many different queries are all
-correct - `execution_accuracy.py` runs both the agent's query and the reference query against the
-fixture and compares the result sets as unordered multisets (`collections.Counter`, including
-duplicates).
-Different-but-equivalent SQL passes; same-looking-but-wrong SQL fails.
-
-Everything from execution accuracy onward makes no model call, so grading a captured run is free
-and repeatable.
-
-## Running an arm: the order that protects the evidence
-
-The steps below are ordered by what is recoverable, not by convenience.
-Exactly one of them spends money and cannot be repeated; everything else is free and idempotent.
-[`README.md`](README.md) owns the exact commands.
-
-1. **Pin the inputs.** Fixture up and hash-verified, registry frozen, working tree committed. The
-   manifest records `fixture_hash`, `git_sha`, `prompt_hash`, provider, model, and sampling, and
-   that block is the only thing that makes two arms comparable. Never capture from a dirty tree:
-   the run is flagged `baseline_eligible: false` and `driver diff` will refuse it.
-2. **Capture.** `driver --output evals/runs/<arm>.json`, resumable with `--resume`. This is the
-   only step that spends serving credit and the only one that cannot be reproduced - the model is
-   non-deterministic, and `git_sha` and `prompt_hash` move underneath you, so a later run is a new
-   arm rather than the same one. Treat the artifact as write-once.
-3. **Freeze, before reading anything.** Project the capture into a sanitized replay under
-   [`replays/`](replays/) with `evals.driver freeze` and commit it only after it validates. Until
-   this happens the measurement exists in one ignored directory on one machine; after it, every
-   downstream deterministic check is reproducible from the repository alone. The current freezer
-   cannot accept every legitimate no-SQL conversational turn, so a full-registry capture cannot
-   yet be frozen. This limitation is tracked in [Known Issues](../docs/Known_Issues.md).
-4. **Grade and read.** Run execution accuracy, then let `grader` produce the deterministic report.
-   `viewer <run> --grade <grade>` joins it per
-   turn. Filter to `FAIL` and walk each one, reading the failing check's `detail` beside the seam it
-   judges. That is how 33 failures separate into behavior and rule artifacts.
-5. **Optionally score.** `evals.score --run <run>` performs the Gemini judge pass and Langfuse score
-   writeback after capture. It is separate because judge scoring is slower than capture and no
-   scenario currently makes it part of the deterministic verdict.
-6. **Write the dated record, then leave it alone.** It is evidence, superseded by re-measurement and
-   never edited. Route real defects to the behavior milestone and rule artifacts to the registry.
-
-Two rules carry the weight, and both have been learned the expensive way.
-
-**Freeze before you analyze.** Analysis is what makes a run feel finished, so a capture left
-unfrozen until "after the write-up" is a capture nobody froze. On 2026-08-16 the T0027.3 DeepSeek
-capture was lost this way - 77 turns, 29 of 29 scenarios, the only full measurement taken to date -
-when the worktree holding it was removed after its pull request merged. Its findings survive in
-[the arm record](t0027_deepseek_arm.md) because they had been written up; the per-turn evidence
-does not, because `evals/runs/` is ignored and nothing had projected it into
-[`replays/`](replays/).
-
-**Never fix a rule in the pass that measures.** If the ruleset moves in the same session as the
-capture, the resulting number cannot say whether the agent improved or the ruler did. M27 held this
-line by forbidding scenario, threshold, and grader changes inside the milestone that measured, and
-that is why its 44/33 split can be compared to anything at all.
-
-## Grading: three tiers, four outcomes
-
-`grader.py` grades a captured turn in three tiers, and stops at the first one that fails, so an
-expensive judge check is only ever reached by a turn that already passed everything mechanical.
-
-1. **Structural.** Did it call the required tool, or correctly call none? Did execution accuracy
-   pass? Does the answer contain the right count? Pure mechanics, no judgement.
-2. **Textual.** Does the answer contain a required idea, or avoid a forbidden one? Requirements are
-   phrased as word groups, so "different currencies" and "can't rank" can both satisfy the same
-   check.
-3. **Judge.** A second model scores the answer against a threshold. The tier is implemented and
-   wired up, but no scenario's `grading:` block sets a `judge_metric` today - an unvalidated judge
-   would add opinion, not evidence, until its agreement with human labels is measured.
-
-Every graded turn lands on one of four outcomes:
-
-| Outcome | Means | Counted in the pass rate? |
+| Result | Operator interpretation | Required action |
 |---|---|---|
-| `PASS` | Every tier that ran was satisfied. | Yes |
-| `FAIL` | A check the agent controls was violated. This is behavior. | Yes |
-| `INFRA` | Something outside the agent's judgement broke - a quota refusal, or a completed turn that produced no answer. | No |
-| `UNRUN` | The turn never executed, so there is nothing to grade. | No |
+| `PASS` | The evaluated deterministic checks passed. | Inspect only as part of normal sampling. |
+| `FAIL` | The agent violated an applicable deterministic check. | Verify the earliest failing seam and route it as product behavior work. |
+| `INFRA` | Required evidence was not captured because of a provider, quota, database, or other external failure. | Repair or rerun the affected measurement. Do not count it as a pass. |
+| `UNRUN` | The capture did not attempt the turn or scenario. | Resume or replace the capture. Do not publish it as complete coverage. |
+| `NOT_EVALUATED` | A single check was inapplicable to recorded evidence. | Keep the earlier applicable result and do not relabel this as `INFRA`. |
+| `EXEMPT` | Execution accuracy is intentionally absent because the scenario has no SQL contract. | Verify the registry exemption remains appropriate. |
+| `AVAILABLE` | The semantic judge returned a score and rationale. | Compare it with the human label or sample review. |
+| `UNAVAILABLE` | The semantic judge did not produce a usable result. | Preserve the error and keep the result for rerun. |
 
-`INFRA` and `UNRUN` are excluded from the denominator (`grader.EXCLUDED_FROM_DENOMINATOR`) so a run
-that dies on quota after two turns cannot report a catastrophic pass rate that says nothing about
-the agent.
-The pass rate always answers "of the turns actually measured, how many were right?", and the count
-of unmeasured turns is reported separately so a thin result cannot masquerade as a strong one.
+Pass-rate denominators exclude `INFRA` and `UNRUN` turns.
+They do not convert missing coverage into success.
+`NOT_EVALUATED` is visible beside the related seam and does not decide the turn-level grade by itself.
 
-## What this instrument can and cannot tell you today
+## Baseline review workflow
 
-It can prove a specific behavior is wrong, show exactly which seam produced it, and reproduce that
-finding for free without spending quota again - `replay.py` is the committed-evidence gate CI runs
-on every pull request, with no model or judge call.
-It cannot yet produce an overall quality score, for three reasons that are constraints on what can
-be known rather than defects to fix:
+Perform the commands in [`README.md`](README.md) in their listed order.
+The order protects the only non-repeatable artifact, which is the serving-model capture.
 
-- **Two or three repeats cannot measure a rare event.** The historical symptom was 8 empty answers;
-  the current capture saw none in 13 turns, which rules out a *common* fault and says nothing about
-  a rare one. Recorded as "no recurrence observed in 13 turns", never as "fixed".
-- **22 rows is not the real corpus.** The fixture makes verification possible and results
-  comparable, at the cost of realism. It cannot surface failures that only appear at thousands of
-  rows, or with data shapes it does not contain.
-- **The reference SQL is one person's answer.** Where a question is genuinely ambiguous, the
-  reference encodes one reading of it. A disagreement between agent and reference can mean the
-  agent is wrong, or that the reference is too narrow.
+1. Confirm the worktree is clean and the fixture is rebuilt.
+2. Capture the registry and retain the raw artifact under `evals/runs/`.
+3. Generate execution accuracy and deterministic grade reports.
+4. Freeze the capture before analyzing the result and commit only the resulting sanitized replay.
+5. Replay the committed artifact with no serving-model or judge credentials.
+6. Score the preserved raw capture through the semantic path when judge credentials are available.
+7. Open the viewer with deterministic and execution reports joined.
+8. Update the instrument report with provenance, coverage, metrics, disagreements, and unresolved cases.
+9. Request maintainer acceptance only after the manual sample below is complete.
 
-Two defects that limited earlier runs are now fixed, not open.
-The grader's tool expectations used to come from a hardcoded list rather than the registry, which
-failed `HON-SQL-DESCRIBE-1` even though declining to call a tool was correct; T0025.9 moved every
-expectation into the registry and regraded, and [`Instrument_Report.md`](Instrument_Report.md)
-records the result.
-The same ticket committed a sanitized real capture and wired `replay.py` into the CI `checks` job,
-so a change to the capture format cannot break grading without a test noticing it.
+Never alter prompts, provider configuration, fixture data, registry rules, or a human label in the same pass that measures a baseline.
+That would make a score unable to distinguish model change from measurement change.
+
+## Manual viewer sample
+
+Use the viewer to inspect at least these four examples in every full baseline.
+
+| Sample | What to inspect |
+|---|---|
+| Refusal | Confirm the routing seam, refusal answer, and any prohibited-content check agree. |
+| Zero result | Confirm reference and generated row counts are zero and that the answer does not invent a result. |
+| Conversational scenario | Confirm every turn is present, the second question receives the expected context, and a missing SQL comparison is marked `NOT_EVALUATED` only when appropriate. |
+| SQL mismatch | Compare generated and reference rows, the declared comparison contract, and the first failing seam. |
+
+Record the scenario, repeat, turn, observed evidence, and disposition in the pull request body or the dated instrument report.
+Do not change a rule merely because the current captured answer fails it.
+
+## Disagreement workflow
+
+Treat a disagreement as evidence to classify, not as a reason to pick the convenient score.
+
+1. Read the scenario contract and the complete turn trajectory in the viewer.
+2. Check structural evidence first, including tool calls and execution rows.
+3. Check whether the disputed assertion was applicable.
+4. Compare the human judgement with the semantic score and rationale when it is `AVAILABLE`.
+5. Label the disagreement as an agent behavior failure, a deterministic grader defect, a semantic judge disagreement, or infrastructure.
+6. Add an independently written labelled case to `calibration_v6.yaml` when the disagreement tests semantic behavior.
+7. Record why the label won and rerun only the appropriate offline stage.
+
+A judge score must never silently replace a human label.
+A failed structural check must never be waived by a favorable semantic score.
+An unavailable judge result is rerunnable evidence, not a pass or a failure.
+
+## Baseline acceptance checklist
+
+The maintainer can accept a published baseline only after confirming all of these statements.
+
+- The capture has `baseline_eligible: true`, a clean worktree state, and recorded prompt, registry, fixture, provider, model, and sampling lineage.
+- The run's scenario and turn coverage is explicit, including all `INFRA` and `UNRUN` cases.
+- The frozen replay is sanitized and replays to the stored execution and deterministic outcomes without a model call.
+- The deterministic result reports class, scenario, and turn outcomes separately.
+- The semantic calibration report identifies its corpus, available and unavailable results, threshold status, precision, recall, confusion counts, and disagreement rate.
+- Every sampled disagreement has a written disposition.
+- The report names the metric's authorized use and the claims it does not support.
+
+If any item is missing, the correct result is an incomplete baseline, not a green baseline.

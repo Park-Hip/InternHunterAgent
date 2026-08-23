@@ -445,16 +445,23 @@ def _expected_execution_accuracy(
         if not isinstance(check, dict) or check.get("name") != "execution_accuracy":
             continue
         match = re.fullmatch(
-            r"execution accuracy (?:is )?(PASS|FAIL|EXEMPT)",
+            r"execution accuracy (?:is )?(PASS|FAIL|EXEMPT|NOT_EVALUATED)",
             str(check.get("detail", "")),
         )
-        if match and check.get("passed") is (match.group(1) != "FAIL"):
-            return match.group(1)
+        if match:
+            expected = match.group(1)
+            passed = check.get("passed")
+            if (
+                (expected == "FAIL" and passed is False)
+                or (expected == "NOT_EVALUATED" and passed is None)
+                or (expected in {"PASS", "EXEMPT"} and passed is True)
+            ):
+                return expected
     if scenario.get("execution_accuracy_exempt"):
         return "EXEMPT"
     raise ValueError(
         f"Grade report has a non-replayable execution-accuracy result for {label}; "
-        "it must declare PASS, FAIL, or EXEMPT"
+        "it must declare PASS, FAIL, EXEMPT, or NOT_EVALUATED"
     )
 
 

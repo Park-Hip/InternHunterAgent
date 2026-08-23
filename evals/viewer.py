@@ -173,6 +173,77 @@ def index_grades(grade: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     return index
 
 
+def index_execution_results(report: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """Index execution evidence by the same scenario/repeat/turn key as grades."""
+    index: dict[str, dict[str, Any]] = {}
+    for scenario_id, repeats in (report or {}).get("scenarios", {}).items():
+        if not isinstance(repeats, list):
+            continue
+        for repeat in repeats:
+            if not isinstance(repeat, dict):
+                continue
+            for turn_number, result in enumerate(repeat.get("turns", []), start=1):
+                if isinstance(result, dict):
+                    index[f"{scenario_id}/{repeat.get('repeat')}/{turn_number}"] = result
+    return index
+
+
+def _coverage_state(
+    *, turn_status: Any, configured: bool | None, applicable: bool, captured: bool
+) -> str:
+    """Keep missing evidence states distinct instead of treating all as absent."""
+    if turn_status != "COMPLETE":
+        return "CAPTURE_FAILED"
+    if not applicable:
+        return "NOT_APPLICABLE"
+    if configured is False or configured is None:
+        return "NOT_CONFIGURED"
+    return "CAPTURED" if captured else "PROVIDER_DID_NOT_EMIT"
+
+
+def _evidence_coverage(
+    turn_record: dict[str, Any], seams: dict[str, Any], manifest: dict[str, Any]
+) -> list[list[str]]:
+    telemetry = turn_record.get("telemetry")
+    tracing = manifest.get("tracing")
+    tracing = tracing if isinstance(tracing, dict) else {}
+    tools = seams.get("tools_called")
+    tools = tools if isinstance(tools, list) else []
+    return [
+        [
+            "Trace linkage",
+            _coverage_state(
+                turn_status=turn_record.get("status"),
+                configured=tracing.get("langfuse_enabled"),
+                applicable=True,
+                captured=bool(seams.get("trace_id")),
+            ),
+        ],
+        [
+            "Tool arguments",
+            _coverage_state(
+                turn_status=turn_record.get("status"),
+                configured=True,
+                applicable=bool(tools),
+                captured=isinstance(seams.get("tool_arguments"), list),
+            ),
+        ],
+        [
+            "Per-call telemetry",
+            _coverage_state(
+                turn_status=turn_record.get("status"),
+                configured=isinstance(telemetry, dict),
+                applicable=True,
+                captured=bool(
+                    isinstance(telemetry, dict)
+                    and isinstance(telemetry.get("provider_token_usage"), dict)
+                    and telemetry["provider_token_usage"].get("calls")
+                ),
+            ),
+        ],
+    ]
+
+
 def _checks(grade: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Return the checks that did not pass, tagged with the seam each one judges.
 
@@ -266,10 +337,13 @@ def flatten_turns(
     run: dict[str, Any],
     scenarios: list[dict[str, Any]] | None = None,
     grade: dict[str, Any] | None = None,
+    execution_accuracy: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Turn the driver's nested artifact into records suitable for the browser."""
-    names = {scenario["id"]: scenario["name"] for scenario in scenarios or []}
+    scenario_index = {scenario["id"]: scenario for scenario in scenarios or []}
     grades = index_grades(grade)
+    execution = index_execution_results(execution_accuracy)
+    manifest = run.get("manifest") if isinstance(run.get("manifest"), dict) else {}
     turns: list[dict[str, Any]] = []
     for scenario_id, scenario_record in run.get("scenarios", {}).items():
         for repeat_record in scenario_record.get("repeats", []):
@@ -278,11 +352,13 @@ def flatten_turns(
                 tools = seams.get("tools_called", [])
                 key = f"{scenario_id}/{repeat_record.get('repeat', '?')}/{turn_record.get('turn', '?')}"
                 turn_grade = grades.get(key)
+                execution_result = execution.get(key)
+                scenario = scenario_index.get(scenario_id, {})
                 turns.append(
                     {
                         "key": key,
                         "scenario_id": scenario_id,
-                        "scenario_name": names.get(scenario_id, scenario_id),
+                        "scenario_name": scenario.get("name", scenario_id),
                         "repeat": repeat_record.get("repeat"),
                         "turn": turn_record.get("turn"),
                         "status": turn_record.get("status", "UNKNOWN"),
@@ -294,11 +370,15 @@ def flatten_turns(
                         "checks": _checks(turn_grade),
                         "question": _text(seams.get("question")),
                         "routing": ", ".join(map(str, tools)) if tools else "No tool call captured",
+                        "expected_tools": ", ".join(map(str, scenario.get("expected_tools", []))) or "No exact tool expectation recorded",
+                        "tool_arguments": _text(seams.get("tool_arguments"), "Not captured"),
                         "sql": _text(seams.get("sql_text")),
                         "rows": _rows(seams.get("tool_output")),
+                        "execution": execution_result or {"status": "NOT_CONFIGURED"},
                         "answer": _text(seams.get("answer")),
                         "trace_id": _text(seams.get("trace_id"), "No trace id"),
                         "telemetry": _telemetry(turn_record.get("telemetry")),
+                        "coverage": _evidence_coverage(turn_record, seams, manifest),
                     }
                 )
     return turns
@@ -344,6 +424,7 @@ def build_viewer_html(
     run: dict[str, Any],
     scenarios: list[dict[str, Any]] | None = None,
     grade: dict[str, Any] | None = None,
+    execution_accuracy: dict[str, Any] | None = None,
 ) -> str:
     """Build a self-contained HTML viewer with no API or external asset dependency."""
     manifest = run.get("manifest", {})
@@ -353,7 +434,7 @@ def build_viewer_html(
         "run_id": run_id,
         "status": run.get("status", "UNKNOWN"),
         "header": run_header(manifest),
-        "turns": flatten_turns(run, scenarios, grade),
+        "turns": flatten_turns(run, scenarios, grade, execution_accuracy),
     }
     serialized = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
     title = html.escape(f"Trace viewer - {run_id}")
@@ -381,7 +462,7 @@ def build_viewer_html(
     .notes { margin-top:16px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; } textarea { width:100%; min-height:110px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:8px; } .saved { color:var(--muted); font-size:12px; margin-top:6px; }
     .empty { text-align:center; padding:70px 20px; color:var(--muted); } @media (max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:16px; } .header-row { align-items:flex-start; flex-direction:column; } }
     .runbar { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px; } .facts { display:flex; flex-wrap:wrap; gap:18px; } .fact { font-size:13px; overflow-wrap:anywhere; } .fact label { color:var(--muted); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-right:6px; }
-    .badge { display:inline-block; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; letter-spacing:.04em; border:1px solid transparent; } .b-PASS { background:#e7f6ec; color:#11633a; border-color:#b6e0c6; } .b-FAIL { background:#fdeaea; color:#93231f; border-color:#f3c2c0; } .b-INFRA { background:#fff3df; color:#7c4a00; border-color:#f0d28c; } .b-UNRUN,.b-UNGRADED,.b-UNKNOWN { background:#eef1f5; color:#4a5769; border-color:var(--line); }
+    .badge { display:inline-block; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; letter-spacing:.04em; border:1px solid transparent; } .b-PASS,.b-CAPTURED { background:#e7f6ec; color:#11633a; border-color:#b6e0c6; } .b-FAIL,.b-CAPTURE_FAILED { background:#fdeaea; color:#93231f; border-color:#f3c2c0; } .b-INFRA,.b-PROVIDER_DID_NOT_EMIT { background:#fff3df; color:#7c4a00; border-color:#f0d28c; } .b-UNRUN,.b-UNGRADED,.b-UNKNOWN,.b-NOT_CONFIGURED,.b-NOT_APPLICABLE { background:#eef1f5; color:#4a5769; border-color:var(--line); }
     .verdict { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:14px; font-size:13px; color:var(--muted); }
     .checks { margin-top:14px; display:grid; gap:10px; } .check { border:1px solid var(--line); border-left-width:4px; border-radius:8px; padding:10px 12px; background:#fcfdfe; } .check-fail { border-left-color:#c9403a; } .check-na { border-left-color:#c78b21; }
     .check-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:13px; } .check-head .tier { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; } .check-detail { margin-top:6px; font-size:13px; overflow-wrap:anywhere; white-space:pre-wrap; }
@@ -425,6 +506,14 @@ def build_viewer_html(
       if (!rows.count) return note + '<div class="rows-text">No rows returned.</div>';
       return `${note}<div class="row-count">${rows.count} row${rows.count === 1 ? '' : 's'}</div>${table(rows.headers, rows.rows)}`;
     };
+    const executionBlock = result => {
+      if (result.status === 'NOT_CONFIGURED') return '<div class="rows-text">No execution-accuracy report was joined.</div>';
+      const facts = [['Result', result.status], ['Comparison', result.comparison_mode || 'not recorded'], ['Generated rows', result.generated_row_count ?? 'not recorded'], ['Reference rows', result.reference_row_count ?? 'not recorded']];
+      const summary = `<div class="tele">${facts.map(([label, value]) => `<div><label>${esc(label)}</label><span>${esc(value)}</span></div>`).join('')}</div>`;
+      const renderedRows = rows => Array.isArray(rows) ? rowsBlock({kind:'table', count:rows.length, headers:Object.keys(rows[0] || {}), rows:rows.map(row => Object.values(row).map(String))}) : '<div class="rows-text">Not recorded</div>';
+      return `${summary}<div class="field"><label>Generated rows</label>${renderedRows(result.generated_rows)}</div><div class="field"><label>Reference rows</label>${renderedRows(result.reference_rows)}</div>`;
+    };
+    const coverageBlock = coverage => table(['Evidence', 'Coverage'], coverage.map(([label, status]) => [label, status]));
     const storageRead = key => { try { return {value: window.localStorage.getItem(key) || '', error: ''}; } catch (_) { return {value: '', error: 'Notes are unavailable in this browser; navigation still works.'}; } };
     const storageWrite = (key, value) => { try { window.localStorage.setItem(key, value); return true; } catch (_) { return false; } };
     function renderRunHeader() {
@@ -460,9 +549,9 @@ def build_viewer_html(
       root.innerHTML = `<div class="toolbar"><div class="turn-meta"><button id="prev">← Previous</button><button id="next">Next →</button><span class="progress">Turn ${index + 1} of ${view.length} · ${esc(t.scenario_id)} · repeat ${esc(t.repeat)}</span></div><div class="turn-meta">${gradeFilter}<select id="jump" aria-label="Jump to turn">${view.map((item, i) => `<option value="${i}">${i + 1}. ${esc(item.scenario_id)} / r${esc(item.repeat)} / t${esc(item.turn)} · ${esc(item.grade_status)}</option>`).join('')}</select></div></div>
       <div class="rule"><strong>Review rule:</strong> mark the earliest wrong seam only, then stop. Downstream symptoms of an upstream defect are not separate labels.</div>
       <section class="question"><h3>${esc(t.scenario_name)}</h3>${block('Question', t.question)}
-      <div class="verdict">Verdict ${badge(t.grade_status)}<span>Grade tier: ${esc(t.grade_tier)}</span><span>Capture status: ${esc(t.status)}</span><span>Trace ID: ${esc(t.trace_id)}</span></div>${checksFor(t, 'run')}
-      <div class="field"><label>Telemetry</label>${teleBlock(t.telemetry)}</div></section>
-      <section class="grid"><article class="card"><div class="card-head"><h2 class="seam">1 · Routing</h2></div>${block('Routing decision / tools called', t.routing)}${checksFor(t, 'routing')}</article><article class="card"><div class="card-head"><h2 class="seam">2 · NL → SQL</h2></div>${block('Generated SQL', t.sql, 'answer')} ${block('Rows returned', t.rows, 'answer')}${checksFor(t, 'sql')}</article><article class="card"><div class="card-head"><h2 class="seam">3 · Synthesis</h2></div>${block('Final answer', t.answer, 'answer')}${checksFor(t, 'answer')}</article></section>
+      <div class="verdict">Verdict ${badge(t.grade_status)}<span>Grade tier: ${esc(t.grade_tier)}</span><span>Capture status: ${esc(t.status)}</span></div>${checksFor(t, 'run')}
+      <div class="field"><label>Evidence coverage</label>${coverageBlock(t.coverage)}</div><div class="field"><label>Telemetry</label>${teleBlock(t.telemetry)}</div></section>
+      <section class="grid"><article class="card"><div class="card-head"><h2 class="seam">1 · Routing</h2></div>${block('Expected tools', t.expected_tools)}${block('Captured tools', t.routing)}${block('Captured tool arguments', t.tool_arguments, 'answer')}${checksFor(t, 'routing')}</article><article class="card"><div class="card-head"><h2 class="seam">2 · NL → SQL</h2></div>${block('Generated SQL', t.sql, 'answer')} ${block('Rows returned', t.rows, 'answer')}<div class="field"><label>Generated versus reference rows</label>${executionBlock(t.execution)}</div>${checksFor(t, 'sql')}</article><article class="card"><div class="card-head"><h2 class="seam">3 · Synthesis</h2></div>${block('Final answer', t.answer, 'answer')}${checksFor(t, 'answer')}</article></section>
       <section class="notes"><h2>Operator note</h2><textarea id="note" placeholder="Record the first wrong seam and evidence. Stop after the earliest failure."></textarea><div class="saved" id="saved">Notes are stored in this browser for this run.</div></section>`;
       document.getElementById('jump').value = index;
       document.getElementById('prev').disabled = index === 0; document.getElementById('next').disabled = index === view.length - 1;
@@ -499,11 +588,29 @@ def _read_grade(path: Path, parser: argparse.ArgumentParser) -> dict[str, Any]:
     return grade
 
 
+def _read_execution_accuracy(path: Path, parser: argparse.ArgumentParser) -> dict[str, Any]:
+    """Load the structured SQL comparison report that explains a seam-2 verdict."""
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        parser.error(f"could not read execution-accuracy file {path}: {exc}")
+    if not isinstance(report, dict) or not isinstance(report.get("scenarios"), dict):
+        parser.error(
+            "execution-accuracy file is not a report; expected a top-level 'scenarios' object"
+        )
+    return report
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Generate a local HTML viewer for a scenario-driver run.")
     parser.add_argument("run", type=Path, nargs="?", help="Scenario-driver run JSON artifact")
     parser.add_argument("--sample", action="store_true", help="Generate a two-turn sample without a recorded run or model quota")
     parser.add_argument("--grade", type=Path, help="Grader report JSON to join per turn (optional)")
+    parser.add_argument(
+        "--execution-accuracy",
+        type=Path,
+        help="Execution-accuracy JSON to show generated and reference row evidence",
+    )
     parser.add_argument("--output", type=Path, help="HTML output path (defaults beside the run artifact)")
     args = parser.parse_args(argv)
     if args.sample and args.run:
@@ -512,7 +619,14 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("provide a run artifact or --sample")
     if args.sample and args.grade:
         parser.error("--grade joins a grader report to a recorded run; it does not apply to --sample")
+    if args.sample and args.execution_accuracy:
+        parser.error("--execution-accuracy joins a recorded run; it does not apply to --sample")
     grade = _read_grade(args.grade, parser) if args.grade else None
+    execution_accuracy = (
+        _read_execution_accuracy(args.execution_accuracy, parser)
+        if args.execution_accuracy
+        else None
+    )
     if args.sample:
         run = sample_run()
         scenarios = [{"id": "HLP-SAMPLE-1", "name": "Sample trace viewer run"}]
@@ -531,7 +645,9 @@ def main(argv: list[str] | None = None) -> None:
 
         scenarios = load_scenarios()
         output = args.output or args.run.with_name(f"{args.run.stem}-viewer.html")
-    output.write_text(build_viewer_html(run, scenarios, grade), encoding="utf-8")
+    output.write_text(
+        build_viewer_html(run, scenarios, grade, execution_accuracy), encoding="utf-8"
+    )
     print(output)
 
 

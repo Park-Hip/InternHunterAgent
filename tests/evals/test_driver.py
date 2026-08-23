@@ -858,21 +858,38 @@ def test_freeze_refuses_a_capture_that_cannot_name_its_prompt(tmp_path: Path) ->
     assert not output.exists()
 
 
-def test_freeze_refuses_a_capture_with_a_live_trace_id(tmp_path: Path) -> None:
+def test_freeze_sanitizes_langfuse_metadata_and_retains_replay_evidence(
+    tmp_path: Path,
+) -> None:
     capture, grade = _capture_and_grade_from_replay()
-    capture["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]["seams"][
-        "trace_id"
-    ] = "live-trace"
+    capture["manifest"]["langfuse_ingestion"] = {
+        "trace_id": "live-trace",
+        "ingested": True,
+    }
+    seams = capture["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]["seams"]
+    seams["trace_id"] = "live-trace"
+    seams["tool_output"] = "Found 1 result(s) with columns: id.\n- id=7"
+    seams["tool_arguments"] = [{"name": "query_clean_jobs", "arguments": {"q": "jobs"}}]
     capture_path = tmp_path / "capture.json"
     grade_path = tmp_path / "grade.json"
     output = tmp_path / "frozen.json"
     capture_path.write_text(json.dumps(capture), encoding="utf-8")
     grade_path.write_text(json.dumps(grade), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="trace_id"):
-        driver.freeze_capture(capture_path, grade_path, output)
+    frozen = driver.freeze_capture(capture_path, grade_path, output)
 
-    assert not output.exists()
+    validate_replay(frozen)
+    frozen_seams = frozen["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]["seams"]
+    assert frozen_seams == {
+        "question": seams["question"],
+        "answer": seams["answer"],
+        "tools_called": seams["tools_called"],
+        "tool_output": seams["tool_output"],
+        "tool_arguments": seams["tool_arguments"],
+        "sql_text": seams["sql_text"],
+    }
+    assert "trace_id" not in output.read_text(encoding="utf-8")
+    assert "langfuse" not in output.read_text(encoding="utf-8")
 
 
 def test_freeze_preserves_a_failed_execution_result(tmp_path: Path) -> None:

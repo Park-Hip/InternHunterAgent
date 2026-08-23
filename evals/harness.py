@@ -145,6 +145,7 @@ class SeamRun:
     question: str
     answer: str
     tools_called: list[str] = field(default_factory=list)
+    tool_arguments: list[dict[str, Any]] | None = None
     tool_output: str | None = None
     sql_text: str | None = None
     trace_id: str | None = None
@@ -304,7 +305,20 @@ async def _run_turn(
         trace_testing_manager.test_dict = None
 
     answer = str(response["messages"][-1].content).strip()
-    tools_called = [tc.get("name") for tc in (trace_dict.get("toolsCalled") or [])]
+    recorded_tool_calls = [
+        tool_call
+        for tool_call in (trace_dict.get("toolsCalled") or [])
+        if isinstance(tool_call, dict)
+    ]
+    tools_called = [tool_call.get("name") for tool_call in recorded_tool_calls]
+    tool_arguments = [
+        {
+            "name": tool_call.get("name"),
+            "arguments": tool_call.get("arguments", tool_call.get("input")),
+        }
+        for tool_call in recorded_tool_calls
+        if "arguments" in tool_call or "input" in tool_call
+    ]
 
     tool_span, sql_span = _extract_sql_span(trace_dict)
     tool_output = tool_span.get("output") if tool_span else None
@@ -315,6 +329,7 @@ async def _run_turn(
         question=message,
         answer=answer,
         tools_called=[name for name in tools_called if name],
+        tool_arguments=tool_arguments or None,
         tool_output=str(tool_output) if tool_output is not None else None,
         sql_text=_llm_output_text(sql_span),
         trace_id=trace_id,

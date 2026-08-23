@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from evals.scenarios import load_scenarios, scenario_category
+from evals.scenarios import load_scenarios, repeat_count, scenario_category
 from src.agents.runtime.prompts import (
     load_behavior_glossary,
     load_prompt_version,
@@ -28,6 +28,7 @@ PASS = "PASS"
 FAIL = "FAIL"
 INFRA = "INFRA"
 UNRUN = "UNRUN"
+NOT_EVALUATED = "NOT_EVALUATED"
 EXCLUDED_FROM_DENOMINATOR = frozenset({INFRA, UNRUN})
 BEHAVIOR_GLOSSARY = load_behavior_glossary()
 BEHAVIOR_GLOSSARY_ANCHORS = settings.prompts_yaml.get("behavior_glossary_anchors", {})
@@ -87,10 +88,16 @@ class ScenarioRule:
     expected_tools: tuple[str, ...] = ()
     expected_answer_count: int | None = None
     forbid_single_salary_winner: bool = False
-    text: TextRule | None = None
+    literal: TextRule | None = None
+    semantic: TextRule | None = None
     judge_metric: str | None = None
     judge_threshold: float = 0.5
     require_vietnamese: bool = False
+
+    @property
+    def text(self) -> TextRule | None:
+        """Compatibility view for callers that inspect semantic assertion terms."""
+        return self.semantic
 
 
 @dataclass
@@ -99,6 +106,11 @@ class Check:
     passed: bool | None
     detail: str
     tier: str
+    outcome: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.outcome is None:
+            self.outcome = PASS if self.passed is True else FAIL if self.passed is False else INFRA
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -106,6 +118,7 @@ class Check:
             "passed": self.passed,
             "detail": self.detail,
             "tier": self.tier,
+            "outcome": self.outcome,
         }
 
 
@@ -115,6 +128,7 @@ class Grade:
     status: str
     tier: str
     checks: list[Check] = field(default_factory=list)
+    first_failing_seam: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -122,6 +136,7 @@ class Grade:
             "status": self.status,
             "tier": self.tier,
             "checks": [check.to_dict() for check in self.checks],
+            "first_failing_seam": self.first_failing_seam,
         }
 
 
@@ -129,7 +144,7 @@ def _text(answer: str | None) -> str:
     return (answer or "").casefold()
 
 
-def _required_check(answer: str, groups: tuple[tuple[str, ...], ...]) -> list[Check]:
+def _required_check(answer: str, groups: tuple[tuple[str, ...], ...], tier: str) -> list[Check]:
     checks: list[Check] = []
     for index, group in enumerate(groups, start=1):
         matched = next((term for term in group if term.casefold() in answer), None)
@@ -138,21 +153,21 @@ def _required_check(answer: str, groups: tuple[tuple[str, ...], ...]) -> list[Ch
                 name=f"required_substance_{index}",
                 passed=matched is not None,
                 detail=(f"matched {matched!r}" if matched else f"none of {group!r} present"),
-                tier="textual",
+                tier=tier,
             )
         )
     return checks
 
 
-def _text_checks(answer: str | None, rule: TextRule) -> list[Check]:
+def _text_checks(answer: str | None, rule: TextRule, tier: str) -> list[Check]:
     normalized = _text(answer)
-    checks = _required_check(normalized, rule.required_any)
+    checks = _required_check(normalized, rule.required_any, tier)
     checks.extend(
         Check(
             name="forbidden_phrase_absent",
             passed=term.casefold() not in normalized,
             detail=f"forbidden phrase {term!r} {'absent' if term.casefold() not in normalized else 'present'}",
-            tier="textual",
+            tier=tier,
         )
         for term in rule.forbidden_any
     )
@@ -161,7 +176,7 @@ def _text_checks(answer: str | None, rule: TextRule) -> list[Check]:
             name="forbidden_pattern_absent",
             passed=re.search(pattern, normalized, flags=re.IGNORECASE) is None,
             detail=f"forbidden pattern {pattern!r} {'absent' if re.search(pattern, normalized, flags=re.IGNORECASE) is None else 'present'}",
-            tier="textual",
+            tier=tier,
         )
         for pattern in rule.forbidden_patterns
     )
@@ -401,18 +416,6 @@ def _structural_checks(rule: ScenarioRule, evidence: Evidence) -> list[Check]:
             )
         )
 
-    if rule.forbid_single_salary_winner:
-        winner_pattern = r"\bhighest[- ]paid\s+(?:job|role|posting)\b[^.]{0,120}\b(?:is|was|:)\s*"
-        crowned = re.search(winner_pattern, _text(evidence.answer), flags=re.IGNORECASE) is not None
-        checks.append(
-            Check(
-                "no_single_cross_currency_winner",
-                not crowned,
-                "a single cross-currency winner is not named" if not crowned else "answer crowns a highest-paid job",
-                "structural",
-            )
-        )
-
     return checks
 
 
@@ -475,15 +478,15 @@ def _term(scenario_id: str, term: str | dict[str, str]) -> tuple[str, ...]:
     return tuple(anchors)
 
 
-def _text_rule(scenario_id: str, grading: dict[str, Any]) -> TextRule | None:
+def _text_rule(scenario_id: str, assertion: dict[str, Any]) -> TextRule | None:
     required = tuple(
         tuple(anchor for term in group for anchor in _term(scenario_id, term))
-        for group in grading.get("required_any", ())
+        for group in assertion.get("required_any", ())
     )
     forbidden = tuple(
-        anchor for term in grading.get("forbidden_any", ()) for anchor in _term(scenario_id, term)
+        anchor for term in assertion.get("forbidden_any", ()) for anchor in _term(scenario_id, term)
     )
-    patterns = tuple(grading.get("forbidden_patterns", ()))
+    patterns = tuple(assertion.get("forbidden_patterns", ()))
     if not (required or forbidden or patterns):
         return None
     return TextRule(
@@ -504,12 +507,17 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
     if scenario is None:
         raise ValueError(f"Unknown scenario id: {scenario_id}")
     grading = scenario.get("grading") or {}
+    assertions = grading.get("assertions") or []
+    literal = next((item for item in assertions if item["type"] == "literal"), {})
+    structural = next((item for item in assertions if item["type"] == "structural"), {})
+    semantic = next((item for item in assertions if item["type"] == "semantic"), {})
     return ScenarioRule(
         expected_tools=tuple(scenario["expected_tools"]),
-        expected_answer_count=grading.get("expected_answer_count"),
-        forbid_single_salary_winner=bool(grading.get("forbid_single_salary_winner", False)),
-        text=_text_rule(scenario_id, grading),
-        require_vietnamese=bool(grading.get("require_vietnamese", scenario.get("language") == "vi")),
+        expected_answer_count=literal.get("expected_answer_count"),
+        forbid_single_salary_winner=bool(semantic.get("forbid_single_salary_winner", False)),
+        literal=_text_rule(scenario_id, literal),
+        semantic=_text_rule(scenario_id, semantic),
+        require_vietnamese=bool(structural.get("require_vietnamese", scenario.get("language") == "vi")),
     )
 
 
@@ -526,8 +534,26 @@ def _prompt_is_current(evidence: Evidence) -> bool:
     return stamped is None or stamped == load_prompt_version()
 
 
+def _semantic_checks(rule: ScenarioRule) -> list[Check]:
+    if rule.semantic is None and not rule.forbid_single_salary_winner:
+        return []
+    return [
+        Check(
+            "semantic_behavior",
+            None,
+            "semantic assertion retained for the calibrated judge; not evaluated in Phase 1",
+            "semantic",
+            NOT_EVALUATED,
+        )
+    ]
+
+
+def _first_failing_seam(checks: list[Check]) -> str | None:
+    return next((check.tier for check in checks if check.outcome == FAIL), None)
+
+
 def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
-    """Grade one turn, retaining honesty text checks when structural SQL fails."""
+    """Grade independently evaluated literal and structural assertions for one turn."""
     rule = _rule_for(scenario_id)
     if not evidence.answer:
         return Grade(
@@ -549,30 +575,21 @@ def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
                 if purity is not None
                 else "returned rows are empty; language purity was not measured",
                 "structural",
+                NOT_EVALUATED if purity is None else None,
             )
         )
-    structural_failed = any(check.passed is False for check in structural)
-    structural_unavailable = any(check.passed is None for check in structural)
-    grade_text = rule.text is not None and scenario_category(scenario_id) == "HON"
-    if structural_failed and not grade_text:
-        return Grade(scenario_id, FAIL, "structural", structural)
-    if structural_unavailable and not grade_text:
-        return Grade(scenario_id, INFRA, "structural", structural)
-
-    textual = _text_checks(evidence.answer, rule.text) if rule.text else []
-    if any(check.passed is False for check in textual) or structural_failed:
-        return Grade(scenario_id, FAIL, "textual", structural + textual)
-    if any(check.passed is None for check in textual) or structural_unavailable:
-        return Grade(scenario_id, INFRA, "textual", structural + textual)
-
+    literal = _text_checks(evidence.answer, rule.literal, "literal") if rule.literal else []
+    semantic = _semantic_checks(rule)
     judge = _judge_checks(rule, evidence)
-    if any(check.passed is False for check in judge):
-        return Grade(scenario_id, FAIL, "judge", structural + textual + judge)
-    if any(check.passed is None for check in judge):
-        return Grade(scenario_id, INFRA, "judge", structural + textual + judge)
-
-    tier = "judge" if judge else "textual" if textual else "structural"
-    return Grade(scenario_id, PASS, tier, structural + textual + judge)
+    checks = structural + literal + semantic + judge
+    first_failing_seam = _first_failing_seam(checks)
+    if first_failing_seam:
+        return Grade(scenario_id, FAIL, first_failing_seam, checks, first_failing_seam)
+    infra_seam = next((check.tier for check in checks if check.outcome == INFRA), None)
+    if infra_seam:
+        return Grade(scenario_id, INFRA, infra_seam, checks)
+    tier = "judge" if judge else "literal" if literal else "structural"
+    return Grade(scenario_id, PASS, tier, checks)
 
 
 def _execution_for_turn(
@@ -617,6 +634,37 @@ def summarize(grades: list[Grade]) -> dict[str, Any]:
     }
 
 
+def _scenario_outcome(
+    scenario: dict[str, Any], turn_grades: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Aggregate every required repeat without hiding the individual turn verdicts."""
+    by_repeat: dict[int, list[str]] = defaultdict(list)
+    for grade in turn_grades:
+        if "repeat" in grade:
+            by_repeat[int(grade["repeat"])].append(grade["status"])
+
+    repeats: list[dict[str, Any]] = []
+    for number in range(1, repeat_count(scenario) + 1):
+        statuses = by_repeat.get(number, [])
+        if not statuses:
+            status = UNRUN
+        elif FAIL in statuses:
+            status = FAIL
+        elif INFRA in statuses:
+            status = INFRA
+        elif UNRUN in statuses:
+            status = UNRUN
+        else:
+            status = PASS
+        repeats.append({"repeat": number, "status": status})
+
+    statuses = [repeat["status"] for repeat in repeats]
+    status = (
+        FAIL if FAIL in statuses else INFRA if INFRA in statuses else UNRUN if UNRUN in statuses else PASS
+    )
+    return {"status": status, "repeats": repeats}
+
+
 def grade_persisted_run(
     run: dict[str, Any],
     execution_accuracy: dict[str, Any] | None = None,
@@ -626,11 +674,13 @@ def grade_persisted_run(
     capture_prompt_version = (run.get("manifest") or {}).get("prompt_version")
     grades: list[Grade] = []
     results: dict[str, list[dict[str, Any]]] = {}
+    scenario_outcomes: dict[str, dict[str, Any]] = {}
     for scenario_id, scenario_record in run.get("scenarios", {}).items():
         if scenario_id not in known_ids:
             grade = Grade(scenario_id, INFRA, "structural", [Check("scenario_known", False, "unknown scenario id", "structural")])
             grades.append(grade)
             results[scenario_id] = [grade.to_dict()]
+            scenario_outcomes[scenario_id] = {"status": INFRA, "repeats": []}
             continue
         scenario_grades: list[dict[str, Any]] = []
         if scenario_record.get("status") == UNRUN and not scenario_record.get("repeats"):
@@ -643,6 +693,7 @@ def grade_persisted_run(
             grades.append(grade)
             scenario_grades.append(grade.to_dict())
             results[scenario_id] = scenario_grades
+            scenario_outcomes[scenario_id] = {"status": UNRUN, "repeats": []}
             continue
         for repeat in scenario_record.get("repeats", []):
             repeat_number = int(repeat.get("repeat", 0))
@@ -665,10 +716,14 @@ def grade_persisted_run(
                 grades.append(grade)
                 scenario_grades.append({"repeat": repeat_number, "turn": turn_number, **grade.to_dict()})
         results[scenario_id] = scenario_grades
+        scenario_outcomes[scenario_id] = _scenario_outcome(
+            _registry_index()[scenario_id], scenario_grades
+        )
 
     return {
         "run_id": run.get("manifest", {}).get("run_id"),
         "scenarios": results,
+        "scenario_outcomes": scenario_outcomes,
         "summary": summarize(grades),
     }
 

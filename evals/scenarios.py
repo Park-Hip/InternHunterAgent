@@ -22,13 +22,14 @@ _KNOWN_TOOLS = {"query_clean_jobs"}
 # The rest of each scenario's grading expectations. Same reasoning as the tool
 # names: a misspelled field would be silently ignored and quietly weaken a rule.
 _GRADING_KEYS = {
-    "expected_answer_count",
-    "forbid_single_salary_winner",
-    "required_any",
-    "forbidden_any",
-    "forbidden_patterns",
     "execution_comparison",
-    "require_vietnamese",
+    "assertions",
+}
+_ASSERTION_TYPES = {"literal", "structural", "semantic"}
+_ASSERTION_FIELDS = {
+    "literal": {"expected_answer_count", "forbidden_patterns"},
+    "structural": {"require_vietnamese"},
+    "semantic": {"required_any", "forbidden_any", "forbid_single_salary_winner"},
 }
 
 
@@ -69,20 +70,24 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
     if unknown:
         raise ValueError(f"Scenario {scenario_id} has unknown grading fields: {sorted(unknown)}")
 
-    if "expected_answer_count" in grading:
-        count = grading["expected_answer_count"]
-        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+    assertions = grading.get("assertions", [])
+    if not isinstance(assertions, list):
+        raise ValueError(f"Scenario {scenario_id} assertions must be a list")
+    for assertion in assertions:
+        if not isinstance(assertion, dict):
+            raise ValueError(f"Scenario {scenario_id} assertion must be a mapping")
+        assertion_type = assertion.get("type")
+        if assertion_type not in _ASSERTION_TYPES:
+            raise ValueError(f"Scenario {scenario_id} has unknown assertion type: {assertion_type!r}")
+        fields = set(assertion) - {"type"}
+        if not fields:
+            raise ValueError(f"Scenario {scenario_id} {assertion_type} assertion has no fields")
+        unsupported = fields - _ASSERTION_FIELDS[assertion_type]
+        if unsupported:
             raise ValueError(
-                f"Scenario {scenario_id} expected_answer_count must be a non-negative integer"
+                f"Scenario {scenario_id} {assertion_type} assertion has unsupported fields: {sorted(unsupported)}"
             )
-
-    if "forbid_single_salary_winner" in grading and not isinstance(
-        grading["forbid_single_salary_winner"], bool
-    ):
-        raise ValueError(f"Scenario {scenario_id} forbid_single_salary_winner must be a boolean")
-
-    if "require_vietnamese" in grading and not isinstance(grading["require_vietnamese"], bool):
-        raise ValueError(f"Scenario {scenario_id} require_vietnamese must be a boolean")
+        _validate_assertion_fields(scenario_id, assertion_type, assertion)
 
     if "execution_comparison" in grading and grading["execution_comparison"] not in {
         "exact", "contains_reference", "ids_only"
@@ -91,8 +96,27 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
             f"Scenario {scenario_id} execution_comparison must be exact, contains_reference, or ids_only"
         )
 
-    if "required_any" in grading:
-        groups = grading["required_any"]
+
+def _validate_assertion_fields(
+    scenario_id: str, assertion_type: str, assertion: dict[str, Any]
+) -> None:
+    if "expected_answer_count" in assertion:
+        count = assertion["expected_answer_count"]
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise ValueError(
+                f"Scenario {scenario_id} expected_answer_count must be a non-negative integer"
+            )
+
+    if "forbid_single_salary_winner" in assertion and not isinstance(
+        assertion["forbid_single_salary_winner"], bool
+    ):
+        raise ValueError(f"Scenario {scenario_id} forbid_single_salary_winner must be a boolean")
+
+    if "require_vietnamese" in assertion and not isinstance(assertion["require_vietnamese"], bool):
+        raise ValueError(f"Scenario {scenario_id} require_vietnamese must be a boolean")
+
+    if "required_any" in assertion:
+        groups = assertion["required_any"]
         if not isinstance(groups, list) or not groups:
             raise ValueError(f"Scenario {scenario_id} required_any must be a non-empty list")
         # Each group is an OR of alternatives, and all groups must match. An empty
@@ -100,11 +124,11 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
         for group in groups:
             _validate_term_list(scenario_id, "required_any group", group)
 
-    if "forbidden_any" in grading:
-        _validate_term_list(scenario_id, "forbidden_any", grading["forbidden_any"])
+    if "forbidden_any" in assertion:
+        _validate_term_list(scenario_id, "forbidden_any", assertion["forbidden_any"])
 
-    if "forbidden_patterns" in grading:
-        patterns = grading["forbidden_patterns"]
+    if "forbidden_patterns" in assertion:
+        patterns = assertion["forbidden_patterns"]
         if not isinstance(patterns, list) or not patterns:
             raise ValueError(f"Scenario {scenario_id} forbidden_patterns must be a non-empty list")
         for pattern in patterns:

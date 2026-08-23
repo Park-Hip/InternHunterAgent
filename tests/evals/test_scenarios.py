@@ -224,16 +224,39 @@ def test_loader_rejects_an_unknown_grading_field(tmp_path) -> None:
 
 
 def test_loader_rejects_a_required_group_that_cannot_match(tmp_path) -> None:
-    registry = _registry_with_grading(tmp_path, "    required_any:\n      - []\n")
+    registry = _registry_with_grading(
+        tmp_path, "    assertions:\n      - type: semantic\n        required_any:\n          - []\n"
+    )
 
     with pytest.raises(ValueError, match="required_any group must be a non-empty list"):
         load_scenarios(registry)
 
 
 def test_loader_rejects_a_forbidden_pattern_that_does_not_compile(tmp_path) -> None:
-    registry = _registry_with_grading(tmp_path, '    forbidden_patterns: ["(unclosed"]\n')
+    registry = _registry_with_grading(
+        tmp_path, '    assertions:\n      - type: literal\n        forbidden_patterns: ["(unclosed"]\n'
+    )
 
     with pytest.raises(ValueError, match="does not compile"):
+        load_scenarios(registry)
+
+
+def test_loader_rejects_an_unknown_assertion_type(tmp_path) -> None:
+    registry = _registry_with_grading(
+        tmp_path, "    assertions:\n      - type: probabilistic\n        required_any: []\n"
+    )
+
+    with pytest.raises(ValueError, match="unknown assertion type"):
+        load_scenarios(registry)
+
+
+def test_loader_rejects_a_semantic_requirement_encoded_as_a_bare_literal_phrase(tmp_path) -> None:
+    registry = _registry_with_grading(
+        tmp_path,
+        "    assertions:\n      - type: semantic\n        required_any:\n          - [must refuse]\n",
+    )
+
+    with pytest.raises(ValueError, match="terms must use"):
         load_scenarios(registry)
 
 

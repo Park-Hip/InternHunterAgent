@@ -80,13 +80,29 @@ class TextRule:
 
 
 @dataclass(frozen=True)
+class ToolExpectation:
+    """The retrieval contract for one turn.
+
+    ``allowed_tools`` is ``None`` for legacy registry entries, which preserves
+    their required-tool-only behavior. An explicit empty tuple means no tool is
+    allowed.
+    """
+
+    required_tools: tuple[str, ...] = ()
+    allowed_tools: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True)
 class ScenarioRule:
     """The highest-tier assertions for one frozen scenario."""
 
     # An empty tuple is a real expectation, not an absent one: the scenario
     # requires that no tool ran. Every value comes from the frozen registry.
     expected_tools: tuple[str, ...] = ()
+    tool_expectation_override: ToolExpectation | None = None
+    turn_tool_expectations: tuple[ToolExpectation, ...] = ()
     expected_answer_count: int | None = None
+    count_only: bool = False
     forbid_single_salary_winner: bool = False
     literal: TextRule | None = None
     semantic: TextRule | None = None
@@ -98,6 +114,18 @@ class ScenarioRule:
     def text(self) -> TextRule | None:
         """Compatibility view for callers that inspect semantic assertion terms."""
         return self.semantic
+
+    def tool_expectation(self, turn_number: int | None) -> ToolExpectation:
+        """Return the applicable tool contract without changing legacy scenarios."""
+        if (
+            self.turn_tool_expectations
+            and turn_number is not None
+            and 1 <= turn_number <= len(self.turn_tool_expectations)
+        ):
+            return self.turn_tool_expectations[turn_number - 1]
+        if self.tool_expectation_override is not None:
+            return self.tool_expectation_override
+        return ToolExpectation(required_tools=self.expected_tools)
 
 
 @dataclass
@@ -259,9 +287,9 @@ def _answer_language_pure(answer: str | None, rows: list[dict[str, Any]] | None)
     for value in _row_values(rows):
         remaining = remaining.replace(value.casefold(), " ")
     remaining = _strip_schema_identifiers(remaining)
-    # Accented Vietnamese letters are outside this ASCII token probe. Requiring two
-    # characters avoids treating fragments such as ``t`` and ``i`` as English words.
-    words = set(re.findall(r"[a-z]{2,}", remaining))
+    # ``\w`` is Unicode-aware, so an ASCII run in an accented Vietnamese word such
+    # as ``toàn`` is not treated as a standalone English token.
+    words = set(re.findall(r"(?<!\w)[a-z]{2,}(?!\w)", remaining))
     return not bool(words & _ENGLISH_PROSE_WORDS)
 
 
@@ -370,11 +398,36 @@ def _answer_style_checks(evidence: Evidence) -> list[Check]:
     ]
 
 
-def _structural_checks(rule: ScenarioRule, evidence: Evidence) -> list[Check]:
+def _execution_accuracy_checks(evidence: Evidence) -> list[Check]:
+    accuracy = evidence.execution_accuracy
+    if accuracy is None:
+        return [Check("execution_accuracy", None, "T0025.5 result is absent", "structural")]
+    accuracy_status = accuracy.get("status")
+    if accuracy_status in {PASS, "EXEMPT"}:
+        return [Check("execution_accuracy", True, f"execution accuracy {accuracy_status}", "structural")]
+    if accuracy_status in {INFRA, UNRUN}:
+        return [Check("execution_accuracy", None, f"execution accuracy is {accuracy_status}", "structural")]
+    if accuracy_status == NOT_EVALUATED:
+        return [
+            Check(
+                "execution_accuracy",
+                None,
+                f"execution accuracy is {accuracy_status}",
+                "structural",
+                outcome=NOT_EVALUATED,
+            )
+        ]
+    return [Check("execution_accuracy", False, f"execution accuracy is {accuracy_status}", "structural")]
+
+
+def _structural_checks(
+    rule: ScenarioRule, evidence: Evidence, turn_number: int | None = None
+) -> list[Check]:
     checks: list[Check] = []
+    expectation = rule.tool_expectation(turn_number)
     if evidence.tools_called is None:
         checks.append(Check("tools_recorded", None, "tools_called is absent from the replay record", "structural"))
-    elif not rule.expected_tools:
+    elif expectation.allowed_tools is None and not expectation.required_tools:
         passed = len(evidence.tools_called) == 0
         checks.append(
             Check(
@@ -385,36 +438,28 @@ def _structural_checks(rule: ScenarioRule, evidence: Evidence) -> list[Check]:
             )
         )
     else:
-        passed = all(tool in evidence.tools_called for tool in rule.expected_tools)
-        checks.append(
-            Check(
-                "required_tool_called",
-                passed,
-                f"required {rule.expected_tools!r}; observed {evidence.tools_called!r}",
-                "structural",
-            )
-        )
-        accuracy = evidence.execution_accuracy
-        if accuracy is None:
-            checks.append(Check("execution_accuracy", None, "T0025.5 result is absent", "structural"))
-        else:
-            accuracy_status = accuracy.get("status")
-            if accuracy_status in {PASS, "EXEMPT"}:
-                checks.append(Check("execution_accuracy", True, f"execution accuracy {accuracy_status}", "structural"))
-            elif accuracy_status in {INFRA, UNRUN}:
-                checks.append(Check("execution_accuracy", None, f"execution accuracy is {accuracy_status}", "structural"))
-            elif accuracy_status == NOT_EVALUATED:
-                checks.append(
-                    Check(
-                        "execution_accuracy",
-                        None,
-                        f"execution accuracy is {accuracy_status}",
-                        "structural",
-                        outcome=NOT_EVALUATED,
-                    )
+        if expectation.required_tools:
+            passed = all(tool in evidence.tools_called for tool in expectation.required_tools)
+            checks.append(
+                Check(
+                    "required_tool_called",
+                    passed,
+                    f"required {expectation.required_tools!r}; observed {evidence.tools_called!r}",
+                    "structural",
                 )
-            else:
-                checks.append(Check("execution_accuracy", False, f"execution accuracy is {accuracy_status}", "structural"))
+            )
+        if expectation.allowed_tools is not None:
+            passed = all(tool in expectation.allowed_tools for tool in evidence.tools_called)
+            checks.append(
+                Check(
+                    "allowed_tools_called",
+                    passed,
+                    f"allowed {expectation.allowed_tools!r}; observed {evidence.tools_called!r}",
+                    "structural",
+                )
+            )
+        if expectation.required_tools or evidence.tools_called:
+            checks.extend(_execution_accuracy_checks(evidence))
 
     if rule.expected_answer_count is not None:
         checks.append(
@@ -426,7 +471,40 @@ def _structural_checks(rule: ScenarioRule, evidence: Evidence) -> list[Check]:
             )
         )
 
+    if rule.count_only:
+        checks.append(_count_only_check(evidence.answer, rule.expected_answer_count))
+
     return checks
+
+
+_LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
+_HEADING_MARKER = re.compile(r"^\s*(?:#{1,6}\s+|\*{1,3}[^*]+\*{1,3}\s*$)")
+
+
+def _count_only_check(answer: str | None, expected_count: int | None) -> Check:
+    """Require one declarative count sentence without list or follow-up content."""
+    lines = [line.strip() for line in (answer or "").splitlines() if line.strip()]
+    forbidden = (
+        len(lines) != 1
+        or any(_LIST_MARKER.match(line) or _HEADING_MARKER.match(line) for line in lines)
+        or "?" in (answer or "")
+        or (bool(lines) and lines[0].endswith((":", ";")))
+    )
+    sentence_count = len(re.findall(r"[.!?]+", lines[0])) if len(lines) == 1 else 0
+    passed = (
+        expected_count is not None
+        and _answer_count(answer, expected_count)
+        and not forbidden
+        and sentence_count <= 1
+    )
+    return Check(
+        "count_only",
+        passed,
+        "answer is one concise declarative count sentence"
+        if passed
+        else "answer must be one concise declarative count sentence with no list, heading, or follow-up question",
+        "literal",
+    )
 
 
 def _judge_checks(rule: ScenarioRule, evidence: Evidence) -> list[Check]:
@@ -521,9 +599,26 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
     literal = next((item for item in assertions if item["type"] == "literal"), {})
     structural = next((item for item in assertions if item["type"] == "structural"), {})
     semantic = next((item for item in assertions if item["type"] == "semantic"), {})
+    expectation = scenario.get("tool_expectation")
     return ScenarioRule(
         expected_tools=tuple(scenario["expected_tools"]),
+        tool_expectation_override=(
+            ToolExpectation(
+                required_tools=tuple(expectation["required"]),
+                allowed_tools=tuple(expectation["allowed"]),
+            )
+            if expectation is not None
+            else None
+        ),
+        turn_tool_expectations=tuple(
+            ToolExpectation(
+                required_tools=tuple(expectation["required"]),
+                allowed_tools=tuple(expectation["allowed"]),
+            )
+            for expectation in scenario.get("turn_tool_expectations", [])
+        ),
         expected_answer_count=literal.get("expected_answer_count"),
+        count_only=bool(literal.get("count_only", False)),
         forbid_single_salary_winner=bool(semantic.get("forbid_single_salary_winner", False)),
         literal=_text_rule(scenario_id, literal),
         semantic=_text_rule(scenario_id, semantic),
@@ -562,7 +657,9 @@ def _first_failing_seam(checks: list[Check]) -> str | None:
     return next((check.tier for check in checks if check.outcome == FAIL), None)
 
 
-def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
+def grade_evidence(
+    scenario_id: str, evidence: Evidence, turn_number: int | None = None
+) -> Grade:
     """Grade independently evaluated literal and structural assertions for one turn."""
     rule = _rule_for(scenario_id)
     if not evidence.answer:
@@ -573,7 +670,7 @@ def grade_evidence(scenario_id: str, evidence: Evidence) -> Grade:
             [Check("answer_present", None, "completed turn has no answer", "structural")],
         )
 
-    structural = _structural_checks(rule, evidence)
+    structural = _structural_checks(rule, evidence, turn_number)
     structural.extend(_answer_style_checks(evidence))
     if rule.require_vietnamese and evidence.returned_rows is not None and _prompt_is_current(evidence):
         purity = _answer_language_pure(evidence.answer, evidence.returned_rows)
@@ -722,6 +819,7 @@ def grade_persisted_run(
                 grade = grade_evidence(
                     scenario_id,
                     Evidence.from_turn(turn, execution, capture_prompt_version),
+                    turn_number=turn_number,
                 )
                 grades.append(grade)
                 scenario_grades.append({"repeat": repeat_number, "turn": turn_number, **grade.to_dict()})

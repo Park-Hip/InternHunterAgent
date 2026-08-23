@@ -110,7 +110,9 @@ def test_limited_ids_rejects_an_extra_result_and_reports_it(monkeypatch) -> None
     monkeypatch.setattr(
         "evals.execution_accuracy.execute_query",
         lambda sql, database_url=None: (
-            [{"id": 1}, {"id": 2}, {"id": 3}] if sql == "generated" else [{"id": 1}, {"id": 2}]
+            [{"id": 1}, {"id": 2}, {"id": 3}]
+            if sql.startswith("generated")
+            else [{"id": 1}, {"id": 2}]
         ),
     )
 
@@ -120,22 +122,43 @@ def test_limited_ids_rejects_an_extra_result_and_reports_it(monkeypatch) -> None
     assert result["difference"] == {"missing_ids": [], "unexpected_ids": [3]}
 
 
-def test_limited_ids_rejects_a_query_that_ignores_the_twenty_result_limit(monkeypatch) -> None:
+def test_limited_ids_mirrors_the_product_twenty_row_display_cap(monkeypatch) -> None:
     monkeypatch.setattr(
         "evals.execution_accuracy.execute_query",
         lambda sql, database_url=None: (
-            [{"id": index} for index in range(1, 23)]
-            if sql == "generated"
+            [{"id": index} for index in range(1, 22)]
+            if sql.startswith("generated")
             else [{"id": index} for index in range(1, 21)]
         ),
     )
 
     result = compare_result_sets("generated", "reference", comparison_mode="limited_ids")
 
-    assert result["status"] == "FAIL"
-    assert result["generated_row_count"] == 22
+    assert result["status"] == "PASS"
+    assert result["generated_row_count"] == 20
+    assert result["generated_fetched_row_count"] == 21
     assert result["reference_row_count"] == 20
-    assert result["difference"]["unexpected_ids"] == [21, 22]
+    assert result["generated_sql"] == "generated"
+    assert result["executed_generated_sql"].endswith("LIMIT 21")
+
+
+def test_destructive_compound_read_requires_all_python_job_ids(monkeypatch) -> None:
+    reference = [{"id": number} for number in range(1, 13)]
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: reference if sql == "reference" else list(reference),
+    )
+
+    assert compare_result_sets("generated", "reference", comparison_mode="ids_only")["status"] == "PASS"
+
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: reference if sql == "reference" else reference[:-1],
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="ids_only")
+    assert result["status"] == "FAIL"
+    assert result["difference"]["missing_ids"] == [12]
 
 
 def test_zero_results_requires_the_generated_query_to_return_no_rows(monkeypatch) -> None:

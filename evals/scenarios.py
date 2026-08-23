@@ -19,6 +19,7 @@ _REQUIREMENT_PATTERN = re.compile(r"G[0-9]{2}")
 # The grader reads its tool expectation from here, so an unknown name would
 # silently become an expectation no agent can satisfy.
 _KNOWN_TOOLS = {"query_clean_jobs"}
+_TURN_TOOL_EXPECTATION_KEYS = {"required", "allowed"}
 # The rest of each scenario's grading expectations. Same reasoning as the tool
 # names: a misspelled field would be silently ignored and quietly weaken a rule.
 _GRADING_KEYS = {
@@ -36,7 +37,7 @@ _EXECUTION_COMPARISONS = {
 }
 _ASSERTION_TYPES = {"literal", "structural", "semantic"}
 _ASSERTION_FIELDS = {
-    "literal": {"expected_answer_count", "forbidden_patterns"},
+    "literal": {"expected_answer_count", "count_only", "forbidden_patterns"},
     "structural": {"require_vietnamese"},
     "semantic": {"required_any", "forbidden_any", "forbid_single_salary_winner"},
 }
@@ -115,6 +116,14 @@ def _validate_assertion_fields(
                 f"Scenario {scenario_id} expected_answer_count must be a non-negative integer"
             )
 
+    if "count_only" in assertion:
+        if assertion["count_only"] is not True:
+            raise ValueError(f"Scenario {scenario_id} count_only must be true")
+        if "expected_answer_count" not in assertion:
+            raise ValueError(
+                f"Scenario {scenario_id} count_only requires expected_answer_count"
+            )
+
     if "forbid_single_salary_winner" in assertion and not isinstance(
         assertion["forbid_single_salary_winner"], bool
     ):
@@ -150,6 +159,45 @@ def _validate_assertion_fields(
                 raise ValueError(
                     f"Scenario {scenario_id} forbidden pattern {pattern!r} does not compile: {exc}"
                 ) from exc
+
+
+def _validate_tool_expectation(scenario_id: str, field: str, expectation: Any) -> None:
+    if not isinstance(expectation, dict) or set(expectation) != _TURN_TOOL_EXPECTATION_KEYS:
+        raise ValueError(
+            f"Scenario {scenario_id} {field} must contain required and allowed"
+        )
+    required = expectation["required"]
+    allowed = expectation["allowed"]
+    if not (
+        isinstance(required, list)
+        and isinstance(allowed, list)
+        and all(tool in _KNOWN_TOOLS for tool in required)
+        and all(tool in _KNOWN_TOOLS for tool in allowed)
+    ):
+        raise ValueError(
+            f"Scenario {scenario_id} {field} lists must contain known tool names"
+        )
+    if not set(required).issubset(allowed):
+        raise ValueError(
+            f"Scenario {scenario_id} {field} required tools must be allowed"
+        )
+
+
+def _validate_turn_tool_expectations(scenario_id: str, scenario: dict[str, Any]) -> None:
+    """Validate a conversational scenario's optional per-turn tool contract."""
+    expectations = scenario.get("turn_tool_expectations")
+    if expectations is None:
+        return
+    if scenario["type"] != "conversational":
+        raise ValueError(
+            f"Scenario {scenario_id} turn_tool_expectations require a conversational scenario"
+        )
+    if not isinstance(expectations, list) or len(expectations) != len(scenario["turns"]):
+        raise ValueError(
+            f"Scenario {scenario_id} turn_tool_expectations must have one entry per turn"
+        )
+    for expectation in expectations:
+        _validate_tool_expectation(scenario_id, "turn tool expectation", expectation)
 
 
 def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
@@ -235,6 +283,10 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
                 f"Scenario {scenario_id} expected_tools must be a list of known tool names"
             )
 
+        _validate_turn_tool_expectations(scenario_id, scenario)
+        if "tool_expectation" in scenario:
+            _validate_tool_expectation(scenario_id, "tool_expectation", scenario["tool_expectation"])
+
         if "grading" in scenario:
             _validate_grading(scenario_id, scenario["grading"])
 
@@ -300,16 +352,19 @@ def build_eval_dataset() -> EvaluationDataset:
 def format_scenario(scenario: dict[str, Any]) -> str:
     """Render a scenario for inspection without running the agent or a model."""
     question = scenario.get("input") or " -> ".join(scenario["turns"])
-    return "\n".join(
-        [
-            f"Scenario: {scenario['id']}",
-            f"Name: {scenario['name']}",
-            f"Input: {question}",
-            f"Expected behavior: {scenario['expected']}",
-            f"Expected tools: {', '.join(scenario['expected_tools']) or 'none'}",
-            f"Probe: {'yes' if scenario['probe'] else 'no'}",
-        ]
-    )
+    lines = [
+        f"Scenario: {scenario['id']}",
+        f"Name: {scenario['name']}",
+        f"Input: {question}",
+        f"Expected behavior: {scenario['expected']}",
+        f"Expected tools: {', '.join(scenario['expected_tools']) or 'none'}",
+    ]
+    if expectations := scenario.get("turn_tool_expectations"):
+        lines.append(f"Turn tool expectations: {expectations}")
+    elif expectation := scenario.get("tool_expectation"):
+        lines.append(f"Tool expectation: {expectation}")
+    lines.append(f"Probe: {'yes' if scenario['probe'] else 'no'}")
+    return "\n".join(lines)
 
 
 def main(argv: Sequence[str] | None = None) -> None:

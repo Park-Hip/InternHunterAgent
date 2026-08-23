@@ -14,6 +14,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from evals.fixtures.loader import fixture_database_url
 from evals.scenarios import load_scenarios
+from src.core.config import settings
+from src.services.query.row_bound import resolve_bounds
 
 
 _SELECT_LIST_PATTERN = re.compile(r"\s*SELECT\s+(?:DISTINCT\s+)?(.*?)\s+FROM\s", re.IGNORECASE | re.DOTALL)
@@ -161,6 +163,27 @@ def execute_query(sql: str, database_url: str | None = None) -> list[dict[str, A
         engine.dispose()
 
 
+def _displayed_limited_rows(
+    generated_sql: str, database_url: str | None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
+    """Execute a generated query with the production fetch and display bounds.
+
+    ``query_clean_jobs`` fetches one sentinel row beyond the configured display
+    cap, then formats only the rows visible to the user.  ``limited_ids`` must
+    compare that displayed set rather than the raw generated result set.
+    """
+    max_rows = settings.config_yaml["agent"]["query"]["max_rows"]
+    if isinstance(max_rows, bool) or not isinstance(max_rows, int) or max_rows <= 0:
+        raise ValueError("agent.query.max_rows must be a positive integer")
+    # ``query_clean_jobs`` passes the normalized ``ValidationResult.sql`` to
+    # ``resolve_bounds``. The replay preserves the model's original SQL, which
+    # can include the single trailing semicolon the validator removes.
+    validated_sql = generated_sql.strip().rstrip(";").strip()
+    bounds = resolve_bounds(validated_sql, max_rows)
+    fetched_rows = execute_query(bounds.sql, database_url)
+    return fetched_rows[: bounds.display_cap], fetched_rows, bounds.sql
+
+
 def compare_result_sets(
     generated_sql: str,
     reference_sql: str,
@@ -169,7 +192,14 @@ def compare_result_sets(
 ) -> dict[str, Any]:
     """Compare query results using the scenario's explicit semantic contract."""
     try:
-        generated_rows = execute_query(generated_sql, database_url)
+        if comparison_mode == "limited_ids":
+            generated_rows, fetched_generated_rows, executed_generated_sql = _displayed_limited_rows(
+                generated_sql, database_url
+            )
+        else:
+            generated_rows = execute_query(generated_sql, database_url)
+            fetched_generated_rows = generated_rows
+            executed_generated_sql = generated_sql
         reference_rows = execute_query(reference_sql, database_url)
     except SQLAlchemyError as exc:
         return {"status": "INFRA", "error": str(exc)}
@@ -270,6 +300,9 @@ def compare_result_sets(
     return {
         "status": "PASS" if matches else "FAIL",
         "generated_row_count": len(generated_rows),
+        "generated_fetched_row_count": len(fetched_generated_rows),
+        "generated_sql": generated_sql,
+        "executed_generated_sql": executed_generated_sql,
         "reference_row_count": len(reference_rows),
         "generated_rows": generated_rows,
         "reference_rows": reference_rows,

@@ -26,6 +26,7 @@ from evals.grader import (
 )
 from evals.holdout import HOLDOUT
 from evals.scenarios import load_scenarios
+from src.agents.runtime.prompts import load_prompt_version
 
 
 def test_answer_count_accepts_accented_and_unaccented_vietnamese_number_words() -> None:
@@ -41,6 +42,11 @@ def test_language_purity_exempts_canonical_and_source_row_values() -> None:
     assert _answer_language_pure("The Data Engineer is in Hanoi.", rows) is False
 
 
+@pytest.mark.parametrize("word", ["toàn", "toản", "toại"])
+def test_language_purity_does_not_extract_english_from_accented_vietnamese_words(word: str) -> None:
+    assert _answer_language_pure(f"Tôi đã xem {word} bộ kết quả.", [{"id": 1}]) is True
+
+
 def test_vietnamese_purity_is_row_aware_in_grade() -> None:
     grade = grade_evidence(
         "HLP-LIST-1",
@@ -53,6 +59,22 @@ def test_vietnamese_purity_is_row_aware_in_grade() -> None:
     )
 
     assert any(check.name == "vietnamese_agent_prose" for check in grade.checks)
+
+
+def test_vietnamese_purity_passes_accented_prose_and_exempts_returned_rows() -> None:
+    grade = grade_evidence(
+        "HLP-LIST-1",
+        Evidence(
+            answer="Tôi đã xem toàn bộ kết quả Data Engineer.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "PASS"},
+            returned_rows=[{"role": "Data Engineer"}],
+            capture_prompt_version=load_prompt_version(),
+        ),
+    )
+
+    language = next(check for check in grade.checks if check.name == "vietnamese_agent_prose")
+    assert language.passed is True
 
 
 # The 2026-08-21 probe answer, verbatim: it failed vietnamese_agent_prose on ``is``, a
@@ -236,6 +258,32 @@ def test_missing_replay_evidence_is_infra_not_behavior_failure() -> None:
     assert grade.tier == "structural"
 
 
+@pytest.mark.parametrize(
+    ("answer", "expected_status"),
+    [
+        ("Có 5 việc làm AI Engineer.", PASS),
+        ("Có 5 việc làm AI Engineer.\n\n1. AI Engineer", FAIL),
+        ("Có 5 việc làm AI Engineer, bao gồm các vị trí sau:", FAIL),
+        ("Có 5 việc làm AI Engineer. Bạn muốn xem chi tiết không?", FAIL),
+    ],
+)
+def test_count_only_requires_one_concise_declarative_sentence(
+    answer: str, expected_status: str
+) -> None:
+    grade = grade_evidence(
+        "HLP-COUNT-1",
+        Evidence(
+            answer=answer,
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+        ),
+    )
+
+    assert grade.status == expected_status
+    count_only = next(check for check in grade.checks if check.name == "count_only")
+    assert count_only.passed is (expected_status == PASS)
+
+
 def test_zero_rows_are_not_infrastructure_failure() -> None:
     grade = grade_evidence(
         "HON-ZERO-RESULTS-1",
@@ -264,6 +312,26 @@ def test_no_tool_expectation_is_owned_by_the_scenario_registry() -> None:
 
     assert grade.status == PASS
     assert any(check.name == "no_tool_called" and check.passed for check in grade.checks)
+
+
+def test_general_company_opinion_allows_a_direct_decline_or_grounded_postings() -> None:
+    direct_decline = grade_evidence(
+        "HON-GENERAL-KNOWLEDGE-1",
+        Evidence(answer="I cannot provide a general opinion about a company.", tools_called=[]),
+    )
+    grounded_postings = grade_evidence(
+        "HON-GENERAL-KNOWLEDGE-1",
+        Evidence(
+            answer="I can only describe the postings in the database.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "EXEMPT"},
+        ),
+    )
+
+    assert direct_decline.status == PASS
+    assert all(check.name != "execution_accuracy" for check in direct_decline.checks)
+    assert grounded_postings.status == PASS
+    assert any(check.name == "execution_accuracy" and check.passed for check in grounded_postings.checks)
 
 
 def test_sql_description_accepts_refusal_wording_observed_in_the_real_sample() -> None:
@@ -416,6 +484,71 @@ def test_missing_sql_is_not_evaluated_after_a_routing_failure() -> None:
     assert grade.status == FAIL
     assert grade.first_failing_seam == "structural"
     assert execution.outcome == NOT_EVALUATED
+
+
+def test_referent_follow_up_allows_context_reuse_or_a_fresh_query() -> None:
+    reused_context = grade_evidence(
+        "HLP-REFERENT-1",
+        Evidence(answer="There are 2 internships.", tools_called=[]),
+        turn_number=2,
+    )
+    fresh_query = grade_evidence(
+        "HLP-REFERENT-1",
+        Evidence(
+            answer="There are 2 internships.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+        ),
+        turn_number=2,
+    )
+
+    assert reused_context.status == PASS
+    assert all(check.name != "execution_accuracy" for check in reused_context.checks)
+    assert fresh_query.status == PASS
+    assert any(check.name == "execution_accuracy" and check.passed for check in fresh_query.checks)
+
+
+def test_persisted_referent_follow_up_uses_its_turn_tool_contract() -> None:
+    report = grade_persisted_run(
+        {
+            "manifest": {"run_id": "referent-context-run"},
+            "scenarios": {
+                "HLP-REFERENT-1": {
+                    "status": "COMPLETE",
+                    "repeats": [
+                        {
+                            "repeat": 1,
+                            "turns": [
+                                {
+                                    "seams": {
+                                        "answer": "Five AI Engineer jobs are available.",
+                                        "tools_called": ["query_clean_jobs"],
+                                    }
+                                },
+                                {
+                                    "seams": {
+                                        "answer": "Two of those jobs are internships.",
+                                        "tools_called": [],
+                                    }
+                                },
+                            ],
+                        }
+                    ],
+                }
+            },
+        },
+        {
+            "scenarios": {
+                "HLP-REFERENT-1": [
+                    {"repeat": 1, "turns": [{"status": PASS}, {"status": NOT_EVALUATED}]}
+                ]
+            }
+        },
+    )
+
+    second_turn = report["scenarios"]["HLP-REFERENT-1"][1]
+    assert second_turn["status"] == PASS
+    assert all(check["name"] != "execution_accuracy" for check in second_turn["checks"])
 
 
 def test_persisted_empty_answer_is_infra_and_counted_explicitly() -> None:

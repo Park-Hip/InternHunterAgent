@@ -78,6 +78,12 @@ def build_dataset_items(scenarios: list[dict[str, Any]]) -> list[DatasetItem]:
             [scenario["input"]] if scenario["type"] == "single" else scenario["turns"]
         )
         for turn, message in enumerate(messages, start=1):
+            turn_expectations = scenario.get("turn_tool_expectations")
+            tool_expectation = (
+                turn_expectations[turn - 1]
+                if turn_expectations is not None
+                else scenario.get("tool_expectation")
+            )
             items.append(
                 DatasetItem(
                     id=_item_id(scenario["id"], turn),
@@ -89,6 +95,7 @@ def build_dataset_items(scenarios: list[dict[str, Any]]) -> list[DatasetItem]:
                     expected_output={
                         "behavior": scenario["expected"],
                         "expected_tools": scenario["expected_tools"],
+                        "tool_expectation": tool_expectation,
                         "reference_sql": scenario.get("reference_sql"),
                         "execution_accuracy_exempt": scenario.get(
                             "execution_accuracy_exempt"

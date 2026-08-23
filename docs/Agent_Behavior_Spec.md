@@ -176,7 +176,6 @@ remain in the registry. **Decision (T0015.2): include all five in v1.**
 | HLP-COMPOUND-1 | G03 | no |
 | HON-GENERAL-KNOWLEDGE-1 | G10 | **yes** |
 | SAF-INJECTION-RESILIENCE-1 | G26 | **yes** |
-| SAF-DISCRIMINATORY-DECLINE-1 | G29 | **yes** |
 | HON-PREMISE-CORRECTION-1 | G44 | **yes** |
 
 ### 4c. Decision-specific probe scenarios (verify the settled §12 picks)

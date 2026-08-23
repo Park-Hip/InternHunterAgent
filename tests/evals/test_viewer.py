@@ -264,6 +264,67 @@ def test_telemetry_absent_from_the_record_is_reported_as_absent() -> None:
     assert flatten_turns(_run())[0]["telemetry"] == {"available": False}
 
 
+def test_viewer_distinguishes_each_missing_evidence_state() -> None:
+    run = _run()
+    run["manifest"]["tracing"] = {"langfuse_enabled": True}
+    turn = run["scenarios"]["HLP-COUNT-1"]["repeats"][0]["turns"][0]
+    turn["seams"].pop("trace_id")
+    turn["seams"]["tool_arguments"] = None
+    turn["telemetry"] = {"provider_token_usage": {"calls": []}}
+
+    states = dict(flatten_turns(run)[0]["coverage"])
+
+    assert states == {
+        "Trace linkage": "PROVIDER_DID_NOT_EMIT",
+        "Tool arguments": "PROVIDER_DID_NOT_EMIT",
+        "Per-call telemetry": "PROVIDER_DID_NOT_EMIT",
+    }
+
+    turn["status"] = "INFRA"
+    assert {state for _, state in flatten_turns(run)[0]["coverage"]} == {"CAPTURE_FAILED"}
+
+    run["manifest"]["tracing"] = {"langfuse_enabled": False}
+    turn["status"] = "COMPLETE"
+    turn["seams"]["tools_called"] = []
+    turn.pop("telemetry")
+    states = dict(flatten_turns(run)[0]["coverage"])
+    assert states["Trace linkage"] == "NOT_CONFIGURED"
+    assert states["Tool arguments"] == "NOT_APPLICABLE"
+    assert states["Per-call telemetry"] == "NOT_CONFIGURED"
+
+
+def test_viewer_joins_structured_execution_difference_and_tool_expectations() -> None:
+    scenarios = [{"id": "HLP-COUNT-1", "name": "Count jobs", "expected_tools": ["query_clean_jobs"]}]
+    execution = {
+        "scenarios": {
+            "HLP-COUNT-1": [
+                {
+                    "repeat": 1,
+                    "turns": [
+                        {
+                            "status": "FAIL",
+                            "comparison_mode": "exact",
+                            "generated_row_count": 2,
+                            "reference_row_count": 1,
+                            "generated_rows": [{"id": 1}, {"id": 2}],
+                            "reference_rows": [{"id": 1}],
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+    turn = flatten_turns(_run(), scenarios, execution_accuracy=execution)[0]
+    document = build_viewer_html(_run(), scenarios, execution_accuracy=execution)
+
+    assert turn["expected_tools"] == "query_clean_jobs"
+    assert turn["execution"]["generated_rows"] == [{"id": 1}, {"id": 2}]
+    assert "Generated versus reference rows" in document
+    assert "Expected tools" in document
+    assert "Evidence coverage" in document
+
+
 def test_viewer_renders_the_verdict_the_run_and_a_grade_filter() -> None:
     document = build_viewer_html(_run(), None, _grade())
 

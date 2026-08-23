@@ -17,7 +17,8 @@ REPLAY_PATH = Path(__file__).with_name("replays") / "t0025.9-committed.json"
 # 2 (T0035.1) added prompt_version. The bump is checked rather than tolerated: a
 # schema_version 1 artifact predates the lineage stamp, so accepting it would let an
 # unlabelled replay pass as a labelled one - the silent invalidation M35 exists to stop.
-REPLAY_SCHEMA_VERSION = 2
+REPLAY_SCHEMA_VERSION = 3
+_SUPPORTED_REPLAY_SCHEMA_VERSIONS = frozenset({2, REPLAY_SCHEMA_VERSION})
 _MANIFEST_KEYS = {"run_id", "schema_version", "source_capture", "sanitized", "prompt_version"}
 _SCENARIO_KEYS = {"scenario_type", "status", "repeats"}
 _REPEAT_KEYS = {"repeat", "status", "turns"}
@@ -28,7 +29,8 @@ _TURN_KEYS = {
     "expected_execution_accuracy",
     "expected_grade",
 }
-_SEAM_KEYS = {"question", "answer", "tools_called", "sql_text"}
+_V2_SEAM_KEYS = {"question", "answer", "tools_called", "sql_text"}
+_V3_SEAM_KEYS = {*_V2_SEAM_KEYS, "tool_output", "tool_arguments"}
 def load_replay(path: Path = REPLAY_PATH) -> dict[str, Any]:
     """Load the committed replay artifact as UTF-8 JSON."""
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -62,10 +64,10 @@ def validate_replay(replay: dict[str, Any]) -> None:
         and manifest["prompt_version"].strip()
     ):
         raise ValueError("Replay manifest has invalid provenance fields")
-    if manifest["schema_version"] != REPLAY_SCHEMA_VERSION:
+    if manifest["schema_version"] not in _SUPPORTED_REPLAY_SCHEMA_VERSIONS:
         raise ValueError(
             f"Replay schema_version is {manifest['schema_version']}, "
-            f"expected {REPLAY_SCHEMA_VERSION}"
+            f"expected one of {sorted(_SUPPORTED_REPLAY_SCHEMA_VERSIONS)}"
         )
     if replay["status"] != "COMPLETE":
         raise ValueError("Replay status must be COMPLETE")
@@ -130,7 +132,12 @@ def validate_replay(replay: dict[str, Any]) -> None:
                     raise ValueError(
                         f"Replay scenario {scenario_id} seams must be an object"
                     )
-                _assert_keys(seams, _SEAM_KEYS, f"Replay scenario {scenario_id} seams")
+                seam_keys = (
+                    _V3_SEAM_KEYS
+                    if manifest["schema_version"] == REPLAY_SCHEMA_VERSION
+                    else _V2_SEAM_KEYS
+                )
+                _assert_keys(seams, seam_keys, f"Replay scenario {scenario_id} seams")
                 if not all(
                     isinstance(seams[key], expected)
                     for key, expected in (
@@ -148,6 +155,19 @@ def validate_replay(replay: dict[str, Any]) -> None:
                     raise ValueError(
                         f"Replay scenario {scenario_id} SQL must be a string or null"
                     )
+                if manifest["schema_version"] == REPLAY_SCHEMA_VERSION:
+                    if seams["tool_output"] is not None and not isinstance(
+                        seams["tool_output"], str
+                    ):
+                        raise ValueError(
+                            f"Replay scenario {scenario_id} tool output must be a string or null"
+                        )
+                    if seams["tool_arguments"] is not None and not isinstance(
+                        seams["tool_arguments"], list
+                    ):
+                        raise ValueError(
+                            f"Replay scenario {scenario_id} tool arguments must be a list or null"
+                        )
                 # Without this the replay could keep passing against a question
                 # the registry no longer asks, which is exactly the drift the
                 # gate exists to catch.

@@ -386,6 +386,30 @@ def _forbidden_capture_field(value: Any, path: str = "capture") -> str | None:
     return None
 
 
+_NON_REPLAYABLE_CAPTURE_KEYS = re.compile(
+    r"(?:langfuse|trace[_-]?id|dataset[_-]?run[_-]?id)", re.IGNORECASE
+)
+
+
+def _sanitize_capture_for_replay(value: Any) -> Any:
+    """Remove external tracing linkage while retaining deterministic evidence.
+
+    A native capture intentionally records trace and dataset identifiers so scoring and
+    ingestion verification can operate on the private artifact. Those identifiers are
+    neither replay inputs nor safe committed provenance, so freezing projects them away
+    before the generic secret scan runs. Values under every other key are kept intact.
+    """
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_capture_for_replay(child)
+            for key, child in value.items()
+            if not _NON_REPLAYABLE_CAPTURE_KEYS.search(str(key))
+        }
+    if isinstance(value, list):
+        return [_sanitize_capture_for_replay(child) for child in value]
+    return value
+
+
 def _grade_index(
     grade: dict[str, Any], capture_run_id: str
 ) -> dict[tuple[str, int, int], dict[str, Any]]:
@@ -446,7 +470,7 @@ def freeze_capture(
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite existing replay: {output}")
 
-    capture = load_run(capture_path)
+    capture = _sanitize_capture_for_replay(load_run(capture_path))
     forbidden = _forbidden_capture_field(capture)
     if forbidden:
         raise ValueError(f"Capture contains forbidden content at {forbidden}")
@@ -526,6 +550,8 @@ def freeze_capture(
                                 "question",
                                 "answer",
                                 "tools_called",
+                                "tool_output",
+                                "tool_arguments",
                                 "sql_text",
                             )
                         },
@@ -599,6 +625,7 @@ def _seam_dict(run: harness.SeamRun) -> dict[str, Any]:
         "question": run.question,
         "answer": run.answer,
         "tools_called": run.tools_called,
+        "tool_arguments": run.tool_arguments,
         "tool_output": run.tool_output,
         "sql_text": run.sql_text,
         "trace_id": run.trace_id,

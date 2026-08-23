@@ -72,16 +72,17 @@ def test_committed_replay_names_the_prompt_that_produced_it() -> None:
     """Every committed replay carries the prompt version its capture ran (M35)."""
     replay = load_replay()
 
-    assert replay["manifest"]["schema_version"] == REPLAY_SCHEMA_VERSION
+    assert replay["manifest"]["schema_version"] in {2, REPLAY_SCHEMA_VERSION}
     assert replay["manifest"]["prompt_version"] == "v1"
 
 
-def test_committed_replay_records_the_phase_one_literal_verdict() -> None:
+def test_committed_replay_records_the_cross_currency_failure() -> None:
     replay = load_replay()
 
     currency_turn = replay["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]
 
-    assert currency_turn["expected_grade"] == "PASS"
+    assert currency_turn["expected_execution_accuracy"] == "FAIL"
+    assert currency_turn["expected_grade"] == "FAIL"
 
 
 def test_replay_rejects_a_manifest_that_cannot_name_its_prompt() -> None:
@@ -180,8 +181,8 @@ def test_replay_fails_when_an_expected_execution_result_drifts(monkeypatch) -> N
             **_expected_execution(run),
             "scenarios": {
                 **_expected_execution(run)["scenarios"],
-                # The frozen expectation for this turn is PASS, so FAIL is the drift.
-                "HON-CURRENCY-1": [{"repeat": 1, "turns": [{"status": "FAIL"}]}],
+                # The frozen expectation for this turn is FAIL, so PASS is the drift.
+                "HON-CURRENCY-1": [{"repeat": 1, "turns": [{"status": "PASS"}]}],
             },
         },
     )

@@ -108,18 +108,52 @@ def test_every_graded_scenario_classifies_its_comparison_explicitly() -> None:
     }
 
     assert None not in modes.values()
-    assert modes["HLP-COUNT-1"] == "exact"
+    assert modes["HLP-COUNT-1"] == "aggregate_count"
     assert modes["HLP-LIST-1"] == "ids_only"
+    assert modes["HLP-TRUNCATION-1"] == "limited_ids"
     assert modes["HON-CREATED-ON-1"] == "contains_reference"
+    assert modes["HON-ZERO-RESULTS-1"] == "zero_results"
+    assert modes["HON-CURRENCY-1"] == "cross_currency"
     assert sorted(Counter(modes.values()).items()) == [
+        ("aggregate_count", 1),
         ("contains_reference", 1),
-        ("exact", 1),
-        ("ids_only", 16),
+        ("cross_currency", 1),
+        ("ids_only", 13),
+        ("limited_ids", 1),
+        ("zero_results", 1),
     ]
 
 
 def test_no_registry_scenario_compares_ids_against_a_reference_without_them() -> None:
     for scenario in load_scenarios():
+        validate_execution_comparison(scenario)
+
+
+@pytest.mark.parametrize(
+    ("scenario", "message"),
+    [
+        (
+            {
+                "id": "HLP-COUNT-1",
+                "reference_sql": "SELECT id FROM clean_jobs",
+                "grading": {"execution_comparison": "aggregate_count"},
+            },
+            "does not contain COUNT",
+        ),
+        (
+            {
+                "id": "HON-CURRENCY-1",
+                "reference_sql": "SELECT id FROM clean_jobs",
+                "grading": {"execution_comparison": "cross_currency"},
+            },
+            "does not select salary_currency",
+        ),
+    ],
+)
+def test_execution_contracts_reject_reference_sql_without_required_evidence(
+    scenario: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
         validate_execution_comparison(scenario)
 
 

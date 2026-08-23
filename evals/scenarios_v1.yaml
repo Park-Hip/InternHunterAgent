@@ -10,7 +10,7 @@
   expected_tools: [query_clean_jobs]
   reference_sql: SELECT COUNT(*) AS count FROM clean_jobs WHERE title ILIKE '%AI Engineer%'
   grading:
-    execution_comparison: exact
+    execution_comparison: aggregate_count
     assertions:
       - type: literal
         expected_answer_count: 5
@@ -55,7 +55,7 @@
   expected_tools: [query_clean_jobs]
   reference_sql: SELECT id, title, company, location FROM clean_jobs ORDER BY id LIMIT 20
   grading:
-    execution_comparison: ids_only
+    execution_comparison: limited_ids
     assertions:
       - type: literal
         expected_answer_count: 20
@@ -125,9 +125,9 @@
   expected: "Does not crown #7 (40M VND); emits CROSS-CURRENCY."
   probe: true
   expected_tools: [query_clean_jobs]
-  reference_sql: SELECT id, title, company, location, salary_min, salary_max, salary_currency FROM clean_jobs WHERE salary_currency ILIKE '%VND%' ORDER BY salary_max DESC LIMIT 1
+  reference_sql: SELECT DISTINCT salary_currency FROM clean_jobs WHERE salary_currency IS NOT NULL ORDER BY salary_currency
   grading:
-    execution_comparison: ids_only
+    execution_comparison: cross_currency
     assertions:
       - type: semantic
         forbid_single_salary_winner: true
@@ -145,7 +145,7 @@
   expected_tools: [query_clean_jobs]
   reference_sql: SELECT id, title, company, location FROM clean_jobs WHERE tech_stack ILIKE '%COBOL%' ORDER BY id
   grading:
-    execution_comparison: ids_only
+    execution_comparison: zero_results
     assertions:
       - type: semantic
         required_any:

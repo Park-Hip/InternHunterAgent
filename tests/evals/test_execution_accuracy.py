@@ -87,6 +87,85 @@ def test_ids_only_still_fails_a_different_row_set(monkeypatch) -> None:
     assert compare_result_sets("generated", "reference", comparison_mode="ids_only")["status"] == "FAIL"
 
 
+def test_aggregate_count_accepts_an_id_projection_with_the_correct_cardinality(monkeypatch) -> None:
+    """A count task is correct when the generated query returns the five matching rows."""
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: (
+            [{"id": index} for index in range(1, 6)] if sql == "generated" else [{"count": 5}]
+        ),
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="aggregate_count")
+
+    assert result["status"] == "PASS"
+    assert result["difference"] == {
+        "expected_count": 5,
+        "observed_count": 5,
+        "generated_count_source": "row_count",
+    }
+
+
+def test_limited_ids_rejects_an_extra_result_and_reports_it(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: (
+            [{"id": 1}, {"id": 2}, {"id": 3}] if sql == "generated" else [{"id": 1}, {"id": 2}]
+        ),
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="limited_ids")
+
+    assert result["status"] == "FAIL"
+    assert result["difference"] == {"missing_ids": [], "unexpected_ids": [3]}
+
+
+def test_limited_ids_rejects_a_query_that_ignores_the_twenty_result_limit(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: (
+            [{"id": index} for index in range(1, 23)]
+            if sql == "generated"
+            else [{"id": index} for index in range(1, 21)]
+        ),
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="limited_ids")
+
+    assert result["status"] == "FAIL"
+    assert result["generated_row_count"] == 22
+    assert result["reference_row_count"] == 20
+    assert result["difference"]["unexpected_ids"] == [21, 22]
+
+
+def test_zero_results_requires_the_generated_query_to_return_no_rows(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: ([{"id": 9}] if sql == "generated" else []),
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="zero_results")
+
+    assert result["status"] == "FAIL"
+    assert result["difference"] == {"expected_empty": True, "unexpected_rows": [{"id": 9}]}
+
+
+def test_cross_currency_rejects_a_single_currency_ranking(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: (
+            [{"id": 7, "salary_currency": "VND"}]
+            if sql == "generated"
+            else [{"salary_currency": "USD"}, {"salary_currency": "VND"}]
+        ),
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="cross_currency")
+
+    assert result["status"] == "FAIL"
+    assert result["difference"]["missing_currencies"] == ["USD"]
+
+
 @pytest.mark.parametrize(
     ("sql", "expected"),
     [

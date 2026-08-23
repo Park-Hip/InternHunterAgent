@@ -17,6 +17,7 @@ from evals.scenarios import load_scenarios
 
 
 _SELECT_LIST_PATTERN = re.compile(r"\s*SELECT\s+(?:DISTINCT\s+)?(.*?)\s+FROM\s", re.IGNORECASE | re.DOTALL)
+_COUNT_AGGREGATE_PATTERN = re.compile(r"\bCOUNT\s*\(", re.IGNORECASE)
 
 
 def _value_key(value: Any) -> str:
@@ -64,24 +65,52 @@ def selects_id(sql: str) -> bool:
     return False
 
 
+def selects_column(sql: str, column: str) -> bool:
+    """Report whether a simple reference query projects ``column`` by name."""
+    match = _SELECT_LIST_PATTERN.match(sql)
+    if match is None:
+        return False
+    select_list = match.group(1).strip()
+    if select_list == "*":
+        return True
+    for item in _split_select_list(select_list):
+        item = item.strip()
+        alias = re.search(r"\s+AS\s+(\w+)\s*$", item, re.IGNORECASE)
+        name = alias.group(1) if alias else item.rsplit(".", maxsplit=1)[-1]
+        if name.strip('"').lower() == column.lower():
+            return True
+    return False
+
+
 def validate_execution_comparison(scenario: dict[str, Any]) -> None:
-    """Reject ``ids_only`` on a scenario whose reference SQL does not project ``id``.
+    """Reject execution contracts whose reference SQL cannot support their evidence.
 
     Without this, ``ids_only`` over a ``COUNT(*)`` reference compares two empty id multisets and
     passes every generated query. That is a silent false pass, which is worse than the projection
     failure ``ids_only`` exists to remove.
     """
     comparison_mode = scenario.get("grading", {}).get("execution_comparison", "exact")
-    if comparison_mode != "ids_only":
-        return
     reference_sql = scenario.get("reference_sql")
     queries = reference_sql if isinstance(reference_sql, list) else [reference_sql]
-    for index, query in enumerate(queries):
-        if not isinstance(query, str) or not selects_id(query):
-            turn = f" turn {index + 1}" if isinstance(reference_sql, list) else ""
+    if comparison_mode in {"ids_only", "limited_ids"}:
+        for index, query in enumerate(queries):
+            if not isinstance(query, str) or not selects_id(query):
+                turn = f" turn {index + 1}" if isinstance(reference_sql, list) else ""
+                raise ValueError(
+                    f"Scenario {scenario.get('id', '<unknown>')}{turn} declares "
+                    f"execution_comparison: {comparison_mode} but its reference SQL does not select id"
+                )
+    elif comparison_mode == "aggregate_count":
+        if len(queries) != 1 or not isinstance(queries[0], str) or not _COUNT_AGGREGATE_PATTERN.search(queries[0]):
             raise ValueError(
-                f"Scenario {scenario.get('id', '<unknown>')}{turn} declares "
-                "execution_comparison: ids_only but its reference SQL does not select id"
+                f"Scenario {scenario.get('id', '<unknown>')} declares execution_comparison: "
+                "aggregate_count but its reference SQL does not contain COUNT("
+            )
+    elif comparison_mode == "cross_currency":
+        if len(queries) != 1 or not isinstance(queries[0], str) or not selects_column(queries[0], "salary_currency"):
+            raise ValueError(
+                f"Scenario {scenario.get('id', '<unknown>')} declares execution_comparison: "
+                "cross_currency but its reference SQL does not select salary_currency"
             )
 
 
@@ -91,6 +120,33 @@ def _result_key(row: dict[str, Any], compare_ids: bool) -> str:
         return _value_key(row["id"])
     # Result columns are ordered in a SQL row, while aliases are presentation metadata.
     return json.dumps([_value_key(value) for value in row.values()], ensure_ascii=False)
+
+
+def _row_difference(generated: Counter[str], reference: Counter[str]) -> dict[str, Any]:
+    """Describe an unordered result difference without hiding duplicate rows."""
+    return {
+        "missing_rows": _display_values(reference - generated),
+        "unexpected_rows": _display_values(generated - reference),
+    }
+
+
+def _id_difference(generated: Counter[str], reference: Counter[str]) -> dict[str, Any]:
+    return {
+        "missing_ids": _display_values(reference - generated),
+        "unexpected_ids": _display_values(generated - reference),
+    }
+
+
+def _display_values(values: Counter[str]) -> list[Any]:
+    """Return JSON comparison keys as readable structured values in the report."""
+    return [json.loads(value) for value in values.elements()]
+
+
+def _single_numeric_value(rows: list[dict[str, Any]]) -> Any | None:
+    if len(rows) != 1 or len(rows[0]) != 1:
+        return None
+    value = next(iter(rows[0].values()))
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
 def execute_query(sql: str, database_url: str | None = None) -> list[dict[str, Any]]:
@@ -118,7 +174,7 @@ def compare_result_sets(
     except SQLAlchemyError as exc:
         return {"status": "INFRA", "error": str(exc)}
 
-    if comparison_mode == "ids_only":
+    if comparison_mode in {"ids_only", "limited_ids"}:
         # Dropping an id-less row would compare a short multiset against the reference, and when the
         # reference legitimately returns nothing, two empty multisets match whatever was generated.
         # That is the same silent false pass validate_execution_comparison prevents on the reference
@@ -136,6 +192,7 @@ def compare_result_sets(
                 "generated_rows": generated_rows,
                 "reference_rows": reference_rows,
                 "comparison_mode": comparison_mode,
+                "difference": {"missing_ids": [], "unexpected_ids": []},
             }
         generated = Counter(_value_key(row["id"]) for row in generated_rows)
         reference = Counter(_value_key(row["id"]) for row in reference_rows)
@@ -149,9 +206,67 @@ def compare_result_sets(
     elif comparison_mode == "exact":
         generated = Counter(_result_key(row, False) for row in generated_rows)
         reference = Counter(_result_key(row, False) for row in reference_rows)
+    elif comparison_mode == "aggregate_count":
+        expected_count = _single_numeric_value(reference_rows)
+        if expected_count is None:
+            raise ValueError("aggregate_count reference query must return one numeric aggregate")
+        observed_count = _single_numeric_value(generated_rows)
+        generated_count = observed_count if observed_count is not None else len(generated_rows)
+        return {
+            "status": "PASS" if generated_count == expected_count else "FAIL",
+            "generated_row_count": len(generated_rows),
+            "reference_row_count": len(reference_rows),
+            "generated_rows": generated_rows,
+            "reference_rows": reference_rows,
+            "comparison_mode": comparison_mode,
+            "difference": {
+                "expected_count": expected_count,
+                "observed_count": generated_count,
+                "generated_count_source": "aggregate" if observed_count is not None else "row_count",
+            },
+        }
+    elif comparison_mode == "zero_results":
+        if reference_rows:
+            raise ValueError("zero_results reference query must return no rows")
+        return {
+            "status": "PASS" if not generated_rows else "FAIL",
+            "generated_row_count": len(generated_rows),
+            "reference_row_count": 0,
+            "generated_rows": generated_rows,
+            "reference_rows": reference_rows,
+            "comparison_mode": comparison_mode,
+            "difference": {"expected_empty": True, "unexpected_rows": generated_rows},
+        }
+    elif comparison_mode == "cross_currency":
+        required = Counter(_value_key(row["salary_currency"]) for row in reference_rows)
+        if not required or len(required) < 2:
+            raise ValueError("cross_currency reference query must return at least two currencies")
+        observed = (
+            Counter(_value_key(row["salary_currency"]) for row in generated_rows)
+            if all("salary_currency" in row for row in generated_rows)
+            else Counter()
+        )
+        return {
+            "status": "PASS" if required <= observed else "FAIL",
+            "generated_row_count": len(generated_rows),
+            "reference_row_count": len(reference_rows),
+            "generated_rows": generated_rows,
+            "reference_rows": reference_rows,
+            "comparison_mode": comparison_mode,
+            "difference": {
+                "required_currencies": _display_values(required),
+                "observed_currencies": _display_values(observed),
+                "missing_currencies": _display_values(required - observed),
+            },
+        }
     else:
         raise ValueError(f"Unknown comparison mode: {comparison_mode!r}")
     matches = reference <= generated if comparison_mode == "contains_reference" else generated == reference
+    difference = (
+        _row_difference(generated, reference)
+        if comparison_mode in {"exact", "contains_reference"}
+        else _id_difference(generated, reference)
+    )
     return {
         "status": "PASS" if matches else "FAIL",
         "generated_row_count": len(generated_rows),
@@ -159,6 +274,7 @@ def compare_result_sets(
         "generated_rows": generated_rows,
         "reference_rows": reference_rows,
         "comparison_mode": comparison_mode,
+        "difference": difference,
     }
 
 

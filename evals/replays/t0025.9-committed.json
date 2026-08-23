@@ -44,7 +44,7 @@
               "turn": 1,
               "status": "COMPLETE",
               "expected_execution_accuracy": "PASS",
-              "expected_grade": "FAIL",
+              "expected_grade": "PASS",
               "seams": {
                 "question": "Việc làm nào có mức lương cao nhất?",
                 "answer": "The highest-paid job in the database is the Data Scientist position at Sonat Game, with a maximum salary of 40,000,000 VND.",

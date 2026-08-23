@@ -91,6 +91,21 @@ def test_projection_has_one_stable_item_per_scenario_turn() -> None:
     assert all("repeat" not in item.input for item in items)
 
 
+def test_projection_carries_the_per_turn_tool_contract() -> None:
+    scenarios = _scenarios()
+    scenarios[1]["turn_tool_expectations"] = [
+        {"required": ["query_clean_jobs"], "allowed": ["query_clean_jobs"]},
+        {"required": [], "allowed": ["query_clean_jobs"]},
+    ]
+
+    items = dataset.build_dataset_items(scenarios)
+
+    assert items[-1].expected_output["tool_expectation"] == {
+        "required": [],
+        "allowed": ["query_clean_jobs"],
+    }
+
+
 def test_mirror_verification_skips_a_no_op_sync_and_selectively_repairs_drift() -> None:
     fake = FakeLangfuse()
 

@@ -49,11 +49,11 @@ def test_trace_attributes_propagate_request_metadata_and_closed_tags() -> None:
         user_id="user-1",
         tags=[
             "api:chat-stream",
-            "prompt:v6",
+            "prompt:v7",
             "provider:deepseek",
             "model:deepseek-v4-flash",
         ],
-        version="v6",
+        version="v7",
     )
 
 
@@ -88,11 +88,11 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
         user_id="user-1",
         tags=[
             "api:chat",
-            "prompt:v6",
+            "prompt:v7",
             "provider:deepseek",
             "model:deepseek-v4-flash",
         ],
-        version="v6",
+        version="v7",
     )
     client.start_as_current_observation.assert_called_once_with(
         as_type="span", name="agent-chat"

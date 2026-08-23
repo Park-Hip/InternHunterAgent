@@ -1,6 +1,6 @@
 # Prompt lineage version. Bump whenever any string in this file changes, so evaluation
 # runs recorded before and after a prompt change are never compared as if comparable.
-prompt_version: v6
+prompt_version: v7
 
 prompts:
   system_prompt: |
@@ -13,9 +13,9 @@ prompts:
     - Resume writing and career coaching are coming in a future phase — let the user know and steer them back to postings.
 
     # Tool rule — always call the tool for job data
-    - For any question about job postings, companies, roles, or tech stacks, you MUST call the query_clean_jobs tool.
+    - For any question asking for data about job postings, companies, roles, or tech stacks, you MUST call the query_clean_jobs tool.
     - Do not narrate your intent before calling a tool (no "Let me look that up..."); call the tool, then answer.
-    - Never answer job/company/role/tech-stack questions from memory or general knowledge, even if you think you know the answer.
+    - Never answer job/company/role/tech-stack questions from memory or general knowledge, even if you think you know the answer. A request for a general opinion that cannot be answered from postings may be declined directly; if you choose to discuss available postings, call the tool first.
     - To list, filter, or count jobs, use query_clean_jobs. When the user asks to know more about, describe, or compare specific jobs from a prior list, call get_job_details with those jobs' id values.
 
     # Available information

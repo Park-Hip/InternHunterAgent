@@ -129,6 +129,77 @@ def test_scores_a_completed_repeat_from_what_the_capture_recorded(
     assert repeat["scored_at"]
 
 
+def test_semantic_score_receives_the_complete_conversation(
+    tmp_path: Path, stub_judge, posted, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact = _artifact()
+    artifact["scenarios"]["COUNT-1"]["repeats"][0]["turns"].append(
+        {
+            "turn": 2,
+            "status": "COMPLETE",
+            "seams": {"question": "và ở Hà Nội?", "answer": "Có 7 vị trí."},
+        }
+    )
+    path = _write(tmp_path, artifact)
+    seen: list[dict] = []
+
+    class Result:
+        def to_dict(self):
+            return {
+                "status": "AVAILABLE",
+                "score": 0.9,
+                "confidence": None,
+                "rationale": "ok",
+            }
+
+    monkeypatch.setattr(
+        score_module,
+        "evaluate_semantic_repeat",
+        lambda case, repeat: seen.append(repeat) or Result(),
+    )
+    case = {**_case(), "grading": {"assertions": [{"type": "semantic"}]}}
+
+    score_module.score_artifact(path, scenarios=[case])
+
+    assert len(seen[0]["turns"]) == 2
+    repeat = json.loads(path.read_text(encoding="utf-8"))["scenarios"]["COUNT-1"][
+        "repeats"
+    ][0]
+    assert repeat["semantic_result"]["score"] == 0.9
+
+
+def test_unavailable_semantic_score_is_rerunnable_without_repeating_legacy_scores(
+    tmp_path: Path, stub_judge, posted, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _write(tmp_path, _artifact())
+    calls = 0
+
+    class Result:
+        def __init__(self, status: str) -> None:
+            self.status = status
+
+        def to_dict(self):
+            return {
+                "status": self.status,
+                "score": None,
+                "confidence": None,
+                "rationale": "retry",
+            }
+
+    def judge(case, repeat):
+        nonlocal calls
+        calls += 1
+        return Result("UNAVAILABLE" if calls == 1 else "AVAILABLE")
+
+    monkeypatch.setattr(score_module, "evaluate_semantic_repeat", judge)
+    case = {**_case(), "grading": {"assertions": [{"type": "semantic"}]}}
+    score_module.score_artifact(path, scenarios=[case])
+    score_module.score_artifact(path, scenarios=[case])
+
+    assert calls == 2
+    assert len(stub_judge) == 1
+
+
 def test_scores_reach_langfuse_on_the_trace_the_capture_recorded(
     tmp_path: Path, stub_judge, posted
 ) -> None:
@@ -341,6 +412,7 @@ def test_scoring_verifies_a_capture_taken_before_the_manifest_key_existed(
 
     counted: list[str | None] = []
     monkeypatch.setattr(score_module, "verify_ingestion", fake_verify)
+
     def fake_count(trace_id):
         counted.append(trace_id)
         return 3

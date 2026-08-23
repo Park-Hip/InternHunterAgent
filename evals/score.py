@@ -47,6 +47,7 @@ _bind_environment()
 
 from evals import harness  # noqa: E402
 from evals.harness import SCORER_VERSION  # noqa: E402
+from evals.semantic import AVAILABLE, evaluate_semantic_repeat, semantic_assertion  # noqa: E402
 from evals.scenarios import load_scenarios  # noqa: E402
 from evals.writeback import (  # noqa: E402
     count_trace_scores,
@@ -149,7 +150,16 @@ def score_artifact(
                 repeat.get("scorer_version") == SCORER_VERSION
             )
             posted = bool(repeat.get("scores_written"))
-            if judged and posted and not rescore:
+            semantic_required = semantic_assertion(case) is not None
+            semantic_ready = (
+                repeat.get("semantic_result", {}).get("status") == AVAILABLE
+            )
+            if (
+                judged
+                and posted
+                and (not semantic_required or semantic_ready)
+                and not rescore
+            ):
                 summary["skipped"] += 1
                 continue
 
@@ -167,6 +177,12 @@ def score_artifact(
                 # Judged on an earlier pass whose post never landed. Re-posting is
                 # cheap and idempotent; re-judging is 46 minutes of throttled calls.
                 summary["reposted"] += 1
+
+            if semantic_required and (rescore or not semantic_ready):
+                repeat["semantic_result"] = evaluate_semantic_repeat(
+                    case, repeat
+                ).to_dict()
+                _write_json(path, artifact)
 
             written = write_scores(final_run.trace_id, repeat["scores"])
             repeat["scores_written"] = written

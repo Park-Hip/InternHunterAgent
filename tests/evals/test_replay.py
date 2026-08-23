@@ -76,6 +76,14 @@ def test_committed_replay_names_the_prompt_that_produced_it() -> None:
     assert replay["manifest"]["prompt_version"] == "v1"
 
 
+def test_committed_replay_records_the_phase_one_literal_verdict() -> None:
+    replay = load_replay()
+
+    currency_turn = replay["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]
+
+    assert currency_turn["expected_grade"] == "PASS"
+
+
 def test_replay_rejects_a_manifest_that_cannot_name_its_prompt() -> None:
     """An unlabelled replay is not evidence: it cannot be placed against a prompt change."""
     replay = load_replay()

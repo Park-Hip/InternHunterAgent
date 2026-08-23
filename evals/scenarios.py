@@ -25,6 +25,15 @@ _GRADING_KEYS = {
     "execution_comparison",
     "assertions",
 }
+_EXECUTION_COMPARISONS = {
+    "exact",
+    "contains_reference",
+    "ids_only",
+    "limited_ids",
+    "aggregate_count",
+    "zero_results",
+    "cross_currency",
+}
 _ASSERTION_TYPES = {"literal", "structural", "semantic"}
 _ASSERTION_FIELDS = {
     "literal": {"expected_answer_count", "forbidden_patterns"},
@@ -89,11 +98,10 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
             )
         _validate_assertion_fields(scenario_id, assertion_type, assertion)
 
-    if "execution_comparison" in grading and grading["execution_comparison"] not in {
-        "exact", "contains_reference", "ids_only"
-    }:
+    if "execution_comparison" in grading and grading["execution_comparison"] not in _EXECUTION_COMPARISONS:
         raise ValueError(
-            f"Scenario {scenario_id} execution_comparison must be exact, contains_reference, or ids_only"
+            f"Scenario {scenario_id} has an unknown execution_comparison: "
+            f"{grading['execution_comparison']!r}"
         )
 
 

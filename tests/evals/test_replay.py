@@ -142,6 +142,15 @@ def test_replay_accepts_a_recorded_execution_failure() -> None:
     validate_replay(replay)
 
 
+def test_replay_accepts_a_not_evaluated_execution_result() -> None:
+    replay = load_replay()
+    replay["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0][
+        "expected_execution_accuracy"
+    ] = "NOT_EVALUATED"
+
+    validate_replay(replay)
+
+
 def test_replay_runs_execution_accuracy_before_the_deterministic_grader(
     monkeypatch,
 ) -> None:

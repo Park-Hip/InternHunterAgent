@@ -119,7 +119,12 @@ def validate_replay(replay: dict[str, Any]) -> None:
                 _assert_keys(turn, _TURN_KEYS, f"Replay scenario {scenario_id} turn")
                 if turn["turn"] != turn_index or turn["status"] != "COMPLETE":
                     raise ValueError(f"Replay scenario {scenario_id} turn is invalid")
-                if turn["expected_execution_accuracy"] not in {"PASS", "FAIL", "EXEMPT"}:
+                if turn["expected_execution_accuracy"] not in {
+                    "PASS",
+                    "FAIL",
+                    "EXEMPT",
+                    "NOT_EVALUATED",
+                }:
                     raise ValueError(
                         f"Replay scenario {scenario_id} has an invalid expected execution status"
                     )

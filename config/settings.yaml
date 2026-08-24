@@ -92,3 +92,9 @@ eval:
     # and the driver runs one turn at a time - so the serving default needs no pacing.
     # Restore 75 together with the groq arm; the T0027.3 capture ran 77 turns at 0.
     turn_pacing_seconds: 0
+  # Serving prices in USD per million tokens, read only by the trace viewer's cost
+  # dashboard. They are estimates - verify against the provider price page before
+  # quoting any number outside this repository.
+  pricing_usd_per_mtok:
+    deepseek-v4-flash: { input: 0.28, output: 0.42 }
+    qwen/qwen3.6-27b: { input: 0.59, output: 0.79 }

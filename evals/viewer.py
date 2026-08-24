@@ -7,8 +7,11 @@ import ast
 import html
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
 
 # `query_clean_jobs` returns prose, not a Python literal: a header naming the
 # columns, then one `- col=value, col=value` line per row (see
@@ -390,6 +393,146 @@ def flatten_turns(
     return turns
 
 
+_NON_MEASURED = frozenset({"INFRA", "UNRUN", "UNGRADED"})
+
+
+def load_pricing() -> dict[str, dict[str, float]]:
+    """Serving prices (USD per million tokens) for the dashboard's cost estimate."""
+    try:
+        import yaml
+
+        settings = yaml.safe_load((ROOT / "config" / "settings.yaml").read_text(encoding="utf-8"))
+        return (settings or {}).get("eval", {}).get("pricing_usd_per_mtok") or {}
+    except (OSError, ImportError):
+        return {}
+
+
+def _token_usage(run: dict[str, Any]) -> dict[str, Any]:
+    """Sum the per-turn telemetry aggregates into one run-level token picture."""
+    input_tokens = output_tokens = total_tokens = 0
+    turns_with_telemetry = 0
+    latencies: list[float] = []
+    for scenario_record in (run.get("scenarios") or {}).values():
+        if not isinstance(scenario_record, dict):
+            continue
+        for repeat_record in scenario_record.get("repeats", []):
+            if not isinstance(repeat_record, dict):
+                continue
+            for turn_record in repeat_record.get("turns", []):
+                if not isinstance(turn_record, dict):
+                    continue
+                telemetry = turn_record.get("telemetry")
+                usage = telemetry.get("provider_token_usage") if isinstance(telemetry, dict) else None
+                aggregate = usage.get("aggregate") if isinstance(usage, dict) else None
+                if not isinstance(aggregate, dict):
+                    continue
+                turns_with_telemetry += 1
+                input_tokens += int(aggregate.get("input_tokens") or 0)
+                output_tokens += int(aggregate.get("output_tokens") or 0)
+                total_tokens += int(aggregate.get("total_tokens") or 0)
+                latency = telemetry.get("latency_ms")
+                if isinstance(latency, (int, float)):
+                    latencies.append(float(latency))
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "turns_with_telemetry": turns_with_telemetry,
+        "latency_average_ms": round(sum(latencies) / len(latencies)) if latencies else None,
+        "latency_max_ms": max(latencies) if latencies else None,
+    }
+
+
+def _cost_estimate(models: list[Any], usage: dict[str, Any], pricing: dict[str, dict[str, float]]) -> dict[str, Any]:
+    """Price the run's token totals, refusing to guess when attribution is missing.
+
+    Telemetry records tokens per turn, not per model profile. When the manifest
+    serves more than one distinct agent model the split is unknowable, so the
+    estimate says so instead of silently applying one price to everything.
+    """
+    distinct = sorted({str(model) for model in models if model})
+    if not distinct:
+        return {"available": False, "reason": "The manifest records no serving model."}
+    unknown = [model for model in distinct if model not in pricing]
+    if unknown:
+        return {"available": False, "reason": f"No price is recorded for {', '.join(unknown)}; add it to eval.pricing_usd_per_mtok."}
+    if len(distinct) > 1:
+        return {"available": False, "reason": f"Tokens are not attributed per model ({', '.join(distinct)}), so no single price applies."}
+    prices = pricing[distinct[0]]
+    input_cost = usage["input_tokens"] / 1e6 * float(prices.get("input", 0))
+    output_cost = usage["output_tokens"] / 1e6 * float(prices.get("output", 0))
+    return {
+        "available": True,
+        "model": distinct[0],
+        "input_usd": round(input_cost, 4),
+        "output_usd": round(output_cost, 4),
+        "total_usd": round(input_cost + output_cost, 4),
+    }
+
+
+def build_dashboard(
+    run: dict[str, Any],
+    flat_turns: list[dict[str, Any]],
+    grade: dict[str, Any] | None = None,
+    pricing: dict[str, dict[str, float]] | None = None,
+) -> dict[str, Any]:
+    """Aggregate a run into pass-rate, token, latency, and cost summaries.
+
+    Category pass rates prefer the grader's own `summary.by_class` when a grade file
+    is joined - it is authoritative and includes verdicts that never captured a turn
+    (UNRUN, INFRA). Without it the dashboard falls back to counting the captured
+    turns' grade statuses and says which source produced the numbers.
+    """
+    counts = Counter(str(turn.get("grade_status")) for turn in flat_turns)
+    measured = sum(n for status, n in counts.items() if status not in _NON_MEASURED)
+    pass_rate = counts["PASS"] / measured if measured else None
+    by_class: dict[str, dict[str, Any]] = {}
+    summary_classes = ((grade or {}).get("summary") or {}).get("by_class")
+    class_source = "grade summary"
+    if isinstance(summary_classes, dict) and summary_classes:
+        for category, entry in summary_classes.items():
+            by_class[str(category)] = {
+                "counts": {str(k): int(v) for k, v in (entry.get("counts") or {}).items()},
+                "measured": int(entry.get("measured") or 0),
+                "pass_rate": entry.get("pass_rate"),
+            }
+    else:
+        class_source = "captured turns (no grade file joined)"
+        category_counts: dict[str, Counter] = {}
+        for turn in flat_turns:
+            category = str(turn["scenario_id"]).split("-", maxsplit=1)[0]
+            category_counts.setdefault(category, Counter())[str(turn.get("grade_status"))] += 1
+        for category, tally in category_counts.items():
+            class_measured = sum(n for status, n in tally.items() if status not in _NON_MEASURED)
+            by_class[category] = {
+                "counts": dict(tally),
+                "measured": class_measured,
+                "pass_rate": tally["PASS"] / class_measured if class_measured else None,
+            }
+    failing_checks = Counter(
+        str(check.get("name"))
+        for turn in flat_turns
+        for check in turn.get("checks", [])
+        if check.get("outcome") == "FAILED"
+    )
+    manifest = run.get("manifest") if isinstance(run.get("manifest"), dict) else {}
+    usage = _token_usage(run)
+    return {
+        "turns": len(flat_turns),
+        "counts": dict(sorted(counts.items())),
+        "measured": measured,
+        "pass_rate": pass_rate,
+        "class_source": class_source,
+        "classes": [
+            {"category": category, **stats}
+            for category, stats in sorted(by_class.items())
+        ],
+        "failing_checks": sorted(failing_checks.items(), key=lambda item: (-item[1], item[0])),
+        "usage": usage,
+        "cost": _cost_estimate(list((manifest.get("models") or {}).values()), usage, pricing or {}),
+    }
+
+
 def sample_run() -> dict[str, Any]:
     """Return a small two-turn artifact for zero-quota viewer verification.
 
@@ -436,11 +579,13 @@ def build_viewer_html(
     manifest = run.get("manifest", {})
     manifest = manifest if isinstance(manifest, dict) else {}
     run_id = str(manifest.get("run_id", "unknown-run"))
+    turn_records = flatten_turns(run, scenarios, grade, execution_accuracy)
     payload = {
         "run_id": run_id,
         "status": run.get("status", "UNKNOWN"),
         "header": run_header(manifest),
-        "turns": flatten_turns(run, scenarios, grade, execution_accuracy),
+        "turns": turn_records,
+        "dashboard": build_dashboard(run, turn_records, grade, load_pricing()),
     }
     serialized = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
     title = html.escape(f"Trace viewer - {run_id}")
@@ -451,32 +596,58 @@ def build_viewer_html(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>__TITLE__</title>
   <style>
-    :root { color-scheme: light; --ink:#17212b; --muted:#64748b; --line:#dbe3ea; --paper:#f6f8fb; --card:#fff; --accent:#176b87; --warn:#9a5b00; }
-    * { box-sizing:border-box; } body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
-    header { background:#122b39; color:#f8fafc; padding:24px max(24px,calc((100vw - 1180px)/2)); }
+    :root { color-scheme: dark; --bg:#0a0e14; --card:#141b25; --well:#0e141d; --ink:#e8eef5; --muted:#95a4b6; --line:#28374a; --accent:#ff5fa8; --accent-deep:#55112f; --accent-ink:#2b0316; --green:#42d98d; --red:#ff6d6d; --amber:#ffb84d; }
+    * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    header { background:#04070c; border-bottom:2px solid var(--accent); color:#f2f7fc; padding:20px max(24px,calc((100vw - 1180px)/2)); }
     .header-row,.toolbar,.turn-meta,.card-head { display:flex; align-items:center; gap:12px; } .header-row,.toolbar { justify-content:space-between; }
+    .header-col { display:flex; flex-direction:column; align-items:flex-end; gap:10px; } @media (max-width:800px) { .header-col { align-items:flex-start; } }
     /* A long scenario id in .progress used to squeeze the nav buttons until their own
        labels broke across two lines. Let the toolbar reflow, and never break a label. */
     .toolbar,.turn-meta { flex-wrap:wrap; } .toolbar button { white-space:nowrap; }
-    h1 { margin:0; font-size:24px; letter-spacing:-.02em; } h2 { margin:0; font-size:18px; } h3 { margin:0; font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
-    main { max-width:1180px; margin:0 auto; padding:24px; } .toolbar { margin-bottom:18px; } select,button,textarea { font:inherit; } select,button { border:1px solid var(--line); border-radius:8px; background:var(--card); padding:8px 12px; color:var(--ink); } button { cursor:pointer; } button:hover { border-color:var(--accent); }
-    .progress { color:var(--muted); font-variant-numeric:tabular-nums; } .rule { background:#fff8e8; border:1px solid #f0d28c; border-radius:10px; padding:14px 16px; margin-bottom:18px; color:#5b4100; }
-    .question { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:16px; } .question p { font-size:20px; margin:8px 0 0; }
-    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; } .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; min-width:0; }
+    h1 { margin:0; font-size:24px; letter-spacing:-.02em; } h2 { margin:0; font-size:18px; } h3 { margin:0; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); }
+    main { max-width:1180px; margin:0 auto; padding:20px 24px 36px; }
+    /* The toolbar sticks to the top so Prev/Next, search, and the jump menu stay
+       reachable while a long tool-output table is being scrolled. */
+    .toolbar { margin-bottom:14px; position:sticky; top:0; z-index:20; background:rgba(10,14,20,.92); backdrop-filter:blur(8px); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+    select,button,textarea,input { font:inherit; }
+    button { cursor:pointer; border:1px solid var(--line); border-radius:8px; background:#1d2937; color:var(--ink); padding:8px 13px; font-weight:650; } button:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); } button:disabled { opacity:.4; cursor:default; }
+    #prev,#next { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); } #prev:hover:not(:disabled),#next:hover:not(:disabled) { color:var(--accent-ink); filter:brightness(1.18); }
+    select,textarea,input[type="search"] { border:1px solid var(--line); border-radius:8px; background:var(--well); color:var(--ink); padding:8px 12px; } select:focus,textarea:focus,input[type="search"]:focus { outline:2px solid var(--accent); outline-offset:-2px; }
+    .search { flex:1 1 240px; min-width:190px; }
+    .progress { color:var(--muted); font-variant-numeric:tabular-nums; } .run-fail { color:var(--red); }
+    .rule { background:#251b06; border:1px solid #6d5512; border-radius:10px; padding:12px 16px; margin:12px 0; color:#ffd98f; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; } .chip { border-radius:999px; padding:5px 12px; font-size:12px; font-weight:700; letter-spacing:.03em; background:#1d2937; } .chip.active { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); } .chip.c-FAIL.active { background:var(--red); border-color:var(--red); color:#2b0505; } .chip.c-PASS.active { background:var(--green); border-color:var(--green); color:#032312; } .chip.c-INFRA.active { background:var(--amber); border-color:var(--amber); color:#2b1a02; }
+    .tabs { display:flex; gap:8px; } .tab { border-radius:999px; padding:7px 16px; font-weight:700; background:#141b25; } .tab.active { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+    /* Dashboard cards: pass-rate bars, token totals, and the cost estimate. */
+    .dash { display:grid; gap:16px; margin-top:14px; }
+    .statgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+    .stat { background:var(--well); border:1px solid var(--line); border-radius:10px; padding:12px 14px; min-width:0; } .stat label { display:block; color:var(--muted); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; } .stat strong { font-size:22px; letter-spacing:-.01em; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; } .stat span { display:block; color:var(--muted); font-size:12px; margin-top:5px; overflow-wrap:anywhere; }
+    .bar { height:10px; background:#1d2937; border-radius:999px; overflow:hidden; min-width:90px; } .barfill { height:100%; border-radius:999px; } .barfill.good { background:var(--green); } .barfill.mid { background:var(--amber); } .barfill.bad { background:var(--red); }
+    .failrow { display:flex; align-items:center; gap:10px; margin-top:8px; } .failname { width:230px; max-width:40%; font-size:13px; overflow-wrap:anywhere; } .failcount { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+    .question { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-top:14px; }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:16px; } .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; min-width:0; }
     .card-head { justify-content:space-between; margin-bottom:14px; } .seam { color:var(--accent); } .field { margin-top:14px; } .field label { display:block; color:var(--muted); font-size:12px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-bottom:5px; }
-    pre,.answer,.rows-text { white-space:pre-wrap; overflow-wrap:anywhere; margin:0; background:#f3f6f8; border-radius:7px; padding:10px; min-height:42px; } .answer { background:#eef8f8; } .trace { color:var(--muted); font-size:12px; margin-top:14px; overflow-wrap:anywhere; } .row-count { color:var(--muted); font-size:12px; margin-bottom:6px; } .row-note { color:var(--warn); font-size:12px; font-weight:650; margin-bottom:6px; } .table-wrap { overflow-x:auto; } table { border-collapse:collapse; width:100%; font-size:13px; } th,td { border-bottom:1px solid var(--line); padding:7px 8px; text-align:left; vertical-align:top; } th { color:var(--muted); font-weight:650; white-space:nowrap; }
-    .notes { margin-top:16px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; } textarea { width:100%; min-height:110px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:8px; } .saved { color:var(--muted); font-size:12px; margin-top:6px; }
-    .empty { text-align:center; padding:70px 20px; color:var(--muted); } @media (max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:16px; } .header-row { align-items:flex-start; flex-direction:column; } }
-    .runbar { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px; } .facts { display:flex; flex-wrap:wrap; gap:18px; } .fact { font-size:13px; overflow-wrap:anywhere; } .fact label { color:var(--muted); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-right:6px; }
-    .badge { display:inline-block; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; letter-spacing:.04em; border:1px solid transparent; } .b-PASS,.b-CAPTURED { background:#e7f6ec; color:#11633a; border-color:#b6e0c6; } .b-FAIL,.b-CAPTURE_FAILED { background:#fdeaea; color:#93231f; border-color:#f3c2c0; } .b-INFRA,.b-PROVIDER_DID_NOT_EMIT { background:#fff3df; color:#7c4a00; border-color:#f0d28c; } .b-UNRUN,.b-UNGRADED,.b-UNKNOWN,.b-NOT_CONFIGURED,.b-NOT_APPLICABLE,.b-NOT_EVALUATED { background:#eef1f5; color:#4a5769; border-color:var(--line); }
+    details.field summary { cursor:pointer; color:var(--accent); font-weight:650; text-transform:uppercase; font-size:12px; letter-spacing:.06em; }
+    pre,.answer,.rows-text { white-space:pre-wrap; overflow-wrap:anywhere; margin:0; background:var(--well); border:1px solid var(--line); border-radius:7px; padding:10px; min-height:42px; } .answer { background:#0c1e19; border-color:#1d4636; }
+    /* Long evidence stays readable without pushing the rest of the turn off screen:
+       tables and long text scroll inside a bounded box until expanded. */
+    .scrollbox { max-height:320px; overflow:auto; border-radius:7px; } .scrollbox.open { max-height:none; } .expand { margin-top:6px; padding:4px 11px; font-size:12px; color:var(--accent); background:var(--accent-deep); border-color:#8a2a58; }
+    .trace { color:var(--muted); font-size:12px; margin-top:14px; overflow-wrap:anywhere; } .row-count { color:var(--muted); font-size:12px; margin-bottom:6px; } .row-note { color:var(--amber); font-size:12px; font-weight:650; margin-bottom:6px; } .table-wrap { overflow-x:auto; } table { border-collapse:collapse; width:100%; font-size:13px; } th,td { border-bottom:1px solid var(--line); padding:7px 8px; text-align:left; vertical-align:top; } th { color:var(--accent); font-weight:650; white-space:nowrap; position:sticky; top:0; background:var(--card); }
+    .notes { margin-top:16px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; } textarea { width:100%; min-height:110px; resize:vertical; margin-top:8px; } .saved { color:var(--muted); font-size:12px; margin-top:6px; }
+    .empty { text-align:center; padding:70px 20px; color:var(--muted); } @media (max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:14px; } .header-row { align-items:flex-start; flex-direction:column; } }
+    .runbar { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:6px; } .facts { display:flex; flex-wrap:wrap; gap:18px; } .fact { font-size:13px; overflow-wrap:anywhere; } .fact label { color:var(--muted); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-right:6px; }
+    .badge { display:inline-block; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; letter-spacing:.04em; border:1px solid transparent; } .b-PASS,.b-CAPTURED { background:rgba(66,217,141,.16); color:var(--green); border-color:rgba(66,217,141,.5); } .b-FAIL,.b-CAPTURE_FAILED { background:rgba(255,109,109,.16); color:var(--red); border-color:rgba(255,109,109,.5); } .b-INFRA,.b-PROVIDER_DID_NOT_EMIT { background:rgba(255,184,77,.14); color:var(--amber); border-color:rgba(255,184,77,.5); } .b-UNRUN,.b-UNGRADED,.b-UNKNOWN,.b-NOT_CONFIGURED,.b-NOT_APPLICABLE,.b-NOT_EVALUATED { background:#1d2937; color:var(--muted); border-color:var(--line); }
+    /* The failure panel leads the turn view: an operator scans why a turn failed
+       before reading any evidence beneath it. */
+    .failpanel { margin-top:14px; background:rgba(255,109,109,.08); border:1px solid rgba(255,109,109,.45); border-left:5px solid var(--red); border-radius:10px; padding:14px 16px; } .failpanel h2 { color:var(--red); } .failpanel p { margin:8px 0 0; overflow-wrap:anywhere; } .failpanel ol { margin:10px 0 0; padding-left:20px; } .failpanel li { margin-top:8px; font-size:14px; } .failpanel .detail { overflow-wrap:anywhere; } .failpanel .meta { color:var(--muted); font-size:12px; }
     .verdict { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:14px; font-size:13px; color:var(--muted); }
-    .checks { margin-top:14px; display:grid; gap:10px; } .check { border:1px solid var(--line); border-left-width:4px; border-radius:8px; padding:10px 12px; background:#fcfdfe; } .check-fail { border-left-color:#c9403a; } .check-na { border-left-color:#c78b21; }
+    .checks { margin-top:14px; display:grid; gap:10px; } .check { border:1px solid var(--line); border-left-width:4px; border-radius:8px; padding:10px 12px; background:var(--well); } .check-fail { border-left-color:var(--red); background:rgba(255,109,109,.07); } .check-na { border-left-color:var(--amber); }
     .check-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:13px; } .check-head .tier { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; } .check-detail { margin-top:6px; font-size:13px; overflow-wrap:anywhere; white-space:pre-wrap; }
-    .tele { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; } .tele div { background:#f3f6f8; border-radius:7px; padding:8px 10px; } .tele label { display:block; color:var(--muted); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; } .tele span { font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+    .tele { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; } .tele div { background:var(--well); border:1px solid var(--line); border-radius:7px; padding:8px 10px; } .tele label { display:block; color:var(--muted); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; } .tele span { font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
   </style>
 </head>
 <body>
-  <header><div class="header-row"><div><h1>Trace viewer</h1><div id="run-label"></div></div><div id="run-status"></div></div></header>
+  <header><div class="header-row"><div><h1>Trace viewer</h1><div id="run-label"></div></div><div class="header-col"><div id="run-status"></div><div class="tabs" role="tablist"><button id="tab-turns" class="tab active" type="button">Turns</button><button id="tab-dashboard" class="tab" type="button">Dashboard</button></div></div></div></header>
   <main>
     <section class="runbar" id="run-header"></section>
     <div id="app"></div>
@@ -487,11 +658,17 @@ def build_viewer_html(
     const turns = data.turns;
     const storageKey = 'internhunter-trace-notes/' + data.run_id + '/';
     const GRADES = ['PASS', 'FAIL', 'INFRA', 'UNRUN', 'UNGRADED'];
+    let mode = 'turns';
     let filter = 'ALL';
+    let query = '';
     let view = turns;
     let index = 0;
     const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'} )[c]);
     const block = (label, value, cls='') => `<div class="field"><label>${label}</label><div class="${cls}">${label === 'Rows returned' ? rowsBlock(value) : esc(value)}</div></div>`;
+    // Long evidence (SQL, answers, tool output) scrolls inside a bounded box with an
+    // expander, so one verbose turn cannot push the operator note off screen.
+    const collapsible = (cls, inner, moreLabel) => `<div class="scrollbox"><div class="${cls}">${inner}</div></div><button class="expand" type="button" data-more="${moreLabel || 'Show more ⤵'}">${moreLabel || 'Show more ⤵'}</button>`;
+    const longBlock = (label, value) => `<div class="field"><label>${label}</label>${collapsible('answer', esc(value))}</div>`;
     const table = (headers, rows) => `<div class="table-wrap"><table><thead><tr>${headers.map(header => `<th scope="col">${esc(header)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     const badge = (status, label) => `<span class="badge b-${esc(status)}">${esc(label === undefined ? status : label)}</span>`;
     const teleBlock = tele => {
@@ -511,7 +688,19 @@ def build_viewer_html(
       if (rows.kind === 'text') return `<div class="rows-text">${esc(rows.text)}</div>`;
       const note = rows.note ? `<div class="row-note">${esc(rows.note)}</div>` : '';
       if (!rows.count) return note + '<div class="rows-text">No rows returned.</div>';
-      return `${note}<div class="row-count">${rows.count} row${rows.count === 1 ? '' : 's'}</div>${table(rows.headers, rows.rows)}`;
+      return `${note}<div class="row-count">${rows.count} row${rows.count === 1 ? '' : 's'} · ${rows.headers.length} column${rows.headers.length === 1 ? '' : 's'}</div><div class="scrollbox">${table(rows.headers, rows.rows)}</div><button class="expand" type="button" data-more="Expand full table ⤢">Expand full table ⤢</button>`;
+    };
+    /* The failure panel leads the turn: an operator scans why it failed before
+       reading any evidence. Checks that did not pass stay beside their seam. */
+    const failPanel = t => {
+      const failed = t.checks.filter(check => check.outcome === 'FAILED');
+      if (!failed.length) {
+        return t.grade_status === 'FAIL'
+          ? `<section class="failpanel"><h2>✗ This turn failed</h2><p>No failed check joined this turn; the verdict came from the grade file without per-check detail.</p></section>`
+          : '';
+      }
+      const items = failed.map(check => `<li><strong>${esc(check.name)}</strong> <span class="meta">· ${esc(check.seam)} seam · ${esc(check.tier)} tier</span><div class="detail">${esc(check.detail)}</div></li>`).join('');
+      return `<section class="failpanel"><h2>✗ Why this turn failed</h2><ol>${items}</ol></section>`;
     };
     const executionBlock = result => {
       if (result.status === 'NOT_CONFIGURED') return '<div class="rows-text">No execution-accuracy report was joined.</div>';
@@ -529,50 +718,119 @@ def build_viewer_html(
       const body = header.rows.length ? table(header.headers, header.rows) : '<div class="rows-text">This capture records no provider or sampling block.</div>';
       document.getElementById('run-header').innerHTML = `<div class="card-head"><h2>What produced this capture</h2><div class="facts">${facts}</div></div>${body}`;
     }
-    function applyFilter(next) {
-      const current = view[index];
-      filter = next;
-      view = filter === 'ALL' ? turns : turns.filter(turn => turn.grade_status === filter);
-      const kept = view.indexOf(current);
+    // Grade chips plus free-text search decide which turns the pager walks through.
+    function applyView(keepKey) {
+      const needle = query.trim().toLowerCase();
+      view = turns.filter(turn => (filter === 'ALL' || turn.grade_status === filter) && (!needle || [turn.scenario_id, turn.scenario_name, turn.question, turn.answer, turn.routing, turn.sql, ...turn.checks.map(check => check.name + ' ' + check.detail)].join('\\n').toLowerCase().includes(needle)));
+      const kept = view.findIndex(turn => turn.key === keepKey);
       index = kept >= 0 ? kept : 0;
     }
+    function renderDashboard(root) {
+      const d = data.dashboard || {};
+      const pct = value => value === null || value === undefined ? '—' : Math.round(value * 100) + '%';
+      const fmt = value => value === null || value === undefined ? '—' : Number(value).toLocaleString('en-US');
+      const stat = (label, value, sub='') => `<div class="stat"><label>${esc(label)}</label><strong>${value}</strong>${sub ? `<span>${sub}</span>` : ''}</div>`;
+      const classes = d.classes || [];
+      const classRows = classes.map(c => {
+        const rate = c.pass_rate === null || c.pass_rate === undefined ? null : Math.round(c.pass_rate * 100);
+        const tone = rate === null ? '' : rate >= 80 ? 'good' : rate >= 50 ? 'mid' : 'bad';
+        const bar = rate === null ? '<span class="progress">—</span>' : `<div class="bar"><div class="barfill ${tone}" style="width:${rate}%"></div></div>`;
+        const counts = Object.entries(c.counts).map(([status, n]) => `<span class="badge b-${esc(status)}">${esc(status)} ${n}</span>`).join(' ');
+        return `<tr><td><strong>${esc(c.category)}</strong></td><td>${counts}</td><td class="progress">${c.measured} measured</td><td>${pct(c.pass_rate)}</td><td style="min-width:140px">${bar}</td></tr>`;
+      }).join('');
+      const cost = d.cost && d.cost.available
+        ? stat('Estimated cost', '$' + d.cost.total_usd.toFixed(4), `${esc(d.cost.model)} · in $${d.cost.input_usd.toFixed(4)} / out $${d.cost.output_usd.toFixed(4)}`)
+        : stat('Estimated cost', '—', esc((d.cost && d.cost.reason) || ''));
+      const latency = d.usage && d.usage.latency_average_ms !== null && d.usage.latency_average_ms !== undefined
+        ? stat('Avg latency', fmt(d.usage.latency_average_ms) + ' ms', `max ${fmt(d.usage.latency_max_ms)} ms`)
+        : '';
+      const fails = d.failing_checks || [];
+      const failBars = fails.length ? fails.map(([name, count]) => `<div class="failrow"><span class="failname">${esc(name)}</span><div class="bar"><div class="barfill bad" style="width:${Math.round(count / fails[0][1] * 100)}%"></div></div><span class="failcount">× ${count}</span></div>`).join('') : '<div class="rows-text">No failed checks were joined for this run.</div>';
+      const usage = d.usage || {};
+      root.innerHTML = `<div class="dash">
+      <section class="card"><div class="card-head"><h2>Run health</h2><span class="progress">${esc(d.class_source || '')}</span></div>
+      <div class="statgrid">
+        ${stat('Captured turns', String(d.turns ?? 0))}
+        ${stat('Overall pass rate', pct(d.pass_rate), `${(d.counts && d.counts.PASS) || 0} PASS · ${d.measured ?? 0} measured (INFRA/UNRUN excluded)`)}
+        ${latency}
+        ${stat('Tokens in / out', `${fmt(usage.input_tokens)} / ${fmt(usage.output_tokens)}`, `${usage.turns_with_telemetry ?? 0} of ${d.turns ?? 0} turns report usage`)}
+        ${stat('Total tokens', fmt(usage.total_tokens))}
+        ${cost}
+      </div></section>
+      <section class="card"><div class="card-head"><h2>Pass rate by category</h2></div>
+      <div class="table-wrap"><table><thead><tr><th scope="col">Category</th><th scope="col">Verdicts</th><th scope="col"></th><th scope="col">Pass rate</th><th scope="col"></th></tr></thead><tbody>${classRows || '<tr><td colspan="5" class="rows-text">No graded turns are available in this run.</td></tr>'}</tbody></table></div></section>
+      <section class="card"><div class="card-head"><h2>Most frequent failing checks</h2></div>${failBars}</section>
+      </div>`;
+    }
+    function wireToolbar(root) {
+      root.querySelectorAll('.chip').forEach(chip => { chip.onclick = () => { filter = chip.dataset.grade; applyView(view[index] ? view[index].key : null); render(); }; });
+      const search = root.querySelector('#search');
+      if (search) search.oninput = () => { query = search.value; applyView(view[index] ? view[index].key : null); render(); };
+    }
     function render() {
+      document.getElementById('tab-turns').classList.toggle('active', mode === 'turns');
+      document.getElementById('tab-dashboard').classList.toggle('active', mode === 'dashboard');
+      document.getElementById('tab-turns').onclick = () => { mode = 'turns'; render(); };
+      document.getElementById('tab-dashboard').onclick = () => { mode = 'dashboard'; render(); };
+      const previousSearch = document.getElementById('search');
+      const resume = previousSearch ? { pos: previousSearch.selectionStart } : null;
       document.getElementById('run-label').textContent = data.run_id + ' · ' + turns.length + ' captured turn' + (turns.length === 1 ? '' : 's');
-      document.getElementById('run-status').textContent = 'Capture: ' + data.status;
+      const failCount = turns.filter(turn => turn.grade_status === 'FAIL').length;
+      document.getElementById('run-status').innerHTML = 'Capture: ' + esc(data.status) + (failCount ? ` · <strong class="run-fail">${failCount} failed</strong>` : '');
       renderRunHeader();
       const root = document.getElementById('app');
+      if (mode === 'dashboard') { renderDashboard(root); return; }
       if (!turns.length) { root.innerHTML = '<div class="empty">No captured turns are available in this run.</div>'; return; }
       const counts = {};
       GRADES.forEach(status => { counts[status] = turns.filter(turn => turn.grade_status === status).length; });
-      const options = ['ALL', ...GRADES.filter(status => counts[status])].map(status => `<option value="${status}"${status === filter ? ' selected' : ''}>Grade: ${status === 'ALL' ? 'all (' + turns.length + ')' : status + ' (' + counts[status] + ')'}</option>`).join('');
-      const gradeFilter = `<select id="grade-filter" aria-label="Filter turns by grade status">${options}</select>`;
+      const chipRow = ['ALL', ...GRADES.filter(status => counts[status])].map(status => `<button type="button" class="chip c-${esc(status)}${status === filter ? ' active' : ''}" data-grade="${esc(status)}">${status === 'ALL' ? 'All' : esc(status)} ${status === 'ALL' ? turns.length : counts[status]}</button>`).join('');
+      const searchBox = `<input id="search" class="search" type="search" placeholder="Search scenario, question, SQL, answer, checks… (press /)" value="${esc(query)}" aria-label="Search turns">`;
       if (!view.length) {
-        root.innerHTML = `<div class="toolbar"><div class="turn-meta">${gradeFilter}</div></div><div class="empty">No turn in this run is graded ${esc(filter)}.</div>`;
-        document.getElementById('grade-filter').onchange = event => { applyFilter(event.target.value); render(); };
+        root.innerHTML = `<div class="toolbar">${searchBox}<div class="chips" id="grade-filter">${chipRow}</div></div><div class="empty">No turn matches this filter${query.trim() ? ' and search text' : ''}.</div>`;
+        wireToolbar(root);
         return;
       }
       const t = view[index];
       const noteKey = storageKey + t.key;
-      root.innerHTML = `<div class="toolbar"><div class="turn-meta"><button id="prev">← Previous</button><button id="next">Next →</button><span class="progress">Turn ${index + 1} of ${view.length} · ${esc(t.scenario_id)} · repeat ${esc(t.repeat)}</span></div><div class="turn-meta">${gradeFilter}<select id="jump" aria-label="Jump to turn">${view.map((item, i) => `<option value="${i}">${i + 1}. ${esc(item.scenario_id)} / r${esc(item.repeat)} / t${esc(item.turn)} · ${esc(item.grade_status)}</option>`).join('')}</select></div></div>
+      root.innerHTML = `<div class="toolbar"><div class="turn-meta"><button id="prev">← Prev</button><button id="next">Next →</button><span class="progress">Turn ${index + 1} of ${view.length} · ${esc(t.scenario_id)} · repeat ${esc(t.repeat)}</span></div><div class="turn-meta">${searchBox}<div class="chips" id="grade-filter">${chipRow}</div><select id="jump" aria-label="Jump to turn">${view.map((item, i) => `<option value="${i}">${i + 1}. ${item.grade_status === 'FAIL' ? '✗ ' : ''}${esc(item.scenario_id)} / r${esc(item.repeat)} / t${esc(item.turn)} · ${esc(item.grade_status)}</option>`).join('')}</select></div></div>
       <div class="rule"><strong>Review rule:</strong> mark the earliest wrong seam only, then stop. Downstream symptoms of an upstream defect are not separate labels.</div>
       <section class="question"><h3>${esc(t.scenario_name)}</h3>${block('Question', t.question)}
-      <div class="verdict">Verdict ${badge(t.grade_status)}<span>Grade tier: ${esc(t.grade_tier)}</span><span>Capture status: ${esc(t.status)}</span></div>${checksFor(t, 'run')}
-      <div class="field"><label>Evidence coverage</label>${coverageBlock(t.coverage)}</div><div class="field"><label>Telemetry</label>${teleBlock(t.telemetry)}</div></section>
-      <section class="grid"><article class="card"><div class="card-head"><h2 class="seam">1 · Routing</h2></div>${block('Expected tools', t.expected_tools)}${block('Captured tools', t.routing)}${block('Captured tool arguments', t.tool_arguments, 'answer')}${checksFor(t, 'routing')}</article><article class="card"><div class="card-head"><h2 class="seam">2 · NL → SQL</h2></div>${block('Generated SQL', t.sql, 'answer')} ${block('Rows returned', t.rows, 'answer')}<div class="field"><label>Generated versus reference rows</label>${executionBlock(t.execution)}</div>${checksFor(t, 'sql')}</article><article class="card"><div class="card-head"><h2 class="seam">3 · Synthesis</h2></div>${block('Final answer', t.answer, 'answer')}${checksFor(t, 'answer')}</article></section>
+      <div class="verdict">Verdict ${badge(t.grade_status)}<span>Grade tier: ${esc(t.grade_tier)}</span><span>Capture status: ${esc(t.status)}</span></div>
+      ${failPanel(t)}${checksFor(t, 'run')}
+      <details class="field"><summary>Evidence coverage</summary>${coverageBlock(t.coverage)}</details>
+      <details class="field"><summary>Telemetry</summary>${teleBlock(t.telemetry)}</details></section>
+      <section class="grid"><article class="card"><div class="card-head"><h2 class="seam">1 · Routing</h2></div>${block('Expected tools', t.expected_tools)}${block('Captured tools', t.routing)}${longBlock('Captured tool arguments', t.tool_arguments)}${checksFor(t, 'routing')}</article><article class="card"><div class="card-head"><h2 class="seam">2 · NL → SQL</h2></div>${longBlock('Generated SQL', t.sql)} ${block('Rows returned', t.rows)}<div class="field"><label>Generated versus reference rows</label>${executionBlock(t.execution)}</div>${checksFor(t, 'sql')}</article><article class="card"><div class="card-head"><h2 class="seam">3 · Synthesis</h2></div>${longBlock('Final answer', t.answer)}${checksFor(t, 'answer')}</article></section>
       <section class="notes"><h2>Operator note</h2><textarea id="note" placeholder="Record the first wrong seam and evidence. Stop after the earliest failure."></textarea><div class="saved" id="saved">Notes are stored in this browser for this run.</div></section>`;
       document.getElementById('jump').value = index;
       document.getElementById('prev').disabled = index === 0; document.getElementById('next').disabled = index === view.length - 1;
       document.getElementById('prev').onclick = () => { index--; render(); }; document.getElementById('next').onclick = () => { index++; render(); };
       document.getElementById('jump').onchange = event => { index = Number(event.target.value); render(); };
-      document.getElementById('grade-filter').onchange = event => { applyFilter(event.target.value); render(); };
+      wireToolbar(root);
+      // An expander only earns its place when its box actually overflows.
+      root.querySelectorAll('.expand').forEach(button => {
+        const box = button.previousElementSibling;
+        if (!(box instanceof HTMLElement) || box.scrollHeight <= box.clientHeight + 4) { button.remove(); return; }
+        button.onclick = () => { const open = box.classList.toggle('open'); button.textContent = open ? 'Show less ⤒' : (button.dataset.more || 'Show more ⤵'); };
+      });
       const note = document.getElementById('note');
       const saved = document.getElementById('saved');
       note.addEventListener('input', event => { saved.textContent = storageWrite(noteKey, event.target.value) ? 'Saved locally' : 'Notes are unavailable in this browser; navigation still works.'; });
       const noteState = storageRead(noteKey);
       note.value = noteState.value;
       if (noteState.error) saved.textContent = noteState.error;
+      if (resume) { const next = document.getElementById('search'); if (next) { next.focus(); next.setSelectionRange(resume.pos, resume.pos); } }
     }
-    document.addEventListener('keydown', event => { if (event.target.tagName === 'TEXTAREA') return; if (event.key === 'ArrowLeft' && index > 0) { index--; render(); } if (event.key === 'ArrowRight' && index < view.length - 1) { index++; render(); } });
+    document.addEventListener('keydown', event => {
+      if (event.target.tagName === 'TEXTAREA') return;
+      if (event.target.id === 'search') {
+        if (event.key === 'Escape') { const key = view[index] ? view[index].key : null; event.target.value = ''; query = ''; applyView(key); render(); }
+        return;
+      }
+      if (event.key === '/') { if (mode !== 'turns') return; event.preventDefault(); const search = document.getElementById('search'); if (search) search.focus(); return; }
+      if (mode !== 'turns') return;
+      if (event.key === 'ArrowLeft' && index > 0) { index--; render(); }
+      if (event.key === 'ArrowRight' && index < view.length - 1) { index++; render(); }
+    });
     render();
   </script>
 </body>

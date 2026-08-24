@@ -37,6 +37,22 @@ class DetectObligationsTests(unittest.TestCase):
             ["CREATED_ON_CAVEAT", "FREE_TEXT_HEDGE"],
         )
 
+    def test_displayed_lifecycle_fields_require_their_caveats(self) -> None:
+        table = TableArtifact(
+            columns=["listing_expires_on", "created_on"],
+            rows=[["2026-09-01", "2026-08-01"]],
+            row_count=1,
+        )
+
+        obligations = detect_obligations(
+            "SELECT listing_expires_on, created_on FROM clean_jobs", table
+        )
+
+        self.assertEqual(
+            [obligation.glossary_token for obligation in obligations],
+            ["CREATED_ON_CAVEAT", "LISTING_EXPIRY_NOT_DEADLINE"],
+        )
+
     def test_missing_displayed_salary_values_require_negotiable_salary_caveat(self) -> None:
         table = TableArtifact(
             columns=["salary_min", "salary_max"],

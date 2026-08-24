@@ -31,6 +31,16 @@ def _uses_for_filter_or_order(sql: str, column: str) -> bool:
     )
 
 
+def _uses_for_lifecycle_answer(sql: str, column: str) -> bool:
+    """Report whether lifecycle data affects the query or is shown to the user.
+
+    The V8 projection contract makes an explicitly selected lifecycle field an
+    answer subject. Ordinary lists no longer select either field incidentally,
+    so preserving its caveat here does not reintroduce the former caveat noise.
+    """
+    return _projects(sql, column) or _uses_for_filter_or_order(sql, column)
+
+
 def detect_obligations(sql: str, table: TableArtifact) -> list[HedgeObligation]:
     """Return deterministic caveats implied by validated SQL and its result table."""
     normalized_sql = sql.lower()
@@ -38,13 +48,13 @@ def detect_obligations(sql: str, table: TableArtifact) -> list[HedgeObligation]:
 
     if table.row_count == 0:
         tokens.append(_RULE_TOKENS["zero_results"])
-    if _uses_for_filter_or_order(normalized_sql, "created_on"):
+    if _uses_for_lifecycle_answer(normalized_sql, "created_on"):
         tokens.append(_RULE_TOKENS["created_on"])
     if re.search(r"\bdescription\s+(?:not\s+)?ilike\b", normalized_sql):
         tokens.append(_RULE_TOKENS["free_text"])
     if re.search(r"\b(?:order\s+by\s+|max\s*\(|min\s*\()salary_(?:min|max)\b", normalized_sql):
         tokens.append(_RULE_TOKENS["cross_currency"])
-    if _uses_for_filter_or_order(normalized_sql, "listing_expires_on"):
+    if _uses_for_lifecycle_answer(normalized_sql, "listing_expires_on"):
         tokens.append(_RULE_TOKENS["listing_expiry"])
     if _projects(normalized_sql, "salary_min", "salary_max", "salary_currency", "is_salary_negotiable") and _has_negotiable_salary(table):
         tokens.append(_RULE_TOKENS["negotiable_salary"])

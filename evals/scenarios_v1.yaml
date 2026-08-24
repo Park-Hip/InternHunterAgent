@@ -11,6 +11,8 @@
   reference_sql: SELECT COUNT(*) AS count FROM clean_jobs WHERE title ILIKE '%AI Engineer%'
   grading:
     execution_comparison: aggregate_count
+    projection:
+      exact: [count]
     assertions:
       - type: literal
         expected_answer_count: 5
@@ -22,12 +24,17 @@
   type: single
   input: Liệt kê các việc làm AI Engineer.
   language: vi
-  expected: List 5 rows (title - company - location); SELECT id first.
+  expected: List 5 rows with labelled original source links; SELECT the normal-list projection.
   probe: false
   expected_tools: [query_clean_jobs]
-  reference_sql: SELECT id, title, company, location FROM clean_jobs WHERE title ILIKE '%AI Engineer%' ORDER BY id
+  reference_sql: SELECT id, title, company, location, source_url FROM clean_jobs WHERE title ILIKE '%AI Engineer%' ORDER BY id
   grading:
     execution_comparison: ids_only
+    projection:
+      exact: [id, title, company, location, source_url]
+    assertions:
+      - type: structural
+        require_source_links: true
 - id: HLP-TECH-STACK-1
   name: List Python jobs
   requirements: [G13, G33, G35]
@@ -38,10 +45,14 @@
   expected: tech_stack ILIKE '%Python%' -> 12; concise list.
   probe: false
   expected_tools: [query_clean_jobs]
-  reference_sql: SELECT id, title, company, location FROM clean_jobs WHERE tech_stack ILIKE '%Python%' ORDER BY id
+  reference_sql: SELECT id, title, company, location, source_url FROM clean_jobs WHERE tech_stack ILIKE '%Python%' ORDER BY id
   grading:
     execution_comparison: ids_only
+    projection:
+      exact: [id, title, company, location, source_url]
     assertions:
+      - type: structural
+        require_source_links: true
       - type: literal
         expected_answer_count: 12
 - id: HLP-TRUNCATION-1
@@ -54,9 +65,11 @@
   expected: 22 exist, 20 shown -> answer carries TRUNCATION.
   probe: false
   expected_tools: [query_clean_jobs]
-  reference_sql: SELECT id, title, company, location FROM clean_jobs ORDER BY id LIMIT 20
+  reference_sql: SELECT id, title, company, location, source_url FROM clean_jobs ORDER BY id LIMIT 20
   grading:
     execution_comparison: limited_ids
+    projection:
+      exact: [id, title, company, location, source_url]
     assertions:
       - type: literal
         expected_answer_count: 20
@@ -112,9 +125,11 @@
   expected: ORDER BY created_on DESC -> that row, with CREATED-ON-CAVEAT.
   probe: true
   expected_tools: [query_clean_jobs]
-  reference_sql: SELECT id, title, company, location, created_on FROM clean_jobs ORDER BY created_on DESC LIMIT 1
+  reference_sql: SELECT id, title, company, location, source_url FROM clean_jobs ORDER BY created_on DESC LIMIT 1
   grading:
     execution_comparison: contains_reference
+    projection:
+      exact: [id, title, company, location, source_url]
     assertions:
       - type: semantic
         required_any:
@@ -128,12 +143,14 @@
   type: single
   input: Việc làm nào có mức lương cao nhất?
   language: vi
-  expected: "Does not crown #7 (40M VND); emits CROSS-CURRENCY."
+  expected: Returns separate non-ranked USD and VND salary groups; no global winner.
   probe: true
   expected_tools: [query_clean_jobs]
-  reference_sql: SELECT DISTINCT salary_currency FROM clean_jobs WHERE salary_currency IS NOT NULL ORDER BY salary_currency
+  reference_sql: SELECT id, title, company, location, salary_min, salary_max, salary_currency, is_salary_negotiable FROM clean_jobs WHERE salary_currency IS NOT NULL ORDER BY salary_currency, salary_max DESC NULLS LAST
   grading:
     execution_comparison: cross_currency
+    projection:
+      exact: [id, title, company, location, salary_min, salary_max, salary_currency, is_salary_negotiable]
     assertions:
       - type: semantic
         forbid_single_salary_winner: true

@@ -9,6 +9,7 @@ import pytest
 from evals.execution_accuracy import (
     compare_result_sets,
     grade_turn,
+    projected_columns,
     selects_id,
     validate_execution_comparison,
 )
@@ -87,8 +88,8 @@ def test_ids_only_still_fails_a_different_row_set(monkeypatch) -> None:
     assert compare_result_sets("generated", "reference", comparison_mode="ids_only")["status"] == "FAIL"
 
 
-def test_aggregate_count_accepts_an_id_projection_with_the_correct_cardinality(monkeypatch) -> None:
-    """A count task is correct when the generated query returns the five matching rows."""
+def test_aggregate_count_rejects_row_projection_even_when_its_cardinality_matches(monkeypatch) -> None:
+    """A count query cannot pass by retrieving a coincidentally matching row count."""
     monkeypatch.setattr(
         "evals.execution_accuracy.execute_query",
         lambda sql, database_url=None: (
@@ -98,12 +99,40 @@ def test_aggregate_count_accepts_an_id_projection_with_the_correct_cardinality(m
 
     result = compare_result_sets("generated", "reference", comparison_mode="aggregate_count")
 
-    assert result["status"] == "PASS"
+    assert result["status"] == "FAIL"
+    assert result["error"] == "Generated count query must project only COUNT(*) AS count"
     assert result["difference"] == {
         "expected_count": 5,
-        "observed_count": 5,
-        "generated_count_source": "row_count",
+        "observed_count": None,
     }
+
+
+def test_projection_contract_fails_separately_from_matching_rows(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: [{"id": 1, "title": "AI Engineer"}],
+    )
+    scenario = {
+        "id": "HLP-LIST-1",
+        "reference_sql": "SELECT id, title FROM clean_jobs",
+        "grading": {
+            "execution_comparison": "ids_only",
+            "projection": {"exact": ["id", "title", "company", "location", "source_url"]},
+        },
+    }
+
+    result = grade_turn(scenario, "SELECT id, title FROM clean_jobs")
+
+    assert result["status"] == "FAIL"
+    assert result["projection"] == {
+        "status": "FAIL",
+        "expected_columns": ["id", "title", "company", "location", "source_url"],
+        "observed_columns": ["id", "title"],
+    }
+
+
+def test_projected_columns_reads_aliases_in_select_order() -> None:
+    assert projected_columns("SELECT COUNT(*) AS count FROM clean_jobs") == ["count"]
 
 
 def test_limited_ids_rejects_an_extra_result_and_reports_it(monkeypatch) -> None:

@@ -13,6 +13,23 @@ _RULE_TOKENS = {
     "listing_expiry": "LISTING_EXPIRY_NOT_DEADLINE",
 }
 
+_SELECT_LIST = re.compile(r"\bselect\s+(.*?)\s+from\b", re.IGNORECASE | re.DOTALL)
+
+
+def _projects(sql: str, *columns: str) -> bool:
+    match = _SELECT_LIST.search(sql)
+    if match is None:
+        return False
+    select_list = match.group(1)
+    return any(re.search(rf"\b{re.escape(column)}\b", select_list) for column in columns)
+
+
+def _uses_for_filter_or_order(sql: str, column: str) -> bool:
+    return bool(
+        re.search(rf"\bwhere\b.*\b{re.escape(column)}\b", sql, re.DOTALL)
+        or re.search(rf"\border\s+by\b.*\b{re.escape(column)}\b", sql, re.DOTALL)
+    )
+
 
 def detect_obligations(sql: str, table: TableArtifact) -> list[HedgeObligation]:
     """Return deterministic caveats implied by validated SQL and its result table."""
@@ -21,15 +38,15 @@ def detect_obligations(sql: str, table: TableArtifact) -> list[HedgeObligation]:
 
     if table.row_count == 0:
         tokens.append(_RULE_TOKENS["zero_results"])
-    if re.search(r"\bcreated_on\b", normalized_sql):
+    if _uses_for_filter_or_order(normalized_sql, "created_on"):
         tokens.append(_RULE_TOKENS["created_on"])
     if re.search(r"\bdescription\s+(?:not\s+)?ilike\b", normalized_sql):
         tokens.append(_RULE_TOKENS["free_text"])
     if re.search(r"\b(?:order\s+by\s+|max\s*\(|min\s*\()salary_(?:min|max)\b", normalized_sql):
         tokens.append(_RULE_TOKENS["cross_currency"])
-    if re.search(r"\blisting_expires_on\b", normalized_sql):
+    if _uses_for_filter_or_order(normalized_sql, "listing_expires_on"):
         tokens.append(_RULE_TOKENS["listing_expiry"])
-    if _has_negotiable_salary(table):
+    if _projects(normalized_sql, "salary_min", "salary_max", "salary_currency", "is_salary_negotiable") and _has_negotiable_salary(table):
         tokens.append(_RULE_TOKENS["negotiable_salary"])
 
     return [HedgeObligation(glossary_token=token) for token in tokens]

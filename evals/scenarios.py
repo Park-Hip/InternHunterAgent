@@ -25,6 +25,7 @@ _TURN_TOOL_EXPECTATION_KEYS = {"required", "allowed"}
 _GRADING_KEYS = {
     "execution_comparison",
     "assertions",
+    "projection",
 }
 _EXECUTION_COMPARISONS = {
     "exact",
@@ -38,8 +39,13 @@ _EXECUTION_COMPARISONS = {
 _ASSERTION_TYPES = {"literal", "structural", "semantic"}
 _ASSERTION_FIELDS = {
     "literal": {"expected_answer_count", "count_only", "forbidden_patterns"},
-    "structural": {"require_vietnamese"},
+    "structural": {"require_vietnamese", "require_source_links"},
     "semantic": {"required_any", "forbidden_any", "forbid_single_salary_winner"},
+}
+_PROJECTION_COLUMNS = {
+    "id", "title", "company", "role", "tech_stack", "location", "source_url",
+    "job_level", "listing_expires_on", "created_on", "is_internship", "salary_min",
+    "salary_max", "salary_currency", "is_salary_negotiable", "count",
 }
 
 
@@ -104,6 +110,17 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
             f"Scenario {scenario_id} has an unknown execution_comparison: "
             f"{grading['execution_comparison']!r}"
         )
+    if "projection" in grading:
+        projection = grading["projection"]
+        if not isinstance(projection, dict) or set(projection) != {"exact"}:
+            raise ValueError(f"Scenario {scenario_id} projection must contain exactly 'exact'")
+        columns = projection["exact"]
+        if not isinstance(columns, list) or not columns or any(
+            not isinstance(column, str) or column not in _PROJECTION_COLUMNS for column in columns
+        ):
+            raise ValueError(f"Scenario {scenario_id} projection exact must name known output columns")
+        if len(columns) != len(set(columns)):
+            raise ValueError(f"Scenario {scenario_id} projection exact must not contain duplicates")
 
 
 def _validate_assertion_fields(
@@ -131,6 +148,9 @@ def _validate_assertion_fields(
 
     if "require_vietnamese" in assertion and not isinstance(assertion["require_vietnamese"], bool):
         raise ValueError(f"Scenario {scenario_id} require_vietnamese must be a boolean")
+
+    if "require_source_links" in assertion and assertion["require_source_links"] is not True:
+        raise ValueError(f"Scenario {scenario_id} require_source_links must be true")
 
     if "required_any" in assertion:
         groups = assertion["required_any"]

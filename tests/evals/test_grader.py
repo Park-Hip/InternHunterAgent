@@ -284,6 +284,23 @@ def test_count_only_requires_one_concise_declarative_sentence(
     assert count_only.passed is (expected_status == PASS)
 
 
+def test_list_requires_each_returned_source_url_under_a_source_label() -> None:
+    url = "https://example.com/jobs/1"
+    grade = grade_evidence(
+        "HLP-LIST-1",
+        Evidence(
+            answer=f"AI Engineer - Acme - Hanoi. Liên kết nguồn gốc: {url}",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=[{"source_url": url}],
+            capture_prompt_version=load_prompt_version(),
+        ),
+    )
+
+    source_links = next(check for check in grade.checks if check.name == "source_links")
+    assert source_links.passed is True
+
+
 def test_zero_rows_are_not_infrastructure_failure() -> None:
     grade = grade_evidence(
         "HON-ZERO-RESULTS-1",

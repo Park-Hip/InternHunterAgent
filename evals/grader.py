@@ -109,6 +109,7 @@ class ScenarioRule:
     judge_metric: str | None = None
     judge_threshold: float = 0.5
     require_vietnamese: bool = False
+    require_source_links: bool = False
 
     @property
     def text(self) -> TextRule | None:
@@ -474,6 +475,9 @@ def _structural_checks(
     if rule.count_only:
         checks.append(_count_only_check(evidence.answer, rule.expected_answer_count))
 
+    if rule.require_source_links and _prompt_is_current(evidence):
+        checks.append(_source_link_check(evidence.answer, evidence.returned_rows))
+
     return checks
 
 
@@ -504,6 +508,27 @@ def _count_only_check(answer: str | None, expected_count: int | None) -> Check:
         if passed
         else "answer must be one concise declarative count sentence with no list, heading, or follow-up question",
         "literal",
+    )
+
+
+def _source_link_check(answer: str | None, returned_rows: list[dict[str, Any]] | None) -> Check:
+    """Require every returned source URL to appear under a source-link label."""
+    urls = [
+        row["source_url"]
+        for row in returned_rows or []
+        if isinstance(row.get("source_url"), str) and row["source_url"].strip()
+    ]
+    rendered = answer or ""
+    has_label = "nguồn" in rendered.casefold() or "source link" in rendered.casefold()
+    missing = [url for url in urls if url not in rendered]
+    passed = not urls or (has_label and not missing)
+    return Check(
+        "source_links",
+        passed,
+        "every returned source URL is labelled as a source link"
+        if passed
+        else f"missing source URLs or source-link label: {missing!r}",
+        "structural",
     )
 
 
@@ -623,6 +648,7 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
         literal=_text_rule(scenario_id, literal),
         semantic=_text_rule(scenario_id, semantic),
         require_vietnamese=bool(structural.get("require_vietnamese", scenario.get("language") == "vi")),
+        require_source_links=bool(structural.get("require_source_links", False)),
     )
 
 

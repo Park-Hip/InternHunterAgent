@@ -396,6 +396,65 @@ def test_sample_run_provides_two_turns_without_quota() -> None:
     assert turns[1]["rows"]["rows"] == [["Acme"], ["Beta"]]
 
 
+def test_dashboard_aggregates_tokens_latency_cost_and_pass_rates() -> None:
+    run = {
+        "manifest": {"run_id": "r", "models": {"react": "model-a", "sql_generation": "model-a"}},
+        "status": "COMPLETE",
+        "scenarios": {
+            "HLP-COUNT-1": {"repeats": [{"repeat": 1, "turns": [
+                {"turn": 1, "status": "COMPLETE", "seams": {},
+                 "telemetry": {"latency_ms": 1000, "provider_token_usage": {"aggregate": {"input_tokens": 1000, "output_tokens": 500, "total_tokens": 1500}}}},
+                {"turn": 2, "status": "COMPLETE", "seams": {}},
+            ]}]},
+            "HON-SQL-DESCRIBE-1": {"repeats": [{"repeat": 1, "turns": [
+                {"turn": 1, "status": "INFRA", "seams": {}},
+            ]}]},
+        },
+    }
+    grade = {
+        "scenarios": {"HLP-COUNT-1": [{"repeat": 1, "turn": 1, "status": "PASS", "tier": "structural", "checks": []}]},
+        "summary": {"by_class": {"HLP": {"counts": {"PASS": 1}, "measured": 1, "pass_rate": 1.0}}},
+    }
+    pricing = {"model-a": {"input": 1.0, "output": 2.0}}
+
+    dashboard = viewer.build_dashboard(run, flatten_turns(run), grade, pricing)
+
+    # Tokens sum only where telemetry exists; latency averages across reported turns.
+    assert dashboard["usage"]["input_tokens"] == 1000
+    assert dashboard["usage"]["output_tokens"] == 500
+    assert dashboard["usage"]["latency_average_ms"] == 1000
+    # Cost prices input and output at the manifest's single serving model.
+    assert dashboard["cost"] == {"available": True, "model": "model-a", "input_usd": 0.001, "output_usd": 0.001, "total_usd": 0.002}
+    # A joined grade summary is authoritative for category pass rates...
+    assert dashboard["class_source"] == "grade summary"
+    assert dashboard["classes"][0] == {"category": "HLP", "counts": {"PASS": 1}, "measured": 1, "pass_rate": 1.0}
+    # ...and INFRA/UNGRADED stay out of the denominator when counting captured turns
+    # instead - an ungraded turn is not a measured failure.
+    fallback = viewer.build_dashboard(run, flatten_turns(run), None, pricing)
+    hon = next(entry for entry in fallback["classes"] if entry["category"] == "HON")
+    assert hon["measured"] == 0 and hon["pass_rate"] is None
+    assert fallback["pass_rate"] is None
+
+
+def test_dashboard_refuses_a_cost_estimate_it_cannot_attribute() -> None:
+    run = {"manifest": {"run_id": "r", "models": {"react": "a", "sql_generation": "b"}}, "status": "COMPLETE", "scenarios": {}}
+
+    multi_model = viewer.build_dashboard(run, [], None, {"a": {}, "b": {}})
+    unknown_model = viewer.build_dashboard({"manifest": {"models": {"react": "x"}}, "scenarios": {}}, [], None, {})
+
+    assert "not attributed per model" in multi_model["cost"]["reason"]
+    assert "No price is recorded for x" in unknown_model["cost"]["reason"]
+
+
+def test_viewer_embeds_the_dashboard_and_pink_tabs() -> None:
+    document = build_viewer_html(_run(), [{"id": "HLP-COUNT-1", "name": "Count jobs"}])
+
+    assert "tab-dashboard" in document
+    assert "Pass rate by category" in document
+    assert "Most frequent failing checks" in document
+    assert "#ff5fa8" in document
+
+
 def test_missing_run_has_actionable_cli_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     missing = tmp_path / "missing.json"
 

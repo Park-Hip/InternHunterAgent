@@ -149,6 +149,12 @@ class SystemPromptScopeTests(unittest.TestCase):
 
         self.assertIn("Do not use emoji or decorative symbols", system_prompt)
 
+    def test_system_prompt_requires_safe_original_source_links(self) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn("labelled original source link", system_prompt)
+        self.assertIn("do not claim that the posting is open, available, or closed", system_prompt)
+
 
 class LoadPromptVersionTests(unittest.TestCase):
     @patch("src.agents.runtime.prompts.settings")
@@ -172,7 +178,7 @@ class LoadPromptVersionTests(unittest.TestCase):
             load_prompt_version()
 
     def test_yaml_declares_a_prompt_version(self) -> None:
-        self.assertEqual(load_prompt_version(), "v7")
+        self.assertEqual(load_prompt_version(), "v8")
 
 
 class LoadBehaviorGlossaryTests(unittest.TestCase):

@@ -20,6 +20,9 @@ from src.services.query.row_bound import resolve_bounds
 
 _SELECT_LIST_PATTERN = re.compile(r"\s*SELECT\s+(?:DISTINCT\s+)?(.*?)\s+FROM\s", re.IGNORECASE | re.DOTALL)
 _COUNT_AGGREGATE_PATTERN = re.compile(r"\bCOUNT\s*\(", re.IGNORECASE)
+_COUNT_ONLY_PROJECTION = re.compile(
+    r"\s*COUNT\s*\(\s*\*\s*\)\s+AS\s+count\s*", re.IGNORECASE
+)
 
 
 def _value_key(value: Any) -> str:
@@ -84,6 +87,36 @@ def selects_column(sql: str, column: str) -> bool:
     return False
 
 
+def projected_columns(sql: str) -> list[str] | None:
+    """Return simple output names in SQL select-list order, or None when it cannot be read."""
+    match = _SELECT_LIST_PATTERN.match(sql)
+    if match is None:
+        return None
+    select_list = match.group(1).strip()
+    if select_list == "*":
+        return ["*"]
+    columns: list[str] = []
+    for item in _split_select_list(select_list):
+        item = item.strip()
+        alias = re.search(r"\s+AS\s+(\w+)\s*$", item, re.IGNORECASE)
+        name = alias.group(1) if alias else item.rsplit(".", maxsplit=1)[-1]
+        columns.append(name.strip('"').lower())
+    return columns
+
+
+def _projection_result(sql: str, expected: list[str] | None) -> dict[str, Any] | None:
+    if expected is None:
+        return None
+    observed = projected_columns(sql)
+    normalized_expected = [column.lower() for column in expected]
+    passed = observed == normalized_expected
+    return {
+        "status": "PASS" if passed else "FAIL",
+        "expected_columns": normalized_expected,
+        "observed_columns": observed,
+    }
+
+
 def validate_execution_comparison(scenario: dict[str, Any]) -> None:
     """Reject execution contracts whose reference SQL cannot support their evidence.
 
@@ -113,6 +146,11 @@ def validate_execution_comparison(scenario: dict[str, Any]) -> None:
             raise ValueError(
                 f"Scenario {scenario.get('id', '<unknown>')} declares execution_comparison: "
                 "cross_currency but its reference SQL does not select salary_currency"
+            )
+        if not selects_id(queries[0]):
+            raise ValueError(
+                f"Scenario {scenario.get('id', '<unknown>')} declares execution_comparison: "
+                "cross_currency but its reference SQL does not select id"
             )
 
 
@@ -149,6 +187,39 @@ def _single_numeric_value(rows: list[dict[str, Any]]) -> Any | None:
         return None
     value = next(iter(rows[0].values()))
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _currency_groups(rows: list[dict[str, Any]]) -> list[tuple[str, list[Any]]] | None:
+    """Return contiguous currency groups with their ordered posting ids.
+
+    A salary comparison must show every reference posting, keep salary rows together by currency,
+    and preserve the reference's within-currency ranking.  A repeated currency means generated
+    rows are interleaved rather than grouped, so it is an invalid presentation shape.
+    """
+    groups: list[tuple[str, list[Any]]] = []
+    completed_currencies: set[str] = set()
+    for row in rows:
+        currency = row.get("salary_currency")
+        if not isinstance(currency, str) or "id" not in row:
+            return None
+        if not groups or groups[-1][0] != currency:
+            if currency in completed_currencies:
+                return None
+            groups.append((currency, []))
+            completed_currencies.add(currency)
+        groups[-1][1].append(row["id"])
+    return groups
+
+
+def _display_currency_groups(groups: list[tuple[str, list[Any]]] | None) -> list[dict[str, Any]] | None:
+    if groups is None:
+        return None
+    return [{"currency": currency, "ids": ids} for currency, ids in groups]
+
+
+def _uses_count_only_projection(sql: str) -> bool:
+    match = _SELECT_LIST_PATTERN.match(sql)
+    return match is not None and _COUNT_ONLY_PROJECTION.fullmatch(match.group(1)) is not None
 
 
 def execute_query(sql: str, database_url: str | None = None) -> list[dict[str, Any]]:
@@ -240,6 +311,17 @@ def compare_result_sets(
         expected_count = _single_numeric_value(reference_rows)
         if expected_count is None:
             raise ValueError("aggregate_count reference query must return one numeric aggregate")
+        if not _uses_count_only_projection(generated_sql):
+            return {
+                "status": "FAIL",
+                "error": "Generated count query must project only COUNT(*) AS count",
+                "generated_row_count": len(generated_rows),
+                "reference_row_count": len(reference_rows),
+                "generated_rows": generated_rows,
+                "reference_rows": reference_rows,
+                "comparison_mode": comparison_mode,
+                "difference": {"expected_count": expected_count, "observed_count": None},
+            }
         observed_count = _single_numeric_value(generated_rows)
         generated_count = observed_count if observed_count is not None else len(generated_rows)
         return {
@@ -268,16 +350,27 @@ def compare_result_sets(
             "difference": {"expected_empty": True, "unexpected_rows": generated_rows},
         }
     elif comparison_mode == "cross_currency":
-        required = Counter(_value_key(row["salary_currency"]) for row in reference_rows)
+        reference_groups = _currency_groups(reference_rows)
+        if reference_groups is None:
+            raise ValueError(
+                "cross_currency reference query must return id and salary_currency for every row"
+            )
+        required = Counter(_value_key(currency) for currency, ids in reference_groups for _ in ids)
         if not required or len(required) < 2:
             raise ValueError("cross_currency reference query must return at least two currencies")
-        observed = (
-            Counter(_value_key(row["salary_currency"]) for row in generated_rows)
-            if all("salary_currency" in row for row in generated_rows)
-            else Counter()
-        )
+        generated_groups = _currency_groups(generated_rows)
+        observed = Counter(
+            _value_key(currency) for currency, ids in generated_groups for _ in ids
+        ) if generated_groups is not None else Counter()
+        reference_by_currency = dict(reference_groups)
+        generated_by_currency = dict(generated_groups) if generated_groups is not None else {}
+        matches = generated_groups is not None and reference_by_currency == generated_by_currency
+        reference_ids = Counter(_value_key(job_id) for _, ids in reference_groups for job_id in ids)
+        generated_ids = Counter(
+            _value_key(job_id) for _, ids in generated_groups for job_id in ids
+        ) if generated_groups is not None else Counter()
         return {
-            "status": "PASS" if required <= observed else "FAIL",
+            "status": "PASS" if matches else "FAIL",
             "generated_row_count": len(generated_rows),
             "reference_row_count": len(reference_rows),
             "generated_rows": generated_rows,
@@ -287,6 +380,10 @@ def compare_result_sets(
                 "required_currencies": _display_values(required),
                 "observed_currencies": _display_values(observed),
                 "missing_currencies": _display_values(required - observed),
+                "missing_ids": _display_values(reference_ids - generated_ids),
+                "unexpected_ids": _display_values(generated_ids - reference_ids),
+                "expected_currency_groups": _display_currency_groups(reference_groups),
+                "observed_currency_groups": _display_currency_groups(generated_groups),
             },
         }
     else:
@@ -333,14 +430,26 @@ def grade_turn(
         }
     if not isinstance(reference_sql, str):
         return {"status": "INFRA", "error": "Scenario has no turn reference SQL"}
-    comparison_mode = scenario.get("grading", {}).get("execution_comparison", "exact")
+    grading = scenario.get("grading", {})
+    projection = _projection_result(
+        generated_sql, (grading.get("projection") or {}).get("exact")
+    )
+    comparison_mode = grading.get("execution_comparison", "exact")
     if comparison_mode == "exact":
         result = compare_result_sets(generated_sql, reference_sql, database_url)
     else:
         result = compare_result_sets(
             generated_sql, reference_sql, database_url, comparison_mode
         )
-    return {"status": result.pop("status"), "reference_sql": reference_sql, **result}
+    status = result.pop("status")
+    if projection is not None and projection["status"] == "FAIL":
+        status = "FAIL"
+    return {
+        "status": status,
+        "reference_sql": reference_sql,
+        **result,
+        **({"projection": projection} if projection is not None else {}),
+    }
 
 
 def grade_run(run: dict[str, Any], database_url: str | None = None) -> dict[str, Any]:

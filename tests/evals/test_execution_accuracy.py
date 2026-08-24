@@ -9,6 +9,7 @@ import pytest
 from evals.execution_accuracy import (
     compare_result_sets,
     grade_turn,
+    projected_columns,
     selects_id,
     validate_execution_comparison,
 )
@@ -87,8 +88,8 @@ def test_ids_only_still_fails_a_different_row_set(monkeypatch) -> None:
     assert compare_result_sets("generated", "reference", comparison_mode="ids_only")["status"] == "FAIL"
 
 
-def test_aggregate_count_accepts_an_id_projection_with_the_correct_cardinality(monkeypatch) -> None:
-    """A count task is correct when the generated query returns the five matching rows."""
+def test_aggregate_count_rejects_row_projection_even_when_its_cardinality_matches(monkeypatch) -> None:
+    """A count query cannot pass by retrieving a coincidentally matching row count."""
     monkeypatch.setattr(
         "evals.execution_accuracy.execute_query",
         lambda sql, database_url=None: (
@@ -98,12 +99,40 @@ def test_aggregate_count_accepts_an_id_projection_with_the_correct_cardinality(m
 
     result = compare_result_sets("generated", "reference", comparison_mode="aggregate_count")
 
-    assert result["status"] == "PASS"
+    assert result["status"] == "FAIL"
+    assert result["error"] == "Generated count query must project only COUNT(*) AS count"
     assert result["difference"] == {
         "expected_count": 5,
-        "observed_count": 5,
-        "generated_count_source": "row_count",
+        "observed_count": None,
     }
+
+
+def test_projection_contract_fails_separately_from_matching_rows(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: [{"id": 1, "title": "AI Engineer"}],
+    )
+    scenario = {
+        "id": "HLP-LIST-1",
+        "reference_sql": "SELECT id, title FROM clean_jobs",
+        "grading": {
+            "execution_comparison": "ids_only",
+            "projection": {"exact": ["id", "title", "company", "location", "source_url"]},
+        },
+    }
+
+    result = grade_turn(scenario, "SELECT id, title FROM clean_jobs")
+
+    assert result["status"] == "FAIL"
+    assert result["projection"] == {
+        "status": "FAIL",
+        "expected_columns": ["id", "title", "company", "location", "source_url"],
+        "observed_columns": ["id", "title"],
+    }
+
+
+def test_projected_columns_reads_aliases_in_select_order() -> None:
+    assert projected_columns("SELECT COUNT(*) AS count FROM clean_jobs") == ["count"]
 
 
 def test_limited_ids_rejects_an_extra_result_and_reports_it(monkeypatch) -> None:
@@ -179,7 +208,7 @@ def test_cross_currency_rejects_a_single_currency_ranking(monkeypatch) -> None:
         lambda sql, database_url=None: (
             [{"id": 7, "salary_currency": "VND"}]
             if sql == "generated"
-            else [{"salary_currency": "USD"}, {"salary_currency": "VND"}]
+            else [{"id": 1, "salary_currency": "USD"}, {"id": 7, "salary_currency": "VND"}]
         ),
     )
 
@@ -187,6 +216,59 @@ def test_cross_currency_rejects_a_single_currency_ranking(monkeypatch) -> None:
 
     assert result["status"] == "FAIL"
     assert result["difference"]["missing_currencies"] == ["USD"]
+
+
+@pytest.mark.parametrize(
+    "generated",
+    [
+        [
+            {"id": 10, "salary_currency": "USD"},
+            {"id": 11, "salary_currency": "USD"},
+            {"id": 12, "salary_currency": "VND"},
+            {"id": 14, "salary_currency": "VND"},
+        ],
+        [
+            {"id": 2, "salary_currency": "USD"},
+            {"id": 1, "salary_currency": "USD"},
+            {"id": 3, "salary_currency": "VND"},
+            {"id": 4, "salary_currency": "VND"},
+        ],
+    ],
+)
+def test_cross_currency_requires_reference_postings_in_rank_order(monkeypatch, generated) -> None:
+    reference = [
+        {"id": 1, "salary_currency": "USD"},
+        {"id": 2, "salary_currency": "USD"},
+        {"id": 3, "salary_currency": "VND"},
+        {"id": 4, "salary_currency": "VND"},
+    ]
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: generated if sql == "generated" else reference,
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="cross_currency")
+
+    assert result["status"] == "FAIL"
+    assert result["difference"]["expected_currency_groups"] == [
+        {"currency": "USD", "ids": [1, 2]},
+        {"currency": "VND", "ids": [3, 4]},
+    ]
+
+
+def test_cross_currency_accepts_the_reference_postings_in_each_currency_group(monkeypatch) -> None:
+    rows = [
+        {"id": 1, "salary_currency": "USD"},
+        {"id": 2, "salary_currency": "USD"},
+        {"id": 3, "salary_currency": "VND"},
+        {"id": 4, "salary_currency": "VND"},
+    ]
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: rows,
+    )
+
+    assert compare_result_sets("generated", "reference", comparison_mode="cross_currency")["status"] == "PASS"
 
 
 @pytest.mark.parametrize(

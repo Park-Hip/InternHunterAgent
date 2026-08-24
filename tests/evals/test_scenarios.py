@@ -174,6 +174,14 @@ def test_no_registry_scenario_compares_ids_against_a_reference_without_them() ->
             },
             "does not select salary_currency",
         ),
+        (
+            {
+                "id": "HON-CURRENCY-1",
+                "reference_sql": "SELECT salary_currency FROM clean_jobs",
+                "grading": {"execution_comparison": "cross_currency"},
+            },
+            "does not select id",
+        ),
     ],
 )
 def test_execution_contracts_reject_reference_sql_without_required_evidence(

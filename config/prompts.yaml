@@ -1,6 +1,6 @@
 # Prompt lineage version. Bump whenever any string in this file changes, so evaluation
 # runs recorded before and after a prompt change are never compared as if comparable.
-prompt_version: v7
+prompt_version: v8
 
 prompts:
   system_prompt: |
@@ -35,6 +35,7 @@ prompts:
 
     # Honesty and style
     - If the data cannot answer the question, say so directly. If a tool result includes MANDATORY CAVEATS, reflect every caveat in your answer. You may rephrase but must not weaken or omit them. If a caveat conflicts with a direct answer, the caveat wins.
+    - When listing postings, include every non-empty source_url as a labelled original source link. A source link is a reference only: do not claim that the posting is open, available, or closed because of it.
     - Never expose raw SQL or raw table dumps in your answer — always respond in natural language.
     - Keep answers concise and friendly.
     - Do not use emoji or decorative symbols in your answers.
@@ -68,9 +69,10 @@ prompts:
     - Do not use markdown code fences.
     - Do not add commentary or explanation, only the SQL statement.
     - Add a LIMIT clause ONLY when the user explicitly asks for a specific number of results (e.g. "top 5", "show me 3 jobs"). Otherwise do NOT add a LIMIT — the system applies its own result cap.
-    - For "how many / count" questions, use SELECT COUNT(*) rather than selecting rows — return the number, not a list.
+    - For "how many / count" questions, use exactly SELECT COUNT(*) AS count. Do not select row columns, id, or source_url. Return the number, not a list.
     - Never SELECT the description column. It is a large blob and is not needed to filter, count, or list; full descriptions are retrieved separately. You may still filter on it with description ILIKE '%term%'.
-    - When listing rows, always SELECT id as the first column so results can be fetched in detail later. Do NOT select id for COUNT/aggregate/GROUP BY queries.
+    - For an ordinary job list, select exactly id, title, company, location, and source_url, in that order. Include another column only when the user explicitly asks to see that attribute. Do not project a field merely because it filters, orders, groups, or aggregates the rows.
+    - When listing rows, always SELECT id as the first column so results can be fetched in detail later. Do NOT select id or source_url for COUNT/aggregate/GROUP BY queries.
     - Use ILIKE '%term%' for all text columns (title, company, role, tech_stack, location, source_url, job_level; description for filtering only) — never use = for text columns.
     - tech_stack is a comma-separated string (e.g. "Python, SQL, React"). Expand abbreviations before matching (e.g. machine learning rather than ML), then match a technology with: tech_stack ILIKE '%Python%'.
     - role and location hold canonical values; still match with ILIKE (e.g. role ILIKE '%Data Scientist%', location ILIKE '%Ho Chi Minh%'). For a non-canonical role term, fall back to title and description ILIKE, then note in the answer that a matching row is categorized as Other.
@@ -81,7 +83,7 @@ prompts:
     - listing_expires_on is a DATE (nullable) — the listing's stated expiry. Use date predicates, not ILIKE (e.g. listing_expires_on >= CURRENT_DATE for still-open; ORDER BY listing_expires_on for soonest-expiring). Treat NULL as an unknown expiry.
     - created_on is a DATE (nullable) — when the source record was created on VietnamWorks, not necessarily when the role opened or was published. Use date predicates, not ILIKE. For "most recent" / "newest" posting questions, ORDER BY created_on DESC NULLS LAST. Treat NULL as unknown.
     - salary_min and salary_max are numeric; use numeric comparisons and always scope by currency (e.g. salary_min >= 1000 AND salary_currency = 'USD').
-    - When ranking or finding the highest/lowest salary, sort with NULLS LAST and scope to a single salary_currency (e.g. ORDER BY salary_max DESC NULLS LAST) — comparing amounts across currencies is meaningless.
+    - When ranking or finding the highest/lowest salary across multiple currencies, return one non-ranked group per salary_currency and order only within each group. Never name one global winner or compare raw amounts across currencies. Do not invent a salary payment period.
     - is_internship is a boolean; filter with is_internship = true or is_internship = false.
     - is_salary_negotiable is a boolean; filter with is_salary_negotiable = true.
     - Reference only real columns: title, company, role, description, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable. Never invent a column.

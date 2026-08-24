@@ -8,7 +8,7 @@ from src.services.query.table_formatter import render_tool_result
 
 
 class DetectObligationsTests(unittest.TestCase):
-    def test_listing_expiry_query_requires_not_deadline_caveat(self) -> None:
+    def test_listing_expiry_filter_requires_not_deadline_caveat(self) -> None:
         table = TableArtifact(
             columns=["title", "listing_expires_on"],
             rows=[["Data Analyst", "2026-09-01"]],
@@ -16,7 +16,7 @@ class DetectObligationsTests(unittest.TestCase):
         )
 
         obligations = detect_obligations(
-            "SELECT title, listing_expires_on FROM clean_jobs", table
+            "SELECT title FROM clean_jobs WHERE listing_expires_on >= CURRENT_DATE", table
         )
 
         self.assertEqual(
@@ -37,7 +37,7 @@ class DetectObligationsTests(unittest.TestCase):
             ["CREATED_ON_CAVEAT", "FREE_TEXT_HEDGE"],
         )
 
-    def test_missing_salary_values_require_negotiable_salary_caveat(self) -> None:
+    def test_missing_displayed_salary_values_require_negotiable_salary_caveat(self) -> None:
         table = TableArtifact(
             columns=["salary_min", "salary_max"],
             rows=[[None, None]],
@@ -50,6 +50,21 @@ class DetectObligationsTests(unittest.TestCase):
             [obligation.glossary_token for obligation in obligations],
             ["NEGOTIABLE_SALARY"],
         )
+
+    def test_incidental_date_and_salary_projections_do_not_require_caveats(self) -> None:
+        table = TableArtifact(
+            columns=["title", "created_on", "listing_expires_on", "salary_min", "salary_max"],
+            rows=[["Data Analyst", "2026-08-01", "2026-09-01", None, None]],
+            row_count=1,
+        )
+
+        obligations = detect_obligations(
+            "SELECT title FROM clean_jobs "
+            "WHERE title ILIKE '%Data Analyst%'",
+            table,
+        )
+
+        self.assertEqual(obligations, [])
 
     def test_renderer_marks_listing_expiry_caveat_for_the_agent(self) -> None:
         glossary = {"LISTING_EXPIRY_NOT_DEADLINE": "listing expiry is not a deadline"}

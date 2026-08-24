@@ -9,7 +9,7 @@
 >   T0033.2.
 > - The glossary has 19 canonical strings and matching Vietnamese grader anchors.
 
-The [v1 scenario matrix](../evals/archive/v1_scenario_matrix.md) preserves the measured behavior
+The [v1 scenario matrix](../../evals/archive/v1_scenario_matrix.md) preserves the measured behavior
 record that informs this specification.
 
 > **Eviction:** A behavior requirement leaves when an approved replacement is measured against the
@@ -44,7 +44,7 @@ because a style rule nobody measures is a style rule nobody keeps.
 | No schema identifiers | Answers name fields in ordinary words, never as column names such as `is_salary_negotiable` or `created_on` | `no_schema_identifier_leak` |
 
 The decoration rule is stated under `# Honesty and style` in
-[`config/prompts.yaml`](../config/prompts.yaml) and was recorded on 2026-08-21, after a probe found
+[`config/prompts.yaml`](../../config/prompts.yaml) and was recorded on 2026-08-21, after a probe found
 a closing emoji in both `HLP-LIST-1` repeats and no rule anywhere in the repository forbidding one.
 
 The identifier rule is the existing "never expose raw SQL or raw table dumps" instruction applied
@@ -54,7 +54,7 @@ It is measured but not yet prompted: the upstream cause is the `column=value` pa
 measurement one.
 
 The date-semantics rule is stated beside the available-information guidance in
-[`config/prompts.yaml`](../config/prompts.yaml): a source listing-expiry date never substitutes
+[`config/prompts.yaml`](../../config/prompts.yaml): a source listing-expiry date never substitutes
 for an application deadline, the data has no application deadline, and a source-record creation
 date is never presented as a publication date.
 
@@ -86,7 +86,7 @@ the target.
 ## 3. Canonical phrasings (G47 — FINAL)
 
 The verbatim strings live in [`research/archive/agent-behavior-question-bank.md`
-§10](../research/archive/agent-behavior-question-bank.md) and the `behavior_glossary` block of
+§10](../../research/archive/agent-behavior-question-bank.md) and the `behavior_glossary` block of
 `config/prompts.yaml`. Phrase IDs referenced below:
 `NEGOTIABLE-SALARY`, `ABSENT-FIELD`, `LISTING-EXPIRY-NOT-DEADLINE`, `FRESHNESS-REFUSAL`,
 `CREATED-ON-CAVEAT`, `FREE-TEXT-HEDGE`,
@@ -95,7 +95,7 @@ The verbatim strings live in [`research/archive/agent-behavior-question-bank.md`
 `SQL-DESCRIBE-ONLY`, `FUTURE-FEATURE`, `GENERAL-KNOWLEDGE-DECLINE`, `DISCRIMINATORY-DECLINE`.
 
 The machine source of truth is the `behavior_glossary` block and its
-`behavior_glossary_anchors` block in [`config/prompts.yaml`](../config/prompts.yaml).
+`behavior_glossary_anchors` block in [`config/prompts.yaml`](../../config/prompts.yaml).
 The following table restates the 19 canonical strings in Vietnamese.
 
 | Phrase ID | Vietnamese canonical phrasing |
@@ -139,7 +139,7 @@ Data Engineer `job_level` = 3× Experienced (non-manager) + 1× Manager. Newest 
 Home Credit Data Analyst row. No COBOL / Rust / Google rows.
 
 **Legend:** `Probe?` = honesty/safety-critical → must be correct on **all** reruns (G45, ≥3×).
-Every scenario is carried by [`evals/scenarios_v1.yaml`](../evals/scenarios_v1.yaml), which owns
+Every scenario is carried by [`evals/scenarios_v1.yaml`](../../evals/scenarios_v1.yaml), which owns
 each scenario's fixture rows, input (or turns), and expected behavior; the tables below name the
 scenario and the requirement it tests, and do not restate that data.
 
@@ -228,22 +228,21 @@ rows is acceptable. If probes stay flaky after the T0015.5 few-shots, record the
 > ```
 >
 > So treat the phrase IDs below as **specified and written, but not yet what the system
-> emits**. Landing them is owned work, tracked in `docs/Known_Issues.md` → Repo state &
-> version control. Note the ID spelling differs: this doc hyphenates (`NEGOTIABLE-SALARY`),
-> the config uses underscores (`NEGOTIABLE_SALARY`).
+> emits**. Landing them is owned work, tracked on GitHub. Note the ID spelling differs: this doc
+> hyphenates (`NEGOTIABLE-SALARY`), the config uses underscores (`NEGOTIABLE_SALARY`).
 >
 > **Status:** Spec of record — **frozen 2026-07-11 (T0015.2)**. This is the human-readable
 > single source of truth for *how Resumi should behave*, scenario by scenario, against the frozen
-> 16-column v1 schema ([`Schema_Contract.md`](Schema_Contract.md)) and the `internhunter_eval`
+> 16-column v1 schema ([`schema.md`](schema.md)) and the `internhunter_eval`
 > fixture. It is the target the T0015.4 manual matrix measures against and the T0015.5 few-shots
 > optimize toward.
 >
 > **Companion artifacts:**
 > - Research/rationale + the full behavioral question catalog:
-> [`research/archive/agent-behavior-question-bank.md`](../research/archive/agent-behavior-question-bank.md)
+> [`research/archive/agent-behavior-question-bank.md`](../../research/archive/agent-behavior-question-bank.md)
 > (groups
 > `G01`–`G47`; settled decisions in §12; final glossary in §10).
 > - Machine source of truth for the canonical strings: the `behavior_glossary` block in
-> [`config/prompts.yaml`](../config/prompts.yaml).
-> - This doc does **not** replace `skills/plan/SKILL.md`, the separate
-> ticket-template artifact.
+> [`config/prompts.yaml`](../../config/prompts.yaml).
+> - This doc does **not** replace the change-proposal workflow (`AGENTS.md`,
+>   `.agents/skills/change-proposal/SKILL.md`).

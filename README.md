@@ -41,7 +41,9 @@ tells you what it found, including when a result set was truncated.
   `clean_jobs` table, with a frozen column contract and a nightly ingestion workflow.
 - **Measured, not vibed.** A DeepEval harness scores the agent against a versioned golden
   dataset, with an LLM judge on a separate provider and scores written back to Langfuse.
-- **Traced end to end.** Every turn produces a Langfuse trace, surfaced back to the UI.
+- **Traced end to end, when tracing is configured.** With Langfuse credentials set, every turn
+  produces a Langfuse trace surfaced back to the UI; without them, tracing degrades to a no-op and
+  serving continues.
 
 ## Architecture
 
@@ -58,7 +60,7 @@ Browser ──POST /api/v1/agent/chat/stream──▶ FastAPI ──▶ Agent se
 
 The layers stay strictly separated: the API never knows how the agent is built, routes own no
 LangChain logic, and tracing does not leak across the codebase. See
-[`docs/Design.md`](docs/Design.md).
+[`docs/architecture.md`](docs/architecture.md).
 
 ## Quickstart
 
@@ -74,8 +76,9 @@ docker compose up -d                       # Postgres on host port 5433
 
 `.env.example` already points `DATABASE_URL` at that container, so `DEEPSEEK_API_KEY` is the only
 value you must supply to run the agent — it is the provider both profiles select in
-`config/settings.yaml`. Switching a profile back to `groq` needs `GROQ_API_KEY` instead; the
-Gemini key enables the eval harness.
+`config/settings.yaml`. Switching a profile back to `groq` needs `GROQ_API_KEY` instead; the Gemini
+key enables the eval harness.
+Langfuse keys are optional locally: without them the app runs with tracing disabled.
 
 Initialise the schema (idempotent — safe to re-run):
 
@@ -97,13 +100,17 @@ and interactive API docs at `/docs`.
 
 | Doc | What it answers |
 |---|---|
-| [`docs/README.md`](docs/README.md) | Map of every document and which one owns what |
-| [`docs/Design.md`](docs/Design.md) | Product scope, architecture, stack, and deliberate exclusions |
-| [`docs/Operations.md`](docs/Operations.md) | How the deployed service, database, and ingestion cron are operated |
-| [`docs/Repo_Current_State.md`](docs/Repo_Current_State.md) | Where the work stands right now |
+| [`docs/architecture.md`](docs/architecture.md) | Product scope, architecture, and deliberate exclusions |
+| [`docs/how-to/operate.md`](docs/how-to/operate.md) | How the deployed service, database, and ingestion cron are operated |
+| [`docs/how-to/evaluate.md`](docs/how-to/evaluate.md) | How to run, grade, freeze, and inspect evaluations |
+| [`docs/reference/configuration.md`](docs/reference/configuration.md) | Stack, dependencies, tunables, hosted services |
+| [`docs/reference/schema.md`](docs/reference/schema.md) | Frozen agent-visible `clean_jobs` columns |
+| [`docs/reference/agent-behavior.md`](docs/reference/agent-behavior.md) | Frozen agent behavior requirements |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to change this repository and get it merged |
 
 ## Status
 
 **v1.0 release candidate.** The API, agent, streaming UI, ingestion pipeline, and evaluation
-harness are all built and deployed. Current state and the next planned work are tracked in
-[`docs/Repo_Current_State.md`](docs/Repo_Current_State.md).
+harness are all built and deployed.
+Open risks, follow-ups, and planned work are tracked as
+[GitHub Issues](https://github.com/Park-Hip/InternHunterAgent/issues).

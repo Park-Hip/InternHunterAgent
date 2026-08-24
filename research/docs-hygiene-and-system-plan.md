@@ -16,8 +16,8 @@
 |---|---|---|
 | 1 | **Set a line-length + shape standard** and reflow the live docs | 21% of all doc lines exceed 100 chars; the worst single line is 5,424 chars |
 | 2 | **Rewrite the root `README.md`** | The repo's front door still describes only a T0002-era Postgres bootstrap |
-| 3 | **Add `docs/Tech_Stack.md`** | No doc answers "what is this built with" — the stack is scattered across 5 files |
-| 4 | **Add `docs/Operations.md`** | Deploy topology is restated in 4 places and drifts independently |
+| 3 | **Add `docs/Tech_Stack.md`** | No doc answers "what is this built with" — the stack is scattered across 5 files | <!-- archived-on-tag -->
+| 4 | **Add `docs/Operations.md`** | Deploy topology is restated in 4 places and drifts independently | <!-- archived-on-tag -->
 | 5 | **Split archive out of living docs** | `Tickets.md` / `Manual_Verification_Guide.md` are ~90% history by volume |
 | 6 | **Prune `research/` from 14 docs to 5** | 9 are executed plans (~4,900 lines) whose milestones already shipped |
 | 7 | **Add `docs/Decision_Log.md`** | **The "one place"** — every durable decision in ≤6 lines, harvested before archiving |
@@ -88,10 +88,10 @@ so is the prose.
 |---|---:|---:|---:|
 | `docs/archive/Repo_State_History.md` | **5,424** | 55 | 164 | <!-- archived-on-tag -->
 | `evals/v1_scenario_matrix.md` | **4,231** | 31 | **497** | <!-- lint-allow-link-path -->
-| `docs/Repo_Current_State.md` | **2,790** | 55 | 140 |
-| `docs/MVP_Technical_Design.md` | 1,990 | 126 | 155 |
+| `docs/Repo_Current_State.md` | **2,790** | 55 | 140 | <!-- archived-on-tag -->
+| `docs/MVP_Technical_Design.md` | 1,990 | 126 | 155 | <!-- archived-on-tag -->
 | `docs/Tickets.md` | 1,577 | **327** | 149 |
-| `docs/Known_Issues.md` | 1,510 | 176 | 221 |
+| `docs/Known_Issues.md` | 1,510 | 176 | 221 | <!-- archived-on-tag -->
 | `docs/Completion_Reports.md` | 1,446 | 194 | **290** |
 | `docs/Manual_Verification_Guide.md` | 785 | 132 | 74 |
 
@@ -189,8 +189,8 @@ mojibake byte sequences, and `docs/Docs_Conventions.md` must state the rule plai
 
 | Doc | Commits touching it |
 |---|---:|
-| `docs/Repo_Current_State.md` | **66** |
-| `docs/Known_Issues.md` | 53 |
+| `docs/Repo_Current_State.md` | **66** | <!-- archived-on-tag -->
+| `docs/Known_Issues.md` | 53 | <!-- archived-on-tag -->
 | `docs/Manual_Verification_Guide.md` | 50 |
 | `docs/Tickets.md` | 34 |
 | `docs/Completion_Reports.md` | 24 |
@@ -307,7 +307,7 @@ the boundary.
 
 | Tier | Character | Cap | Members |
 |---|---|---|---|
-| **T1 — Front door** | What is this, how do I run it, what is it built with | 150 lines each | `README.md`, `docs/Tech_Stack.md`, `docs/README.md` |
+| **T1 — Front door** | What is this, how do I run it, what is it built with | 150 lines each | `README.md`, `docs/Tech_Stack.md`, `docs/README.md` | <!-- archived-on-tag -->
 | **T2 — Canonical** | Permanent laws & design; changes rarely | 400 lines | `MVP_Spec.md`, `Full_Design_Document.md`, `MVP_Technical_Design.md`, `Schema_Contract.md`, `Agent_Behavior_Spec.md` |
 | **T3 — Living** | Must be true *right now*; capped and stamped | 150 lines | `Repo_Current_State.md`, `Known_Issues.md`, `Tickets.md` (open only), `Operations.md` |
 | **T4 — Archive** | Append-only history; never needs to be current | uncapped | `Completion_Reports.md`, `Resolved_Issues.md`, `archive/**`, `Tickets_Archive.md`, `Manual_Verification_History.md` |
@@ -320,27 +320,27 @@ the boundary.
 |---|---|
 | `README.md` | **REWRITE** — currently T0002-era DB bootstrap only. See §6.2 |
 | `docs/README.md` | **UPDATE** — add the 4-tier model, the Fact Ledger, and the 2 unlisted files |
-| `docs/Tech_Stack.md` | **NEW** — see §6.1 |
+| `docs/Tech_Stack.md` | **NEW** — see §6.1 | <!-- archived-on-tag -->
 
 **Canonical (T2) — reflow only, no content change**
 
 | File | Action |
 |---|---|
-| `docs/MVP_Spec.md` | REFLOW (8 lines >200) |
-| `docs/Full_Design_Document.md` | REFLOW (21 lines >200) |
-| `docs/MVP_Technical_Design.md` | REFLOW + **split check** (126 lines >200; 435 lines) |
-| `docs/Schema_Contract.md` | **KEEP AS-IS** — already conformant (max 93). Use as the model |
-| `docs/Agent_Behavior_Spec.md` | REFLOW + register in `docs/README.md` |
+| `docs/MVP_Spec.md` | REFLOW (8 lines >200) | <!-- archived-on-tag -->
+| `docs/Full_Design_Document.md` | REFLOW (21 lines >200) | <!-- archived-on-tag -->
+| `docs/MVP_Technical_Design.md` | REFLOW + **split check** (126 lines >200; 435 lines) | <!-- archived-on-tag -->
+| `docs/Schema_Contract.md` | **KEEP AS-IS** — already conformant (max 93). Use as the model | <!-- archived-on-tag -->
+| `docs/Agent_Behavior_Spec.md` | REFLOW + register in `docs/README.md` | <!-- archived-on-tag -->
 | `docs/Prompt_Playbook.md` | **KEEP AS-IS** — conformant (max 88) | <!-- archived-on-tag -->
 
 **Living (T3) — the heavy lifting**
 
 | File | Action |
 |---|---|
-| `docs/Repo_Current_State.md` | **REBUILD as a fact sheet** — 297 → ≤120 lines. See §6.5 |
-| `docs/Known_Issues.md` | **SPLIT + REFLOW** — evict the 5 `RESOLVED` entries it holds in violation of its own stated rule; rebuild the category counts from actual entries |
+| `docs/Repo_Current_State.md` | **REBUILD as a fact sheet** — 297 → ≤120 lines. See §6.5 | <!-- archived-on-tag -->
+| `docs/Known_Issues.md` | **SPLIT + REFLOW** — evict the 5 `RESOLVED` entries it holds in violation of its own stated rule; rebuild the category counts from actual entries | <!-- archived-on-tag -->
 | `docs/Tickets.md` | **SPLIT** — 1,299 lines / 107 headings / 19 done milestones. Closed milestones → `docs/archive/Tickets_Archive.md`; live file keeps open work + a one-line-per-milestone index |
-| `docs/Operations.md` | **NEW** — absorbs `T0020.4_Cron_Activation_Runbook.md` + the topology facts currently restated in 4 places. See §6.3 |
+| `docs/Operations.md` | **NEW** — absorbs `T0020.4_Cron_Activation_Runbook.md` + the topology facts currently restated in 4 places. See §6.3 | <!-- archived-on-tag -->
 | `docs/Manual_Verification_Guide.md` | **SPLIT** — 1,503 lines / 82 headings. Per-ticket one-time checks → `archive/Manual_Verification_History.md`; keep only re-runnable smoke checks |
 
 **Archive (T4) — reflow the worst, otherwise leave**
@@ -419,7 +419,7 @@ instead.
 
 ## 6. New documents — specifications
 
-### 6.1 `docs/Tech_Stack.md` (new, T1, ≤150 lines)
+### 6.1 `docs/Tech_Stack.md` (new, T1, ≤150 lines) <!-- archived-on-tag -->
 
 The user explicitly asked for this, and the audit confirms the gap: stack facts are currently
 scattered across `pyproject.toml`, `Repo_Current_State.md`, `MVP_Technical_Design.md`,
@@ -478,7 +478,7 @@ front-door material.
 > when the live demo is next up. Write the README so the image slots in without a rewrite —
 > put the sample exchange in its own section, not woven into a paragraph.
 
-### 6.3 `docs/Operations.md` (new, T3, ≤200 lines)
+### 6.3 `docs/Operations.md` (new, T3, ≤200 lines) <!-- archived-on-tag -->
 
 Absorbs `T0020.4_Cron_Activation_Runbook.md` (424 lines) and consolidates the deploy topology
 now restated in `Repo_Current_State.md`, `Completion_Reports.md` (T0018.4),
@@ -500,7 +500,7 @@ The written form of §7, plus: the Fact Ledger rule, the tier model and caps, th
 **PowerShell encoding hazard** (§2.5): never round-trip a doc through `Get-Content` /
 `Set-Content`; use an editor or the file-edit tooling.
 
-### 6.5 `docs/Repo_Current_State.md` (rebuild, T3, ≤120 lines)
+### 6.5 `docs/Repo_Current_State.md` (rebuild, T3, ≤120 lines) <!-- archived-on-tag -->
 
 Today: 297 lines, a 2,790-char line, 66 commits of churn, and long narrative sections that
 duplicate `Completion_Reports.md`.
@@ -811,4 +811,4 @@ Per CLAUDE.md §4 — what the developer runs by hand after each ticket.
 | `docs/README.md` | 4-tier model + Fact Ledger (T0022.8) |
 | `CLAUDE.md` §6 **and `AGENTS.md` §6** | Add a pointer to `Docs_Conventions.md` so future tickets inherit the standard. **Edit both, identically** — §2.4.1 |
 | `CLAUDE.md` / `AGENTS.md` §1 | The "read `research/` before designing" rule should point at `Decision_Log.md` first, then the surviving live docs — the whole point of the harvest |
-| `docs/Known_Issues.md` | Log the encoding hazard as a standing `[LOW · NOTE]` if not already present |
+| `docs/Known_Issues.md` | Log the encoding hazard as a standing `[LOW · NOTE]` if not already present | <!-- archived-on-tag -->

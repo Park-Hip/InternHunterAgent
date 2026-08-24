@@ -55,7 +55,7 @@ That leaves the model provider, and three candidates ordered by cost to rule out
 
 1. The `GROQ_API_KEY` is invalid or revoked.
 2. The `qwen/qwen3.6-27b` pin is no longer served.
-   [`Known_Issues.md`](../docs/Known_Issues.md) already carries this exact risk as open and
+   [`Known_Issues.md`](../docs/Known_Issues.md) already carries this exact risk as open and <!-- archived-on-tag -->
    unconfirmed, recorded during T0011.5 preparation.
 3. The Groq free-tier daily budget is exhausted.
    One turn reserves roughly 9.2K tokens across routing, SQL generation, and synthesis, so a low
@@ -120,7 +120,7 @@ records a tag against a service that does not work.
 
 **In scope.** Establish which of the three causes in section 1.1 is live, by elimination in the
 listed order.
-Record the finding in [`Known_Issues.md`](../docs/Known_Issues.md) with its evidence.
+Record the finding in [`Known_Issues.md`](../docs/Known_Issues.md) with its evidence. <!-- archived-on-tag -->
 Restore answering on both sample prompts and confirm by direct probe, not by reading logs.
 
 **Out of scope.** Any provider or model change beyond what restoration requires.
@@ -168,7 +168,7 @@ serve produces a signal without a human clicking the demo.
 > wrong. `M27`, `M28` and `M29` were already spent when it was written - on DeepSeek Provider
 > Integration, Evaluation Documentation Ownership and Evaluation Readability - because this plan
 > inferred its numbers from a document instead of from
-> [`docs/roadmap.yaml`](../docs/roadmap.yaml), which is the exact defect the registry's header
+> [`docs/roadmap.yaml`](../docs/roadmap.yaml), which is the exact defect the registry's header <!-- archived-on-tag -->
 > warns about. Only the titles carry forward.
 > This section is now **M39**, allocated in the registry and scoped into `T0039.1-.4` in
 > [`docs/Tickets.md`](../docs/Tickets.md). Read the ticket bodies, not this section: four of the
@@ -211,7 +211,7 @@ The 8000 TPM admission ceiling is what excludes those two scenarios, and lowerin
 better.
 
 **Decision required.** The paid-tier spend.
-[`Known_Issues.md`](../docs/Known_Issues.md) has carried this as an open maintainer decision since
+[`Known_Issues.md`](../docs/Known_Issues.md) has carried this as an open maintainer decision since <!-- archived-on-tag -->
 M25; this ticket is where it is answered or the milestone stops.
 
 ### T0028.3: Fail the build on a pass-rate regression
@@ -219,7 +219,7 @@ M25; this ticket is where it is answered or the milestone stops.
 **In scope.** The replay gate computes a pass rate over the committed evidence and exits non-zero
 when it falls more than an agreed margin below the frozen baseline.
 Expand committed replay evidence beyond its current five turns toward the full registry.
-Turn on the branch protection that [`Known_Issues.md`](../docs/Known_Issues.md) records as
+Turn on the branch protection that [`Known_Issues.md`](../docs/Known_Issues.md) records as <!-- archived-on-tag -->
 configured-but-unenforced, so a red gate actually blocks a merge.
 
 **Out of scope.** Gating on latency or cost.

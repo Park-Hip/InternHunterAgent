@@ -327,9 +327,9 @@ Decisions (a call to make):
 
 ## 5. Cross-references
 
-- `docs/MVP_Spec.md` §3/§4 — the bar and DoD this document audits against.
-- `docs/Repo_Current_State.md` — branch topology, T0019 status, live-deploy record.
-- `docs/Known_Issues.md` — every gap cited in §1 lives there with full context.
+- `docs/MVP_Spec.md` §3/§4 — the bar and DoD this document audits against. <!-- archived-on-tag -->
+- `docs/Repo_Current_State.md` — branch topology, T0019 status, live-deploy record. <!-- archived-on-tag -->
+- `docs/Known_Issues.md` — every gap cited in §1 lives there with full context. <!-- archived-on-tag -->
 - `docs/Tickets.md` T0019 + Backlog — fixed sequencing; the unscheduled seeds M20 absorbs.
 - `research/archive/pre-deploy-refinement-plan.md` §6/§7/§8 — the deploy-hardening body and open
   decisions

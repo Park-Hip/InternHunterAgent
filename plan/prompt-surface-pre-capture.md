@@ -70,7 +70,7 @@ Decision #10 stays satisfied, because the corpus is still described as covering 
 
 **Files.**
 `config/prompts.yaml` for A1 to A6.
-`docs/Agent_Behavior_Spec.md` to record the date-semantics rule beside the style rule Phase 2 added.
+`docs/Agent_Behavior_Spec.md` to record the date-semantics rule beside the style rule Phase 2 added. <!-- archived-on-tag -->
 `tests/agents/runtime/test_prompts.py` and `tests/agents/test_langfuse_tracing.py`, which assert the
 literal `v5` and cannot stay green across A6.
 
@@ -81,10 +81,10 @@ Phase 2 merged as `e646bd8`, so no live branch holds these files.
 ## Change B - the clock leaves the agent's tool surface
 
 **B1.** `get_current_time` is unbound from `agent_factory`.
-`docs/Design.md` justifies it as existing to keep the multi-tool path exercised, which the two
+`docs/Design.md` justifies it as existing to keep the multi-tool path exercised, which the two <!-- archived-on-tag -->
 remaining tools now do for real.
 
-**B2.** `docs/Design.md` stops describing three tools.
+**B2.** `docs/Design.md` stops describing three tools. <!-- archived-on-tag -->
 
 **B3.** `tests/test_prompt_surface.py` drops the tool's docstring from the model-visible inventory,
 and `tests/agents/runtime/test_factory.py` stops asserting the tool is registered.

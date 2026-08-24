@@ -1,0 +1,30 @@
+name: Bug report
+description: Report a defect in behavior, documentation, or operations.
+labels: [bug]
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: What happened, including the exact commands and output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What should happen instead, and how you know.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps from a clean checkout, with environment details.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Optional links to traces, logs, CI runs, or evaluation results.

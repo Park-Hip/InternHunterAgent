@@ -381,8 +381,8 @@ topic section or resolves them.
   - **Next:** Either symlink the `.claude/` copy to the tracked file, or restore a check that fails
     rather than skips when the copy is missing. Copying by hand is what just happened and is not a
     fix.
-  - **History:** Same class as `AGENTS.md`/`CLAUDE.md`, which are both tracked and are now held
-    identical by `scripts/sync_agent_instructions.py --check` in the CI `docs` job. Restated
+  - **History:** Same class as `AGENTS.md`/`CLAUDE.md`, which are both tracked and were held
+    identical by a CI parity step, retired with the sync tooling on 2026-08-24. Restated
     2026-08-20: the severity is unchanged but the detector is gone.
 
 - **`[MED · OPEN]` A fresh worktree cannot run the test suite.**

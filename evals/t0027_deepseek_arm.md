@@ -143,7 +143,8 @@ These are behavior defects, not provider defects.
 ## The decision
 
 Applying the pre-registered rule from
-[research section 7](../research/deepseek-provider-evaluation.md) in order:
+the provider evaluation's pre-registered rule (section 7 of that record, preserved on git tag
+docs-history-pre-redesign) in order:
 
 1. **Safety.** Not a disqualifier. 18 of 18 turns refuse correctly on inspection; the 11/18 score
    is a rule-phrasing artifact, documented above. No comparison is possible: the baseline never
@@ -199,7 +200,8 @@ Groq is roughly 1.6x faster per turn, and that is the one measure where it wins.
 It does not survive contact with pacing: 75 seconds of mandated idle per turn dominates a 2.7
 second response, which is why 13 turns took 21 minutes.
 
-Two estimates in [research section 5](../research/deepseek-provider-evaluation.md) are corrected by
+Two estimates from the provider evaluation's section 5 (preserved on git tag
+docs-history-pre-redesign) are corrected by
 this run.
 Per-turn consumption is ~3.7K tokens, not the ~9.2K estimate, because 9.2K counts Groq's admission
 reserve rather than tokens actually spent.

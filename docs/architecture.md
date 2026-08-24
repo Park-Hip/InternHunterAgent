@@ -8,7 +8,7 @@ ingestion design.
 Operational procedures live in [how-to/operate.md](how-to/operate.md); evaluation in
 [how-to/evaluate.md](how-to/evaluate.md); configuration and stack in
 [reference/configuration.md](reference/configuration.md).
-Durable decisions are recorded in [Decision_Log.md](Decision_Log.md).
+Durable decisions are recorded under [decisions/](decisions/README.md).
 
 ## C4 context view
 

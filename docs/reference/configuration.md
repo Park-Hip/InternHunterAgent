@@ -155,7 +155,7 @@ tokens per turn across 77 turns.
 Serving traffic on the demo is the same per-turn shape.
 For the measured derivation see [T0027.3 DeepSeek arm](../../evals/t0027_deepseek_arm.md); for the
 judge-side rate-limit caveats see
-[evaluation strategy](../../research/evaluation-strategy.md), sections 4a and 4b.
+the evaluation strategy record on git tag docs-history-pre-redesign, sections 4a and 4b.
 
 The Groq arm remains selectable on its free tier, at 8000 tokens per minute and 200K per day.
 That ceiling is what the driver's turn-pacing setting exists for: restore it whenever a profile

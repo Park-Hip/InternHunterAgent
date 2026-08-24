@@ -1,18 +1,54 @@
-# InternHunterAgent Design
+# Architecture
 
-> **Last verified:** 2026-08-20.
+> **Eviction:** A section leaves when the implementation it explains is retired or its decision is
+> superseded.
 
-> **Eviction:** Replace a section when its owning implementation or decision changes.
+This document owns product scope, architecture, agent runtime, serving, schema evolution, and
+ingestion design.
+Operational procedures live in [how-to/operate.md](how-to/operate.md); evaluation in
+[how-to/evaluate.md](how-to/evaluate.md); configuration and stack in
+[reference/configuration.md](reference/configuration.md).
+Durable decisions are recorded in [Decision_Log.md](Decision_Log.md).
 
-This is the maintained design source for product scope, architecture, serving, offline pipelines,
-operations, and the technology stack.
-The schema contract, agent behavior, operational procedures, and durable decisions remain in their
-specialist documents: [Schema Contract](Schema_Contract.md), [Agent Behavior
-Spec](Agent_Behavior_Spec.md), [Operations](Operations.md), and [Decision Log](Decision_Log.md).
+## C4 context view
 
-Five retired documents redirect here and keep their original section numbering in the archived
-research that cites them.
-The mapping is in section 11.
+The system is one conversation surface over a read-only job-posting corpus.
+
+```mermaid
+graph LR
+    U[Visitor] -->|plain Vietnamese question| UI[Demo UI - same origin]
+    UI -->|POST stream endpoint| API[FastAPI service on Render]
+    API --> AG[ReAct agent runtime]
+    AG -->|validated read-only SQL| DB[(Neon PostgreSQL clean_jobs)]
+    API -.->|traces and scores| LF[Langfuse Cloud]
+    CRON[GitHub Actions ingestion workflow] -->|upsert postings| DB
+    CRON -->|scrape| SRC[VietnamWorks]
+```
+
+## C4 container view
+
+```mermaid
+graph TB
+    subgraph Serving path - one request
+        R[API routes - transport and validation only] --> S[Agent service - orchestration]
+        S --> RT[Agent runtime - ReAct loop tools memory]
+        RT --> T[Tools - query_clean_jobs get_job_details]
+        T -->|single-table allowlist| DB[(PostgreSQL)]
+        RT --- TR[Tracing layer - only Langfuse importer]
+    end
+    subgraph Offline batch - never imported by serving
+        ING[Ingestion pipeline] -->|writes| DB
+        EV[Evaluation harness] -->|black box public entrypoint| S
+    end
+    CORE[Core - settings logging db engine]
+    R -.-> CORE
+    S -.-> CORE
+    RT -.-> CORE
+    ING -.-> CORE
+```
+
+
+## 1. Product and MVP bar
 
 ## 1. Product and MVP bar
 
@@ -114,9 +150,12 @@ Intent, not commitment.
 
 The product can grow in those directions only through a recorded decision and measured design work.
 
+
+## 2. Layered architecture
+
 ## 2. Architecture
 
-### 2.1 Request lifecycle
+### 1 Request lifecycle
 
 The service exposes one conversational endpoint pair and every request follows one fixed path:
 
@@ -143,7 +182,7 @@ neighbors.
 At any point in the project's life the correctness of the layer contract matters more than how many
 features sit behind it.
 
-### 2.2 Layer matrix
+### 2 Layer matrix
 
 **API layer** (`src/api/app.py`, `src/api/routes/`, `src/api/schemas.py`).
 Owns HTTP transport, Pydantic validation, same-origin static files, and the public response shape.
@@ -198,7 +237,7 @@ This isolation is what lets data acquisition evolve without touching the serving
 Offline quality tooling under the same isolation rule as ingestion.
 It treats the agent as a black box through its public entrypoint plus an injected callback.
 
-### 2.3 Cross-boundary invariants
+### 3 Cross-boundary invariants
 
 Some types are permitted inside a layer but must never cross out of it.
 
@@ -222,7 +261,7 @@ Some types are permitted inside a layer but must never cross out of it.
 If a change requires passing one of these types across its boundary, the change is wrong, not the
 rule.
 
-### 2.4 Permanent scope exclusions
+### 4 Permanent scope exclusions
 
 These are deliberate and permanent, not gaps a future change closes.
 
@@ -247,7 +286,7 @@ The production request path therefore has one selected serving provider per prof
 provider-routing matrix, no in-request scheduler, no background queue, no long-term memory, no
 authentication layer, and no agent-to-agent delegation.
 
-### 2.5 Engineering principles
+### 5 Engineering principles
 
 The system is built infrastructure-and-reliability-first: a stable, traced, hardened request path is
 proven before any tool is added, so tool work never gets to skip validation, configuration checking,
@@ -273,11 +312,14 @@ or tracing.
   crosses the API boundary.
 - **Schema growth is column-cheap, table-costly.** Answer honesty is derived from the documented
   schema, never a hardcoded field list, so growing the schema never silently turns an honesty rule
-  into a falsehood. See section 5.2.
+  into a falsehood. See the schema-evolution section.
+
 
 ## 3. Agent runtime
 
-### 3.1 Model providers
+## 3. Agent runtime
+
+### 1 Model providers
 
 Chat models are wrapped by the provider in `src/agents/runtime/provider.py`.
 This is the one place model construction lives; no other layer constructs a model.
@@ -299,7 +341,7 @@ branches are what keep the provider seam honest.
 The two profiles are deliberately separate: the outer ReAct loop reasons, while SQL generation is
 pinned to deterministic sampling.
 
-### 3.2 System prompt and reasoning
+### 2 System prompt and reasoning
 
 The agent runs a ReAct-style loop.
 The model reasons about the user's question, decides whether to call a tool, consumes the tool's
@@ -313,9 +355,9 @@ The runtime extracts the final answer from the last message and returns it as a 
 The behavior glossary is loaded separately rather than pasted into the system prompt, so the
 evaluation grader and the prompt resolve the same phrasings from one source.
 The frozen behavior requirements themselves are owned by
-[Agent Behavior Spec](Agent_Behavior_Spec.md).
+[agent behavior reference](reference/agent-behavior.md).
 
-### 3.3 Tools
+### 3 Tools
 
 Tools are how the agent acts on the world, under one contract: **natural language in, bounded plain
 string out**.
@@ -407,7 +449,7 @@ Promoting hot text into a real column at ingestion - the path that produced `rol
 Salary ranking guidance and the "count, do not list" rule for how-many questions live in the
 SQL-generation prompt, not in tool code.
 
-### 3.4 Memory
+### 4 Memory
 
 Short-term, session-scoped memory lets a user refine questions across turns within one
 conversation.
@@ -430,7 +472,7 @@ It is not the whole agent, and it is deliberately scoped.
   profiles, and resume or embedding retrieval are long-term memory: a distinct mechanism and an
   explicit future phase, which must not be bolted onto the thread checkpointer.
 
-### 3.5 Tracing
+### 5 Tracing
 
 Tracing is built once in `src/agents/tracing/langfuse.py` and injected into the agent invocation
 through `build_langfuse_config()`, which the runtime passes to the agent call.
@@ -445,9 +487,12 @@ This invariant is the verification bar for all future tools, not just the ones t
 A new tool that does not show up as a traced span is an incomplete tool, regardless of whether it
 returns the right answer.
 
+
 ## 4. Public contract and serving
 
-### 4.1 One-shot contract
+## 4. Public contract and serving
+
+### 1 One-shot contract
 
 The API exchanges two Pydantic models defined in `src/api/schemas.py`.
 
@@ -469,7 +514,7 @@ tracing is disabled.
 The answer-only shape is an MVP choice, not a permanent law.
 A future charting capability is not a string, and revisiting the shape is what that would require.
 
-### 4.2 Streaming delivery
+### 2 Streaming delivery
 
 One-shot delivery makes the user wait on a spinner for the whole run and then shows the entire
 answer at once.
@@ -520,8 +565,8 @@ What survives both gates is model-authored answer text.
 ("let me look that up"), that text streams before the tool-call gate can fire.
 This is model- and prompt-dependent.
 It is handled at MVP scope by a system-prompt instruction not to narrate before tool calls and - the
-load-bearing half - a **leak test** that runs a tool-invoking query and asserts no SQL, tool name, or
-row data ever appears in the streamed tokens.
+load-bearing half - a **leak test** that runs a tool-invoking query and asserts no SQL, tool name,
+or row data ever appears in the streamed tokens.
 Heavier machinery, such as buffering a whole turn to be certain, is rejected: it would defeat
 streaming on the final turn, the one turn that most needs to stream.
 
@@ -573,7 +618,7 @@ The browser cannot use the native `EventSource` API here, because it is GET-only
 endpoint is a POST with a JSON body.
 The client consumes the stream with `fetch()` plus a `ReadableStream` reader instead.
 
-### 4.3 Error handling
+### 3 Error handling
 
 The quality bar in section 1.3 requires that imperfect input or a backend hiccup yields a clean
 response, never a crash and never a leaked internal error.
@@ -618,7 +663,7 @@ The demo streams the final answer only.
 The streamed answer routes through the same tool and prompt path the evaluation harness scores, so
 streaming adds no bypass.
 
-### 4.4 Public-endpoint hardening
+### 4 Public-endpoint hardening
 
 Exposing the agent publicly adds a distinct concern: the endpoint must survive an untrusted internet
 without a WAF, an API gateway, or an auth layer, none of which the MVP has or needs.
@@ -673,7 +718,7 @@ write.
 > by hand, not by construction, which contradicts the project rule that parameters live in
 > settings. **Changing one without the other silently does nothing.** Closing it means either a
 > config-backed schema loader or dropping the unused YAML key. Tracked in
-> [Known Issues](Known_Issues.md).
+> Open cost decisions and cron activation gates are GitHub Issues.
 
 **API documentation exposure.**
 A single `api.docs_enabled` flag gates the interactive docs, the alternate docs, and the OpenAPI
@@ -683,7 +728,7 @@ Keeping them public is a deliberate portfolio choice: the demo's audience includ
 the API design, and the schema reveals nothing the answer-only contract does not already imply.
 The single flag exists so that judgement can be reversed in one line.
 
-### 4.5 Demo surface
+### 5 Demo surface
 
 The demo is an editorial vanilla HTML, CSS, and JavaScript interface in `src/api/static/`, served
 from the same FastAPI origin with no client build toolchain.
@@ -718,9 +763,9 @@ chat rate limiter.
 - **Liveness** is static. It touches no dependency and always returns `200`. This is what the
   platform's health check polls; making it depend on the database would let a transient database
   blip trigger an instance restart that cannot possibly fix it.
-- **Readiness** is real. It executes a trivial query through the session factory, off the event loop,
-  and returns `503` on any failure. On success it also returns `data_snapshot_date`, which the UI
-  renders as its corpus-age disclaimer.
+- **Readiness** is real. It executes a trivial query through the session factory, off the event
+  loop, and returns `503` on any failure. On success it also returns `data_snapshot_date`, which the
+  UI renders as its corpus-age disclaimer.
 
 The split is what lets the demo degrade honestly: the page can load and explain that data is
 unavailable, instead of appearing healthy while every query fails.
@@ -740,7 +785,7 @@ unavailable, instead of appearing healthy while every query fails.
 > missing that column the query raises, the fallback fires, and readiness still returns `200` with a
 > stale-but-plausible date. That keeps a readiness probe from flapping on a cosmetic field, but it
 > means schema drift is invisible from the response body alone and is recoverable only from the
-> logged warning. Tracked in [Known Issues](Known_Issues.md).
+> logged warning. Tracked as a GitHub issue (data_snapshot_date fallback hides schema drift).
 
 The two database round trips are separate on purpose: the trivial query runs first and a failure
 short-circuits to `503` **before** the date query is attempted, so the two failure modes stay
@@ -755,34 +800,8 @@ in-band error event as a normal chat bubble.
 It knows nothing about the agent, the tools, or the schema; the answer-only law is what makes such a
 thin client sufficient.
 
-## 5. Data and configuration
 
-### 5.1 Stores and environment
-
-The agent reads the normalized `clean_jobs` table through a single-table allowlist.
-Its frozen agent-visible columns are owned by [Schema Contract](Schema_Contract.md).
-
-Source creation dates are preserved, posting dates are never invented, and listing expiry comes from
-the truthful source expiry field.
-The lifecycle column exists in the data layer but is not exposed to the agent until behavior
-evidence supports an honest presentation.
-
-Alembic owns schema changes.
-The application database owns domain data and persisted checkpoint state, while Langfuse Cloud owns
-traces and project metadata.
-Those stores have separate owners, lifecycles, and schemas, and no overlap.
-
-**Required environment.**
-The database URL and the Langfuse keys, where tracing degrades gracefully if the Langfuse keys are
-absent.
-Provider keys are optional at boot and validated by the branch that needs them, so a checkout runs
-with only the selected provider's key.
-
-**Tunable parameters** live in `config/settings.yaml`, read through `src/core/config.py`:
-`agent.react.*` for the outer model, `agent.sql_generation.*` for the nested SQL-generation model,
-`agent.memory.*` for the memory window, `agent.query.*` for the retrieval bounds, `api.*` for the
-hardening controls, and `ingestion.*` for the pipeline.
-Per project convention, parameters are configured here rather than hard-coded.
+## 5. Schema evolution
 
 ### 5.2 Schema evolution
 
@@ -806,6 +825,9 @@ deliberate cheap-growth path.
   columns drifted out-of-band, which a migration tool does not detect. That is why ingestion carries
   a separate pre-flight column assertion; see section 6.4.
 
+
+## 6. Ingestion pipeline
+
 ## 6. Ingestion pipeline
 
 Ingestion is offline batch tooling under `src/services/ingestion/`, isolated from the request
@@ -821,7 +843,7 @@ Only two components ever know a source's specifics - the **adapter** that fetche
 **normalizer** that maps payload to common shape.
 Everything downstream is shared.
 
-### 6.1 Dataflow and tables
+### 1 Dataflow and tables
 
 ```text
 JobSource (VietnamWorks) --RawPosting--> raw_jobs   verbatim landing, upsert on (source, external_id)
@@ -850,7 +872,7 @@ common shape across boards.
 VietnamWorks supplies them separately and its normalizer concatenates them back; they survive
 verbatim in the raw table either way.
 
-### 6.2 Deterministic cleaning
+### 2 Deterministic cleaning
 
 All transforms are pure, unit-tested, and contain no model or network call.
 That keeps ingestion testable and aligned with the no-over-engineering rule; model-based extraction
@@ -878,9 +900,9 @@ Because the enriched columns are agent-visible, the schema context, the SQL-gene
 the honesty rules all move with them.
 Notably, salary is numeric and currency-scoped - filter within one currency - and may be null or
 negotiable, which is "may be missing or negotiable for some postings", not "not in the data".
-That is the column-cheap schema growth of section 5.2, applied.
+That is the column-cheap schema growth of the schema-evolution section, applied.
 
-### 6.3 Identity, idempotency, and configuration
+### 3 Identity, idempotency, and configuration
 
 Upsert on `(source, external_id)` with a content hash for change detection, so re-running refreshes
 rather than duplicating, and a partial run cannot shrink the served corpus.
@@ -900,7 +922,7 @@ convention.
 The [vendored technology vocabulary sources](../data/vendor/README.md) record the inputs to the
 vocabulary builder.
 
-### 6.4 Unattended-run safety
+### 4 Unattended-run safety
 
 Once the CLI runs unattended on a schedule against the live database, "it failed and someone
 noticed" stops being a reliable control.
@@ -937,312 +959,3 @@ Nothing in this module imports or is imported by the request path.
 into numbers, translating source text to a single language, and cross-board deduplication are out of
 scope.
 
-## 7. Evaluation harness
-
-The harness is offline quality tooling under the same isolation rule as ingestion.
-It treats the agent as a black box through its public entrypoint plus the tracing callback seam.
-Its job is to establish a measurable baseline of task correctness and the honesty bar in section 1.3
-*before* any work whose design depends on measured model behavior is built.
-
-Evaluation measures behavior; it does not fix it.
-Remediation is separate work.
-
-### 7.1 What it measures: three seams
-
-The agent is not one model call.
-The query tool takes a **natural-language question**, and a *separate, nested* call turns it into
-SQL that deterministic code then validates and runs.
-So a single agent run has three distinct decision points, and the harness scores each.
-
-| Seam | What the model decides | Metric attaches to |
-|---|---|---|
-| 1. Routing | which tool, and the question passed to it | the agent tool-call span |
-| 2. Natural language to SQL | the SQL string, invisible to the ReAct trace | the nested generation span |
-| 3. Synthesis | the final user-facing answer | the final output |
-
-Seam 2 is the most failure-prone point, and it is **not** on the tool call: it is inside the nested
-generation.
-Capturing it is a tracing concern, so per the tracing-boundary law it must **not** be met by
-hard-coding an evaluation decorator inside the tools layer.
-Instead the harness threads its callback in through **runtime config**, the same injection seam
-Langfuse tracing already uses, so the nested call surfaces as its own span without evaluation
-concerns leaking into tool code.
-
-### 7.2 Metric stack
-
-Deterministic checks for everything exact; judge checks for everything semantic.
-
-- **Seam 1, routing.** Deterministic tool-correctness - was the right tool chosen, in the right
-  order - plus a light referenceless check on the question the agent passed.
-- **Seam 2, SQL.** A referenceless argument check plus a schema-aware judged criterion asking
-  whether the SQL respects the schema and answers the question. No expected SQL string is stored.
-- **Seam 3, synthesis.** Task completion, plus faithfulness against the tool's returned string as
-  context, which catches *fabrication* such as invented freshness or hidden-salary claims not in the
-  data, plus a judged honesty criterion for *omission*. The truncation caveat is emitted
-  deterministically by the tool; the risk is the agent stripping it when it rewrites the answer.
-
-Where a structural check and the judge disagree, the structural check wins (D-042).
-Thresholds are **calibrated after a baseline run**, never pre-set: a threshold above the baseline
-blocks every build, and below it nothing signals.
-
-### 7.3 Scenario registry and the seeded fixture
-
-The scenario registry in `evals/scenarios_v1.yaml` owns the cases, their probe flags, reference SQL,
-tool expectations, and grading rules, and is the single source of truth for evaluation cases
-(D-041).
-Goldens are generated from it, which ends probe-flag drift structurally.
-Scenario ids are class-first and self-describing (D-039).
-
-Twenty-nine scenarios span five categories: grounded retrieval asserting the fixture's pinned
-totals; multi-turn refinement, stored as conversational cases so the agent's own context-carry is
-what gets scored rather than a pre-flattened turn; honesty probes covering freshness, cross-currency
-ranking, absent technology, out-of-schema attributes, hidden salary, and hidden seniority; safety and
-refusal, asserting both an empty tool list *and* a refusal, so a model that queries the database
-before refusing still fails; and resilience, covering vague input and a dangling pronoun with no
-prior turn.
-
-**The harness runs against a small version-controlled seeded fixture database, not the live
-corpus.**
-That is what lets honesty scenarios assert exact counts, truncation notices, and specific rows, and
-what makes before-and-after comparison valid: a scenario's baseline is only meaningful against a
-fixed dataset version (D-037).
-The fixture is versioned with the scenarios, and changing it changes the baseline.
-Its free text is drawn from real captured postings so answers read authentically, while the
-structured columns are *engineered* to a fixed distribution that pins every scenario.
-Internship-ness is one filterable attribute among many: the fixture, like the real corpus, is mostly
-non-internship AI and data postings.
-
-### 7.4 Judge, replay, and writeback
-
-The judge runs on a provider that does not serve the agent (D-017), which keeps evaluation load off
-the serving account and keeps a provider out of judging its own arm.
-Gemini judges; the judge is wrapped so the harness sees one interface.
-Evaluation quality is bounded by judge quality.
-
-**Committed replays are the CI gate.**
-A completed capture is frozen into a sanitized replay, and CI replays it on every pull request with
-no model or judge call.
-A replay retains the evidence needed to reproduce a fixture-bound verdict - questions, answers,
-called tools, generated SQL, expected deterministic outcomes, and the prompt version its capture ran
-- and excludes per-turn latency, token usage, finish reasons, tool output, and every trace
-identifier (D-046).
-The freeze step refuses a capture that still carries a live trace identifier or cannot name its
-prompt.
-Replay validation also refuses a scenario whose question has drifted from the registry, so a replay
-cannot keep passing against a question the registry no longer asks.
-
-**Score writeback.**
-A post-run step writes each metric score onto the same trace as the raw run, so Langfuse stays the
-single pane of glass.
-Re-runs are idempotent by construction of the score identity.
-
-For the instrument's layout, seams, grading, and limits see
-[`evals/README.md`](../evals/README.md) and
-[`evals/Operating_Manual.md`](../evals/Operating_Manual.md).
-
-### 7.5 Boundaries
-
-- **Layer isolation.** The only touch inside the agent boundary is the config seam that lets the
-  nested generation span be observed, which carries no evaluation logic and is inert in production.
-- **No online evaluation.** Production-trace scoring, production-sampled goldens, judge matrices,
-  and chart metrics are out of scope.
-- **The harness measures; it does not remediate.**
-
-## 8. Testing strategy
-
-Tests prove capabilities, not implementation trivia.
-The strategy spans four layers.
-
-- **Unit, deterministic internals.** The SQL validator on safe and unsafe cases and its
-  `SELECT`-only enforcement, the table formatter on empty, single, multi-row, and missing-key
-  inputs, and result-model serialization. These are the safety- and correctness-critical pure
-  functions.
-- **Tool path.** The query tool end to end with the model call stubbed: a success path from
-  validated SQL through rows to an answer, and a refusal path where the validator rejects unsafe SQL
-  before execution.
-- **Request integration.** A happy path returning a well-formed answer-only response, and a failure
-  path proving the process degrades cleanly. Under streaming, the load-bearing case is the leak test
-  described in section 4.2.
-- **Memory behavior.** Multi-turn refinement within one session, isolation between two sessions, a
-  generated session id when none is supplied, persistence across a restart, and the history cap
-  holding on long sessions. See `tests/agents/runtime/test_memory.py`.
-
-The bar: every capability in section 1.2 maps to at least one observable test.
-
-These are **deterministic capability tests**: they prove a feature exists and behaves on fixed
-inputs.
-The distinct question of *behavioral quality under model non-determinism* - task correctness and the
-honesty rules, which no assert-equality test can pin - is measured separately by the evaluation
-harness in section 7, not here.
-
-## 9. Operations and deployment
-
-Render runs the Docker web service and Neon supplies PostgreSQL.
-Render runtime environment variables hold production secrets, and Langfuse Cloud in Japan provides
-observability.
-GitHub Actions provides CI and the external ingestion workflow.
-
-The production image is slim and runs as a non-root user.
-The demo uses Render's same-origin subdomain, so no cross-origin frontend is required.
-The deployment runs a single worker, which is what makes the in-process rate limit in section 4.4
-mean what it says.
-
-Operational topology, environment variables, database procedures, deploy flow, cron activation, and
-incident response are owned by [Operations](Operations.md).
-
-## 10. Technology stack
-
-This section is the single owner of "what is this built with": versions, runtime choices, and hosted
-services.
-Other documents link here rather than restating.
-`python scripts/docs_lint.py --check stack` fails the build if the dependency list below drifts from
-`pyproject.toml`, so it cannot go stale silently.
-`pyproject.toml` remains authoritative for exact versions.
-
-### 10.1 At a glance
-
-| Layer | Choice | Version | Where configured |
-|---|---|---|---|
-| Language | Python | 3.12 | `.python-version`, `pyproject.toml` |
-| Package manager | uv | lockfile `uv.lock` | `pyproject.toml` |
-| API | FastAPI and uvicorn | >=0.136.3 / >=0.48.0 | `src/api/app.py` |
-| Agent | LangChain ReAct | >=1.3.1 | `src/agents/`, `config/prompts.yaml` |
-| Model, serving | DeepSeek | - | `config/settings.yaml`, `agent` |
-| Model, second arm | Groq, selectable | - | `config/settings.yaml`, `agent` |
-| Database | PostgreSQL | 17 on Neon | `DATABASE_URL` |
-| ORM and driver | SQLAlchemy and psycopg | >=2.0 / >=3.2 | `src/services/query/` |
-| Migrations | Alembic | >=1.14 | `alembic/`, `alembic.ini` |
-| Tracing | Langfuse Cloud | >=4.6.1 | `src/agents/tracing/` |
-| Evaluation | DeepEval with a Gemini judge | >=4.0.7 | `evals/`, `config/settings.yaml` |
-| Hosting | Render Docker web service | Free tier | `render.yaml`, `docker/Dockerfile` |
-
-### 10.2 Dependencies
-
-<!-- deps:begin -->
-
-**Runtime and API**
-
-| Package | Role |
-|---|---|
-| `fastapi` | HTTP layer. Routes stay agnostic of how the agent is built. |
-| `uvicorn` | ASGI server. Production runs a single worker; the free tier has one. |
-| `pydantic-settings` | Typed config loading from `config/settings.yaml` and the environment. |
-| `slowapi` | Per-IP rate limiting, applied to chat and not to health. |
-
-**Agent**
-
-| Package | Role |
-|---|---|
-| `langchain` | ReAct agent runtime and tool binding. |
-| `langchain-deepseek` | Serving provider, and the default for both profiles since D-045. Thinking is disabled so temperature applies. |
-| `langchain-groq` | Second selectable serving provider, and the judge's alternate branch. Reached only when a profile names it. |
-| `langchain-google-genai` | Gemini, used only as the evaluation judge, never on the serving path. |
-| `langgraph-checkpoint-postgres` | Short-term conversation memory, session id to thread id. |
-
-**Data**
-
-| Package | Role |
-|---|---|
-| `sqlalchemy` | Query construction and session management, 2.0 style. |
-| `psycopg` | PostgreSQL driver, with binary and pool extras: no local build, built-in pooling. |
-| `alembic` | Schema migrations. |
-
-**Observability**
-
-| Package | Role |
-|---|---|
-| `langfuse` | Trace capture and evaluation score writeback. Confined to the tracing layer. |
-| `structlog` | Structured application logging. |
-
-**Ingestion**
-
-| Package | Role |
-|---|---|
-| `cloudscraper` | Fetches VietnamWorks listings past bot protection. |
-| `httpx` | HTTP client for the JSON API path. |
-| `beautifulsoup4` | HTML parsing for detail pages. |
-| `lxml` | Parser backend for BeautifulSoup. |
-
-**Quality, dev group**
-
-| Package | Role |
-|---|---|
-| `pytest` | Test runner. Eval-marked tests are deselected by default. |
-| `pytest-asyncio` | Async test support. |
-| `pytest-mock` | Mocking helpers. |
-| `mypy` | Type checking over `src/`, with the pydantic plugin. |
-| `ruff` | Lint and format. `scripts/` is excluded; throwaway spikes live there. |
-| `deepeval` | Evaluation harness for the scenario and three-seam metric runs. |
-
-<!-- deps:end -->
-
-On Windows, invoke live DeepEval checks with `PYTHONUTF8=1` and the eval marker.
-The fixture count tests skip when the evaluation database is unavailable, and the trace extractor
-expects the nested SQL-generation span to be a sibling of its tool span.
-
-### 10.3 Hosted services
-
-| Service | Chosen offering | Why |
-|---|---|---|
-| Render | Free Docker web service | Managed container hosting without an additional platform. |
-| Neon | Free PostgreSQL 17 | Managed serverless Postgres. |
-| Langfuse Cloud | Hobby, Japan | Selected over self-hosting on operational-cost grounds. |
-| GitHub Actions | Free | CI and the ingestion workflow. |
-
-For the current cost position, topology, environment variables, deploy procedures, and cron
-operation, see [Operations](Operations.md).
-
-### 10.4 Provider quotas and cost
-
-The serving agent is metered and the judge is on a free tier, which keeps evaluation work off the
-serving provider's account (D-017).
-
-DeepSeek has no free tier and publishes no per-minute or per-day token limit, only account
-concurrency.
-A full 29-scenario evaluation run measured about four cents at list rates, spending roughly 3.7K
-tokens per turn across 77 turns.
-Serving traffic on the demo is the same per-turn shape.
-For the measured derivation see [T0027.3 DeepSeek arm](../evals/t0027_deepseek_arm.md); for the
-judge-side rate-limit caveats see
-[evaluation strategy](../research/evaluation-strategy.md), sections 4a and 4b.
-
-The Groq arm remains selectable on its free tier, at 8000 tokens per minute and 200K per day.
-That ceiling is what the driver's turn-pacing setting exists for: restore it whenever a profile
-moves back to Groq.
-
-### 10.5 Deliberately not used
-
-Recorded so these choices are not re-litigated.
-
-- **CORS.** The demo UI is served same-origin from FastAPI, so the allowed-origins list stays empty.
-  Adding a cross-origin front end is the only reason to revisit.
-- **Self-hosted Langfuse.** Langfuse Cloud Hobby won on operational cost.
-- **A JavaScript framework.** The demo UI is vanilla HTML, CSS, and JavaScript consuming SSE via
-  `fetch()` and `ReadableStream`. No build step, nothing to keep patched.
-- **Celery, Redis, or a task queue.** Ingestion runs as a scheduled GitHub Action, not a long-lived
-  worker.
-- **The browser `EventSource` API.** It is GET-only; the chat endpoint is a POST, hence the
-  `fetch()` reader.
-- **RAG, embeddings, and fine tuning.** Future phases, not MVP scope.
-- **A hardcoded technology allowlist.** Source tags are noisy; an external, refreshable vocabulary
-  retains coverage without a model call.
-
-## 11. Where the retired documents went
-
-Five documents merged into this one.
-Archived research still cites them by their original section numbers, so the paths are retained as
-redirects.
-
-| Retired path | Owned | Now in |
-|---|---|---|
-| [MVP Spec](MVP_Spec.md) | Product scope and quality bar | Section 1 |
-| [Full Design Document](Full_Design_Document.md) | Layer laws and invariants | Section 2 |
-| [MVP Technical Design](MVP_Technical_Design.md) sections 1 to 6 | Serving path and runtime | Sections 3, 4.1, 4.3, 5, 8 |
-| [MVP Technical Design](MVP_Technical_Design.md) sections 9 to 11 | Streaming, hardening, demo | Sections 4.2, 4.4, 4.5 |
-| [Offline Pipelines Design](Offline_Pipelines_Design.md) section 7 | Ingestion | Section 6 |
-| [Offline Pipelines Design](Offline_Pipelines_Design.md) section 8 | Evaluation | Section 7 |
-| [Tech Stack](Tech_Stack.md) | Versions, packages, quotas | Section 10 |
-
-Two documents deliberately stayed separate, because a contract another machine reads keeps its own
-file: [Schema Contract](Schema_Contract.md), read by the evaluation fixture, and
-[Agent Behavior Spec](Agent_Behavior_Spec.md), read by the grader.

@@ -11,8 +11,8 @@ Read the [Instrument Report](Instrument_Report.md) for the current baseline resu
 ## Start here
 
 The registry in [`scenarios_v1.yaml`](scenarios_v1.yaml) is the single source of truth for the 29 evaluation scenarios.
-The frozen target is [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md).
-Read [Known Issues](../docs/Known_Issues.md), the [Decision Log](../docs/Decision_Log.md), and the relevant [research record](../research/README.md) before changing or starting an evaluation.
+The frozen target is [`docs/reference/agent-behavior.md`](../docs/reference/agent-behavior.md).
+Open evaluation issues are tracked on GitHub; see [CONTRIBUTING.md](../CONTRIBUTING.md) for the change workflow.
 
 The named runtime environment must contain the normal application configuration, including `DATABASE_URL`.
 The driver replaces that value with the fixture DSN before it imports the agent, so a capture does not query a serving database.

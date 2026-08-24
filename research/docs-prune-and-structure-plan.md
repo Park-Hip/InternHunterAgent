@@ -94,9 +94,9 @@ correction-on-correction. Live examples:
 | Doc | The layer |
 |---|---|
 | `research/v1-release-readiness-plan.md` | "**Read every 'M22' below as 'M23'**" — a banner reinterpreting 300 lines |
-| `docs/Schema_Contract.md` | "The gate is **no longer T0014**" |
-| `docs/Known_Issues.md` | One entry runs 41 lines across *Found → Fixed in sandbox → Owned → Fixed → Remaining gap* |
-| `docs/Agent_Behavior_Spec.md` | 40 lines of provenance and "NOT LANDED" warnings before any content |
+| `docs/Schema_Contract.md` | "The gate is **no longer T0014**" | <!-- archived-on-tag -->
+| `docs/Known_Issues.md` | One entry runs 41 lines across *Found → Fixed in sandbox → Owned → Fixed → Remaining gap* | <!-- archived-on-tag -->
+| `docs/Agent_Behavior_Spec.md` | 40 lines of provenance and "NOT LANDED" warnings before any content | <!-- archived-on-tag -->
 
 Each layer is individually honest and collectively unreadable: the reader must replay the
 document's edit history to learn its current claim. The rule — **rewrite against current truth;
@@ -125,7 +125,7 @@ recoverable from that tag and from git history.
 
 **Inbound links to repair:** `docs/README.md` (Prompt Playbook row),
 `skills/generate-ticket-prompt/SKILL.md` line 57 (absorb the template inline),
-`docs/Repo_Current_State.md` (Repo State History), `research/job-site-comparison.md` (TopDev
+`docs/Repo_Current_State.md` (Repo State History), `research/job-site-comparison.md` (TopDev <!-- archived-on-tag -->
 spike prompt). `link-path` must be green before and after.
 
 ### 3.1.1 `skills/` is **not** deleted — T0022.2's premise was wrong
@@ -153,7 +153,7 @@ Langfuse Cloud. The remains generate three claims that cannot all be true:
 |---|---|
 | `docs/Tech_Stack.md` | "Self-hosted Langfuse — `infra/langfuse/` has no Compose service" | <!-- archived-on-tag -->
 | `docs/Full_Design_Document.md` §5 | "The self-hosted Langfuse stack lives under `infra/langfuse/`" — wrong path *and* wrong decision | <!-- archived-on-tag -->
-| `docs/Known_Issues.md` | An **open** `[OPEN]` entry about that stack's `CHANGEME` secrets |
+| `docs/Known_Issues.md` | An **open** `[OPEN]` entry about that stack's `CHANGEME` secrets | <!-- archived-on-tag -->
 
 Delete `infra/`. That makes `Tech_Stack.md` simply true, lets `Full_Design_Document.md` §5 say <!-- archived-on-tag -->
 tracing is Cloud-hosted, and closes the security entry as *"resolved by removal"* in
@@ -321,7 +321,7 @@ re-classified as a by-design note — in which case it moves to the doc that own
 | A 20-bullet "Archived completed milestones" list where every bullet links to the same file | Delete. The milestone index table 30 lines above already carries status, goal, and the same link |
 | Open work is buried below ~800 lines of closed work | Open milestones first; the index table stays as the top-of-file map |
 
-### 6.2 `docs/MVP_Technical_Design.md` — split along the layer boundary
+### 6.2 `docs/MVP_Technical_Design.md` — split along the layer boundary <!-- archived-on-tag -->
 
 1,019 lines against a 400-line cap. The clean cut already exists in `Full_Design_Document.md` §3,
 which declares ingestion an isolated layer the request pipeline must never import:
@@ -342,7 +342,7 @@ and a cap that is breached the day it is written teaches everyone to ignore caps
 | Doc | Now | Change |
 |---|---:|---|
 | `docs/Manual_Verification_Guide.md` | 146 | Half the file is a flat 70-item list of ticket IDs. Replace with one sentence and a link to the archive |
-| `docs/Agent_Behavior_Spec.md` | 172 | 40 lines of provenance and "NOT LANDED" warning before any content. Lead with a 3-line status box; move provenance to the foot |
+| `docs/Agent_Behavior_Spec.md` | 172 | 40 lines of provenance and "NOT LANDED" warning before any content. Lead with a 3-line status box; move provenance to the foot | <!-- archived-on-tag -->
 | `docs/README.md` | 67 | Four tables state overlapping ownership. Merge into one: **Doc · Owns · Tier · Cap · Reader** |
 | `docs/Decision_Log.md` | 222 | Excellent format, but 34 decisions read as 220 lines of scroll. Add a one-line-per-decision index table at the top |
 | `docs/Completion_Reports.md` | 1,642 | "Entry format" sits at line 157, between T0022.1 and Milestone 16. Move to the top; leave content untouched |

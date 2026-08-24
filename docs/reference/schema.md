@@ -1,4 +1,4 @@
-# Schema Contract
+# Schema reference
 
 > **Eviction:** A contract entry leaves when an Alembic migration changes the schema and its
 > agent-visible mapping is updated with that migration.
@@ -114,3 +114,25 @@ contract.
 
 `tests/agents/runtime/test_prompts.py` enforces this contract by checking the visible
 columns and hidden-column exclusions across the prompt surfaces.
+
+## Schema evolution
+
+The schema grew from an original four-column sample into the real job-posting shape along a
+deliberate cheap-growth path.
+
+- **Adding a column is free in code.** The SQL validator allowlists the *table*, not its columns,
+  and the executor and formatter are key-driven, so a new column reaches the answer with no code
+  change. Only the schema description the model reads and, where relevant, the honesty rules need an
+  edit.
+- **Adding tables, joins, or renames is the boundary** where this stops being free, because it
+  crosses the validator's single-table allowlist. Staying single-table is the design choice that
+  keeps evolution cheap.
+- **Multi-value fields.** `tech_stack` is a comma-separated string. The path for a richer dataset is
+  a Postgres array or JSON column, adopted only when the data demands it.
+- **Migrations arrived when both deferral conditions fired.** A migration tool was intentionally not
+  adopted until the schema stopped being a fixed sample *and* deployed data became irreplaceable.
+  Real ingestion met the first; a live hosted database plus an accumulating raw landing table, which
+  holds postings that have dropped out of search and cannot be re-fetched, met the second.
+- **Migrations are only half the problem.** A create-if-not-exists silently no-ops on a table whose
+  columns drifted out-of-band, which a migration tool does not detect. That is why ingestion carries
+  a separate pre-flight column assertion; see [how-to/operate.md](../how-to/operate.md).

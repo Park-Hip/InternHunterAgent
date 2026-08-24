@@ -18,7 +18,7 @@ touches a live or production system or is a human decision. No pipeline code cha
 (`.github/workflows/ingestion.yml`,
 T0019.6) into an actually-firing job — but only after every accepted safety gate clears. The T0019.5
 safety code
-has never run against a live Postgres (`Known_Issues.md`, HIGH · OPEN), so D5 is the load-bearing
+has never run against a live Postgres (tracked on GitHub, HIGH), so D5 is the load-bearing
 gate.
 
 ---
@@ -83,9 +83,8 @@ gate.
 > the first. Do a green `workflow_dispatch` run *before* restoring the schedule.
 
 > **Fill in the result/sign-off slots as you go.** A slot left blank means the gate is not cleared.
-> When all gates are signed, move the corresponding `Known_Issues.md` entries to
-> `Resolved_Issues.md`
-> and record completion in `Completion_Reports.md`.
+> When all gates are signed, close the corresponding GitHub issues and link the closing
+> evidence in each issue thread.
 
 ---
 
@@ -243,9 +242,9 @@ maintainer's.
 > **How the instruction came to be wrong — it didn't start that way.** At T0019.2, `head` *was*
 > `f3a1c9d2e7b4`: that ticket's own manual checks record `alembic upgrade head` producing a
 > `clean_jobs` with
-> "**all 19 columns**" and `alembic stamp head` resolving to `f3a1c9d2e7b4` (`Completion_Reports.md`
-> → T0019.2,
-> checks A and C). `stamp head` was correct as written. It silently expired when T0019.3 added
+> "**all 19 columns**" and `alembic stamp head` resolving to `f3a1c9d2e7b4` (the pre-redesign
+> verification archive, entry T0019.2,
+> checks A and C; preserved on git tag docs-history-pre-redesign). `stamp head` was correct as written. It silently expired when T0019.3 added
 > `b7e2f4a91c3d` and moved `head` forward one revision. **The defect is naming a moving label in a
 > procedure
 > that outlives it** — which is why the corrected steps below pin the explicit revision hash.
@@ -493,7 +492,7 @@ Run workflow → branch `main`. Confirm:
 
 > **If a run fails partway, do NOT retry blindly against Neon.** Capture the log and inspect — a
 > half-written
-> production table warrants a human look. Record the failure in `Known_Issues.md`.
+> production table warrants a human look. Record the failure as a GitHub issue.
 
 **4b — concurrency holds.** Dispatch two runs back-to-back; confirm the second **queues behind** the
 first
@@ -544,9 +543,8 @@ runbook stops contradicting the decision it is gated by.
   activation.
 - **The 60-day GitHub Actions inactivity auto-disable** (D11) — the `keepalive` action was omitted
   (ToS-blocked);
-  mitigation is tracked in the **v1.0 release-cut milestone, now T0023** (`Known_Issues.md`) — the
-  sub-ticket
-  is unscoped, so cite the milestone, not a number. *(Was written as "T0022.3" before the 2026-08-09
+  mitigation is tracked on GitHub (release-cut arbitration decision issue) — cite that issue,
+  not a ticket number.
   renumbering; that ID now belongs to the Docs Hygiene reflow ticket.)* A quiet repository still
   risks the auto-disable even with the schedule live;
   note it, don't fix it here.
@@ -585,8 +583,6 @@ conflated *arming the schedule* with *proving a run works*, which is precisely t
 let an
 un-verified cron run nightly for 19 days. They are now separate, ordered gates.
 
-When all rows are signed: update `Known_Issues.md` (move the T0019.5 "never run against live
-Postgres" HIGH item
-and the cron-dormant items to `Resolved_Issues.md`), append a T0020.4 entry to
-`Completion_Reports.md`, and set
-the "Next recommended ticket" in `Repo_Current_State.md` to the T0021 / T0022 track.
+When all rows are signed: close the related GitHub issues (the "never run against live Postgres"
+HIGH item and the cron-dormant items), and record completion with links to evidence in each issue
+thread.

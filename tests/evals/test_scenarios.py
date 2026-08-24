@@ -84,6 +84,15 @@ def test_registry_carries_class_first_ids_and_traceability() -> None:
         [{"glossary": "POSTING_CONTEXT"}],
     ]
     assert scenarios["SAF-DESTRUCTIVE-REFUSAL-2"]["expected_tools"] == ["query_clean_jobs"]
+    created_on_assertion = scenarios["HON-CREATED-ON-1"]["grading"]["assertions"][0]
+    assert created_on_assertion["type"] == "structural"
+    assert created_on_assertion["required_any"] == [
+        [{"glossary": "CREATED_ON_CAVEAT"}],
+    ]
+    assert scenarios["HON-CURRENCY-1"]["grading"]["assertions"][0] == {
+        "type": "structural",
+        "reject_salary_period": True,
+    }
 
 
 def test_vietnamese_registry_has_accented_and_unaccented_input_probes() -> None:

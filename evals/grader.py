@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 import json
 from pathlib import Path
@@ -104,12 +105,17 @@ class ScenarioRule:
     expected_answer_count: int | None = None
     count_only: bool = False
     forbid_single_salary_winner: bool = False
+    structural_text: TextRule | None = None
     literal: TextRule | None = None
     semantic: TextRule | None = None
     judge_metric: str | None = None
     judge_threshold: float = 0.5
     require_vietnamese: bool = False
     require_source_links: bool = False
+    reject_salary_period: bool = False
+    preserve_returned_job_levels: bool = False
+    reject_title_to_level_inference: bool = False
+    reject_lifecycle_substitution: bool = False
 
     @property
     def text(self) -> TextRule | None:
@@ -399,6 +405,162 @@ def _answer_style_checks(evidence: Evidence) -> list[Check]:
     ]
 
 
+_SALARY_PERIOD_PATTERN = re.compile(
+    r"\b(?:monthly|yearly|hourly|per\s+(?:month|year|hour)|tháng|thang|năm|nam|giờ|gio)\b",
+    re.IGNORECASE,
+)
+_STRUCTURED_JOB_LEVELS = (
+    "Experienced (non-manager)",
+    "Manager",
+    "Fresher/Entry level",
+    "Intern/Student",
+    "Director and above",
+)
+
+
+def _answer_mentions_returned_salary(answer: str, rows: list[dict[str, Any]] | None) -> bool:
+    """Return whether an answer states a returned salary amount or range.
+
+    A payment-period word on its own is not enough. The check needs a returned salary
+    currency and a number in the answer so ordinary time language is never graded as
+    fabricated compensation information.
+    """
+    if not rows:
+        return False
+    currencies = {
+        str(row["salary_currency"]).casefold()
+        for row in rows
+        if row.get("salary_currency")
+        and (row.get("salary_min") is not None or row.get("salary_max") is not None)
+    }
+    returned_amounts = {
+        _normalized_salary_amount(value)
+        for row in rows
+        for value in (row.get("salary_min"), row.get("salary_max"))
+        if value is not None
+    }
+    mentioned_currencies = {currency.casefold() for currency in re.findall(r"\b[A-Z]{3}\b", answer)}
+    answer_amounts = {
+        re.sub(r"\D", "", token)
+        for token in re.findall(r"\d+(?:[,.]\d+)*", answer)
+    }
+    return bool(currencies & mentioned_currencies) and bool(returned_amounts & answer_amounts)
+
+
+def _normalized_salary_amount(value: Any) -> str:
+    """Normalize a stored amount without conflating an integer with a decimal."""
+    try:
+        rendered = format(Decimal(str(value)), "f")
+    except (InvalidOperation, ValueError):
+        return re.sub(r"\D", "", str(value))
+    if "." in rendered:
+        rendered = rendered.rstrip("0").rstrip(".")
+    return re.sub(r"\D", "", rendered)
+
+
+def _salary_period_check(evidence: Evidence) -> Check:
+    mentions_salary = _answer_mentions_returned_salary(evidence.answer or "", evidence.returned_rows)
+    period = _SALARY_PERIOD_PATTERN.search(evidence.answer or "") if mentions_salary else None
+    return Check(
+        "salary_period",
+        period is None,
+        "salary amount has no inferred payment period"
+        if period is None
+        else f"salary amount is paired with an unsupported payment period: {period.group(0)!r}",
+        "structural",
+    )
+
+
+def _job_level_fidelity_check(evidence: Evidence) -> Check:
+    """Reject shortened or invented structured levels while allowing omitted levels."""
+    rows = evidence.returned_rows or []
+    returned_levels = {
+        str(row["job_level"])
+        for row in rows
+        if isinstance(row.get("job_level"), str) and row["job_level"].strip()
+    }
+    if not returned_levels:
+        return Check(
+            "job_level_fidelity",
+            None,
+            "returned rows contain no structured job level",
+            "structural",
+            NOT_EVALUATED,
+        )
+    answer = _text(evidence.answer)
+    mentioned = [level for level in _STRUCTURED_JOB_LEVELS if level.casefold() in answer]
+    unsupported = [level for level in mentioned if level not in returned_levels]
+    shortened = [
+        level
+        for level in returned_levels
+        if "(" in level
+        and re.search(rf"(?<!\w){re.escape(level.split(' ', 1)[0].casefold())}(?!\w)", answer)
+        and level.casefold() not in answer
+    ]
+    if unsupported or shortened:
+        detail = []
+        if unsupported:
+            detail.append(f"unsupported structured levels: {unsupported!r}")
+        if shortened:
+            detail.append(f"shortened structured levels: {shortened!r}")
+        return Check("job_level_fidelity", False, "; ".join(detail), "structural")
+    if any(level.casefold() in answer for level in returned_levels):
+        return Check(
+            "job_level_fidelity",
+            True,
+            "every reported structured job level matches a returned canonical value",
+            "structural",
+        )
+    return Check(
+        "job_level_fidelity",
+        None,
+        "answer does not report a structured job level",
+        "structural",
+        NOT_EVALUATED,
+    )
+
+
+def _title_to_level_inference_check(evidence: Evidence) -> Check:
+    """A Senior title cannot establish a structured level without returned evidence."""
+    answer = _text(evidence.answer)
+    rows = evidence.returned_rows or []
+    returned_levels = {
+        str(row["job_level"]).casefold()
+        for row in rows
+        if isinstance(row.get("job_level"), str) and row["job_level"].strip()
+    }
+    claimed = [level for level in _STRUCTURED_JOB_LEVELS if level.casefold() in answer]
+    unsupported = [level for level in claimed if level.casefold() not in returned_levels]
+    return Check(
+        "senior_title_level_inference",
+        not unsupported,
+        "Senior title is not mapped to an unsupported structured level"
+        if not unsupported
+        else f"Senior title is mapped to unsupported structured levels: {unsupported!r}",
+        "structural",
+    )
+
+
+_LIFECYCLE_SUBSTITUTION_PATTERN = re.compile(
+    r"(?:listing[\s_-]?expiry|created_on|source[\s_-]listing[\s_-]expiry|"
+    r"source[\s_-]record[\s_-]creation|ngày hết hạn của tin đăng|ngày tạo bản ghi)",
+    re.IGNORECASE,
+)
+
+
+def _lifecycle_substitution_check(evidence: Evidence) -> Check:
+    """An absent application deadline must not be replaced by lifecycle metadata."""
+    match = _LIFECYCLE_SUBSTITUTION_PATTERN.search(evidence.answer or "")
+    return Check(
+        "no_lifecycle_date_substitution",
+        match is None,
+        "absent deadline is not replaced by lifecycle metadata"
+        if match is None
+        else f"absent deadline is replaced by lifecycle metadata: {match.group(0)!r}",
+        "structural",
+    )
+
+
 def _execution_accuracy_checks(evidence: Evidence) -> list[Check]:
     accuracy = evidence.execution_accuracy
     if accuracy is None:
@@ -477,6 +639,18 @@ def _structural_checks(
 
     if rule.require_source_links and _prompt_is_current(evidence):
         checks.append(_source_link_check(evidence.answer, evidence.returned_rows))
+
+    if _prompt_is_current(evidence):
+        if rule.structural_text:
+            checks.extend(_text_checks(evidence.answer, rule.structural_text, "structural"))
+        if rule.reject_salary_period:
+            checks.append(_salary_period_check(evidence))
+        if rule.preserve_returned_job_levels:
+            checks.append(_job_level_fidelity_check(evidence))
+        if rule.reject_title_to_level_inference:
+            checks.append(_title_to_level_inference_check(evidence))
+        if rule.reject_lifecycle_substitution:
+            checks.append(_lifecycle_substitution_check(evidence))
 
     return checks
 
@@ -656,10 +830,15 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
         expected_answer_count=literal.get("expected_answer_count"),
         count_only=bool(literal.get("count_only", False)),
         forbid_single_salary_winner=bool(semantic.get("forbid_single_salary_winner", False)),
+        structural_text=_text_rule(scenario_id, structural),
         literal=_text_rule(scenario_id, literal),
         semantic=_text_rule(scenario_id, semantic),
         require_vietnamese=bool(structural.get("require_vietnamese", scenario.get("language") == "vi")),
         require_source_links=bool(structural.get("require_source_links", False)),
+        reject_salary_period=bool(structural.get("reject_salary_period", False)),
+        preserve_returned_job_levels=bool(structural.get("preserve_returned_job_levels", False)),
+        reject_title_to_level_inference=bool(structural.get("reject_title_to_level_inference", False)),
+        reject_lifecycle_substitution=bool(structural.get("reject_lifecycle_substitution", False)),
     )
 
 

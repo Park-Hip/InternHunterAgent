@@ -461,7 +461,7 @@ def test_unknown_scenario_id_is_rejected_rather_than_silently_defaulted() -> Non
         grade_evidence("HON-NOT-A-SCENARIO-1", Evidence(answer="anything"))
 
 
-def test_semantic_check_is_retained_when_sql_accuracy_fails() -> None:
+def test_created_on_structural_checks_are_retained_when_sql_accuracy_fails() -> None:
     grade = grade_evidence(
         "HON-CREATED-ON-1",
         Evidence(
@@ -476,8 +476,87 @@ def test_semantic_check_is_retained_when_sql_accuracy_fails() -> None:
 
     assert grade.status == FAIL
     assert any(check.name == "execution_accuracy" and not check.passed for check in grade.checks)
-    assert any(check.name == "semantic_behavior" and check.outcome == NOT_EVALUATED for check in grade.checks)
+    assert all(check.name != "semantic_behavior" for check in grade.checks)
     assert grade.first_failing_seam == "structural"
+
+
+def test_salary_period_requires_a_returned_salary_context() -> None:
+    fabricated = grade_evidence(
+        "HON-CURRENCY-1",
+        Evidence(
+            answer="Mức lương là 5000 USD mỗi tháng.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=[{"salary_min": 3000, "salary_max": 5000, "salary_currency": "USD"}],
+        ),
+    )
+    ordinary_time = grade_evidence(
+        "HON-CURRENCY-1",
+        Evidence(
+            answer="Tôi sẽ xem lại dữ liệu USD của năm 2026.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=[{"salary_min": 3000, "salary_max": 5000, "salary_currency": "USD"}],
+        ),
+    )
+
+    assert next(check for check in fabricated.checks if check.name == "salary_period").passed is False
+    assert next(check for check in ordinary_time.checks if check.name == "salary_period").passed is True
+
+
+def test_job_level_fidelity_rejects_a_shortened_canonical_value() -> None:
+    evidence = {
+        "tools_called": ["query_clean_jobs"],
+        "execution_accuracy": {"status": PASS},
+        "returned_rows": [
+            {"job_level": "Experienced (non-manager)"},
+            {"job_level": "Manager"},
+        ],
+    }
+    exact = grade_evidence(
+        "HLP-SENIORITY-1",
+        Evidence(answer="Các cấp là Experienced (non-manager) và Manager.", **evidence),
+    )
+    shortened = grade_evidence(
+        "HLP-SENIORITY-1",
+        Evidence(answer="Các cấp là Experienced và Manager.", **evidence),
+    )
+
+    assert next(check for check in exact.checks if check.name == "job_level_fidelity").passed is True
+    assert next(check for check in shortened.checks if check.name == "job_level_fidelity").passed is False
+
+
+def test_senior_title_does_not_establish_a_structured_level() -> None:
+    grade = grade_evidence(
+        "HLP-SENIOR-TITLE-1",
+        Evidence(
+            answer="Đây là cách viết trong tiêu đề, nhưng các vị trí này ở cấp Manager.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=[{"title": "Senior Data Engineer"}],
+        ),
+    )
+
+    check = next(check for check in grade.checks if check.name == "senior_title_level_inference")
+    assert check.passed is False
+
+
+def test_absent_deadline_does_not_substitute_lifecycle_metadata() -> None:
+    grade = grade_evidence(
+        "HON-ABSENT-FIELD-1",
+        Evidence(
+            answer=(
+                "Dữ liệu không ghi nhận hạn nộp hồ sơ, nên tôi không thể trả lời. "
+                "Ngày hết hạn của tin đăng là 2026-08-01."
+            ),
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=[{"job_level": "Manager"}],
+        ),
+    )
+
+    check = next(check for check in grade.checks if check.name == "no_lifecycle_date_substitution")
+    assert check.passed is False
 
 
 def test_vietnamese_semantic_safety_answer_is_not_rejected_for_missing_english_phrase() -> None:

@@ -1,5 +1,5 @@
 # Agent Behavior Spec — InternHunterAgent (Resumi)
-> **Last verified:** 2026-08-22
+> **Last verified:** 2026-08-24
 
 > **Status**
 > - Frozen: 2026-07-11 under T0015.2. The freeze protects the requirements under test, the probe
@@ -57,6 +57,17 @@ The date-semantics rule is stated beside the available-information guidance in
 [`config/prompts.yaml`](../../config/prompts.yaml): a source listing-expiry date never substitutes
 for an application deadline, the data has no application deadline, and a source-record creation
 date is never presented as a publication date.
+
+### 1b. Semantic fidelity
+
+The V9 contract keeps explanations in Vietnamese.
+It preserves returned source and canonical values verbatim.
+It reports salary values without inferring a payment period.
+It preserves a reported structured job level exactly.
+It treats `Senior` in a title as title text rather than structured seniority.
+It calls lifecycle values source-record creation or source listing-expiry dates.
+It never calls them publication dates, application deadlines, or proof of an open posting.
+The deterministic grader enforces these rules only when the answer and returned rows provide evidence.
 
 Both style checks read the capture's `prompt_version`, so evidence frozen before a rule existed is
 never regraded against it.

@@ -1,15 +1,16 @@
-# Operations
-
-> **Last verified:** 2026-08-21 against `render.yaml`, `.env.example`,
-> `.github/workflows/ingestion.yml`, and the active migration/runbook records.
-> This document is the single owner of deploy topology, operational configuration, database
-> procedures, cron status, and incident response.
-> For service selections and their rationale, see [Design](Design.md).
+# Operate
 
 > **Eviction:** An operational procedure leaves when the deployed configuration or provider workflow
 > it governs is retired and the replacement runbook is verified.
 
+Deploy, observe, recover, ingest, and keep the service running.
+Architecture rationale lives in [architecture.md](../architecture.md); configuration in
+[reference/configuration.md](../reference/configuration.md).
+
 ## Topology
+
+The serving agent runs one worker; the in-process rate limit means what it says because of it.
+The production image is slim, non-root, and auto-deployed to Render on every push to `main`.
 
 | Surface | Current operation | Configuration / check |
 |---|---|---|
@@ -18,7 +19,7 @@
 | Tracing | Langfuse Cloud Hobby, JP | Render receives the Langfuse credentials as dashboard secrets |
 | Public URL | `https://internhunteragent.onrender.com` | `/api/v1/health` for liveness; `/api/v1/ready` for database readiness |
 
-The web service is declared in tracked [`render.yaml`](../render.yaml).
+The web service is declared in tracked [`render.yaml`](../../render.yaml).
 It pins the service to `main`, uses `autoDeploy: true`, and declares required environment-variable
 names.
 It never contains secret values.
@@ -62,7 +63,7 @@ It does not create or update secret values in Render.
 ## Langfuse model definitions
 
 The version-controlled pricing definitions live in
-[`config/langfuse_models.yaml`](../config/langfuse_models.yaml).
+[`config/langfuse_models.yaml`](../../config/langfuse_models.yaml).
 The committed DeepSeek V4 Flash rates were checked against both the
 [English pricing page](https://api-docs.deepseek.com/quick_start/pricing/) and the
 [Chinese pricing page](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) on 2026-08-21.
@@ -134,7 +135,7 @@ For Neon, set `ALEMBIC_DATABASE_URL` to the direct, non-pooled Neon connection U
 running Alembic.
 Do not use a `-pooler` host for migrations.
 The guarded production adoption sequence remains in
-[the cron activation runbook](archive/T0020.4_Cron_Activation_Runbook.md), section 3 D6.
+[the cron activation runbook](../archive/T0020.4_Cron_Activation_Runbook.md), section 3 D6.
 
 ## Ingestion cron
 
@@ -142,12 +143,12 @@ The schedule is currently disabled: the two `schedule:` / `cron:` lines in
 `.github/workflows/ingestion.yml` remain commented out.
 Manual `workflow_dispatch` is available.
 This is a gated pause, not the intended steady state: an active schedule is a required MVP
-capability under [Design](Design.md), so the demo runs below specification until the
+capability under [architecture.md](../architecture.md), so the demo runs below specification until the
 gates clear.
 
 Do not enable the schedule or set its secrets from this document.
 The activation gates, their evidence, order, and sign-off state are maintained in
-[T0020.4 Cron Activation Runbook](archive/T0020.4_Cron_Activation_Runbook.md).
+[T0020.4 Cron Activation Runbook](../archive/T0020.4_Cron_Activation_Runbook.md).
 The workflow's `DATABASE_URL` must use Neon's direct, non-pooled host because it writes data
 and runs schema safety checks against production.
 
@@ -193,7 +194,7 @@ The recorded observation confirms the checkpointer's idle Neon pool does not kee
 so the `/health` pings do not hold Neon active between requests.
 This external job is unrelated to the unavailable GitHub `keepalive-workflow` action.
 The remaining cost decision and the separate ingestion-cron activation gates remain in
-[Known_Issues.md](Known_Issues.md) and the cron runbook.
+GitHub issues (keep-alive windowing and cold starts) and the cron activation runbook.
 
 ## Incident response
 
@@ -206,4 +207,4 @@ The remaining cost decision and the separate ingestion-cron activation gates rem
 | Schema mismatch | Stop the ingestion/deploy path and run the deliberate Alembic procedure above. |
 | Missing traces | Verify Langfuse dashboard credentials and `LANGFUSE_BASE_URL` in Render. |
 
-For active risks and maintainer-owned actions, use [Known_Issues.md](Known_Issues.md).
+For active risks and maintainer-owned actions, use GitHub Issues.

@@ -51,7 +51,7 @@ are produced by one ruleset.
 `config/prompts.yaml` between the two commits. The manifest hashes working-tree bytes, and
 `core.autocrlf=true` with no `.gitattributes` rule gives the same committed blob different bytes in
 different checkouts: 102 CRLF in this worktree, 71 CRLF and 31 bare LF in the main checkout.
-See [Known Issues](../docs/Known_Issues.md).
+See the GitHub issue tracker.
 
 ## Graded outcomes per scenario
 
@@ -174,7 +174,7 @@ and guessing at one.
 - `HLP-CONTEXT-1`: 3/4 PASS. The one failure is the second turn of the second repeat, which did not
   call the required tool.
 
-Their [Known Issues](../docs/Known_Issues.md) entry is updated accordingly.
+Their [its GitHub issue](https://github.com/Park-Hip/InternHunterAgent/issues) entry is updated accordingly.
 
 ## Cost and latency, provider-reported
 

@@ -25,7 +25,7 @@ SCENARIO_ID_MARKER = "<!-- lint-allow-scenario-id -->"
 SCENARIOS = ROOT / "evals" / "scenarios_v1.yaml"
 SCENARIO_ID = re.compile(r"\b(?:HLP|HON|SAF)-[A-Z0-9]+(?:-[A-Z0-9]+)*\b")
 REGISTRY_ID = re.compile(r"^- id: (\S+)", re.M)
-TECH_STACK = ROOT / "docs" / "Design.md"
+TECH_STACK = ROOT / "docs" / "reference" / "configuration.md"
 PYPROJECT = ROOT / "pyproject.toml"
 DEPS_BEGIN = "<!-- deps:begin -->"
 DEPS_END = "<!-- deps:end -->"
@@ -184,7 +184,7 @@ def documented_dependencies(text: str) -> set[str]:
 def check_stack(_: list[Path]) -> list[Finding]:
     """Keep dependency claims in Tech Stack aligned with pyproject.toml."""
     if not TECH_STACK.exists():
-        return [Finding("stack", TECH_STACK, 0, "docs/Design.md is missing")]
+        return [Finding("stack", TECH_STACK, 0, "docs/reference/configuration.md is missing")]
     stack_text = TECH_STACK.read_text(encoding="utf-8")
     if DEPS_BEGIN not in stack_text or DEPS_END not in stack_text:
         return [Finding("stack", TECH_STACK, 0, f"missing {DEPS_BEGIN} / {DEPS_END} markers")]

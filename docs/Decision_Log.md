@@ -95,7 +95,7 @@
   which exist. T0036.1's entire subject was the `scope` check. T0031.3 steps 2, 4, and 6 fall the
   same way, which is why only its steps 1 and 5 were run above.
 - **The sweep found one live defect**, filed as `KI-2026-08-20-stale-replays` in
-  [Known Issues](Known_Issues.md). Running T0030.2's checklist as written fails: two of the three
+  [the issue tracker](https://github.com/Park-Hip/InternHunterAgent/issues). Running T0030.2's checklist as written fails: two of the three
   committed replays no longer validate against the scenario registry, and the CI gate replays only
   the third. That is the return on doing the sweep rather than archiving the queue silently.
 - **Full record:** [`docs/archive/Manual_Verification_Guide.md`](archive/Manual_Verification_Guide.md)
@@ -211,7 +211,7 @@
   active and observed before the `v1.0.0` tag is cut.
 - This settles D10 in the cron runbook and makes every activation gate release-blocking, including
   the terms posture that gates rearming the schedule.
-- **Full record:** [Design](Design.md), product and MVP bar.
+- **Full record:** [architecture.md](architecture.md), product and MVP bar.
 
 ### D-037 - Evaluation baselines freeze fixture data with the agent-visible contract
 
@@ -244,7 +244,7 @@
 - The scheduled VietnamWorks path is permitted under the recorded, dated review. The maintainer
   ratified the favorable verdict on 2026-08-13, clearing gate D2 of the cron activation runbook.
 - Scope: automated *access*. The separate ToS §7 *republishing* restriction concerns what the
-  public demo displays and stays open in [Known Issues](Known_Issues.md); it does not gate the cron.
+  public demo displays and stays open on the issue tracker; it does not gate the cron.
 - **Full record:** [deployment research §11](../research/archive/deployment-research-plan.md).
 
 ### D-033 - Render hosts the portfolio demo

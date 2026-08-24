@@ -8,7 +8,7 @@
 > which is [The agentic workflow](agentic-workflow.md).
 
 > **Last verified:** 2026-08-19 against `main` at `cf5027a`, all 83 tracked Markdown files,
-> `scripts/docs_lint.py`, `scripts/docs_build.py`, their two test modules, and the external
+> `scripts/docs_lint.py`, `scripts/docs_build.py`, their two test modules, and the external <!-- archived-on-tag -->
 > practice sources listed in section 8.
 
 > **Eviction:** A block leaves this record when its prune ships, when a measurement contradicts it,
@@ -61,8 +61,8 @@ summarised from secondary write-ups.
 |---|---:|---|
 | `scripts/docs_lint.py` | 979 | 15 checks |
 | `tests/test_docs_lint.py` | 650 | Tests for those checks |
-| `scripts/docs_build.py` | 496 | Renders entries into 4 registers |
-| `tests/test_docs_build.py` | 332 | Tests for the generator |
+| `scripts/docs_build.py` | 496 | Renders entries into 4 registers | <!-- archived-on-tag -->
+| `tests/test_docs_build.py` | 332 | Tests for the generator | <!-- archived-on-tag -->
 | **Total** | **2,457** | |
 | `src/` for comparison | 2,766 | The application |
 
@@ -82,7 +82,7 @@ number to watch after the prune.
 | `docs/Resolved_Issues.md` | 917 | Closed history, still live and linted |
 | `research/archive/deployment-research-plan.md` | 892 | Already archived |
 | `research/docs-hygiene-and-system-plan.md` | 814 | Research about documentation hygiene |
-| `docs/MVP_Technical_Design.md` | 726 | |
+| `docs/MVP_Technical_Design.md` | 726 | | <!-- archived-on-tag -->
 | `docs/T0020.4_Cron_Activation_Runbook.md` | 594 | The cron it gates closed on 2026-08-17 |
 | `research/docs-prune-and-structure-plan.md` | 464 | Research about pruning documentation |
 
@@ -237,7 +237,7 @@ That was settled at M14 and stopped being applied at M16.
 | `docs_lint.py` | 979 | ~250 | 6 checks: `scenario-id`, `link-path`, `encoding`, `stack`, `registry`, plus one repo-level size check |
 | `tests/test_docs_lint.py` | 650 | ~180 | Tests follow the checks out |
 | `docs_build.py` | 496 | 496 | Unchanged. The generator is the part that works. |
-| `tests/test_docs_build.py` | 332 | 332 | Unchanged |
+| `tests/test_docs_build.py` | 332 | 332 | Unchanged | <!-- archived-on-tag -->
 | `.claude/settings.json` | 0 | ~45 | Three hooks replacing `frozen`, `scope` and `generated` |
 | **Total** | **2,457** | **~1,300** | 47% reduction |
 
@@ -345,8 +345,8 @@ External practice, read directly:
 [ace-fca]: https://github.com/humanlayer/advanced-context-engineering-for-coding-agents
 [sdd]: https://dev.to/mudassirworks/spec-driven-development-what-it-fixes-and-breaks-1co3
 
-In-repo evidence: all 83 tracked Markdown files, `scripts/docs_lint.py`, `scripts/docs_build.py`,
-`tests/test_docs_lint.py`, `tests/test_docs_build.py`, `docs/README.md`'s caps table,
+In-repo evidence: all 83 tracked Markdown files, `scripts/docs_lint.py`, `scripts/docs_build.py`, <!-- archived-on-tag -->
+`tests/test_docs_lint.py`, `tests/test_docs_build.py`, `docs/README.md`'s caps table, <!-- archived-on-tag -->
 `docs/entries/README.md`, `.github/workflows/ci.yml`, and the frontmatter of all 26 ticket entries.
 
 ---

@@ -37,7 +37,7 @@
 
 A conversational front door to AI/Data job postings scraped from VietnamWorks, answering plain
 language questions from a Postgres table. The bar that matters is
-[`docs/MVP_Spec.md`](../docs/MVP_Spec.md) §3: **trustworthy over impressive.** "I can't answer that
+[`docs/MVP_Spec.md`](../docs/MVP_Spec.md) §3: **trustworthy over impressive.** "I can't answer that <!-- archived-on-tag -->
 from the available data" is a success; confident guessing is the worst outcome — and that
 Definition-of-Done bullet is **the only one currently unmet**, which puts evaluation on the v1.0
 critical path.
@@ -51,7 +51,7 @@ critical path.
 | 3. Synthesis | the final user-facing answer | drops a caveat, overstates what the rows show |
 
 Seam 2 is invisible to a naive trace. Instrumentation blueprint:
-[`docs/Offline_Pipelines_Design.md`](../docs/Offline_Pipelines_Design.md) §8.
+[`docs/Offline_Pipelines_Design.md`](../docs/Offline_Pipelines_Design.md) §8. <!-- archived-on-tag -->
 
 **Safety is code; honesty is prose.** A SQL validator and a row cap hold by construction. Whether
 an answer hedges appropriately does not — and the data offers many chances to overclaim:
@@ -122,7 +122,7 @@ The reasoning A/B artifact remains archive-only.
 
 ### 2d. The behavior target is written but not landed
 
-[`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md) freezes correctness per scenario,
+[`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md) freezes correctness per scenario, <!-- archived-on-tag -->
 with a priority ladder (safety > honesty > helpfulness > style) and a determinism protocol: a probe
 must be correct on **all** reruns, so 2-of-3 is a FAIL. Its `behavior_glossary` — 18 canonical
 phrasings keyed by token — **is not in `config/prompts.yaml`**; it survives only on tag
@@ -487,8 +487,8 @@ the preserved record behind those entries.
 | [`honesty-enforcement-design.md`](honesty-enforcement-design.md) | The obligation-seam mechanism | Stays live under M24 until the behavior design ships; this strategy links to it without duplication |
 | `eval-cost-and-rate-limits.md` | Quota and cost arithmetic | **Done (T0025.10).** Folded into §4a and §4b, then archived |
 | [`evals/archive/v1_scenario_matrix.md`](../evals/archive/v1_scenario_matrix.md) | The 2026-07-14 raw measurement | Keep as a dated measurement record; evidence, not guidance |
-| [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md) | The frozen behavior target and glossary | **Stays.** It owns the target; this record owns how the target is measured |
-| [`docs/Offline_Pipelines_Design.md`](../docs/Offline_Pipelines_Design.md) §8 | How the harness is built | **Stays.** It owns the build blueprint per the Fact Ledger |
+| [`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md) | The frozen behavior target and glossary | **Stays.** It owns the target; this record owns how the target is measured | <!-- archived-on-tag -->
+| [`docs/Offline_Pipelines_Design.md`](../docs/Offline_Pipelines_Design.md) §8 | How the harness is built | **Stays.** It owns the build blueprint per the Fact Ledger | <!-- archived-on-tag -->
 | `Known_Issues.md` evaluation entries | Open evaluation risks | **Stays.** The register owns open risks; link, do not restate |
 
 Per [`docs/Docs_Conventions.md`](../docs/Docs_Conventions.md): respect the Fact Ledger — this

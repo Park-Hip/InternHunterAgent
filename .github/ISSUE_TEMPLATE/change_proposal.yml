@@ -1,0 +1,54 @@
+name: Change proposal
+description: Propose a substantial, contract-affecting, or uncertain change for approval before implementation.
+labels: [proposal]
+body:
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Tier
+      description: Planned needs a short proposal here. Research-led additionally needs measured evidence linked below.
+      options:
+        - Planned - behavior, contract, operational, or multi-file change
+        - Research-led - uncertain, irreversible, or architectural choice
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Goal and expected outcome
+      description: The observable end state, not the implementation steps.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files and change surface
+      description: What changes, and explicit exclusions left out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility boundary
+      description: Contracts, APIs, schemas, or documented claims this touches; state "no boundary change" if none.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification plan
+      description: Focused checks, full gates, and the manual check with its expected result.
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback
+      description: How to undo the change if it fails after merge.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: For research-led proposals, links to measurements, spikes, or primary sources supporting the choice.

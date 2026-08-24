@@ -241,7 +241,7 @@ checklist of hand-written steps with caps and next-ticket flagged as the most-mi
 commit-then-lint order and its reason, and the preconditions worth checking in the first minute.
 It should not restate what the generator does.
 
-It was written on 2026-08-19 as [`skills/integrate/SKILL.md`](../skills/integrate/SKILL.md),
+It was written on 2026-08-19 as [`skills/integrate/SKILL.md`](../skills/integrate/SKILL.md), <!-- archived-on-tag -->
 carrying exactly those four things.
 The rest of this section is the evidence it was drafted from.
 

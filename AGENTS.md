@@ -1,43 +1,46 @@
-## 1. Operational rules
+# Agent instructions
 
-- Implement one change at a time.
-- Do not implement future work, refactor unrelated systems, introduce unnecessary dependencies, or
-  over-engineer the MVP.
-- Keep models in `models.py` and parameters in `config/settings.yaml`.
-- Before designing, planning, or implementing, read `docs/Decision_Log.md`, then the relevant
-  research record beginning with `research/README.md`.
-- Before changing Markdown, read `docs/Docs_Conventions.md`.
-- Run focused verification and the available build or test gates before finalizing.
-- Record risks and out-of-scope follow-ups in the pull request body instead of fixing them silently.
+This is the canonical cross-agent policy. `CLAUDE.md` imports this file; do not duplicate it.
+Active work lives in GitHub Issues: one issue per task, and every pull request closes its issue
+with `Closes #<n>`.
 
-## 2. Architecture boundaries
+## 1. Architecture boundaries
 
 - Keep the API layer, application service, agent runtime, and tracing layer isolated.
 - FastAPI routes must not contain LangChain logic or know how the agent is built.
 - Keep Langfuse and tracing concerns local to their layer.
+- Keep models in `models.py` and parameters in `config/settings.yaml`.
 
-## 3. Change workflow
+## 2. Change tiers
 
-Use the smallest tier that fits the change.
+Use the smallest tier that fits. Planned and research-led changes need approval before code.
 
-| Tier | Use when | Required artifact |
+| Tier | Use when | Before implementing |
 |---|---|---|
-| Direct | A focused, low-risk edit has obvious verification | None beyond the pull request body |
-| Planned | The change affects behavior, contracts, operations, or multiple files | An approved plan covering goal, files, exclusions, verification, and risks |
-| Research-led | The choice is uncertain, irreversible, or needs measured evidence | Research record, decision, and approved plan |
+| Direct | A focused, low-risk edit with obvious verification | Nothing beyond the issue or request |
+| Planned | Behavior, contract, operational, or multi-file change | Short proposal in the linked issue |
+| Research-led | An uncertain, irreversible, or architectural choice | Evidence-backed proposal with explicit options |
 
-Branch from the tip of `origin/main` and work in a dedicated git worktree.
-Keep a pull request limited to one coherent change and rebase it onto `origin/main` before review.
-Use the pull request template for the summary, risks, known issues, and manual verification.
-For a planned change, use the tracked `skills/plan/` skill to prepare the approval artifact.
+For planned and research-led changes, invoke the `.agents/skills/change-proposal/SKILL.md` skill.
+Branch from the tip of `origin/main` in a dedicated git worktree for anything but a trivial edit.
+Keep one coherent change per pull request and rebase onto `origin/main` before review.
 
-## 4. Manual verification
+## 3. Verification
 
-Every pull request includes a short manual checklist with the expected result.
-Automated checks are necessary but do not replace an end-user or maintainer validation when one is
-applicable.
+- Run focused checks first: the tests covering the changed paths, for example
+  `uv run pytest tests/<area>`.
+- For documentation changes: `uv run python scripts/docs_lint.py` and
+  `python scripts/docs_build.py --check`.
+- Before requesting review, run the full gate: `uv run pytest` plus available lint gates.
+- After a nontrivial change, invoke the `.agents/skills/verify-change/SKILL.md` skill to select
+  checks from the diff.
+- Every pull request includes a manual check with an expected result when an end-user or
+  maintainer validation applies.
 
-## 5. Integration
+## 4. Safety invariants
 
-Use the tracked `skills/integrate/` skill when merging ready pull requests or publishing derived
-repository-state documentation.
+- Never commit secrets; production secrets are Render runtime environment variables.
+- Documentation is UTF-8 without BOM; never round-trip Markdown through PowerShell
+  `Get-Content`/`Set-Content`.
+- Schema changes go through Alembic migrations; ingestion accumulates records instead of
+  truncating clean jobs.

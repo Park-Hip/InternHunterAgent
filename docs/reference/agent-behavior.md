@@ -85,8 +85,8 @@ the target.
 
 ## 3. Canonical phrasings (G47 — FINAL)
 
-The verbatim strings live in [`research/archive/agent-behavior-question-bank.md`
-§10](../../research/archive/agent-behavior-question-bank.md) and the `behavior_glossary` block of
+The verbatim strings live in section 10 of the behavior question bank
+(preserved on git tag docs-history-pre-redesign) and the `behavior_glossary` block of
 `config/prompts.yaml`. Phrase IDs referenced below:
 `NEGOTIABLE-SALARY`, `ABSENT-FIELD`, `LISTING-EXPIRY-NOT-DEADLINE`, `FRESHNESS-REFUSAL`,
 `CREATED-ON-CAVEAT`, `FREE-TEXT-HEDGE`,
@@ -212,7 +212,7 @@ rows is acceptable. If probes stay flaky after the T0015.5 few-shots, record the
 
 > **Provenance (restored 2026-07-22).** Recovered from `archive/t0015.4-scenario-matrix`
 > (`eba3e1f`) during a branch-cleanup pass. It had been stranded on an unmerged branch since
-> T0015.2 — `docs/archive/Tickets.md` marks that ticket *(done)*, but neither this file nor the
+> T0015.2 — the pre-redesign ticket register (preserved on git tag docs-history-pre-redesign) marks that ticket *(done)*, but neither this file nor the
 > `behavior_glossary` it names had ever reached the mainline.
 >
 > **⚠️ The "machine source of truth" referenced below is frozen but NOT LANDED.**
@@ -239,7 +239,7 @@ rows is acceptable. If probes stay flaky after the T0015.5 few-shots, record the
 >
 > **Companion artifacts:**
 > - Research/rationale + the full behavioral question catalog:
-> [`research/archive/agent-behavior-question-bank.md`](../../research/archive/agent-behavior-question-bank.md)
+> the behavior question bank (preserved on git tag docs-history-pre-redesign)
 > (groups
 > `G01`–`G47`; settled decisions in §12; final glossary in §10).
 > - Machine source of truth for the canonical strings: the `behavior_glossary` block in

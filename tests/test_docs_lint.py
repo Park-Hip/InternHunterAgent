@@ -44,13 +44,6 @@ def test_missing_repo_path_is_reported(tmp_path: Path) -> None:
     assert findings[0].check == "link-path"
 
 
-def test_archived_paths_are_resolved_during_the_instruction_migration(tmp_path: Path) -> None:
-    document = tmp_path / "guide.md"
-    document.write_text("See `docs/Tickets.md`.\n", encoding="utf-8")
-
-    assert docs_lint.check_link_path([document]) == []
-
-
 def test_branch_name_is_not_treated_as_a_missing_repo_path(tmp_path: Path) -> None:
     document = tmp_path / "guide.md"
     document.write_text("Use branch `docs/some-branch`.\n", encoding="utf-8")

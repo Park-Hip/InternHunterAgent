@@ -84,21 +84,6 @@ def path_from_link(target: str, source: Path, *, repo_rooted: bool = False) -> P
     return ((ROOT if repo_rooted else source.parent) / target).resolve()
 
 
-def archived_path(candidate: Path) -> Path | None:
-    """Resolve a Phase A archive move while instruction rewrites remain pending.
-
-    A documented reference can retain its historical location only when the same relative path
-    exists under ``docs/archive``. This keeps the archive move verifiable without suppressing
-    unrelated missing references.
-    """
-    try:
-        relative = candidate.relative_to(ROOT / "docs")
-    except ValueError:
-        return None
-    relocated = ROOT / "docs" / "archive" / relative
-    return relocated if relocated.exists() else None
-
-
 def is_repo_path(value: str) -> bool:
     top_level = (".github/", "config/", "data/", "docs/", "evals/", "infra/", "research/", "scripts/", "src/", "tests/")
     if not value.startswith(top_level) or " " in value:
@@ -133,7 +118,7 @@ def check_link_path(files: list[Path]) -> list[Finding]:
             targets.extend((value, True) for value in code_pattern.findall(line) if is_repo_path(value))
             for target, repo_rooted in targets:
                 candidate = path_from_link(target, path, repo_rooted=repo_rooted)
-                if candidate is not None and not candidate.exists() and archived_path(candidate) is None:
+                if candidate is not None and not candidate.exists():
                     findings.append(Finding("link-path", path, number, f"missing {target}"))
     return findings
 

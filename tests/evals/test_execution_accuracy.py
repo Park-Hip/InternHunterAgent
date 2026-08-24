@@ -208,7 +208,7 @@ def test_cross_currency_rejects_a_single_currency_ranking(monkeypatch) -> None:
         lambda sql, database_url=None: (
             [{"id": 7, "salary_currency": "VND"}]
             if sql == "generated"
-            else [{"salary_currency": "USD"}, {"salary_currency": "VND"}]
+            else [{"id": 1, "salary_currency": "USD"}, {"id": 7, "salary_currency": "VND"}]
         ),
     )
 
@@ -216,6 +216,59 @@ def test_cross_currency_rejects_a_single_currency_ranking(monkeypatch) -> None:
 
     assert result["status"] == "FAIL"
     assert result["difference"]["missing_currencies"] == ["USD"]
+
+
+@pytest.mark.parametrize(
+    "generated",
+    [
+        [
+            {"id": 10, "salary_currency": "USD"},
+            {"id": 11, "salary_currency": "USD"},
+            {"id": 12, "salary_currency": "VND"},
+            {"id": 14, "salary_currency": "VND"},
+        ],
+        [
+            {"id": 2, "salary_currency": "USD"},
+            {"id": 1, "salary_currency": "USD"},
+            {"id": 3, "salary_currency": "VND"},
+            {"id": 4, "salary_currency": "VND"},
+        ],
+    ],
+)
+def test_cross_currency_requires_reference_postings_in_rank_order(monkeypatch, generated) -> None:
+    reference = [
+        {"id": 1, "salary_currency": "USD"},
+        {"id": 2, "salary_currency": "USD"},
+        {"id": 3, "salary_currency": "VND"},
+        {"id": 4, "salary_currency": "VND"},
+    ]
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: generated if sql == "generated" else reference,
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="cross_currency")
+
+    assert result["status"] == "FAIL"
+    assert result["difference"]["expected_currency_groups"] == [
+        {"currency": "USD", "ids": [1, 2]},
+        {"currency": "VND", "ids": [3, 4]},
+    ]
+
+
+def test_cross_currency_accepts_the_reference_postings_in_each_currency_group(monkeypatch) -> None:
+    rows = [
+        {"id": 1, "salary_currency": "USD"},
+        {"id": 2, "salary_currency": "USD"},
+        {"id": 3, "salary_currency": "VND"},
+        {"id": 4, "salary_currency": "VND"},
+    ]
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: rows,
+    )
+
+    assert compare_result_sets("generated", "reference", comparison_mode="cross_currency")["status"] == "PASS"
 
 
 @pytest.mark.parametrize(

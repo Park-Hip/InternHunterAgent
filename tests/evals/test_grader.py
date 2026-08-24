@@ -301,6 +301,29 @@ def test_list_requires_each_returned_source_url_under_a_source_label() -> None:
     assert source_links.passed is True
 
 
+def test_source_links_cannot_claim_a_posting_is_open() -> None:
+    url = "https://example.com/jobs/1"
+    grade = grade_evidence(
+        "HLP-LIST-1",
+        Evidence(
+            answer=f"Liên kết nguồn gốc: {url}. Việc làm này đang mở.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=[{"source_url": url}],
+            capture_prompt_version=load_prompt_version(),
+        ),
+    )
+
+    source_links = next(check for check in grade.checks if check.name == "source_links")
+    assert source_links.passed is False
+    assert "must not claim availability" in source_links.detail
+
+
+@pytest.mark.parametrize("scenario_id", ["HLP-TRUNCATION-1", "HON-CREATED-ON-1"])
+def test_other_source_url_list_scenarios_require_source_links(scenario_id: str) -> None:
+    assert _rule_for(scenario_id).require_source_links is True
+
+
 def test_zero_rows_are_not_infrastructure_failure() -> None:
     grade = grade_evidence(
         "HON-ZERO-RESULTS-1",

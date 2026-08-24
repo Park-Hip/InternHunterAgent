@@ -71,6 +71,8 @@
     projection:
       exact: [id, title, company, location, source_url]
     assertions:
+      - type: structural
+        require_source_links: true
       - type: literal
         expected_answer_count: 20
 - id: HLP-CONTEXT-1
@@ -131,6 +133,8 @@
     projection:
       exact: [id, title, company, location, source_url]
     assertions:
+      - type: structural
+        require_source_links: true
       - type: semantic
         required_any:
           - [{glossary: CREATED_ON_CAVEAT}]

@@ -147,6 +147,11 @@ def validate_execution_comparison(scenario: dict[str, Any]) -> None:
                 f"Scenario {scenario.get('id', '<unknown>')} declares execution_comparison: "
                 "cross_currency but its reference SQL does not select salary_currency"
             )
+        if not selects_id(queries[0]):
+            raise ValueError(
+                f"Scenario {scenario.get('id', '<unknown>')} declares execution_comparison: "
+                "cross_currency but its reference SQL does not select id"
+            )
 
 
 def _result_key(row: dict[str, Any], compare_ids: bool) -> str:
@@ -182,6 +187,34 @@ def _single_numeric_value(rows: list[dict[str, Any]]) -> Any | None:
         return None
     value = next(iter(rows[0].values()))
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _currency_groups(rows: list[dict[str, Any]]) -> list[tuple[str, list[Any]]] | None:
+    """Return contiguous currency groups with their ordered posting ids.
+
+    A salary comparison must show every reference posting, keep salary rows together by currency,
+    and preserve the reference's within-currency ranking.  A repeated currency means generated
+    rows are interleaved rather than grouped, so it is an invalid presentation shape.
+    """
+    groups: list[tuple[str, list[Any]]] = []
+    completed_currencies: set[str] = set()
+    for row in rows:
+        currency = row.get("salary_currency")
+        if not isinstance(currency, str) or "id" not in row:
+            return None
+        if not groups or groups[-1][0] != currency:
+            if currency in completed_currencies:
+                return None
+            groups.append((currency, []))
+            completed_currencies.add(currency)
+        groups[-1][1].append(row["id"])
+    return groups
+
+
+def _display_currency_groups(groups: list[tuple[str, list[Any]]] | None) -> list[dict[str, Any]] | None:
+    if groups is None:
+        return None
+    return [{"currency": currency, "ids": ids} for currency, ids in groups]
 
 
 def _uses_count_only_projection(sql: str) -> bool:
@@ -317,16 +350,27 @@ def compare_result_sets(
             "difference": {"expected_empty": True, "unexpected_rows": generated_rows},
         }
     elif comparison_mode == "cross_currency":
-        required = Counter(_value_key(row["salary_currency"]) for row in reference_rows)
+        reference_groups = _currency_groups(reference_rows)
+        if reference_groups is None:
+            raise ValueError(
+                "cross_currency reference query must return id and salary_currency for every row"
+            )
+        required = Counter(_value_key(currency) for currency, ids in reference_groups for _ in ids)
         if not required or len(required) < 2:
             raise ValueError("cross_currency reference query must return at least two currencies")
-        observed = (
-            Counter(_value_key(row["salary_currency"]) for row in generated_rows)
-            if all("salary_currency" in row for row in generated_rows)
-            else Counter()
-        )
+        generated_groups = _currency_groups(generated_rows)
+        observed = Counter(
+            _value_key(currency) for currency, ids in generated_groups for _ in ids
+        ) if generated_groups is not None else Counter()
+        reference_by_currency = dict(reference_groups)
+        generated_by_currency = dict(generated_groups) if generated_groups is not None else {}
+        matches = generated_groups is not None and reference_by_currency == generated_by_currency
+        reference_ids = Counter(_value_key(job_id) for _, ids in reference_groups for job_id in ids)
+        generated_ids = Counter(
+            _value_key(job_id) for _, ids in generated_groups for job_id in ids
+        ) if generated_groups is not None else Counter()
         return {
-            "status": "PASS" if required <= observed else "FAIL",
+            "status": "PASS" if matches else "FAIL",
             "generated_row_count": len(generated_rows),
             "reference_row_count": len(reference_rows),
             "generated_rows": generated_rows,
@@ -336,6 +380,10 @@ def compare_result_sets(
                 "required_currencies": _display_values(required),
                 "observed_currencies": _display_values(observed),
                 "missing_currencies": _display_values(required - observed),
+                "missing_ids": _display_values(reference_ids - generated_ids),
+                "unexpected_ids": _display_values(generated_ids - reference_ids),
+                "expected_currency_groups": _display_currency_groups(reference_groups),
+                "observed_currency_groups": _display_currency_groups(generated_groups),
             },
         }
     else:

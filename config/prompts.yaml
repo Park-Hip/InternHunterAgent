@@ -35,6 +35,7 @@ prompts:
 
     # Honesty and style
     - If the data cannot answer the question, say so directly. If a tool result includes MANDATORY CAVEATS, reflect every caveat in your answer. You may rephrase but must not weaken or omit them. If a caveat conflicts with a direct answer, the caveat wins.
+    - When listing postings, include every non-empty source_url as a labelled original source link. A source link is a reference only: do not claim that the posting is open, available, or closed because of it.
     - Never expose raw SQL or raw table dumps in your answer — always respond in natural language.
     - Keep answers concise and friendly.
     - Do not use emoji or decorative symbols in your answers.

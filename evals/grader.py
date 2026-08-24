@@ -483,6 +483,10 @@ def _structural_checks(
 
 _LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
 _HEADING_MARKER = re.compile(r"^\s*(?:#{1,6}\s+|\*{1,3}[^*]+\*{1,3}\s*$)")
+_SOURCE_AVAILABILITY_PATTERNS = (
+    re.compile(r"\b(?:is|are|currently|still)\s+open\b", re.IGNORECASE),
+    re.compile(r"(?:đang|vẫn|còn)\s+(?:mở|tuyển)\b", re.IGNORECASE),
+)
 
 
 def _count_only_check(answer: str | None, expected_count: int | None) -> Check:
@@ -512,7 +516,7 @@ def _count_only_check(answer: str | None, expected_count: int | None) -> Check:
 
 
 def _source_link_check(answer: str | None, returned_rows: list[dict[str, Any]] | None) -> Check:
-    """Require every returned source URL to appear under a source-link label."""
+    """Require labelled source URLs without presenting them as availability evidence."""
     urls = [
         row["source_url"]
         for row in returned_rows or []
@@ -521,13 +525,20 @@ def _source_link_check(answer: str | None, returned_rows: list[dict[str, Any]] |
     rendered = answer or ""
     has_label = "nguồn" in rendered.casefold() or "source link" in rendered.casefold()
     missing = [url for url in urls if url not in rendered]
-    passed = not urls or (has_label and not missing)
+    availability_claims = [
+        pattern.pattern for pattern in _SOURCE_AVAILABILITY_PATTERNS if pattern.search(rendered)
+    ]
+    passed = not urls or (has_label and not missing and not availability_claims)
+    if availability_claims:
+        detail = f"source links must not claim availability: {availability_claims!r}"
+    elif passed:
+        detail = "every returned source URL is labelled as a source link"
+    else:
+        detail = f"missing source URLs or source-link label: {missing!r}"
     return Check(
         "source_links",
         passed,
-        "every returned source URL is labelled as a source link"
-        if passed
-        else f"missing source URLs or source-link label: {missing!r}",
+        detail,
         "structural",
     )
 
@@ -621,9 +632,9 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
         raise ValueError(f"Unknown scenario id: {scenario_id}")
     grading = scenario.get("grading") or {}
     assertions = grading.get("assertions") or []
-    literal = next((item for item in assertions if item["type"] == "literal"), {})
-    structural = next((item for item in assertions if item["type"] == "structural"), {})
-    semantic = next((item for item in assertions if item["type"] == "semantic"), {})
+    literal: dict[str, Any] = next((item for item in assertions if item["type"] == "literal"), {})
+    structural: dict[str, Any] = next((item for item in assertions if item["type"] == "structural"), {})
+    semantic: dict[str, Any] = next((item for item in assertions if item["type"] == "semantic"), {})
     expectation = scenario.get("tool_expectation")
     return ScenarioRule(
         expected_tools=tuple(scenario["expected_tools"]),

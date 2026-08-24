@@ -56,7 +56,7 @@ by a correct plan not actually running, not by a missing plan.
 | `evals/grader.py` | 2 | 1, 3 |
 | `tests/evals/test_grader.py` | 2 | 1, 3 |
 | `tests/test_prompt_surface.py` | 2 | 1, 3 |
-| `docs/Agent_Behavior_Spec.md` | 2 | 1, 3 |
+| `docs/Agent_Behavior_Spec.md` | 2 | 1, 3 | <!-- archived-on-tag -->
 | `tests/agents/runtime/test_prompts.py` | 2 | 1, 3 |
 | `tests/agents/test_langfuse_tracing.py` | 2 | 1, 3 |
 | `src/core/config.py` | 3 | 1, 2, 6 |
@@ -202,10 +202,10 @@ The agent emits emoji and no rule forbids it. The agent quotes schema identifier
   loader, not a second hand-maintained list.
 - **R2.6** A separate structural check fails an answer that quotes a schema identifier, reported
   under its own name so the defect is legible. It is gated the same way as R2.4.
-- **R2.7** `docs/Agent_Behavior_Spec.md` records the style rule under its existing conciseness and
+- **R2.7** `docs/Agent_Behavior_Spec.md` records the style rule under its existing conciseness and <!-- archived-on-tag -->
   style section.
 
-**Files.** `config/prompts.yaml`, `evals/grader.py`, `docs/Agent_Behavior_Spec.md`,
+**Files.** `config/prompts.yaml`, `evals/grader.py`, `docs/Agent_Behavior_Spec.md`, <!-- archived-on-tag -->
 `tests/evals/test_grader.py`, `tests/test_prompt_surface.py`, and the two files the R2.2 bump
 turns red.
 

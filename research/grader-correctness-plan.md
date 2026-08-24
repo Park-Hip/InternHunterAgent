@@ -2,7 +2,7 @@
 
 > **Status:** design record, written 2026-08-18. No implementation.
 > It feeds **M38 Grader Correctness**, allocated in
-> [`docs/roadmap.yaml`](../docs/roadmap.yaml) on 2026-08-18 with tickets T0038.1 to T0038.3.
+> [`docs/roadmap.yaml`](../docs/roadmap.yaml) on 2026-08-18 with tickets T0038.1 to T0038.3. <!-- archived-on-tag -->
 > It does not restate the instrument's design, which is
 > [`evals/Operating_Manual.md`](../evals/Operating_Manual.md); it corrects three defects in it.
 
@@ -44,7 +44,7 @@ repository, which is the property the capture and grade split was built to give.
 Every turn in the frozen obligation replay
 [`evals/replays/t0024.4-v3-obligations.json`](../evals/replays/t0024.4-v3-obligations.json)
 was re-graded through `evals.grader.grade_evidence`, then read by hand against
-[`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md).
+[`docs/Agent_Behavior_Spec.md`](../docs/Agent_Behavior_Spec.md). <!-- archived-on-tag -->
 The capture is six honesty scenarios at three repeats each on the `v3` prompt, DeepSeek serving,
 against the frozen 22-row fixture.
 
@@ -139,7 +139,7 @@ It is recorded here so the ticket inherits it as a stated assumption rather than
 ## 3. The tickets
 
 Three tickets, sequenced, on one branch each.
-All three are allocated to M38 in `docs/roadmap.yaml`.
+All three are allocated to M38 in `docs/roadmap.yaml`. <!-- archived-on-tag -->
 
 ### T0038.1: Anchor every textual rule in the glossary
 
@@ -184,7 +184,7 @@ It caught the `%ML%` bug and stays.
 Re-grade `evals/replays/t0024.4-v3-obligations.json` under the corrected rules, with no new capture.
 Record the 18 `v3` turns as the current human-label calibration set in
 `evals/Instrument_Report.md`, stamped with the `prompt_version` they were taken at.
-Restate M24's outcome in `docs/roadmap.yaml` against the corrected numbers.
+Restate M24's outcome in `docs/roadmap.yaml` against the corrected numbers. <!-- archived-on-tag -->
 Close `KI-2026-08-18-created-on-fails-under-v3` and `KI-2026-08-18-absent-field-grader-stale`,
 both of which ask for exactly this triage, through `docs/entries/`.
 
@@ -197,7 +197,7 @@ this repository has held since M27.
 
 ## 4. Scope and sequencing
 
-The `scope:` M38 declares in `docs/roadmap.yaml`:
+The `scope:` M38 declares in `docs/roadmap.yaml`: <!-- archived-on-tag -->
 
 ```yaml
 scope:

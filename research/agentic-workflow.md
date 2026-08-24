@@ -5,10 +5,10 @@
 > it stalls, and proposes what to fix and what to encode as a skill.
 > It does not restate the generator's contract, which is
 > [`docs/entries/README.md`](../docs/entries/README.md), or the numbering rules, which are the
-> header of [`docs/roadmap.yaml`](../docs/roadmap.yaml).
+> header of [`docs/roadmap.yaml`](../docs/roadmap.yaml). <!-- archived-on-tag -->
 
 > **Last verified:** 2026-08-19 against `main` at `cf5027a`, the 40 most recent merged pull
-> requests, the 60 most recent `ci.yml` runs, `scripts/docs_lint.py`, and `scripts/docs_build.py`.
+> requests, the 60 most recent `ci.yml` runs, `scripts/docs_lint.py`, and `scripts/docs_build.py`. <!-- archived-on-tag -->
 
 > **Eviction:** A block leaves this record when its bottleneck is measured away, when the
 > improvement it proposes ships, or when a re-measurement contradicts the evidence it rests on.
@@ -47,7 +47,7 @@ test-suite runtime with and without the fixture-backed modules.
 
 | Stage | Owner | Write surface | Enforcement |
 |---|---|---|---|
-| Allocate a number | integration session | `docs/roadmap.yaml` | `registry` check |
+| Allocate a number | integration session | `docs/roadmap.yaml` | `registry` check | <!-- archived-on-tag -->
 | Draft the ticket prompt | prompt session | none | the ticket-prompt skill |
 | Implement | coder session in its own worktree | code, plus one file under `docs/entries/` | `scope` check |
 | Render the registers | coder session | generated regions | `generated` check |
@@ -78,10 +78,10 @@ Every conflict was on a generated register, which is section 4.1.
 
 ### 4.1 Derived state lives in version control
 
-Generated regions are rendered by `scripts/docs_build.py` and then committed, so two branches that
+Generated regions are rendered by `scripts/docs_build.py` and then committed, so two branches that <!-- archived-on-tag -->
 each add a ticket entry both rewrite the same lines of the same three registers.
 All four M33 pull requests reported `CONFLICTING` against `main` on 2026-08-19, and every one of
-them conflicted only on `docs/Completion_Reports.md` or `docs/Known_Issues.md`.
+them conflicted only on `docs/Completion_Reports.md` or `docs/Known_Issues.md`. <!-- archived-on-tag -->
 
 The cost is serialization.
 Each branch had to be rebased, re-rendered, re-pushed, and re-gated before the next one could
@@ -213,7 +213,7 @@ carried checklist where it is a judgment.
 
 Change 1 is the only structural one and deserves a decision rather than a ticket.
 The lightest form is a git merge driver registered in `.gitattributes` for the three generated
-registers, which re-runs `scripts/docs_build.py` instead of merging text; branches keep committing
+registers, which re-runs `scripts/docs_build.py` instead of merging text; branches keep committing <!-- archived-on-tag -->
 their regions, and the conflict class disappears.
 The stronger form renders the regions in CI and stops committing them, which also removes the
 `generated` check's reason to exist.
@@ -248,7 +248,7 @@ The rest of this section is the evidence it was drafted from.
 The merge recipe, written out:
 
 - Rebase the pull-request head onto `origin/main`; never merge `main` into a ticket branch.
-- Resolve a conflict inside a generated region by re-running `scripts/docs_build.py` from that
+- Resolve a conflict inside a generated region by re-running `scripts/docs_build.py` from that <!-- archived-on-tag -->
   worktree, never by hand-merging the region.
 - Force-push the rebased head and merge only once CI is green **on the rebased head**.
 - CI runs `on: pull_request` only, so a push to `main` triggers nothing and verifies nothing.

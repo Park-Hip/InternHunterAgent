@@ -3,8 +3,8 @@
 > **Status:** design record, written 2026-07-16. No implementation. Decides *where honesty
 > enforcement lives* for the C-category failures measured in
 > `evals/v1_scenario_matrix.md` (branch `feature/t0015.4-v1-scenario-matrix` @ `eba3e1f`). <!-- lint-allow-link-path -->
-> Companion evidence: `docs/Known_Issues.md` (§ Agent runtime & prompts),
-> `docs/Agent_Behavior_Spec.md` @ `eba3e1f`, `research/archive/pre-deploy-refinement-plan.md`
+> Companion evidence: `docs/Known_Issues.md` (§ Agent runtime & prompts), <!-- archived-on-tag -->
+> `docs/Agent_Behavior_Spec.md` @ `eba3e1f`, `research/archive/pre-deploy-refinement-plan.md` <!-- archived-on-tag -->
 > §4/§5f,
 > `research/archive/deployment-research-plan.md` §4.2 #3.
 

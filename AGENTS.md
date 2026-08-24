@@ -29,8 +29,7 @@ Keep one coherent change per pull request and rebase onto `origin/main` before r
 
 - Run focused checks first: the tests covering the changed paths, for example
   `uv run pytest tests/<area>`.
-- For documentation changes: `uv run python scripts/docs_lint.py` and
-  `python scripts/docs_build.py --check`.
+- For documentation changes: `uv run python scripts/docs_lint.py`.
 - Before requesting review, run the full gate: `uv run pytest` plus available lint gates.
 - After a nontrivial change, invoke the `.agents/skills/verify-change/SKILL.md` skill to select
   checks from the diff.

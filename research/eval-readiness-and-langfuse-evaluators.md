@@ -537,4 +537,4 @@ The Langfuse feature and plan details in section 8a were read from the vendor do
 - In-repo: [Langfuse observability gaps](langfuse-observability-gaps.md),
   [evaluation strategy](evaluation-strategy.md),
   [T0027.3 DeepSeek arm](../evals/t0027_deepseek_arm.md),
-  [Known Issues](../docs/Known_Issues.md), [Decision Log](../docs/Decision_Log.md)
+  [Known Issues](../docs/Known_Issues.md), [Decision Log](../docs/Decision_Log.md) <!-- archived-on-tag -->

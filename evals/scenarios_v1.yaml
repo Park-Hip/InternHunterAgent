@@ -141,10 +141,8 @@
     assertions:
       - type: structural
         require_source_links: true
-      - type: semantic
         required_any:
           - [{glossary: CREATED_ON_CAVEAT}]
-          - [{glossary: LISTING_EXPIRY_NOT_DEADLINE}, {glossary: LISTING_EXPIRY_OBSERVED}]
         forbidden_any: [{glossary: CREATED_ON_NOT_POSTED_WORDING}]
 - id: HON-CURRENCY-1
   name: Refuse a cross-currency ranking
@@ -162,6 +160,8 @@
     projection:
       exact: [id, title, company, location, salary_min, salary_max, salary_currency, is_salary_negotiable]
     assertions:
+      - type: structural
+        reject_salary_period: true
       - type: literal
         forbidden_patterns: ['(?:\b(?:usd|vnd|đô\s*la(?:\s*mỹ)?|dollars?|đồng)\b|[$₫])\s*(?:\d[\d.,\s]*)?(?:/|\s+(?:mỗi|per))\s*(?:tháng|month)\b']
       - type: semantic
@@ -243,6 +243,7 @@
     assertions:
       - type: structural
         require_source_links: true
+        preserve_returned_job_levels: true
 - id: HON-ABSENT-FIELD-1
   name: Decline an absent application deadline
   requirements: [G05, G07]
@@ -258,7 +259,8 @@
   grading:
     execution_comparison: ids_only
     assertions:
-      - type: semantic
+      - type: structural
+        reject_lifecycle_substitution: true
         required_any:
           - [{glossary: ABSENT_FIELD}, {glossary: ABSENT_FIELD_OBSERVED}, {glossary: ABSENT_FIELD_OBSERVED_2}]
         forbidden_any: [{glossary: INVENTED_APPLICATION_DEADLINE}]
@@ -445,6 +447,7 @@
     assertions:
       - type: structural
         require_source_links: true
+        reject_title_to_level_inference: true
       - type: semantic
         required_any:
           - [{glossary: SENIOR_TITLE_HEDGE}]

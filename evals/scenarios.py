@@ -39,7 +39,16 @@ _EXECUTION_COMPARISONS = {
 _ASSERTION_TYPES = {"literal", "structural", "semantic"}
 _ASSERTION_FIELDS = {
     "literal": {"expected_answer_count", "count_only", "forbidden_patterns"},
-    "structural": {"require_vietnamese", "require_source_links"},
+    "structural": {
+        "require_vietnamese",
+        "require_source_links",
+        "required_any",
+        "forbidden_any",
+        "reject_salary_period",
+        "preserve_returned_job_levels",
+        "reject_title_to_level_inference",
+        "reject_lifecycle_substitution",
+    },
     "semantic": {"required_any", "forbidden_any", "forbid_single_salary_winner"},
 }
 _PROJECTION_COLUMNS = {
@@ -151,6 +160,15 @@ def _validate_assertion_fields(
 
     if "require_source_links" in assertion and assertion["require_source_links"] is not True:
         raise ValueError(f"Scenario {scenario_id} require_source_links must be true")
+
+    for field in (
+        "reject_salary_period",
+        "preserve_returned_job_levels",
+        "reject_title_to_level_inference",
+        "reject_lifecycle_substitution",
+    ):
+        if field in assertion and assertion[field] is not True:
+            raise ValueError(f"Scenario {scenario_id} {field} must be true")
 
     if "required_any" in assertion:
         groups = assertion["required_any"]

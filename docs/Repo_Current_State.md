@@ -240,8 +240,6 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 - `uv run python scripts/docs_build.py` - refresh the tree-derived regions of this document;
   `--check` reports them stale without writing. The `--snapshot` option refreshes the
   clone-local git block under [Current branch](#current-branch) and is integration-only.
-- `uv run python scripts/sync_agent_instructions.py` - regenerate `AGENTS.md` from
-  `CLAUDE.md`; `--check` fails when they differ, and the CI `docs` job runs it.
 
 ### Maintenance scripts
 
@@ -264,7 +262,6 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 - `scripts/scrape_topcv_spike.py` - Scraping spike - TopCV internship listings via cloudscraper.
 - `scripts/scrape_topdev_spike.py` - Scraping spike - TopDev AI/Data IT jobs via RSC payload
   parsing.
-- `scripts/sync_agent_instructions.py` - Keep AGENTS.md byte-for-byte identical to CLAUDE.md.
 - `scripts/vietnamese_prompt_spike.py` - Measure Vietnamese prompt variants against the
   fixture-backed production agent.
 <!-- generated:scripts:end -->
@@ -275,7 +272,6 @@ Development (6): `deepeval`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-mock`, 
 |---|---|
 | `python scripts/docs_lint.py` | Exit 0 on 2026-08-22, on the four surviving checks. The untracked working-tree leftovers under [Carried work](#carried-work) no longer produce findings: the `orphan` and `size-cap` checks that flagged them were cut by **D-047** |
 | `python scripts/docs_build.py --check` | Exit 0 on 2026-08-22; the three tree-derived regions current. The publish pass rendered no diff again: PRs #98-#102 changed no tree-derived fact, so nothing regenerated |
-| `python scripts/sync_agent_instructions.py --check` | Exit 0 on 2026-08-22; `AGENTS.md` is byte-identical to `CLAUDE.md`. Runs in the CI `docs` job |
 | `uv run pytest -q` | 626 passed, 1 skipped, 30 deselected, and 45 subtests passed on 2026-08-22, in 11 s. The count rose from 563 with the eval-readiness merges (PRs #98-#102), which are test-heavy by construction: the row-identity, answer-style and offline-scoring phases each land their measurement with their code. The fixture Postgres was running, so the eight fixture-backed tests ran rather than skipped, and the one remaining skip is `SCRATCH_DATABASE_URL` |
 | `uv run ruff check .` | Passed on 2026-08-22 |
 | `uv run mypy` | Success: no issues in 46 source files on 2026-08-22. The count is unchanged: `evals/score.py` is new but `evals/` is not on the checked path |

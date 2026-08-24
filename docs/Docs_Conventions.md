@@ -59,5 +59,5 @@ Both rules are conventions an author applies, not checks. The `amendment` check 
 flag correction-on-correction phrasing was retired by **D-047**, along with the
 `<!-- lint-allow-amendment -->` marker that suppressed it.
 
-The [planning skill](../skills/plan/SKILL.md) applies these conventions when it prepares a change
-plan.
+The `change-proposal` skill (`.agents/skills/change-proposal/SKILL.md`) applies these conventions
+when it prepares a change proposal.

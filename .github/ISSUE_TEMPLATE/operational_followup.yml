@@ -1,0 +1,28 @@
+name: Operational follow-up
+description: Track a risk, known issue, or follow-up discovered while doing other work.
+labels: [follow-up]
+body:
+  - type: textarea
+    id: finding
+    attributes:
+      label: Finding
+      description: What was observed, where, and why it matters. Link the originating PR, evaluation, or incident.
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - High - blocks release or correctness
+        - Medium - should fix soon
+        - Low - fix when convenient
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: The observable condition that closes this issue.
+    validations:
+      required: true

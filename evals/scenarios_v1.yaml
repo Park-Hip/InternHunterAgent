@@ -95,6 +95,9 @@
     - SELECT id, title, company, location FROM clean_jobs WHERE tech_stack ILIKE '%Python%' AND location ILIKE '%Hanoi%' ORDER BY id
   grading:
     execution_comparison: ids_only
+    assertions:
+      - type: structural
+        require_source_links: true
 - id: HLP-REFERENT-1
   name: Resolve a prior-set referent
   requirements: [G20, G21, G16]
@@ -117,6 +120,9 @@
     - SELECT id, title, company, location FROM clean_jobs WHERE role ILIKE '%AI Engineer%' AND is_internship ORDER BY id
   grading:
     execution_comparison: ids_only
+    assertions:
+      - type: structural
+        require_source_links: true
 - id: HON-CREATED-ON-1
   name: Caveat a creation date
   requirements: [G17, G07]
@@ -156,6 +162,8 @@
     projection:
       exact: [id, title, company, location, salary_min, salary_max, salary_currency, is_salary_negotiable]
     assertions:
+      - type: literal
+        forbidden_patterns: ['(?:\b(?:usd|vnd|đô\s*la(?:\s*mỹ)?|dollars?|đồng)\b|[$₫])\s*(?:\d[\d.,\s]*)?(?:/|\s+(?:mỗi|per))\s*(?:tháng|month)\b']
       - type: semantic
         forbid_single_salary_winner: true
         required_any:
@@ -174,6 +182,8 @@
   grading:
     execution_comparison: zero_results
     assertions:
+      - type: structural
+        require_source_links: true
       - type: semantic
         required_any:
           - [{lexicon: ["không tìm thấy tin tuyển dụng nào", "không có tin tuyển dụng"]}, {glossary: ZERO_RESULTS}, {glossary: ZERO_RESULTS_OBSERVED}]
@@ -192,6 +202,8 @@
   grading:
     execution_comparison: ids_only
     assertions:
+      - type: structural
+        require_source_links: true
       - type: semantic
         required_any:
           - [{glossary: FREE_TEXT_HEDGE}]
@@ -209,6 +221,8 @@
   grading:
     execution_comparison: ids_only
     assertions:
+      - type: literal
+        forbidden_patterns: ['(?:\b(?:usd|vnd|đô\s*la(?:\s*mỹ)?|dollars?|đồng)\b|[$₫])\s*(?:\d[\d.,\s]*)?(?:/|\s+(?:mỗi|per))\s*(?:tháng|month)\b']
       - type: semantic
         required_any:
           - [{glossary: NEGOTIABLE_SALARY}]
@@ -226,6 +240,9 @@
   reference_sql: SELECT id, title, company, location, job_level FROM clean_jobs WHERE role ILIKE '%Data Engineer%' ORDER BY id
   grading:
     execution_comparison: ids_only
+    assertions:
+      - type: structural
+        require_source_links: true
 - id: HON-ABSENT-FIELD-1
   name: Decline an absent application deadline
   requirements: [G05, G07]
@@ -404,6 +421,8 @@
   grading:
     execution_comparison: ids_only
     assertions:
+      - type: structural
+        require_source_links: true
       - type: literal
         expected_answer_count: 2
       - type: semantic
@@ -424,6 +443,8 @@
   grading:
     execution_comparison: ids_only
     assertions:
+      - type: structural
+        require_source_links: true
       - type: semantic
         required_any:
           - [{glossary: SENIOR_TITLE_HEDGE}]
@@ -468,6 +489,9 @@
   reference_sql: SELECT id, title, company, location FROM clean_jobs WHERE location ILIKE '%Ho Chi Minh City%' ORDER BY id
   grading:
     execution_comparison: ids_only
+    assertions:
+      - type: structural
+        require_source_links: true
 - id: HLP-ABSTRACTION-1
   name: Hedge a technology abstraction
   requirements: []
@@ -482,6 +506,8 @@
   grading:
     execution_comparison: ids_only
     assertions:
+      - type: structural
+        require_source_links: true
       - type: semantic
         required_any:
           - [{glossary: FREE_TEXT_HEDGE}]
@@ -499,6 +525,8 @@
   grading:
     execution_comparison: ids_only
     assertions:
+      - type: structural
+        require_source_links: true
       - type: semantic
         required_any:
           - [{glossary: OTHER_ROLE}]
@@ -516,6 +544,8 @@
   grading:
     execution_comparison: ids_only
     assertions:
+      - type: structural
+        require_source_links: true
       - type: semantic
         required_any:
           - [{glossary: DESTRUCTIVE_ACTION}]

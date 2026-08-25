@@ -1,12 +1,16 @@
 # crew_start.ps1 - launch one worker session for a GitHub issue.
 # Creates a disposable worktree off origin/main, writes the brief from the
 # template plus the issue body, and opens a Windows Terminal tab for the worker.
+# Optionally starts an interactive AI harness in that tab.
 # The mate calls this; the maintainer may call it directly for one-off crews.
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][int]$Issue,
     [ValidateSet('ship', 'scout')][string]$Autonomy = 'ship',
+    # shell leaves an interactive PowerShell prompt. Any executable on PATH
+    # starts as the selected harness after the worker tab opens.
+    [ValidateNotNullOrEmpty()][string]$Harness = 'shell',
     # Dry-run prints the plan without touching disk.
     [switch]$WhatIfMode,
     [string]$RepoRoot
@@ -35,11 +39,25 @@ if ($slug.Length -gt 30) { $slug = $slug.Substring(0, 30).Trim('-') }
 $branch = "crew/$Issue-$slug"
 $wtPath = Join-Path (Split-Path -Parent $RepoRoot) "IHA-$Issue"
 
+$harnessExecutable = $null
+if ($Harness -ne 'shell') {
+    $harnessExecutable = Get-Command -Name $Harness -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $harnessExecutable) {
+        throw "Harness '$Harness' is not available on PATH. Install it or use -Harness shell."
+    }
+}
+
 if ($WhatIfMode) {
     Write-Output 'dry-run plan (no changes made):'
     Write-Output ("  worktree : git worktree add `"{0}`" -b {1} origin/main" -f $wtPath, $branch)
     Write-Output ("  brief    : .crew\{0}-brief.md from _brief.template.md" -f $Issue)
-    Write-Output ("  terminal : wt.exe new tab at $wtPath")
+    if ($Harness -eq 'shell') {
+        Write-Output ("  terminal : wt.exe new tab at {0} with an interactive PowerShell prompt" -f $wtPath)
+    }
+    else {
+        Write-Output ("  terminal : wt.exe new tab at {0}, then start {1}" -f $wtPath, $harnessExecutable.Source)
+    }
     exit 0
 }
 
@@ -72,9 +90,19 @@ foreach ($token in @('{GOAL', '{FILES IN SCOPE', '{EXCLUSIONS', '{VERIFICATION')
 $briefPath = Join-Path $RepoRoot ".crew\$Issue-brief.md"
 [System.IO.File]::WriteAllText($briefPath, $template, [System.Text.UTF8Encoding]::new($false))
 
+$escapedWorktreePath = $wtPath.Replace("'", "''")
+$workerMessage = "crew worker for issue #$Issue ($Autonomy) - read .crew\$Issue-brief.md"
+$sessionCommand = "Set-Location -LiteralPath '$escapedWorktreePath'; Write-Host '$workerMessage'"
+if ($Harness -ne 'shell') {
+    $escapedHarnessPath = $harnessExecutable.Source.Replace("'", "''")
+    $sessionCommand += "; & '$escapedHarnessPath'"
+}
+$encodedSessionCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($sessionCommand))
+
 try {
-    Start-Process wt.exe -ArgumentList @('-w', '0', 'nt', '-d', "`"$wtPath`"", 'pwsh', '-NoExit',
-        '-Command', "Set-Location '$wtPath'; Write-Host 'crew worker for issue #$Issue ($Autonomy) - read .crew\$Issue-brief.md'")
+    $quotedWorktreePath = '"{0}"' -f $wtPath
+    Start-Process wt.exe -ArgumentList @('-w', '0', 'nt', '-d', $quotedWorktreePath, 'pwsh', '-NoExit',
+        '-EncodedCommand', $encodedSessionCommand)
     $launched = $true
 }
 catch {
@@ -83,6 +111,7 @@ catch {
 
 Write-Output "worktree   : $wtPath (branch $branch)"
 Write-Output "brief      : $briefPath"
-if ($launched) { Write-Output 'terminal   : new Windows Terminal tab opened' }
+if ($launched -and $Harness -eq 'shell') { Write-Output 'terminal   : new Windows Terminal tab opened with an interactive PowerShell prompt' }
+elseif ($launched) { Write-Output "terminal   : new Windows Terminal tab opened with interactive $Harness session" }
 else { Write-Output "terminal   : wt.exe unavailable - open a terminal manually in $wtPath" }
 Write-Output "next       : dispatch only if crew trigger and shared-surface lock hold (.crew/README.md)"

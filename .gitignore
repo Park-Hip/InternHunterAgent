@@ -14,3 +14,8 @@ evals/runs/
 
 # Regenerable local viewer HTML (evidence lives in the committed replay JSON)
 evals/replays/*-viewer.html
+
+# crew-mode runtime state (briefs, statuses, events, watcher bookkeeping)
+.crew/[0-9]*-*.md
+.crew/events.log
+.crew/.watch-state.json

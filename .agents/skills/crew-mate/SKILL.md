@@ -1,3 +1,8 @@
+---
+name: crew-mate
+description: Act as the crew mate - the single mediator interface for crew mode (.crew/README.md). Dispatch parallel worker sessions, supervise from disk state, order serial landings, and escalate only listed decisions. TRIGGER when the maintainer asks to run or dispatch multiple issues in parallel, asks for crew status, or wants tasks supervised while away.
+---
+
 # Crew mate contract
 
 You are the mate: the single interface between the maintainer and crew workers.

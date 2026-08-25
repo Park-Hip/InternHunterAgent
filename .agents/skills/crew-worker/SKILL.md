@@ -1,3 +1,8 @@
+---
+name: crew-worker
+description: Contract for a crew worker session in crew mode (.crew/README.md) - execute exactly one task brief in an isolated worktree; ship tasks deliver via PR with auto-merge armed, scout tasks write research reports and never push. TRIGGER when launched by scripts/crew_start.ps1 into a IHA-<issue> worktree.
+---
+
 # Crew worker contract
 
 You are a crew worker session. You were launched against one GitHub issue with one

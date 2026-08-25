@@ -93,7 +93,6 @@ def build_judge() -> DeepEvalJudge:
 
     temperature = judge_cfg.get("temperature", 0.0)
     rpm = judge_cfg.get("rpm", 0)
-    thinking_budget = judge_cfg.get("thinking_budget", 0)
     max_retries = 0 if os.getenv("EVAL_DRIVER_DISABLE_PROVIDER_RETRIES") == "1" else 2
 
     if provider == "groq":
@@ -110,21 +109,28 @@ def build_judge() -> DeepEvalJudge:
             groq_api_key=settings.GROQ_API_KEY,
         )
         return DeepEvalJudge(chat_model, model_name=f"groq/{model_name}", rpm=rpm)
-    elif provider == "google":
-        from langchain_google_genai import ChatGoogleGenerativeAI
+    elif provider == "openrouter":
+        # OpenRouter speaks the OpenAI wire protocol, so one dependency covers it.
+        # The Gemini arm was retired here: its free tier could not survive a full
+        # scoring run (#238), and with it went the thinking_budget knob (#171/#212
+        # closed as moot - that decision belonged to a provider we no longer call).
+        from langchain_openai import ChatOpenAI
 
-        if not settings.GOOGLE_API_KEY:
-            raise ValueError("eval.judge.provider is 'google' but GOOGLE_API_KEY is unset")
+        if not settings.OPENROUTER_API_KEY:
+            raise ValueError(
+                "eval.judge.provider is 'openrouter' but OPENROUTER_API_KEY is unset"
+            )
 
-        chat_model = ChatGoogleGenerativeAI(
+        chat_model = ChatOpenAI(
             model=model_name,
+            base_url="https://openrouter.ai/api/v1",
+            api_key=settings.OPENROUTER_API_KEY,
             temperature=temperature,
             max_tokens=4096,
             timeout=30,
             max_retries=max_retries,
-            google_api_key=settings.GOOGLE_API_KEY,
-            thinking_budget=thinking_budget,
+            streaming=False,
         )
-        return DeepEvalJudge(chat_model, model_name=f"google/{model_name}", rpm=rpm)
+        return DeepEvalJudge(chat_model, model_name=f"openrouter/{model_name}", rpm=rpm)
     else:
         raise ValueError(f"Unsupported 'eval.judge.provider': {provider}")

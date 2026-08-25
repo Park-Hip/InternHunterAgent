@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.136.3",
     "langchain>=1.3.1",
     "langchain-groq>=1.1.2",
+    "langchain-openai>=1.1.0",
     "langfuse>=4.6.1",
     "pydantic-settings>=2.14.1",
     "psycopg[binary,pool]>=3.2",
@@ -20,7 +21,6 @@ dependencies = [
     "beautifulsoup4>=4.15.0",
     "lxml>=6.1.1",
     "httpx>=0.27",
-    "langchain-google-genai>=4.2.6",
     "slowapi>=0.1.10",
     "langchain-deepseek>=1.1.0",
 ]
@@ -45,7 +45,6 @@ extend-exclude = [
     "scripts/deepseek_provider_spike.py",
     "scripts/docs_build.py",
     "scripts/docs_lint.py",
-    "scripts/eval_judge_spike.py",
     "scripts/scrape_itviec_spike.py",
     "scripts/scrape_spike.py",
     "scripts/scrape_topcv_spike.py",

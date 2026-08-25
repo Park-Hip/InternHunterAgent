@@ -87,7 +87,7 @@ Other documents link here rather than restating.
 | `langchain` | ReAct agent runtime and tool binding. |
 | `langchain-deepseek` | Serving provider, and the default for both profiles since D-045. Thinking is disabled so temperature applies. |
 | `langchain-groq` | Second selectable serving provider, and the judge's alternate branch. Reached only when a profile names it. |
-| `langchain-google-genai` | Gemini, used only as the evaluation judge, never on the serving path. |
+| `langchain-openai` | Evaluation judge (`ox-alpha`) via OpenRouter's OpenAI-compatible endpoint, never on the serving path. Replaced the retired Gemini arm. |
 | `langgraph-checkpoint-postgres` | Short-term conversation memory, session id to thread id. |
 
 **Data**

@@ -76,11 +76,10 @@ agent:
 
 eval:
   judge:
-    provider: google        # was: groq
-    model: gemini-2.5-flash  # was: openai/gpt-oss-120b
+    provider: openrouter   # was: google (retired - free tier could not survive a scoring run, see #238); before that: groq
+    model: ox-alpha
     temperature: 0.0
-    rpm: 8                  # throttle below Gemini free-tier's ~10 RPM cap (bump to ~25 if provider reverts to groq)
-    thinking_budget: 0      # gemini-2.5-flash: 0 disables thinking (kills ~90% of judge output cost); ignored by the groq branch
+    rpm: 20                # throttle below OpenRouter's free-tier RPM cap; confirmed by the pre-scoring smoke test
   fixture:
     database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval
   driver:

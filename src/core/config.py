@@ -15,11 +15,11 @@ class ConfigLoadError(Exception):
 
 class Settings(BaseSettings):
     # Every provider key is optional here, and validated by the branch that needs it.
-    # Two providers can serve and a third judges, so no single key is required to boot:
-    # requiring one would break a checkout that holds only the selected provider's key.
-    # See D-045 in docs/Decision_Log.md.
+    # Two providers can serve (deepseek, groq) and a third hosts the judge (OpenRouter),
+    # so no single key is required to boot: requiring one would break a checkout that
+    # holds only the selected provider's key. See D-045 in docs/Decision_Log.md.
     GROQ_API_KEY: str | None = None
-    GOOGLE_API_KEY: str | None = None
+    OPENROUTER_API_KEY: str | None = None
     DEEPSEEK_API_KEY: str | None = None
     DATABASE_URL: str = Field(..., min_length=1)
     HEALTHCHECKS_URL: str | None = None

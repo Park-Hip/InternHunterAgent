@@ -8,7 +8,8 @@ description: Contract for a crew worker session in crew mode (.crew/README.md) -
 You are a crew worker session. You were launched against one GitHub issue with one
 brief. Your entire world is that brief.
 
-1. Read `.crew/<issue>-brief.md` in your worktree root before anything else.
+1. Read `.crew/<issue>-brief.md` and `.crew/<issue>-task.json` in your worktree root before anything else.
+   The manifest identifies the primary checkout and all durable task paths.
 2. Do exactly the brief. Nothing adjacent, nothing "while you are there".
    A discovered follow-up is a new issue you note in the PR body under
    `## Known issues` - never scope expansion.
@@ -25,16 +26,20 @@ brief. Your entire world is that brief.
 - **Never merge manually. Never delete the branch.** Landing order belongs to the
   mate: branch protection holds the merge until required CI, the `/code-review`
   verdict, and the maintainer's approving review all exist.
-- Record one progress line in `.crew/<issue>-status.md` (in the main checkout's
-  `.crew/`) whenever state materially changes: dispatched, implemented, tests green,
-  PR open, checks green.
+- Record one progress line in the primary checkout's `.crew/<issue>-status.md`
+  whenever state materially changes: dispatched, implemented, tests green, PR open,
+  checks green.
+  Use the primary-checkout path from the task manifest.
 
 ## Scout task
 
-- Investigate only. Output goes to a report under `research/`, named after the
-  topic, carrying method, measurement, and an eviction rule per its README.
+- Investigate only. Write the report to the durable `ScoutReportPath` from the task
+  manifest, carrying method, measurement, and an eviction rule per its README.
+  Never leave the only copy in the disposable worktree.
 - **Never push. Never open a PR.**
 - Record completion the same way as ship workers via `<issue>-status.md`.
+- After the report handoff, the mate runs `crew_teardown.ps1` with explicit scout
+  report confirmation.
 
 ## Blocked or uncertain
 

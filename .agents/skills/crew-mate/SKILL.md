@@ -61,7 +61,8 @@ escalate conflicts, and confirm checks re-run on the rebased tips.
 
 ## State discipline
 
-All durable facts belong on disk: briefs, statuses, `events.log`. A restart of your
-session must lose nothing - the next turn reconciles from `.crew/` exactly as this
-one did. When the fleet empties (all merged or closed), tear down worktrees, remove
-the `<issue>-*.md` records, stop the watcher, and say so plainly.
+All durable facts belong on disk: manifests, briefs, statuses, and `events.log`.
+A restart of your session must lose nothing - the next turn reconciles from `.crew/`
+exactly as this one did. When the fleet empties (all merged or closed), use
+`scripts/crew_teardown.ps1` for each manifest-backed task, confirm a scout report
+handoff explicitly, stop the watcher, and say so plainly.

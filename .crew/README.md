@@ -24,6 +24,27 @@ than duplicating it.
 A task never blurs between shapes on its own. Changing shape is a decision for the
 maintainer.
 
+## Visible worker sessions
+
+`scripts/crew_start.ps1` creates a new Windows Terminal tab in the worker's isolated worktree.
+
+By default, it opens an interactive PowerShell prompt and does not start an AI harness.
+
+Pass `-Harness <executable>` to start any installed command-line harness interactively in the new tab.
+
+```powershell
+.\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness codex
+.\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness claude
+.\scripts\crew_start.ps1 -Issue 123 -Autonomy scout -Harness pi
+.\scripts\crew_start.ps1 -Issue 123 -Autonomy scout -Harness aider
+```
+
+The launcher validates the selected executable on `PATH` before it creates the worktree.
+
+Use `-Harness shell` when you want to choose or start a harness manually.
+
+The launcher is terminal-based and does not create sessions in VS Code, HerdR, or any other harness-specific UI.
+
 ## Intake rules (enforced by the mate)
 
 - **Crew trigger.** Crew mode activates only when at least two pending tasks touch

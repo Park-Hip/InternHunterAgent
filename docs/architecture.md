@@ -50,8 +50,6 @@ graph TB
 
 ## 1. Product and MVP bar
 
-## 1. Product and MVP bar
-
 ### 1.1 Purpose
 
 InternHunterAgent helps a job seeker find and understand AI and data job opportunities, internships

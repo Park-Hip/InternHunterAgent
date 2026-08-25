@@ -8,3 +8,9 @@ __pycache__/
 .deepeval-cache.json
 evals/runs/
 .lavish/
+
+# Agent-skill installs whose docs reference artifacts created by later workflows
+.agents/skills/deepeval/
+
+# Regenerable local viewer HTML (evidence lives in the committed replay JSON)
+evals/replays/*-viewer.html

@@ -17,5 +17,6 @@ evals/replays/*-viewer.html
 
 # crew-mode runtime state (briefs, statuses, events, watcher bookkeeping)
 .crew/[0-9]*-*.md
+.crew/[0-9]*-task.json
 .crew/events.log
 .crew/.watch-state.json

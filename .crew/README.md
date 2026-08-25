@@ -1,11 +1,11 @@
 # Crew mode
 
-Mediator-driven parallel work for this repository. One mate session dispatches,
-supervises, and lands worker sessions; the maintainer talks only to the mate and
-gates every landing with one approving GitHub review.
+Mediator-driven parallel work for this repository.
+One mate session dispatches, supervises, and lands worker sessions.
+The maintainer talks only to the mate and gates every landing with one approving GitHub review.
 
-This document is canonical for crew conventions. `AGENTS.md` points here rather
-than duplicating it.
+This document is canonical for crew conventions.
+`AGENTS.md` points here rather than duplicating it.
 
 ## Roles
 
@@ -17,19 +17,33 @@ than duplicating it.
 
 ## Task shapes
 
-- **Ship** - changes code or docs, delivers through a PR opened with
-  `gh pr merge --squash --auto` and `Closes #<issue>`.
-- **Scout** - investigation only; output goes to `research/`. Never pushes.
+- **Ship** - changes code or docs and delivers through a PR opened with `gh pr merge --squash --auto` and `Closes #<issue>`.
 
-A task never blurs between shapes on its own. Changing shape is a decision for the
-maintainer.
+- **Scout** - investigates only and writes its report to the durable path recorded in its task manifest.
+  Scouts never push.
+
+A task never blurs between shapes on its own.
+Changing shape is a decision for the maintainer.
+
+## Durable task lifecycle
+
+New task worktrees are created at `..\InternHunterAgent-worktrees\IHA-<issue>`.
+The `<issue>-task.json` manifest in the primary checkout's `.crew\` directory is the authoritative locator for the task's worktree, brief, branch, terminal backend, and scout report path.
+The launcher also copies the brief and manifest into the task worktree, so a worker can read its contract locally from `.crew\<issue>-brief.md`.
+
+For scout tasks, the durable report path is `research\crew\<issue>-report.md` in the primary checkout.
+The worker must not leave the only report copy inside its disposable worktree.
+
+Existing worktrees keep their `IHA-<issue>` names and locations.
+The launcher never moves them.
+Teardown for an existing task without a manifest remains a manual, path-specific operation.
 
 ## Visible worker sessions
 
-`scripts/crew_start.ps1` creates a new Windows Terminal tab in the worker's isolated worktree.
+`scripts/crew_start.ps1` launches the worker through the explicit Windows Terminal backend.
+It opens a new Windows Terminal tab in the worker's isolated worktree.
 
 By default, it opens an interactive PowerShell prompt and does not start an AI harness.
-
 Pass `-Harness <executable>` to start any installed command-line harness interactively in the new tab.
 
 ```powershell
@@ -40,72 +54,92 @@ Pass `-Harness <executable>` to start any installed command-line harness interac
 ```
 
 The launcher validates the selected executable on `PATH` before it creates the worktree.
-
 Use `-Harness shell` when you want to choose or start a harness manually.
-
 The launcher is terminal-based and does not create sessions in VS Code, HerdR, or any other harness-specific UI.
+
+Use `-WhatIfMode` to inspect the worktree root, manifest, brief, report, and backend launch plan without changing disk.
 
 ## Intake rules (enforced by the mate)
 
-- **Crew trigger.** Crew mode activates only when at least two pending tasks touch
-  disjoint areas, or one ship task is accompanied by a scout task. Otherwise run the
-  default sequential workflow.
-- **Shared-surface lock.** At most one active ship may touch `src/**/models.py` or
-  `config/settings.yaml`. Checked at dispatch from the brief's files-in-scope list.
-- **Plan gate unchanged.** Every ship task still needs an approved plan (issue +
-  change-proposal flow when the tier demands it) before any code exists.
+- **Crew trigger.** Crew mode activates only when at least two pending tasks touch disjoint areas, or one ship task is accompanied by a scout task.
+  Otherwise run the default sequential workflow.
+
+- **Shared-surface lock.** At most one active ship may touch `src/**/models.py` or `config/settings.yaml`.
+  Check this at dispatch from the brief's files-in-scope list.
+
+- **Plan gate unchanged.** Every ship task still needs an approved plan, including the change-proposal flow when its tier demands it, before any code exists.
 
 Parallelism is bounded by these rules, not by a fixed number of workers.
 
 ## Merge policy
 
-Every landed ship PR has, by construction, passed all three gates, enforced by
-branch protection - not by convention:
+Every landed ship PR has, by construction, passed all three gates, enforced by branch protection rather than convention.
 
 1. Required CI checks green.
 2. A recorded `/code-review` verdict.
 3. The maintainer's approving review.
 
-PRs open with `gh pr merge --squash --auto`; GitHub holds them until all three
-hold. The mate presents each ready PR with a captain-facing summary (what changed,
-risks, manual check) and executes serial landing order: merge, rebase remaining
-worktrees onto the new tip, continue. The mate never merges manually and cannot
-bypass protection.
+PRs open with `gh pr merge --squash --auto`.
+GitHub holds them until all three gates hold.
+The mate presents each ready PR with a captain-facing summary covering what changed, risks, and the manual check.
+The mate executes the serial landing order: merge, rebase remaining worktrees onto the new tip, then continue.
+The mate never merges manually and cannot bypass protection.
 
-One-time prerequisite (maintainer action): branch protection on `main` must enable
-*require approve* alongside required status checks. Verify:
+One-time prerequisite: branch protection on `main` must require approval alongside the required status checks.
+Verify it with:
 
 ```sh
 gh api repos/Park-Hip/InternHunterAgent/branches/main/protection/required_pull_request_reviews
 ```
 
-Must return non-empty.
+The response must be non-empty.
 
 ## Files
 
-- `_brief.template.md` - skeleton filled per task by the mate or `crew_start.ps1`.
-- `<issue>-brief.md` - the contract for one task: goal, files in scope, out of
-  scope, verification, autonomy level.
-- `<issue>-status.md` - worker-written progress line(s); last line wins.
-- `events.log` - structured event lines appended by `mate_watch.ps1`:
-  `<UTC timestamp> | <subject> | <event> | <detail>`.
-- `.watch-state.json` - watcher bookkeeping; safe to delete when no crew is active.
+- `_brief.template.md` - skeleton filled by the mate or `crew_start.ps1`.
+
+- `<issue>-brief.md` - primary-checkout copy of the contract for one task.
+  The task-local copy is at `.crew\<issue>-brief.md` in its worktree.
+
+- `<issue>-task.json` - durable, primary-checkout task manifest and authoritative locator for newly dispatched tasks.
+
+- `<issue>-status.md` - worker-written progress lines in the primary checkout.
+  The last non-empty line wins.
+
+- `events.log` - structured events appended by `mate_watch.ps1` in the format `<UTC timestamp> | <subject> | <event> | <detail>`.
+
+- `.watch-state.json` - watcher bookkeeping that is safe to delete when no crew is active.
 
 ## Escalation surface
 
 The mate escalates exactly these and nothing else:
 
-- Plan approval (unchanged gate).
+- Plan approval.
+
 - A ship PR ready for approving review.
+
 - Merge conflicts it cannot resolve by rebasing.
+
 - Repeated check failures on the same PR.
+
 - Shared-surface lock conflicts discovered after dispatch.
+
 - Scout findings that require a maintainer decision.
 
 Everything else is reported as outcomes, not narrated as mechanics.
 
 ## Teardown
 
-Worktrees are disposable: `git worktree remove ../IHA-<issue>` and delete the
-matching `<issue>-*.md` records. When no crew is active the `.crew/` directory holds
-only this README and the template.
+Use the manifest-aware teardown command for newly dispatched tasks:
+
+```powershell
+.\scripts\crew_teardown.ps1 -Issue 123
+.\scripts\crew_teardown.ps1 -Issue 123 -ConfirmScoutReportHandoff
+```
+
+Teardown never forces removal of a dirty worktree.
+For a scout, it refuses to remove the worktree unless the durable report exists and the operator explicitly confirms the handoff with `-ConfirmScoutReportHandoff`.
+On success, it leaves the primary manifest in place and records that the task was torn down.
+
+When no crew is active, stop the watcher.
+The retained manifest, brief, status, and durable scout report support later inspection and manual recovery.

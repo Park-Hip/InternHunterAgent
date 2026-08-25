@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from evals.calibration import CALIBRATION_PATH, load_calibration, score_calibration
-from src.core.config import settings
+from evals.calibration import CALIBRATION_PATH, load_calibration, score_calibration  # noqa: E402  (path bootstrap must precede project imports)
+from src.core.config import settings  # noqa: E402
 
 NONZERO_BUDGET = 1024
 THRESHOLD = 0.5  # DeepEval GEval scores are 0..1; >=0.5 counts as PASS.

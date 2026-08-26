@@ -80,6 +80,7 @@ eval:
     model: gemma-4-31b-it  # served by AI Studio directly; OpenRouter fallback stays available in build_judge()
     temperature: 0.0
     rpm: 10                # 16k TPM free-tier cap binds before the 30 RPM cap at ~1k tok/judge call; measured on the #239 probe
+    timeout_seconds: 120   # client socket timeout; default 30 was too tight for gemma CoT prompts that take 50-90s to score (measured on #266 retries of hlp-referent/hlp-senior-title/hlp-abstraction FAIL cases)
   fixture:
     database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval
   driver:

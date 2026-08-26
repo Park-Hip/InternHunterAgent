@@ -75,7 +75,7 @@ def test_committed_replay_names_the_prompt_that_produced_it() -> None:
     """Every committed replay carries the prompt version its capture ran (M35)."""
     replay = load_replay()
 
-    assert replay["manifest"]["schema_version"] in {2, REPLAY_SCHEMA_VERSION}
+    assert replay["manifest"]["schema_version"] in {2, 3, REPLAY_SCHEMA_VERSION}
     assert replay["manifest"]["prompt_version"] == "v1"
 
 
@@ -95,6 +95,26 @@ def test_replay_rejects_a_manifest_that_cannot_name_its_prompt() -> None:
 
     with pytest.raises(ValueError, match="prompt_version"):
         validate_replay(replay)
+
+
+def test_replay_accepts_named_prompt_lineage_without_rewriting_legacy_artifacts() -> None:
+    replay = load_replay()
+    replay["manifest"] = {
+        **replay["manifest"],
+        "schema_version": REPLAY_SCHEMA_VERSION,
+        "prompt_versions": {
+            "system": "v11",
+            "schema_context": "v11",
+            "sql_generation": "v11",
+        },
+    }
+    del replay["manifest"]["prompt_version"]
+    for scenario in replay["scenarios"].values():
+        for repeat in scenario["repeats"]:
+            for turn in repeat["turns"]:
+                turn["seams"].update({"tool_output": None, "tool_arguments": None})
+
+    validate_replay(replay)
 
 
 def test_replay_rejects_a_pre_stamp_schema_version() -> None:

@@ -17,7 +17,7 @@ CALIBRATION_PATH = Path(__file__).with_name("calibration_v7.yaml")
 # keeps recall at 1.00 overall and on every swept class. See ADR-0047 and
 # evals/runs/iha266-calibration-v7-agreement-report.json.
 RELEASE_THRESHOLD = 0.30
-_REQUIRED = {
+_REQUIRED_LEGACY = {
     "id",
     "scenario_id",
     "language",
@@ -26,6 +26,16 @@ _REQUIRED = {
     "trajectory",
     "human",
 }
+_REQUIRED_NAMED = {
+    "id",
+    "scenario_id",
+    "language",
+    "prompt_versions",
+    "source",
+    "trajectory",
+    "human",
+}
+_PROMPT_SURFACES = frozenset({"system", "schema_context", "sql_generation"})
 
 
 def load_calibration(path: Path = CALIBRATION_PATH) -> dict[str, Any]:
@@ -49,7 +59,10 @@ def load_calibration(path: Path = CALIBRATION_PATH) -> dict[str, Any]:
         raise ValueError("Calibration corpus cases must be a non-empty list")
     seen: set[str] = set()
     for case in cases:
-        if not isinstance(case, dict) or set(case) != _REQUIRED:
+        if not isinstance(case, dict) or set(case) not in {
+            frozenset(_REQUIRED_LEGACY),
+            frozenset(_REQUIRED_NAMED),
+        }:
             raise ValueError(
                 "Each calibration case must use the complete versioned schema"
             )
@@ -61,13 +74,25 @@ def load_calibration(path: Path = CALIBRATION_PATH) -> dict[str, Any]:
             raise ValueError(
                 "Calibration cases must reference a scenario with a semantic assertion"
             )
-        if not all(
-            isinstance(case[field], str) and case[field]
-            for field in ("language", "prompt_version", "source")
-        ):
+        if not all(isinstance(case[field], str) and case[field] for field in ("language", "source")):
             raise ValueError(
-                "Calibration cases must stamp language, prompt version, and source"
+                "Calibration cases must stamp language and source"
             )
+        if "prompt_versions" in case:
+            prompt_versions = case["prompt_versions"]
+            if not (
+                isinstance(prompt_versions, dict)
+                and set(prompt_versions) == _PROMPT_SURFACES
+                and all(
+                    isinstance(version, str) and version
+                    for version in prompt_versions.values()
+                )
+            ):
+                raise ValueError(
+                    "Calibration cases must stamp every named prompt surface"
+                )
+        elif not isinstance(case["prompt_version"], str) or not case["prompt_version"]:
+            raise ValueError("Calibration cases must stamp a legacy prompt version")
         trajectory = case["trajectory"]
         if (
             not isinstance(trajectory, list)
@@ -113,11 +138,19 @@ def calibration_report(
             continue
         row = (result["score"] >= threshold, case["human"]["overall"] == "PASS")
         scenario_class = case["scenario_id"].split("-", 1)[0]
+        lineage_groups = (
+            tuple(
+                f"prompt_surface:{surface}:{version}"
+                for surface, version in sorted(case["prompt_versions"].items())
+            )
+            if "prompt_versions" in case
+            else (f"prompt_version:{case['prompt_version']}",)
+        )
         for group in (
             "overall",
             f"class:{scenario_class}",
             f"language:{case['language']}",
-            f"prompt_version:{case['prompt_version']}",
+            *lineage_groups,
             "assertion_type:semantic",
         ):
             groups[group].append(row)

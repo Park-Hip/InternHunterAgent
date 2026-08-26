@@ -2,6 +2,15 @@ from langchain.messages import SystemMessage
 
 from src.core.config import settings
 
+SYSTEM_PROMPT_SURFACE = "system"
+SCHEMA_CONTEXT_PROMPT_SURFACE = "schema_context"
+SQL_GENERATION_PROMPT_SURFACE = "sql_generation"
+PROMPT_SURFACES = (
+    SYSTEM_PROMPT_SURFACE,
+    SCHEMA_CONTEXT_PROMPT_SURFACE,
+    SQL_GENERATION_PROMPT_SURFACE,
+)
+
 
 def load_system_prompt() -> SystemMessage:
     prompts_root = settings.prompts_yaml.get("prompts")
@@ -39,12 +48,28 @@ def load_sql_generation_prompt() -> str:
     return sql_generation_prompt.strip()
 
 
-def load_prompt_version() -> str:
-    prompt_version = settings.prompts_yaml.get("prompt_version")
-    if not isinstance(prompt_version, str) or not prompt_version.strip():
-        raise ValueError("Missing or empty 'prompt_version' in config/prompts.yaml")
+def load_prompt_versions() -> dict[str, str]:
+    """Return the independently versioned prompt lineage surfaces.
 
-    return prompt_version.strip()
+    Captures persist this mapping directly. A single aggregate version would make a
+    system-only change look like a schema-context or SQL-generation change too.
+    """
+    prompt_versions = settings.prompts_yaml.get("prompt_versions")
+    if not isinstance(prompt_versions, dict) or set(prompt_versions) != set(
+        PROMPT_SURFACES
+    ):
+        raise ValueError(
+            "config/prompts.yaml must declare exactly these prompt_versions: "
+            + ", ".join(PROMPT_SURFACES)
+        )
+    if not all(
+        isinstance(prompt_versions[surface], str)
+        and prompt_versions[surface].strip()
+        for surface in PROMPT_SURFACES
+    ):
+        raise ValueError("Every prompt_versions value must be a non-empty string")
+
+    return {surface: prompt_versions[surface].strip() for surface in PROMPT_SURFACES}
 
 
 def load_behavior_glossary() -> dict[str, str]:

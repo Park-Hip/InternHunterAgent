@@ -153,7 +153,13 @@ from evals.writeback import sample_verification_target, verify_ingestion  # noqa
 
 # Below the bind because it reads config/prompts.yaml through src.core.config, which
 # must not be frozen before the fixture environment is in place.
-from src.agents.runtime.prompts import load_prompt_version  # noqa: E402
+from src.agents.runtime.prompts import (  # noqa: E402
+    PROMPT_SURFACES,
+    load_prompt_versions,
+    load_schema_context,
+    load_sql_generation_prompt,
+    load_system_prompt,
+)
 from src.agents.tracing.langfuse import get_langfuse_client, get_langfuse_handler  # noqa: E402
 
 
@@ -163,6 +169,19 @@ def _utc_now() -> str:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _text_sha256(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _prompt_hashes() -> dict[str, str]:
+    """Fingerprint each prompt surface without coupling it to the others."""
+    return {
+        "system": _text_sha256(str(load_system_prompt().content)),
+        "schema_context": _text_sha256(load_schema_context()),
+        "sql_generation": _text_sha256(load_sql_generation_prompt()),
+    }
 
 
 def load_turn_pacing_seconds() -> float:
@@ -233,7 +252,6 @@ def _database_fingerprint(database_url: str) -> tuple[str, str, int]:
 
 def build_manifest() -> dict[str, Any]:
     settings_path = ROOT / "config" / "settings.yaml"
-    prompts_path = ROOT / "config" / "prompts.yaml"
     fixture_path = ROOT / "evals" / "fixtures" / "seed_eval_db.sql"
     scenarios_path = ROOT / "evals" / "scenarios_v1.yaml"
     settings = yaml.safe_load(settings_path.read_text(encoding="utf-8"))
@@ -254,11 +272,10 @@ def build_manifest() -> dict[str, Any]:
         "baseline_eligible": worktree_state == "clean",
         "database_name": database_name,
         "database_row_count": database_row_count,
-        # prompt_hash detects that the prompt changed; prompt_version names which prompt
-        # produced the run. A capture that cannot name its prompt cannot be read as the
-        # baseline for a later one, which is what T0024.1's version label is for.
-        "prompt_version": load_prompt_version(),
-        "prompt_hash": _sha256(prompts_path),
+        # Each named version and hash belongs to one prompt surface. A change to one
+        # surface is visible without invalidating lineage for the other two.
+        "prompt_versions": load_prompt_versions(),
+        "prompt_hashes": _prompt_hashes(),
         "config_hash": _sha256(settings_path),
         # Provider is recorded per profile because a profile may override agent.provider,
         # and a capture that cannot say which provider produced it is not evidence. The
@@ -328,6 +345,27 @@ def load_run(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _named_prompt_lineage(manifest: dict[str, Any]) -> dict[str, dict[str, str]] | None:
+    versions = manifest.get("prompt_versions")
+    hashes = manifest.get("prompt_hashes")
+    if not isinstance(versions, dict) or not isinstance(hashes, dict):
+        return None
+    if set(versions) != set(PROMPT_SURFACES) or set(hashes) != set(PROMPT_SURFACES):
+        raise ValueError("Run has invalid named prompt lineage")
+    if not all(
+        isinstance(versions[surface], str)
+        and versions[surface].strip()
+        and isinstance(hashes[surface], str)
+        and hashes[surface].strip()
+        for surface in PROMPT_SURFACES
+    ):
+        raise ValueError("Run has invalid named prompt lineage")
+    return {
+        surface: {"version": versions[surface], "hash": hashes[surface]}
+        for surface in PROMPT_SURFACES
+    }
+
+
 def _assert_comparable(left: dict[str, Any], right: dict[str, Any]) -> None:
     if (
         left["manifest"].get("worktree_state") != "clean"
@@ -338,7 +376,6 @@ def _assert_comparable(left: dict[str, Any], right: dict[str, Any]) -> None:
         "fixture_hash",
         "database_name",
         "database_row_count",
-        "prompt_hash",
         "config_hash",
         "scenario_registry_hash",
     )
@@ -355,10 +392,33 @@ def compare_runs(left_path: Path, right_path: Path) -> dict[str, Any]:
     left = load_run(left_path)
     right = load_run(right_path)
     _assert_comparable(left, right)
+    left_lineage = _named_prompt_lineage(left["manifest"])
+    right_lineage = _named_prompt_lineage(right["manifest"])
+    if left_lineage is None or right_lineage is None:
+        if left_lineage != right_lineage:
+            raise ValueError(
+                "Runs are incomparable: named and legacy prompt lineage cannot be "
+                "compared by surface"
+            )
+        if left["manifest"].get("prompt_hash") != right["manifest"].get("prompt_hash"):
+            raise ValueError("Runs are incomparable: prompt_hash differ")
+        prompt_surfaces = {"legacy": {"comparable": True}}
+    else:
+        prompt_surfaces = {
+            surface: {
+                "comparable": left_lineage[surface] == right_lineage[surface],
+                "left": left_lineage[surface],
+                "right": right_lineage[surface],
+            }
+            for surface in PROMPT_SURFACES
+        }
     return {
-        "comparable": True,
+        "comparable": all(
+            surface["comparable"] for surface in prompt_surfaces.values()
+        ),
         "left": left["manifest"]["run_id"],
         "right": right["manifest"]["run_id"],
+        "prompt_surfaces": prompt_surfaces,
     }
 
 
@@ -488,11 +548,14 @@ def freeze_capture(
     run_id = capture["manifest"].get("run_id")
     if not isinstance(run_id, str) or not run_id:
         raise ValueError("Capture manifest must contain a run_id")
+    prompt_versions = _named_prompt_lineage(capture["manifest"])
     prompt_version = capture["manifest"].get("prompt_version")
-    if not isinstance(prompt_version, str) or not prompt_version.strip():
+    if prompt_versions is None and (
+        not isinstance(prompt_version, str) or not prompt_version.strip()
+    ):
         raise ValueError(
-            "Capture manifest must contain a prompt_version; a capture recorded before "
-            "T0035.1 cannot be frozen without stamping the version it actually ran"
+            "Capture manifest must contain prompt_versions or a legacy prompt_version; "
+            "a capture recorded before T0035.1 cannot be frozen without lineage"
         )
     grades = _grade_index(grade, run_id)
     scenarios_by_id = {scenario["id"]: scenario for scenario in load_scenarios()}
@@ -500,10 +563,19 @@ def freeze_capture(
     replay: dict[str, Any] = {
         "manifest": {
             "run_id": run_id,
-            "schema_version": REPLAY_SCHEMA_VERSION,
+            "schema_version": REPLAY_SCHEMA_VERSION if prompt_versions else 3,
             "source_capture": capture_path.name,
             "sanitized": True,
-            "prompt_version": prompt_version.strip(),
+            **(
+                {
+                    "prompt_versions": {
+                        surface: prompt_versions[surface]["version"]
+                        for surface in PROMPT_SURFACES
+                    }
+                }
+                if prompt_versions
+                else {"prompt_version": prompt_version.strip()}
+            ),
         },
         "status": "COMPLETE",
         "scenarios": {},

@@ -102,8 +102,10 @@ It calls lifecycle values source-record creation or source listing-expiry dates.
 It never calls them publication dates, application deadlines, or proof of an open posting.
 The deterministic grader enforces these rules only when the answer and returned rows provide evidence.
 
-Both style checks read the capture's `prompt_version`, so evidence frozen before a rule existed is
-never regraded against it.
+Both style checks read the capture's `prompt_versions.system` value, so a system-prompt change
+gates those checks without invalidating evidence for the schema-context or SQL-generation surfaces.
+Historical captures retain their immutable aggregate `prompt_version` and remain replayable, but
+cannot establish that an individual current surface produced the evidence.
 
 ---
 

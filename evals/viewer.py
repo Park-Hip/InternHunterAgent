@@ -135,6 +135,17 @@ def _setting(value: Any) -> str:
     return "not recorded" if value is None else _text(value)
 
 
+def _prompt_lineage(manifest: dict[str, Any]) -> str:
+    """Render named lineage while retaining readable historical aggregate stamps."""
+    prompt_versions = manifest.get("prompt_versions")
+    if isinstance(prompt_versions, dict) and prompt_versions:
+        return ", ".join(
+            f"{surface}: {version}"
+            for surface, version in sorted(prompt_versions.items())
+        )
+    return _setting(manifest.get("prompt_version"))
+
+
 def _scenario_outcome(manifest: dict[str, Any]) -> str:
     """Say how much of the registry succeeded, since the capture status no longer does.
 
@@ -335,7 +346,7 @@ def run_header(manifest: dict[str, Any]) -> dict[str, Any]:
         "rows": rows,
         "facts": [
             ["Git SHA", _setting(manifest.get("git_sha"))],
-            ["Prompt version", _setting(manifest.get("prompt_version"))],
+            ["Prompt lineage", _prompt_lineage(manifest)],
             ["Baseline eligible", _setting(manifest.get("baseline_eligible"))],
             ["Scenarios", _scenario_outcome(manifest)],
         ],

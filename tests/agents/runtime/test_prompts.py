@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from src.agents.runtime.prompts import (
     load_behavior_glossary,
-    load_prompt_version,
+    load_prompt_versions,
     load_schema_context,
     load_sql_generation_prompt,
     load_system_prompt,
@@ -156,29 +156,48 @@ class SystemPromptScopeTests(unittest.TestCase):
         self.assertIn("do not claim that the posting is open, available, or closed", system_prompt)
 
 
-class LoadPromptVersionTests(unittest.TestCase):
+class LoadPromptVersionsTests(unittest.TestCase):
     @patch("src.agents.runtime.prompts.settings")
-    def test_returns_stripped_string(self, mock_settings) -> None:
-        mock_settings.prompts_yaml = {"prompt_version": "  v2  "}
+    def test_returns_stripped_named_versions(self, mock_settings) -> None:
+        mock_settings.prompts_yaml = {
+            "prompt_versions": {
+                "system": "  v2  ",
+                "schema_context": "v3",
+                "sql_generation": "v4",
+            }
+        }
 
-        self.assertEqual(load_prompt_version(), "v2")
+        self.assertEqual(
+            load_prompt_versions(),
+            {"system": "v2", "schema_context": "v3", "sql_generation": "v4"},
+        )
 
     @patch("src.agents.runtime.prompts.settings")
     def test_raises_when_missing(self, mock_settings) -> None:
         mock_settings.prompts_yaml = {"prompts": {}}
 
         with self.assertRaises(ValueError):
-            load_prompt_version()
+            load_prompt_versions()
 
     @patch("src.agents.runtime.prompts.settings")
     def test_raises_when_blank(self, mock_settings) -> None:
-        mock_settings.prompts_yaml = {"prompt_version": "   "}
+        mock_settings.prompts_yaml = {
+            "prompt_versions": {
+                "system": "v2",
+                "schema_context": "v3",
+                "sql_generation": "   ",
+            }
+        }
 
         with self.assertRaises(ValueError):
-            load_prompt_version()
+            load_prompt_versions()
 
-    def test_yaml_declares_a_prompt_version(self) -> None:
-        self.assertEqual(load_prompt_version(), "v11")
+    def test_yaml_declares_independent_prompt_versions(self) -> None:
+        assert load_prompt_versions() == {
+            "system": "v11",
+            "schema_context": "v11",
+            "sql_generation": "v11",
+        }
 
     def test_yaml_sql_rules_carry_the_issue_243_superlative_and_salary_contract(self) -> None:
         sql_generation = load_sql_generation_prompt()

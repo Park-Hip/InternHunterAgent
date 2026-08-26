@@ -1,6 +1,9 @@
-# Prompt lineage version. Bump whenever any string in this file changes, so evaluation
-# runs recorded before and after a prompt change are never compared as if comparable.
-prompt_version: v11
+# Prompt lineage versions. Bump only the named surface whose text changes, so evaluation
+# evidence for unrelated prompt surfaces remains comparable.
+prompt_versions:
+  system: v11
+  schema_context: v11
+  sql_generation: v11
 
 prompts:
   system_prompt: |

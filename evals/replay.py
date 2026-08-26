@@ -25,12 +25,29 @@ ARCHIVED_REPLAY_NAMES = frozenset(
     }
 )
 
-# 2 (T0035.1) added prompt_version. The bump is checked rather than tolerated: a
-# schema_version 1 artifact predates the lineage stamp, so accepting it would let an
-# unlabelled replay pass as a labelled one - the silent invalidation M35 exists to stop.
-REPLAY_SCHEMA_VERSION = 3
-_SUPPORTED_REPLAY_SCHEMA_VERSIONS = frozenset({2, REPLAY_SCHEMA_VERSION})
-_MANIFEST_KEYS = {"run_id", "schema_version", "source_capture", "sanitized", "prompt_version"}
+# Schema versions 2 and 3 preserve the legacy file-wide prompt_version. Version 4
+# records independently versioned surfaces. Historical artifacts keep their bytes and
+# can still be replayed, but cannot be compared to named lineage one surface at a time.
+REPLAY_SCHEMA_VERSION = 4
+_LEGACY_REPLAY_SCHEMA_VERSIONS = frozenset({2, 3})
+_SUPPORTED_REPLAY_SCHEMA_VERSIONS = frozenset(
+    {*_LEGACY_REPLAY_SCHEMA_VERSIONS, REPLAY_SCHEMA_VERSION}
+)
+_PROMPT_SURFACES = frozenset({"system", "schema_context", "sql_generation"})
+_LEGACY_MANIFEST_KEYS = {
+    "run_id",
+    "schema_version",
+    "source_capture",
+    "sanitized",
+    "prompt_version",
+}
+_NAMED_MANIFEST_KEYS = {
+    "run_id",
+    "schema_version",
+    "source_capture",
+    "sanitized",
+    "prompt_versions",
+}
 _SCENARIO_KEYS = {"scenario_type", "status", "repeats"}
 _REPEAT_KEYS = {"repeat", "status", "turns"}
 _TURN_KEYS = {
@@ -75,21 +92,41 @@ def validate_replay(replay: dict[str, Any]) -> None:
     manifest = replay["manifest"]
     if not isinstance(manifest, dict):
         raise ValueError("Replay manifest must be an object")
-    _assert_keys(manifest, _MANIFEST_KEYS, "replay manifest")
+    schema_version = manifest.get("schema_version")
+    manifest_keys = (
+        _NAMED_MANIFEST_KEYS
+        if schema_version == REPLAY_SCHEMA_VERSION
+        else _LEGACY_MANIFEST_KEYS
+    )
+    _assert_keys(manifest, manifest_keys, "replay manifest")
     if not (
         isinstance(manifest["run_id"], str)
-        and isinstance(manifest["schema_version"], int)
+        and isinstance(schema_version, int)
         and isinstance(manifest["source_capture"], str)
         and manifest["sanitized"] is True
-        and isinstance(manifest["prompt_version"], str)
-        and manifest["prompt_version"].strip()
     ):
         raise ValueError("Replay manifest has invalid provenance fields")
-    if manifest["schema_version"] not in _SUPPORTED_REPLAY_SCHEMA_VERSIONS:
+    if schema_version not in _SUPPORTED_REPLAY_SCHEMA_VERSIONS:
         raise ValueError(
-            f"Replay schema_version is {manifest['schema_version']}, "
+            f"Replay schema_version is {schema_version}, "
             f"expected one of {sorted(_SUPPORTED_REPLAY_SCHEMA_VERSIONS)}"
         )
+    if schema_version == REPLAY_SCHEMA_VERSION:
+        prompt_versions = manifest["prompt_versions"]
+        if not (
+            isinstance(prompt_versions, dict)
+            and set(prompt_versions) == _PROMPT_SURFACES
+            and all(
+                isinstance(version, str) and version.strip()
+                for version in prompt_versions.values()
+            )
+        ):
+            raise ValueError("Replay manifest has invalid prompt_versions")
+    elif not (
+        isinstance(manifest["prompt_version"], str)
+        and manifest["prompt_version"].strip()
+    ):
+        raise ValueError("Replay manifest has invalid prompt_version")
     if replay["status"] != "COMPLETE":
         raise ValueError("Replay status must be COMPLETE")
     if _FORBIDDEN_CONTENT.search(json.dumps(replay)):
@@ -160,7 +197,7 @@ def validate_replay(replay: dict[str, Any]) -> None:
                     )
                 seam_keys = (
                     _V3_SEAM_KEYS
-                    if manifest["schema_version"] == REPLAY_SCHEMA_VERSION
+                    if manifest["schema_version"] >= 3
                     else _V2_SEAM_KEYS
                 )
                 _assert_keys(seams, seam_keys, f"Replay scenario {scenario_id} seams")
@@ -181,7 +218,7 @@ def validate_replay(replay: dict[str, Any]) -> None:
                     raise ValueError(
                         f"Replay scenario {scenario_id} SQL must be a string or null"
                     )
-                if manifest["schema_version"] == REPLAY_SCHEMA_VERSION:
+                if manifest["schema_version"] >= 3:
                     if seams["tool_output"] is not None and not isinstance(
                         seams["tool_output"], str
                     ):

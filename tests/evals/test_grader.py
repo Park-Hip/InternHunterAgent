@@ -26,7 +26,7 @@ from evals.grader import (
 )
 from evals.holdout import HOLDOUT
 from evals.scenarios import load_scenarios
-from src.agents.runtime.prompts import load_prompt_version
+from src.agents.runtime.prompts import load_prompt_versions
 
 
 def test_answer_count_accepts_accented_and_unaccented_vietnamese_number_words() -> None:
@@ -69,7 +69,7 @@ def test_vietnamese_purity_passes_accented_prose_and_exempts_returned_rows() -> 
             tools_called=["query_clean_jobs"],
             execution_accuracy={"status": "PASS"},
             returned_rows=[{"role": "Data Engineer"}],
-            capture_prompt_version=load_prompt_version(),
+            capture_prompt_versions=load_prompt_versions(),
         ),
     )
 
@@ -211,7 +211,7 @@ def test_a_stale_prompt_capture_is_not_regraded_against_either_style_rule() -> N
             tools_called=["query_clean_jobs"],
             execution_accuracy={"status": "PASS"},
             returned_rows=[{"company": "Sonat Game"}],
-            capture_prompt_version="v3",
+            capture_legacy_prompt_version="v3",
         ),
     )
 
@@ -293,7 +293,7 @@ def test_list_requires_each_returned_source_url_under_a_source_label() -> None:
             tools_called=["query_clean_jobs"],
             execution_accuracy={"status": PASS},
             returned_rows=[{"source_url": url}],
-            capture_prompt_version=load_prompt_version(),
+            capture_prompt_versions=load_prompt_versions(),
         ),
     )
 
@@ -310,7 +310,7 @@ def test_source_links_cannot_claim_a_posting_is_open() -> None:
             tools_called=["query_clean_jobs"],
             execution_accuracy={"status": PASS},
             returned_rows=[{"source_url": url}],
-            capture_prompt_version=load_prompt_version(),
+            capture_prompt_versions=load_prompt_versions(),
         ),
     )
 

@@ -13,7 +13,11 @@ def _manifest() -> dict:
     return {
         "run_id": "run-123",
         "git_sha": "abc1234",
-        "prompt_version": "v3",
+        "prompt_versions": {
+            "system": "v3",
+            "schema_context": "v2",
+            "sql_generation": "v1",
+        },
         "baseline_eligible": True,
         "providers": {"react": "deepseek", "sql_generation": "deepseek"},
         "models": {"react": "deepseek-chat", "sql_generation": "deepseek-chat"},
@@ -216,7 +220,7 @@ def test_run_header_names_the_provider_and_sampling_per_profile() -> None:
     assert header["rows"][0] == ["react", "deepseek", "deepseek-chat", "0.2", "900", "not recorded", "off"]
     assert header["facts"] == [
         ["Git SHA", "abc1234"],
-        ["Prompt version", "v3"],
+        ["Prompt lineage", "schema_context: v2, sql_generation: v1, system: v3"],
         ["Baseline eligible", "True"],
         ["Scenarios", "not recorded"],
     ]
@@ -228,7 +232,7 @@ def test_run_header_survives_a_manifest_without_a_provider_block() -> None:
     assert header["rows"] == []
     assert header["facts"] == [
         ["Git SHA", "not recorded"],
-        ["Prompt version", "not recorded"],
+        ["Prompt lineage", "not recorded"],
         ["Baseline eligible", "not recorded"],
         ["Scenarios", "not recorded"],
     ]
@@ -356,9 +360,9 @@ def test_viewer_header_names_the_arm_that_produced_the_capture() -> None:
 
     assert "deepseek-chat" in document
     assert "abc1234" in document
-    # The prompt version travels with the arm: a capture read months later must say
-    # which prompt produced it, not only which git SHA (M35).
-    assert "Prompt version" in document
+    # Prompt lineage travels with the arm: a capture read months later must say
+    # which surfaces produced it, not only which git SHA (M35).
+    assert "Prompt lineage" in document
 
 
 def test_grade_cli_reports_a_missing_file_with_the_command_that_makes_one(

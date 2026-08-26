@@ -69,8 +69,8 @@ async def get_job_details(ids: list[int]) -> str:
     """Fetch the full description and details for specific job postings by their id. Use this only when the user asks to know more about, describe, or compare specific jobs already shown by query_clean_jobs (which lists jobs with their id). Pass the id values from that list."""
     if not ids:
         return (
-            "Please specify which job's id you'd like details for, or run a search "
-            "with query_clean_jobs first."
+            "Vui lòng chỉ định mã tin tuyển dụng bạn muốn xem chi tiết hoặc tìm kiếm "
+            "trước bằng query_clean_jobs."
         )
 
     max_detail_ids = load_max_detail_ids()

@@ -71,8 +71,8 @@ INVENTORY = frozenset(
             path="src/agents/tools/get_job_details.py",
             symbol="get_job_details",
             text=(
-                "Please specify which job's id you'd like details for, or run a search "
-                "with query_clean_jobs first."
+                "Vui lòng chỉ định mã tin tuyển dụng bạn muốn xem chi tiết hoặc tìm kiếm "
+                "trước bằng query_clean_jobs."
             ),
             visibility="model-visible",
         ),

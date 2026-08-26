@@ -1,0 +1,84 @@
+{
+  "manifest": {
+    "run_id": "d0df4f3f-3ed0-4b8f-839c-9cfc460a3f46",
+    "schema_version": 3,
+    "source_capture": "251-hlp-abstraction-v10-capture.json",
+    "sanitized": true,
+    "prompt_version": "v10"
+  },
+  "status": "COMPLETE",
+  "scenarios": {
+    "HLP-ABSTRACTION-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "FAIL",
+              "expected_grade": "FAIL",
+              "seams": {
+                "question": "Việc làm ML?",
+                "answer": "Mình tìm thấy 5 tin tuyển dụng liên quan đến Machine Learning / AI trong cơ sở dữ liệu:\n\n1. **AI Engineer** – Công Ty Cổ Phần ITL Aviation Logistics – TP. Hồ Chí Minh\n   [Nguồn](https://www.vietnamworks.com/ai-engineer--2066640-jv)\n\n2. **Senior AI/Agent Engineer (1-Year Contractor)** – Bosch Global Software Technologies Company Limited – Hà Nội\n   [Nguồn](https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv)\n\n3. **Engineer/senior Engineer Of AI** – Hoya Glass Disk Vietnam – TP. Hồ Chí Minh\n   [Nguồn](https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv)\n\n4. **Machine Vision Engineer (Kỹ Sư Thị Giác Máy)** – Công Ty TNHH Standard Units Supply Việt Nam – Đà Nẵng\n   [Nguồn](https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv)\n\n5. **Computer Vision Engineer (Factory Automation)** – Vietnamworks' Client – TP. Hồ Chí Minh\n   [Nguồn](https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv)\n\nLưu ý: kết quả tìm kiếm dựa trên nội dung tin đăng, có thể chưa hoàn toàn chính xác.\n\nBạn muốn mình xem chi tiết hơn về tin nào không? Hoặc bạn có thể lọc theo thành phố, cấp bậc, hay kỹ năng cụ thể nào đó nhé!",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "tool_output": "Tìm thấy 5 kết quả với các cột: id, title, company, location, source_url.\n- id=3, title=AI Engineer, company=Công Ty Cổ Phần ITL Aviation Logistics, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/ai-engineer--2066640-jv\n- id=14, title=Senior AI/Agent Engineer (1-Year Contractor), company=Bosch Global Software Technologies Company Limited, location=Hanoi, source_url=https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv\n- id=15, title=Engineer/senior Engineer Of AI, company=Hoya Glass Disk Vietnam, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv\n- id=16, title=Machine Vision Engineer (Kỹ Sư Thị Giác Máy), company=Công Ty TNHH Standard Units Supply Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv\n- id=17, title=Computer Vision Engineer (Factory Automation), company=Vietnamworks' Client, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv\nMANDATORY CAVEATS:\n[FREE_TEXT_HEDGE] Không có trường dữ liệu riêng cho thông tin đó. Tôi có thể tìm trong nội dung tin đăng, nhưng kết quả dựa trên cách diễn đạt và có thể chưa hoàn toàn chính xác.",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE tech_stack ILIKE '%machine learning%' OR title ILIKE '%machine learning%' OR description ILIKE '%machine learning%' OR role ILIKE '%ML Engineer%' OR role ILIKE '%Machine Learning%'"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "FAIL",
+              "expected_grade": "FAIL",
+              "seams": {
+                "question": "Việc làm ML?",
+                "answer": "Mình tìm thấy 5 tin tuyển dụng liên quan đến Machine Learning / AI trong cơ sở dữ liệu:\n\n1. **AI Engineer** – Công Ty Cổ Phần ITL Aviation Logistics – TP. Hồ Chí Minh\n   [Nguồn](https://www.vietnamworks.com/ai-engineer--2066640-jv)\n\n2. **Senior AI/Agent Engineer (1-Year Contractor)** – Bosch Global Software Technologies Company Limited – Hà Nội\n   [Nguồn](https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv)\n\n3. **Engineer/senior Engineer Of AI** – Hoya Glass Disk Vietnam – TP. Hồ Chí Minh\n   [Nguồn](https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv)\n\n4. **Machine Vision Engineer (Kỹ Sư Thị Giác Máy)** – Công Ty TNHH Standard Units Supply Việt Nam – Đà Nẵng\n   [Nguồn](https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv)\n\n5. **Computer Vision Engineer (Factory Automation)** – Vietnamworks' Client – TP. Hồ Chí Minh\n   [Nguồn](https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv)\n\nLưu ý: kết quả này dựa trên nội dung tin đăng và có thể chưa hoàn toàn chính xác. Bạn muốn mình xem chi tiết hơn về tin nào không? Hoặc bạn có thể lọc theo thành phố, cấp bậc, hay kỹ năng cụ thể nào đó nhé.",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "tool_output": "Tìm thấy 5 kết quả với các cột: id, title, company, location, source_url.\n- id=3, title=AI Engineer, company=Công Ty Cổ Phần ITL Aviation Logistics, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/ai-engineer--2066640-jv\n- id=14, title=Senior AI/Agent Engineer (1-Year Contractor), company=Bosch Global Software Technologies Company Limited, location=Hanoi, source_url=https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv\n- id=15, title=Engineer/senior Engineer Of AI, company=Hoya Glass Disk Vietnam, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv\n- id=16, title=Machine Vision Engineer (Kỹ Sư Thị Giác Máy), company=Công Ty TNHH Standard Units Supply Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv\n- id=17, title=Computer Vision Engineer (Factory Automation), company=Vietnamworks' Client, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv\nMANDATORY CAVEATS:\n[FREE_TEXT_HEDGE] Không có trường dữ liệu riêng cho thông tin đó. Tôi có thể tìm trong nội dung tin đăng, nhưng kết quả dựa trên cách diễn đạt và có thể chưa hoàn toàn chính xác.",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE tech_stack ILIKE '%machine learning%' OR title ILIKE '%machine learning%' OR description ILIKE '%machine learning%' OR role ILIKE '%ML Engineer%' OR role ILIKE '%Machine Learning%'"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 3,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "FAIL",
+              "expected_grade": "FAIL",
+              "seams": {
+                "question": "Việc làm ML?",
+                "answer": "Mình tìm thấy 5 tin tuyển dụng liên quan đến Machine Learning / AI trong dữ liệu:\n\n1. **AI Engineer** – Công Ty Cổ Phần ITL Aviation Logistics – TP. Hồ Chí Minh\n   [Nguồn gốc](https://www.vietnamworks.com/ai-engineer--2066640-jv)\n\n2. **Senior AI/Agent Engineer (1-Year Contractor)** – Bosch Global Software Technologies Company Limited – Hà Nội\n   [Nguồn gốc](https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv)\n\n3. **Engineer/senior Engineer Of AI** – Hoya Glass Disk Vietnam – TP. Hồ Chí Minh\n   [Nguồn gốc](https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv)\n\n4. **Machine Vision Engineer (Kỹ Sư Thị Giác Máy)** – Công Ty TNHH Standard Units Supply Việt Nam – Đà Nẵng\n   [Nguồn gốc](https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv)\n\n5. **Computer Vision Engineer (Factory Automation)** – Vietnamworks' Client – TP. Hồ Chí Minh\n   [Nguồn gốc](https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv)\n\nLưu ý: các đường link trên chỉ là nguồn tham khảo, không đảm bảo tin đăng còn mở hay đã đóng.\n\nBạn muốn mình xem chi tiết hơn về tin nào không?",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "tool_output": "Tìm thấy 5 kết quả với các cột: id, title, company, location, source_url.\n- id=3, title=AI Engineer, company=Công Ty Cổ Phần ITL Aviation Logistics, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/ai-engineer--2066640-jv\n- id=14, title=Senior AI/Agent Engineer (1-Year Contractor), company=Bosch Global Software Technologies Company Limited, location=Hanoi, source_url=https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv\n- id=15, title=Engineer/senior Engineer Of AI, company=Hoya Glass Disk Vietnam, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv\n- id=16, title=Machine Vision Engineer (Kỹ Sư Thị Giác Máy), company=Công Ty TNHH Standard Units Supply Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv\n- id=17, title=Computer Vision Engineer (Factory Automation), company=Vietnamworks' Client, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv\nMANDATORY CAVEATS:\n[FREE_TEXT_HEDGE] Không có trường dữ liệu riêng cho thông tin đó. Tôi có thể tìm trong nội dung tin đăng, nhưng kết quả dựa trên cách diễn đạt và có thể chưa hoàn toàn chính xác.",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE tech_stack ILIKE '%machine learning%' OR title ILIKE '%machine learning%' OR description ILIKE '%machine learning%' OR role ILIKE '%ML Engineer%' OR role ILIKE '%Machine Learning%'"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

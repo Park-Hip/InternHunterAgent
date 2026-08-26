@@ -178,7 +178,7 @@ class LoadPromptVersionTests(unittest.TestCase):
             load_prompt_version()
 
     def test_yaml_declares_a_prompt_version(self) -> None:
-        self.assertEqual(load_prompt_version(), "v10")
+        self.assertEqual(load_prompt_version(), "v11")
 
     def test_yaml_sql_rules_carry_the_issue_243_superlative_and_salary_contract(self) -> None:
         sql_generation = load_sql_generation_prompt()
@@ -189,6 +189,19 @@ class LoadPromptVersionTests(unittest.TestCase):
         # Repeat 3 of HON-NEGOTIABLE-SALARY-1 filtered on salary disclosure and
         # substituted a zero-results report for the negotiable-salary answer.
         self.assertIn("never add a salary-disclosure filter", sql_generation)
+
+    def test_yaml_sql_rules_carry_the_issue_251_abstraction_contract(self) -> None:
+        sql_generation = load_sql_generation_prompt()
+
+        # Issue #251 capture 2026-08-26: all 3 v10 repeats of HLP-ABSTRACTION-1
+        # ("Việc làm ML?") added role ILIKE '%ML Engineer%'/'%Machine Learning%'
+        # clauses alongside the tech_stack/title/description match, pulling in rows
+        # that never mention "machine learning" anywhere in their own text.
+        self.assertIn("Do NOT add role-category filters", sql_generation)
+        self.assertIn("role ILIKE '%ML Engineer%'", sql_generation)
+        # Second v11 capture iteration: the bare abbreviation '%ML%' also matched
+        # "MLOps" and "MLflow", so the rule must require the expanded form only.
+        self.assertIn("do NOT also search the bare abbreviation", sql_generation)
 
 
 class LoadBehaviorGlossaryTests(unittest.TestCase):

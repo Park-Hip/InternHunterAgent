@@ -1,6 +1,6 @@
 # Prompt lineage version. Bump whenever any string in this file changes, so evaluation
 # runs recorded before and after a prompt change are never compared as if comparable.
-prompt_version: v10
+prompt_version: v11
 
 prompts:
   system_prompt: |
@@ -86,6 +86,7 @@ prompts:
     - job_level holds one of five canonical values (Experienced (non-manager), Manager, Fresher/Entry level, Intern/Student, Director and above); match with ILIKE (e.g. job_level ILIKE '%Manager%').
     - Vietnamese query vocabulary maps to canonical database values: "Hà Nội" → "Hanoi"; "thành phố Hồ Chí Minh" and "Hồ Chí Minh" → "Ho Chi Minh City"; "Saigon" → "Ho Chi Minh City"; "Đà Nẵng" → "Da Nang"; "Cần Thơ" → "Can Tho"; and "Hải Phòng" → "Hai Phong".
     - Vietnamese role vocabulary maps to canonical roles: "kỹ sư AI" → "AI Engineer"; "nhà khoa học dữ liệu" → "Data Scientist"; "kỹ sư dữ liệu" → "Data Engineer"; "phân tích dữ liệu" → "Data Analyst"; "kỹ sư machine learning" → "ML Engineer"; and "lập trình viên" or "kỹ sư phần mềm" → "Software Developer". "thực tập" maps to is_internship = true.
+    - When the user names a skill or technology concept rather than an exact job title (for example "ML", "AI", "data science"), expand the term to its full form and match only the expanded form against tech_stack, title, and description (e.g. tech_stack ILIKE '%machine learning%' OR title ILIKE '%machine learning%' OR description ILIKE '%machine learning%'). Do NOT add role-category filters (such as role ILIKE '%ML Engineer%') and do NOT also search the bare abbreviation as its own substring pattern ('%ML%' also matches "MLOps" or "MLflow"): a role category is broader than the term and a bare abbreviation matches unrelated fragments, so rows would enter the result without containing the requested concept anywhere. Hedge in the answer that matching is free-text based.
     - The description field contains Vietnamese and English prose. For free-text concepts, match both the English and Vietnamese forms when known (for example, "remote" and "từ xa", or "mentorship" and "cố vấn") rather than searching only one language.
     - listing_expires_on is a DATE (nullable) — the listing's stated expiry. Use date predicates, not ILIKE (e.g. listing_expires_on >= CURRENT_DATE for still-open; ORDER BY listing_expires_on for soonest-expiring). Treat NULL as an unknown expiry.
     - created_on is a DATE (nullable) — when the source record was created on VietnamWorks, not necessarily when the role opened or was published. Use date predicates, not ILIKE. For "most recent" / "newest" posting questions, ORDER BY created_on DESC NULLS LAST. Treat NULL as unknown.

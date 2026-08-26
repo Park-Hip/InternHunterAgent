@@ -43,6 +43,11 @@ Teardown for an existing task without a manifest remains a manual, path-specific
 `scripts/crew_start.ps1` launches the worker through an explicit terminal backend.
 By default it opens the task worktree in a new VS Code window.
 Pass `-Backend wt` to open a new Windows Terminal tab instead.
+Pass `-Backend vscode-task` to register a "Crew: IHA-<issue> worker" task in this
+checkout's `.vscode/tasks.json` without launching anything - then start it from
+the terminal panel of an already-running window (Terminal > Run Task), which is
+the only way to land a worker inside a window that is already open, because the
+VS Code CLI cannot inject terminals into running windows.
 
 By default, it opens an interactive PowerShell prompt and does not start an AI harness.
 Pass `-Harness <executable>` to start any installed command-line harness interactively.
@@ -52,10 +57,17 @@ Pass `-Harness <executable>` to start any installed command-line harness interac
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness claude
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy scout -Harness pi
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy scout -Harness aider
+# Register the worker as a task in this checkout's terminal panel (pi example):
+.\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness pi -Backend vscode-task
 ```
 
 With `-Harness codex`, codex starts with `--yolo` unless `-HarnessArgs` supplies
 different arguments. Other harnesses start without extra arguments.
+
+With `-Backend vscode-task`, the harness is started with the task brief as its
+initial prompt argument, so it begins working on its contract immediately.
+Every backend passes the brief to the harness this way; no human needs to type
+anything into the worker session.
 
 The launcher validates the selected executable on `PATH` before it creates the worktree.
 Use `-Harness shell` when you want to choose or start a harness manually.
@@ -153,6 +165,7 @@ Use the manifest-aware teardown command for newly dispatched tasks:
 Teardown never forces removal of a dirty worktree.
 For a scout, it refuses to remove the worktree unless the durable report exists and the operator explicitly confirms the handoff with `-ConfirmScoutReportHandoff`.
 On success, it leaves the primary manifest in place and records that the task was torn down.
+For tasks dispatched with `-Backend vscode-task`, teardown also removes the matching `Crew: IHA-<issue> worker` entry from this checkout's `.vscode/tasks.json`.
 
 When no crew is active, stop the watcher.
 The retained manifest, brief, status, and durable scout report support later inspection and manual recovery.

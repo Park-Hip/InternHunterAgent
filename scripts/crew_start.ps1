@@ -12,8 +12,11 @@ param(
     [string]$HarnessArgs,
     # wt opens a Windows Terminal tab; vscode opens the worktree in a new VS
     # Code window and auto-starts the harness in the integrated terminal panel
-    # via a generated .vscode/tasks.json (requires allowing automatic tasks).
-    [ValidateSet('wt', 'vscode')][string]$Backend = 'vscode',
+    # via a generated .vscode/tasks.json (requires allowing automatic tasks);
+    # vscode-task registers a "Crew: IHA-<issue> worker" task in THIS checkout's
+    # .vscode/tasks.json without launching anything - start it from the terminal
+    # panel of an already-running window via Terminal > Run Task.
+    [ValidateSet('wt', 'vscode', 'vscode-task')][string]$Backend = 'vscode',
     # Dry-run prints the plan without touching disk.
     [switch]$WhatIfMode,
     [string]$RepoRoot
@@ -59,6 +62,16 @@ if ($Harness -ne 'shell') {
 $resolvedHarnessArgs = if (-not [string]::IsNullOrWhiteSpace($HarnessArgs)) { $HarnessArgs.Trim() }
     elseif ($Harness -eq 'codex') { '--yolo' } else { $null }
 
+# The harness receives the brief as its initial prompt argument so it starts
+# working without a human typing anything. Wording is autonomy-aware: scouts
+# write reports, ships open pull requests.
+$workerPrompt = if ($Autonomy -eq 'scout') {
+        "Read the file .crew/$Issue-brief.md in this repository and execute exactly what it specifies as a scout: investigate only, never push, and write your durable report to the report path given in the brief. Record progress lines in the primary status path given in the brief."
+    }
+    else {
+        "Read the file .crew/$Issue-brief.md in this repository and execute the task it describes end to end: implement the changes it specifies in this worktree, run the verification commands it lists, then open the pull request with gh as instructed. Record progress lines in the primary status path given in the brief."
+    }
+
 if ($WhatIfMode) {
     Write-Output 'dry-run plan (no changes made):'
     Write-Output ("  root     : {0}" -f $paths.WorktreeRoot)
@@ -68,7 +81,11 @@ if ($WhatIfMode) {
     if ($Autonomy -eq 'scout') {
         Write-Output ("  report   : {0}" -f $paths.ScoutReportPath)
     }
-    if ($Backend -eq 'vscode') {
+    if ($Backend -eq 'vscode-task') {
+        Write-Output ("  task     : register 'Crew: IHA-{0} worker ({1})' in this checkout's .vscode/tasks.json (cwd = worktree, harness gets the brief as its initial prompt)" -f $Issue, $Harness)
+        Write-Output '  start    : Ctrl+Shift+P > Tasks: Run Task > the registered worker task'
+    }
+    elseif ($Backend -eq 'vscode') {
         if ($Harness -eq 'shell') {
             Write-Output ("  terminal : new VS Code window on {0} (no automatic task)" -f $wtPath)
         }
@@ -90,7 +107,30 @@ if ($WhatIfMode) {
     exit 0
 }
 
-if (Test-Path -LiteralPath $wtPath) { throw "worktree path already exists: $wtPath" }
+if ($Backend -eq 'vscode-task' -and $Harness -eq 'shell') {
+    throw '-Backend vscode-task starts the worker from your terminal panel and requires -Harness <executable>.'
+}
+# Relaunch of an existing dispatched task: reuse its worktree, brief, and
+# manifest; only (re-)register the terminal-panel task entry.
+if ($Backend -eq 'vscode-task' -and (Test-Path -LiteralPath $wtPath)) {
+    if (-not (Test-Path -LiteralPath $paths.PrimaryManifestPath)) {
+        throw "worktree exists at '$wtPath' without a task manifest; cannot relaunch."
+    }
+    $taskName = "Crew: IHA-$Issue worker ($Harness)"
+    Add-CrewVsCodeTaskEntry -RepoRoot $RepoRoot -WorktreePath $wtPath -TaskName $taskName `
+        -HarnessPath $harnessExecutable.Source -HarnessArgs $(if ($resolvedHarnessArgs) { $resolvedHarnessArgs } else { '' }) `
+        -WorkerPrompt $workerPrompt | Out-Null
+    Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes @{
+        State                = 'dispatched'
+        TerminalBackend      = 'vscode-task'
+        TerminalLaunchStatus = 'awaiting-task-run'
+        TerminalLaunchDetail = "registered '$taskName' in .vscode/tasks.json (cwd = worktree, harness gets the brief as initial prompt); start via Terminal > Run Task"
+    } | Out-Null
+    Write-Output "relaunch   : reused worktree $wtPath"
+    Write-Output "task       : '$taskName' registered in .vscode/tasks.json"
+    Write-Output "next       : Ctrl+Shift+P > Tasks: Run Task > '$taskName' - it starts in this window's terminal panel"
+    exit 0
+}
 git fetch origin main | Out-Null
 if (-not (Test-Path -LiteralPath $paths.WorktreeRoot)) {
     New-Item -ItemType Directory -Path $paths.WorktreeRoot -Force | Out-Null
@@ -131,7 +171,8 @@ Copy-CrewTaskContractFiles -PrimaryBriefPath $paths.PrimaryBriefPath -TaskBriefP
     -PrimaryManifestPath $paths.PrimaryManifestPath -TaskManifestPath $paths.TaskManifestPath
 
 $escapedWorktreePath = $wtPath.Replace("'", "''")
-$workerMessage = "crew worker for issue #$Issue ($Autonomy) - read .crew\$Issue-brief.md"
+$escapedPrompt = $workerPrompt.Replace("'", "''")
+$workerMessage = "crew worker for issue #$Issue ($Autonomy) - the brief is passed to the harness as its initial prompt"
 $sessionCommand = "Set-Location -LiteralPath '$escapedWorktreePath'; Write-Host '$workerMessage'"
 if ($Harness -ne 'shell') {
     $escapedHarnessPath = $harnessExecutable.Source.Replace("'", "''")
@@ -141,8 +182,24 @@ if ($Harness -ne 'shell') {
             $sessionCommand += " '$($arg.Replace("'", "''"))'"
         }
     }
+    # The brief as initial prompt - the harness starts working immediately.
+    $sessionCommand += " '$escapedPrompt'"
 }
-if ($Backend -eq 'vscode') {
+if ($Backend -eq 'vscode-task') {
+    $taskName = "Crew: IHA-$Issue worker ($Harness)"
+    Add-CrewVsCodeTaskEntry -RepoRoot $RepoRoot -WorktreePath $wtPath -TaskName $taskName `
+        -HarnessPath $harnessExecutable.Source -HarnessArgs $(if ($resolvedHarnessArgs) { $resolvedHarnessArgs } else { '' }) `
+        -WorkerPrompt $workerPrompt | Out-Null
+    Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes @{
+        TerminalLaunchStatus = 'awaiting-task-run'
+        TerminalLaunchDetail = "registered '$taskName' in .vscode/tasks.json (cwd = worktree, harness gets the brief as initial prompt); start via Terminal > Run Task"
+    } | Out-Null
+    Write-Output "worktree   : $wtPath (branch $branch)"
+    Write-Output "task       : '$taskName' registered in .vscode/tasks.json"
+    Write-Output "next       : Ctrl+Shift+P > Tasks: Run Task > '$taskName' - it starts in this window's terminal panel"
+    exit 0
+}
+elseif ($Backend -eq 'vscode') {
     $taskName = "IHA-$Issue worker"
     $launchPlan = New-CrewVsCodeLaunchPlan -WorktreePath $wtPath -SessionCommand $sessionCommand -TaskName $taskName
     if ($launchPlan -and $Harness -ne 'shell') {

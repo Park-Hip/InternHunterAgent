@@ -64,7 +64,7 @@ function Write-CrewTaskManifest {
         [Parameter(Mandatory)][string]$PrimaryStatusPath,
         [Parameter(Mandatory)][string]$TaskBriefPath,
         [Parameter(Mandatory)][string]$ScoutReportPath,
-        [Parameter(Mandatory)][ValidateSet('wt', 'vscode')][string]$TerminalBackend
+            [Parameter(Mandatory)][ValidateSet('wt', 'vscode', 'vscode-task')][string]$TerminalBackend
     )
 
     $manifest = [ordered]@{

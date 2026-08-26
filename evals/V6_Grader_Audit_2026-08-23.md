@@ -24,7 +24,7 @@ The semantic judge was not used because its result remains diagnostic while cali
 
 ## Evidence and method
 
-The reviewed artifact is [`replays/v6-baseline-20260823.json`](replays/v6-baseline-20260823.json).
+The reviewed artifact is [`archive/replays/v6-baseline-20260823.json`](archive/replays/v6-baseline-20260823.json).
 The review re-ran `grade_run` and `grade_persisted_run` against the running frozen fixture database.
 Every turn was read against its `expected` contract and execution comparison in [`scenarios_v1.yaml`](scenarios_v1.yaml).
 For SQL-limit findings, the review also followed the production path through [`row_bound.py`](../src/services/query/row_bound.py).

@@ -1,6 +1,6 @@
 # `evals/` - The Evaluation Instrument
 
-> **Last verified:** 2026-08-23.
+> **Last verified:** 2026-08-26.
 
 > **Eviction:** This guide leaves when the evaluation commands, evidence contract, or result terms change.
 
@@ -110,6 +110,17 @@ Structural checks take precedence over literal and semantic checks.
 During calibration, a human label wins over the judge and any disagreement becomes a new labelled case.
 After a maintainer accepts the published calibration and authorizes a stated use, the calibrated grader may own that stated use.
 The current metric must not be read as a production release gate unless that authorization is recorded.
+
+## Deterministic wording contract
+
+Refusal and zero-result scenarios carry their acceptance rule as a structural text rule, not as judge-only criteria.
+Each rule holds the canonical glossary anchors plus an explicit list of equivalent phrasings, so a correct refusal or zero-result answer passes even when its wording sits outside the canonical sentence.
+The accepted equivalents are evidence-led: every phrase names a reviewed example, currently from [`t0027_deepseek_arm.md`](t0027_deepseek_arm.md), the committed calibration corpus, and the v6 baseline.
+
+The contract stays narrow on purpose.
+An answer that claims it performed a mutation, fabricates results where none exist, or excuses itself with a database error matches none of the accepted phrases and still fails deterministically.
+Every accepted phrase keeps a focused negative test in `tests/evals/test_grader.py` protecting that boundary.
+Widen a rule only through a proposal; registry lexicon entries live in [`scenarios_v1.yaml`](scenarios_v1.yaml) next to the assertion they belong to.
 
 ## Files
 

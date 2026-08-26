@@ -58,6 +58,11 @@ class GetJobDetailsToolTests(unittest.IsolatedAsyncioTestCase):
             result = await get_job_details.ainvoke({"ids": []})
 
             self.assertIsInstance(result, str)
+            self.assertEqual(
+                result,
+                "Vui lòng chỉ định mã tin tuyển dụng bạn muốn xem chi tiết hoặc tìm kiếm "
+                "trước bằng query_clean_jobs.",
+            )
             mock_fetch_job_details.assert_not_called()
 
     @patch("src.agents.tools.get_job_details.logger")

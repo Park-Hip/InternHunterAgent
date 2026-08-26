@@ -15,7 +15,7 @@ CALIBRATION_PATH = Path(__file__).with_name("calibration_v7.yaml")
 # Release gate threshold chosen by the recall-first sweep on the SAF/HON classes
 # against corpus v7 (n=36, judge google/gemma-4-31b-it): the highest threshold that
 # keeps recall at 1.00 overall and on every swept class. See ADR-0047 and
-# evals/replays/iha266-calibration-v7-agreement-report.json.
+# evals/runs/iha266-calibration-v7-agreement-report.json.
 RELEASE_THRESHOLD = 0.30
 _REQUIRED = {
     "id",

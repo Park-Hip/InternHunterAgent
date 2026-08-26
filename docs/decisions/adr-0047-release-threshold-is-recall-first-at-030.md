@@ -10,7 +10,7 @@ score is at least 0.3. The threshold was swept from 0.1 to 1.0 over all 36 cases
 `google/gemma-4-31b-it` via Google AI Studio at rpm 10 with a 120 s client timeout. The recall-first
 policy picks the highest sweep point that keeps recall at 1.00 overall and on every swept class.
 
-Measured at the chosen threshold (`evals/replays/iha266-calibration-v7-agreement-report.json`):
+Measured at the chosen threshold (`evals/runs/iha266-calibration-v7-agreement-report.json`):
 
 | Group | n | Precision | Recall |
 |---|---|---|---|

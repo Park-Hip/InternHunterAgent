@@ -1,5 +1,73 @@
-# crew_vscode_backend.ps1 - explicit VS Code launch backend for crew workers.
-#
+# crew_vscode_backend.ps1 - VS Code launch backends for crew workers.
+
+function Add-CrewVsCodeTaskEntry {
+    # Registers (or replaces) a "Crew: IHA-<issue> worker" task in the primary
+    # checkout's .vscode/tasks.json so the maintainer can start the worker from
+    # the integrated terminal panel of an already-running VS Code window
+    # (Terminal > Run Task). The CLI cannot inject terminals into running windows,
+    # so a workspace task is the only way to land a worker inside them.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$WorktreePath,
+        [Parameter(Mandatory)][string]$TaskName,
+        [Parameter(Mandatory)][string]$HarnessPath,
+        [AllowEmptyString()][string]$HarnessArgs,
+        [Parameter(Mandatory)][string]$WorkerPrompt
+    )
+
+    $tasksDir = Join-Path $RepoRoot '.vscode'
+    $tasksPath = Join-Path $tasksDir 'tasks.json'
+
+    if (Test-Path -LiteralPath $tasksPath) {
+        try {
+            $config = Get-Content -LiteralPath $tasksPath -Raw | ConvertFrom-Json
+        }
+        catch {
+            throw ".vscode/tasks.json exists but is not valid JSON: $($_.Exception.Message)"
+        }
+    }
+    else {
+        $config = [pscustomobject]@{
+            version = '2.0.0'
+            tasks   = @()
+        }
+    }
+
+    if (-not ($config | Get-Member -Name tasks)) {
+        $config | Add-Member -MemberType NoteProperty -Name tasks -Value @()
+    }
+    $tasks = @($config.tasks | Where-Object { $_.label -ne $TaskName })
+
+    $args = @()
+    foreach ($arg in ($HarnessArgs -split '\s+' | Where-Object { $_ })) { $args += $arg }
+    $args += $WorkerPrompt
+
+    $entry = [ordered]@{
+        label          = $TaskName
+        type           = 'shell'
+        isBackground   = $true
+        problemMatcher = @()
+        presentation   = [ordered]@{ reveal = 'always'; focus = $true; panel = 'dedicated'; clear = $true }
+        options        = [ordered]@{ cwd = $WorktreePath }
+        command        = $HarnessPath
+        args           = $args
+    }
+    $tasks += [pscustomobject]$entry
+
+    if (-not ($config | Get-Member -Name version)) {
+        $config | Add-Member -MemberType NoteProperty -Name version -Value '2.0.0' -Force
+    }
+    $config.tasks = $tasks
+
+    if (-not (Test-Path -LiteralPath $tasksDir)) {
+        New-Item -ItemType Directory -Path $tasksDir -Force | Out-Null
+    }
+    $json = $config | ConvertTo-Json -Depth 6
+    [System.IO.File]::WriteAllText($tasksPath, $json + "`n", [System.Text.UTF8Encoding]::new($false))
+    return $tasksPath
+}
+
 # The VS Code CLI cannot inject an integrated-terminal session into an
 # already-running window. This backend therefore opens the task worktree in a
 # NEW VS Code window and pre-writes a .vscode/tasks.json terminal task so the

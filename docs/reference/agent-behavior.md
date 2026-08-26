@@ -76,6 +76,21 @@ by a *posted* date (none exists), but may order by the source-record creation da
 as such. The deterministic grader treats a lifecycle-date mention accompanied by an explicit
 not-a-deadline / not-a-posting-date clarification as truthful, and still fails a bare substitution.
 
+#### 1a-2. Tech-abstraction query scoping (resolved 2026-08-26, issue #251)
+
+The remaining #175 item was resolved the same way: three prompt-v10 live repeats of
+`HLP-ABSTRACTION-1` ("Việc làm ML?") were captured before any edit (`iha251-hlp-abstraction-v10`).
+All three generated identical SQL that added `role ILIKE '%ML Engineer%'` / `'%Machine Learning%'
+clauses on top of the tech_stack/title/description match, returning rows whose own text never
+mentions "machine learning" — the over-broad match recorded by the v6 audit. The answers themselves
+were already hedged and source-labelled, so the defect was SQL scoping, not missing disclosure.
+
+Prompt v11 adds the SQL rule: expand a skill/technology concept to its full form and match only the
+expanded form against `tech_stack`/`title`/`description`; never add role-category filters alongside
+it, and never search the bare abbreviation as its own substring pattern (`%ML%` also matches
+"MLOps" and "MLflow"). A follow-up three-repeat capture under v11 returns exactly the reference row
+set with the hedge intact (3/3 PASS). The frozen v10 capture remains as regression evidence.
+
 ### 1b. Semantic fidelity
 
 The V9 contract keeps explanations in Vietnamese.
@@ -103,7 +118,7 @@ never regraded against it.
 | 5 | Canonical phrasings home | Final; machine SoT in `prompts.yaml` glossary, human SoT here | G47 §10 |
 | 6 | Priority ladder | Safety > Honesty > Helpfulness > Style (SP) | §1 above |
 | 7 | Location synonyms | SG maps Saigon → Ho Chi Minh City before `ILIKE` | SG rule (T0015.5) |
-| 8 | Tech abstractions | `tech_stack` primary; hedged `description`/`title` fallback for abstractions; expand abbreviations (`%machine learning%` not `%ML%`) | `FREE-TEXT-HEDGE` + SG rule |
+| 8 | Tech abstractions | `tech_stack` primary; hedged `description`/`title` fallback for abstractions; expand abbreviations (`%machine learning%` not `%ML%`); no role-category broadening beyond the text match (prompt v11 SQL rule) | `FREE-TEXT-HEDGE` + SG rule |
 | 9 | Role→title fallback | Non-canonical term → `title`/`description` `ILIKE`, note `role='Other'` | SG rule (T0015.5) |
 | 10 | Persona internship-bias | SP line 3 → "AI/Data job and internship postings" | SP edit (T0015.5) |
 

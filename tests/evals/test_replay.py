@@ -243,8 +243,13 @@ def test_committed_replay_is_never_silently_omitted_from_discovery() -> None:
     assert REPLAY_PATH.name in discovered
     # Preserved history lives outside the active set and must stay there.
     # iha243-honesty-v9.json joined the active set with issue #243 (prompt-v9
-    # honesty-capture freeze, 2026-08-26).
-    assert discovered == {REPLAY_PATH.name, "iha243-honesty-v9.json"}
+    # honesty-capture freeze, 2026-08-26). iha251-hlp-abstraction-v10.json joined
+    # with issue #251 (prompt-v10 abstraction-capture freeze, 2026-08-26).
+    assert discovered == {
+        REPLAY_PATH.name,
+        "iha243-honesty-v9.json",
+        "iha251-hlp-abstraction-v10.json",
+    }
     for name in ARCHIVED_REPLAY_NAMES:
         assert name not in discovered
 
@@ -275,11 +280,11 @@ def test_run_active_replays_runs_every_discovered_artifact(monkeypatch) -> None:
 
     report = run_active_replays()
 
-    assert sorted(replayed) == [
+    assert sorted(replayed) == sorted(
         scenario_id
         for path in active_replay_paths()
         for scenario_id in [next(iter(load_replay(path)["scenarios"]))]
-    ]
+    )
     assert set(report) == {path.name for path in active_replay_paths()}
 
 

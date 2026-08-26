@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from langchain.messages import AIMessage, HumanMessage
 
@@ -310,12 +310,14 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
 
     @patch("src.agents.runtime.react_agent.get_langfuse_client")
+    @patch("src.agents.runtime.react_agent.record_agent_response_failure")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config")
     async def test_ainvoke_returns_empty_answer_when_agent_returns_no_messages(
         self,
         mock_build_langfuse_config,
         mock_langfuse_request_trace,
+        mock_record_agent_response_failure,
         _mock_get_langfuse_client,
     ) -> None:
         fake_agent = AsyncMock()
@@ -326,6 +328,10 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         result = await AgentRuntime(agent=fake_agent).ainvoke("what time is it?")
 
         self.assertEqual(result["answer"], "")
+        self.assertEqual(result["failure_category"], "messages_empty")
+        mock_record_agent_response_failure.assert_called_once_with(
+            category="messages_empty"
+        )
 
     @patch("src.agents.runtime.react_agent.get_langfuse_client")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
@@ -347,6 +353,55 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result["answer"], FALLBACK_ANSWER)
+
+    @patch("src.agents.runtime.react_agent.get_langfuse_client")
+    @patch("src.agents.runtime.react_agent.build_langfuse_config")
+    @patch("src.agents.tracing.langfuse.get_langfuse_client")
+    @patch("src.agents.tracing.langfuse._langfuse_handler", object())
+    async def test_malformed_response_records_failure_category_on_enabled_trace(
+        self,
+        mock_tracing_get_client,
+        mock_build_langfuse_config,
+        mock_runtime_get_client,
+    ) -> None:
+        fake_agent = AsyncMock()
+        fake_agent.ainvoke.return_value = {"messages": []}
+        client = MagicMock()
+        client.get_current_trace_id.return_value = "trace-malformed"
+        mock_tracing_get_client.return_value = client
+        mock_runtime_get_client.return_value = client
+        mock_build_langfuse_config.return_value = {}
+
+        result = await generate_agent_response(
+            query="what time is it?", runtime=AgentRuntime(agent=fake_agent)
+        )
+
+        self.assertEqual(result["answer"], FALLBACK_ANSWER)
+        client.update_current_span.assert_called_once_with(
+            metadata={"agent_response_failure_category": "messages_empty"},
+            level="WARNING",
+        )
+
+    def test_extract_answer_classifies_malformed_response_shapes(self) -> None:
+        runtime = AgentRuntime(agent=AsyncMock())
+
+        class _NonStringContent:
+            content = 123
+
+        cases = (
+            ("oops", "response_not_dict"),
+            ({}, "messages_missing"),
+            ({"messages": "oops"}, "messages_not_list"),
+            ({"messages": []}, "messages_empty"),
+            ({"messages": [_NonStringContent()]}, "message_content_not_text"),
+            ({"messages": [AIMessage(content="   ")]}, "message_content_empty"),
+        )
+
+        for response, expected_category in cases:
+            with self.subTest(response=response):
+                answer, category = runtime._extract_answer_with_failure_category(response)
+                self.assertEqual(answer, "")
+                self.assertEqual(category, expected_category)
 
     @patch("src.agents.runtime.react_agent.get_langfuse_client")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")

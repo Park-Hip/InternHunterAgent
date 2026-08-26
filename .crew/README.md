@@ -40,11 +40,12 @@ Teardown for an existing task without a manifest remains a manual, path-specific
 
 ## Visible worker sessions
 
-`scripts/crew_start.ps1` launches the worker through the explicit Windows Terminal backend.
-It opens a new Windows Terminal tab in the worker's isolated worktree.
+`scripts/crew_start.ps1` launches the worker through an explicit terminal backend.
+By default it opens the task worktree in a new VS Code window.
+Pass `-Backend wt` to open a new Windows Terminal tab instead.
 
 By default, it opens an interactive PowerShell prompt and does not start an AI harness.
-Pass `-Harness <executable>` to start any installed command-line harness interactively in the new tab.
+Pass `-Harness <executable>` to start any installed command-line harness interactively.
 
 ```powershell
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness codex
@@ -53,11 +54,21 @@ Pass `-Harness <executable>` to start any installed command-line harness interac
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy scout -Harness aider
 ```
 
+With `-Harness codex`, codex starts with `--yolo` unless `-HarnessArgs` supplies
+different arguments. Other harnesses start without extra arguments.
+
 The launcher validates the selected executable on `PATH` before it creates the worktree.
 Use `-Harness shell` when you want to choose or start a harness manually.
-The launcher is terminal-based and does not create sessions in VS Code, HerdR, or any other harness-specific UI.
-
 Use `-WhatIfMode` to inspect the worktree root, manifest, brief, report, and backend launch plan without changing disk.
+
+### VS Code backend (default)
+
+The VS Code CLI cannot inject a session into an already-running window, so each dispatch
+opens its own new VS Code window on the worktree folder. When a harness is selected, the
+launcher also writes `.vscode/tasks.json` into the worktree defining a dedicated integrated-
+terminal task that runs on folder open, so the harness starts in VS Code's terminal panel as
+a switchable terminal tab. One-time prerequisite: allow automatic tasks when prompted, or set
+`"task.allowAutomaticTasks": "on"`. With `-Harness shell`, no automatic task is written.
 
 ## Intake rules (enforced by the mate)
 

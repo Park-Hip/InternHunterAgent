@@ -38,7 +38,7 @@ try {
     Invoke-TestGit -Arguments @('-C', $repoRoot, 'worktree', 'add', $paths.WorktreePath, '-b', 'crew/999-lifecycle-probe', 'main')
 
     Write-CrewUtf8File -Path $paths.PrimaryBriefPath -Content '# Brief: lifecycle probe'
-    Write-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Issue 999 -IssueUrl 'https://example.test/issues/999' -Title 'Lifecycle probe' -Autonomy scout -Branch 'crew/999-lifecycle-probe' -RepoRoot $repoRoot -WorktreePath $paths.WorktreePath -PrimaryBriefPath $paths.PrimaryBriefPath -PrimaryStatusPath $paths.PrimaryStatusPath -TaskBriefPath $paths.TaskBriefPath -ScoutReportPath $paths.ScoutReportPath | Out-Null
+    Write-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Issue 999 -IssueUrl 'https://example.test/issues/999' -Title 'Lifecycle probe' -Autonomy scout -Branch 'crew/999-lifecycle-probe' -RepoRoot $repoRoot -WorktreePath $paths.WorktreePath -PrimaryBriefPath $paths.PrimaryBriefPath -PrimaryStatusPath $paths.PrimaryStatusPath -TaskBriefPath $paths.TaskBriefPath -ScoutReportPath $paths.ScoutReportPath -TerminalBackend wt | Out-Null
     Copy-CrewTaskContractFiles -PrimaryBriefPath $paths.PrimaryBriefPath -TaskBriefPath $paths.TaskBriefPath -PrimaryManifestPath $paths.PrimaryManifestPath -TaskManifestPath $paths.TaskManifestPath
     if (-not (Test-Path -LiteralPath $paths.TaskBriefPath)) { throw 'Task-local brief was not created.' }
     if (-not (Test-Path -LiteralPath $paths.TaskManifestPath)) { throw 'Task-local manifest was not created.' }

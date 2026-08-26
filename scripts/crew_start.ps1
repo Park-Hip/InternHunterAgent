@@ -7,6 +7,13 @@ param(
     # shell leaves an interactive PowerShell prompt. Any executable on PATH
     # starts as the selected harness after the worker tab opens.
     [ValidateNotNullOrEmpty()][string]$Harness = 'shell',
+    # Extra arguments appended to the harness invocation. When omitted, codex
+    # defaults to '--yolo'; every other harness gets no extra arguments.
+    [string]$HarnessArgs,
+    # wt opens a Windows Terminal tab; vscode opens the worktree in a new VS
+    # Code window and auto-starts the harness in the integrated terminal panel
+    # via a generated .vscode/tasks.json (requires allowing automatic tasks).
+    [ValidateSet('wt', 'vscode')][string]$Backend = 'vscode',
     # Dry-run prints the plan without touching disk.
     [switch]$WhatIfMode,
     [string]$RepoRoot
@@ -23,6 +30,7 @@ $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 Set-Location $RepoRoot
 . (Join-Path $PSScriptRoot 'crew_lifecycle.ps1')
 . (Join-Path $PSScriptRoot 'crew_terminal_backend.ps1')
+. (Join-Path $PSScriptRoot 'crew_vscode_backend.ps1')
 
 if (-not (Test-Path (Join-Path $RepoRoot '.crew\README.md'))) {
     throw '.crew/README.md missing - crew mode conventions not installed.'
@@ -48,6 +56,9 @@ if ($Harness -ne 'shell') {
     }
 }
 
+$resolvedHarnessArgs = if (-not [string]::IsNullOrWhiteSpace($HarnessArgs)) { $HarnessArgs.Trim() }
+    elseif ($Harness -eq 'codex') { '--yolo' } else { $null }
+
 if ($WhatIfMode) {
     Write-Output 'dry-run plan (no changes made):'
     Write-Output ("  root     : {0}" -f $paths.WorktreeRoot)
@@ -57,11 +68,24 @@ if ($WhatIfMode) {
     if ($Autonomy -eq 'scout') {
         Write-Output ("  report   : {0}" -f $paths.ScoutReportPath)
     }
-    if ($Harness -eq 'shell') {
-        Write-Output ("  terminal : Windows Terminal tab at {0} with an interactive PowerShell prompt" -f $wtPath)
+    if ($Backend -eq 'vscode') {
+        if ($Harness -eq 'shell') {
+            Write-Output ("  terminal : new VS Code window on {0} (no automatic task)" -f $wtPath)
+        }
+        else {
+            Write-Output ("  terminal : new VS Code window on {0}; integrated-terminal task runs on folder open" -f $wtPath)
+            $harnessLine = if ($resolvedHarnessArgs) { "{0} {1}" -f $harnessExecutable.Source, $resolvedHarnessArgs } else { $harnessExecutable.Source }
+            Write-Output ("  harness  : {0}" -f $harnessLine)
+        }
     }
     else {
-        Write-Output ("  terminal : Windows Terminal tab at {0}, then start {1}" -f $wtPath, $harnessExecutable.Source)
+        if ($Harness -eq 'shell') {
+            Write-Output ("  terminal : Windows Terminal tab at {0} with an interactive PowerShell prompt" -f $wtPath)
+        }
+        else {
+            Write-Output ("  terminal : Windows Terminal tab at {0}, then start {1}" -f $wtPath, $harnessExecutable.Source)
+            if ($resolvedHarnessArgs) { Write-Output ("  harness  : {0}" -f $resolvedHarnessArgs) }
+        }
     }
     exit 0
 }
@@ -102,7 +126,7 @@ Write-CrewUtf8File -Path $paths.PrimaryBriefPath -Content $template
 Write-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Issue $Issue -IssueUrl $ghIssue.url `
     -Title $ghIssue.title -Autonomy $Autonomy -Branch $branch -RepoRoot $RepoRoot -WorktreePath $wtPath `
     -PrimaryBriefPath $paths.PrimaryBriefPath -PrimaryStatusPath $paths.PrimaryStatusPath `
-    -TaskBriefPath $paths.TaskBriefPath -ScoutReportPath $paths.ScoutReportPath | Out-Null
+    -TaskBriefPath $paths.TaskBriefPath -ScoutReportPath $paths.ScoutReportPath -TerminalBackend $Backend | Out-Null
 Copy-CrewTaskContractFiles -PrimaryBriefPath $paths.PrimaryBriefPath -TaskBriefPath $paths.TaskBriefPath `
     -PrimaryManifestPath $paths.PrimaryManifestPath -TaskManifestPath $paths.TaskManifestPath
 
@@ -112,9 +136,25 @@ $sessionCommand = "Set-Location -LiteralPath '$escapedWorktreePath'; Write-Host 
 if ($Harness -ne 'shell') {
     $escapedHarnessPath = $harnessExecutable.Source.Replace("'", "''")
     $sessionCommand += "; & '$escapedHarnessPath'"
+    if ($resolvedHarnessArgs) {
+        foreach ($arg in ($resolvedHarnessArgs -split '\s+')) {
+            $sessionCommand += " '$($arg.Replace("'", "''"))'"
+        }
+    }
 }
-$launchPlan = New-CrewWindowsTerminalLaunchPlan -WorktreePath $wtPath -SessionCommand $sessionCommand
-$launchResult = Start-CrewWindowsTerminal -LaunchPlan $launchPlan
+if ($Backend -eq 'vscode') {
+    $taskName = "IHA-$Issue worker"
+    $launchPlan = New-CrewVsCodeLaunchPlan -WorktreePath $wtPath -SessionCommand $sessionCommand -TaskName $taskName
+    if ($launchPlan -and $Harness -ne 'shell') {
+        Write-CrewVsCodeTerminalTask -WorktreePath $wtPath -TaskName $taskName -SessionCommand $sessionCommand
+    }
+    $launchResult = if ($launchPlan) { Start-CrewVsCode -LaunchPlan $launchPlan }
+                    else { [pscustomobject]@{ Launched = $false; Detail = 'code CLI unavailable on PATH' } }
+}
+else {
+    $launchPlan = New-CrewWindowsTerminalLaunchPlan -WorktreePath $wtPath -SessionCommand $sessionCommand
+    $launchResult = Start-CrewWindowsTerminal -LaunchPlan $launchPlan
+}
 Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes @{
     TerminalLaunchStatus = if ($launchResult.Launched) { 'launched' } else { 'unavailable' }
     TerminalLaunchDetail = $launchResult.Detail
@@ -123,6 +163,11 @@ Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes @{
 Write-Output "worktree   : $wtPath (branch $branch)"
 Write-Output "brief      : $($paths.PrimaryBriefPath)"
 Write-Output "manifest   : $($paths.PrimaryManifestPath)"
+if ($Backend -eq 'vscode') {
+    if ($launchResult.Launched -and $Harness -eq 'shell') { Write-Output 'terminal   : new VS Code window opened on the worktree (open a terminal manually for a harness)' }
+    elseif ($launchResult.Launched) { Write-Output "terminal   : new VS Code window opened; allow automatic tasks so the integrated-terminal task starts $Harness$(if ($resolvedHarnessArgs) { " $($resolvedHarnessArgs)" })" }
+    else { Write-Output "terminal   : $($launchResult.Detail) - run 'code -n $wtPath' manually" }
+}
 if ($launchResult.Launched -and $Harness -eq 'shell') { Write-Output 'terminal   : new Windows Terminal tab opened with an interactive PowerShell prompt' }
 elseif ($launchResult.Launched) { Write-Output "terminal   : new Windows Terminal tab opened with interactive $Harness session" }
 else { Write-Output "terminal   : $($launchResult.Detail) - open a terminal manually in $wtPath" }

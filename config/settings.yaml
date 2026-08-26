@@ -76,10 +76,10 @@ agent:
 
 eval:
   judge:
-    provider: openrouter   # was: google (retired - free tier could not survive a scoring run, see #238); before that: groq
-    model: ox-alpha
+    provider: google       # Google AI Studio (Gemini API); was openrouter (ox-alpha), before that groq
+    model: gemma-4-31b-it  # served by AI Studio directly; OpenRouter fallback stays available in build_judge()
     temperature: 0.0
-    rpm: 20                # throttle below OpenRouter's free-tier RPM cap; confirmed by the pre-scoring smoke test
+    rpm: 10                # 16k TPM free-tier cap binds before the 30 RPM cap at ~1k tok/judge call; measured on the #239 probe
   fixture:
     database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval
   driver:

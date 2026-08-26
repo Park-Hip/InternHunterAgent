@@ -7,7 +7,7 @@
 ## Published v6 baseline
 
 The 2026-08-23 baseline is a complete, clean-tree capture of the then-current 29-scenario registry.
-It is frozen as [`replays/v6-baseline-20260823.json`](replays/v6-baseline-20260823.json) and replays against the fixture without a serving-model or judge call.
+It is frozen as [`archive/replays/v6-baseline-20260823.json`](archive/replays/v6-baseline-20260823.json); the artifact is preserved with provenance and no longer replays against the current registry.
 The capture produced all 77 required turns with no capture `INFRA` or `UNRUN` outcomes.
 The retired discriminatory-filter scenario is no longer in the active registry, but remains in this
 historical capture as evidence.

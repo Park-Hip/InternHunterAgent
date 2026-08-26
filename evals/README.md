@@ -20,6 +20,14 @@ The evaluator also needs the serving-provider credentials for capture and the ju
 
 Raw captures under `evals/runs/` are local and ignored by Git because they can contain telemetry, trace identifiers, and tool output.
 Committed replays under `evals/replays/` are sanitized evidence that CI can reproduce without a serving model or judge call.
+The replay gate discovers and validates **every** artifact in `evals/replays/`, so a stale or newly added file fails loudly instead of being silently skipped:
+
+```powershell
+uv run python -m evals.replay --all
+```
+
+Historical replays cited as durable evidence but no longer valid against the current registry are preserved byte-for-byte with their provenance in [`archive/replays/`](archive/replays/README.md).
+They are readable history, not active regression fixtures.
 
 ## Evaluation vocabulary
 
@@ -132,7 +140,7 @@ Widen a rule only through a proposal; registry lexicon entries live in [`scenari
 | `grader.py` | Produces independent deterministic check outcomes and the first failing seam. |
 | `score.py` | Runs the resumable judge pass over a recorded capture. |
 | `calibration_v6.yaml` | Versioned human-labelled Vietnamese semantic corpus. |
-| `replay.py` | CI's provider-free replay gate. |
+| `replay.py` | CI's provider-free replay gate. Discovers every artifact in `replays/`. |
 | `viewer.py` | Local HTML evidence viewer. |
 | `Instrument_Report.md` | Dated baseline, calibration, disagreement, and unresolved-case record. |
 | `Operating_Manual.md` | Maintainer review and disagreement workflow. |

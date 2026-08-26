@@ -6,9 +6,12 @@ from datetime import date
 import pytest
 
 from evals.replay import (
+    ARCHIVED_REPLAY_NAMES,
     REPLAY_PATH,
     REPLAY_SCHEMA_VERSION,
+    active_replay_paths,
     load_replay,
+    run_active_replays,
     run_replay,
     validate_replay,
 )
@@ -219,3 +222,88 @@ def test_replay_cli_serializes_fixture_values(tmp_path, monkeypatch, capsys) -> 
     replay_module.main(["--replay", str(replay_path)])
 
     assert json.loads(capsys.readouterr().out) == {"row": {"created_on": "2026-08-13"}}
+
+
+def test_discovery_finds_every_json_artifact_and_ignores_nothing(tmp_path) -> None:
+    (tmp_path / "b-replay.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "a-replay.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "notes.md").write_text("not evidence", encoding="utf-8")
+    (tmp_path / "subdir").mkdir()
+    (tmp_path / "subdir" / "nested.json").write_text("{}", encoding="utf-8")
+
+    assert active_replay_paths(tmp_path) == [
+        tmp_path / "a-replay.json",
+        tmp_path / "b-replay.json",
+    ]
+
+
+def test_committed_replay_is_never_silently_omitted_from_discovery() -> None:
+    discovered = {path.name for path in active_replay_paths()}
+
+    assert REPLAY_PATH.name in discovered
+    # Preserved history lives outside the active set and must stay there.
+    assert discovered == {REPLAY_PATH.name}
+    for name in ARCHIVED_REPLAY_NAMES:
+        assert name not in discovered
+
+
+def test_every_active_replay_validates_against_the_registry_without_a_model_call() -> None:
+    paths = active_replay_paths()
+
+    assert paths, "the active replay set must not be empty"
+    for path in paths:
+        validate_replay(load_replay(path))
+
+
+def test_run_active_replays_runs_every_discovered_artifact(monkeypatch) -> None:
+    import evals.replay as replay_module
+
+    replayed: list[str] = []
+
+    def fake_grade_run(run, database_url=None):
+        replayed.append(next(iter(run["scenarios"])))
+        return _expected_execution(run)
+
+    monkeypatch.setattr(replay_module, "grade_run", fake_grade_run)
+    monkeypatch.setattr(
+        replay_module,
+        "grade_persisted_run",
+        lambda run, execution: _expected_grades(run),
+    )
+
+    report = run_active_replays()
+
+    assert sorted(replayed) == [
+        scenario_id
+        for path in active_replay_paths()
+        for scenario_id in [next(iter(load_replay(path)["scenarios"]))]
+    ]
+    assert set(report) == {path.name for path in active_replay_paths()}
+
+
+def test_run_active_replays_names_a_stale_artifact_instead_of_stopping(
+    tmp_path, monkeypatch
+) -> None:
+    import evals.replay as replay_module
+
+    stale_artifact = {**load_replay(), "status": "INCOMPLETE"}
+
+    stale = tmp_path / "stale-artifact.json"
+    stale.write_text(json.dumps(stale_artifact), encoding="utf-8")
+    healthy = tmp_path / "healthy-artifact.json"
+    healthy.write_text(json.dumps(load_replay()), encoding="utf-8")
+    monkeypatch.setattr(replay_module, "ACTIVE_REPLAY_DIR", tmp_path)
+    monkeypatch.setattr(
+        replay_module, "grade_run", lambda run, database_url=None: _expected_execution(run)
+    )
+    monkeypatch.setattr(
+        replay_module,
+        "grade_persisted_run",
+        lambda run, execution: _expected_grades(run),
+    )
+
+    with pytest.raises(ValueError, match="stale-artifact.json.*must be COMPLETE"):
+        run_active_replays()
+
+    # Both artifacts were examined; the failure did not stop at the first.
+    assert stale.exists() and healthy.exists()

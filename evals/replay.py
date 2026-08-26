@@ -13,6 +13,17 @@ from evals.scenarios import load_scenarios
 from evals.sanitization import FORBIDDEN_CONTENT as _FORBIDDEN_CONTENT
 
 REPLAY_PATH = Path(__file__).with_name("replays") / "t0025.9-committed.json"
+ACTIVE_REPLAY_DIR = REPLAY_PATH.parent
+# Historical captures preserved under evals/archive/replays/ (issue #148/#249).
+# They keep their original bytes and provenance but are no longer current
+# regression evidence: the registry moved on, so they no longer validate.
+ARCHIVED_REPLAY_NAMES = frozenset(
+    {
+        "t0024.4-v3-obligations.json",
+        "t0025.7-acceptance.json",
+        "v6-baseline-20260823.json",
+    }
+)
 
 # 2 (T0035.1) added prompt_version. The bump is checked rather than tolerated: a
 # schema_version 1 artifact predates the lineage stamp, so accepting it would let an
@@ -31,6 +42,16 @@ _TURN_KEYS = {
 }
 _V2_SEAM_KEYS = {"question", "answer", "tools_called", "sql_text"}
 _V3_SEAM_KEYS = {*_V2_SEAM_KEYS, "tool_output", "tool_arguments"}
+def active_replay_paths(directory: Path = ACTIVE_REPLAY_DIR) -> list[Path]:
+    """Discover every active replay artifact, in deterministic sorted order.
+
+    The active replay directory is the contract for current regression
+    evidence: CI iterates it rather than defaulting to one path so a stale or
+    newly added artifact can never be silently skipped.
+    """
+    return sorted(directory.glob("*.json"))
+
+
 def load_replay(path: Path = REPLAY_PATH) -> dict[str, Any]:
     """Load the committed replay artifact as UTF-8 JSON."""
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -229,20 +250,41 @@ def run_replay(
     return {"execution_accuracy": execution_accuracy, "grades": grades}
 
 
+def run_active_replays(database_url: str | None = None) -> dict[str, Any]:
+    """Run every discovered active replay; a stale one fails loudly by name.
+
+    Failures are collected across the whole set first so a single invocation
+    names every invalid artifact instead of stopping at the first one.
+    """
+    reports: dict[str, Any] = {}
+    failures: list[str] = []
+    for path in active_replay_paths(ACTIVE_REPLAY_DIR):
+        try:
+            reports[path.name] = run_replay(path, database_url)
+        except ValueError as exc:
+            failures.append(f"{path.name}: {exc}")
+    if failures:
+        raise ValueError("Active replays are not all valid - " + "; ".join(failures))
+    return reports
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Replay committed evaluation evidence without model or judge calls."
     )
-    parser.add_argument("--replay", type=Path, default=REPLAY_PATH)
+    parser.add_argument("--replay", type=Path)
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Replay every artifact in the active replay directory.",
+    )
     parser.add_argument("--database-url")
     args = parser.parse_args(argv)
-    print(
-        json.dumps(
-            run_replay(args.replay, args.database_url),
-            indent=2,
-            default=str,
-        )
-    )
+    if args.all:
+        result = run_active_replays(args.database_url)
+    else:
+        result = run_replay(args.replay or REPLAY_PATH, args.database_url)
+    print(json.dumps(result, indent=2, default=str))
 
 
 if __name__ == "__main__":

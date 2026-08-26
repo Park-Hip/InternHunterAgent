@@ -114,6 +114,9 @@ def build_judge() -> DeepEvalJudge:
 
     temperature = judge_cfg.get("temperature", 0.0)
     rpm = judge_cfg.get("rpm", 0)
+    timeout = judge_cfg.get("timeout_seconds", 30)
+    if not isinstance(timeout, (int, float)) or timeout <= 0:
+        raise ValueError("eval.judge.timeout_seconds must be a positive number")
     max_retries = 0 if os.getenv("EVAL_DRIVER_DISABLE_PROVIDER_RETRIES") == "1" else 2
 
     if provider == "groq":
@@ -124,7 +127,7 @@ def build_judge() -> DeepEvalJudge:
             model_name=model_name,
             temperature=temperature,
             max_tokens=1024,
-            timeout=30,
+            timeout=timeout,
             max_retries=max_retries,
             streaming=False,
             groq_api_key=settings.GROQ_API_KEY,
@@ -143,7 +146,7 @@ def build_judge() -> DeepEvalJudge:
             model=model_name,
             temperature=temperature,
             max_tokens=4096,
-            timeout=30,
+            timeout=timeout,
             max_retries=max_retries,
             google_api_key=settings.GOOGLE_API_KEY,
         )
@@ -166,7 +169,7 @@ def build_judge() -> DeepEvalJudge:
             api_key=settings.OPENROUTER_API_KEY,
             temperature=temperature,
             max_tokens=4096,
-            timeout=30,
+            timeout=timeout,
             max_retries=max_retries,
             streaming=False,
         )

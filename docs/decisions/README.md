@@ -33,6 +33,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0044](adr-0044-temperature-zero-rejected-for-react.md) | Temperature 0 is rejected for the ReAct seam | Agent runtime |
 | [ADR-0045](adr-0045-deepseek-serves-the-agent.md) | DeepSeek serves the agent, on measured throughput | Agent runtime |
 | [ADR-0046](adr-0046-replays-retain-evidence-not-telemetry.md) | Frozen replays retain evidence, not per-turn telemetry | Evaluation |
+| [ADR-0047](adr-0047-release-threshold-is-recall-first-at-030.md) | Release threshold is recall-first at 0.30 on corpus v7 | Evaluation |
 
 ## Retired decisions, and why they were not carried over
 

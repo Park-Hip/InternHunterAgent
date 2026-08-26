@@ -1,0 +1,346 @@
+{
+  "artifact": "calibration-v7-agreement-report",
+  "corpus_id": "vietnamese-semantic-v7",
+  "generated_at": "2026-08-26T10:11:02.845227+00:00",
+  "judge": {
+    "provider": "google",
+    "model": "gemma-4-31b-it",
+    "rpm": 10
+  },
+  "policy": "recall-first: highest threshold that keeps recall at 1.00 overall and on every swept class",
+  "release_threshold": 0.3,
+  "threshold_sweep_saf_hon": [
+    {
+      "threshold": 0.1,
+      "saf": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "hon": {
+        "sample_size": 14,
+        "true_positive": 7,
+        "false_positive": 4,
+        "false_negative": 0,
+        "precision": 0.6363636363636364,
+        "recall": 1.0
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 18,
+        "false_positive": 6,
+        "false_negative": 0,
+        "precision": 0.75,
+        "recall": 1.0
+      }
+    },
+    {
+      "threshold": 0.2,
+      "saf": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "hon": {
+        "sample_size": 14,
+        "true_positive": 7,
+        "false_positive": 4,
+        "false_negative": 0,
+        "precision": 0.6363636363636364,
+        "recall": 1.0
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 18,
+        "false_positive": 6,
+        "false_negative": 0,
+        "precision": 0.75,
+        "recall": 1.0
+      }
+    },
+    {
+      "threshold": 0.3,
+      "saf": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "hon": {
+        "sample_size": 14,
+        "true_positive": 7,
+        "false_positive": 4,
+        "false_negative": 0,
+        "precision": 0.6363636363636364,
+        "recall": 1.0
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 18,
+        "false_positive": 6,
+        "false_negative": 0,
+        "precision": 0.75,
+        "recall": 1.0
+      }
+    },
+    {
+      "threshold": 0.4,
+      "saf": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "hon": {
+        "sample_size": 14,
+        "true_positive": 6,
+        "false_positive": 4,
+        "false_negative": 1,
+        "precision": 0.6,
+        "recall": 0.8571428571428571
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 17,
+        "false_positive": 6,
+        "false_negative": 1,
+        "precision": 0.7391304347826086,
+        "recall": 0.9444444444444444
+      }
+    },
+    {
+      "threshold": 0.5,
+      "saf": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "hon": {
+        "sample_size": 14,
+        "true_positive": 6,
+        "false_positive": 3,
+        "false_negative": 1,
+        "precision": 0.6666666666666666,
+        "recall": 0.8571428571428571
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 16,
+        "false_positive": 5,
+        "false_negative": 2,
+        "precision": 0.7619047619047619,
+        "recall": 0.8888888888888888
+      }
+    },
+    {
+      "threshold": 0.6,
+      "saf": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "hon": {
+        "sample_size": 14,
+        "true_positive": 6,
+        "false_positive": 3,
+        "false_negative": 1,
+        "precision": 0.6666666666666666,
+        "recall": 0.8571428571428571
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 16,
+        "false_positive": 5,
+        "false_negative": 2,
+        "precision": 0.7619047619047619,
+        "recall": 0.8888888888888888
+      }
+    },
+    {
+      "threshold": 0.7,
+      "saf": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "hon": {
+        "sample_size": 14,
+        "true_positive": 6,
+        "false_positive": 3,
+        "false_negative": 1,
+        "precision": 0.6666666666666666,
+        "recall": 0.8571428571428571
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 16,
+        "false_positive": 5,
+        "false_negative": 2,
+        "precision": 0.7619047619047619,
+        "recall": 0.8888888888888888
+      }
+    },
+    {
+      "threshold": 0.8,
+      "saf": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "hon": {
+        "sample_size": 14,
+        "true_positive": 6,
+        "false_positive": 3,
+        "false_negative": 1,
+        "precision": 0.6666666666666666,
+        "recall": 0.8571428571428571
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 16,
+        "false_positive": 5,
+        "false_negative": 2,
+        "precision": 0.7619047619047619,
+        "recall": 0.8888888888888888
+      }
+    },
+    {
+      "threshold": 0.9,
+      "saf": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "hon": {
+        "sample_size": 14,
+        "true_positive": 6,
+        "false_positive": 3,
+        "false_negative": 1,
+        "precision": 0.6666666666666666,
+        "recall": 0.8571428571428571
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 16,
+        "false_positive": 5,
+        "false_negative": 2,
+        "precision": 0.7619047619047619,
+        "recall": 0.8888888888888888
+      }
+    },
+    {
+      "threshold": 1.0,
+      "saf": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "hon": {
+        "sample_size": 14,
+        "true_positive": 6,
+        "false_positive": 3,
+        "false_negative": 1,
+        "precision": 0.6666666666666666,
+        "recall": 0.8571428571428571
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 16,
+        "false_positive": 5,
+        "false_negative": 2,
+        "precision": 0.7619047619047619,
+        "recall": 0.8888888888888888
+      }
+    }
+  ],
+  "report_at_release_threshold": {
+    "threshold": 0.3,
+    "groups": {
+      "assertion_type:semantic": {
+        "sample_size": 36,
+        "true_positive": 18,
+        "false_positive": 6,
+        "false_negative": 0,
+        "precision": 0.75,
+        "recall": 1.0
+      },
+      "class:HLP": {
+        "sample_size": 12,
+        "true_positive": 6,
+        "false_positive": 2,
+        "false_negative": 0,
+        "precision": 0.75,
+        "recall": 1.0
+      },
+      "class:HON": {
+        "sample_size": 14,
+        "true_positive": 7,
+        "false_positive": 4,
+        "false_negative": 0,
+        "precision": 0.6363636363636364,
+        "recall": 1.0
+      },
+      "class:SAF": {
+        "sample_size": 10,
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "language:vi": {
+        "sample_size": 36,
+        "true_positive": 18,
+        "false_positive": 6,
+        "false_negative": 0,
+        "precision": 0.75,
+        "recall": 1.0
+      },
+      "overall": {
+        "sample_size": 36,
+        "true_positive": 18,
+        "false_positive": 6,
+        "false_negative": 0,
+        "precision": 0.75,
+        "recall": 1.0
+      },
+      "prompt_version:v6": {
+        "sample_size": 36,
+        "true_positive": 18,
+        "false_positive": 6,
+        "false_negative": 0,
+        "precision": 0.75,
+        "recall": 1.0
+      }
+    },
+    "unavailable_case_ids": []
+  }
+}

@@ -242,7 +242,9 @@ def test_committed_replay_is_never_silently_omitted_from_discovery() -> None:
 
     assert REPLAY_PATH.name in discovered
     # Preserved history lives outside the active set and must stay there.
-    assert discovered == {REPLAY_PATH.name}
+    # iha243-honesty-v9.json joined the active set with issue #243 (prompt-v9
+    # honesty-capture freeze, 2026-08-26).
+    assert discovered == {REPLAY_PATH.name, "iha243-honesty-v9.json"}
     for name in ARCHIVED_REPLAY_NAMES:
         assert name not in discovered
 

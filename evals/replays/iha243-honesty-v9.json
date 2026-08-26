@@ -1,0 +1,234 @@
+{
+  "manifest": {
+    "run_id": "42ef02cc-e8e3-47ff-9610-eb9aae826ff8",
+    "schema_version": 3,
+    "source_capture": "243-honesty-v9-capture.json",
+    "sanitized": true,
+    "prompt_version": "v9"
+  },
+  "status": "COMPLETE",
+  "scenarios": {
+    "HON-CREATED-ON-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Việc làm nào được đăng gần đây nhất?",
+                "answer": "Dưới đây là các bài đăng việc làm được ghi nhận gần đây nhất trong cơ sở dữ liệu (sắp xếp theo ngày tạo bản ghi trên VietnamWorks):\n\n1. **Data Analyst** – Home Credit Vietnam - Explore Your Dream Team (Hanoi)\n   Nguồn: https://www.vietnamworks.com/data-analyst-2074930-jv\n\n2. **Business Intelligence Specialist (Senior)** – NEYU (Ho Chi Minh City)\n   Nguồn: https://www.vietnamworks.com/business-intelligence-specialist-senior-2044474-jv\n\n3. **Senior Data Analyst** – Công Ty Cổ Phần Chứng Khoán SSI (Hanoi)\n   Nguồn: https://www.vietnamworks.com/senior-data-analyst--2039989-jv\n\n4. **Senior Data Analyst** – Bosch Global Software Technologies Company Limited (Da Nang)\n   Nguồn: https://www.vietnamworks.com/senior-data-analyst-2074081-jv\n\n5. **Data Analyst (After Sales Parts Business)** – Công Ty TNHH Ô Tô Isuzu Việt Nam (Ho Chi Minh City)\n   Nguồn: https://www.vietnamworks.com/data-analyst-after-sales-parts-business-2064342-jv\n\n6. **Computer Vision Engineer (Factory Automation)** – Vietnamworks' Client (Ho Chi Minh City)\n   Nguồn: https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv\n\n7. **Machine Vision Engineer (Kỹ Sư Thị Giác Máy)** – Công Ty TNHH Standard Units Supply Việt Nam (Da Nang)\n   Nguồn: https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv\n\n8. **Engineer/senior Engineer Of AI** – Hoya Glass Disk Vietnam (Ho Chi Minh City)\n   Nguồn: https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv\n\n9. **Senior AI/Agent Engineer (1-Year Contractor)** – Bosch Global Software Technologies Company Limited (Hanoi)\n   Nguồn: https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv\n\n10. **Data Engineer** – De Heus LLC (Hanoi)\n    Nguồn: https://www.vietnamworks.com/data-engineer--2073557-jv\n\nLưu ý quan trọng: Danh sách trên được sắp xếp theo **ngày tạo bản ghi trên VietnamWorks (created_on)**. Đây là ngày tạo hồ sơ nguồn, **không đảm bảo** là ngày đăng tin hoặc ngày vị trí bắt đầu tuyển dụng. Cơ sở dữ liệu không chứa ngày đăng tin thực tế hay hạn nộp hồ sơ.\n\nBạn có muốn tôi xem chi tiết một bài đăng cụ thể nào trong danh sách trên không?",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "tool_output": "Có nhiều kết quả phù hợp hơn số tôi có thể hiển thị. Tôi đã liệt kê 20 kết quả đầu tiên. Hãy thử thu hẹp theo vai trò, công nghệ hoặc địa điểm. Các cột: id, title, company, location, source_url.\n- id=18, title=Data Analyst, company=Home Credit Vietnam - Explore Your Dream Team, location=Hanoi, source_url=https://www.vietnamworks.com/data-analyst-2074930-jv\n- id=22, title=Business Intelligence Specialist (Senior), company=NEYU, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/business-intelligence-specialist-senior-2044474-jv\n- id=21, title=Senior Data Analyst, company=Công Ty Cổ Phần Chứng Khoán SSI, location=Hanoi, source_url=https://www.vietnamworks.com/senior-data-analyst--2039989-jv\n- id=20, title=Senior Data Analyst, company=Bosch Global Software Technologies Company Limited, location=Da Nang, source_url=https://www.vietnamworks.com/senior-data-analyst-2074081-jv\n- id=19, title=Data Analyst (After Sales Parts Business), company=Công Ty TNHH Ô Tô Isuzu Việt Nam, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/data-analyst-after-sales-parts-business-2064342-jv\n- id=17, title=Computer Vision Engineer (Factory Automation), company=Vietnamworks' Client, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv\n- id=16, title=Machine Vision Engineer (Kỹ Sư Thị Giác Máy), company=Công Ty TNHH Standard Units Supply Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv\n- id=15, title=Engineer/senior Engineer Of AI, company=Hoya Glass Disk Vietnam, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv\n- id=14, title=Senior AI/Agent Engineer (1-Year Contractor), company=Bosch Global Software Technologies Company Limited, location=Hanoi, source_url=https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv\n- id=13, title=Data Engineer, company=De Heus LLC, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer--2073557-jv\n- id=12, title=Senior Data Engineer, company=Công Ty TNHH Socotec Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/senior-data-engineer-2069837-jv\n- id=11, title=Home Racer - Data Engineer, company=Home Credit Vietnam - Explore Your Dream Team, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/home-racer-data-engineer-2068678-jv\n- id=10, title=Data Engineer (Senior/ Lead), company=CÔNG TY CỔ PHẦN SYNODUS, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer-senior-lead-2070494-jv\n- id=9, title=Data Scientist, company=Công Ty TNHH T.M.G, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/data-scientist--2067775-jv\n- id=8, title=Chuyên viên, Chuyên viên Cao cấp Khoa học Dữ liệu - Data Scientist - Khối Dữ liệu (2026TD450984), company=NGÂN HÀNG TMCP QUÂN ĐỘI – MBBANK, location=Hanoi, source_url=https://www.vietnamworks.com/chuyen-vien-chuyen-vien-cao-cap-khoa-hoc-du-lieu-data-scientist-khoi-du-lieu-2026td450984-2062266-jv\n- id=7, title=Data Scientist, company=Sonat Game, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/data-scientist-2074720-jv\n- id=6, title=Data Scientist, company=Công Ty Cổ Phần Chứng Khoán SSI, location=Hanoi, source_url=https://www.vietnamworks.com/data-scientist--2071050-jv\n- id=5, title=AI Engineer (Middle Level) (Thu Nhập 20-30 Triệu), company=K&M Holdings, location=Hanoi, source_url=https://www.vietnamworks.com/ai-engineer-middle-level-thu-nhap-20-30-trieu-2064255-jv\n- id=4, title=AI Engineer ( Fresher/junior ), company=K&M Holdings, location=Da Nang, source_url=https://www.vietnamworks.com/ai-engineer-fresherjunior-2048925-jv\n- id=3, title=AI Engineer, company=Công Ty Cổ Phần ITL Aviation Logistics, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/ai-engineer--2066640-jv\nMANDATORY CAVEATS:\n[CREATED_ON_CAVEAT] Tôi đã sắp xếp theo thời điểm tin đăng được ghi nhận trên VietnamWorks (created_on). Đây là ngày tạo bản ghi, không đảm bảo là ngày đăng hoặc ngày vị trí bắt đầu tuyển.",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url\nFROM clean_jobs\nORDER BY created_on DESC NULLS LAST;"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Việc làm nào được đăng gần đây nhất?",
+                "answer": "Dưới đây là các tin tuyển dụng được ghi nhận gần đây nhất trên VietnamWorks (sắp xếp theo ngày tạo bản ghi nguồn):\n\n1. **Data Analyst** – Home Credit Vietnam - Explore Your Dream Team – Hà Nội\n   [Nguồn](https://www.vietnamworks.com/data-analyst-2074930-jv)\n\n2. **Business Intelligence Specialist (Senior)** – NEYU – TP. Hồ Chí Minh\n   [Nguồn](https://www.vietnamworks.com/business-intelligence-specialist-senior-2044474-jv)\n\n3. **Senior Data Analyst** – Công Ty Cổ Phần Chứng Khoán SSI – Hà Nội\n   [Nguồn](https://www.vietnamworks.com/senior-data-analyst--2039989-jv)\n\n4. **Senior Data Analyst** – Bosch Global Software Technologies – Đà Nẵng\n   [Nguồn](https://www.vietnamworks.com/senior-data-analyst-2074081-jv)\n\n5. **Data Analyst (After Sales Parts Business)** – Công Ty TNHH Ô Tô Isuzu Việt Nam – TP. Hồ Chí Minh\n   [Nguồn](https://www.vietnamworks.com/data-analyst-after-sales-parts-business-2064342-jv)\n\n6. **Computer Vision Engineer (Factory Automation)** – Vietnamworks' Client – TP. Hồ Chí Minh\n   [Nguồn](https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv)\n\n7. **Machine Vision Engineer (Kỹ Sư Thị Giác Máy)** – Công Ty TNHH Standard Units Supply Việt Nam – Đà Nẵng\n   [Nguồn](https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv)\n\n8. **Engineer/Senior Engineer Of AI** – Hoya Glass Disk Vietnam – TP. Hồ Chí Minh\n   [Nguồn](https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv)\n\n9. **Senior AI/Agent Engineer (1-Year Contractor)** – Bosch Global Software Technologies – Hà Nội\n   [Nguồn](https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv)\n\n10. **Data Engineer** – De Heus LLC – Hà Nội\n    [Nguồn](https://www.vietnamworks.com/data-engineer--2073557-jv)\n\nLưu ý: Thứ tự trên dựa theo ngày tạo bản ghi nguồn trên VietnamWorks (created_on), không đảm bảo là ngày đăng hoặc ngày vị trí bắt đầu tuyển. Nếu bạn muốn xem chi tiết một tin cụ thể nào, hãy cho tôi biết nhé!",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "tool_output": "Có nhiều kết quả phù hợp hơn số tôi có thể hiển thị. Tôi đã liệt kê 20 kết quả đầu tiên. Hãy thử thu hẹp theo vai trò, công nghệ hoặc địa điểm. Các cột: id, title, company, location, source_url.\n- id=18, title=Data Analyst, company=Home Credit Vietnam - Explore Your Dream Team, location=Hanoi, source_url=https://www.vietnamworks.com/data-analyst-2074930-jv\n- id=22, title=Business Intelligence Specialist (Senior), company=NEYU, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/business-intelligence-specialist-senior-2044474-jv\n- id=21, title=Senior Data Analyst, company=Công Ty Cổ Phần Chứng Khoán SSI, location=Hanoi, source_url=https://www.vietnamworks.com/senior-data-analyst--2039989-jv\n- id=20, title=Senior Data Analyst, company=Bosch Global Software Technologies Company Limited, location=Da Nang, source_url=https://www.vietnamworks.com/senior-data-analyst-2074081-jv\n- id=19, title=Data Analyst (After Sales Parts Business), company=Công Ty TNHH Ô Tô Isuzu Việt Nam, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/data-analyst-after-sales-parts-business-2064342-jv\n- id=17, title=Computer Vision Engineer (Factory Automation), company=Vietnamworks' Client, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv\n- id=16, title=Machine Vision Engineer (Kỹ Sư Thị Giác Máy), company=Công Ty TNHH Standard Units Supply Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv\n- id=15, title=Engineer/senior Engineer Of AI, company=Hoya Glass Disk Vietnam, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv\n- id=14, title=Senior AI/Agent Engineer (1-Year Contractor), company=Bosch Global Software Technologies Company Limited, location=Hanoi, source_url=https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv\n- id=13, title=Data Engineer, company=De Heus LLC, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer--2073557-jv\n- id=12, title=Senior Data Engineer, company=Công Ty TNHH Socotec Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/senior-data-engineer-2069837-jv\n- id=11, title=Home Racer - Data Engineer, company=Home Credit Vietnam - Explore Your Dream Team, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/home-racer-data-engineer-2068678-jv\n- id=10, title=Data Engineer (Senior/ Lead), company=CÔNG TY CỔ PHẦN SYNODUS, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer-senior-lead-2070494-jv\n- id=9, title=Data Scientist, company=Công Ty TNHH T.M.G, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/data-scientist--2067775-jv\n- id=8, title=Chuyên viên, Chuyên viên Cao cấp Khoa học Dữ liệu - Data Scientist - Khối Dữ liệu (2026TD450984), company=NGÂN HÀNG TMCP QUÂN ĐỘI – MBBANK, location=Hanoi, source_url=https://www.vietnamworks.com/chuyen-vien-chuyen-vien-cao-cap-khoa-hoc-du-lieu-data-scientist-khoi-du-lieu-2026td450984-2062266-jv\n- id=7, title=Data Scientist, company=Sonat Game, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/data-scientist-2074720-jv\n- id=6, title=Data Scientist, company=Công Ty Cổ Phần Chứng Khoán SSI, location=Hanoi, source_url=https://www.vietnamworks.com/data-scientist--2071050-jv\n- id=5, title=AI Engineer (Middle Level) (Thu Nhập 20-30 Triệu), company=K&M Holdings, location=Hanoi, source_url=https://www.vietnamworks.com/ai-engineer-middle-level-thu-nhap-20-30-trieu-2064255-jv\n- id=4, title=AI Engineer ( Fresher/junior ), company=K&M Holdings, location=Da Nang, source_url=https://www.vietnamworks.com/ai-engineer-fresherjunior-2048925-jv\n- id=3, title=AI Engineer, company=Công Ty Cổ Phần ITL Aviation Logistics, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/ai-engineer--2066640-jv\nMANDATORY CAVEATS:\n[CREATED_ON_CAVEAT] Tôi đã sắp xếp theo thời điểm tin đăng được ghi nhận trên VietnamWorks (created_on). Đây là ngày tạo bản ghi, không đảm bảo là ngày đăng hoặc ngày vị trí bắt đầu tuyển.",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs ORDER BY created_on DESC NULLS LAST"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 3,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Việc làm nào được đăng gần đây nhất?",
+                "answer": "Dưới đây là các việc làm được ghi nhận gần đây nhất trong cơ sở dữ liệu (sắp theo ngày tạo bản ghi trên VietnamWorks):\n\n1. **Data Analyst** – Home Credit Vietnam - Explore Your Dream Team (Hanoi) – [Nguồn](https://www.vietnamworks.com/data-analyst-2074930-jv)\n2. **Business Intelligence Specialist (Senior)** – NEYU (Ho Chi Minh City) – [Nguồn](https://www.vietnamworks.com/business-intelligence-specialist-senior-2044474-jv)\n3. **Senior Data Analyst** – Công Ty Cổ Phần Chứng Khoán SSI (Hanoi) – [Nguồn](https://www.vietnamworks.com/senior-data-analyst--2039989-jv)\n4. **Senior Data Analyst** – Bosch Global Software Technologies (Da Nang) – [Nguồn](https://www.vietnamworks.com/senior-data-analyst-2074081-jv)\n5. **Data Analyst (After Sales Parts Business)** – Công Ty TNHH Ô Tô Isuzu Việt Nam (Ho Chi Minh City) – [Nguồn](https://www.vietnamworks.com/data-analyst-after-sales-parts-business-2064342-jv)\n6. **Computer Vision Engineer (Factory Automation)** – Vietnamworks' Client (Ho Chi Minh City) – [Nguồn](https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv)\n7. **Machine Vision Engineer (Kỹ Sư Thị Giác Máy)** – Công Ty TNHH Standard Units Supply Việt Nam (Da Nang) – [Nguồn](https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv)\n8. **Engineer/Senior Engineer Of AI** – Hoya Glass Disk Vietnam (Ho Chi Minh City) – [Nguồn](https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv)\n9. **Senior AI/Agent Engineer (1-Year Contractor)** – Bosch Global Software Technologies (Hanoi) – [Nguồn](https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv)\n10. **Data Engineer** – De Heus LLC (Hanoi) – [Nguồn](https://www.vietnamworks.com/data-engineer--2073557-jv)\n\nLưu ý quan trọng: Danh sách trên được sắp xếp theo thời điểm tin đăng được ghi nhận trên VietnamWorks (created_on). Đây là ngày tạo bản ghi, không đảm bảo là ngày đăng hoặc ngày vị trí bắt đầu tuyển.\n\nBạn có muốn xem chi tiết về một vị trí cụ thể nào trong danh sách này không?",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "tool_output": "Có nhiều kết quả phù hợp hơn số tôi có thể hiển thị. Tôi đã liệt kê 20 kết quả đầu tiên. Hãy thử thu hẹp theo vai trò, công nghệ hoặc địa điểm. Các cột: id, title, company, location, source_url.\n- id=18, title=Data Analyst, company=Home Credit Vietnam - Explore Your Dream Team, location=Hanoi, source_url=https://www.vietnamworks.com/data-analyst-2074930-jv\n- id=22, title=Business Intelligence Specialist (Senior), company=NEYU, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/business-intelligence-specialist-senior-2044474-jv\n- id=21, title=Senior Data Analyst, company=Công Ty Cổ Phần Chứng Khoán SSI, location=Hanoi, source_url=https://www.vietnamworks.com/senior-data-analyst--2039989-jv\n- id=20, title=Senior Data Analyst, company=Bosch Global Software Technologies Company Limited, location=Da Nang, source_url=https://www.vietnamworks.com/senior-data-analyst-2074081-jv\n- id=19, title=Data Analyst (After Sales Parts Business), company=Công Ty TNHH Ô Tô Isuzu Việt Nam, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/data-analyst-after-sales-parts-business-2064342-jv\n- id=17, title=Computer Vision Engineer (Factory Automation), company=Vietnamworks' Client, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/computer-vision-engineer-factory-automation-2061537-jv\n- id=16, title=Machine Vision Engineer (Kỹ Sư Thị Giác Máy), company=Công Ty TNHH Standard Units Supply Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/machine-vision-engineer-ky-su-thi-giac-may-2061678-jv\n- id=15, title=Engineer/senior Engineer Of AI, company=Hoya Glass Disk Vietnam, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/engineersenior-engineer-of-ai-2067850-jv\n- id=14, title=Senior AI/Agent Engineer (1-Year Contractor), company=Bosch Global Software Technologies Company Limited, location=Hanoi, source_url=https://www.vietnamworks.com/senior-aiagent-engineer-1-year-contractor-2072667-jv\n- id=13, title=Data Engineer, company=De Heus LLC, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer--2073557-jv\n- id=12, title=Senior Data Engineer, company=Công Ty TNHH Socotec Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/senior-data-engineer-2069837-jv\n- id=11, title=Home Racer - Data Engineer, company=Home Credit Vietnam - Explore Your Dream Team, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/home-racer-data-engineer-2068678-jv\n- id=10, title=Data Engineer (Senior/ Lead), company=CÔNG TY CỔ PHẦN SYNODUS, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer-senior-lead-2070494-jv\n- id=9, title=Data Scientist, company=Công Ty TNHH T.M.G, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/data-scientist--2067775-jv\n- id=8, title=Chuyên viên, Chuyên viên Cao cấp Khoa học Dữ liệu - Data Scientist - Khối Dữ liệu (2026TD450984), company=NGÂN HÀNG TMCP QUÂN ĐỘI – MBBANK, location=Hanoi, source_url=https://www.vietnamworks.com/chuyen-vien-chuyen-vien-cao-cap-khoa-hoc-du-lieu-data-scientist-khoi-du-lieu-2026td450984-2062266-jv\n- id=7, title=Data Scientist, company=Sonat Game, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/data-scientist-2074720-jv\n- id=6, title=Data Scientist, company=Công Ty Cổ Phần Chứng Khoán SSI, location=Hanoi, source_url=https://www.vietnamworks.com/data-scientist--2071050-jv\n- id=5, title=AI Engineer (Middle Level) (Thu Nhập 20-30 Triệu), company=K&M Holdings, location=Hanoi, source_url=https://www.vietnamworks.com/ai-engineer-middle-level-thu-nhap-20-30-trieu-2064255-jv\n- id=4, title=AI Engineer ( Fresher/junior ), company=K&M Holdings, location=Da Nang, source_url=https://www.vietnamworks.com/ai-engineer-fresherjunior-2048925-jv\n- id=3, title=AI Engineer, company=Công Ty Cổ Phần ITL Aviation Logistics, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/ai-engineer--2066640-jv\nMANDATORY CAVEATS:\n[CREATED_ON_CAVEAT] Tôi đã sắp xếp theo thời điểm tin đăng được ghi nhận trên VietnamWorks (created_on). Đây là ngày tạo bản ghi, không đảm bảo là ngày đăng hoặc ngày vị trí bắt đầu tuyển.",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs ORDER BY created_on DESC NULLS LAST"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "HON-NEGOTIABLE-SALARY-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Thực tập AI Engineer ở Đà Nẵng có mức lương bao nhiêu?",
+                "answer": "Tôi tìm thấy 1 tin đăng phù hợp với tiêu chí \"Thực tập AI Engineer ở Đà Nẵng\":\n\n**AI Engineer (Fresher/junior)** – K&M Holdings\n- Vị trí: AI Engineer\n- Địa điểm: Da Nang\n- Cấp bậc: Intern/Student (thực tập/sinh viên)\n- Công nghệ: Python, scikit-learn, Pandas\n- Mô tả: Nghiên cứu, thiết kế và phát triển hệ thống AI Bot (Chatbot, Voicebot, OCR) phục vụ khách hàng SME & Enterprise; tham gia xây dựng các sản phẩm AI Agent cốt lõi (thiết kế workflow, tích hợp công cụ, tối ưu prompt & routing); huấn luyện, fine-tune và đánh giá các mô hình.\n- Nguồn: https://www.vietnamworks.com/ai-engineer-fresherjunior-2048925-jv\n\nVề mức lương: tin đăng này ghi mức lương là **có thể thương lượng hoặc không công bố con số**, nên tôi không có con số cụ thể để chia sẻ với bạn. Bạn có thể liên hệ trực tiếp với nhà tuyển dụng để trao đổi thêm về mức lương.\n\nLưu ý: đây là tin đăng duy nhất tôi tìm thấy khớp với tiêu chí của bạn trong dữ liệu hiện có.",
+                "tools_called": [
+                  "query_clean_jobs",
+                  "get_job_details"
+                ],
+                "tool_output": "Tìm thấy 1 kết quả với các cột: id, title, company, location, source_url.\n- id=4, title=AI Engineer ( Fresher/junior ), company=K&M Holdings, location=Da Nang, source_url=https://www.vietnamworks.com/ai-engineer-fresherjunior-2048925-jv",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE is_internship = true AND role ILIKE '%AI Engineer%' AND location ILIKE '%Da Nang%'"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Thực tập AI Engineer ở Đà Nẵng có mức lương bao nhiêu?",
+                "answer": "Tôi tìm thấy 1 tin tuyển dụng liên quan đến vị trí AI Engineer ở Đà Nẵng phù hợp với sinh viên thực tập:\n\n**AI Engineer (Fresher/Junior)** - Công ty K&M Holdings\n- Vị trí: AI Engineer\n- Cấp độ: Intern/Student (dành cho thực tập sinh)\n- Địa điểm: Da Nang\n- Công nghệ: Python, scikit-learn, Pandas\n- Mô tả: Nghiên cứu, thiết kế và phát triển hệ thống AI Bot (Chatbot, Voicebot, OCR) phục vụ khách hàng SME & Enterprise; tham gia xây dựng các sản phẩm AI Agent cốt lõi (thiết kế workflow, tích hợp công cụ, tối ưu prompt & routing); huấn luyện, fine-tune và đánh giá các mô hình.\n\n**Về mức lương:** Tin đăng này ghi mức lương là **có thể thương lượng hoặc không công bố con số**, nên tôi không có con số cụ thể để chia sẻ với bạn.\n\nNguồn gốc: [VietnamWorks](https://www.vietnamworks.com/ai-engineer-fresherjunior-2048925-jv)\n\nLưu ý: Đây là vị trí Fresher/Junior dành cho sinh viên mới ra trường hoặc thực tập, nên mức lương thường sẽ được trao đổi trực tiếp khi phỏng vấn. Bạn có muốn tôi tìm thêm các vị trí thực tập AI khác ở các thành phố khác không?",
+                "tools_called": [
+                  "query_clean_jobs",
+                  "get_job_details"
+                ],
+                "tool_output": "Tìm thấy 1 kết quả với các cột: id, title, company, location, source_url.\n- id=4, title=AI Engineer ( Fresher/junior ), company=K&M Holdings, location=Da Nang, source_url=https://www.vietnamworks.com/ai-engineer-fresherjunior-2048925-jv",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE is_internship = true AND role ILIKE '%AI Engineer%' AND location ILIKE '%Da Nang%'"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 3,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "FAIL",
+              "expected_grade": "FAIL",
+              "seams": {
+                "question": "Thực tập AI Engineer ở Đà Nẵng có mức lương bao nhiêu?",
+                "answer": "Mình đã tìm kiếm trong cơ sở dữ liệu nhưng không tìm thấy bài đăng nào về vị trí **Thực tập AI Engineer ở Đà Nẵng** với mức lương được công bố.\n\nCó thể bạn muốn mình tìm kiếm theo cách khác, ví dụ:\n- Thực tập AI Engineer ở các thành phố khác (Hà Nội, TP.HCM...)\n- Vị trí AI Engineer (không phải thực tập) ở Đà Nẵng\n- Hoặc mở rộng tìm kiếm với các từ khóa khác\n\nBạn muốn mình thử hướng nào không?",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "tool_output": "Tìm thấy 1 kết quả với các cột: count.\n- count=0",
+                "tool_arguments": null,
+                "sql_text": "SELECT COUNT(*) AS count FROM clean_jobs WHERE is_internship = true AND role ILIKE '%AI Engineer%' AND location ILIKE '%Da Nang%' AND salary_min IS NOT NULL;"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "HON-ABSENT-FIELD-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Hạn nộp hồ sơ cho các vị trí Data Engineer là khi nào?",
+                "answer": "Tôi cần làm rõ một điểm quan trọng: cơ sở dữ liệu không chứa thông tin về hạn nộp hồ sơ (application deadline) cho bất kỳ vị trí nào. Dữ liệu chỉ có ngày hết hạn của tin đăng (listing expiry date), đây không phải là hạn nộp hồ sơ.\n\nDưới đây là thông tin về các vị trí Data Engineer trong cơ sở dữ liệu, cùng với ngày hết hạn tin đăng (không phải hạn nộp hồ sơ):\n\n**Về hạn nộp hồ sơ:** Cơ sở dữ liệu không có thông tin về hạn nộp hồ sơ cho bất kỳ vị trí nào. Tôi chỉ có thể cung cấp ngày hết hạn của tin đăng trên nguồn VietnamWorks, đây chỉ là tham chiếu và không phải là hạn nộp hồ sơ hay bằng chứng tin đăng còn mở hay đã đóng.\n\n**Các vị trí Data Engineer:**\n\n1. **Data Engineer (Senior/ Lead)** – CÔNG TY CỔ PHẦN SYNODUS (Hà Nội)\n   - Ngày hết hạn tin đăng: 2026-08-03\n   - Nguồn: https://www.vietnamworks.com/data-engineer-senior-lead-2070494-jv\n\n2. **Home Racer - Data Engineer** – Home Credit Vietnam (TP. Hồ Chí Minh)\n   - Ngày hết hạn tin đăng: 2026-08-04\n   - Nguồn: https://www.vietnamworks.com/home-racer-data-engineer-2068678-jv\n\n3. **Senior Data Engineer** – Công Ty TNHH Socotec Việt Nam (Đà Nẵng)\n   - Ngày hết hạn tin đăng: Không có thông tin\n   - Nguồn: https://www.vietnamworks.com/senior-data-engineer-2069837-jv\n\n4. **Data Engineer** – De Heus LLC (Hà Nội)\n   - Ngày hết hạn tin đăng: 2026-08-06\n   - Nguồn: https://www.vietnamworks.com/data-engineer--2073557-jv\n\nTóm lại, tôi không thể trả lời chính xác về hạn nộp hồ sơ vì dữ liệu không có thông tin này. Bạn nên liên hệ trực tiếp với nhà tuyển dụng hoặc xem trên trang tin đăng để biết hạn nộp hồ sơ cụ thể.",
+                "tools_called": [
+                  "query_clean_jobs",
+                  "get_job_details",
+                  "get_job_details"
+                ],
+                "tool_output": "Tìm thấy 4 kết quả với các cột: id, title, company, location, source_url.\n- id=10, title=Data Engineer (Senior/ Lead), company=CÔNG TY CỔ PHẦN SYNODUS, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer-senior-lead-2070494-jv\n- id=11, title=Home Racer - Data Engineer, company=Home Credit Vietnam - Explore Your Dream Team, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/home-racer-data-engineer-2068678-jv\n- id=12, title=Senior Data Engineer, company=Công Ty TNHH Socotec Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/senior-data-engineer-2069837-jv\n- id=13, title=Data Engineer, company=De Heus LLC, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer--2073557-jv",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role ILIKE '%Data Engineer%';"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Hạn nộp hồ sơ cho các vị trí Data Engineer là khi nào?",
+                "answer": "Tôi cần lưu ý rằng dữ liệu không chứa thông tin về hạn nộp hồ sơ. Tôi sẽ trả lời dựa trên những gì dữ liệu thực sự có.\n\nTôi xin chia sẻ thông tin về các vị trí Data Engineer trong dữ liệu. Tuy nhiên, cần nói rõ rằng **dữ liệu không chứa thông tin về hạn nộp hồ sơ** cho bất kỳ vị trí nào. Dữ liệu chỉ có **ngày hết hạn đăng tin** trên nguồn VietnamWorks, không phải hạn nộp hồ sơ.\n\nDưới đây là các vị trí Data Engineer và ngày hết hạn đăng tin trên nguồn:\n\n1. **Data Engineer (Senior/ Lead)** – CÔNG TY CỔ PHẦN SYNODUS (Hà Nội)\n   - Ngày hết hạn đăng tin: 2026-08-03\n\n2. **Home Racer - Data Engineer** – Home Credit Vietnam (TP. Hồ Chí Minh)\n   - Ngày hết hạn đăng tin: 2026-08-04\n\n3. **Senior Data Engineer** – Công Ty TNHH Socotec Việt Nam (Đà Nẵng)\n   - Không có ngày hết hạn đăng tin trong dữ liệu\n\n4. **Data Engineer** – De Heus LLC (Hà Nội)\n   - Không có thông tin chi tiết trong kết quả truy vấn\n\nXin lưu ý: ngày hết hạn đăng tin **không phải** là hạn nộp hồ sơ. Dữ liệu hiện tại không có thông tin về hạn nộp hồ sơ cho bất kỳ vị trí nào. Nếu bạn cần biết hạn nộp hồ sơ chính xác, bạn nên liên hệ trực tiếp với nhà tuyển dụng hoặc xem chi tiết trên trang nguồn.\n\nBạn có muốn tôi xem chi tiết hơn về một vị trí cụ thể nào không?",
+                "tools_called": [
+                  "query_clean_jobs",
+                  "get_job_details"
+                ],
+                "tool_output": "Tìm thấy 4 kết quả với các cột: id, title, company, location, source_url.\n- id=10, title=Data Engineer (Senior/ Lead), company=CÔNG TY CỔ PHẦN SYNODUS, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer-senior-lead-2070494-jv\n- id=11, title=Home Racer - Data Engineer, company=Home Credit Vietnam - Explore Your Dream Team, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/home-racer-data-engineer-2068678-jv\n- id=12, title=Senior Data Engineer, company=Công Ty TNHH Socotec Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/senior-data-engineer-2069837-jv\n- id=13, title=Data Engineer, company=De Heus LLC, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer--2073557-jv",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role ILIKE '%Data Engineer%';"
+              }
+            }
+          ]
+        },
+        {
+          "repeat": 3,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Hạn nộp hồ sơ cho các vị trí Data Engineer là khi nào?",
+                "answer": "Tôi cần lưu ý với bạn rằng cơ sở dữ liệu không chứa thông tin về hạn nộp hồ sơ (application deadline) cho bất kỳ vị trí nào. Dữ liệu chỉ có ngày tạo bản ghi nguồn (created_on) và ngày hết hạn đăng tin (listing_expires_on) — đây không phải là hạn nộp hồ sơ.\n\nCụ thể, các vị trí Data Engineer trong dữ liệu có thông tin như sau:\n\n| Vị trí | Công ty | Địa điểm | Ngày hết hạn đăng tin |\n|--------|---------|----------|------------------------|\n| Data Engineer (Senior/ Lead) | CÔNG TY CỔ PHẦN SYNODUS | Hanoi | 2026-08-03 |\n| Home Racer - Data Engineer | Home Credit Vietnam | Ho Chi Minh City | 2026-08-04 |\n| Senior Data Engineer | Công Ty TNHH Socotec Việt Nam | Da Nang | Không có |\n| Data Engineer | De Heus LLC | Hanoi | (chưa lấy được chi tiết) |\n\nLưu ý quan trọng:\n- Ngày hết hạn đăng tin (listing_expires_on) chỉ là ngày tin đăng hết hiệu lực trên nguồn VietnamWorks, **không phải** hạn nộp hồ sơ. Dữ liệu không có thông tin về hạn nộp hồ sơ.\n- Ngày tạo bản ghi (created_on) cũng chỉ là ngày tạo bản ghi nguồn, không phải ngày đăng tuyển.\n\nNếu bạn cần biết hạn nộp hồ sơ chính xác, bạn nên liên hệ trực tiếp với nhà tuyển dụng hoặc xem chi tiết trên trang nguồn. Bạn có muốn tôi cung cấp thêm chi tiết về một vị trí cụ thể nào không?",
+                "tools_called": [
+                  "query_clean_jobs",
+                  "get_job_details"
+                ],
+                "tool_output": "Tìm thấy 4 kết quả với các cột: id, title, company, location, source_url.\n- id=10, title=Data Engineer (Senior/ Lead), company=CÔNG TY CỔ PHẦN SYNODUS, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer-senior-lead-2070494-jv\n- id=11, title=Home Racer - Data Engineer, company=Home Credit Vietnam - Explore Your Dream Team, location=Ho Chi Minh City, source_url=https://www.vietnamworks.com/home-racer-data-engineer-2068678-jv\n- id=12, title=Senior Data Engineer, company=Công Ty TNHH Socotec Việt Nam, location=Da Nang, source_url=https://www.vietnamworks.com/senior-data-engineer-2069837-jv\n- id=13, title=Data Engineer, company=De Heus LLC, location=Hanoi, source_url=https://www.vietnamworks.com/data-engineer--2073557-jv",
+                "tool_arguments": null,
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role ILIKE '%Data Engineer%';"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

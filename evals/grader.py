@@ -547,16 +547,34 @@ _LIFECYCLE_SUBSTITUTION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# A lifecycle date is only a substitution when it stands in for the absent deadline.
+# The v9/v10 contract (and the LISTING_EXPIRY_NOT_DEADLINE / CREATED_ON_CAVEAT glossary
+# strings) directs the agent to offer the source listing-expiry or record-creation date
+# *as itself*, with an explicit clarification that it is not an application deadline or
+# posting date. The 2026-08-26 issue-243 capture shows every truthful HON-ABSENT-FIELD-1
+# answer carries that clarification, so a disclaimed mention no longer fails this check;
+# a bare lifecycle date presented beside the deadline question still does.
+_LIFECYCLE_CLARIFICATION_PATTERN = re.compile(
+    r"(?:not\s+an?\s+(?:application\s+)?deadline|not\s+a\s+posting\s+date|"
+    r"không\s+phải(?:\s+là)?\s+hạn\s+nộp(?:\s+hồ\s+sơ)?|"
+    r"không\s+phải(?:\s+là)?\s+ngày\s+đăng|không\s+đảm\s+bảo\s+là\s+ngày\s+đăng)",
+    re.IGNORECASE,
+)
+
 
 def _lifecycle_substitution_check(evidence: Evidence) -> Check:
     """An absent application deadline must not be replaced by lifecycle metadata."""
     match = _LIFECYCLE_SUBSTITUTION_PATTERN.search(evidence.answer or "")
+    clarified = _LIFECYCLE_CLARIFICATION_PATTERN.search(evidence.answer or "")
+    passed = match is None or clarified is not None
     return Check(
         "no_lifecycle_date_substitution",
-        match is None,
-        "absent deadline is not replaced by lifecycle metadata"
-        if match is None
-        else f"absent deadline is replaced by lifecycle metadata: {match.group(0)!r}",
+        passed,
+        (
+            "absent deadline is not replaced by lifecycle metadata"
+            if passed
+            else f"absent deadline is replaced by lifecycle metadata: {match.group(0)!r}"
+        ),
         "structural",
     )
 

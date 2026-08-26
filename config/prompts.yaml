@@ -1,6 +1,6 @@
 # Prompt lineage version. Bump whenever any string in this file changes, so evaluation
 # runs recorded before and after a prompt change are never compared as if comparable.
-prompt_version: v9
+prompt_version: v10
 
 prompts:
   system_prompt: |
@@ -75,6 +75,8 @@ prompts:
     - Do not add commentary or explanation, only the SQL statement.
     - Add a LIMIT clause ONLY when the user explicitly asks for a specific number of results (e.g. "top 5", "show me 3 jobs"). Otherwise do NOT add a LIMIT — the system applies its own result cap.
     - For "how many / count" questions, use exactly SELECT COUNT(*) AS count. Do not select row columns, id, or source_url. Return the number, not a list.
+    - A superlative question ("the newest", "the most recent", "mới nhất", "gần đây nhất") asks about one posting. Order by the requested attribute and add LIMIT 1 so only that top row is returned; do not return the whole table for a superlative question.
+    - When the user asks about salary, never add a salary-disclosure filter (such as salary_min IS NOT NULL) to the query. Return every matching posting and report each row's salary state: a stored range and currency, negotiable, or not disclosed.
     - Never SELECT the description column. It is a large blob and is not needed to filter, count, or list; full descriptions are retrieved separately. You may still filter on it with description ILIKE '%term%'.
     - For an ordinary job list, select exactly id, title, company, location, and source_url, in that order. Include another column only when the user explicitly asks to see that attribute. Do not project a field merely because it filters, orders, groups, or aggregates the rows.
     - When listing rows, always SELECT id as the first column so results can be fetched in detail later. Do NOT select id or source_url for COUNT/aggregate/GROUP BY queries.

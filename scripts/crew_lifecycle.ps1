@@ -63,7 +63,8 @@ function Write-CrewTaskManifest {
         [Parameter(Mandatory)][string]$PrimaryBriefPath,
         [Parameter(Mandatory)][string]$PrimaryStatusPath,
         [Parameter(Mandatory)][string]$TaskBriefPath,
-        [Parameter(Mandatory)][string]$ScoutReportPath
+        [Parameter(Mandatory)][string]$ScoutReportPath,
+        [Parameter(Mandatory)][ValidateSet('wt', 'vscode')][string]$TerminalBackend
     )
 
     $manifest = [ordered]@{
@@ -82,7 +83,7 @@ function Write-CrewTaskManifest {
         ScoutReportHandedOff   = $false
         State                  = 'dispatched'
         DispatchedAtUtc        = '{0:u}' -f (Get-Date).ToUniversalTime()
-        TerminalBackend        = 'windows-terminal'
+        TerminalBackend        = $TerminalBackend
         TerminalLaunchStatus   = 'not-attempted'
         TornDownAtUtc          = $null
     }

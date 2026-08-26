@@ -9,7 +9,9 @@ from src.agents.tracing.langfuse import (
     build_langfuse_config,
     get_langfuse_client,
     langfuse_request_trace,
+    record_agent_response_failure,
 )
+from src.core.logger import logger
 
 
 class AgentRuntime:
@@ -36,7 +38,13 @@ class AgentRuntime:
             user_id=user_id,
         ) as trace_id:
             response = await self.agent.ainvoke(messages, config=config or None)
-        answer = self._extract_answer(response)
+            answer, failure_category = self._extract_answer_with_failure_category(response)
+            if failure_category is not None:
+                logger.warning(
+                    "agent_runtime.response_extraction_failed",
+                    failure_category=failure_category,
+                )
+                record_agent_response_failure(category=failure_category)
 
         client = get_langfuse_client()
         if client is not None:
@@ -46,11 +54,14 @@ class AgentRuntime:
         if trace_id is not None and client is not None:
             trace_url = client.get_trace_url(trace_id=trace_id)
 
-        return {
+        result: dict[str, str | None] = {
             "answer": answer,
             "trace_id": trace_id,
             "trace_url": trace_url,
         }
+        if failure_category is not None:
+            result["failure_category"] = failure_category
+        return result
 
     async def astream(
         self,
@@ -134,17 +145,30 @@ class AgentRuntime:
         return {"messages": [HumanMessage(content=query)]}
 
     def _extract_answer(self, response: Any) -> str:
-        if not isinstance(response, dict):
-            return ""
+        answer, _ = self._extract_answer_with_failure_category(response)
+        return answer
 
-        messages = response.get("messages")
-        if not isinstance(messages, list) or not messages:
-            return ""
+    def _extract_answer_with_failure_category(
+        self, response: Any
+    ) -> tuple[str, str | None]:
+        if not isinstance(response, dict):
+            return "", "response_not_dict"
+
+        if "messages" not in response:
+            return "", "messages_missing"
+
+        messages = response["messages"]
+        if not isinstance(messages, list):
+            return "", "messages_not_list"
+        if not messages:
+            return "", "messages_empty"
 
         last_message = messages[-1]
         content = getattr(last_message, "content", None)
 
-        if not isinstance(content, str) or not content.strip():
-            return ""
+        if not isinstance(content, str):
+            return "", "message_content_not_text"
+        if not content.strip():
+            return "", "message_content_empty"
 
-        return content.strip()
+        return content.strip(), None

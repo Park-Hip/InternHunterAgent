@@ -41,6 +41,7 @@ async def generate_agent_response(
         logger.warning(
             "generate_agent_response.empty_answer_fallback",
             session_id=session_id,
+            failure_category=response.get("failure_category"),
         )
         answer = FALLBACK_ANSWER
 

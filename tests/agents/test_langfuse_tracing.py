@@ -153,6 +153,20 @@ def test_build_langfuse_config_rejects_unknown_entry_points() -> None:
         langfuse.build_langfuse_config(entry_point="api:debug")
 
 
+def test_record_agent_response_failure_updates_the_active_span_with_safe_metadata() -> (
+    None
+):
+    client = MagicMock()
+
+    with patch.object(langfuse, "get_langfuse_client", return_value=client):
+        langfuse.record_agent_response_failure(category="messages_empty")
+
+    client.update_current_span.assert_called_once_with(
+        metadata={"agent_response_failure_category": "messages_empty"},
+        level="WARNING",
+    )
+
+
 def test_build_langfuse_tags_use_the_configured_provider_and_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

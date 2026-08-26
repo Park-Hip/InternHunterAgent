@@ -85,6 +85,7 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         mock_logger.warning.assert_called_once_with(
             "generate_agent_response.empty_answer_fallback",
             session_id="session-empty-sync",
+            failure_category=None,
         )
 
 

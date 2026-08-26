@@ -68,6 +68,42 @@ function Add-CrewVsCodeTaskEntry {
     return $tasksPath
 }
 
+function Remove-CrewVsCodeTaskEntry {
+    # Mirror image of Add-CrewVsCodeTaskEntry: removes every task entry whose
+    # options.cwd matches the torn-down worktree path from the primary
+    # checkout's .vscode/tasks.json so retired workers do not leave stale
+    # Run Task entries behind. Matching keys off cwd rather than label so the
+    # removal stays robust even if the label suffix or harness differs.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$WorktreePath
+    )
+
+    $tasksPath = Join-Path (Join-Path $RepoRoot '.vscode') 'tasks.json'
+    if (-not (Test-Path -LiteralPath $tasksPath)) {
+        return [pscustomobject]@{ Removed = 0; TasksPath = $tasksPath }
+    }
+    try {
+        $config = Get-Content -LiteralPath $tasksPath -Raw | ConvertFrom-Json
+    }
+    catch {
+        throw ".vscode/tasks.json exists but is not valid JSON: $($_.Exception.Message)"
+    }
+    if (-not ($config | Get-Member -Name tasks)) {
+        return [pscustomobject]@{ Removed = 0; TasksPath = $tasksPath }
+    }
+
+    $remaining = @($config.tasks | Where-Object { $_.options.cwd -ne $WorktreePath })
+    $removed = @($config.tasks).Count - $remaining.Count
+    if ($removed -gt 0) {
+        $config.tasks = $remaining
+        $json = $config | ConvertTo-Json -Depth 6
+        [System.IO.File]::WriteAllText($tasksPath, $json + "`n", [System.Text.UTF8Encoding]::new($false))
+    }
+    return [pscustomobject]@{ Removed = $removed; TasksPath = $tasksPath }
+}
+#
 # The VS Code CLI cannot inject an integrated-terminal session into an
 # already-running window. This backend therefore opens the task worktree in a
 # NEW VS Code window and pre-writes a .vscode/tasks.json terminal task so the

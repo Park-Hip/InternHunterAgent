@@ -165,6 +165,7 @@ Use the manifest-aware teardown command for newly dispatched tasks:
 Teardown never forces removal of a dirty worktree.
 For a scout, it refuses to remove the worktree unless the durable report exists and the operator explicitly confirms the handoff with `-ConfirmScoutReportHandoff`.
 On success, it leaves the primary manifest in place and records that the task was torn down.
+For tasks dispatched with `-Backend vscode-task`, teardown also removes the matching `Crew: IHA-<issue> worker` entry from this checkout's `.vscode/tasks.json`.
 
 When no crew is active, stop the watcher.
 The retained manifest, brief, status, and durable scout report support later inspection and manual recovery.

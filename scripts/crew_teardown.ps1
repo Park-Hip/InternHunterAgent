@@ -39,6 +39,9 @@ if ($WhatIfMode) {
     if ($manifest.Autonomy -eq 'scout') {
         Write-Output ("  report   : confirmed durable at {0}" -f $manifest.ScoutReportPath)
     }
+    if ($manifest.TerminalBackend -eq 'vscode-task') {
+        Write-Output "  vscode-task : remove Run Task entries with cwd '$($manifest.WorktreePath)' from .vscode\tasks.json"
+    }
     Write-Output ("  manifest : mark .crew\{0}-task.json as torn_down" -f $Issue)
     exit 0
 }
@@ -54,6 +57,17 @@ if ($manifest.Autonomy -eq 'scout' -and -not $manifest.ScoutReportHandedOff) {
     $changes.ScoutReportHandedOff = $true
 }
 Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes $changes | Out-Null
+
+if ($manifest.TerminalBackend -eq 'vscode-task') {
+    . (Join-Path $PSScriptRoot 'crew_vscode_backend.ps1')
+    $taskEntry = Remove-CrewVsCodeTaskEntry -RepoRoot $RepoRoot -WorktreePath $manifest.WorktreePath
+    if ($taskEntry.Removed -gt 0) {
+        Write-Output ("vscode-task : removed {0} matching Run Task entry from {1}" -f $taskEntry.Removed, $taskEntry.TasksPath)
+    }
+    else {
+        Write-Output ("vscode-task : no matching Run Task entry found in {0}" -f $taskEntry.TasksPath)
+    }
+}
 
 Write-Output "teardown    : crew task #$Issue worktree removed"
 Write-Output ("manifest    : {0}" -f $paths.PrimaryManifestPath)

@@ -8,7 +8,11 @@ from langchain.agents.middleware import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 
-from src.agents.runtime.middleware import build_trim_middleware, load_max_turns
+from src.agents.runtime.middleware import (
+    build_trim_middleware,
+    load_compaction_message_limits,
+    load_max_turns,
+)
 
 
 def _make_request(messages: list) -> ModelRequest:
@@ -50,6 +54,39 @@ class LoadMaxTurnsTests(unittest.TestCase):
                 load_max_turns()
 
 
+class LoadCompactionMessageLimitsTests(unittest.TestCase):
+    def test_reads_trigger_and_retention_from_config(self) -> None:
+        with patch("src.agents.runtime.middleware.settings") as mock_settings:
+            mock_settings.config_yaml = {
+                "agent": {
+                    "memory": {
+                        "compaction": {
+                            "trigger_messages": 24,
+                            "keep_messages": 12,
+                        }
+                    }
+                }
+            }
+
+            self.assertEqual(load_compaction_message_limits(), (24, 12))
+
+    def test_rejects_retention_that_cannot_compact(self) -> None:
+        with patch("src.agents.runtime.middleware.settings") as mock_settings:
+            mock_settings.config_yaml = {
+                "agent": {
+                    "memory": {
+                        "compaction": {
+                            "trigger_messages": 12,
+                            "keep_messages": 12,
+                        }
+                    }
+                }
+            }
+
+            with self.assertRaises(ValueError):
+                load_compaction_message_limits()
+
+
 class TrimTurnsMiddlewareTests(unittest.TestCase):
     def test_trims_to_recent_complete_turns(self) -> None:
         history: list = []
@@ -83,6 +120,30 @@ class TrimTurnsMiddlewareTests(unittest.TestCase):
         middleware.wrap_model_call(_make_request(history), handler)
 
         self.assertEqual([message.content for message in seen["messages"]], ["hi", "hello"])
+
+    def test_retains_a_compaction_summary_alongside_recent_complete_turns(self) -> None:
+        history = [
+            HumanMessage(
+                content="summary",
+                additional_kwargs={"lc_source": "summarization"},
+            )
+        ]
+        for index in range(3):
+            history.append(HumanMessage(content=f"q{index}"))
+            history.append(AIMessage(content=f"a{index}"))
+        seen: dict = {}
+
+        def handler(request: ModelRequest):
+            seen["messages"] = request.messages
+            return AIMessage(content="final")
+
+        middleware = build_trim_middleware(2)
+        middleware.wrap_model_call(_make_request(history), handler)
+
+        self.assertEqual(
+            [message.content for message in seen["messages"]],
+            ["summary", "q1", "a1", "q2", "a2"],
+        )
 
 
 class TrimTurnsMiddlewareAsyncTests(unittest.IsolatedAsyncioTestCase):

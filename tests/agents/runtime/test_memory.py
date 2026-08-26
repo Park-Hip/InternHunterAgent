@@ -13,7 +13,10 @@ from pydantic import PrivateAttr
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
-from src.agents.runtime.middleware import build_trim_middleware
+from src.agents.runtime.middleware import (
+    build_compaction_middleware,
+    build_trim_middleware,
+)
 from src.agents.service import generate_agent_response
 
 
@@ -88,6 +91,30 @@ class ToolCallingRecordingChatModel(RecordingChatModel):
             reply = AIMessage(content="done")
 
         return ChatResult(generations=[ChatGeneration(message=reply)])
+
+
+class CompactionRecordingChatModel(RecordingChatModel):
+    """A deterministic model that preserves a fact when summarizing history."""
+
+    _summary = "Acme uses Python."
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        self._seen.append(list(messages))
+        contents = _contents(messages)
+        if any(
+            isinstance(content, str) and "Context Extraction Assistant" in content
+            for content in contents
+        ):
+            return ChatResult(
+                generations=[ChatGeneration(message=AIMessage(content=self._summary))]
+            )
+        if any(
+            isinstance(content, str) and self._summary in content for content in contents
+        ):
+            reply = "Acme is the company you said uses Python."
+        else:
+            reply = "I do not have enough retained context to answer honestly."
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content=reply))])
 
 
 def _build_agent(model: BaseChatModel, checkpointer, middleware=None, tools=None):
@@ -216,6 +243,73 @@ class TurnCapHoldsTests(unittest.IsolatedAsyncioTestCase):
         state = await agent.aget_state(config)
         self.assertGreater(len(state.values["messages"]), 2 * max_turns)
         self.assertIn("turn-0", _contents(state.values["messages"]))
+
+
+class PersistedHistoryCompactionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_compaction_bounds_persisted_history_and_keeps_referential_fact(self) -> None:
+        checkpointer = InMemorySaver()
+        config = {"configurable": {"thread_id": "compacted-session"}}
+        before_restart = CompactionRecordingChatModel()
+        middleware = [
+            build_compaction_middleware(
+                before_restart, trigger_messages=8, keep_messages=4
+            ),
+            build_trim_middleware(2),
+        ]
+        agent_before = _build_agent(before_restart, checkpointer, middleware=middleware)
+
+        for message in (
+            "Remember that Acme uses Python.",
+            "Also remember that Beta uses Go.",
+            "This is another independent detail.",
+            "One more independent detail.",
+            "A final independent detail triggers compaction.",
+        ):
+            await agent_before.ainvoke(
+                {"messages": [HumanMessage(content=message)]}, config=config
+            )
+
+        compacted_state = await agent_before.aget_state(config)
+        compacted_contents = _contents(compacted_state.values["messages"])
+        self.assertLessEqual(len(compacted_contents), 8)
+        self.assertTrue(
+            any(
+                isinstance(content, str) and "Acme uses Python." in content
+                for content in compacted_contents
+            )
+        )
+        self.assertNotIn("Remember that Acme uses Python.", compacted_contents)
+
+        after_restart = CompactionRecordingChatModel()
+        agent_after = _build_agent(
+            after_restart,
+            checkpointer,
+            middleware=[
+                build_compaction_middleware(
+                    after_restart, trigger_messages=8, keep_messages=4
+                ),
+                build_trim_middleware(2),
+            ],
+        )
+        result = await agent_after.ainvoke(
+            {
+                "messages": [
+                    HumanMessage(content="Which company did I say uses Python?")
+                ]
+            },
+            config=config,
+        )
+
+        self.assertEqual(
+            result["messages"][-1].content,
+            "Acme is the company you said uses Python.",
+        )
+        self.assertTrue(
+            any(
+                isinstance(content, str) and "Acme uses Python." in content
+                for content in _contents(after_restart.seen[-1])
+            )
+        )
 
 
 class ToolTurnWindowTests(unittest.IsolatedAsyncioTestCase):

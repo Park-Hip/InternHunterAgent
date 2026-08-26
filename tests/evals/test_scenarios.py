@@ -18,6 +18,7 @@ BEHAVIOR_SPEC_PROBE_IDS = {
     "HON-FREE-TEXT-1",
     "HON-NEGOTIABLE-SALARY-1",
     "HON-ABSENT-FIELD-1",
+    "HON-OPEN-STATUS-1",
     "SAF-DESTRUCTIVE-REFUSAL-1",
     "SAF-OFF-TOPIC-REDIRECT-1",
     "SAF-INJECTION-REFUSAL-1",
@@ -35,9 +36,9 @@ OBSERVED_ANSWERS_PATH = Path(evals.__file__).with_name("v1_scenario_matrix.obser
 def test_registry_loads_and_matches_the_frozen_behavior_spec() -> None:
     scenarios = load_scenarios()
 
-    assert len(scenarios) == 28
+    assert len(scenarios) == 29
     assert {scenario["id"] for scenario in scenarios if scenario["probe"]} == BEHAVIOR_SPEC_PROBE_IDS
-    assert sum(1 for scenario in scenarios if scenario["probe"]) == 14
+    assert sum(1 for scenario in scenarios if scenario["probe"]) == 15
     assert repeat_count(
         next(scenario for scenario in scenarios if scenario["id"] == "HON-CREATED-ON-1")
     ) == 3
@@ -133,6 +134,26 @@ def test_refusal_and_zero_result_rules_carry_the_deterministic_wording_contract(
     assert {"DATABASE_ERROR", "INTERNSHIP_SUBSTITUTION"} <= guard_names
 
 
+def test_open_status_rule_carries_the_deterministic_current_open_contract() -> None:
+    """Issue #243: current-open questions are declined deterministically, not judge-only.
+
+    The structural rule holds the FRESHNESS_REFUSAL glossary plus the decline wordings
+    observed in all three live repeats of the 2026-08-26 capture; an answer claiming a
+    listing is open matches none of them and fails.
+    """
+    scenarios = {scenario["id"]: scenario for scenario in load_scenarios()}
+    open_status = scenarios["HON-OPEN-STATUS-1"]
+
+    assert open_status["probe"] is True
+    assertion = open_status["grading"]["assertions"][0]
+    group = assertion["required_any"][0]
+    assert {"glossary": "FRESHNESS_REFUSAL"} in group
+    lexicon = next(term["lexicon"] for term in group if "lexicon" in term)
+    # Observed truthful decline wordings from the 2026-08-26 capture repeats.
+    assert "không thể xác nhận" in lexicon
+    assert "không xác nhận được" in lexicon
+
+
 def test_vietnamese_registry_has_accented_and_unaccented_input_probes() -> None:
     scenarios = {scenario["id"]: scenario for scenario in load_scenarios()}
 
@@ -146,7 +167,7 @@ def test_vietnamese_registry_has_accented_and_unaccented_input_probes() -> None:
 def test_build_eval_dataset_generates_all_single_turn_goldens_from_the_registry() -> None:
     dataset = build_eval_dataset()
 
-    assert len(dataset.goldens) == 26
+    assert len(dataset.goldens) == 27
 
 
 def test_format_scenario_is_a_dry_run_without_a_model_call() -> None:
@@ -191,7 +212,7 @@ def test_every_graded_scenario_classifies_its_comparison_explicitly() -> None:
         ("aggregate_count", 1),
         ("contains_reference", 1),
         ("cross_currency", 1),
-        ("ids_only", 14),
+        ("ids_only", 15),
         ("limited_ids", 1),
         ("zero_results", 1),
     ]
@@ -422,5 +443,8 @@ def test_observed_answers_join_the_renamed_registry() -> None:
     observed_answers = json.loads(OBSERVED_ANSWERS_PATH.read_text(encoding="utf-8"))
     scenarios = load_scenarios()
 
-    assert set(observed_answers) == {scenario["id"] for scenario in scenarios}
+    # Every observed answer must join a live registry id. The set is a subset, not an
+    # equality: HON-OPEN-STATUS-1 (issue #243) postdates this historical v1-matrix
+    # capture and has no recorded row here.
+    assert set(observed_answers) <= {scenario["id"] for scenario in scenarios}
     assert sum(len(answers) for answers in observed_answers.values()) == 70

@@ -178,7 +178,17 @@ class LoadPromptVersionTests(unittest.TestCase):
             load_prompt_version()
 
     def test_yaml_declares_a_prompt_version(self) -> None:
-        self.assertEqual(load_prompt_version(), "v9")
+        self.assertEqual(load_prompt_version(), "v10")
+
+    def test_yaml_sql_rules_carry_the_issue_243_superlative_and_salary_contract(self) -> None:
+        sql_generation = load_sql_generation_prompt()
+
+        # Issue #243 capture 2026-08-26: superlative questions returned whole tables that
+        # were then silently truncated in the answer, dropping labelled source links.
+        self.assertIn("add LIMIT 1 so only that top row is returned", sql_generation)
+        # Repeat 3 of HON-NEGOTIABLE-SALARY-1 filtered on salary disclosure and
+        # substituted a zero-results report for the negotiable-salary answer.
+        self.assertIn("never add a salary-disclosure filter", sql_generation)
 
 
 class LoadBehaviorGlossaryTests(unittest.TestCase):

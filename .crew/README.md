@@ -118,8 +118,10 @@ The response must be non-empty.
   The last non-empty line wins.
 
 - `events.log` - structured events appended by `mate_watch.ps1` in the format `<UTC timestamp> | <subject> | <event> | <detail>`.
-
+  Event kinds: `PR_OPENED`, `CHECKS_GREEN`, `CHECKS_FAILED`, `PR_READY_FOR_REVIEW`, `PR_LANDABLE`, `PR_MERGED`, `PR_GONE`, `WORKER_STATUS_CHANGED`, plus direct completion events: `SCOUT_REPORT_READY` (a scout task's durable report appeared) and `WORKER_IDLE` (a worktree's dirty-file count unchanged across sweeps).
 - `.watch-state.json` - watcher bookkeeping that is safe to delete when no crew is active.
+
+The watcher raises a Windows toast for escalation-grade events (`CHECKS_FAILED`, `PR_READY_FOR_REVIEW`, `PR_LANDABLE`, `PR_MERGED`, `SCOUT_REPORT_READY`, `WORKER_IDLE`) so completion and failures surface without polling. Suppress with `mate_watch.ps1 -NoToast`; tune the idle threshold with `-IdleSweeps <n>` (default 5).
 
 ## Escalation surface
 

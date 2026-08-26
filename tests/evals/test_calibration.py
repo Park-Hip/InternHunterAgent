@@ -83,6 +83,46 @@ def test_calibration_loader_rejects_an_empty_corpus(tmp_path) -> None:
         load_calibration(path)
 
 
+def test_calibration_accepts_and_groups_named_prompt_lineage_without_rewriting_legacy_cases(
+    tmp_path,
+) -> None:
+    path = tmp_path / "named.yaml"
+    path.write_text(
+        """schema_version: 1
+corpus_id: named-lineage
+cases:
+  - id: named-case
+    scenario_id: HON-CURRENCY-1
+    language: vi
+    prompt_versions:
+      system: v11
+      schema_context: v10
+      sql_generation: v9
+    source: independently_authored_holdout
+    trajectory:
+      - question: Có bao nhiêu việc?
+        answer: Có 2 việc.
+    human:
+      overall: PASS
+      rationale: named lineage fixture
+""",
+        encoding="utf-8",
+    )
+
+    corpus = load_calibration(path)
+    report = calibration_report(
+        corpus,
+        {"named-case": {"status": "AVAILABLE", "score": 0.9}},
+        threshold=0.5,
+    )
+
+    assert {
+        "prompt_surface:system:v11",
+        "prompt_surface:schema_context:v10",
+        "prompt_surface:sql_generation:v9",
+    } <= set(report["groups"])
+
+
 def test_calibration_scoring_keeps_human_labels_separate_from_judge_results(
     monkeypatch,
 ) -> None:

@@ -11,7 +11,7 @@ from langfuse.api import NotFoundError
 from langfuse.langchain import CallbackHandler
 from langfuse.model import PromptClient
 
-from src.agents.runtime.prompts import load_prompt_version
+from src.agents.runtime.prompts import load_prompt_versions
 from src.agents.tracing.prompt_registry import SQL_GENERATION_PROMPT_NAME
 from src.core.config import settings
 from src.core.logger import logger
@@ -118,7 +118,7 @@ def build_langfuse_tags(
 
     tags = [
         entry_point,
-        f"prompt:{load_prompt_version()}",
+        *(f"prompt:{surface}:{version}" for surface, version in load_prompt_versions().items()),
         f"provider:{provider}",
         f"model:{model}",
     ]
@@ -153,7 +153,7 @@ def langfuse_trace_attributes(
     session_id: str | None = None,
     user_id: str | None = None,
 ) -> Iterator[None]:
-    """Attach Session 3's tags and prompt version without exposing Langfuse to routes."""
+    """Attach Session 3's tags and named prompt lineage without exposing Langfuse to routes."""
     tags = build_langfuse_tags(
         entry_point=entry_point,
         scenario_id=scenario_id,
@@ -161,7 +161,7 @@ def langfuse_trace_attributes(
     )
     attributes: dict[str, Any] = {
         "tags": tags,
-        "version": load_prompt_version(),
+        "metadata": {"prompt_versions": load_prompt_versions()},
     }
     if trace_name is not None:
         attributes["trace_name"] = trace_name

@@ -19,8 +19,9 @@ from typing import Any
 
 from evals.scenarios import load_scenarios, repeat_count, scenario_category
 from src.agents.runtime.prompts import (
+    SYSTEM_PROMPT_SURFACE,
     load_behavior_glossary,
-    load_prompt_version,
+    load_prompt_versions,
     load_schema_context,
 )
 from src.core.config import settings
@@ -46,14 +47,16 @@ class Evidence:
     execution_accuracy: dict[str, Any] | None = None
     judge_scores: dict[str, Any] | None = None
     returned_rows: list[dict[str, Any]] | None = None
-    capture_prompt_version: str | None = None
+    capture_prompt_versions: dict[str, str] | None = None
+    capture_legacy_prompt_version: str | None = None
 
     @classmethod
     def from_turn(
         cls,
         turn: dict[str, Any],
         execution_accuracy: dict[str, Any] | None = None,
-        capture_prompt_version: str | None = None,
+        capture_prompt_versions: dict[str, str] | None = None,
+        capture_legacy_prompt_version: str | None = None,
     ) -> "Evidence":
         seams = turn.get("seams") or {}
         return cls(
@@ -67,7 +70,8 @@ class Evidence:
                 or turn.get("returned_rows")
                 or (execution_accuracy or turn.get("execution_accuracy") or {}).get("generated_rows")
             ),
-            capture_prompt_version=capture_prompt_version,
+            capture_prompt_versions=capture_prompt_versions,
+            capture_legacy_prompt_version=capture_legacy_prompt_version,
         )
 
 
@@ -375,13 +379,13 @@ def _leaked_identifiers(answer: str | None) -> list[str]:
 
 
 def _answer_style_checks(evidence: Evidence) -> list[Check]:
-    """Cross-scenario answer-style assertions, gated on the capture's prompt version.
+    """Cross-scenario answer-style assertions, gated on the system prompt version.
 
     Both rules are properties of the prompt that produced the answer, so a capture frozen
     before the rule existed must not be regraded against it. This is the
-    ``vietnamese_agent_prose`` precedent in ``_prompt_is_current``.
+    ``vietnamese_agent_prose`` precedent in ``_prompt_surface_is_current``.
     """
-    if not _prompt_is_current(evidence):
+    if not _prompt_surface_is_current(evidence, SYSTEM_PROMPT_SURFACE):
         return []
     symbols = _decorative_symbols(evidence.answer)
     identifiers = _leaked_identifiers(evidence.answer)
@@ -655,10 +659,12 @@ def _structural_checks(
     if rule.count_only:
         checks.append(_count_only_check(evidence.answer, rule.expected_answer_count))
 
-    if rule.require_source_links and _prompt_is_current(evidence):
+    if rule.require_source_links and _prompt_surface_is_current(
+        evidence, SYSTEM_PROMPT_SURFACE
+    ):
         checks.append(_source_link_check(evidence.answer, evidence.returned_rows))
 
-    if _prompt_is_current(evidence):
+    if _prompt_surface_is_current(evidence, SYSTEM_PROMPT_SURFACE):
         if rule.structural_text:
             checks.extend(_text_checks(evidence.answer, rule.structural_text, "structural"))
         if rule.reject_salary_period:
@@ -860,17 +866,19 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
     )
 
 
-def _prompt_is_current(evidence: Evidence) -> bool:
-    """Report whether a capture was taken under the prompt now in config/prompts.yaml.
+def _prompt_surface_is_current(evidence: Evidence, surface: str) -> bool:
+    """Report whether a capture used the current version of one prompt surface.
 
     Answer language is a property of the prompt that produced it, so a capture frozen before
     the Vietnamese output rule would read as a behaviour failure when it is only a prompt
-    change. T0035.1 stamps every capture with its prompt version precisely so a baseline is
-    never read across one. An unstamped evidence object (a constructed holdout case, or a
-    live turn) is treated as current, so this narrows nothing but stale replays.
+    change. Named lineage prevents a change to an unrelated surface from suppressing
+    these checks. Legacy aggregate lineage remains readable, but cannot prove that an
+    individual surface is current. An unstamped constructed holdout case is current.
     """
-    stamped = evidence.capture_prompt_version
-    return stamped is None or stamped == load_prompt_version()
+    stamped = evidence.capture_prompt_versions
+    if stamped is None:
+        return evidence.capture_legacy_prompt_version is None
+    return stamped.get(surface) == load_prompt_versions()[surface]
 
 
 def _semantic_checks(rule: ScenarioRule) -> list[Check]:
@@ -906,7 +914,11 @@ def grade_evidence(
 
     structural = _structural_checks(rule, evidence, turn_number)
     structural.extend(_answer_style_checks(evidence))
-    if rule.require_vietnamese and evidence.returned_rows is not None and _prompt_is_current(evidence):
+    if (
+        rule.require_vietnamese
+        and evidence.returned_rows is not None
+        and _prompt_surface_is_current(evidence, SYSTEM_PROMPT_SURFACE)
+    ):
         purity = _answer_language_pure(evidence.answer, evidence.returned_rows)
         structural.append(
             Check(
@@ -1012,7 +1024,13 @@ def grade_persisted_run(
 ) -> dict[str, Any]:
     """Grade a T0025.3 run artifact and optional T0025.5 result artifact."""
     known_ids = {scenario["id"] for scenario in load_scenarios()}
-    capture_prompt_version = (run.get("manifest") or {}).get("prompt_version")
+    manifest = run.get("manifest") or {}
+    capture_prompt_versions = manifest.get("prompt_versions")
+    if not isinstance(capture_prompt_versions, dict):
+        capture_prompt_versions = None
+    capture_legacy_prompt_version = manifest.get("prompt_version")
+    if not isinstance(capture_legacy_prompt_version, str):
+        capture_legacy_prompt_version = None
     grades: list[Grade] = []
     results: dict[str, list[dict[str, Any]]] = {}
     scenario_outcomes: dict[str, dict[str, Any]] = {}
@@ -1052,7 +1070,12 @@ def grade_persisted_run(
                 execution = _execution_for_turn(execution_accuracy, scenario_id, repeat_number, turn_number)
                 grade = grade_evidence(
                     scenario_id,
-                    Evidence.from_turn(turn, execution, capture_prompt_version),
+                    Evidence.from_turn(
+                        turn,
+                        execution,
+                        capture_prompt_versions,
+                        capture_legacy_prompt_version,
+                    ),
                     turn_number=turn_number,
                 )
                 grades.append(grade)

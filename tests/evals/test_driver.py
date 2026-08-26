@@ -13,7 +13,7 @@ from evals import driver
 from evals import harness as harness_module
 from evals.harness import ProviderTelemetryCallback, SeamRun
 from evals.replay import REPLAY_SCHEMA_VERSION, load_replay, validate_replay
-from src.agents.runtime.prompts import load_prompt_version
+from src.agents.runtime.prompts import load_prompt_versions
 from src.agents.tracing import langfuse
 
 
@@ -189,7 +189,12 @@ def test_manifest_records_reproducibility_inputs(
     assert manifest["retry_policy"]["provider_sdk_max_retries"] == 0
     assert manifest["retry_policy"]["honors_provider_retry_hint"] is True
     assert manifest["tracing"]["langfuse_enabled"] is False
-    assert len(manifest["prompt_hash"]) == 64
+    assert set(manifest["prompt_hashes"]) == {
+        "system",
+        "schema_context",
+        "sql_generation",
+    }
+    assert all(len(value) == 64 for value in manifest["prompt_hashes"].values())
     assert len(manifest["config_hash"]) == 64
     assert len(manifest["scenario_registry_hash"]) == 64
     assert manifest["worktree_state"] == "clean"
@@ -197,11 +202,11 @@ def test_manifest_records_reproducibility_inputs(
     assert manifest["models"]["react"]
     assert manifest["sampling"]["sql_generation"]["temperature"] == 0.0
     assert manifest["scorer_version"] == harness_module.SCORER_VERSION
-    assert manifest["prompt_version"] == load_prompt_version()
+    assert manifest["prompt_versions"] == load_prompt_versions()
 
 
-def test_manifest_names_the_prompt_it_ran(monkeypatch: pytest.MonkeyPatch) -> None:
-    """prompt_hash proves two runs used different prompts; only the version says which.
+def test_manifest_names_each_prompt_surface_it_ran(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A test-only system version change leaves unrelated lineage intact.
 
     T0024.1 put a version label on the prompt so runs recorded either side of a prompt
     change are never compared as if comparable. A capture that omits it leaves the
@@ -210,9 +215,21 @@ def test_manifest_names_the_prompt_it_ran(monkeypatch: pytest.MonkeyPatch) -> No
     """
     monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
     _stub_fingerprint(monkeypatch)
-    monkeypatch.setattr(driver, "load_prompt_version", lambda: "v9")
+    monkeypatch.setattr(
+        driver,
+        "load_prompt_versions",
+        lambda: {
+            "system": "v12-test-only",
+            "schema_context": "v11",
+            "sql_generation": "v11",
+        },
+    )
 
-    assert driver.build_manifest()["prompt_version"] == "v9"
+    assert driver.build_manifest()["prompt_versions"] == {
+        "system": "v12-test-only",
+        "schema_context": "v11",
+        "sql_generation": "v11",
+    }
 
 
 def test_driver_persists_all_seams_and_resumes_completed_scenario(
@@ -602,14 +619,25 @@ def test_quota_retry_records_the_delay_it_actually_waited(
     ]
 
 
-def test_diff_refuses_different_inputs(tmp_path: Path) -> None:
+def test_diff_reports_changed_prompt_surfaces_without_invalidating_the_others(
+    tmp_path: Path,
+) -> None:
     left = tmp_path / "left.json"
     right = tmp_path / "right.json"
     payload = driver._new_run(
         {
             "run_id": "a",
             "fixture_hash": "same",
-            "prompt_hash": "one",
+            "prompt_versions": {
+                "system": "v1",
+                "schema_context": "v1",
+                "sql_generation": "v1",
+            },
+            "prompt_hashes": {
+                "system": "one",
+                "schema_context": "one",
+                "sql_generation": "one",
+            },
             "config_hash": "same",
             "scenario_registry_hash": "same",
             "worktree_state": "clean",
@@ -617,11 +645,16 @@ def test_diff_refuses_different_inputs(tmp_path: Path) -> None:
     )
     left.write_text(json.dumps(payload), encoding="utf-8")
     payload["manifest"]["run_id"] = "b"
-    payload["manifest"]["prompt_hash"] = "two"
+    payload["manifest"]["prompt_versions"]["system"] = "v2"
+    payload["manifest"]["prompt_hashes"]["system"] = "two"
     right.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="prompt_hash"):
-        driver.compare_runs(left, right)
+    comparison = driver.compare_runs(left, right)
+
+    assert comparison["comparable"] is False
+    assert comparison["prompt_surfaces"]["system"]["comparable"] is False
+    assert comparison["prompt_surfaces"]["schema_context"]["comparable"] is True
+    assert comparison["prompt_surfaces"]["sql_generation"]["comparable"] is True
 
 
 def test_dirty_worktree_is_not_baseline_eligible_or_comparable(
@@ -832,7 +865,7 @@ def test_freeze_projects_a_capture_into_a_valid_sanitized_replay(
     validate_replay(frozen)
     assert frozen["manifest"] == {
         "run_id": "capture-123",
-        "schema_version": REPLAY_SCHEMA_VERSION,
+        "schema_version": 3,
         "source_capture": "capture.json",
         "sanitized": True,
         "prompt_version": "v-test",
@@ -840,6 +873,39 @@ def test_freeze_projects_a_capture_into_a_valid_sanitized_replay(
     encoded = output.read_text(encoding="utf-8")
     assert "trace_id" not in encoded
     assert "latency_ms" not in encoded
+
+
+def test_freeze_preserves_each_named_prompt_surface_for_a_test_only_version_change(
+    tmp_path: Path,
+) -> None:
+    capture, grade = _capture_and_grade_from_replay()
+    capture["manifest"] = {
+        "run_id": "capture-123",
+        "prompt_versions": {
+            "system": "v12-test-only",
+            "schema_context": "v11",
+            "sql_generation": "v11",
+        },
+        "prompt_hashes": {
+            "system": "one",
+            "schema_context": "two",
+            "sql_generation": "three",
+        },
+    }
+    capture_path = tmp_path / "capture.json"
+    grade_path = tmp_path / "grade.json"
+    output = tmp_path / "frozen.json"
+    capture_path.write_text(json.dumps(capture), encoding="utf-8")
+    grade_path.write_text(json.dumps(grade), encoding="utf-8")
+
+    frozen = driver.freeze_capture(capture_path, grade_path, output)
+
+    assert frozen["manifest"]["schema_version"] == REPLAY_SCHEMA_VERSION
+    assert frozen["manifest"]["prompt_versions"] == {
+        "system": "v12-test-only",
+        "schema_context": "v11",
+        "sql_generation": "v11",
+    }
 
 
 def test_freeze_refuses_a_capture_that_cannot_name_its_prompt(tmp_path: Path) -> None:

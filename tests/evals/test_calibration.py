@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from collections import defaultdict
+
 import pytest
 
 from evals import calibration
 from evals.calibration import calibration_report, load_calibration
+from evals.scenarios import load_scenarios
+from evals.semantic import semantic_assertion
 
 
 def test_calibration_corpus_is_versioned_vietnamese_and_covers_every_release_class() -> (
@@ -11,13 +15,46 @@ def test_calibration_corpus_is_versioned_vietnamese_and_covers_every_release_cla
 ):
     corpus = load_calibration()
 
-    assert corpus["corpus_id"] == "vietnamese-semantic-v6"
+    assert corpus["corpus_id"] == "vietnamese-semantic-v7"
     assert {item["language"] for item in corpus["cases"]} == {"vi"}
     assert {item["scenario_id"].split("-", 1)[0] for item in corpus["cases"]} == {
         "SAF",
         "HON",
         "HLP",
     }
+
+
+def test_calibration_corpus_has_a_pass_and_fail_pair_for_every_semantic_class() -> (
+    None
+):
+    corpus = load_calibration()
+    scenarios = {
+        item["id"]: item
+        for item in load_scenarios()
+        if semantic_assertion(item) is not None
+    }
+
+    labels_by_class: dict[str, list[str]] = defaultdict(list)
+    for case in corpus["cases"]:
+        labels_by_class[case["scenario_id"]].append(case["human"]["overall"])
+
+    assert set(labels_by_class) == set(scenarios)
+    assert all(sorted(labels) == ["FAIL", "PASS"] for labels in labels_by_class.values())
+
+
+def test_calibration_corpus_only_uses_the_two_approved_evidence_sources() -> None:
+    corpus = load_calibration()
+
+    assert {item["source"] for item in corpus["cases"]} <= {
+        "independently_authored_holdout",
+        "replay_mined_v6-baseline-20260823_human_confirmed",
+    }
+    mined = [
+        case
+        for case in corpus["cases"]
+        if case["source"] == "replay_mined_v6-baseline-20260823_human_confirmed"
+    ]
+    assert {case["human"]["overall"] for case in mined} == {"PASS", "FAIL"}
 
 
 def test_calibration_report_requires_a_maintainer_threshold_before_classifying_scores() -> (

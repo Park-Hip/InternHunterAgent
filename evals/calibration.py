@@ -11,7 +11,7 @@ import yaml
 from evals.semantic import AVAILABLE, evaluate_semantic_repeat, semantic_assertion
 from evals.scenarios import load_scenarios
 
-CALIBRATION_PATH = Path(__file__).with_name("calibration_v6.yaml")
+CALIBRATION_PATH = Path(__file__).with_name("calibration_v7.yaml")
 _REQUIRED = {
     "id",
     "scenario_id",

@@ -1,8 +1,8 @@
 """Score a recorded capture artifact, outside the capture loop.
 
 Capture and scoring have different economics. A full DeepSeek capture is 77 turns
-in about five minutes for about four cents; judging the same registry is 365 calls
-against a judge deliberately throttled to 8 RPM, so 46 minutes at best. Running the
+in about five minutes for about four cents; judging the same registry is 96 calls
+against a judge deliberately throttled to 8 RPM, so about 40 minutes at best. Running the
 second inside the first held a five-minute run open for an hour, kept its checkpoint
 mid-run for all of it, and made recorded evidence impossible to re-score without
 re-capturing it.

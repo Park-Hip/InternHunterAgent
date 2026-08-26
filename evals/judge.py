@@ -51,17 +51,38 @@ class DeepEvalJudge(DeepEvalBaseLLM):
         self._throttle = _RpmThrottle(rpm)
         super().__init__(model=model_name)
 
+    @staticmethod
+    def _content_to_text(content: object) -> str:
+        """Flatten LangChain message content into judge-parseable text.
+
+        Some providers return content blocks instead of a plain string; the
+        google/gemma arm emits ``{'type': 'thinking'}`` blocks before the answer.
+        Keep only the text blocks so DeepEval's response parsers see clean output.
+        """
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        parts.append(str(block.get("text", "")))
+                elif getattr(block, "type", None) == "text":
+                    parts.append(str(getattr(block, "text", "")))
+            return "\n".join(p for p in parts if p)
+        return str(content)
+
     def load_model(self) -> BaseChatModel:
         return self._chat_model
 
     def generate(self, prompt: str) -> str:
         self._throttle.wait()
-        return str(self.load_model().invoke(prompt).content)
+        return self._content_to_text(self.load_model().invoke(prompt).content)
 
     async def a_generate(self, prompt: str) -> str:
         await self._throttle.a_wait()
         response = await self.load_model().ainvoke(prompt)
-        return str(response.content)
+        return self._content_to_text(response.content)
 
     def get_model_name(self) -> str:
         return self._model_name
@@ -109,6 +130,24 @@ def build_judge() -> DeepEvalJudge:
             groq_api_key=settings.GROQ_API_KEY,
         )
         return DeepEvalJudge(chat_model, model_name=f"groq/{model_name}", rpm=rpm)
+    elif provider == "google":
+        # Google AI Studio (Gemini API). Re-added after the OpenRouter detour so the
+        # judge can run on gemma-4-31b-it directly; Gemma has no thinking knob, so
+        # the old thinking_budget parameter stays retired.
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        if not settings.GOOGLE_API_KEY:
+            raise ValueError("eval.judge.provider is 'google' but GOOGLE_API_KEY is unset")
+
+        chat_model = ChatGoogleGenerativeAI(
+            model=model_name,
+            temperature=temperature,
+            max_tokens=4096,
+            timeout=30,
+            max_retries=max_retries,
+            google_api_key=settings.GOOGLE_API_KEY,
+        )
+        return DeepEvalJudge(chat_model, model_name=f"google/{model_name}", rpm=rpm)
     elif provider == "openrouter":
         # OpenRouter speaks the OpenAI wire protocol, so one dependency covers it.
         # The Gemini arm was retired here: its free tier could not survive a full

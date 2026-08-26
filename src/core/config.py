@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # so no single key is required to boot: requiring one would break a checkout that
     # holds only the selected provider's key. See D-045 in docs/Decision_Log.md.
     GROQ_API_KEY: str | None = None
+    GOOGLE_API_KEY: str | None = None
     OPENROUTER_API_KEY: str | None = None
     DEEPSEEK_API_KEY: str | None = None
     DATABASE_URL: str = Field(..., min_length=1)

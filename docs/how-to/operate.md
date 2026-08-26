@@ -30,7 +30,8 @@ It never contains secret values.
 |---|---|---|---|---|
 | `DEEPSEEK_API_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Not used | Serves the agent (D-045). Required whenever a profile selects `deepseek`, which both do. |
 | `GROQ_API_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | The selectable second serving arm; unused while both profiles are `deepseek`. Ingestion does not call an LLM. |
-| `OPENROUTER_API_KEY` | `.env` only | Deliberately undeclared | Not used | Eval-judge key (`ox-alpha` via OpenRouter); not declared for Render. The Gemini arm was retired when its free tier proved unable to survive a scoring run. |
+| `OPENROUTER_API_KEY` | `.env` only | Deliberately undeclared | Not used | Eval-judge fallback key (OpenRouter arm of `build_judge()`); not declared for Render. The active judge runs on Google AI Studio via `GOOGLE_API_KEY`. |
+| `GOOGLE_API_KEY` | `.env` only | Deliberately undeclared | Not used | Active eval-judge key (`gemma-4-31b-it` via Google AI Studio); not declared for Render. |
 | `DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | GitHub `DATABASE_URL` secret | Cron and migrations use Neon's direct, non-pooled host. |
 | `LANGFUSE_SECRET_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |
 | `LANGFUSE_PUBLIC_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |

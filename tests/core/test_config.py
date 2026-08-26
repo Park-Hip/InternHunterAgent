@@ -88,6 +88,7 @@ class ConfigLoadTests(unittest.TestCase):
 
         self.assertEqual(settings.DEEPSEEK_API_KEY, "deepseek-test-key")
         self.assertIsNone(settings.GROQ_API_KEY)
+        self.assertIsNone(settings.GOOGLE_API_KEY)
         self.assertIsNone(settings.OPENROUTER_API_KEY)
 
     def test_load_settings_allows_missing_langfuse_credentials(self) -> None:

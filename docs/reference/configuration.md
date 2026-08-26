@@ -48,7 +48,7 @@ services.
 Other documents link here rather than restating.
 `python scripts/docs_lint.py --check stack` fails the build if the dependency list below drifts from
 `pyproject.toml`, so it cannot go stale silently.
-`pyproject.toml` remains authoritative for exact versions.
+`pyproject.toml` remains authoritative for declared compatible ranges, and `uv.lock` records the exact tested resolutions.
 
 ### 1 At a glance
 
@@ -82,14 +82,14 @@ Other documents link here rather than restating.
 
 **Agent**
 
-| Package | Role |
-|---|---|
-| `langchain` | ReAct agent runtime and tool binding. |
-| `langchain-deepseek` | Serving provider, and the default for both profiles since D-045. Thinking is disabled so temperature applies. |
-| `langchain-groq` | Second selectable serving provider, and the judge's alternate branch. Reached only when a profile names it. |
-| `langchain-openai` | Evaluation-judge fallback via OpenRouter's OpenAI-compatible endpoint, never on the serving path. |
-| `langchain-google-genai` | Evaluation judge (`gemma-4-31b-it`) via Google AI Studio, never on the serving path. Restored after the OpenRouter detour; the retired arm was Gemini 2.5 Flash. |
-| `langgraph-checkpoint-postgres` | Short-term conversation memory, session id to thread id. |
+| Package | Compatible range | Role |
+|---|---|---|
+| `langchain` | `>=1.3.1,<1.4.0` | ReAct agent runtime and tool binding. |
+| `langchain-deepseek` | `>=1.1.0,<1.2.0` | Serving provider, and the default for both profiles since D-045. Thinking is disabled so temperature applies. |
+| `langchain-groq` | `>=1.1.2,<1.2.0` | Second selectable serving provider, and the judge's alternate branch. Reached only when a profile names it. |
+| `langchain-openai` | `>=1.5.0,<1.6.0` | Evaluation-judge fallback via OpenRouter's OpenAI-compatible endpoint, never on the serving path. |
+| `langchain-google-genai` | `>=4.3.5,<4.4.0` | Evaluation judge (`gemma-4-31b-it`) via Google AI Studio, never on the serving path. Restored after the OpenRouter detour; the retired arm was Gemini 2.5 Flash. |
+| `langgraph-checkpoint-postgres` | `>=3.1.0,<3.2.0` | Short-term conversation memory, session id to thread id. |
 
 **Data**
 
@@ -127,6 +127,14 @@ Other documents link here rather than restating.
 | `deepeval` | Evaluation harness for the scenario and three-seam metric runs. |
 
 <!-- deps:end -->
+
+### 3 Agent-critical dependency upgrades
+
+Do not widen an agent-critical dependency range until its target minor line has passed the runtime and evaluation checks.
+First update the range in `pyproject.toml`, regenerate the lockfile with `uv lock`, and confirm the resolved package version is inside the declared range.
+Run `uv run pytest tests/agents/runtime/test_factory.py tests/agents/runtime/test_provider.py tests/agents/runtime/test_react_agent.py` and `uv run pytest tests/evals`.
+Then run the full verification gate: `uv run pytest`, `uv run ruff check .`, `uv run mypy`, and `uv run python scripts/docs_lint.py`.
+Record the resolved versions and check results in the pull request before merging the widened range.
 
 On Windows, invoke live DeepEval checks with `PYTHONUTF8=1` and the eval marker.
 The fixture count tests skip when the evaluation database is unavailable, and the trace extractor

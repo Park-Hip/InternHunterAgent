@@ -462,10 +462,10 @@ It is not the whole agent, and it is deliberately scoped.
   the model's context, and the model uses that context to reformulate its next tool call, so "only
   the Python ones" becomes a refined query. There is no special memory-reasoning code: refinement
   quality is a function of the model and prompt, not a bespoke feature.
-- **Bound.** A configurable cap under `agent.memory.*` retains a fixed number of complete recent
-  turns in the model context. This trims *what the model sees per turn*; the stored thread may
-  retain fuller history. The cap protects latency and token cost, and turn trimming rather than
-  long-term memory is the intended first optimization if context grows.
+- **Bound.** A configurable cap under `agent.memory.max_turns` retains a fixed number of complete recent turns in the model context.
+  `agent.memory.compaction` summarizes older persisted messages once its trigger is reached, retaining the summary and its configured recent-message window.
+  This bounds active session history while preserving the context needed for valid multi-turn references.
+  It does not rewrite pre-existing checkpoints.
 - **Boundary.** This is short-term within-conversation memory only. Cross-session recall, user
   profiles, and resume or embedding retrieval are long-term memory: a distinct mechanism and an
   explicit future phase, which must not be bolted onto the thread checkpointer.

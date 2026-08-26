@@ -62,6 +62,9 @@ agent:
 
   memory:
     max_turns: 6
+    compaction:
+      trigger_messages: 24
+      keep_messages: 12
   query:
     max_rows: 20
     max_detail_ids: 3

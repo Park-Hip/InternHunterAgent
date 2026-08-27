@@ -35,6 +35,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0046](adr-0046-replays-retain-evidence-not-telemetry.md) | Frozen replays retain evidence, not per-turn telemetry | Evaluation |
 | [ADR-0047](adr-0047-release-threshold-is-recall-first-at-030.md) | Release threshold is recall-first at 0.30 on corpus v7 | Evaluation |
 | [ADR-0048](adr-0048-streamed-agent-turn-serving-deadline.md) | Each streamed agent turn has an end-to-end serving deadline | Operations |
+| [ADR-0049](adr-0049-cancel-streamed-generation-on-client-disconnect.md) | Streamed generation stops when its client disconnects | Operations |
 
 ## Retired decisions, and why they were not carried over
 

@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 import unittest
-from unittest.mock import AsyncMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
 from src.agents.service import FALLBACK_ANSWER
 from src.api.app import create_app
+from src.api.routes.query import stream_query_agent
+from src.api.schemas import QueryRequest
 from src.core.errors import (
     BUSY_MESSAGE,
     GENERIC_ERROR_MESSAGE,
@@ -174,3 +178,42 @@ class StreamQueryRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"detail": "Query must not be empty."})
         self.app.state.runtime.astream.assert_not_called()
+
+
+class StreamQueryDisconnectTests(unittest.IsolatedAsyncioTestCase):
+    @patch("src.api.routes.query.logger")
+    async def test_disconnect_cancels_runtime_closes_generators_and_logs_once(
+        self, mock_logger
+    ) -> None:
+        producer_started = asyncio.Event()
+        producer_cancelled = asyncio.Event()
+
+        async def slow_stream(**_kwargs):
+            producer_started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                producer_cancelled.set()
+            yield {"type": "token", "text": "secret exception text"}
+
+        runtime = MagicMock()
+        runtime.astream.side_effect = slow_stream
+        async def is_disconnected() -> bool:
+            return producer_started.is_set()
+
+        request = SimpleNamespace(
+            app=SimpleNamespace(state=SimpleNamespace(runtime=runtime)),
+            is_disconnected=is_disconnected,
+        )
+        response = await stream_query_agent(
+            QueryRequest(query="slow request", session_id="session-disconnect"), request
+        )
+        chunks = [chunk async for chunk in response.body_iterator]
+
+        await asyncio.wait_for(producer_cancelled.wait(), timeout=0.1)
+        self.assertEqual(len(chunks), 1)
+        self.assertIn('event: session', chunks[0])
+        self.assertNotIn("secret exception text", "".join(chunks))
+        mock_logger.info.assert_called_once_with(
+            "stream.client_disconnected", session_id="session-disconnect"
+        )

@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from typing import Any
 
 from langchain.messages import HumanMessage
@@ -68,7 +68,7 @@ class AgentRuntime:
         query: str,
         user_id: str | None = None,
         session_id: str | None = None,
-    ) -> AsyncIterator[dict[str, str | None]]:
+    ) -> AsyncGenerator[dict[str, str | None], None]:
         config = build_langfuse_config(
             entry_point="api:chat-stream",
         )

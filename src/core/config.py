@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 from typing import Any, Dict
 
@@ -108,10 +109,11 @@ def _validate_api_config(config: dict[str, Any]) -> None:
     if (
         isinstance(heartbeat_seconds, bool)
         or not isinstance(heartbeat_seconds, (int, float))
+        or not math.isfinite(heartbeat_seconds)
         or heartbeat_seconds <= 0
     ):
         raise ConfigLoadError(
-            "api.stream_heartbeat_seconds must be a positive number in config/settings.yaml"
+            "api.stream_heartbeat_seconds must be a positive finite number in config/settings.yaml"
         )
 
 

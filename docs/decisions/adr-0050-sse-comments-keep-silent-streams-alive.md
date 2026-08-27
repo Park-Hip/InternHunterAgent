@@ -12,7 +12,7 @@ run it again.
 ## Decision
 
 The API route emits the protocol-valid SSE comment `: ping\n\n` whenever its upstream event iterator
-has been idle for the positive, repository-configured `api.stream_heartbeat_seconds` interval.
+has been idle for the positive finite, repository-configured `api.stream_heartbeat_seconds` interval.
 The route continues to poll for client disconnects while the upstream stream is idle; a disconnect
 cancels the pending receive and closes the service generator before any further comment or event is
 emitted. Comments are not application events, so the existing `session`, `token`, `metadata`,

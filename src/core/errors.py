@@ -11,6 +11,10 @@ PROVIDER_BUSY_ERROR_CODE = "provider_busy"
 INTERNAL_ERROR_CODE = "internal_error"
 
 
+class AgentTurnDeadlineExceededError(TimeoutError):
+    """Raised internally when the serving deadline expires for a streamed turn."""
+
+
 class ProviderBusyError(RuntimeError):
     """Raised when the upstream model provider is rate-limited or unavailable."""
 

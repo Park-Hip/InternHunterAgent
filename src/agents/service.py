@@ -1,17 +1,31 @@
+import asyncio
 import uuid
 from collections.abc import AsyncIterator
-from typing import Mapping, TypedDict
+from typing import Mapping, TypeVar, TypedDict
 
 from src.agents.runtime.react_agent import AgentRuntime
+from src.core.config import get_stream_turn_timeout_seconds, settings
 from src.core.errors import (
     BUSY_MESSAGE,
     GENERIC_ERROR_MESSAGE,
     INTERNAL_ERROR_CODE,
+    PROVIDER_BUSY_ERROR_CODE,
+    AgentTurnDeadlineExceededError,
     classify_provider_busy_error,
 )
 from src.core.logger import logger
 
 FALLBACK_ANSWER = "I couldn't produce an answer for that — please try rephrasing."
+
+
+_T = TypeVar("_T")
+
+
+def _consume_background_task_result(task: asyncio.Future[_T]) -> None:
+    """Retrieve a cancelled runtime task's result after detached cleanup."""
+
+    if not task.cancelled():
+        task.exception()
 
 
 class AgentResponse(TypedDict):
@@ -71,12 +85,31 @@ async def stream_agent_response(
     metadata_event = {"type": "metadata", "trace_id": None, "trace_url": None}
     metadata_emitted = False
 
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + get_stream_turn_timeout_seconds(settings.config_yaml)
+    runtime_stream = runtime.astream(
+        query=query,
+        session_id=session_id,
+        user_id=user_id,
+    )
     try:
-        async for event in runtime.astream(
-            query=query,
-            session_id=session_id,
-            user_id=user_id,
-        ):
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise AgentTurnDeadlineExceededError(
+                    "Streamed agent turn exceeded its serving deadline."
+                )
+
+            next_event = asyncio.ensure_future(anext(runtime_stream))
+            done, _ = await asyncio.wait({next_event}, timeout=remaining)
+            if not done:
+                next_event.cancel()
+                next_event.add_done_callback(_consume_background_task_result)
+                raise AgentTurnDeadlineExceededError(
+                    "Streamed agent turn exceeded its serving deadline."
+                )
+
+            event = next_event.result()
             if event["type"] == "metadata":
                 metadata_event = event
                 if not saw_token:
@@ -94,7 +127,7 @@ async def stream_agent_response(
                 saw_token = True
 
             yield event
-
+    except StopAsyncIteration:
         if not saw_token:
             logger.warning(
                 "stream_agent_response.empty_answer_fallback",
@@ -104,6 +137,20 @@ async def stream_agent_response(
 
         if not metadata_emitted:
             yield metadata_event
+    except AgentTurnDeadlineExceededError as exc:
+        logger.error(
+            "stream_agent_response.failed",
+            session_id=session_id,
+            error=str(exc),
+            reclassified_busy=False,
+            deadline_exceeded=True,
+        )
+        yield {
+            "type": "error",
+            "message": BUSY_MESSAGE,
+            "code": PROVIDER_BUSY_ERROR_CODE,
+            "retryable": True,
+        }
     except Exception as exc:
         provider_busy = classify_provider_busy_error(exc)
         logger.error(
@@ -111,6 +158,7 @@ async def stream_agent_response(
             session_id=session_id,
             error=str(exc),
             reclassified_busy=provider_busy is not None,
+            deadline_exceeded=False,
         )
         if provider_busy is not None:
             yield {

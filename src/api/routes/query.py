@@ -4,6 +4,8 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
+from starlette.types import Receive
+
 from src.api.schemas import (
     STREAM_EVENT_SCHEMA,
     QueryRequest,
@@ -22,6 +24,16 @@ from src.agents.service import generate_agent_response, stream_agent_response
 
 
 _DISCONNECT_POLL_INTERVAL_SECONDS = 0.05
+
+
+class _DisconnectLoggingEventSourceResponse(EventSourceResponse):
+    def __init__(self, *args, on_disconnect: Callable[[], None], **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._on_disconnect = on_disconnect
+
+    async def listen_for_disconnect(self, receive: Receive) -> None:
+        await super().listen_for_disconnect(receive)
+        self._on_disconnect()
 
 
 def create_router(*, limiter=None, rate_limit: str | None = None) -> APIRouter:
@@ -99,6 +111,14 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
     if not payload.query or not payload.query.strip():
         raise HTTPException(status_code=400, detail="Query must not be empty.")
 
+    disconnect_logged = False
+
+    def _log_client_disconnected() -> None:
+        nonlocal disconnect_logged
+        if not disconnect_logged:
+            logger.info("stream.client_disconnected", session_id=payload.session_id)
+            disconnect_logged = True
+
     async def _event_source():
         stream = stream_agent_response(
             query=payload.query,
@@ -113,9 +133,7 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
                     settings.config_yaml["api"]["stream_heartbeat_seconds"]
                 ),
                 is_disconnected=request.is_disconnected,
-                on_disconnect=lambda: logger.info(
-                    "stream.client_disconnected", session_id=payload.session_id
-                ),
+                on_disconnect=_log_client_disconnected,
             ):
                 if isinstance(item, str):
                     yield item
@@ -128,8 +146,9 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
         finally:
             await stream.aclose()
 
-    return EventSourceResponse(
+    return _DisconnectLoggingEventSourceResponse(
         _event_source(),
+        on_disconnect=_log_client_disconnected,
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 

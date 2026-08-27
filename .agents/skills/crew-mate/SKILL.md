@@ -22,8 +22,12 @@ For each requested task:
 3. Enforce the **shared-surface lock**: at most one active ship touching
    `src/**/models.py` or `config/settings.yaml`, judged from the briefs'
    files-in-scope.
-4. Fill the brief from the plan (`.crew/_brief.template.md`), then launch with
-   `scripts/crew_start.ps1 -Issue <n> -Autonomy ship|scout`.
+4. Fill the brief from the plan (`.crew/_brief.template.md`). For a VS Code
+   terminal-panel launch, dispatch with
+   `scripts/crew_start.ps1 -Issue <n> -Autonomy ship|scout -Harness <executable> -Backend vscode-task`.
+   This registers the matching `Crew: IHA-<issue> worker` entry in the primary
+   checkout's `.vscode/tasks.json`; start it through **Terminal: Run Task**.
+   Otherwise, launch with `scripts/crew_start.ps1 -Issue <n> -Autonomy ship|scout`.
 5. Start `scripts/mate_watch.ps1` if not already running (background job).
 
 ## Supervise
@@ -63,6 +67,10 @@ escalate conflicts, and confirm checks re-run on the rebased tips.
 
 All durable facts belong on disk: manifests, briefs, statuses, and `events.log`.
 A restart of your session must lose nothing - the next turn reconciles from `.crew/`
-exactly as this one did. When the fleet empties (all merged or closed), use
-`scripts/crew_teardown.ps1` for each manifest-backed task, confirm a scout report
-handoff explicitly, stop the watcher, and say so plainly.
+exactly as this one did. After a ship merges or a scout report handoff completes,
+tear down that manifest-backed task with `scripts/crew_teardown.ps1` (using
+`-ConfirmScoutReportHandoff` for scouts). For a task dispatched with
+`-Backend vscode-task`, confirm teardown removed its matching `Crew: IHA-<issue>
+worker` entry from the primary checkout's `.vscode/tasks.json`; retain unrelated
+entries. When the fleet empties (all merged or closed), stop the watcher and say
+so plainly.

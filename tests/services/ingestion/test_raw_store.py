@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from sqlalchemy.exc import DBAPIError, OperationalError
 
 from src.services.ingestion.models import RawPosting
-from src.services.ingestion.raw_store import RawStoreError, upsert_raw_postings
+from src.services.ingestion.raw_store import RawStoreError, RawUpsertCounts, upsert_raw_postings
 
 
 def _make_posting(**overrides) -> RawPosting:
@@ -28,16 +28,50 @@ def _mock_session(mock_session_factory: MagicMock) -> MagicMock:
 class UpsertRawPostingsTests(unittest.TestCase):
     @patch("src.services.ingestion.raw_store.session_factory")
     def test_empty_input_returns_zero_without_hitting_db(self, mock_session_factory: MagicMock) -> None:
-        count = upsert_raw_postings([])
-        self.assertEqual(count, 0)
+        counts = upsert_raw_postings([])
+        self.assertEqual(counts, RawUpsertCounts(new=0, changed=0, unchanged=0))
         mock_session_factory.assert_not_called()
 
     @patch("src.services.ingestion.raw_store.session_factory")
-    def test_returns_count_equal_to_number_of_postings(self, mock_session_factory: MagicMock) -> None:
-        _mock_session(mock_session_factory)
+    def test_classifies_missing_natural_keys_as_new(self, mock_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_session_factory)
+        session.execute.return_value.all.return_value = []
         postings = [_make_posting(external_id=f"job-{i}") for i in range(3)]
-        count = upsert_raw_postings(postings)
-        self.assertEqual(count, 3)
+
+        counts = upsert_raw_postings(postings)
+
+        self.assertEqual(counts, RawUpsertCounts(new=3, changed=0, unchanged=0))
+        self.assertEqual(counts.total, 3)
+
+    @patch("src.services.ingestion.raw_store.session_factory")
+    def test_classifies_existing_hashes_as_changed_or_unchanged(self, mock_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_session_factory)
+        existing = MagicMock()
+        existing.all.return_value = [
+            ("vietnamworks", "unchanged", "same-hash"),
+            ("vietnamworks", "changed", "old-hash"),
+        ]
+        session.execute.side_effect = [existing, MagicMock()]
+        postings = [
+            _make_posting(external_id="new", content_hash="new-hash"),
+            _make_posting(external_id="unchanged", content_hash="same-hash"),
+            _make_posting(external_id="changed", content_hash="new-hash"),
+        ]
+
+        counts = upsert_raw_postings(postings)
+
+        self.assertEqual(counts, RawUpsertCounts(new=1, changed=1, unchanged=1))
+
+    @patch("src.services.ingestion.raw_store.session_factory")
+    def test_repeat_run_is_classified_as_unchanged(self, mock_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_session_factory)
+        existing = MagicMock()
+        existing.all.return_value = [("vietnamworks", "job-001", "abc123")]
+        session.execute.side_effect = [existing, MagicMock()]
+
+        counts = upsert_raw_postings([_make_posting()])
+
+        self.assertEqual(counts, RawUpsertCounts(new=0, changed=0, unchanged=1))
 
     @patch("src.services.ingestion.raw_store.session_factory")
     def test_executes_insert_on_conflict_do_update_statement(self, mock_session_factory: MagicMock) -> None:
@@ -45,7 +79,7 @@ class UpsertRawPostingsTests(unittest.TestCase):
         postings = [_make_posting()]
         upsert_raw_postings(postings)
 
-        session.execute.assert_called_once()
+        self.assertEqual(session.execute.call_count, 2)
         stmt = session.execute.call_args.args[0]
         compiled = stmt.compile(dialect=__import__("sqlalchemy.dialects.postgresql", fromlist=["dialect"]).dialect())
         sql_text = str(compiled)
@@ -61,6 +95,20 @@ class UpsertRawPostingsTests(unittest.TestCase):
         stmt = session.execute.call_args.args[0]
         compiled = stmt.compile(dialect=__import__("sqlalchemy.dialects.postgresql", fromlist=["dialect"]).dialect())
         sql_text = str(compiled)
+        self.assertIn("source", sql_text)
+        self.assertIn("external_id", sql_text)
+
+    @patch("src.services.ingestion.raw_store.session_factory")
+    def test_reads_existing_hashes_using_natural_keys(self, mock_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_session_factory)
+        session.execute.return_value.all.return_value = []
+
+        upsert_raw_postings([_make_posting()])
+
+        select_stmt = session.execute.call_args_list[0].args[0]
+        compiled = select_stmt.compile(dialect=__import__("sqlalchemy.dialects.postgresql", fromlist=["dialect"]).dialect())
+        sql_text = str(compiled)
+        self.assertIn("content_hash", sql_text)
         self.assertIn("source", sql_text)
         self.assertIn("external_id", sql_text)
 

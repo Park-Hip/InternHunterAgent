@@ -871,8 +871,9 @@ JobSource (VietnamWorks) --RawPosting--> raw_jobs   verbatim landing, upsert on 
 
 **Tables.**
 
-- **`raw_jobs`**, the verbatim landing table: id, source, external id, source URL, the raw payload
-  as JSON, a content hash, and a fetch timestamp, unique on `(source, external_id)`. Never lossy.
+- **`raw_jobs`**, the current verbatim landing table: id, source, external id, source URL, the raw
+  payload as JSON, a content hash, and a fetch timestamp, unique on `(source, external_id)`. Each
+  natural-key upsert overwrites the current payload and hash; it does not retain payload history.
   It lives in the application database alongside the served table, never in Langfuse's Postgres.
 - **`clean_jobs`**, enriched and agent-facing: the posting title, company, description, and tech
   stack, plus canonical role, source and external id, source URL, creation and listing-expiry
@@ -920,8 +921,10 @@ That is the column-cheap schema growth of the schema-evolution section, applied.
 
 ### 3 Identity, idempotency, and configuration
 
-Upsert on `(source, external_id)` with a content hash for change detection, so re-running refreshes
-rather than duplicating, and a partial run cannot shrink the served corpus.
+Upsert on `(source, external_id)` compares the incoming content hash with the stored hash before
+refreshing the current raw row, recording per-run new, changed, and unchanged counters without
+creating history. Re-running identical postings is therefore idempotent rather than duplicating,
+and a partial run cannot shrink the served corpus.
 A tunable maximum bounds a run.
 
 Load semantics are **accumulate, never wipe**.

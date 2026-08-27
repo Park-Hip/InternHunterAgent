@@ -5,12 +5,19 @@ class InvalidQueryError(ValueError):
 BUSY_MESSAGE = "The demo is busy right now. Please try again in a moment."
 GENERIC_ERROR_MESSAGE = "I couldn't complete that request right now. Please try again later."
 
+# Stable machine-readable values for in-band streaming failures. The messages
+# above remain the only human-facing error text at the public boundary.
+PROVIDER_BUSY_ERROR_CODE = "provider_busy"
+INTERNAL_ERROR_CODE = "internal_error"
+
 
 class ProviderBusyError(RuntimeError):
     """Raised when the upstream model provider is rate-limited or unavailable."""
 
     def __init__(self, *, status_code: int = 503) -> None:
         self.status_code = status_code
+        self.code = PROVIDER_BUSY_ERROR_CODE
+        self.retryable = True
         super().__init__(BUSY_MESSAGE)
 
 

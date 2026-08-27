@@ -36,6 +36,9 @@ class RateLimitTests(unittest.TestCase):
         self.assertEqual(limited.status_code, 429)
         self.assertEqual(limited.json(), {"detail": BUSY_MESSAGE})
         self.assertNotIn("Rate limit exceeded", limited.text)
+        retry_after = limited.headers.get("Retry-After")
+        self.assertIsNotNone(retry_after)
+        self.assertGreaterEqual(int(retry_after), 0)
 
     def test_health_is_not_rate_limited(self) -> None:
         responses = [self.client.get("/api/v1/health") for _ in range(5)]

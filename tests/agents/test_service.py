@@ -11,6 +11,7 @@ from src.agents.service import (
     generate_agent_response,
     stream_agent_response,
 )
+from src.core.errors import INTERNAL_ERROR_CODE, PROVIDER_BUSY_ERROR_CODE
 
 
 class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
@@ -109,7 +110,18 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         ]
 
         error_events = [e for e in events if e["type"] == "error"]
-        self.assertEqual(error_events, [{"type": "error", "message": GENERIC_ERROR_MESSAGE}])
+        self.assertEqual(
+            error_events,
+            [
+                {
+                    "type": "error",
+                    "message": GENERIC_ERROR_MESSAGE,
+                    "code": INTERNAL_ERROR_CODE,
+                    "retryable": False,
+                }
+            ],
+        )
+        self.assertNotIn("db is down", str(error_events))
         self.assertEqual(events[-1], {"type": "done"})
 
         mock_logger.error.assert_called_once()
@@ -138,7 +150,18 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         ]
 
         error_events = [event for event in events if event["type"] == "error"]
-        self.assertEqual(error_events, [{"type": "error", "message": BUSY_MESSAGE}])
+        self.assertEqual(
+            error_events,
+            [
+                {
+                    "type": "error",
+                    "message": BUSY_MESSAGE,
+                    "code": PROVIDER_BUSY_ERROR_CODE,
+                    "retryable": True,
+                }
+            ],
+        )
+        self.assertNotIn("Request timed out after 30s", str(error_events))
         self.assertTrue(mock_logger.error.call_args.kwargs["reclassified_busy"])
 
     @patch("src.agents.service.logger")

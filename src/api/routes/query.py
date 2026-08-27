@@ -2,7 +2,7 @@ import json
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
-from src.api.schemas import QueryRequest, QueryResponse
+from src.api.schemas import QueryRequest, QueryResponse, StreamErrorResponse
 from src.core.errors import (
     BUSY_MESSAGE,
     GENERIC_ERROR_MESSAGE,
@@ -89,6 +89,8 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
         ):
             event_type = event["type"]
             data = {key: value for key, value in event.items() if key != "type"}
+            if event_type == "error":
+                data = StreamErrorResponse(**data).model_dump()
             yield _server_sent_event(event=event_type, data=data)
 
     return EventSourceResponse(
@@ -97,7 +99,7 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
     )
 
 
-def _server_sent_event(*, event: str, data: dict[str, str | None]) -> str:
+def _server_sent_event(*, event: str, data: dict[str, str | bool | None]) -> str:
     payload = ServerSentEvent(event=event, data=data)
     encoded_data = json.dumps(payload.data)
     return f"event: {payload.event}\ndata: {encoded_data}\n\n"

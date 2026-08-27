@@ -9,7 +9,12 @@ from fastapi.testclient import TestClient
 
 from src.agents.service import FALLBACK_ANSWER
 from src.api.app import create_app
-from src.core.errors import GENERIC_ERROR_MESSAGE
+from src.core.errors import (
+    BUSY_MESSAGE,
+    GENERIC_ERROR_MESSAGE,
+    INTERNAL_ERROR_CODE,
+    PROVIDER_BUSY_ERROR_CODE,
+)
 
 
 def _parse_sse_events(body: str) -> list[tuple[str, dict[str, str | None]]]:
@@ -105,8 +110,40 @@ class StreamQueryRouteTests(unittest.TestCase):
         self.assertNotIn("database password leaked", response.text)
         events = _parse_sse_events(response.text)
         self.assertEqual([event_type for event_type, _ in events], ["session", "token", "error", "done"])
-        self.assertEqual(events[2][1], {"message": GENERIC_ERROR_MESSAGE})
+        self.assertEqual(
+            events[2][1],
+            {
+                "message": GENERIC_ERROR_MESSAGE,
+                "code": INTERNAL_ERROR_CODE,
+                "retryable": False,
+            },
+        )
         self.assertEqual(events[3][1], {})
+
+    def test_stream_route_marks_provider_busy_as_retryable(self) -> None:
+        async def _fake_astream(**kwargs):
+            raise RuntimeError("provider quota exhausted")
+            yield  # pragma: no cover - makes this an async generator
+
+        self.app.state.runtime.astream = _fake_astream
+
+        response = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "list 3 data engineer jobs", "session_id": "session-123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("provider quota exhausted", response.text)
+        events = _parse_sse_events(response.text)
+        self.assertEqual([event_type for event_type, _ in events], ["session", "error", "done"])
+        self.assertEqual(
+            events[1][1],
+            {
+                "message": BUSY_MESSAGE,
+                "code": PROVIDER_BUSY_ERROR_CODE,
+                "retryable": True,
+            },
+        )
 
     def test_stream_route_returns_uuid4_session_when_omitted(self) -> None:
         async def _fake_astream(**kwargs):

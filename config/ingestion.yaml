@@ -4,7 +4,8 @@ api:
   pages_per_query: 2
   timeout_seconds: 30
   delay_seconds: 0.6
-  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+  # Identifies the automated client truthfully for the robots preflight and API.
+  user_agent: "InternHunterAgent/1.0 (+https://github.com/Park-Hip/InternHunterAgent)"
   retry_attempts: 2          # retries after the initial attempt (so 3 tries max per page)
   retry_backoff_seconds: 2.0 # base delay; doubles per retry (2s, then 4s)
   # Wall-clock ceiling for the whole fetch, across every query and page. It exists
@@ -18,6 +19,15 @@ api:
   # this value plus one page's worst case (~96s) - about 11.6 minutes here, leaving
   # real headroom under the 15-minute ceiling. Raise them together, never this alone.
   max_elapsed_seconds: 600
+
+# Current robots policy for the exact host used by the job API. The source adapter
+# fails closed before an API request if this document is unavailable, malformed, or
+# disallows target_path for api.user_agent. A successful policy is cached only for
+# one source instance, never persisted across runs.
+robots:
+  url: "https://ms.vietnamworks.com/robots.txt"
+  target_path: "/job-search/v1.0/search"
+  cache_ttl_seconds: 300
 
 queries:
   - "data scientist"

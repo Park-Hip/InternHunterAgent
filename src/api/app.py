@@ -1,4 +1,5 @@
 import asyncio
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -115,7 +116,14 @@ def _load_docs_enabled() -> bool:
 
 
 async def _rate_limit_exceeded_handler(request, exc):
-    return JSONResponse(status_code=429, content={"detail": BUSY_MESSAGE})
+    limit, keys = request.state.view_rate_limit
+    reset_at, _ = request.app.state.limiter.limiter.get_window_stats(limit, *keys)
+    retry_after = max(1, int(reset_at - time.time()) + 1)
+    return JSONResponse(
+        status_code=429,
+        content={"detail": BUSY_MESSAGE},
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 def create_app(

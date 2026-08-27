@@ -597,7 +597,7 @@ The event vocabulary:
 | `session` | `{session_id}` | first, before any token |
 | `token` | `{text}` | each surviving chunk, many |
 | `metadata` | `{trace_id, trace_url}` | once, after the token stream ends |
-| `error` | `{message}` | in place of further tokens on mid-run failure |
+| `error` | `{message, code, retryable}` | in place of further tokens on mid-run failure |
 | `done` | `{}` | terminal, always closes the stream |
 
 Each token is **JSON-wrapped** rather than raw, because the wire format is newline-framed and model
@@ -646,10 +646,12 @@ immediately, so the model call and any provider-busy it raises are always after 
   provider-busy to a `429`, under streaming it is delivered in-band. This is a deliberate
   consequence of session-first ordering, not an oversight.
 - **All runtime failures are in-band error events.** Once the stream has started, a provider hiccup
-  or internal failure is delivered as an error event with a safe message, followed by done. The
-  existing provider-busy classification still runs for logging; only the *delivery* changes from
-  raised exception to yielded event. No exception text ever crosses the boundary. The UI renders it
-  as a chat bubble.
+  or internal failure is delivered as an error event with a safe message, followed by done. Every
+  error also has a stable machine-readable `code` and `retryable` flag: provider pressure (including
+  provider timeouts) is `{code: "provider_busy", retryable: true}`, while an unclassified failure is
+  `{code: "internal_error", retryable: false}`. The existing provider-busy classification still runs
+  for logging; only the *delivery* changes from raised exception to yielded event. No exception text
+  ever crosses the boundary. The UI renders the safe message as a chat bubble.
 - **The empty-answer fallback moves to stream end.** In a stream, emptiness is only known when the
   token stream closes with nothing emitted, so the fallback is decided at end-of-stream and sent as
   a single token.
@@ -693,10 +695,11 @@ Two decisions are recorded here because the config alone reads as an oversight.
 The limiter keys on client IP with the limit string from `api.rate_limit`.
 It applies to the chat routes and **not** to health or readiness: an uptime probe must never be
 throttled, and those endpoints exist precisely to be polled.
-A rate-limit rejection returns `429` with the **same body the provider-busy path returns**.
-That is intentional: a visitor who is rate-limited and a visitor who arrived during provider
-pressure both see one honest "busy, try again" message, and neither learns which internal condition
-fired.
+A rate-limit rejection returns `429` with the **same body the provider-busy path returns** and a
+standard `Retry-After` header. The handler derives the header's positive delay from the active
+SlowAPI rate-limit window, so clients can wait deterministically before retrying. The shared safe body is
+intentional: a visitor who is rate-limited and a visitor who arrived during provider pressure both
+see one honest "busy, try again" message, and neither learns which internal condition fired.
 
 > **The limiter is in-process, which couples this section to the deploy topology.** Counters live in
 > the worker's memory, so with *n* workers the effective limit is *n* times the configured value.

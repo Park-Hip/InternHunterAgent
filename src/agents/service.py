@@ -1,9 +1,14 @@
 import uuid
 from collections.abc import AsyncIterator
-from typing import TypedDict
+from typing import Mapping, TypedDict
 
 from src.agents.runtime.react_agent import AgentRuntime
-from src.core.errors import BUSY_MESSAGE, GENERIC_ERROR_MESSAGE, classify_provider_busy_error
+from src.core.errors import (
+    BUSY_MESSAGE,
+    GENERIC_ERROR_MESSAGE,
+    INTERNAL_ERROR_CODE,
+    classify_provider_busy_error,
+)
 from src.core.logger import logger
 
 FALLBACK_ANSWER = "I couldn't produce an answer for that — please try rephrasing."
@@ -58,7 +63,7 @@ async def stream_agent_response(
     runtime: AgentRuntime,
     session_id: str | None = None,
     user_id: str | None = None,
-) -> AsyncIterator[dict[str, str | None]]:
+) -> AsyncIterator[Mapping[str, str | bool | None]]:
     session_id = session_id or str(uuid.uuid4())
     yield {"type": "session", "session_id": session_id}
 
@@ -107,7 +112,19 @@ async def stream_agent_response(
             error=str(exc),
             reclassified_busy=provider_busy is not None,
         )
-        message = BUSY_MESSAGE if provider_busy is not None else GENERIC_ERROR_MESSAGE
-        yield {"type": "error", "message": message}
+        if provider_busy is not None:
+            yield {
+                "type": "error",
+                "message": BUSY_MESSAGE,
+                "code": provider_busy.code,
+                "retryable": provider_busy.retryable,
+            }
+        else:
+            yield {
+                "type": "error",
+                "message": GENERIC_ERROR_MESSAGE,
+                "code": INTERNAL_ERROR_CODE,
+                "retryable": False,
+            }
 
     yield {"type": "done"}

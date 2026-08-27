@@ -1,6 +1,10 @@
 from psycopg_pool import PoolTimeout
 
-from src.core.errors import ProviderBusyError, classify_provider_busy_error
+from src.core.errors import (
+    PROVIDER_BUSY_ERROR_CODE,
+    ProviderBusyError,
+    classify_provider_busy_error,
+)
 
 
 def test_pool_timeout_is_not_reclassified_as_provider_busy() -> None:
@@ -22,3 +26,5 @@ def test_provider_429_remains_provider_busy() -> None:
 
     assert isinstance(error, ProviderBusyError)
     assert error.status_code == 429
+    assert error.code == PROVIDER_BUSY_ERROR_CODE
+    assert error.retryable is True

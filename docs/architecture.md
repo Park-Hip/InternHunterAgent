@@ -609,6 +609,9 @@ auto-encode yielded event objects, and the higher-level producer path conflicts 
 pre-stream blank-query rejection.
 The endpoint therefore JSON-frames the small event blocks itself and sets the anti-buffering headers
 `Cache-Control: no-cache` and `X-Accel-Buffering: no`.
+OpenAPI publishes the five logical event blocks as a discriminated schema for API consumers, while
+the route deliberately retains this hand-built framing as an `EventSourceResponse` upgrade guard:
+framework upgrades must not silently change the wire bytes.
 This still avoids a third-party SSE dependency and keeps the API layer limited to wire-format
 translation.
 

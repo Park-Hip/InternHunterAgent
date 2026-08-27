@@ -3,7 +3,12 @@ import json
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
-from src.api.schemas import QueryRequest, QueryResponse, StreamErrorResponse
+from src.api.schemas import (
+    STREAM_EVENT_SCHEMA,
+    QueryRequest,
+    QueryResponse,
+    StreamErrorResponse,
+)
 from src.core.errors import (
     BUSY_MESSAGE,
     GENERIC_ERROR_MESSAGE,
@@ -25,7 +30,15 @@ def create_router(*, limiter=None, rate_limit: str | None = None) -> APIRouter:
         endpoint = limiter.limit(rate_limit)(endpoint)
         stream_endpoint = limiter.limit(rate_limit)(stream_endpoint)
     router.post("/agent/chat", response_model=QueryResponse)(endpoint)
-    router.post("/agent/chat/stream")(stream_endpoint)
+    router.post(
+        "/agent/chat/stream",
+        responses={
+            200: {
+                "content": {"text/event-stream": {"schema": STREAM_EVENT_SCHEMA}},
+                "description": "Server-Sent Events",
+            }
+        },
+    )(stream_endpoint)
     return router
 
 

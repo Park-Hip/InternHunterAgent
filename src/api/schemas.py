@@ -1,6 +1,6 @@
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter
 
 DEFAULT_MAX_QUERY_CHARS = 2000
 
@@ -30,3 +30,38 @@ class StreamErrorResponse(BaseModel):
     message: str
     code: Literal["provider_busy", "internal_error"]
     retryable: bool
+
+
+class StreamSessionEvent(BaseModel):
+    type: Literal["session"]
+    session_id: str
+
+
+class StreamTokenEvent(BaseModel):
+    type: Literal["token"]
+    text: str
+
+
+class StreamMetadataEvent(BaseModel):
+    type: Literal["metadata"]
+    trace_id: str | None
+    trace_url: str | None
+
+
+class StreamErrorEvent(StreamErrorResponse):
+    type: Literal["error"]
+
+
+class StreamDoneEvent(BaseModel):
+    type: Literal["done"]
+
+
+StreamEvent = Annotated[
+    StreamSessionEvent
+    | StreamTokenEvent
+    | StreamMetadataEvent
+    | StreamErrorEvent
+    | StreamDoneEvent,
+    Field(discriminator="type"),
+]
+STREAM_EVENT_SCHEMA = TypeAdapter(StreamEvent).json_schema()

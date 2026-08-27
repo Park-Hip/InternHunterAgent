@@ -36,6 +36,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0047](adr-0047-release-threshold-is-recall-first-at-030.md) | Release threshold is recall-first at 0.30 on corpus v7 | Evaluation |
 | [ADR-0048](adr-0048-streamed-agent-turn-serving-deadline.md) | Each streamed agent turn has an end-to-end serving deadline | Operations |
 | [ADR-0049](adr-0049-cancel-streamed-generation-on-client-disconnect.md) | Streamed generation stops when its client disconnects | Operations |
+| [ADR-0050](adr-0050-sse-comments-keep-silent-streams-alive.md) | SSE comments keep silent streams alive | Operations |
 
 ## Retired decisions, and why they were not carried over
 

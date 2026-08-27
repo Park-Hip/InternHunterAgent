@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import unittest
 from unittest.mock import ANY, AsyncMock, patch
 
@@ -7,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from src.agents.service import FALLBACK_ANSWER, generate_agent_response
 from src.api.app import app
+from src.api.routes.query import _server_sent_event, _with_heartbeats
 from src.api.schemas import DEFAULT_MAX_QUERY_CHARS
 from src.core.errors import BUSY_MESSAGE, GENERIC_ERROR_MESSAGE, ProviderBusyError
 
@@ -230,6 +232,46 @@ class QueryRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["answer"], FALLBACK_ANSWER)
+
+
+class StreamHeartbeatTests(unittest.IsolatedAsyncioTestCase):
+    async def test_idle_source_emits_comment_heartbeats_before_preserving_event_order(self) -> None:
+        release_token = asyncio.Event()
+
+        async def events():
+            yield {"type": "session", "session_id": "session-123"}
+            await release_token.wait()
+            yield {"type": "token", "text": "Hello"}
+            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+            yield {"type": "done"}
+
+        stream = _with_heartbeats(events(), heartbeat_seconds=0.001)
+        frames = [_server_sent_event(event=(await anext(stream))["type"], data={"session_id": "session-123"})]
+        frames.append(await anext(stream))
+        frames.append(await anext(stream))
+        release_token.set()
+        await asyncio.sleep(0)
+        async for item in stream:
+            if isinstance(item, str):
+                frames.append(item)
+                continue
+            frames.append(
+                _server_sent_event(
+                    event=item["type"],
+                    data={key: value for key, value in item.items() if key != "type"},
+                )
+            )
+
+        self.assertEqual(frames[:3], [
+            'event: session\ndata: {"session_id": "session-123"}\n\n',
+            ": ping\n\n",
+            ": ping\n\n",
+        ])
+        self.assertEqual(frames[3:], [
+            'event: token\ndata: {"text": "Hello"}\n\n',
+            'event: metadata\ndata: {"trace_id": null, "trace_url": null}\n\n',
+            "event: done\ndata: {}\n\n",
+        ])
 
 
 class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):

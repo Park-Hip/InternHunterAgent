@@ -122,6 +122,14 @@ class ConfigLoadTests(unittest.TestCase):
         self.assertTrue(hasattr(module, "settings"))
         self.assertEqual(module.settings.__class__.__name__, "_SettingsProxy")
 
+    def test_api_config_rejects_nonpositive_stream_heartbeat(self) -> None:
+        config = {"api": {"stream_heartbeat_seconds": 0}}
+
+        with self.assertRaisesRegex(
+            config_module.ConfigLoadError, "stream_heartbeat_seconds"
+        ):
+            config_module._validate_api_config(config)
+
     def test_observability_taxonomy_rejects_duplicate_entry_points(self) -> None:
         config = {
             "observability": {

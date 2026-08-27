@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
@@ -10,6 +11,7 @@ from src.core.errors import (
     InvalidQueryError,
     ProviderBusyError,
 )
+from src.core.config import settings
 from src.core.logger import logger
 from src.agents.service import generate_agent_response, stream_agent_response
 
@@ -91,40 +93,26 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
             user_id=payload.user_id,
             runtime=request.app.state.runtime,
         )
-        next_event: asyncio.Task | None = None
         try:
-            while True:
-                if await request.is_disconnected():
-                    logger.info(
-                        "stream.client_disconnected",
-                        session_id=payload.session_id,
-                    )
-                    return
-
-                next_event = asyncio.create_task(anext(stream))
-                while not next_event.done():
-                    await asyncio.wait(
-                        {next_event}, timeout=_DISCONNECT_POLL_INTERVAL_SECONDS
-                    )
-                    if await request.is_disconnected():
-                        logger.info(
-                            "stream.client_disconnected",
-                            session_id=payload.session_id,
-                        )
-                        return
-
-                event = next_event.result()
-                event_type = event["type"]
-                data = {key: value for key, value in event.items() if key != "type"}
+            async for item in _with_heartbeats(
+                stream,
+                heartbeat_seconds=float(
+                    settings.config_yaml["api"]["stream_heartbeat_seconds"]
+                ),
+                is_disconnected=request.is_disconnected,
+                on_disconnect=lambda: logger.info(
+                    "stream.client_disconnected", session_id=payload.session_id
+                ),
+            ):
+                if isinstance(item, str):
+                    yield item
+                    continue
+                event_type = item["type"]
+                data = {key: value for key, value in item.items() if key != "type"}
                 if event_type == "error":
                     data = StreamErrorResponse(**data).model_dump()
                 yield _server_sent_event(event=event_type, data=data)
-        except StopAsyncIteration:
-            return
         finally:
-            if next_event is not None and not next_event.done():
-                next_event.cancel()
-                await asyncio.gather(next_event, return_exceptions=True)
             await stream.aclose()
 
     return EventSourceResponse(
@@ -133,7 +121,62 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
     )
 
 
-def _server_sent_event(*, event: str, data: dict[str, str | bool | None]) -> str:
+async def _next_stream_event(
+    events: AsyncIterator[Mapping[str, str | bool | None]],
+) -> Mapping[str, str | bool | None]:
+    return await events.__anext__()
+
+
+async def _with_heartbeats(
+    events: AsyncIterator[Mapping[str, str | bool | None]],
+    *,
+    heartbeat_seconds: float,
+    is_disconnected: Callable[[], Awaitable[bool]] | None = None,
+    on_disconnect: Callable[[], None] | None = None,
+) -> AsyncIterator[Mapping[str, str | bool | None] | str]:
+    """Pass events through while polling disconnects and commenting during idle periods."""
+    next_event: asyncio.Task[Mapping[str, str | bool | None]] | None = None
+    try:
+        while True:
+            if is_disconnected is not None and await is_disconnected():
+                if on_disconnect is not None:
+                    on_disconnect()
+                return
+
+            next_event = asyncio.create_task(_next_stream_event(events))
+            next_heartbeat_at = asyncio.get_running_loop().time() + heartbeat_seconds
+            while not next_event.done():
+                now = asyncio.get_running_loop().time()
+                timeout = min(
+                    _DISCONNECT_POLL_INTERVAL_SECONDS,
+                    max(0, next_heartbeat_at - now),
+                )
+                await asyncio.wait({next_event}, timeout=timeout)
+
+                if is_disconnected is not None and await is_disconnected():
+                    if on_disconnect is not None:
+                        on_disconnect()
+                    return
+
+                now = asyncio.get_running_loop().time()
+                if not next_event.done() and now >= next_heartbeat_at:
+                    # SSE comments are ignored by compliant clients, unlike named events.
+                    yield ": ping\n\n"
+                    next_heartbeat_at = now + heartbeat_seconds
+
+            try:
+                yield next_event.result()
+            except StopAsyncIteration:
+                return
+    finally:
+        if next_event is not None and not next_event.done():
+            next_event.cancel()
+            await asyncio.gather(next_event, return_exceptions=True)
+
+
+def _server_sent_event(
+    *, event: str, data: Mapping[str, str | bool | None]
+) -> str:
     payload = ServerSentEvent(event=event, data=data)
     encoded_data = json.dumps(payload.data)
     return f"event: {payload.event}\ndata: {encoded_data}\n\n"

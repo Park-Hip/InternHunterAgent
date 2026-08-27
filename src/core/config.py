@@ -98,6 +98,23 @@ def _validate_string_list(value: Any, *, name: str) -> list[str]:
     return value
 
 
+def _validate_api_config(config: dict[str, Any]) -> None:
+    """Reject an invalid stream heartbeat before the application starts."""
+    api = config.get("api")
+    if not isinstance(api, dict):
+        raise ConfigLoadError("Missing 'api' section in config/settings.yaml")
+
+    heartbeat_seconds = api.get("stream_heartbeat_seconds")
+    if (
+        isinstance(heartbeat_seconds, bool)
+        or not isinstance(heartbeat_seconds, (int, float))
+        or heartbeat_seconds <= 0
+    ):
+        raise ConfigLoadError(
+            "api.stream_heartbeat_seconds must be a positive number in config/settings.yaml"
+        )
+
+
 def _validate_observability_config(config: dict[str, Any]) -> None:
     """Reject malformed closed Langfuse taxonomy before serving requests."""
     observability = config.get("observability")
@@ -171,6 +188,7 @@ def load_settings(*, force_reload: bool = False) -> Settings:
         raise ConfigLoadError(_format_validation_error(exc)) from exc
 
     settings.config_yaml = _load_yaml_file(_config_path("settings.yaml"))
+    _validate_api_config(settings.config_yaml)
     _validate_observability_config(settings.config_yaml)
     settings.prompts_yaml = _load_yaml_file(_config_path("prompts.yaml"))
     settings.ingestion_yaml = _load_yaml_file(_config_path("ingestion.yaml"))

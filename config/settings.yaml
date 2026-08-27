@@ -2,6 +2,7 @@ api:
   docs_enabled: true
   rate_limit: "15/minute"
   max_query_chars: 2000
+  stream_heartbeat_seconds: 15  # SSE comment cadence; keep below normal proxy idle windows.
   demo:
     data_snapshot_date: "2026-07-14"  # Update whenever the shipped demo corpus changes.
   cors:

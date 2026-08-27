@@ -603,6 +603,12 @@ The event vocabulary:
 Each token is **JSON-wrapped** rather than raw, because the wire format is newline-framed and model
 tokens contain newlines; JSON escaping keeps one token to one safe data line.
 
+When the runtime is temporarily silent, the route emits `: ping\n\n` at the configured
+`api.stream_heartbeat_seconds` cadence. This is an SSE comment, not a sixth application event, so
+compliant SSE parsers ignore it and the client behavior and named-event ordering remain unchanged.
+It keeps the connection active through normal proxy idle windows while the agent performs tool work;
+it does not add reconnect, replay, or persistence behavior (ADR-0050).
+
 No new dependency is needed: FastAPI ships a native event-source response.
 An implementation finding kept the route explicit anyway - the installed version does not
 auto-encode yielded event objects, and the higher-level producer path conflicts with the required

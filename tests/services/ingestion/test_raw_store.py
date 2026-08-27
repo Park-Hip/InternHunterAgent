@@ -51,7 +51,7 @@ class UpsertRawPostingsTests(unittest.TestCase):
             ("vietnamworks", "unchanged", "same-hash"),
             ("vietnamworks", "changed", "old-hash"),
         ]
-        session.execute.side_effect = [existing, MagicMock()]
+        session.execute.side_effect = [MagicMock(), existing, MagicMock()]
         postings = [
             _make_posting(external_id="new", content_hash="new-hash"),
             _make_posting(external_id="unchanged", content_hash="same-hash"),
@@ -67,7 +67,7 @@ class UpsertRawPostingsTests(unittest.TestCase):
         session = _mock_session(mock_session_factory)
         existing = MagicMock()
         existing.all.return_value = [("vietnamworks", "job-001", "abc123")]
-        session.execute.side_effect = [existing, MagicMock()]
+        session.execute.side_effect = [MagicMock(), existing, MagicMock()]
 
         counts = upsert_raw_postings([_make_posting()])
 
@@ -79,7 +79,7 @@ class UpsertRawPostingsTests(unittest.TestCase):
         postings = [_make_posting()]
         upsert_raw_postings(postings)
 
-        self.assertEqual(session.execute.call_count, 2)
+        self.assertEqual(session.execute.call_count, 3)
         stmt = session.execute.call_args.args[0]
         compiled = stmt.compile(dialect=__import__("sqlalchemy.dialects.postgresql", fromlist=["dialect"]).dialect())
         sql_text = str(compiled)
@@ -105,12 +105,26 @@ class UpsertRawPostingsTests(unittest.TestCase):
 
         upsert_raw_postings([_make_posting()])
 
-        select_stmt = session.execute.call_args_list[0].args[0]
+        select_stmt = session.execute.call_args_list[1].args[0]
         compiled = select_stmt.compile(dialect=__import__("sqlalchemy.dialects.postgresql", fromlist=["dialect"]).dialect())
         sql_text = str(compiled)
         self.assertIn("content_hash", sql_text)
         self.assertIn("source", sql_text)
         self.assertIn("external_id", sql_text)
+
+    @patch("src.services.ingestion.raw_store.session_factory")
+    def test_acquires_advisory_lock_before_classification(self, mock_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_session_factory)
+        session.execute.return_value.all.return_value = []
+
+        upsert_raw_postings([_make_posting()])
+
+        lock_stmt = session.execute.call_args_list[0].args[0]
+        compiled = lock_stmt.compile(
+            dialect=__import__("sqlalchemy.dialects.postgresql", fromlist=["dialect"]).dialect()
+        )
+        sql_text = str(compiled)
+        self.assertIn("pg_advisory_xact_lock", sql_text)
 
     @patch("src.services.ingestion.raw_store.session_factory")
     def test_commit_called_on_success(self, mock_session_factory: MagicMock) -> None:

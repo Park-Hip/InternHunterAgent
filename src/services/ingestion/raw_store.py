@@ -13,6 +13,9 @@ class RawStoreError(Exception):
     """Raised when a raw_jobs upsert fails at the database layer."""
 
 
+_RAW_JOBS_UPSERT_LOCK = 1572365531
+
+
 @dataclass(frozen=True)
 class RawUpsertCounts:
     new: int
@@ -54,6 +57,8 @@ def upsert_raw_postings(postings: Iterable[RawPosting]) -> RawUpsertCounts:
 
     try:
         with session_factory() as session:
+            # Serialize so classification and write are atomic.
+            session.execute(select(func.pg_advisory_xact_lock(_RAW_JOBS_UPSERT_LOCK)))
             natural_keys = [(row["source"], row["external_id"]) for row in rows]
             existing_hashes = {
                 (source, external_id): content_hash

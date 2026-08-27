@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from src.agents.service import FALLBACK_ANSWER
 from src.api.app import create_app
-from src.api.routes.query import stream_query_agent
+from src.api.routes.query import _server_sent_event, stream_query_agent
 from src.api.schemas import QueryRequest
 from src.core.errors import (
     BUSY_MESSAGE,
@@ -178,6 +178,42 @@ class StreamQueryRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"detail": "Query must not be empty."})
         self.app.state.runtime.astream.assert_not_called()
+
+
+class StreamOpenAPITests(unittest.TestCase):
+    def test_stream_operation_documents_sse_event_variants(self) -> None:
+        app = create_app(rate_limit="1000/minute", docs_enabled=True)
+        response = TestClient(app).get("/openapi.json")
+
+        self.assertEqual(response.status_code, 200)
+        schema = response.json()
+        content = schema["paths"]["/api/v1/agent/chat/stream"]["post"][
+            "responses"
+        ]["200"]["content"]
+        self.assertIn("text/event-stream", content)
+
+        event_schema = content["text/event-stream"]["schema"]
+        discriminator = event_schema["discriminator"]
+        self.assertEqual(discriminator["propertyName"], "type")
+        self.assertEqual(
+            set(discriminator["mapping"]),
+            {"session", "token", "metadata", "error", "done"},
+        )
+        self.assertEqual(len(event_schema["oneOf"]), 5)
+
+        error_ref = discriminator["mapping"]["error"]
+        error_schema = event_schema["$defs"][
+            error_ref.rsplit("/", maxsplit=1)[-1]
+        ]
+        self.assertTrue(
+            {"message", "code", "retryable"}.issubset(error_schema["properties"])
+        )
+
+    def test_server_sent_event_uses_exact_sse_framing(self) -> None:
+        self.assertEqual(
+            _server_sent_event(event="token", data={"text": "first\nsecond"}),
+            'event: token\ndata: {"text": "first\\nsecond"}\n\n',
+        )
 
 
 class StreamQueryDisconnectTests(unittest.IsolatedAsyncioTestCase):

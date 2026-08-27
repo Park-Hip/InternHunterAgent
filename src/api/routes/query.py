@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from fastapi import APIRouter, HTTPException, Request
@@ -11,6 +12,9 @@ from src.core.errors import (
 )
 from src.core.logger import logger
 from src.agents.service import generate_agent_response, stream_agent_response
+
+
+_DISCONNECT_POLL_INTERVAL_SECONDS = 0.05
 
 
 def create_router(*, limiter=None, rate_limit: str | None = None) -> APIRouter:
@@ -81,17 +85,47 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
         raise HTTPException(status_code=400, detail="Query must not be empty.")
 
     async def _event_source():
-        async for event in stream_agent_response(
+        stream = stream_agent_response(
             query=payload.query,
             session_id=payload.session_id,
             user_id=payload.user_id,
             runtime=request.app.state.runtime,
-        ):
-            event_type = event["type"]
-            data = {key: value for key, value in event.items() if key != "type"}
-            if event_type == "error":
-                data = StreamErrorResponse(**data).model_dump()
-            yield _server_sent_event(event=event_type, data=data)
+        )
+        next_event: asyncio.Task | None = None
+        try:
+            while True:
+                if await request.is_disconnected():
+                    logger.info(
+                        "stream.client_disconnected",
+                        session_id=payload.session_id,
+                    )
+                    return
+
+                next_event = asyncio.create_task(anext(stream))
+                while not next_event.done():
+                    await asyncio.wait(
+                        {next_event}, timeout=_DISCONNECT_POLL_INTERVAL_SECONDS
+                    )
+                    if await request.is_disconnected():
+                        logger.info(
+                            "stream.client_disconnected",
+                            session_id=payload.session_id,
+                        )
+                        return
+
+                event = next_event.result()
+                event_type = event["type"]
+                data = {key: value for key, value in event.items() if key != "type"}
+                if event_type == "error":
+                    data = StreamErrorResponse(**data).model_dump()
+                yield _server_sent_event(event=event_type, data=data)
+        except StopAsyncIteration:
+            return
+        finally:
+            if next_event is not None and not next_event.done():
+                next_event.cancel()
+                await asyncio.gather(next_event, return_exceptions=True)
+            await stream.aclose()
 
     return EventSourceResponse(
         _event_source(),

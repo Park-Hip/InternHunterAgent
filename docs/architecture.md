@@ -616,6 +616,12 @@ The browser cannot use the native `EventSource` API here, because it is GET-only
 endpoint is a POST with a JSON body.
 The client consumes the stream with `fetch()` plus a `ReadableStream` reader instead.
 
+**Disconnect cancellation.** While awaiting each service event, the route polls for client
+disconnection. A disconnect cancels and closes the service generator, which cancels the runtime
+producer and runs tracing cleanup; it logs `stream.client_disconnected` once and emits no further
+SSE events. Connected streams retain the event order above, including terminal `done`. There is no
+resume, replay, or persistence of partial output.
+
 ### 3 Error handling
 
 The quality bar in section 1.3 requires that imperfect input or a backend hiccup yields a clean

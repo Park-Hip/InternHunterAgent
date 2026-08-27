@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from typing import Mapping, TypeVar, TypedDict
 
 from src.agents.runtime.react_agent import AgentRuntime
@@ -77,7 +77,7 @@ async def stream_agent_response(
     runtime: AgentRuntime,
     session_id: str | None = None,
     user_id: str | None = None,
-) -> AsyncIterator[Mapping[str, str | bool | None]]:
+) -> AsyncGenerator[Mapping[str, str | bool | None], None]:
     session_id = session_id or str(uuid.uuid4())
     yield {"type": "session", "session_id": session_id}
 
@@ -92,6 +92,8 @@ async def stream_agent_response(
         session_id=session_id,
         user_id=user_id,
     )
+    detach_runtime_task = False
+    next_event: asyncio.Task[dict[str, str | None]] | None = None
     try:
         while True:
             remaining = deadline - loop.time()
@@ -100,11 +102,12 @@ async def stream_agent_response(
                     "Streamed agent turn exceeded its serving deadline."
                 )
 
-            next_event = asyncio.ensure_future(anext(runtime_stream))
+            next_event = asyncio.create_task(anext(runtime_stream))
             done, _ = await asyncio.wait({next_event}, timeout=remaining)
             if not done:
                 next_event.cancel()
                 next_event.add_done_callback(_consume_background_task_result)
+                detach_runtime_task = True
                 raise AgentTurnDeadlineExceededError(
                     "Streamed agent turn exceeded its serving deadline."
                 )
@@ -174,5 +177,11 @@ async def stream_agent_response(
                 "code": INTERNAL_ERROR_CODE,
                 "retryable": False,
             }
+    finally:
+        if not detach_runtime_task:
+            if next_event is not None and not next_event.done():
+                next_event.cancel()
+                await asyncio.gather(next_event, return_exceptions=True)
+            await runtime_stream.aclose()
 
     yield {"type": "done"}

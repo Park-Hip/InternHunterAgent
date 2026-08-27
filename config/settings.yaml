@@ -33,6 +33,9 @@ agent:
   # other arm is one edit away: set both profiles back to `groq` / `qwen/qwen3.6-27b` and
   # restore `eval.driver.turn_pacing_seconds: 75`.
   provider: deepseek
+  # End-to-end serving deadline for one SSE turn. Invalid or omitted values fall
+  # back to 120 seconds so one blocked stream cannot occupy the sole web worker.
+  stream_turn_timeout_seconds: 120
 
   react:
     provider: deepseek

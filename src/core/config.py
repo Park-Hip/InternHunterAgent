@@ -48,6 +48,20 @@ class Settings(BaseSettings):
 
 
 _settings_cache: Settings | None = None
+DEFAULT_STREAM_TURN_TIMEOUT_SECONDS = 120
+
+
+def get_stream_turn_timeout_seconds(config: dict[str, Any]) -> int:
+    """Return the configured bounded SSE turn deadline or its safe fallback."""
+
+    agent_config = config.get("agent")
+    if not isinstance(agent_config, dict):
+        return DEFAULT_STREAM_TURN_TIMEOUT_SECONDS
+
+    timeout_seconds = agent_config.get("stream_turn_timeout_seconds")
+    if isinstance(timeout_seconds, int) and not isinstance(timeout_seconds, bool) and timeout_seconds > 0:
+        return timeout_seconds
+    return DEFAULT_STREAM_TURN_TIMEOUT_SECONDS
 
 
 def _config_path(filename: str) -> Path:

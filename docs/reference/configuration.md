@@ -34,8 +34,9 @@ with only the selected provider's key.
 
 **Tunable parameters** live in `config/settings.yaml`, read through `src/core/config.py`:
 `agent.react.*` for the outer model, `agent.sql_generation.*` for the nested SQL-generation model,
-`agent.memory.*` for the memory window, `agent.query.*` for the retrieval bounds, `api.*` for the
-hardening controls, and `ingestion.*` for the pipeline.
+`agent.stream_turn_timeout_seconds` for the end-to-end SSE serving deadline (120 seconds when
+omitted or invalid), `agent.memory.*` for the memory window, `agent.query.*` for the retrieval
+bounds, `api.*` for the hardening controls, and `ingestion.*` for the pipeline.
 Per project convention, parameters are configured here rather than hard-coded.
 
 

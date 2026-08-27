@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 import unittest
 from unittest.mock import MagicMock, AsyncMock, patch
@@ -9,6 +10,7 @@ from src.agents.service import (
     FALLBACK_ANSWER,
     GENERIC_ERROR_MESSAGE,
     generate_agent_response,
+    get_stream_turn_timeout_seconds,
     stream_agent_response,
 )
 from src.core.errors import INTERNAL_ERROR_CODE, PROVIDER_BUSY_ERROR_CODE
@@ -91,6 +93,93 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
 
 class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
+    def test_stream_turn_timeout_uses_deterministic_fallback_for_missing_or_invalid_config(self) -> None:
+        self.assertEqual(get_stream_turn_timeout_seconds({}), 120)
+        for invalid_value in (0, -1, True, "17"):
+            with self.subTest(invalid_value=invalid_value):
+                self.assertEqual(
+                    get_stream_turn_timeout_seconds(
+                        {"agent": {"stream_turn_timeout_seconds": invalid_value}}
+                    ),
+                    120,
+                )
+        self.assertEqual(
+            get_stream_turn_timeout_seconds({"agent": {"stream_turn_timeout_seconds": 17}}),
+            17,
+        )
+
+    @patch("src.agents.service.get_stream_turn_timeout_seconds", return_value=0.01)
+    @patch("src.agents.service.logger")
+    async def test_stream_deadline_cancels_runtime_and_yields_one_safe_error_then_done(
+        self, mock_logger, _mock_timeout
+    ) -> None:
+        cancellation_received = asyncio.Event()
+        cleaned_up = asyncio.Event()
+
+        async def blocked_stream(**_kwargs):
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancellation_received.set()
+                await asyncio.sleep(0.2)
+                raise
+            finally:
+                cleaned_up.set()
+            yield  # pragma: no cover - keeps this an async generator
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=blocked_stream)
+
+        started_at = asyncio.get_running_loop().time()
+        events = [
+            event
+            async for event in stream_agent_response(
+                query="what internships are available?",
+                runtime=runtime,
+                session_id="session-timeout",
+            )
+        ]
+
+        self.assertLess(asyncio.get_running_loop().time() - started_at, 0.1)
+        await asyncio.wait_for(cancellation_received.wait(), timeout=0.1)
+        self.assertFalse(cleaned_up.is_set())
+        self.assertEqual(
+            events,
+            [
+                {"type": "session", "session_id": "session-timeout"},
+                {
+                    "type": "error",
+                    "message": BUSY_MESSAGE,
+                    "code": PROVIDER_BUSY_ERROR_CODE,
+                    "retryable": True,
+                },
+                {"type": "done"},
+            ],
+        )
+        self.assertTrue(mock_logger.error.call_args.kwargs["deadline_exceeded"])
+
+        async def completed_stream(**_kwargs):
+            yield {"type": "token", "text": "A subsequent turn succeeds."}
+            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+
+        _mock_timeout.return_value = 1
+        runtime.astream = MagicMock(side_effect=completed_stream)
+        follow_up_events = [
+            event
+            async for event in stream_agent_response(
+                query="what internships are available?",
+                runtime=runtime,
+                session_id="session-after-timeout",
+            )
+        ]
+
+        self.assertEqual(
+            [event["type"] for event in follow_up_events],
+            ["session", "token", "metadata", "done"],
+        )
+
+        await asyncio.wait_for(cleaned_up.wait(), timeout=0.3)
+
     @patch("src.agents.service.logger")
     async def test_stream_failure_logs_and_yields_generic_message(self, mock_logger) -> None:
         async def failing_stream(**_kwargs):
@@ -130,6 +219,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["session_id"], "session-1")
         self.assertIn("db is down", kwargs["error"])
         self.assertFalse(kwargs["reclassified_busy"])
+        self.assertFalse(kwargs["deadline_exceeded"])
 
     @patch("src.agents.service.logger")
     async def test_stream_failure_records_reclassified_busy(self, mock_logger) -> None:

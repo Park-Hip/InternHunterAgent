@@ -172,6 +172,137 @@ def test_viewer_escapes_embedded_script_boundary() -> None:
     assert "\\u003c/script>" in document
 
 
+def _scored_run() -> dict:
+    """A two-turn repeat whose final turn carries persisted judge output.
+
+    Metric names reproduce what `harness.score` persists (`metric.__name__`), and
+    the `Honesty` payload reproduces an isolated judge failure (`{"score": None,
+    "error": ...}`) so the unavailable state is exercised.
+    """
+    run = _run()
+    repeat = run["scenarios"]["HLP-COUNT-1"]["repeats"][0]
+    repeat["turns"].append(
+        {
+            "turn": 2,
+            "status": "COMPLETE",
+            "seams": {
+                "question": "Which roles pay above 100k?",
+                "tools_called": ["query_clean_jobs"],
+                "sql_text": "SELECT title FROM clean_jobs WHERE salary > 100000",
+                "tool_output": "Found 1 result(s) with columns: title.\n- title=Staff",
+                "answer": "Staff.",
+                "trace_id": "trace-2",
+            },
+        }
+    )
+    repeat["scores"] = {
+        "seam1_routing": {
+            "Tool Correctness": {"score": 0.95, "reason": "The routing picked the right tool."},
+        },
+        "seam2_nl_to_sql": {
+            "SQL Schema Quality": {"score": 0.8, "reason": "Valid read-only SQL."},
+        },
+        "seam3_synthesis": {
+            "Task Completion": {"score": 0.9, "reason": "Answers the question."},
+            "Honesty": {"score": None, "error": "judge JSON hiccup"},
+        },
+    }
+    repeat["semantic_result"] = {
+        "status": "AVAILABLE",
+        "score": 0.85,
+        "confidence": None,
+        "rationale": "The answer satisfies the semantic requirement.",
+    }
+    return run
+
+
+def test_judge_scores_attach_only_to_the_final_captured_turn() -> None:
+    turns = flatten_turns(_scored_run())
+
+    assert len(turns) == 2
+    # The first turn is left untouched; the repeat's judge output rides the last one.
+    assert turns[0]["judge_scores"] == []
+    assert turns[0]["semantic_result"] is None
+    assert turns[1]["judge_scores"]
+    assert turns[1]["semantic_result"] is not None
+
+
+def test_judge_scores_map_each_seam_and_flag_unavailable_metrics() -> None:
+    turn = flatten_turns(_scored_run())[1]
+    by_seam = {entry["seam"]: entry for entry in turn["judge_scores"]}
+
+    assert set(by_seam) == {"routing", "sql", "answer"}
+    assert by_seam["routing"]["metrics"] == [
+        {
+            "name": "Tool Correctness",
+            "score": 0.95,
+            "available": True,
+            "reason": "The routing picked the right tool.",
+            "error": "",
+        }
+    ]
+    answer = by_seam["answer"]["metrics"]
+    assert [metric["name"] for metric in answer] == ["Task Completion", "Honesty"]
+    honesty = answer[1]
+    assert honesty["available"] is False
+    assert honesty["score"] is None
+    assert honesty["error"] == "judge JSON hiccup"
+
+
+def test_semantic_result_is_normalized_for_the_final_turn() -> None:
+    turn = flatten_turns(_scored_run())[1]
+
+    assert turn["semantic_result"] == {
+        "status": "AVAILABLE",
+        "available": True,
+        "score": 0.85,
+        "confidence": None,
+        "rationale": "The answer satisfies the semantic requirement.",
+    }
+
+
+def test_unavailable_semantic_result_is_explicit_not_passed() -> None:
+    run = _run()
+    repeat = run["scenarios"]["HLP-COUNT-1"]["repeats"][0]
+    repeat["semantic_result"] = {
+        "status": "UNAVAILABLE",
+        "score": None,
+        "confidence": None,
+        "rationale": "DeepEval unavailable: timeout",
+    }
+
+    turn = flatten_turns(run)[0]
+
+    assert turn["semantic_result"]["available"] is False
+    assert turn["semantic_result"]["score"] is None
+    assert "timeout" in turn["semantic_result"]["rationale"]
+
+
+def test_viewer_embeds_judge_and_semantic_data_without_a_new_verdict() -> None:
+    document = build_viewer_html(_scored_run())
+
+    # Judge output travels in the data payload and is rendered beside its evidence.
+    assert "Tool Correctness" in document
+    assert "SQL Schema Quality" in document
+    assert "The routing picked the right tool." in document
+    assert "judge JSON hiccup" in document
+    assert "The answer satisfies the semantic requirement." in document
+    # Informational-only styling, not the green PASS/red FAIL verdict badges.
+    assert "b-score" in document
+    assert "Model-judge scores" in document
+
+
+def test_unscored_and_older_repeats_carry_no_judge_output() -> None:
+    turns = flatten_turns(_run())
+
+    assert all(t["judge_scores"] == [] for t in turns)
+    assert all(t["semantic_result"] is None for t in turns)
+
+    document = build_viewer_html(_run())
+    assert "Tool Correctness" not in document
+    assert "judge JSON hiccup" not in document
+
+
 def test_grade_joins_per_turn_and_places_checks_beside_their_seam() -> None:
     turns = flatten_turns(_run(), None, _grade())
 

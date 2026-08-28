@@ -38,6 +38,15 @@ _CHECK_SEAMS = {
 }
 _CHECK_SEAM_PREFIXES = (("required_substance_", "answer"),)
 
+# Seam keys `evals/harness.py::score_seams` persists under `repeat["scores"]`, and
+# the on-screen seam each one judged. The judge shares these three seams with the
+# deterministic grader, so its output is read beside the same evidence.
+_JUDGE_SEAMS = {
+    "seam1_routing": "routing",
+    "seam2_nl_to_sql": "sql",
+    "seam3_synthesis": "answer",
+}
+
 # The manifest's sampling block carries these two under fixed names; every other key
 # in it is a reasoning knob, and knobs differ by provider (`reasoning_effort` on Groq,
 # `thinking` on DeepSeek). Reading them generically means a new knob reaches the screen
@@ -353,6 +362,69 @@ def run_header(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _normalize_judge_scores(repeat: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten persisted `repeat["scores"]` into informational, per-seam entries.
+
+    `harness.score` isolates one failing metric as `{"score": None, "error": ...}` so
+    a broken judge call reads as unavailable rather than a score of zero, and the
+    rest of the seam's scores survive. Only the three seams `score_seams` emits are
+    kept, because those are the seams this viewer places beside their evidence.
+    """
+    scores = repeat.get("scores")
+    if not isinstance(scores, dict) or not scores:
+        return []
+    entries: list[dict[str, Any]] = []
+    for seam_name, metric_scores in scores.items():
+        seam = _JUDGE_SEAMS.get(seam_name)
+        if seam is None or not isinstance(metric_scores, dict):
+            continue
+        metrics: list[dict[str, Any]] = []
+        for metric_name, payload in metric_scores.items():
+            payload = payload if isinstance(payload, dict) else {}
+            score = payload.get("score")
+            scored = isinstance(score, (int, float)) and not isinstance(score, bool)
+            metrics.append(
+                {
+                    "name": str(metric_name),
+                    "score": score if scored else None,
+                    "available": scored,
+                    "reason": _text(payload.get("reason"), ""),
+                    "error": _text(payload.get("error"), ""),
+                }
+            )
+        entries.append({"seam": seam, "metrics": metrics})
+    return entries
+
+
+def _normalize_semantic_result(repeat: dict[str, Any]) -> dict[str, Any] | None:
+    """Normalize the optional repeat-level semantic verdict for display.
+
+    A result exists only when the scenario declares a semantic assertion. `status`
+    keeps an available score apart from a provider failure the operator may re-run,
+    so the viewer never implies a deterministic verdict from this diagnostic.
+    """
+    result = repeat.get("semantic_result")
+    if not isinstance(result, dict) or not result:
+        return None
+    score = result.get("score")
+    confidence = result.get("confidence")
+    return {
+        "status": str(result.get("status", "UNAVAILABLE")),
+        "available": result.get("status") == "AVAILABLE",
+        "score": (
+            score
+            if isinstance(score, (int, float)) and not isinstance(score, bool)
+            else None
+        ),
+        "confidence": (
+            confidence
+            if isinstance(confidence, (int, float)) and not isinstance(confidence, bool)
+            else None
+        ),
+        "rationale": _text(result.get("rationale"), ""),
+    }
+
+
 def flatten_turns(
     run: dict[str, Any],
     scenarios: list[dict[str, Any]] | None = None,
@@ -367,7 +439,11 @@ def flatten_turns(
     turns: list[dict[str, Any]] = []
     for scenario_id, scenario_record in run.get("scenarios", {}).items():
         for repeat_record in scenario_record.get("repeats", []):
-            for turn_record in repeat_record.get("turns", []):
+            judge_scores = _normalize_judge_scores(repeat_record)
+            semantic_result = _normalize_semantic_result(repeat_record)
+            repeat_turns = repeat_record.get("turns", [])
+            for turn_index, turn_record in enumerate(repeat_turns):
+                is_final_turn = bool(repeat_turns) and turn_index == len(repeat_turns) - 1
                 seams = turn_record.get("seams", {})
                 tools = seams.get("tools_called", [])
                 key = f"{scenario_id}/{repeat_record.get('repeat', '?')}/{turn_record.get('turn', '?')}"
@@ -399,6 +475,11 @@ def flatten_turns(
                         "trace_id": _text(seams.get("trace_id"), "No trace id"),
                         "telemetry": _telemetry(turn_record.get("telemetry")),
                         "coverage": _evidence_coverage(turn_record, seams, manifest),
+                        # Judge output attaches only to the repeat's final captured
+                        # turn: it is produced from that final SeamRun, and pinning
+                        # it there keeps earlier turns byte-for-byte as before.
+                        "judge_scores": judge_scores if is_final_turn else [],
+                        "semantic_result": semantic_result if is_final_turn else None,
                     }
                 )
     return turns
@@ -647,7 +728,7 @@ def build_viewer_html(
     .notes { margin-top:16px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; } textarea { width:100%; min-height:110px; resize:vertical; margin-top:8px; } .saved { color:var(--muted); font-size:12px; margin-top:6px; }
     .empty { text-align:center; padding:70px 20px; color:var(--muted); } @media (max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:14px; } .header-row { align-items:flex-start; flex-direction:column; } }
     .runbar { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:6px; } .facts { display:flex; flex-wrap:wrap; gap:18px; } .fact { font-size:13px; overflow-wrap:anywhere; } .fact label { color:var(--muted); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; margin-right:6px; }
-    .badge { display:inline-block; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; letter-spacing:.04em; border:1px solid transparent; } .b-PASS,.b-CAPTURED { background:rgba(66,217,141,.16); color:var(--green); border-color:rgba(66,217,141,.5); } .b-FAIL,.b-CAPTURE_FAILED { background:rgba(255,109,109,.16); color:var(--red); border-color:rgba(255,109,109,.5); } .b-INFRA,.b-PROVIDER_DID_NOT_EMIT { background:rgba(255,184,77,.14); color:var(--amber); border-color:rgba(255,184,77,.5); } .b-UNRUN,.b-UNGRADED,.b-UNKNOWN,.b-NOT_CONFIGURED,.b-NOT_APPLICABLE,.b-NOT_EVALUATED { background:#1d2937; color:var(--muted); border-color:var(--line); }
+    .badge { display:inline-block; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; letter-spacing:.04em; border:1px solid transparent; } .b-PASS,.b-CAPTURED { background:rgba(66,217,141,.16); color:var(--green); border-color:rgba(66,217,141,.5); } .b-FAIL,.b-CAPTURE_FAILED { background:rgba(255,109,109,.16); color:var(--red); border-color:rgba(255,109,109,.5); } .b-INFRA,.b-PROVIDER_DID_NOT_EMIT { background:rgba(255,184,77,.14); color:var(--amber); border-color:rgba(255,184,77,.5); } .b-UNRUN,.b-UNGRADED,.b-UNKNOWN,.b-NOT_CONFIGURED,.b-NOT_APPLICABLE,.b-NOT_EVALUATED { background:#1d2937; color:var(--muted); border-color:var(--line); } .b-score { background:rgba(122,162,255,.16); color:#9db8ff; border-color:rgba(122,162,255,.5); } .b-unavailable { background:#1d2937; color:var(--muted); border-color:var(--line); }
     /* The failure panel leads the turn view: an operator scans why a turn failed
        before reading any evidence beneath it. */
     .failpanel { margin-top:14px; background:rgba(255,109,109,.08); border:1px solid rgba(255,109,109,.45); border-left:5px solid var(--red); border-radius:10px; padding:14px 16px; } .failpanel h2 { color:var(--red); } .failpanel p { margin:8px 0 0; overflow-wrap:anywhere; } .failpanel ol { margin:10px 0 0; padding-left:20px; } .failpanel li { margin-top:8px; font-size:14px; } .failpanel .detail { overflow-wrap:anywhere; } .failpanel .meta { color:var(--muted); font-size:12px; }
@@ -694,6 +775,27 @@ def build_viewer_html(
       const items = turn.checks.filter(check => check.seam === seam);
       if (!items.length) return '';
       return `<div class="checks">${items.map(check => `<div class="check ${check.outcome === 'FAILED' ? 'check-fail' : 'check-na'}"><div class="check-head"><strong>${esc(check.name)}</strong>${badge(checkBadgeStatus(check.outcome), check.outcome)}<span class="tier">${esc(check.tier)} tier</span></div><div class="check-detail">${esc(check.detail)}</div></div>`).join('')}</div>`;
+    };
+    /* Persisted model-judge output is informational only: it sits beside the
+       evidence the judge read and never feeds the deterministic PASS/FAIL. */
+    const formatScore = score => typeof score === 'number' ? String(Math.round(score * 1000) / 1000) : '—';
+    const judgeScoresFor = (t, seam) => {
+      const entry = (t.judge_scores || []).find(item => item.seam === seam);
+      if (!entry || !entry.metrics.length) return '';
+      const rows = entry.metrics.map(m => {
+        const mark = m.available ? `<span class="badge b-score">${formatScore(m.score)}</span>` : '<span class="badge b-unavailable">unavailable</span>';
+        const detail = m.available ? esc(m.reason) : esc(m.error || m.reason);
+        return `<div class="check ${m.available ? '' : 'check-na'}"><div class="check-head"><strong>${esc(m.name)}</strong>${mark}</div>${detail ? `<div class="check-detail">${detail}</div>` : ''}</div>`;
+      }).join('');
+      return `<div class="field"><label>Model-judge scores</label><div class="checks">${rows}</div></div>`;
+    };
+    const semanticBlock = t => {
+      const s = t.semantic_result;
+      if (!s) return '';
+      const mark = s.available ? `<span class="badge b-score">${formatScore(s.score)}</span>` : `<span class="badge b-unavailable">${esc(s.status)}</span>`;
+      const confidence = s.confidence === null || s.confidence === undefined ? '' : `<span class="tier">confidence ${formatScore(s.confidence)}</span>`;
+      const detail = s.rationale ? `<div class="check-detail">${esc(s.rationale)}</div>` : '';
+      return `<div class="field"><label>Semantic result</label><div class="checks"><div class="check ${s.available ? '' : 'check-na'}"><div class="check-head"><strong>Semantic behavior</strong>${mark}${confidence}</div>${detail}</div></div></div>`;
     };
     const rowsBlock = rows => {
       if (rows.kind === 'text') return `<div class="rows-text">${esc(rows.text)}</div>`;
@@ -810,7 +912,7 @@ def build_viewer_html(
       ${failPanel(t)}${checksFor(t, 'run')}
       <details class="field"><summary>Evidence coverage</summary>${coverageBlock(t.coverage)}</details>
       <details class="field"><summary>Telemetry</summary>${teleBlock(t.telemetry)}</details></section>
-      <section class="grid"><article class="card"><div class="card-head"><h2 class="seam">1 · Routing</h2></div>${block('Expected tools', t.expected_tools)}${block('Captured tools', t.routing)}${longBlock('Captured tool arguments', t.tool_arguments)}${checksFor(t, 'routing')}</article><article class="card"><div class="card-head"><h2 class="seam">2 · NL → SQL</h2></div>${longBlock('Generated SQL', t.sql)} ${block('Rows returned', t.rows)}<div class="field"><label>Generated versus reference rows</label>${executionBlock(t.execution)}</div>${checksFor(t, 'sql')}</article><article class="card"><div class="card-head"><h2 class="seam">3 · Synthesis</h2></div>${longBlock('Final answer', t.answer)}${checksFor(t, 'answer')}</article></section>
+      <section class="grid"><article class="card"><div class="card-head"><h2 class="seam">1 · Routing</h2></div>${block('Expected tools', t.expected_tools)}${block('Captured tools', t.routing)}${longBlock('Captured tool arguments', t.tool_arguments)}${checksFor(t, 'routing')}${judgeScoresFor(t, 'routing')}</article><article class="card"><div class="card-head"><h2 class="seam">2 · NL → SQL</h2></div>${longBlock('Generated SQL', t.sql)} ${block('Rows returned', t.rows)}<div class="field"><label>Generated versus reference rows</label>${executionBlock(t.execution)}</div>${checksFor(t, 'sql')}${judgeScoresFor(t, 'sql')}</article><article class="card"><div class="card-head"><h2 class="seam">3 · Synthesis</h2></div>${longBlock('Final answer', t.answer)}${checksFor(t, 'answer')}${semanticBlock(t)}${judgeScoresFor(t, 'answer')}</article></section>
       <section class="notes"><h2>Operator note</h2><textarea id="note" placeholder="Record the first wrong seam and evidence. Stop after the earliest failure."></textarea><div class="saved" id="saved">Notes are stored in this browser for this run.</div></section>`;
       document.getElementById('jump').value = index;
       document.getElementById('prev').disabled = index === 0; document.getElementById('next').disabled = index === view.length - 1;

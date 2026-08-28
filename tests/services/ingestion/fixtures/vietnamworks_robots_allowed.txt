@@ -1,0 +1,3 @@
+User-agent: InternHunterAgent
+Allow: /job-search/
+Disallow: /private/

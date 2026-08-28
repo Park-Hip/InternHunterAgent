@@ -153,6 +153,22 @@ The activation gates, their evidence, order, and sign-off state are maintained i
 The workflow's `DATABASE_URL` must use Neon's direct, non-pooled host because it writes data
 and runs schema safety checks against production.
 
+### VietnamWorks robots preflight
+
+Before a VietnamWorks job API request, ingestion retrieves
+`https://ms.vietnamworks.com/robots.txt` using the configured honest user agent and evaluates
+`/job-search/v1.0/search`. A parsed policy is cached only in that source instance for five minutes.
+A timeout, non-2xx response, malformed policy, or matching disallow rule fails closed: no job API
+request or data write occurs, `ingestion.compliance_gate_blocked` logs the safe reason, and the
+normal `ingestion.aborted` path exits non-zero. The dead-man healthcheck is not pinged on this
+failed run, consistent with existing failed-ingestion behavior.
+
+The archived `www.vietnamworks.com` robots capture does not authorize the `ms.vietnamworks.com`
+API host. If the preflight reports `robots_unavailable`, `robots_malformed`, or
+`robots_disallowed`, do not retry around it. Inspect the current policy, obtain maintainer review
+for any material source-policy change, and retain the fail-closed configuration until permission is
+clear.
+
 ## Operational gotchas
 
 - Runtime settings require `DATABASE_URL` and the required provider and tracing variables before the
@@ -165,8 +181,8 @@ and runs schema safety checks against production.
   pool is incompatible with the default Proactor event loop.
 - `pages_failed` is an operator-visible ingestion summary field, but it does not yet alter exit
   status; a page exhausted after retries is retried by the next scheduled run.
-- The 2026-07-16 VietnamWorks robots and terms review is point-in-time evidence; repeat it if the
-  source behavior changes or before a material ingestion change.
+- The VietnamWorks preflight is the per-run access gate; the 2026-07-16 human review is
+  point-in-time evidence and must be repeated if source behavior or terms change materially.
 - Serving and ingestion deliberately maintain separate exact `clean_jobs` column lists to preserve
   layer isolation; update both with every migration or the startup guard will fail safely.
 - `render.yaml` is the tracked deployment record, while the existing Render service remains

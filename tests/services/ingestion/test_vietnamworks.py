@@ -10,15 +10,24 @@ from src.services.ingestion.models import RawPosting
 from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "vietnamworks_raw.json"
+ROBOTS_ALLOWED = "User-agent: *\nAllow: /job-search/\n"
 
 
 def _load_fixture() -> dict:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
+def _allow_robots(client: MagicMock) -> None:
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.text = ROBOTS_ALLOWED
+    client.get.return_value = response
+
+
 def _mock_client(fixture: dict) -> MagicMock:
     """Return a mock httpx.Client whose .post() always returns the given fixture."""
     client = MagicMock()
+    _allow_robots(client)
     resp = MagicMock()
     resp.raise_for_status.return_value = None
     resp.json.return_value = fixture
@@ -47,6 +56,7 @@ def _mock_client_sequence(side_effects: list) -> MagicMock:
     instance (raised) — see unittest.mock's side_effect-list semantics.
     """
     client = MagicMock()
+    _allow_robots(client)
     client.post.side_effect = side_effects
     return client
 
@@ -83,6 +93,7 @@ def _per_query_client(
         return _ok_response({"data": jobs_by_query.get(query, {}).get(page, [])})
 
     client = MagicMock()
+    _allow_robots(client)
     client.post.side_effect = side_effect
     return client
 
@@ -486,6 +497,7 @@ class VietnamWorksBudgetTests(unittest.TestCase):
         in full before `_post_with_retry` saw an exception at all.
         """
         client = MagicMock()
+        _allow_robots(client)
 
         def side_effect(url: str, **kwargs: object) -> MagicMock:
             self.clock.advance(30)  # timeout_seconds

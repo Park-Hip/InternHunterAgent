@@ -7,6 +7,7 @@ import httpx
 
 from src.core.config import settings
 from src.core.logger import logger
+from src.services.ingestion.compliance import RobotsPolicyGate, target_url_for_robots
 from src.services.ingestion.models import RawPosting
 from src.services.ingestion.sources.base import JobSource
 
@@ -22,8 +23,9 @@ class VietnamWorksSource(JobSource):
     Pass an httpx.Client to the constructor to inject canned responses in tests
     and avoid live network calls.
 
-    Pre-production: verify ms.vietnamworks.com/robots.txt allows the /job-search
-    API path before scheduling production runs (T0009.8 checklist item).
+    Each fetch first evaluates the current robots policy for the configured
+    honest user agent. If policy permission cannot be established, it raises a
+    safe ingestion error before making any job API request.
     """
 
     source = "vietnamworks"
@@ -39,6 +41,15 @@ class VietnamWorksSource(JobSource):
         self._retry_attempts: int = cfg["api"]["retry_attempts"]
         self._retry_backoff: float = cfg["api"]["retry_backoff_seconds"]
         self._max_elapsed: float = cfg["api"]["max_elapsed_seconds"]
+        robots_cfg = cfg["robots"]
+        self._robots_gate = RobotsPolicyGate(
+            source=self.source,
+            robots_url=robots_cfg["url"],
+            target_url=target_url_for_robots(robots_cfg["url"], robots_cfg["target_path"]),
+            user_agent=self._user_agent,
+            timeout_seconds=self._timeout,
+            cache_ttl_seconds=robots_cfg["cache_ttl_seconds"],
+        )
         self._queries: list[str] = cfg["queries"]
         self._parent_id: int = cfg["job_function"]["parent_id"]
         self._child_ids: set[int] = set(cfg["job_function"]["child_ids"])
@@ -210,7 +221,9 @@ class VietnamWorksSource(JobSource):
         self.budget_exhausted = False
         self._deadline = time.monotonic() + self._max_elapsed
         if self._client is not None:
+            self._robots_gate.assert_allowed(self._client)
             yield from self._collect(self._client)
         else:
             with httpx.Client(follow_redirects=True) as client:
+                self._robots_gate.assert_allowed(client)
                 yield from self._collect(client)

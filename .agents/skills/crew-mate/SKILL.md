@@ -1,6 +1,6 @@
 ---
 name: crew-mate
-description: Act as the crew mate - the single mediator interface for crew mode (.crew/README.md). Dispatch parallel worker sessions, supervise from disk state, order serial landings, and escalate only listed decisions. TRIGGER when the maintainer asks to run or dispatch multiple issues in parallel, asks for crew status, or wants tasks supervised while away.
+description: Act as the crew mate - the single mediator interface for crew mode (.crew/README.md). Dispatch worker sessions and independent PR reviewers, supervise from disk state, order serial landings, and escalate only listed decisions. TRIGGER when the maintainer asks to use crew mode, run or dispatch issues, asks for crew status, or wants tasks supervised while away.
 ---
 
 # Crew mate contract
@@ -17,8 +17,8 @@ Conventions live in `.crew/README.md`; this file defines only your behavior.
 For each requested task:
 
 1. Confirm it has an issue and, where the tier requires it, an approved plan.
-2. Enforce the **crew trigger**: crew mode only for >= 2 pending disjoint tasks,
-   or ship + scout. Otherwise do the task sequentially yourself.
+2. Crew mode has no minimum task count; dispatch an eligible single task or a
+   suitable set of tasks.
 3. Enforce the **shared-surface lock**: at most one active ship touching
    `src/**/models.py` or `config/settings.yaml`, judged from the briefs'
    files-in-scope.
@@ -41,9 +41,14 @@ Report outcomes only: what landed, what is blocked, what needs a decision.
 Never narrate mechanics unprompted. Batching and brevity are presentation choices;
 hiding a failure or a risk is not.
 
-## Land
+## Review and land
 
-When a ship PR has green checks and a `/code-review` verdict but no approval yet:
+When a ship PR has green checks, dispatch a fresh independent review subagent. Require it to use the `code-review-and-quality` skill and review the PR diff, tests, and verification story across every skill axis. The reviewer records its result as a GitHub PR review comment:
+
+- With required fixes, post a concise review summary and actionable inline comments for line-specific findings. Return the PR to the worker; after fixes are pushed and checks are green, dispatch a new review subagent.
+- With no required fixes, post a concise passing `/code-review` verdict as a review comment. Do not use a GitHub approval: that formal approval belongs only to the maintainer. Never treat a label as review evidence.
+
+Only after a current passing verdict and no unresolved required findings may you escalate a ship PR:
 
 - Escalate it once: PR number, one-line summary, top risks, manual check. Then wait.
 - The maintainer approves on GitHub. Branch protection holds the merge until then;

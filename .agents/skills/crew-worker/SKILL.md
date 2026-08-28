@@ -23,9 +23,12 @@ brief. Your entire world is that brief.
 - Open a PR using the repository template. Body carries Summary, Risks, Manual
   check, and `Closes #<issue>`.
 - Set auto-merge: `gh pr merge <number> --squash --auto`.
+- Address required findings posted by the mate's independent `code-review-and-quality`
+  reviewer, then push the fixes and wait for the mate to request a fresh review.
+  Do not present the PR as ready for maintainer approval yourself.
 - **Never merge manually. Never delete the branch.** Landing order belongs to the
-  mate: branch protection holds the merge until required CI, the `/code-review`
-  verdict, and the maintainer's approving review all exist.
+  mate: it requires green CI, a current passing `/code-review` review comment with
+  no unresolved required findings, and the maintainer's approving review.
 - Record one progress line in the primary checkout's `.crew/<issue>-status.md`
   whenever state materially changes: dispatched, implemented, tests green, PR open,
   checks green.

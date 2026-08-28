@@ -12,8 +12,9 @@ This document is canonical for crew conventions.
 | Role | What it does |
 |---|---|
 | Maintainer (captain) | Approves plans, approves ship merges on GitHub, answers escalations. Nothing else. |
-| Mate | One standing agent session. Validates intake, writes briefs, launches workers, supervises, orders landings, escalates exactly what is listed below. |
+| Mate | One standing agent session. Validates intake, writes briefs, launches workers and independent PR reviewers, supervises, orders landings, escalates exactly what is listed below. |
 | Workers | One session per task in its own disposable worktree. Reads only its brief. Ships open PRs; scouts write reports. Never push outside their contract, never merge. |
+| Review subagent | Independently reviews one ship PR using the `code-review-and-quality` skill. Records its verdict and actionable findings on the PR; never merges. |
 
 ## Task shapes
 
@@ -84,8 +85,7 @@ a switchable terminal tab. One-time prerequisite: allow automatic tasks when pro
 
 ## Intake rules (enforced by the mate)
 
-- **Crew trigger.** Crew mode activates only when at least two pending tasks touch disjoint areas, or one ship task is accompanied by a scout task.
-  Otherwise run the default sequential workflow.
+- **Crew eligibility.** Crew mode has no minimum task count: it may dispatch one approved ship or scout task, or a suitable set of tasks. When multiple ship tasks run concurrently, they must still have disjoint scopes except as allowed by the shared-surface lock.
 
 - **Shared-surface lock.** At most one active ship may touch `src/**/models.py` or `config/settings.yaml`.
   Check this at dispatch from the brief's files-in-scope list.
@@ -96,15 +96,19 @@ Parallelism is bounded by these rules, not by a fixed number of workers.
 
 ## Merge policy
 
-Every landed ship PR has, by construction, passed all three gates, enforced by branch protection rather than convention.
+Every landed ship PR has, by construction, passed all four gates.
 
 1. Required CI checks green.
-2. A recorded `/code-review` verdict.
-3. The maintainer's approving review.
+2. An independent review subagent has reviewed the PR with the `code-review-and-quality` skill.
+3. That review has a recorded passing `/code-review` verdict with no unresolved required findings.
+4. The maintainer's approving review.
+
+When a ship PR has green checks, the mate dispatches a fresh, independent review subagent. The reviewer examines the change and its verification story across the skill's correctness, readability, architecture, security, and performance axes. It records the result as a GitHub PR **review comment**: a concise passing verdict when no required fixes remain, or a summary of required fixes when they do. Required findings are posted as actionable inline PR comments when they apply to a specific line; otherwise they belong in the review summary. The reviewer never uses a GitHub approval as its passing verdict, leaving that formal approval exclusively to the maintainer. Labels are optional dashboard metadata and never evidence of review.
+
+A required finding sends the PR back to its worker. After the worker pushes the fixes and checks are green again, the mate dispatches a new independent review; the PR is not ready for maintainer approval until that re-review records a passing verdict. The mate then presents the PR with its number, one-line summary, top risks, and manual check.
 
 PRs open with `gh pr merge --squash --auto`.
-GitHub holds them until all three gates hold.
-The mate presents each ready PR with a captain-facing summary covering what changed, risks, and the manual check.
+GitHub holds them until the protected CI and maintainer-approval gates hold; the mate additionally enforces the delegated-review gates above.
 The mate executes the serial landing order: merge, rebase remaining worktrees onto the new tip, then continue.
 The mate never merges manually and cannot bypass protection.
 

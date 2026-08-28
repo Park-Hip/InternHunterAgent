@@ -15,7 +15,7 @@ The production image is slim, non-root, and auto-deployed to Render on every pus
 | Surface | Current operation | Configuration / check |
 |---|---|---|
 | API | Render web service, Docker runtime, Singapore, Free plan | Deploys `main`; `WEB_CONCURRENCY=1`; health: `/api/v1/health` |
-| Database | Neon PostgreSQL 17 | Alembic head `b7e2f4a91c3d`; use the direct host for migrations and cron |
+| Database | Neon PostgreSQL 17 | Alembic head `c9d3e6f7a2b1`; use the direct host for migrations and cron |
 | Tracing | Langfuse Cloud Hobby, JP | Render receives the Langfuse credentials as dashboard secrets |
 | Public URL | `https://internhunteragent.onrender.com` | `/api/v1/health` for liveness; `/api/v1/ready` for database readiness |
 
@@ -131,7 +131,8 @@ uv run alembic current
 uv run alembic upgrade head
 ```
 
-The current production head is `b7e2f4a91c3d`.
+The repository migration head is `c9d3e6f7a2b1`. Until this change is deployed, production
+remains at `b7e2f4a91c3d`.
 For Neon, set `ALEMBIC_DATABASE_URL` to the direct, non-pooled Neon connection URL before
 running Alembic.
 Do not use a `-pooler` host for migrations.
@@ -152,6 +153,22 @@ The activation gates, their evidence, order, and sign-off state are maintained i
 [T0020.4 Cron Activation Runbook](cron-activation-runbook.md).
 The workflow's `DATABASE_URL` must use Neon's direct, non-pooled host because it writes data
 and runs schema safety checks against production.
+
+### Ingestion-run summaries
+
+Every attempt appends one immutable row to `ingestion_runs`, retained indefinitely for operational
+trend analysis. It records UTC `started_at` / `finished_at`, the source, and one of three outcomes:
+`completed`, `safety_aborted`, or `failed`. Counters are stage-complete facts: `fetched`, the raw
+upsert totals, normalization `skipped`, `clean_loaded`, `expired_count`, and `pages_failed` are
+written only after the relevant stage completes. A not-yet-reached or incomplete stage is `NULL`,
+never a synthetic zero.
+
+The row contains no raw payload, posting identifier, URL, title, company, exception message, or
+traceback. Failures retain only a controlled `failure_phase` and code (`safety_check_failed` or
+`unexpected_error`). The writer is deliberately best-effort: failure to store a summary is logged
+but cannot mask or change the ingestion outcome or CLI exit code. The table is operational history,
+not raw or clean job history; it has no API endpoint, retention sweeper, or effect on raw/clean
+upsert semantics.
 
 ### VietnamWorks robots preflight
 

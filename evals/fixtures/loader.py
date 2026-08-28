@@ -126,7 +126,9 @@ def _drop_fixture_schema(dsn: str) -> None:
     try:
         with engine.begin() as conn:
             conn.execute(
-                text("DROP TABLE IF EXISTS clean_jobs, raw_jobs, alembic_version CASCADE")
+                text(
+                    "DROP TABLE IF EXISTS ingestion_runs, clean_jobs, raw_jobs, alembic_version CASCADE"
+                )
             )
     finally:
         engine.dispose()

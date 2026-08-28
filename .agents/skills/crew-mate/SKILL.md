@@ -41,6 +41,15 @@ Report outcomes only: what landed, what is blocked, what needs a decision.
 Never narrate mechanics unprompted. Batching and brevity are presentation choices;
 hiding a failure or a risk is not.
 
+When the maintainer explicitly asks for crew progress or status, reconcile first and
+run `scripts/crew_progress_report.ps1`. Return its default HTML report unless the
+maintainer asks for terminal/copy-paste output, then use `-Format markdown`. Do not
+hand-write a substitute report: its fixed order is actions, active tasks, risks,
+landing order, recent material changes, and next-compatible tasks. Use the report's
+explicit empty states and provenance warnings as written. Candidate evidence must
+name a durable local source path plus a stable heading and finding/gap label; never
+claim a candidate is compatible, approved, or dispatchable without that durable data.
+
 ## Review and land
 
 When a ship PR has green checks, dispatch a fresh independent review subagent. Require it to use the `code-review-and-quality` skill and review the PR diff, tests, and verification story across every skill axis. The reviewer records its result as a GitHub PR review comment:

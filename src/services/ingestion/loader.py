@@ -17,8 +17,8 @@ from src.services.ingestion.safety import (
 from src.services.ingestion.sources.base import JobSource
 
 # Rollback runbook: if clean_jobs needs to be rebuilt (e.g. a bad load), it can
-# always be reconstructed from raw_jobs — raw_jobs is append-only and never
-# truncated. Replay: fetch every raw_jobs row, run its raw_payload back through
+# always be reconstructed from raw_jobs - raw_jobs accumulates natural-key rows
+# and is never truncated. Replay: fetch every raw_jobs row, run its raw_payload back through
 # to_normalized_job, and re-run upsert_clean_jobs over the results. This is the
 # same recovery performed live on 2026-07-15.
 
@@ -32,7 +32,7 @@ def run_ingestion(source: JobSource | None = None) -> dict:
         source = VietnamWorksSource()
 
     postings = list(source.fetch())
-    raw_count = upsert_raw_postings(postings)
+    raw_counts = upsert_raw_postings(postings)
 
     assert_min_yield(len(postings), settings.ingestion_yaml["safety"]["min_yield"])
 
@@ -58,7 +58,10 @@ def run_ingestion(source: JobSource | None = None) -> dict:
 
     return {
         "fetched": len(postings),
-        "raw_upserted": raw_count,
+        "raw_upserted": raw_counts.total,
+        "raw_new": raw_counts.new,
+        "raw_changed": raw_counts.changed,
+        "raw_unchanged": raw_counts.unchanged,
         "clean_loaded": clean_count,
         "skipped": skipped,
         "expired_count": expired_count,

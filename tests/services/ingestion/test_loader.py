@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 from src.services.ingestion.models import NormalizedJob, RawPosting
+from src.services.ingestion.raw_store import RawUpsertCounts
 from src.services.ingestion.sources.base import JobSource
 
 
@@ -47,7 +48,7 @@ class RunIngestionTests(unittest.TestCase):
         mock_settings.ingestion_yaml = {"lifecycle": {"expire_after_days": 7}, "safety": {"min_yield": 0}}
         postings = [_make_posting(f"job-{i}") for i in range(5)]
         stub = StubSource(postings)
-        mock_upsert_raw.return_value = 5
+        mock_upsert_raw.return_value = RawUpsertCounts(new=2, changed=1, unchanged=2)
         mock_upsert_clean.return_value = 5
         mock_expire.return_value = 0
         mock_normalize.return_value = MagicMock(spec=NormalizedJob)
@@ -56,6 +57,9 @@ class RunIngestionTests(unittest.TestCase):
 
         self.assertEqual(result["fetched"], 5)
         self.assertEqual(result["raw_upserted"], 5)
+        self.assertEqual(result["raw_new"], 2)
+        self.assertEqual(result["raw_changed"], 1)
+        self.assertEqual(result["raw_unchanged"], 2)
         self.assertEqual(result["clean_loaded"], 5)
         self.assertEqual(result["expired_count"], 0)
 
@@ -78,7 +82,7 @@ class RunIngestionTests(unittest.TestCase):
 
         mock_settings.ingestion_yaml = {"lifecycle": {"expire_after_days": 7}, "safety": {"min_yield": 0}}
         call_order: list[str] = []
-        mock_upsert_raw.side_effect = lambda _: call_order.append("raw") or 1
+        mock_upsert_raw.side_effect = lambda _: call_order.append("raw") or RawUpsertCounts(1, 0, 0)
         mock_upsert_clean.side_effect = lambda _: call_order.append("clean") or 1
         mock_expire.side_effect = lambda _: call_order.append("expire") or 0
         mock_normalize.return_value = MagicMock(spec=NormalizedJob)
@@ -108,7 +112,7 @@ class RunIngestionTests(unittest.TestCase):
         payload = {"jobId": "42", "jobTitle": "Intern", "companyName": "Corp"}
         posting = _make_posting("42", payload)
         mock_normalize.return_value = MagicMock(spec=NormalizedJob)
-        mock_upsert_raw.return_value = 1
+        mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
         mock_upsert_clean.return_value = 1
         mock_expire.return_value = 0
 
@@ -134,7 +138,7 @@ class RunIngestionTests(unittest.TestCase):
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {"lifecycle": {"expire_after_days": 7}, "safety": {"min_yield": 0}}
-        mock_upsert_raw.return_value = 0
+        mock_upsert_raw.return_value = RawUpsertCounts(0, 0, 0)
         mock_upsert_clean.return_value = 0
         mock_expire.return_value = 0
 
@@ -164,7 +168,7 @@ class RunIngestionTests(unittest.TestCase):
         good_a = _make_posting("job-001")
         bad = _make_posting("job-002", payload={"jobTitle": "Missing jobId"})
         good_b = _make_posting("job-003")
-        mock_upsert_raw.return_value = 3
+        mock_upsert_raw.return_value = RawUpsertCounts(3, 0, 0)
         mock_upsert_clean.return_value = 2
         mock_expire.return_value = 0
 
@@ -197,7 +201,7 @@ class RunIngestionTests(unittest.TestCase):
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {"lifecycle": {"expire_after_days": 14}, "safety": {"min_yield": 0}}
-        mock_upsert_raw.return_value = 1
+        mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
         mock_upsert_clean.return_value = 1
         mock_expire.return_value = 3
         mock_normalize.return_value = MagicMock(spec=NormalizedJob)
@@ -223,7 +227,7 @@ class RunIngestionTests(unittest.TestCase):
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {"lifecycle": {"expire_after_days": 7}, "safety": {"min_yield": 0}}
-        mock_upsert_raw.return_value = 0
+        mock_upsert_raw.return_value = RawUpsertCounts(0, 0, 0)
         mock_upsert_clean.return_value = 0
         mock_expire.return_value = 0
 
@@ -275,7 +279,7 @@ class RunIngestionTests(unittest.TestCase):
         from src.services.ingestion.loader import IngestionSafetyError, run_ingestion
 
         mock_settings.ingestion_yaml = {"lifecycle": {"expire_after_days": 7}, "safety": {"min_yield": 20}}
-        mock_upsert_raw.return_value = 1
+        mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
 
         with self.assertRaises(IngestionSafetyError):
             run_ingestion(source=StubSource([_make_posting()]))
@@ -304,7 +308,7 @@ class RunIngestionTests(unittest.TestCase):
         mock_settings.ingestion_yaml = {"lifecycle": {"expire_after_days": 7}, "safety": {"min_yield": 1}}
         call_order: list[str] = []
         mock_schema_assert.side_effect = lambda: call_order.append("schema")
-        mock_upsert_raw.side_effect = lambda _: call_order.append("raw") or 1
+        mock_upsert_raw.side_effect = lambda _: call_order.append("raw") or RawUpsertCounts(1, 0, 0)
         mock_upsert_clean.side_effect = lambda _: call_order.append("clean") or 1
         mock_expire.side_effect = lambda _: call_order.append("expire") or 0
         mock_normalize.return_value = MagicMock(spec=NormalizedJob)
@@ -314,7 +318,17 @@ class RunIngestionTests(unittest.TestCase):
         self.assertEqual(call_order, ["schema", "raw", "clean", "expire"])
         self.assertEqual(
             set(result.keys()),
-            {"fetched", "raw_upserted", "clean_loaded", "skipped", "expired_count", "pages_failed"},
+            {
+                "fetched",
+                "raw_upserted",
+                "raw_new",
+                "raw_changed",
+                "raw_unchanged",
+                "clean_loaded",
+                "skipped",
+                "expired_count",
+                "pages_failed",
+            },
         )
 
     def test_import_has_no_side_effects(self) -> None:

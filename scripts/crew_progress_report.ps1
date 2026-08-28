@@ -4,7 +4,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('html', 'markdown', 'data')][string]$Format = 'html',
+    [ValidateSet('html', 'markdown', 'data')][string]$Format = 'markdown',
     [string]$RepoRoot,
     [string]$CandidatePath,
     [string]$OutputPath,
@@ -28,6 +28,43 @@ function Get-LastNonEmptyLine {
     return (Get-Content -LiteralPath $Path | Where-Object { $_.Trim() } | Select-Object -Last 1).Trim()
 }
 
+function Get-BriefSection {
+    param([string]$Text, [string]$Heading)
+    $pattern = '(?ms)^## ' + [regex]::Escape($Heading) + '\s*$(.*?)(?=^## |\z)'
+    $match = [regex]::Match($Text, $pattern)
+    if ($match.Success) { return $match.Groups[1].Value.Trim() }
+    return $null
+}
+
+function Test-DurableLocalSource {
+    param([string]$Source)
+    if (-not $Source) { return $false }
+    $sourcePath = if ([IO.Path]::IsPathRooted($Source)) { $Source } else { Join-Path $RepoRoot $Source }
+    return Test-Path -LiteralPath $sourcePath -PathType Leaf
+}
+
+function Get-BriefEvidence {
+    param([string]$BriefPath, [string]$BriefText, [string]$Goal)
+    $fallback = [pscustomobject]@{
+        Source = $BriefPath; Heading = '## Goal'; Label = 'Task brief'; Excerpt = $Goal
+    }
+    $section = Get-BriefSection -Text $BriefText -Heading 'Evidence'
+    if (-not $section) { return $fallback }
+    $fields = @{}
+    foreach ($line in $section -split "`r?`n") {
+        $match = [regex]::Match($line, '^\s*[-*]\s*\*\*(Source|Heading|Label|Finding):\*\*\s*`?(.+?)`?\s*$')
+        if ($match.Success) { $fields[$match.Groups[1].Value] = $match.Groups[2].Value.Trim() }
+    }
+    if ($fields.Source -and $fields.Heading -and $fields.Label -and $fields.Finding) {
+        if (Test-DurableLocalSource -Source $fields.Source) {
+            return [pscustomobject]@{
+                Source = $fields.Source; Heading = $fields.Heading; Label = $fields.Label; Excerpt = $fields.Finding
+            }
+        }
+    }
+    return $fallback
+}
+
 function Get-TaskPrState {
     param($Task)
     $unknown = [pscustomobject]@{
@@ -38,7 +75,7 @@ function Get-TaskPrState {
 
     $oldPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { $raw = & $GitHubCommand pr view $Task.Branch --json number,state,url,statusCheckRollup,reviewDecision 2>$null }
+    try { $raw = & $GitHubCommand pr view $Task.Branch --json number,state,url,statusCheckRollup,reviewDecision,reviews,comments 2>$null }
     finally { $ErrorActionPreference = $oldPreference }
     if ($LASTEXITCODE -ne 0 -or -not $raw) { return $unknown }
 
@@ -57,10 +94,17 @@ function Get-TaskPrState {
         default { [string]$pr.reviewDecision }
     }
     $summary = "#$($pr.number) [$($pr.state)]; $checkText; review: $reviewText"
+    $reviews = @($pr.reviews)
+    $comments = @($pr.comments)
+    $maintainerApproved = @($reviews | Where-Object { $_.state -eq 'APPROVED' -and $_.authorAssociation -in @('OWNER', 'MEMBER') }).Count -gt 0
+    $skillPassingVerdict = @($comments + $reviews | Where-Object {
+        $_.body -match '(?i)/code-review' -and $_.body -match '(?i)\bpass(ing|ed)?\b'
+    }).Count -gt 0
     return [pscustomobject]@{
         Number = $pr.number; Url = $pr.url; State = $pr.state; Checks = $checkText; Review = $reviewText; Summary = $summary
         Failure = ($failed -gt 0); AwaitingReview = ($failed -eq 0 -and $pending -eq 0 -and $pr.reviewDecision -eq 'REVIEW_REQUIRED')
         Landable = ($failed -eq 0 -and $pending -eq 0 -and $pr.reviewDecision -eq 'APPROVED')
+        FullyMerged = ($pr.state -eq 'MERGED' -and $maintainerApproved -and $skillPassingVerdict)
     }
 }
 
@@ -73,7 +117,8 @@ function Test-SharedSurface {
 function Get-ActiveTasks {
     $warnings = [System.Collections.Generic.List[string]]::new()
     $tasks = [System.Collections.Generic.List[object]]::new()
-    if (-not (Test-Path -LiteralPath $crewRoot)) { return [pscustomobject]@{ Tasks = $tasks; Warnings = $warnings } }
+    $fullyMergedPrs = [System.Collections.Generic.List[object]]::new()
+    if (-not (Test-Path -LiteralPath $crewRoot)) { return [pscustomobject]@{ Tasks = $tasks; FullyMergedPrs = $fullyMergedPrs; Warnings = $warnings } }
 
     foreach ($file in @(Get-ChildItem -LiteralPath $crewRoot -Filter '*-task.json' -File -ErrorAction SilentlyContinue | Sort-Object Name)) {
         try { $manifest = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json }
@@ -90,17 +135,25 @@ function Get-ActiveTasks {
             Branch = [string]$manifest.Branch; DispatchedAtUtc = [string]$manifest.DispatchedAtUtc
             WorktreePath = [string]$manifest.WorktreePath; WorktreeExists = $worktreeExists
             Status = Get-LastNonEmptyLine -Path $statusPath; ScoutReportPath = [string]$manifest.ScoutReportPath
-            FilesInScope = @(); Pr = $null
+            Goal = ''; Evidence = $null; FilesInScope = @(); Pr = $null
         }
         if ($manifest.PrimaryBriefPath -and (Test-Path -LiteralPath $manifest.PrimaryBriefPath)) {
             $briefText = Get-Content -LiteralPath $manifest.PrimaryBriefPath -Raw
+            $task.Goal = Get-BriefSection -Text $briefText -Heading 'Goal'
+            $task.Evidence = Get-BriefEvidence -BriefPath ([string]$manifest.PrimaryBriefPath) -BriefText $briefText -Goal $task.Goal
             $scopeMatch = [regex]::Match($briefText, '(?ms)^## Files in scope\s*$(.*?)(?=^## |\z)')
             if ($scopeMatch.Success) { $task.FilesInScope = @($scopeMatch.Groups[1].Value -split "`r?`n" | ForEach-Object { $_.Trim() -replace '^[-*]\s+', '' } | Where-Object { $_ }) }
         }
+        if (-not $task.Evidence) {
+            $task.Evidence = [pscustomobject]@{ Source = 'No durable brief'; Heading = ''; Label = 'Evidence missing'; Excerpt = 'Add an Evidence section to the task brief.' }
+        }
         $task.Pr = Get-TaskPrState -Task $task
-        $tasks.Add($task)
+        if ($task.Pr.State -eq 'MERGED') {
+            if ($task.Pr.FullyMerged) { $fullyMergedPrs.Add($task) }
+            else { $warnings.Add("#$($task.Issue): PR #$($task.Pr.Number) is merged but lacks durable maintainer-approval or passing /code-review evidence.") }
+        } else { $tasks.Add($task) }
     }
-    return [pscustomobject]@{ Tasks = $tasks; Warnings = $warnings }
+    return [pscustomobject]@{ Tasks = $tasks; FullyMergedPrs = $fullyMergedPrs; Warnings = $warnings }
 }
 
 function Get-CandidateRecords {
@@ -121,6 +174,9 @@ function Get-CandidateRecords {
         $valid = $null -ne $item.issue -and $item.type -in @('ship', 'scout') -and $item.goal -and $null -ne $item.filesInScope -and
                  $item.planStatus -and $item.compatibility -and $null -ne $evidence -and $evidence.source -and $evidence.heading -and $evidence.label -and $evidence.excerpt
         if (-not $valid) { $warnings.Add('Ignored candidate with a missing required field.'); continue }
+        if (-not (Test-DurableLocalSource -Source ([string]$evidence.source))) {
+            $warnings.Add("Ignored candidate with a missing durable evidence source: $($evidence.source)"); continue
+        }
         $files = @($item.filesInScope | ForEach-Object { [string]$_ })
         $compatibility = ''
         $reason = ''
@@ -164,6 +220,7 @@ function Get-RecentEvents {
 
 $activeResult = Get-ActiveTasks
 $tasks = @($activeResult.Tasks | Sort-Object Issue)
+$fullyMergedPrs = @($activeResult.FullyMergedPrs | Sort-Object Issue)
 $candidateResult = Get-CandidateRecords -ActiveTasks $tasks
 $actions = [System.Collections.Generic.List[string]]::new()
 $risks = [System.Collections.Generic.List[string]]::new()
@@ -174,23 +231,21 @@ foreach ($task in $tasks) {
     if ($task.Autonomy -eq 'scout' -and $task.ScoutReportPath -and (Test-Path -LiteralPath $task.ScoutReportPath)) { $actions.Add("#$($task.Issue): read the durable scout report before deciding follow-up.") }
     if ($task.Status -and $task.Status -match '^(blocked|risk)\b') { $risks.Add("#$($task.Issue): worker status: $($task.Status)") }
 }
-$landingOrder = @($tasks | Where-Object { $_.Autonomy -eq 'ship' } | Sort-Object @{ Expression = { if ($_.DispatchedAtUtc) { $_.DispatchedAtUtc } else { '9999' } } }, Issue | ForEach-Object {
-    [pscustomobject]@{ Issue = $_.Issue; Title = $_.Title; Pr = $_.Pr.Summary; Basis = 'Oldest dispatched active ship first.' }
-})
 $report = [pscustomobject]@{
-    SchemaVersion = 1
+    SchemaVersion = 2
     GeneratedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
     Repository = $RepoRoot
     MaintainerActions = @($actions)
     ActiveTasks = $tasks
     Risks = @($risks)
-    LandingOrder = $landingOrder
+    FullyMergedPrs = $fullyMergedPrs
     RecentMaterialChanges = @(Get-RecentEvents)
     NextCompatibleTasks = @($candidateResult.Candidates | Sort-Object Issue)
     EmptyStates = [pscustomobject]@{
         ActiveTasks = if ($tasks.Count) { $null } else { 'No active crew tasks.' }
         Actions = if ($actions.Count) { $null } else { 'No maintainer action is currently indicated by durable state.' }
         Risks = if ($risks.Count) { $null } else { 'No risks are currently indicated by durable state.' }
+        FullyMergedPrs = if ($fullyMergedPrs.Count) { $null } else { 'No fully merged PRs have all required review evidence.' }
         Candidates = if ($candidateResult.Candidates.Count) { $null } else { $candidateResult.SourceState }
     }
     DataWarnings = @($activeResult.Warnings) + @($candidateResult.Warnings)
@@ -202,16 +257,24 @@ function Html-List { param([object[]]$Values, [string]$Empty)
     return '<ul>' + (($Values | ForEach-Object { '<li>' + (Encode-Html $_) + '</li>' }) -join '') + '</ul>'
 }
 function Html-Section { param([string]$Title, [string]$Content, [string]$Class = '') return "<section class=`"$Class`"><h2>$(Encode-Html $Title)</h2>$Content</section>" }
+function Escape-MarkdownTable { param([object]$Value) return (([string]$Value -replace '\|', '\\|' -replace "`r?`n", '<br>')).Trim() }
+function Format-Evidence { param($Evidence) return "$($Evidence.Label): $($Evidence.Source) - $($Evidence.Heading); $($Evidence.Excerpt)" }
 function To-Markdown {
     param($Data)
     $lines = @("# Crew progress report", "Generated: $($Data.GeneratedAtUtc)", '', '## Maintainer actions')
     $lines += if ($Data.MaintainerActions.Count) { $Data.MaintainerActions | ForEach-Object { "- $_" } } else { "_($($Data.EmptyStates.Actions))_" }
     $lines += @('', '## Active tasks')
-    $lines += if ($Data.ActiveTasks.Count) { $Data.ActiveTasks | ForEach-Object { "- **#$($_.Issue)** $($_.Title) ($($_.Autonomy)): $($_.Pr.Summary); status: $([string]$_.Status)" } } else { "_($($Data.EmptyStates.ActiveTasks))_" }
+    if ($Data.ActiveTasks.Count) {
+        $lines += '| Issue | Task | Goal | PR state | Evidence / source |'
+        $lines += '| --- | --- | --- | --- | --- |'
+        $lines += $Data.ActiveTasks | ForEach-Object {
+            "| #$($_.Issue) | $(Escape-MarkdownTable $_.Title) | $(Escape-MarkdownTable $_.Goal) | $(Escape-MarkdownTable $_.Pr.Summary) | $(Escape-MarkdownTable (Format-Evidence $_.Evidence)) |"
+        }
+    } else { $lines += "_($($Data.EmptyStates.ActiveTasks))_" }
     $lines += @('', '## Risks')
     $lines += if ($Data.Risks.Count) { $Data.Risks | ForEach-Object { "- $_" } } else { "_($($Data.EmptyStates.Risks))_" }
-    $lines += @('', '## Landing order')
-    $lines += if ($Data.LandingOrder.Count) { $Data.LandingOrder | ForEach-Object { "1. #$($_.Issue) - $($_.Pr)" } } else { '_No active ship tasks._' }
+    $lines += @('', '## Fully merged PRs')
+    $lines += if ($Data.FullyMergedPrs.Count) { $Data.FullyMergedPrs | ForEach-Object { "- #$($_.Pr.Number): $(Format-Evidence $_.Evidence)" } } else { "_($($Data.EmptyStates.FullyMergedPrs))_" }
     $lines += @('', '## Recent material changes')
     $lines += if ($Data.RecentMaterialChanges.Count) { $Data.RecentMaterialChanges | ForEach-Object { "- $($_.Raw)" } } else { '_No crew events recorded._' }
     $lines += @('', '## Next-compatible tasks')
@@ -224,12 +287,12 @@ function To-Html {
     $body = "<header><h1>Crew progress report</h1><p>Generated $(Encode-Html $Data.GeneratedAtUtc). Durable crew state reconciled at render time.</p></header>"
     $body += Html-Section 'Maintainer actions' (Html-List $Data.MaintainerActions $Data.EmptyStates.Actions)
     if ($Data.ActiveTasks.Count) {
-        $rows = $Data.ActiveTasks | ForEach-Object { "<tr><td>#$($_.Issue)</td><td>$(Encode-Html $_.Title)</td><td>$(Encode-Html $_.Autonomy)</td><td>$(Encode-Html $_.Status)</td><td>$(Encode-Html $_.Pr.Summary)</td></tr>" }
-        $taskBody = '<table><thead><tr><th>Issue</th><th>Task</th><th>Type</th><th>Worker status</th><th>PR state</th></tr></thead><tbody>' + ($rows -join '') + '</tbody></table>'
+        $rows = $Data.ActiveTasks | ForEach-Object { "<tr><td>#$($_.Issue)</td><td>$(Encode-Html $_.Title)</td><td>$(Encode-Html $_.Goal)</td><td>$(Encode-Html $_.Pr.Summary)</td><td>$(Encode-Html (Format-Evidence $_.Evidence))</td></tr>" }
+        $taskBody = '<table><thead><tr><th>Issue</th><th>Task</th><th>Goal</th><th>PR state</th><th>Evidence / source</th></tr></thead><tbody>' + ($rows -join '') + '</tbody></table>'
     } else { $taskBody = "<p class=`"empty`">$(Encode-Html $Data.EmptyStates.ActiveTasks)</p>" }
     $body += Html-Section 'Active tasks' $taskBody
     $body += Html-Section 'Risks' (Html-List $Data.Risks $Data.EmptyStates.Risks)
-    $body += Html-Section 'Landing order' (Html-List @($Data.LandingOrder | ForEach-Object { "#$($_.Issue): $($_.Pr) ($($_.Basis))" }) 'No active ship tasks.')
+    $body += Html-Section 'Fully merged PRs' (Html-List @($Data.FullyMergedPrs | ForEach-Object { "#$($_.Pr.Number): $(Format-Evidence $_.Evidence)" }) $Data.EmptyStates.FullyMergedPrs)
     $body += Html-Section 'Recent material changes' (Html-List @($Data.RecentMaterialChanges | ForEach-Object { $_.Raw }) 'No crew events recorded.')
     if ($Data.NextCompatibleTasks.Count) {
         $rows = $Data.NextCompatibleTasks | ForEach-Object { "<tr><td>#$($_.Issue)</td><td>$(Encode-Html $_.Type)</td><td>$(Encode-Html $_.Goal)</td><td><span class=`"badge $($_.Compatibility)`">$(Encode-Html $_.Compatibility)</span><br>$(Encode-Html $_.CompatibilityReason)</td><td><code>$(Encode-Html $_.Evidence.Source)</code><br>$(Encode-Html $_.Evidence.Heading) - $(Encode-Html $_.Evidence.Label)<br>$(Encode-Html $_.Evidence.Excerpt)</td></tr>" }

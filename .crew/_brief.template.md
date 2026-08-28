@@ -13,6 +13,18 @@
 
 {GOAL - one paragraph, observable end state}
 
+## Evidence
+
+- **Source:** `{DURABLE_RESEARCH_OR_APPROVED_PLAN_PATH}`
+- **Heading:** `{STABLE_HEADING}`
+- **Label:** `{GAP_OR_FINDING_ID}`
+- **Finding:** {CONCISE_EVIDENCE_BACKED_REASON_FOR_THIS_TASK}
+
+Cite the existing research or approved plan when one exists; for example, use the
+Part 3 ingestion research's `G1` rather than restating it. All four fields are
+required for a research/plan citation. The progress report falls back to this brief's
+Goal only when a durable citation is unavailable.
+
 ## Files in scope
 
 {PATHS - used by the mate for shared-surface lock checks}

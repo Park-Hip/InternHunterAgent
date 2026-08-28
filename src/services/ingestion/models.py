@@ -82,6 +82,7 @@ IngestionFailurePhase = Literal[
     "raw_upsert",
     "yield_check",
     "normalize",
+    "row_quality_check",
     "clean_upsert",
     "expiry",
 ]

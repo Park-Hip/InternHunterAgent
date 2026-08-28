@@ -42,13 +42,18 @@ Never narrate mechanics unprompted. Batching and brevity are presentation choice
 hiding a failure or a risk is not.
 
 When the maintainer explicitly asks for crew progress or status, reconcile first and
-run `scripts/crew_progress_report.ps1`. Return its default HTML report unless the
-maintainer asks for terminal/copy-paste output, then use `-Format markdown`. Do not
-hand-write a substitute report: its fixed order is actions, active tasks, risks,
-landing order, recent material changes, and next-compatible tasks. Use the report's
-explicit empty states and provenance warnings as written. Candidate evidence must
-name a durable local source path plus a stable heading and finding/gap label; never
-claim a candidate is compatible, approved, or dispatchable without that durable data.
+run `scripts/crew_progress_report.ps1 -Format markdown`. Return Markdown only; do
+not hand-write a substitute report. Its fixed order is actions, active tasks, risks,
+fully merged PRs, recent material changes, and next-compatible tasks. Active tasks
+are a table that cites each task's durable research or approved-plan evidence; use the
+task brief's Goal only when that citation is unavailable. Do not list a merged PR as
+active. List a PR as fully merged only after its independent skill review has a
+current passing verdict, the maintainer has approved it on GitHub, and GitHub shows it
+as merged. The HTML report remains available only when the maintainer explicitly asks
+for it: use `-Format html`. Use the report's explicit empty states and provenance
+warnings as written. Candidate evidence must name a durable local source path plus a
+stable heading and finding/gap label; never claim a candidate is compatible,
+approved, or dispatchable without that durable data.
 
 ## Review and land
 

@@ -155,7 +155,11 @@ $pairs = [ordered]@{
     '{SCOUT_REPORT}'  = if ($Autonomy -eq 'scout') { $paths.ScoutReportPath } else { 'Not applicable for ship tasks.' }
 }
 foreach ($key in $pairs.Keys) { $template = $template.Replace($key, [string]$pairs[$key]) }
-foreach ($token in @('{GOAL', '{FILES IN SCOPE', '{EXCLUSIONS', '{VERIFICATION')) {
+foreach ($token in @(
+    '{GOAL', '{DURABLE_RESEARCH_OR_APPROVED_PLAN_PATH', '{STABLE_HEADING',
+    '{GAP_OR_FINDING_ID', '{CONCISE_EVIDENCE_BACKED_REASON_FOR_THIS_TASK}',
+    '{FILES IN SCOPE', '{EXCLUSIONS', '{VERIFICATION'
+)) {
     $start = $template.IndexOf($token)
     if ($start -ge 0) {
         $end = $template.IndexOf('}', $start)

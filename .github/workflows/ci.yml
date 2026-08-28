@@ -13,6 +13,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  crew-progress-report:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - shell: powershell
+        run: .\scripts\test_crew_progress_report.ps1
+
   docs:
     runs-on: ubuntu-latest
     continue-on-error: false

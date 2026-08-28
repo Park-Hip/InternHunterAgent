@@ -141,18 +141,18 @@ The watcher raises a Windows toast for escalation-grade events (`CHECKS_FAILED`,
 
 ## Progress reports
 
-When the maintainer asks for crew progress, the mate first reconciles durable state and then uses `scripts/crew_progress_report.ps1`. The default `html` format is a captain-facing report rendered from the static checked-in `scripts/crew_progress_report.template.html`; no facts live in the template. Use `-Format markdown` for terminal or copy/paste use, and `-Format data` when the structured payload itself is needed. All three formats are derived from the same payload.
+When the maintainer asks for crew progress, the mate first reconciles durable state and then uses `scripts/crew_progress_report.ps1 -Format markdown`. Markdown is the captain-facing default; use `-Format html` only when the maintainer explicitly asks for HTML, and `-Format data` when the structured payload itself is needed. All three formats are derived from the same payload.
 
-The report has a fixed order: maintainer actions, active tasks, risks, landing order, recent material changes, and next-compatible tasks. Empty sections are explicit. It does not infer worker progress, ETA, evidence, approval, or dispatch decisions beyond the state it reads.
+The report has a fixed order: maintainer actions, active tasks, risks, fully merged PRs, recent material changes, and next-compatible tasks. Active tasks render as a table with the task goal, PR state, and evidence/source. A task brief should cite its durable research or approved plan in an `## Evidence` section with Source, Heading, Label, and Finding fields; the report falls back to that brief's Goal when no complete citation exists. Merged PRs are excluded from active tasks. A fully merged PR requires GitHub's merged state, a maintainer approval, and a passing `/code-review` verdict. Empty sections are explicit. It does not infer worker progress, ETA, evidence, approval, or dispatch decisions beyond the state it reads.
 
 `.crew/candidates.json` is an ignored local runtime record for **undispatched** candidates. The mate creates or updates a candidate after durable local evidence is available, and removes it after dispatch or abandonment. Its top-level shape is `{ "schemaVersion": 1, "candidates": [] }`. Every candidate requires `issue`, `type` (`ship` or `scout`), `goal`, `filesInScope`, `planStatus`, `compatibility`, and an `evidence` object with `source`, `heading`, `label`, and `excerpt`. `source` is a local durable path; `heading` and `label` are stable finding/gap identifiers. The reporter ignores incomplete records and exposes a data warning instead of inventing provenance. It rechecks plan approval and the active `src/**/models.py` / `config/settings.yaml` shared-surface lock before marking a record dispatchable; it never dispatches automatically.
 
 ```powershell
-# Default captain-facing HTML
+# Default captain-facing Markdown
 .\scripts\crew_progress_report.ps1
 
-# Same facts in a terminal-friendly form
-.\scripts\crew_progress_report.ps1 -Format markdown
+# HTML only when explicitly requested
+.\scripts\crew_progress_report.ps1 -Format html
 ```
 
 ## Escalation surface

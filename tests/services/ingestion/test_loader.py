@@ -20,6 +20,22 @@ def _make_posting(
     )
 
 
+def _make_normalized_job(external_id: str = "job-001") -> NormalizedJob:
+    return NormalizedJob(
+        source="vietnamworks",
+        external_id=external_id,
+        source_url=f"https://example.com/job/{external_id}",
+        title="Data Intern",
+        company="Acme Corp",
+        role="Data Science",
+        is_internship=True,
+        salary_min=2000.0,
+        salary_max=3000.0,
+        salary_currency="USD",
+        is_salary_negotiable=False,
+    )
+
+
 class StubSource(JobSource):
     source = "vietnamworks"
 
@@ -63,7 +79,7 @@ class RunIngestionTests(unittest.TestCase):
         mock_upsert_raw.return_value = RawUpsertCounts(new=2, changed=1, unchanged=2)
         mock_upsert_clean.return_value = 5
         mock_expire.return_value = 0
-        mock_normalize.return_value = MagicMock(spec=NormalizedJob)
+        mock_normalize.return_value = _make_normalized_job()
 
         result = run_ingestion(source=stub)
 
@@ -102,7 +118,7 @@ class RunIngestionTests(unittest.TestCase):
         )
         mock_upsert_clean.side_effect = lambda _: call_order.append("clean") or 1
         mock_expire.side_effect = lambda _: call_order.append("expire") or 0
-        mock_normalize.return_value = MagicMock(spec=NormalizedJob)
+        mock_normalize.return_value = _make_normalized_job()
 
         run_ingestion(source=StubSource([_make_posting()]))
 
@@ -131,7 +147,7 @@ class RunIngestionTests(unittest.TestCase):
         }
         payload = {"jobId": "42", "jobTitle": "Intern", "companyName": "Corp"}
         posting = _make_posting("42", payload)
-        mock_normalize.return_value = MagicMock(spec=NormalizedJob)
+        mock_normalize.return_value = _make_normalized_job()
         mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
         mock_upsert_clean.return_value = 1
         mock_expire.return_value = 0
@@ -233,7 +249,7 @@ class RunIngestionTests(unittest.TestCase):
         mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
         mock_upsert_clean.return_value = 1
         mock_expire.return_value = 3
-        mock_normalize.return_value = MagicMock(spec=NormalizedJob)
+        mock_normalize.return_value = _make_normalized_job()
 
         result = run_ingestion(source=StubSource([_make_posting()]))
 
@@ -363,7 +379,7 @@ class RunIngestionTests(unittest.TestCase):
         )
         mock_upsert_clean.side_effect = lambda _: call_order.append("clean") or 1
         mock_expire.side_effect = lambda _: call_order.append("expire") or 0
-        mock_normalize.return_value = MagicMock(spec=NormalizedJob)
+        mock_normalize.return_value = _make_normalized_job()
 
         result = run_ingestion(source=StubSource([_make_posting()]))
 
@@ -387,6 +403,106 @@ class RunIngestionTests(unittest.TestCase):
         self.assertIsNone(persisted.failure_phase)
         self.assertEqual(persisted.fetched, 1)
         self.assertEqual(persisted.clean_loaded, 1)
+
+    @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
+    @patch("src.services.ingestion.loader.settings")
+    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
+    @patch("src.services.ingestion.loader.upsert_clean_jobs")
+    @patch("src.services.ingestion.loader.upsert_raw_postings")
+    @patch("src.services.ingestion.loader.to_normalized_job")
+    def test_row_quality_violation_aborts_before_clean_write_and_expiry(
+        self,
+        mock_normalize: MagicMock,
+        mock_upsert_raw: MagicMock,
+        mock_upsert_clean: MagicMock,
+        mock_expire: MagicMock,
+        mock_settings: MagicMock,
+        mock_schema_assert: MagicMock,
+    ) -> None:
+        from src.services.ingestion.loader import IngestionSafetyError, run_ingestion
+
+        mock_settings.ingestion_yaml = {
+            "lifecycle": {"expire_after_days": 7},
+            "safety": {"min_yield": 0},
+        }
+        mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
+        mock_upsert_clean.return_value = 1
+        mock_expire.return_value = 0
+        # A real violating row exercises the real gate, not a mocked one: the
+        # salary bounds are inverted, so the run must stop before clean_upsert.
+        mock_normalize.return_value = NormalizedJob(
+            source="vietnamworks",
+            external_id="job-001",
+            source_url="https://example.com/job/1",
+            title="Data Intern",
+            company="Acme Corp",
+            role="Data Science",
+            is_internship=True,
+            salary_min=3000.0,
+            salary_max=2000.0,
+            salary_currency="USD",
+            is_salary_negotiable=False,
+        )
+
+        with self.assertRaises(IngestionSafetyError):
+            run_ingestion(source=StubSource([_make_posting()]))
+
+        mock_upsert_raw.assert_called_once()
+        mock_upsert_clean.assert_not_called()
+        mock_expire.assert_not_called()
+        persisted = self.mock_persist.call_args.args[0]
+        self.assertEqual(persisted.outcome, "safety_aborted")
+        self.assertEqual(persisted.failure_phase, "row_quality_check")
+        self.assertEqual(persisted.failure_code, "safety_check_failed")
+        self.assertEqual(persisted.fetched, 1)
+        self.assertEqual(persisted.raw_upserted, 1)
+        self.assertIsNone(persisted.clean_loaded)
+        self.assertIsNone(persisted.expired_count)
+
+    @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
+    @patch("src.services.ingestion.loader.settings")
+    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
+    @patch("src.services.ingestion.loader.upsert_clean_jobs")
+    @patch("src.services.ingestion.loader.upsert_raw_postings")
+    @patch("src.services.ingestion.loader.to_normalized_job")
+    def test_row_quality_passes_through_to_clean_upsert(
+        self,
+        mock_normalize: MagicMock,
+        mock_upsert_raw: MagicMock,
+        mock_upsert_clean: MagicMock,
+        mock_expire: MagicMock,
+        mock_settings: MagicMock,
+        mock_schema_assert: MagicMock,
+    ) -> None:
+        from src.services.ingestion.loader import run_ingestion
+
+        mock_settings.ingestion_yaml = {
+            "lifecycle": {"expire_after_days": 7},
+            "safety": {"min_yield": 0},
+        }
+        mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
+        mock_upsert_clean.return_value = 1
+        mock_expire.return_value = 0
+        mock_normalize.return_value = NormalizedJob(
+            source="vietnamworks",
+            external_id="job-001",
+            source_url="https://example.com/job/1",
+            title="Data Intern",
+            company="Acme Corp",
+            role="Data Science",
+            is_internship=True,
+            salary_min=2000.0,
+            salary_max=3000.0,
+            salary_currency="USD",
+            is_salary_negotiable=False,
+        )
+
+        result = run_ingestion(source=StubSource([_make_posting()]))
+
+        self.assertEqual(result["clean_loaded"], 1)
+        persisted = self.mock_persist.call_args.args[0]
+        self.assertEqual(persisted.outcome, "completed")
+        self.assertIsNone(persisted.failure_phase)
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     def test_runtime_failure_persists_known_partial_metrics(

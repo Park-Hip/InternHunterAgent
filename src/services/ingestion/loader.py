@@ -22,6 +22,7 @@ from src.services.ingestion.safety import (
     IngestionSafetyError,
     assert_clean_jobs_schema,
     assert_min_yield,
+    assert_normalized_row_quality,
     send_dead_man_ping,
 )
 from src.services.ingestion.sources.base import JobSource
@@ -88,6 +89,9 @@ def run_ingestion(source: JobSource | None = None) -> dict:
                     external_id=p.external_id,
                 )
         summary = replace(summary, skipped=skipped)
+
+        phase = "row_quality_check"
+        assert_normalized_row_quality(normalized)
 
         phase = "clean_upsert"
         clean_count = upsert_clean_jobs(normalized)

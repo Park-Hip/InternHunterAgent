@@ -945,7 +945,7 @@ vocabulary builder.
 
 Once the CLI runs unattended on a schedule against the live database, "it failed and someone
 noticed" stops being a reliable control.
-`src/services/ingestion/safety.py` supplies three checks, and `src/services/ingestion/loader.py`
+`src/services/ingestion/safety.py` supplies four checks, and `src/services/ingestion/loader.py`
 orders them so that **every abort happens before the write it protects**.
 
 - **Schema assertion, pre-flight, before anything is fetched.** It queries the live information
@@ -963,6 +963,15 @@ orders them so that **every abort happens before the write it protects**.
   the expiry pass, which matters because expiry ages rows on their last-seen timestamp: aborting
   after a skipped clean write but before expiry would let a single bad fetch mark the entire healthy
   corpus inactive.
+- **Normalized row-quality gate, after normalization and before the clean upsert.** It fails the
+  whole run the moment any normalized row violates one of three invariants: a required non-blank
+  `title` and `company`, salary bounds that never invert (`salary_min > salary_max` when both are
+  present), and a `listing_expires_on` that never precedes `posted_date` when both are present. The
+  raw table is written *before* this gate, so a violating run still preserves its evidence, and the
+  abort lands *before* the clean upsert **and** the expiry pass, exactly like the yield floor. The
+  failure reports one aggregate count per violated invariant and never a posting identifier, so the
+  log and persisted summary name the invariant without leaking job data. It does not repair or skip
+  a bad row: the run fails closed for operator attention.
 - **Dead-man-switch ping, last, and only on a fully green run.** It posts to an optional monitor URL
   and never raises: an unset URL logs a skip and returns false, the normal local path rather than an
   error, and any HTTP failure logs a failure and returns false. **The signal is the withheld ping,

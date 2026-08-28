@@ -1,3 +1,4 @@
+import math
 from collections.abc import Iterable
 
 import httpx
@@ -71,6 +72,8 @@ def assert_normalized_row_quality(jobs: Iterable[NormalizedJob]) -> None:
 
     - title/company required: neither may be empty or whitespace-only.
     - salary bounds: when both bounds are present, min must not exceed max.
+    - finite salary: present bounds must be finite - reject NaN and ±infinity,
+      which otherwise slip past the ordering comparison.
     - coherent dates: when both are present, expiry must not precede posted.
 
     A violation fails the whole run before any clean upsert or expiry pass.
@@ -79,6 +82,7 @@ def assert_normalized_row_quality(jobs: Iterable[NormalizedJob]) -> None:
     title_missing = 0
     company_missing = 0
     salary_inverted = 0
+    salary_non_finite = 0
     expiry_before_posted = 0
 
     for job in jobs:
@@ -86,6 +90,9 @@ def assert_normalized_row_quality(jobs: Iterable[NormalizedJob]) -> None:
             title_missing += 1
         if not job.company or not job.company.strip():
             company_missing += 1
+        for bound in (job.salary_min, job.salary_max):
+            if bound is not None and not math.isfinite(bound):
+                salary_non_finite += 1
         if (
             job.salary_min is not None
             and job.salary_max is not None
@@ -102,6 +109,7 @@ def assert_normalized_row_quality(jobs: Iterable[NormalizedJob]) -> None:
     violations = {
         "title_required": title_missing,
         "company_required": company_missing,
+        "salary_finite": salary_non_finite,
         "salary_bounds": salary_inverted,
         "expiry_after_posted": expiry_before_posted,
     }

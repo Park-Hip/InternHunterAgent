@@ -964,9 +964,10 @@ orders them so that **every abort happens before the write it protects**.
   after a skipped clean write but before expiry would let a single bad fetch mark the entire healthy
   corpus inactive.
 - **Normalized row-quality gate, after normalization and before the clean upsert.** It fails the
-  whole run the moment any normalized row violates one of three invariants: a required non-blank
-  `title` and `company`, salary bounds that never invert (`salary_min > salary_max` when both are
-  present), and a `listing_expires_on` that never precedes `posted_date` when both are present. The
+  whole run the moment any normalized row violates one of four invariants: a required non-blank
+  `title` and `company`, finite salary bounds that never invert (`salary_min > salary_max` when
+  both are present) and never contain `NaN` or infinity, and a `listing_expires_on` that never
+  precedes `posted_date` when both are present. The
   raw table is written *before* this gate, so a violating run still preserves its evidence, and the
   abort lands *before* the clean upsert **and** the expiry pass, exactly like the yield floor. The
   failure reports one aggregate count per violated invariant and never a posting identifier, so the

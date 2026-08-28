@@ -505,6 +505,64 @@ class RunIngestionTests(unittest.TestCase):
         self.assertIsNone(persisted.failure_phase)
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
+    @patch("src.services.ingestion.loader.settings")
+    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
+    @patch("src.services.ingestion.loader.upsert_clean_jobs")
+    @patch("src.services.ingestion.loader.upsert_raw_postings")
+    @patch("src.services.ingestion.loader.to_normalized_job")
+    def test_row_quality_non_finite_salary_aborts_before_clean_write_and_expiry(
+        self,
+        mock_normalize: MagicMock,
+        mock_upsert_raw: MagicMock,
+        mock_upsert_clean: MagicMock,
+        mock_expire: MagicMock,
+        mock_settings: MagicMock,
+        mock_schema_assert: MagicMock,
+    ) -> None:
+        from src.services.ingestion.loader import IngestionSafetyError, run_ingestion
+
+        mock_settings.ingestion_yaml = {
+            "lifecycle": {"expire_after_days": 7},
+            "safety": {"min_yield": 0},
+        }
+        for salary_min, salary_max in (
+            (float("nan"), 3000.0),
+            (float("inf"), 3000.0),
+            (2000.0, float("-inf")),
+        ):
+            with self.subTest(salary_min=salary_min, salary_max=salary_max):
+                mock_upsert_raw.reset_mock()
+                mock_upsert_clean.reset_mock()
+                mock_expire.reset_mock()
+                mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
+                mock_upsert_clean.return_value = 1
+                mock_expire.return_value = 0
+                mock_normalize.return_value = NormalizedJob(
+                    source="vietnamworks",
+                    external_id="job-001",
+                    source_url="https://example.com/job/1",
+                    title="Data Intern",
+                    company="Acme Corp",
+                    role="Data Science",
+                    is_internship=True,
+                    salary_min=salary_min,
+                    salary_max=salary_max,
+                    salary_currency="USD",
+                    is_salary_negotiable=False,
+                )
+
+                with self.assertRaises(IngestionSafetyError):
+                    run_ingestion(source=StubSource([_make_posting()]))
+
+                mock_upsert_raw.assert_called_once()
+                mock_upsert_clean.assert_not_called()
+                mock_expire.assert_not_called()
+                persisted = self.mock_persist.call_args.args[0]
+                self.assertEqual(persisted.outcome, "safety_aborted")
+                self.assertEqual(persisted.failure_phase, "row_quality_check")
+                self.assertEqual(persisted.failure_code, "safety_check_failed")
+
+    @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     def test_runtime_failure_persists_known_partial_metrics(
         self, mock_schema_assert: MagicMock
     ) -> None:

@@ -178,6 +178,36 @@ class AssertNormalizedRowQualityTests(unittest.TestCase):
             ]
         )
 
+    # ---- salary finiteness ----
+
+    def test_nan_salary_min_raises(self) -> None:
+        with self.assertRaises(IngestionSafetyError) as ctx:
+            assert_normalized_row_quality([_make_job(salary_min=float("nan"))])
+
+        self.assertIn("salary_finite=1", str(ctx.exception))
+
+    def test_nan_salary_max_raises(self) -> None:
+        with self.assertRaises(IngestionSafetyError) as ctx:
+            assert_normalized_row_quality([_make_job(salary_max=float("nan"))])
+
+        self.assertIn("salary_finite=1", str(ctx.exception))
+
+    def test_positive_infinity_salary_raises(self) -> None:
+        with self.assertRaises(IngestionSafetyError):
+            assert_normalized_row_quality([_make_job(salary_min=float("inf"))])
+
+    def test_negative_infinity_salary_raises(self) -> None:
+        with self.assertRaises(IngestionSafetyError):
+            assert_normalized_row_quality([_make_job(salary_max=float("-inf"))])
+
+    def test_both_non_finite_salary_bounds_counted(self) -> None:
+        with self.assertRaises(IngestionSafetyError) as ctx:
+            assert_normalized_row_quality(
+                [_make_job(salary_min=float("nan"), salary_max=float("inf"))]
+            )
+
+        self.assertIn("salary_finite=2", str(ctx.exception))
+
     # ---- posted / expiry coherence ----
 
     def test_expiry_before_posted_raises(self) -> None:

@@ -24,3 +24,4 @@ evals/replays/*-viewer.html
 .crew/[0-9]*-task.json
 .crew/events.log
 .crew/.watch-state.json
+.crew/candidates.json

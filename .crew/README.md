@@ -139,6 +139,22 @@ The response must be non-empty.
 
 The watcher raises a Windows toast for escalation-grade events (`CHECKS_FAILED`, `PR_READY_FOR_REVIEW`, `PR_LANDABLE`, `PR_MERGED`, `SCOUT_REPORT_READY`, `WORKER_IDLE`) so completion and failures surface without polling. Suppress with `mate_watch.ps1 -NoToast`; tune the idle threshold with `-IdleSweeps <n>` (default 5).
 
+## Progress reports
+
+When the maintainer asks for crew progress, the mate first reconciles durable state and then uses `scripts/crew_progress_report.ps1`. The default `html` format is a captain-facing report rendered from the static checked-in `scripts/crew_progress_report.template.html`; no facts live in the template. Use `-Format markdown` for terminal or copy/paste use, and `-Format data` when the structured payload itself is needed. All three formats are derived from the same payload.
+
+The report has a fixed order: maintainer actions, active tasks, risks, landing order, recent material changes, and next-compatible tasks. Empty sections are explicit. It does not infer worker progress, ETA, evidence, approval, or dispatch decisions beyond the state it reads.
+
+`.crew/candidates.json` is an ignored local runtime record for **undispatched** candidates. The mate creates or updates a candidate after durable local evidence is available, and removes it after dispatch or abandonment. Its top-level shape is `{ "schemaVersion": 1, "candidates": [] }`. Every candidate requires `issue`, `type` (`ship` or `scout`), `goal`, `filesInScope`, `planStatus`, `compatibility`, and an `evidence` object with `source`, `heading`, `label`, and `excerpt`. `source` is a local durable path; `heading` and `label` are stable finding/gap identifiers. The reporter ignores incomplete records and exposes a data warning instead of inventing provenance. It rechecks plan approval and the active `src/**/models.py` / `config/settings.yaml` shared-surface lock before marking a record dispatchable; it never dispatches automatically.
+
+```powershell
+# Default captain-facing HTML
+.\scripts\crew_progress_report.ps1
+
+# Same facts in a terminal-friendly form
+.\scripts\crew_progress_report.ps1 -Format markdown
+```
+
 ## Escalation surface
 
 The mate escalates exactly these and nothing else:

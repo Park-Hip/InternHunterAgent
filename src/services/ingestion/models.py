@@ -1,7 +1,18 @@
+from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel
-from sqlalchemy import BigInteger, Boolean, Date, Identity, Numeric, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Date,
+    Identity,
+    Numeric,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy import TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -63,6 +74,41 @@ class Base(DeclarativeBase):
     pass
 
 
+IngestionRunOutcome = Literal["completed", "safety_aborted", "failed"]
+IngestionFailurePhase = Literal[
+    "schema_check",
+    "source_initialization",
+    "fetch",
+    "raw_upsert",
+    "yield_check",
+    "normalize",
+    "clean_upsert",
+    "expiry",
+]
+IngestionFailureCode = Literal["safety_check_failed", "unexpected_error"]
+
+
+@dataclass(frozen=True)
+class IngestionRunSummary:
+    """Safe, immutable operational facts collected for one ingestion attempt."""
+
+    source: str
+    started_at: datetime
+    finished_at: datetime
+    outcome: IngestionRunOutcome
+    failure_phase: IngestionFailurePhase | None = None
+    failure_code: IngestionFailureCode | None = None
+    fetched: int | None = None
+    raw_upserted: int | None = None
+    raw_new: int | None = None
+    raw_changed: int | None = None
+    raw_unchanged: int | None = None
+    clean_loaded: int | None = None
+    skipped: int | None = None
+    expired_count: int | None = None
+    pages_failed: int | None = None
+
+
 class RawJob(Base):
     __tablename__ = "raw_jobs"
     __table_args__ = (UniqueConstraint("source", "external_id"),)
@@ -76,6 +122,39 @@ class RawJob(Base):
     fetched_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default="now()"
     )
+
+
+class IngestionRun(Base):
+    """Append-only, non-PII operational summary of an ingestion attempt."""
+
+    __tablename__ = "ingestion_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "outcome IN ('completed', 'safety_aborted', 'failed')",
+            name="ck_ingestion_runs_outcome",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+    finished_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+    outcome: Mapped[str] = mapped_column(Text, nullable=False)
+    failure_phase: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fetched: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    raw_upserted: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    raw_new: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    raw_changed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    raw_unchanged: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    clean_loaded: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    skipped: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    expired_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    pages_failed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
 
 class CleanJob(Base):

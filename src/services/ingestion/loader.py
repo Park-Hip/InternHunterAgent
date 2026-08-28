@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
+from datetime import UTC, datetime
 
 from src.core.config import settings
 from src.core.logger import logger
-from src.services.ingestion.clean_store import expire_stale_clean_jobs, upsert_clean_jobs
-from src.services.ingestion.models import NormalizedJob
+from src.services.ingestion.clean_store import (
+    expire_stale_clean_jobs,
+    upsert_clean_jobs,
+)
+from src.services.ingestion.models import (
+    IngestionFailurePhase,
+    IngestionRunSummary,
+    NormalizedJob,
+)
 from src.services.ingestion.normalize.vietnamworks import to_normalized_job
 from src.services.ingestion.raw_store import upsert_raw_postings
+from src.services.ingestion.run_store import persist_ingestion_run
 from src.services.ingestion.safety import (
     IngestionSafetyError,
     assert_clean_jobs_schema,
@@ -24,49 +34,103 @@ from src.services.ingestion.sources.base import JobSource
 
 
 def run_ingestion(source: JobSource | None = None) -> dict:
-    assert_clean_jobs_schema()
+    """Run ingestion and append a best-effort non-PII operational summary."""
+    source_name = getattr(source, "source", "vietnamworks")
+    summary = IngestionRunSummary(
+        source=source_name,
+        started_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC),
+        outcome="failed",
+    )
+    phase: IngestionFailurePhase = "schema_check"
 
-    if source is None:
-        from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
+    try:
+        assert_clean_jobs_schema()
 
-        source = VietnamWorksSource()
+        if source is None:
+            phase = "source_initialization"
+            from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
 
-    postings = list(source.fetch())
-    raw_counts = upsert_raw_postings(postings)
+            source = VietnamWorksSource()
 
-    assert_min_yield(len(postings), settings.ingestion_yaml["safety"]["min_yield"])
+        phase = "fetch"
+        postings = list(source.fetch())
+        summary = replace(
+            summary,
+            fetched=len(postings),
+            pages_failed=getattr(source, "pages_failed", 0),
+        )
 
-    normalized: list[NormalizedJob] = []
-    skipped = 0
-    for p in postings:
-        try:
-            normalized.append(to_normalized_job(p.raw_payload))
-        except Exception:
-            skipped += 1
-            logger.warning(
-                "ingestion.normalize_skipped",
-                source=p.source,
-                external_id=p.external_id,
-            )
+        phase = "raw_upsert"
+        raw_counts = upsert_raw_postings(postings)
+        summary = replace(
+            summary,
+            raw_upserted=raw_counts.total,
+            raw_new=raw_counts.new,
+            raw_changed=raw_counts.changed,
+            raw_unchanged=raw_counts.unchanged,
+        )
 
-    clean_count = upsert_clean_jobs(normalized)
+        phase = "yield_check"
+        assert_min_yield(len(postings), settings.ingestion_yaml["safety"]["min_yield"])
 
-    expire_after_days = settings.ingestion_yaml["lifecycle"]["expire_after_days"]
-    expired_count = expire_stale_clean_jobs(expire_after_days)
+        phase = "normalize"
+        normalized: list[NormalizedJob] = []
+        skipped = 0
+        for p in postings:
+            try:
+                normalized.append(to_normalized_job(p.raw_payload))
+            except Exception:
+                skipped += 1
+                logger.warning(
+                    "ingestion.normalize_skipped",
+                    source=p.source,
+                    external_id=p.external_id,
+                )
+        summary = replace(summary, skipped=skipped)
 
-    pages_failed = getattr(source, "pages_failed", 0)
+        phase = "clean_upsert"
+        clean_count = upsert_clean_jobs(normalized)
+        summary = replace(summary, clean_loaded=clean_count)
 
-    return {
-        "fetched": len(postings),
-        "raw_upserted": raw_counts.total,
-        "raw_new": raw_counts.new,
-        "raw_changed": raw_counts.changed,
-        "raw_unchanged": raw_counts.unchanged,
-        "clean_loaded": clean_count,
-        "skipped": skipped,
-        "expired_count": expired_count,
-        "pages_failed": pages_failed,
-    }
+        phase = "expiry"
+        expire_after_days = settings.ingestion_yaml["lifecycle"]["expire_after_days"]
+        expired_count = expire_stale_clean_jobs(expire_after_days)
+        summary = replace(
+            summary,
+            expired_count=expired_count,
+            outcome="completed",
+        )
+
+        return {
+            "fetched": len(postings),
+            "raw_upserted": raw_counts.total,
+            "raw_new": raw_counts.new,
+            "raw_changed": raw_counts.changed,
+            "raw_unchanged": raw_counts.unchanged,
+            "clean_loaded": clean_count,
+            "skipped": skipped,
+            "expired_count": expired_count,
+            "pages_failed": summary.pages_failed,
+        }
+    except IngestionSafetyError:
+        summary = replace(
+            summary,
+            outcome="safety_aborted",
+            failure_phase=phase,
+            failure_code="safety_check_failed",
+        )
+        raise
+    except Exception:
+        summary = replace(
+            summary,
+            outcome="failed",
+            failure_phase=phase,
+            failure_code="unexpected_error",
+        )
+        raise
+    finally:
+        persist_ingestion_run(replace(summary, finished_at=datetime.now(UTC)))
 
 
 def main() -> None:

@@ -52,6 +52,8 @@ try {
     Write-TaskFixture -Root $temporaryRoot -Issue 997 -Autonomy scout -Branch 'crew/997-scout' -Scope @('research/crew') -ScoutReport
     Write-TaskFixture -Root $temporaryRoot -Issue 996 -Autonomy ship -Branch 'crew/996-merged' -Scope @('docs/crew.md') -Goal 'Publish the reviewed crew report.' -Evidence @{ Source = 'research/crew/996-plan.md'; Heading = '## Approved plan'; Label = 'P996'; Finding = 'The approved plan requires this report.' }
     Write-TaskFixture -Root $temporaryRoot -Issue 995 -Autonomy ship -Branch 'crew/995-merged-without-evidence' -Scope @('docs/crew.md')
+    Write-TaskFixture -Root $temporaryRoot -Issue 994 -Autonomy ship -Branch 'crew/994-current-verdict' -Scope @('docs/crew.md') -Goal 'Await maintainer approval after the current independent review.'
+    Write-TaskFixture -Root $temporaryRoot -Issue 993 -Autonomy ship -Branch 'crew/993-approved-without-skill' -Scope @('docs/crew.md') -Goal 'Require an independent review even after a maintainer approval.'
     Write-Utf8 (Join-Path $temporaryRoot '.crew\events.log') "2026-08-28 07:01:00Z | crew/999 | PR_READY_FOR_REVIEW | checks green`n2026-08-28 07:02:00Z | crew/997 | SCOUT_REPORT_READY | report present`n"
 
     $candidate = [ordered]@{ schemaVersion = 1; candidates = @(
@@ -66,6 +68,36 @@ try {
     New-Item -ItemType Directory -Path $bin -Force | Out-Null
     $fakeGh = @'
 @echo off
+echo %* | findstr /c:"repo view" >nul
+if not errorlevel 1 (
+  echo {"nameWithOwner":"owner/repo"}
+  exit /b 0
+)
+echo %* | findstr /c:"/pulls/996/reviews" >nul
+if not errorlevel 1 (
+  echo [[{"commit_id":"merged-head-996","state":"COMMENTED","body":"/code-review passing verdict\nReviewed head: merged-head-996"}]]
+  exit /b 0
+)
+echo %* | findstr /c:"/pulls/995/reviews" >nul
+if not errorlevel 1 (
+  echo [[{"commit_id":"stale-head-995","state":"COMMENTED","body":"/code-review passing verdict\nReviewed head: current-head-995"}]]
+  exit /b 0
+)
+echo %* | findstr /c:"/pulls/994/reviews" >nul
+if not errorlevel 1 (
+  echo [[],[{"commit_id":"current-head-994","state":"COMMENTED","body":"/code-review passing verdict\nReviewed head: current-head-994"}]]
+  exit /b 0
+)
+echo %* | findstr /c:"/pulls/999/reviews" >nul
+if not errorlevel 1 (
+  echo [[]]
+  exit /b 0
+)
+echo %* | findstr /c:"/pulls/993/reviews" >nul
+if not errorlevel 1 (
+  echo [[]]
+  exit /b 0
+)
 echo %* | findstr /c:"crew/999-green" >nul
 if not errorlevel 1 (
   echo {"number":999,"state":"OPEN","url":"https://example.test/pr/999","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}]}
@@ -78,12 +110,22 @@ if not errorlevel 1 (
 )
 echo %* | findstr /c:"crew/995-merged-without-evidence" >nul
 if not errorlevel 1 (
-  echo {"number":995,"state":"MERGED","url":"https://example.test/pr/995","reviewDecision":"","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}]}
+  echo {"number":995,"state":"MERGED","url":"https://example.test/pr/995","headRefOid":"current-head-995","reviewDecision":"","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}],"comments":[{"body":"/code-review passing verdict\nReviewed head: current-head-995"}]}
+  exit /b 0
+)
+echo %* | findstr /c:"crew/994-current-verdict" >nul
+if not errorlevel 1 (
+  echo {"number":994,"state":"OPEN","url":"https://example.test/pr/994","headRefOid":"current-head-994","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}],"reviews":[{"state":"COMMENTED","authorAssociation":"NONE","body":"/code-review passing verdict\nReviewed head: current-head-994"}]}
+  exit /b 0
+)
+echo %* | findstr /c:"crew/993-approved-without-skill" >nul
+if not errorlevel 1 (
+  echo {"number":993,"state":"OPEN","url":"https://example.test/pr/993","headRefOid":"current-head-993","reviewDecision":"APPROVED","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}],"reviews":[{"state":"APPROVED","authorAssociation":"OWNER","body":"Maintainer approval"}]}
   exit /b 0
 )
 echo %* | findstr /c:"crew/996-merged" >nul
 if not errorlevel 1 (
-  echo {"number":996,"state":"MERGED","url":"https://example.test/pr/996","reviewDecision":"","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}],"reviews":[{"state":"APPROVED","authorAssociation":"OWNER","body":"Maintainer approval"}],"comments":[{"body":"/code-review passing verdict"}]}
+  echo {"number":996,"state":"MERGED","url":"https://example.test/pr/996","headRefOid":"merged-head-996","reviewDecision":"","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}],"reviews":[{"state":"APPROVED","authorAssociation":"OWNER","body":"Maintainer approval"},{"state":"COMMENTED","authorAssociation":"NONE","body":"/code-review passing verdict\nReviewed head: merged-head-996"}]}
   exit /b 0
 )
 exit /b 1
@@ -92,11 +134,16 @@ exit /b 1
     Write-Utf8 $fakeGhPath $fakeGh
 
     $data = (& $reportScript -RepoRoot $temporaryRoot -Format data -GitHubCommand $fakeGhPath | ConvertFrom-Json)
-    Assert-True (@($data.ActiveTasks).Count -eq 3) 'Every non-merged task must appear exactly once.'
+    Assert-True (@($data.ActiveTasks).Count -eq 5) 'Every non-merged task must appear exactly once.'
     Assert-True (@($data.ActiveTasks | Where-Object Issue -in @(995, 996)).Count -eq 0) 'A merged PR must not remain active.'
     Assert-True (@($data.FullyMergedPrs).Count -eq 1 -and $data.FullyMergedPrs[0].Issue -eq 996) 'Only PRs with merged, maintainer-approval, and skill-verdict evidence belong in fully merged PRs.'
     Assert-True ([bool]($data.DataWarnings -match '#995: PR #995 is merged but lacks durable')) 'Merged PRs without qualifying evidence must remain visible as a warning.'
-    Assert-True ([bool]($data.MaintainerActions -match 'review PR #999')) 'Green review-required PR must produce a review action.'
+    Assert-True ([bool]($data.MaintainerActions -match 'independent current-head /code-review verdict for PR #999')) 'Green PR without a current skill verdict must request an independent review.'
+    Assert-True ((@($data.ActiveTasks | Where-Object Issue -eq 999))[0].Pr.Review -eq 'Independent review required') 'A green PR without a current verdict must not be summarized as awaiting maintainer approval.'
+    Assert-True ([bool]($data.MaintainerActions -match 'PR #994.*maintainer approval')) 'Only a green PR with a current skill verdict may request maintainer approval.'
+    Assert-True ((@($data.ActiveTasks | Where-Object Issue -eq 994))[0].Pr.Review -eq 'Awaiting maintainer approval') 'A current skill verdict must surface the correct maintainer-approval summary.'
+    Assert-True ([bool]($data.MaintainerActions -match 'independent current-head /code-review verdict for PR #993')) 'A prior maintainer approval must not bypass the independent current-head review.'
+    Assert-True ((@($data.ActiveTasks | Where-Object Issue -eq 993))[0].Pr.Review -eq 'Independent review required') 'An approved PR without a current independent verdict must be summarized as needing that review.'
     Assert-True ([bool]($data.MaintainerActions -match 'failing checks on PR #998')) 'Failed checks must produce an action.'
     Assert-True ([bool]($data.MaintainerActions -match 'durable scout report')) 'Scout report handoff must produce an action.'
     Assert-True ([bool]($data.Risks -match 'BLOCKED: focused check fails')) 'Blocked worker status must be a risk.'

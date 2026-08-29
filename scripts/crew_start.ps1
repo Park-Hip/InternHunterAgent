@@ -59,8 +59,7 @@ if ($Harness -ne 'shell') {
     }
 }
 
-$resolvedHarnessArgs = if (-not [string]::IsNullOrWhiteSpace($HarnessArgs)) { $HarnessArgs.Trim() }
-    elseif ($Harness -eq 'codex') { '--yolo' } else { $null }
+$resolvedHarnessArgs = Resolve-CrewHarnessArgs -Harness $Harness -HarnessArgs $HarnessArgs -Backend $Backend
 
 # The harness receives the brief as its initial prompt argument so it starts
 # working without a human typing anything. Wording is autonomy-aware: scouts

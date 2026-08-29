@@ -21,6 +21,9 @@ jobs:
       - shell: powershell
         run: .\scripts\test_crew_progress_report.ps1
 
+      - shell: powershell
+        run: .\scripts\test_crew_lifecycle.ps1
+
   extension-tests:
     runs-on: ubuntu-latest
     steps:

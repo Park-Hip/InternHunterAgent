@@ -20,6 +20,7 @@ function isWellFormedRequest(request) {
     typeof request.issue === 'number' && Number.isInteger(request.issue) &&
     typeof request.taskName === 'string' && request.taskName.length > 0 &&
     typeof request.worktreePath === 'string' && request.worktreePath.length > 0 &&
+    typeof request.manifestPath === 'string' && request.manifestPath.length > 0 &&
     typeof request.executionSpecHash === 'string' && request.executionSpecHash.length > 0 &&
     typeof request.createdUtc === 'string' && request.createdUtc.length > 0 &&
     isSpec(request.executionSpec);
@@ -46,7 +47,7 @@ function pathEqual(a, b, platform) {
 
 // Stage one: everything verifiable before a task fetch (opt-in, trust, schema,
 // and binding of the request to a well-formed manifest with its pinned spec).
-function validateRequestAndManifest({ request, manifest, isTrusted, enabled, primaryRoot, platform }) {
+function validateRequestAndManifest({ request, manifest, isTrusted, enabled, primaryRoot, manifestPath, platform }) {
   if (enabled !== true) {
     return fail('disabled');
   }
@@ -71,6 +72,9 @@ function validateRequestAndManifest({ request, manifest, isTrusted, enabled, pri
   if (manifest.launchRequestId !== request.requestId) {
     return fail('manifest-request-mismatch');
   }
+  if (!isSpec(manifest.launchSpec)) {
+    return fail('bad-schema');
+  }
   if (typeof manifest.launchSpecHash !== 'string' || manifest.launchSpecHash.length === 0) {
     return fail('manifest-spec-hash-mismatch');
   }
@@ -80,17 +84,17 @@ function validateRequestAndManifest({ request, manifest, isTrusted, enabled, pri
   if (specHash(request.executionSpec) !== request.executionSpecHash) {
     return fail('hash-mismatch');
   }
-  if (!isSpec(manifest.launchSpec)) {
-    return fail('bad-schema');
-  }
-  if (!shapesEqual(manifest.launchSpec, request.executionSpec, platform)) {
-    return fail('manifest-spec-mismatch');
+  if (specHash(manifest.launchSpec) !== manifest.launchSpecHash) {
+    return fail('manifest-spec-hash-mismatch');
   }
   if (!pathEqual(manifest.repoRoot, primaryRoot, platform)) {
     return fail('manifest-repo-mismatch');
   }
   if (!pathEqual(request.worktreePath, manifest.worktreePath, platform)) {
     return fail('manifest-worktree-mismatch');
+  }
+  if (!pathEqual(request.manifestPath, manifestPath, platform)) {
+    return fail('manifest-path-mismatch');
   }
   return { ok: true };
 }

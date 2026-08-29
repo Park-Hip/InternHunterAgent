@@ -18,8 +18,8 @@ const CREW_DIR = '.crew';
 const QUEUE_REL = path.join(CREW_DIR, 'launch-queue');
 const QUEUE_GLOB = '.crew/launch-queue/requests/*.json';
 const TERMINAL_EVENTS = new Set(['accepted', 'started', 'already-running', 'refused', 'failed']);
-const FETCH_ATTEMPTS = 5;
-const FETCH_RETRY_MS = 400;
+const FETCH_ATTEMPTS = 8;
+const FETCH_RETRY_MS = 500;
 
 // A live TaskExecution maps to the request id that initiated it, so lifecycle
 // events can attribute started/ended to the correct result log.
@@ -50,10 +50,13 @@ function resultPath(root, requestId) {
   return path.join(resultsDir(root), `${requestId}.events.jsonl`);
 }
 
+function manifestPathFor(root, issue) {
+  return path.join(root, CREW_DIR, `${issue}-task.json`);
+}
+
 function readManifest(root, issue) {
-  const manifestPath = path.join(root, CREW_DIR, `${issue}-task.json`);
   try {
-    return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    return JSON.parse(fs.readFileSync(manifestPathFor(root, issue), 'utf8'));
   } catch {
     return null;
   }
@@ -86,27 +89,30 @@ function registerLifecycle() {
   });
 }
 
-// Locate the workspace task registered under the request's taskName. A task that
-// exists but does not match the spec is a stable `mismatch` (never retried); a
-// missing task is retried because tasks.json may not have reloaded yet.
+// Locate the workspace task registered under the request's taskName. Both a
+// missing task and a present-but-not-yet-matching task are retried: VS Code
+// reloads .vscode/tasks.json asynchronously, so a relaunch can briefly observe
+// the stale same-name task. Only the final attempt settles on a verdict.
 async function findMatchingTask(spec, taskName, platform) {
+  let sawCandidate = false;
+  let lastShape = null;
   for (let attempt = 0; attempt < FETCH_ATTEMPTS; attempt += 1) {
     const tasks = await vscode.tasks.fetchTasks({ type: 'shell' });
     const candidate = tasks.find(
       (task) => task.source === 'Workspace' && task.name === taskName,
     );
     if (candidate) {
-      const shape = extractTaskShape(candidate);
-      if (shapesEqual(spec, shape, platform)) {
-        return { status: 'matched', task: candidate, shape };
+      sawCandidate = true;
+      lastShape = extractTaskShape(candidate);
+      if (shapesEqual(spec, lastShape, platform)) {
+        return { status: 'matched', task: candidate, shape: lastShape };
       }
-      return { status: 'mismatch', shape };
     }
     if (attempt < FETCH_ATTEMPTS - 1) {
       await delay(FETCH_RETRY_MS);
     }
   }
-  return { status: 'not-found' };
+  return sawCandidate ? { status: 'mismatch', shape: lastShape } : { status: 'not-found' };
 }
 
 async function processRequest(root, requestPath) {
@@ -128,6 +134,7 @@ async function processRequest(root, requestPath) {
   }
 
   const platform = process.platform;
+  const manifestPath = manifestPathFor(root, request.issue);
   const manifest = normalizeManifest(readManifest(root, request.issue));
 
   const stageOne = validateRequestAndManifest({
@@ -136,6 +143,7 @@ async function processRequest(root, requestPath) {
     isTrusted: vscode.workspace.isTrusted,
     enabled: isEnabled(),
     primaryRoot: root,
+    manifestPath,
     platform,
   });
   if (!stageOne.ok) {

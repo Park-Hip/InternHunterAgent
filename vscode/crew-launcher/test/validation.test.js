@@ -28,6 +28,7 @@ function makeRequest(overrides = {}) {
     issue: 7,
     taskName: 'Crew: IHA-7 worker (pi)',
     worktreePath: 'D:\\wts\\IHA-7',
+    manifestPath: 'D:\\repo\\.crew\\7-task.json',
     executionSpec: spec,
     executionSpecHash: specHash(spec),
     createdUtc: '2026-01-01T00:00:00Z',
@@ -48,7 +49,13 @@ function makeManifest(overrides = {}) {
 }
 
 function baseContext() {
-  return { isTrusted: true, enabled: true, primaryRoot: 'D:\\repo', platform: 'win32' };
+  return {
+    isTrusted: true,
+    enabled: true,
+    primaryRoot: 'D:\\repo',
+    manifestPath: 'D:\\repo\\.crew\\7-task.json',
+    platform: 'win32',
+  };
 }
 
 test('accepts a request fully bound to its manifest and spec', () => {
@@ -137,16 +144,25 @@ test('refuses an execution spec whose hash does not match its contents', () => {
   assert.deepEqual(result, { ok: false, reason: 'hash-mismatch' });
 });
 
-test('refuses a manifest spec that differs from the request spec', () => {
-  const spec = makeSpec();
+test('refuses a manifest spec whose own hash does not match its contents', () => {
+  const original = makeSpec();
   const different = makeSpec();
   different.args = ['--model', 'modelscope/other'];
   const result = validateRequestAndManifest({
     request: makeRequest(),
-    manifest: makeManifest({ TerminalLaunchSpec: different }),
+    manifest: makeManifest({ TerminalLaunchSpec: different, TerminalLaunchSpecHash: specHash(original) }),
     ...baseContext(),
   });
-  assert.deepEqual(result, { ok: false, reason: 'manifest-spec-mismatch' });
+  assert.deepEqual(result, { ok: false, reason: 'manifest-spec-hash-mismatch' });
+});
+
+test('refuses a request manifest path that differs from the derived path', () => {
+  const result = validateRequestAndManifest({
+    request: makeRequest({ manifestPath: 'D:\\repo\\.crew\\99-task.json' }),
+    manifest: makeManifest(),
+    ...baseContext(),
+  });
+  assert.deepEqual(result, { ok: false, reason: 'manifest-path-mismatch' });
 });
 
 test('refuses a manifest repo root outside the active workspace', () => {

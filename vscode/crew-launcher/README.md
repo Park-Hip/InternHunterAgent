@@ -60,17 +60,25 @@ extension calls `executeTask`, it verifies that:
 - the request hash re-derived over the stored spec matches the stored hash;
 - the manifest agrees on the request id and spec hash;
 - the manifest repo root is the active workspace and the worktree path matches;
-- the task fetched from VS Code has `source === 'Workspace'` and its extracted
-  `type`/`command`/`args`/`cwd` deep-equal the canonical spec; and
+- the task fetched from VS Code is scoped to the active primary workspace (a folder
+  scope equal to the primary root, or the legacy workspace-wide scope with a `Workspace`
+  source) and its extracted `type`/`command`/`args`/`cwd` deep-equal the canonical spec; and
 - no live task execution already matches the same spec.
 
 Any failure writes an immutable `refused` (or `already-running`) event and never executes. Only
 after every check passes does the extension call `vscode.tasks.executeTask` on the exactly-matching
 task; the task's existing presentation produces the dedicated, focused terminal tab.
 
+When the registered task exists in `.vscode/tasks.json` but VS Code does not surface it to the
+Tasks API (a stale or unavailable task registry), the extension refuses with `registry-unavailable`
+and records a precise recovery instruction instead of a misleading `task-not-found`. Reload the
+window and re-dispatch, or run the task manually via **Tasks: Run Task**.
+
 ## Results
 
 Each request has an append-only event log at
 `.crew/launch-queue/results/<requestId>.events.jsonl`. Events are `validated`, `matched`,
 `accepted`, `started`, `ended`, `already-running`, `refused`, and `failed`, each timestamped.
+A `refused` event carries a `reason` (`task-not-found`, `task-mismatch`, `registry-unavailable`,
+`harness-missing`, or a stage-one reason) and, for recovery cases, an `instruction`.
 The launcher maps the first terminal event to the manifest `TerminalLaunchStatus`.

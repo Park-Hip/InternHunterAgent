@@ -5,12 +5,17 @@ const path = require('node:path');
 const vscode = require('vscode');
 
 const { extractTaskShape } = require('./lib/extract');
-const { shapesEqual } = require('./lib/spec');
 const {
   normalizeManifest,
   validateRequestAndManifest,
   assessTaskMatch,
 } = require('./lib/validation');
+const {
+  findWorkspaceCandidates,
+  selectExactMatch,
+  classifyOutcome,
+  inspectRegisteredTask,
+} = require('./lib/discovery');
 const { appendEvent, hasTerminalEvent } = require('./lib/jsonl');
 
 const CONFIG_SECTION = 'crew.vscodeTaskAuto';
@@ -89,30 +94,41 @@ function registerLifecycle() {
   });
 }
 
-// Locate the workspace task registered under the request's taskName. Both a
-// missing task and a present-but-not-yet-matching task are retried: VS Code
-// reloads .vscode/tasks.json asynchronously, so a relaunch can briefly observe
-// the stale same-name task. Only the final attempt settles on a verdict.
-async function findMatchingTask(spec, taskName, platform) {
+// Locate the workspace task registered under the request's taskName. Every
+// eligible same-name candidate per fetch is evaluated for an exact-spec match:
+// VS Code can surface a stale same-name task before the refreshed one, so the
+// first candidate is not enough. Matching is folder-scope based
+// (lib/discovery.js), never the localized Task.source string. Only the final
+// attempt settles on the terminal verdict.
+async function findMatchingTask(root, spec, taskName, platform) {
   let sawCandidate = false;
   let lastShape = null;
   for (let attempt = 0; attempt < FETCH_ATTEMPTS; attempt += 1) {
-    const tasks = await vscode.tasks.fetchTasks({ type: 'shell' });
-    const candidate = tasks.find(
-      (task) => task.source === 'Workspace' && task.name === taskName,
-    );
-    if (candidate) {
+    let tasks = [];
+    try {
+      tasks = await vscode.tasks.fetchTasks({ type: 'shell' });
+    } catch {
+      tasks = [];
+    }
+    const candidates = findWorkspaceCandidates(tasks, taskName, root, platform);
+    const match = selectExactMatch(candidates, spec, platform);
+    if (match) {
+      return { status: 'matched', task: match.task, shape: match.shape };
+    }
+    if (candidates.length > 0) {
       sawCandidate = true;
-      lastShape = extractTaskShape(candidate);
-      if (shapesEqual(spec, lastShape, platform)) {
-        return { status: 'matched', task: candidate, shape: lastShape };
-      }
+      lastShape = candidates[candidates.length - 1].shape;
     }
     if (attempt < FETCH_ATTEMPTS - 1) {
       await delay(FETCH_RETRY_MS);
     }
   }
-  return sawCandidate ? { status: 'mismatch', shape: lastShape } : { status: 'not-found' };
+
+  // The live registry never surfaced an exact match. Classify using the primary
+  // checkout's .vscode/tasks.json: a stale live candidate alongside a matching
+  // on-disk task is a recoverable registry problem, not a missing task.
+  const registered = inspectRegisteredTask(root, taskName, spec, platform);
+  return classifyOutcome({ sawCandidate, lastShape, registered });
 }
 
 async function processRequest(root, requestPath) {
@@ -153,7 +169,11 @@ async function processRequest(root, requestPath) {
   appendEvent(rp, 'validated');
 
   const spec = request.executionSpec;
-  const found = await findMatchingTask(spec, request.taskName, platform);
+  const found = await findMatchingTask(root, spec, request.taskName, platform);
+  if (found.status === 'registry-unavailable') {
+    appendEvent(rp, 'refused', { reason: 'registry-unavailable', instruction: found.recovery });
+    return;
+  }
   const notFoundReason = found.status === 'mismatch'
     ? 'task-mismatch'
     : (found.status === 'not-found' ? 'task-not-found' : null);

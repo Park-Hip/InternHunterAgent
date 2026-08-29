@@ -186,6 +186,38 @@ API host. If the preflight reports `robots_unavailable`, `robots_malformed`, or
 for any material source-policy change, and retain the fail-closed configuration until permission is
 clear.
 
+### Unattended inactivity recovery
+
+GitHub automatically disables a public repository's scheduled workflows after 60 days of
+repository inactivity. The unattended REST recovery job (`scripts/recover_ingestion_workflow.py`,
+issue #325) re-enables `ingestion.yml` and dispatches exactly one ingestion run when the workflow
+state is `disabled_inactivity`. The maintainer approved this externally automated recovery in
+`.crew/325-approved-plan.md`; it supersedes issue #298's manual-calendar-reminder posture while
+retaining that issue's bans on synthetic commits and on no-op dispatches while the workflow is
+already active. The superseding decision is recorded in full in the
+[cron activation runbook](cron-activation-runbook.md), §8.
+
+The job is idempotent and least-privileged by construction. It reads the workflow state and
+performs no mutation while the state is `active`. Only `disabled_inactivity` triggers a write:
+one enable call followed by one dispatch call, then the outcome is recorded. Every API or
+dispatch failure is logged to stderr, pings the healthcheck failure endpoint, and exits non-zero.
+A successful recovery or active no-op pings the base healthcheck endpoint, so a missed scheduler
+tick is also visible. Repeated invocations are idempotent: a recovered workflow is observed
+`active` on the next cycle and treated as a no-op.
+
+The recovery credential is a repository-scoped GitHub App installation token (or fine-grained PAT)
+with exactly `Actions: write` for this repository only. `contents: write` is forbidden: the
+checked-in credential contract declares only `{"actions": "write"}`, the implementation calls
+only Actions REST endpoints, and its focused tests reject `contents: write` without using real
+credentials. The maintainer verifies the installed token's effective repository and permissions in
+GitHub during provisioning; a bearer token cannot self-report its scope to the script. The job
+writes no commits and never dispatches while the workflow is active.
+
+The selected external host is a Render Cron Job (not cron-job.org, which can only issue HTTP
+requests). The scheduler, owner, credential provisioning, alerting, and rollback procedure are
+documented in [cron-activation-runbook.md §8](cron-activation-runbook.md). Do not provision the
+external host, credential, or healthcheck from this document; provisioning is a maintainer action.
+
 ## Operational gotchas
 
 - Runtime settings require `DATABASE_URL` and the required provider and tracing variables before the

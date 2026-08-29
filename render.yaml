@@ -37,3 +37,39 @@ services:
         value: production
       # OPENROUTER_API_KEY (eval judge, .env only) and HEALTHCHECKS_URL
       # (ingestion cron only) are intentionally not declared for the web service.
+
+  # Issue #325: declarative configuration only. Applying this Blueprint and setting dashboard
+  # secrets remains a maintainer action; this repository never provisions the Cron Job or stores
+  # the recovery token/healthcheck URL. Render is external to GitHub Actions, so it can recover a
+  # workflow after GitHub has disabled all of the repository's own schedules for inactivity.
+  - type: cron
+    name: InternHunterAgent-ingestion-recovery
+    runtime: python
+    repo: https://github.com/Park-Hip/InternHunterAgent
+    branch: main
+    region: singapore
+    plan: "0.5c-512mb"
+    schedule: "0 3 * * *"
+    buildCommand: uv sync --frozen --no-dev
+    startCommand: .venv/bin/python scripts/recover_ingestion_workflow.py
+    autoDeploy: true
+    envVars:
+      # Pin the native runtime to the project version and the uv release used in Docker.
+      - key: PYTHON_VERSION
+        value: "3.12.11"
+      - key: UV_VERSION
+        value: "0.8.15"
+      - key: GITHUB_REPOSITORY
+        value: Park-Hip/InternHunterAgent
+      - key: RECOVERY_DISPATCH_REF
+        value: main
+      - key: RECOVERY_REQUEST_TIMEOUT_SECONDS
+        value: "30"
+      # Repository-scoped GitHub App installation token with Actions: write only. Never grant
+      # contents: write and never put the value in this file.
+      - key: RECOVERY_GITHUB_TOKEN
+        sync: false
+      # Base healthchecks.io URL. The script pings it after success/no-op and derives /fail for
+      # API/dispatch failures; its opaque value stays dashboard-managed.
+      - key: RECOVERY_HEALTHCHECK_URL
+        sync: false

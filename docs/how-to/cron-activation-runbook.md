@@ -586,3 +586,141 @@ un-verified cron run nightly for 19 days. They are now separate, ordered gates.
 When all rows are signed: close the related GitHub issues (the "never run against live Postgres"
 HIGH item and the cron-dormant items), and record completion with links to evidence in each issue
 thread.
+
+## 8. Unattended REST recovery for inactivity auto-disable (issue #325)
+
+> **Supersedes issue #298.** The decision requested in #298 (mitigate GitHub's 60-day
+> scheduled-workflow auto-disable) is settled here by maintainer-approved, externally automated
+> REST recovery. This section is the durable decision record for #298: no separate ADR was carried
+> over, and #298's prior prohibition on automated traffic solely to keep workflows active is
+> superseded **only** for the inactivity-recovery path defined below. The bans on synthetic commits
+> and on no-op dispatches while the workflow is active are retained verbatim.
+
+**Approved plan:** `.crew/325-approved-plan.md` (`APPROVED-PLAN-325`, maintainer, 2026-08-28).
+**Implementation:** `scripts/recover_ingestion_workflow.py` with focused tests in
+`tests/scripts/test_recover_ingestion_workflow.py`. Provisioning is a maintainer action; the code
+and these docs ship reproducible configuration only and never store a credential, secret, scheduler
+account, or production fixture.
+
+### 8.1 What the job does
+
+The recovery job is one external scheduler tick that calls GitHub Actions REST endpoints:
+
+1. `GET /repos/{owner}/{repo}/actions/workflows/ingestion.yml` to read the workflow `state`.
+2. If `state == active`: log a no-op JSON line and exit `0`. **No write call is made.**
+3. If `state == disabled_inactivity`: `PUT .../enable` (idempotent at the API level), then
+   `POST .../dispatches` with `ref: main` exactly once, then record the outcome and exit `0`.
+4. Any other state (e.g. `disabled_manually`), any HTTP error, or any transport error: log to
+   stderr, ping the failure healthcheck URL, and exit non-zero. The job never guesses past the
+   approved trigger.
+
+Repeated ticks are idempotent: after a recovery, the next tick observes `active` and mutates
+nothing. The job writes no commits and never dispatches while the workflow is active.
+
+### 8.2 External scheduler and owner
+
+**Host:** a Render Cron Job in Singapore, declared (but not provisioned) in `render.yaml` as
+`InternHunterAgent-ingestion-recovery`. Render is external to GitHub Actions and can run the Python
+command directly; cron-job.org is intentionally **not** used because it schedules HTTP requests,
+not shell commands.
+**Owner:** the maintainer (Render owner + repository admin). Applying the Blueprint, creating the
+Cron Job, and adding dashboard-managed values are maintainer actions; this repository only carries
+the declarative, non-secret configuration.
+**Cadence:** `0 3 * * *` UTC, once daily and one hour after the 02:00 UTC ingestion schedule. This
+makes a genuine scheduled run distinguishable from an inactivity-disable recovery. Render cron
+expressions use UTC.
+**Cost:** Render bills Cron Jobs by active second with a $1/month minimum. This minimal job is
+inside the project's $10/month ceiling; the maintainer must confirm current Render pricing before
+provisioning.
+**Runtime configuration:** the Blueprint uses Render's native Python runtime, pins Python 3.12.11
+and uv 0.8.15, runs `uv sync --frozen --no-dev`, then executes
+`.venv/bin/python scripts/recover_ingestion_workflow.py`. A repository checkout is needed only to
+run the reviewed script; it receives no repository-contents write permission.
+
+> **Why not a GitHub Actions recovery workflow?** A scheduled recovery workflow inside the same
+> repository would itself be subject to the 60-day inactivity auto-disable it is meant to cure. A
+> Render Cron Job is the load-bearing external host and preserves the recovery boundary.
+
+### 8.3 Least-privileged credential contract
+
+The recovery credential is a repository-scoped GitHub App installation token (or fine-grained PAT)
+for **this repository only**, with exactly:
+
+- `Actions: write` — required to enable a workflow and create a workflow dispatch.
+
+Forbidden:
+
+- `contents: write` — the job never writes repository contents. The checked-in credential contract
+  in `scripts/recover_ingestion_workflow.py` declares only `{"actions": "write"}` and its tests
+  reject `contents: write`. During provisioning, the maintainer must verify the actual GitHub App
+  installation or fine-grained PAT matches that repository-only contract; a bearer token cannot
+  self-report its effective permission scope to this script.
+
+The runtime environment for the recovery tick:
+
+| Variable | Purpose | Source |
+|---|---|---|
+| `GITHUB_REPOSITORY` | `owner/repo` to recover (hard-targets `ingestion.yml`) | `render.yaml` non-secret value |
+| `RECOVERY_GITHUB_TOKEN` | the repository-scoped `Actions: write` token | Render dashboard secret (`sync: false`) |
+| `RECOVERY_DISPATCH_REF` | dispatch ref; defaults to `main` | `render.yaml` non-secret value |
+| `RECOVERY_HEALTHCHECK_URL` | healthchecks.io base ping URL; `/fail` is derived on failure | Render dashboard secret (`sync: false`) |
+| `RECOVERY_REQUEST_TIMEOUT_SECONDS` | per-request timeout, defaults to `30` | `render.yaml` non-secret value |
+
+`--dry-run` validates local configuration and the declared credential contract without contacting
+GitHub. Run it after provisioning, then verify the real token's repository and permissions in the
+GitHub App / fine-grained PAT UI before the first live tick.
+
+### 8.4 Alerting
+
+- **Successful/no-op tick and missed tick:** the job pings `RECOVERY_HEALTHCHECK_URL` after every
+  successful recovery or active-state no-op. Configure healthchecks.io's expected period to the
+  once-daily cadence plus a grace period, so a missed Render tick alerts the maintainer.
+- **Failed recovery run:** the job logs to stderr, pings the derived
+  `RECOVERY_HEALTHCHECK_URL/fail` endpoint, and exits non-zero. Configure Render notifications for
+  a failed Cron Job, so failure remains visible even if healthchecks.io is unavailable.
+- **Failed ping:** if either healthcheck ping fails, the job logs a warning and preserves the
+  original recovery outcome. A failed alert ping never masks a GitHub API or dispatch failure.
+
+### 8.5 Rollback
+
+1. Pause the `InternHunterAgent-ingestion-recovery` Render Cron Job in the Render dashboard.
+2. Revoke or uninstall the recovery GitHub App installation / fine-grained PAT; remove
+   `RECOVERY_GITHUB_TOKEN` and `RECOVERY_HEALTHCHECK_URL` from the Render dashboard.
+3. Revert `scripts/recover_ingestion_workflow.py`, its tests, `render.yaml`, and this runbook
+   section in one pull request.
+
+The immediate fallback is unchanged: GitHub UI → Actions → "Nightly ingestion" → Enable, then
+Run workflow on `main`. The CLI equivalent is `gh workflow enable ingestion.yml` then
+`gh workflow run ingestion.yml --ref main`. These manual procedures remain valid regardless of the
+recovery job's state.
+
+### 8.6 Verification (focused tests, no real credentials)
+
+`tests/scripts/test_recover_ingestion_workflow.py` proves, with an in-memory fake client and no
+network:
+
+- an `active` workflow triggers zero write calls (no enable, no dispatch);
+- a `disabled_inactivity` workflow triggers exactly one enable then exactly one dispatch on `main`;
+- an enable failure and a dispatch failure each alert and exit non-zero, and a failed enable never
+  dispatches;
+- a non-recovery state (e.g. `disabled_manually`) is alerted, not mutated;
+- repeated invocations are idempotent (the recovered workflow is observed `active` next tick);
+- the credential contract rejects `contents: write`, requires `Actions: write`, and the runtime
+  declares exactly `{"actions": "write"}` before any request;
+- a failed healthcheck ping never raises and never masks the original failure.
+
+The end-to-end manual check (disable a non-production test workflow, allow one recovery tick,
+verify it returns to `active` with exactly one dispatch run) is a maintainer action in an approved
+non-production fixture and is not automated here.
+
+### 8.7 Sign-off
+
+| Gate | Cleared? | By | Date |
+|---|---|---|---|
+| Recovery script + focused tests merged | ☑ | this PR (issue #325) | 2026-08-28 |
+| Runbook §8 + operate.md recovery section merged | ☑ | this PR | 2026-08-28 |
+| Issue #298 superseding decision recorded (this §8 lead-in) | ☑ | this PR | 2026-08-28 |
+| Render recovery Cron Job provisioned (cadence, alerting) | ☐ | maintainer | |
+| Repository-scoped `Actions: write` credential provisioned | ☐ | maintainer | |
+| `RECOVERY_HEALTHCHECK_URL` configured | ☐ | maintainer | |
+| First end-to-end recovery observed against a non-production fixture | ☐ | maintainer | |

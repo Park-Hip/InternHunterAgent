@@ -1,7 +1,8 @@
 # mate_watch.ps1 - background event watcher for crew mode.
 # Sleeps between sweeps; appends structured events to .crew/events.log when
 # something changes, raises Windows toasts for escalation-grade events, and
-# detects worker completion directly (scout report ready, idle worktree).
+# detects worker completion directly (scout report ready, idle worktree) and
+# worker health through a durable heartbeat (stalled versus live-but-quiet).
 # Zero tokens: pure script, no agent involved.
 # The mate reconciles from events.log and crew_board.ps1 on its next turn.
 
@@ -10,6 +11,8 @@ param(
     [int]$IntervalSec = 60,
     # Sweeps a worktree's dirty-file count may stay unchanged before WORKER_IDLE fires.
     [ValidateRange(1, 120)][int]$IdleSweeps = 5,
+    # Seconds a worker's heartbeat may be stale before WORKER_STALLED fires.
+    [ValidateRange(30, 86400)][int]$StalledAfterSec = 900,
     # Suppress Windows toast notifications for escalation-grade events.
     [switch]$NoToast,
     # Single sweep then exit; used by tests and manual verification.
@@ -30,7 +33,7 @@ $logPath = Join-Path $RepoRoot '.crew\events.log'
 $statePath = Join-Path $RepoRoot '.crew\.watch-state.json'
 
 # Events that deserve an OS notification because they need a human decision or action.
-$toastEvents = @('PR_READY_FOR_REVIEW', 'PR_LANDABLE', 'CHECKS_FAILED', 'PR_MERGED', 'SCOUT_REPORT_READY', 'WORKER_IDLE')
+$toastEvents = @('PR_READY_FOR_REVIEW', 'PR_LANDABLE', 'CHECKS_FAILED', 'PR_MERGED', 'SCOUT_REPORT_READY', 'WORKER_STALLED')
 
 function Write-Event {
     param([string]$Subject, [string]$Event, [string]$Detail = '')
@@ -141,6 +144,24 @@ function Get-StatusSignature {
     return ((Get-Content $f -Raw -ErrorAction SilentlyContinue) -replace '\s', '')
 }
 
+function Get-CrewHeartbeat {
+    param([string]$Issue)
+    $f = Join-Path $RepoRoot ".crew\$Issue-heartbeat.json"
+    if (-not (Test-Path -LiteralPath $f)) { return $null }
+    try { return (Get-Content -LiteralPath $f -Raw | ConvertFrom-Json) }
+    catch { return $null }
+}
+
+function Get-CrewHeartbeatAgeSeconds {
+    param($Heartbeat)
+    if (-not $Heartbeat -or -not $Heartbeat.updatedAtUtc) { return $null }
+    try {
+        $parsed = [DateTimeOffset]::Parse([string]$Heartbeat.updatedAtUtc, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal)
+    }
+    catch { return $null }
+    return ([DateTimeOffset]::UtcNow - $parsed.ToUniversalTime()).TotalSeconds
+}
+
 $state = @{ Signatures = @{} }
 if (Test-Path $statePath) {
     try {
@@ -198,6 +219,31 @@ while ($true) {
                 Write-Event "crew/$issue" 'SCOUT_REPORT_READY' ("report=$($manifestInfo.ScoutReportPath)")
                 $state.Signatures[$scoutKey] = 'ready'
             }
+        }
+
+        # Health detection: a heartbeat older than StalledAfterSec means the worker
+        # is stalled; a fresh heartbeat means it is alive even if quiet. A missing
+        # heartbeat is not a stall - crew_start writes the first heartbeat and legacy
+        # tasks may predate the contract.
+        $heartbeat = Get-CrewHeartbeat -Issue $issue
+        $stallKey = "$($entry.Branch)#stall"
+        $prevStall = if ($state.Signatures.ContainsKey($stallKey)) { $state.Signatures[$stallKey] } else { '' }
+        $stalled = $false
+        if ($heartbeat -and -not ($sig -like '*|MERGED|*')) {
+            $ageSec = Get-CrewHeartbeatAgeSeconds -Heartbeat $heartbeat
+            if ($null -ne $ageSec -and $ageSec -ge $StalledAfterSec) {
+                $scoutDone = ($manifestInfo.Autonomy -eq 'scout' -and $manifestInfo.ScoutReportPath -and (Test-Path -LiteralPath $manifestInfo.ScoutReportPath))
+                if (-not $scoutDone) { $stalled = $true }
+            }
+        }
+        if ($stalled) {
+            if ($prevStall -ne 'stalled') {
+                Write-Event "crew/$issue" 'WORKER_STALLED' ("heartbeat age {0:N0}s >= {1}s; phase '{2}'" -f $ageSec, $StalledAfterSec, $heartbeat.phase)
+                $state.Signatures[$stallKey] = 'stalled'
+            }
+        }
+        elseif ($prevStall -eq 'stalled') {
+            $state.Signatures[$stallKey] = 'cleared'
         }
 
         # Completion detection: unchanged dirty-file count across IdleSweeps sweeps.

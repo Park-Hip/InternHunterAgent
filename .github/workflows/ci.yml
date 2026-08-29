@@ -102,3 +102,49 @@ jobs:
       - run: uv run python -m evals.fixtures.loader
 
       - run: uv run python -m evals.replay
+
+  migration-check:
+    name: Migration chain & ORM sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: internhunter
+          POSTGRES_PASSWORD: internhunter
+          POSTGRES_DB: internhunter_eval
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U internhunter -d internhunter_eval"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Connect to the real Postgres service for the migration chain.
+      ALEMBIC_DATABASE_URL: "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval"
+      DATABASE_URL: "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval"
+      # Dummy values — only needed to satisfy Settings validation at load.
+      GROQ_API_KEY: "unused-in-ci"
+      LANGFUSE_SECRET_KEY: "unused-in-ci"
+      LANGFUSE_PUBLIC_KEY: "unused-in-ci"
+      DEEPEVAL_TELEMETRY_OPT_OUT: "1"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.8.15"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - run: uv sync --frozen
+
+      # G1: Prove the chain can take a blank database to head.
+      - name: Upgrade blank database to head
+        run: uv run alembic upgrade head
+
+      # G2: Prove the ORM metadata is not ahead of the revision chain.
+      - name: Check ORM metadata matches migration chain
+        run: uv run alembic check

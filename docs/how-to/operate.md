@@ -104,7 +104,8 @@ If that optional lookup fails, SQL generation continues without a Langfuse promp
 
 ### Initialise a local database
 
-Start local Postgres, then apply the idempotent Alembic migration chain:
+Start local Postgres, then apply the canonical Alembic migration chain. Alembic is the
+sole executable schema baseline: there is no hand-maintained initialization SQL.
 
 ```bash
 docker compose up -d postgres
@@ -113,14 +114,17 @@ uv run alembic upgrade head
 
 ### Reset local development data
 
-This deletes the local schema and all current local rows.
-Never point this command at Neon or any production database.
+This deletes the local schema and all current local rows, then rebuilds it from the
+canonical Alembic revision chain. Never point this command at Neon or any production
+database.
 
 ```bash
-docker compose exec -T postgres psql -U internhunter -d internhunter -f scripts/reset_db.sql
-uv run alembic upgrade head
+./scripts/reset_local_db.ps1
 uv run python -m src.services.ingestion.loader
 ```
+
+`reset_local_db.ps1` drops the local objects via `scripts/reset_db.sql` (a drop-only
+script with no schema DDL) and then applies `uv run alembic upgrade head`.
 
 ### Apply a schema migration
 

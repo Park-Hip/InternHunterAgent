@@ -137,3 +137,146 @@ deliberate cheap-growth path.
 - **Migrations are only half the problem.** A create-if-not-exists silently no-ops on a table whose
   columns drifted out-of-band, which a migration tool does not detect. That is why ingestion carries
   a separate pre-flight column assertion; see [how-to/operate.md](../how-to/operate.md).
+- **Breaking-schema changes require a coordinated procedure.** When a column type or semantic contract
+  must change incompatibly (for example `tech_stack` from comma-separated text to a PostgreSQL array),
+  the agent-visible contract, prompts, fixtures, and evaluations all pivot together. The procedure
+  below prevents ad-hoc deployments and keeps the frozen agent-visible contract intact through every
+  phase. See [Expand–migrate–contract procedure](#expandmigratecontract-procedure).
+
+### Expand–migrate–contract procedure
+
+Use this procedure any time a shared schema column requires an incompatible type or semantic change.
+It is a documentation-only contract until a future ticket declares a concrete migration.
+Every destructive boundary includes an explicit rollback condition.
+
+#### Phase 1 — Assess compatibility
+
+1. Enumerate every consumer of the affected column: ORM model fields, SQL query projections,
+   prompt surfaces (`config/prompts.yaml`), API schemas (`src/api/schemas.py`), fixtures
+   (`evals/fixtures/seed_eval_db.sql`), and evaluation baselines.
+2. Confirm the change is genuinely breaking — additive columns use the free-growth path above;
+   this procedure applies only to incompatible changes (type rename, semantic restruct, column
+   removal, or join/table restructuring).
+3. Write the proposed change as a ticket with the full consumer list and rollback plan before any
+code touches the branch.
+
+Rollback condition: if any consumer cannot be updated in lockstep, abort and split the change into
+smaller ordered tickets.
+
+#### Phase 2 — Expand (schema-level compatible superset)
+
+1. Create a new Alembic migration that adds the new column (or new table) alongside the existing one.
+   The new column must accept all current data without loss — for a `tech_stack` array migration,
+   the new column would be a `text[]` or `jsonb` while the old comma-separated `text` column remains.
+2. Do **not** drop or alter the existing column in this migration.
+3. Update `models.py` to map both columns. The old column retains its frozen position in the agent-
+   visible contract; the new column is mapped but not yet exposed to the agent.
+4. Update ingestion writers to populate both columns on insert and on upsert conflict.
+5. Commit and deploy. No agent-visible behavior changes yet.
+
+Rollback condition: the existing column still holds all data; reverting the deployment restores the
+previous state automatically.
+
+#### Phase 3 — Deploy compatible writers and readers
+
+1. Ship the ingestion writer update so both columns are populated from the next run forward.
+2. Deploy the updated API so new requests observe the dual-column state but the agent-visible
+   contract surface remains unchanged.
+3. Verify `assert_clean_jobs_schema()` passes with both columns present.
+
+Rollback condition: revert the deployment; the old code still reads and writes the original column.
+
+#### Phase 4 — Backfill real data
+
+1. Run a backfill script (or Alembic migration `downgrade` + `upgrade` with transform logic) that
+   migrates existing rows from the old column into the new column.
+2. The backfill must be truthful — no synthetic or guessed values. For `tech_stack`, split each
+   comma-separated string into array elements; missing values become empty arrays, not `NULL`.
+3. Run the backfill against a staging Neon branch first; confirm row counts match and no data is
+   lost.
+
+Rollback condition: the old column still contains the original data. If the backfill fails or
+produces incorrect results, drop the new column and restart after fixing the script.
+
+#### Phase 5 — Validate data and consumer contract
+
+1. Run the full evaluation suite against the backfilled data with the old agent-visible contract still
+   in effect. The observable API behaviour must not change.
+2. Confirm `tests/agents/runtime/test_prompts.py` still passes — the hidden-column exclusion test
+   must still reject the new column from prompt surfaces.
+3. Record the backfill checksum (row count, spot-check values) in the ticket for traceability.
+
+Rollback condition: if validation fails, the new column is abandoned and the old column continues
+serving. Re-open the ticket with corrected backfill logic.
+
+#### Phase 6 — Switch (coordinated contract update)
+
+1. Prepare a single coordinated change set covering:
+   - `models.py`: unmapping the old column, promoting the new column to the agent-visible position.
+   - `config/prompts.yaml`: updating `schema_context`, `system_prompt`, and `sql_generation` to
+     reference the new column name and type.
+   - `src/api/schemas.py`: updating any field types that depend on the column.
+   - `evals/fixtures/seed_eval_db.sql`: seeding the new column format in fixture data.
+   - Evaluation baselines: recalibrating T0011.5 and any few-shot references.
+2. All pieces ship in one PR so there is no window where the agent reads stale column names or the
+   API returns incompatible types.
+3. Run `assert_clean_jobs_schema()` after the switch — the ORM-derived column set must match the
+   prompt-enumerated set exactly.
+
+Rollback condition: revert the PR. The old column remains populated by the writer deployed in Phase
+3 and the previous contract is restored.
+
+#### Phase 7 — Observe
+
+1. Monitor ingestion runs for one full cycle to confirm both columns remain in sync on upsert.
+2. Check Langfuse traces for any SQL-generation regressions related to the changed column.
+3. Run the targeted evaluation pass to confirm answer quality is within tolerance.
+
+Rollback condition: if regressions exceed tolerance, revert the switch (Phase 6) and re-evaluate
+the backfill or prompt changes before retrying.
+
+#### Phase 8 — Contract later (staged contraction)
+
+1. Once observation confirms stability, schedule a separate follow-on migration to remove the old
+   column. This is deliberately a different migration from Phase 6 so it can be reviewed and
+   approved independently.
+2. Before dropping the column, confirm no remaining queries, prompts, or fixtures reference it.
+3. The contraction migration is a maintainer-approved action only — it must not land via automated
+   CI without explicit sign-off.
+
+Rollback condition: the old column still exists until the contraction migration is applied.
+Reverting the contraction migration restores the dual-column state; data is never lost.
+
+#### Coordination checklist
+
+Every breaking schema migration must complete these coordination points before the switch phase:
+
+| Surface | Owner | Must update |
+|---|---|---|
+| `src/services/ingestion/models.py` | Engineering | ORM mappings for old and new columns |
+| Alembic migration | Engineering | Schema DDL; downgrade path tested |
+| `config/prompts.yaml` | Engineering + agent | `schema_context`, `system_prompt`, `sql_generation` |
+| `src/api/schemas.py` | Engineering | Pydantic field types |
+| `evals/fixtures/seed_eval_db.sql` | Evaluation | Fixture data in new format |
+| Evaluation baselines | Evaluation | T0011.5 calibration and few-shot references |
+| Production migration approval | Maintainer | Explicit sign-off before contraction |
+
+#### Worked example: `tech_stack` text → PostgreSQL array
+
+1. **Assess**: `tech_stack` is a comma-separated `text` column used in `schema_context`, in SQL
+   queries, and in fixture data. Changing it to `text[]` breaks every consumer.
+2. **Expand**: add `tech_stack_arr text[]` alongside the existing `tech_stack text`. Ingestion
+   writes both. Old column unchanged.
+3. **Deploy**: ship writer update; API and agent observe nothing new.
+4. **Backfill**: run a script that splits each `tech_stack` string into `tech_stack_arr` elements.
+   Verify against a staging Neon branch.
+5. **Validate**: run evals with the old contract still active. Confirm no regressions.
+6. **Switch**: one coordinated PR updates `models.py`, `prompts.yaml`, `schemas.py`, and the
+   fixture. The agent now sees `tech_stack_arr` as the array column.
+7. **Observe**: monitor one ingestion cycle and Langfuse traces for regressions.
+8. **Contract later**: schedule a separate migration to drop `tech_stack text` after explicit
+   maintainer approval.
+
+At no phase do old and new deployments disagree on schema. No destructive operation occurs before
+validation and rollback conditions are in place. Agent contract updates are called out explicitly
+in the switch phase.

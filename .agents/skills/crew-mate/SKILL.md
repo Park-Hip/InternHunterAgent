@@ -19,7 +19,7 @@ receipt named below; do not claim completion from the agent's own narration.
 
 | Captain phrase | Normalized action | Required result / receipt |
 |---|---|---|
-| `register #<n>` or `register task #<n>` | Register a VS Code task | Run `scripts/crew_start.ps1 -Issue <n> -Autonomy ship|scout -Harness pi -Backend vscode-task`. This writes the matching `Crew: IHA-<n> worker` task in the primary checkout and launches **no** window or terminal. Its default Pi model is exactly `dashscope/deepseek-v4-pro-0813`; never substitute a ModelScope or OpenRouter model. Report task label, tasks-file path, and worktree cwd. |
+| `register #<n>` or `register task #<n>` | Register a VS Code task | Run `scripts/crew_start.ps1 -Issue <n> -Autonomy ship|scout -Harness pi -Backend vscode-task`. This writes the matching `Crew: IHA-<n> worker` task in the primary checkout and launches **no** window or terminal. Its default Pi model is exactly `modelscope/deepseek-ai/DeepSeek-V4-Pro-0813`; never substitute a DashScope or OpenRouter model. Report task label, tasks-file path, and worktree cwd. |
 | `launch #<n>` or `open worker #<n>` | Launch a new VS Code worker window | Use the explicit `vscode` backend. Report worktree path and launch result. |
 | `review #<n>` or `review PR #<n>` | Publish an independent crew PR review | Dispatch a fresh reviewer using `crew-pr-review` plus `code-review-and-quality`. The reviewer must return the publisher receipt: review URL/id, current head SHA, event, state, and inline-comment count. |
 | `status`, `progress`, `current progress`, or `how is the crew doing` | Reconcile and report current progress | Reconcile from disk, then run `scripts/crew_progress_report.ps1 -Format markdown`; return that Markdown only. |

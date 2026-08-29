@@ -37,15 +37,15 @@ function Get-CrewTaskPaths {
 
 function Resolve-CrewHarnessArgs {
     # Centralize defaults so every launch backend receives the same resolved
-    # arguments. A registered Pi worker deliberately uses DashScope, not a
-    # similarly named ModelScope/OpenRouter route, unless the caller supplied
+    # arguments. A registered Pi worker deliberately uses ModelScope, not a
+    # similarly named DashScope/OpenRouter route, unless the caller supplied
     # an explicit --model override.
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Harness,
         [AllowEmptyString()][string]$HarnessArgs,
         [Parameter(Mandatory)][ValidateSet('wt', 'vscode', 'vscode-task')][string]$Backend,
-        [ValidateNotNullOrEmpty()][string]$PiModel = 'dashscope/deepseek-v4-pro-0813'
+        [ValidateNotNullOrEmpty()][string]$PiModel = 'modelscope/deepseek-ai/DeepSeek-V4-Pro-0813'
     )
 
     $resolved = if ([string]::IsNullOrWhiteSpace($HarnessArgs)) {

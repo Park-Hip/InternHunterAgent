@@ -1,0 +1,43 @@
+{
+  "name": "crew-vscode-launcher",
+  "displayName": "Crew VS Code Task Auto-Launcher",
+  "description": "Launches registered crew worker tasks in the open VS Code window when a crew launch request is published into .crew/launch-queue.",
+  "version": "0.1.0",
+  "publisher": "internhunteragent",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Park-Hip/InternHunterAgent"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "crew.vscodeTaskAuto.processQueue",
+        "title": "Crew: Process Launch Queue"
+      }
+    ],
+    "configuration": {
+      "title": "Crew",
+      "properties": {
+        "crew.vscodeTaskAuto.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically launch registered crew worker tasks when a request appears in .crew/launch-queue/requests. Requires a trusted workspace."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

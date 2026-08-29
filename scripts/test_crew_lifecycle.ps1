@@ -101,6 +101,70 @@ try {
     $leadingBytes = [System.IO.File]::ReadAllBytes($tasksPath)[0..2]
     if ($leadingBytes[0] -eq 0xEF -and $leadingBytes[1] -eq 0xBB -and $leadingBytes[2] -eq 0xBF) { throw '.vscode/tasks.json was rewritten with a BOM.' }
 
+    # vscode-task-auto: pin the cross-language spec hash, publish an immutable
+    # request, reconcile extension events to a manifest status, and confirm
+    # teardown removes only that request's records.
+    $autoPaths = Get-CrewTaskPaths -RepoRoot $repoRoot -Issue 997
+    Invoke-TestGit -Arguments @('-C', $repoRoot, 'worktree', 'add', $autoPaths.WorktreePath, '-b', 'crew/997-vscode-task-auto-probe', 'main')
+    Write-CrewUtf8File -Path $autoPaths.PrimaryBriefPath -Content '# Brief: vscode-task-auto probe'
+    Write-CrewTaskManifest -ManifestPath $autoPaths.PrimaryManifestPath -Issue 997 -IssueUrl 'https://example.test/issues/997' -Title 'vscode-task-auto probe' -Autonomy ship -Branch 'crew/997-vscode-task-auto-probe' -RepoRoot $repoRoot -WorktreePath $autoPaths.WorktreePath -PrimaryBriefPath $autoPaths.PrimaryBriefPath -PrimaryStatusPath $autoPaths.PrimaryStatusPath -TaskBriefPath $autoPaths.TaskBriefPath -ScoutReportPath $autoPaths.ScoutReportPath -TerminalBackend vscode-task-auto | Out-Null
+
+    $fixtureSpec = [ordered]@{ specVersion = 1; type = 'shell'; command = 'C:\tools\pi.exe'; args = [string[]]@('--model', 'modelscope/x'); cwd = 'D:\crew\IHA-1' }
+    Assert-Equal (Get-CrewExecutionSpecHash -Spec $fixtureSpec) '00787f451655efe3c04a166aadb609f77bfbebc95965c38347b10f3e9be753d0' 'The Powershell canonical spec hash diverged from the JS fixture.'
+
+    $spec = New-CrewExecutionSpec -HarnessPath 'C:\tools\pi.exe' -HarnessArgs '--model modelscope/x' -WorkerPrompt 'do the work' -WorktreePath $autoPaths.WorktreePath
+    $specHash = Get-CrewExecutionSpecHash -Spec $spec
+    $requestId = 'IHA-997-' + [guid]::NewGuid().ToString('N')
+    $requestPath = Add-CrewVsCodeAutoRequest -RepoRoot $repoRoot -RequestId $requestId -Issue 997 -TaskName 'Crew: IHA-997 worker (pi)' -WorktreePath $autoPaths.WorktreePath -ExecutionSpec $spec -ManifestPath $autoPaths.PrimaryManifestPath
+    if (-not (Test-Path -LiteralPath $requestPath)) { throw 'Auto-launch request was not published.' }
+    $request = Get-Content -LiteralPath $requestPath -Raw | ConvertFrom-Json
+    Assert-Equal $request.requestId $requestId 'Published request id mismatch.'
+    Assert-Equal $request.executionSpecHash $specHash 'Published request hash mismatch.'
+    Assert-Equal $request.executionSpec.command 'C:\tools\pi.exe' 'Published request command mismatch.'
+    Assert-Equal ($request.executionSpec.args -join ' ') '--model modelscope/x do the work' 'Published request args mismatch.'
+    try {
+        Add-CrewVsCodeAutoRequest -RepoRoot $repoRoot -RequestId $requestId -Issue 997 -TaskName 'Crew: IHA-997 worker (pi)' -WorktreePath $autoPaths.WorktreePath -ExecutionSpec $spec -ManifestPath $autoPaths.PrimaryManifestPath | Out-Null
+        throw 'Second publication with the same request id was not refused.'
+    }
+    catch {
+        if ($_.Exception.Message -eq 'Second publication with the same request id was not refused.') { throw }
+    }
+
+    $autoQueue = Join-Path (Join-Path $repoRoot '.crew') 'launch-queue'
+    $resultsDir = Join-Path $autoQueue 'results'
+    New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+    $eventsPath = Join-Path $resultsDir ($requestId + '.events.jsonl')
+    [System.IO.File]::AppendAllText($eventsPath, '{ "ts": "2026-01-01T00:00:01Z", "event": "validated" }' + "`n", [System.Text.UTF8Encoding]::new($false))
+    Assert-Equal (Get-CrewVsCodeAutoLaunchEvent -RepoRoot $repoRoot -RequestId $requestId) $null 'Non-terminal events must not resolve to a launch event.'
+    [System.IO.File]::AppendAllText($eventsPath, '{ "ts": "2026-01-01T00:00:02Z", "event": "started", "processId": 7 }' + "`n", [System.Text.UTF8Encoding]::new($false))
+    Assert-Equal (Get-CrewVsCodeAutoLaunchEvent -RepoRoot $repoRoot -RequestId $requestId) 'started' 'Terminal event was not resolved.'
+    $status = Get-CrewVsCodeAutoLaunchStatus -LaunchEvent (Get-CrewVsCodeAutoLaunchEvent -RepoRoot $repoRoot -RequestId $requestId)
+    Assert-Equal $status.Status 'launched' 'Started event did not map to launched status.'
+
+    $unrelatedRequestId = 'IHA-996-' + [guid]::NewGuid().ToString('N')
+    $unrelatedManifest = Join-Path $repoRoot '.crew\996-task.json'
+    Add-CrewVsCodeAutoRequest -RepoRoot $repoRoot -RequestId $unrelatedRequestId -Issue 996 -TaskName 'Crew: IHA-996 worker (pi)' -WorktreePath 'D:\elsewhere\unrelated-auto' -ExecutionSpec $spec -ManifestPath $unrelatedManifest | Out-Null
+    Add-CrewVsCodeTaskEntry -RepoRoot $repoRoot -WorktreePath $autoPaths.WorktreePath -TaskName 'Crew: IHA-997 worker (pi)' -HarnessPath 'C:\tools\pi.exe' -HarnessArgs '--model modelscope/x' -WorkerPrompt 'do the work' | Out-Null
+    Update-CrewTaskManifest -ManifestPath $autoPaths.PrimaryManifestPath -Changes @{
+        TerminalBackend        = 'vscode-task-auto'
+        TerminalLaunchSpec     = $spec
+        TerminalLaunchSpecHash = $specHash
+        LaunchRequestId        = $requestId
+        TerminalLaunchStatus   = 'launched'
+    } | Out-Null
+
+    $autoSawRemoved = $false
+    & (Join-Path $PSScriptRoot 'crew_teardown.ps1') -Issue 997 -RepoRoot $repoRoot | ForEach-Object {
+        if ($_ -like 'vscode-task-auto : removed*') { $autoSawRemoved = $true }
+        $_
+    } | Out-Null
+    if (-not $autoSawRemoved) { throw 'Teardown did not report the vscode-task-auto entry removal.' }
+    if (Test-Path -LiteralPath $autoPaths.WorktreePath) { throw 'vscode-task-auto teardown did not remove the worktree.' }
+    if (Test-Path -LiteralPath $requestPath) { throw 'Teardown left the request record in place.' }
+    if (Test-Path -LiteralPath $eventsPath) { throw 'Teardown left the result record in place.' }
+    $unrelatedRequestPath = Join-Path (Join-Path $autoQueue 'requests') ($unrelatedRequestId + '.json')
+    if (-not (Test-Path -LiteralPath $unrelatedRequestPath)) { throw 'Teardown removed an unrelated launch request.' }
+
     # A second teardown of an already-torn-down task is refused before any
     # removal runs; exercise Remove directly to confirm a no-match is safe.
     try {

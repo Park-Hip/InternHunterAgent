@@ -42,6 +42,10 @@ if ($WhatIfMode) {
     if ($manifest.TerminalBackend -eq 'vscode-task') {
         Write-Output "  vscode-task : remove Run Task entries with cwd '$($manifest.WorktreePath)' from .vscode\tasks.json"
     }
+    if ($manifest.TerminalBackend -eq 'vscode-task-auto') {
+        Write-Output "  vscode-task-auto : remove Run Task entries with cwd '$($manifest.WorktreePath)' from .vscode\tasks.json"
+        Write-Output "  vscode-task-auto : remove request and result records for launch request '$($manifest.LaunchRequestId)'"
+    }
     Write-Output ("  manifest : mark .crew\{0}-task.json as torn_down" -f $Issue)
     exit 0
 }
@@ -58,14 +62,19 @@ if ($manifest.Autonomy -eq 'scout' -and -not $manifest.ScoutReportHandedOff) {
 }
 Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes $changes | Out-Null
 
-if ($manifest.TerminalBackend -eq 'vscode-task') {
+if ($manifest.TerminalBackend -eq 'vscode-task' -or $manifest.TerminalBackend -eq 'vscode-task-auto') {
     . (Join-Path $PSScriptRoot 'crew_vscode_backend.ps1')
     $taskEntry = Remove-CrewVsCodeTaskEntry -RepoRoot $RepoRoot -WorktreePath $manifest.WorktreePath
+    $backendLabel = $manifest.TerminalBackend
     if ($taskEntry.Removed -gt 0) {
-        Write-Output ("vscode-task : removed {0} matching Run Task entry from {1}" -f $taskEntry.Removed, $taskEntry.TasksPath)
+        Write-Output ("{0} : removed {1} matching Run Task entry from {2}" -f $backendLabel, $taskEntry.Removed, $taskEntry.TasksPath)
     }
     else {
-        Write-Output ("vscode-task : no matching Run Task entry found in {0}" -f $taskEntry.TasksPath)
+        Write-Output ("{0} : no matching Run Task entry found in {1}" -f $backendLabel, $taskEntry.TasksPath)
+    }
+    if ($manifest.TerminalBackend -eq 'vscode-task-auto' -and $manifest.LaunchRequestId) {
+        $records = Remove-CrewVsCodeAutoRecords -RepoRoot $RepoRoot -RequestId $manifest.LaunchRequestId
+        Write-Output ("vscode-task-auto : removed {0} launch-queue record(s) for request {1}" -f $records.Removed, $manifest.LaunchRequestId)
     }
 }
 

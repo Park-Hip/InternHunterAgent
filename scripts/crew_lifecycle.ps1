@@ -45,7 +45,7 @@ function Resolve-CrewHarnessArgs {
     param(
         [Parameter(Mandatory)][string]$Harness,
         [AllowEmptyString()][string]$HarnessArgs,
-        [Parameter(Mandatory)][ValidateSet('wt', 'vscode', 'vscode-task')][string]$Backend,
+        [Parameter(Mandatory)][ValidateSet('wt', 'vscode', 'vscode-task', 'vscode-task-auto')][string]$Backend,
         [ValidateNotNullOrEmpty()][string]$PiModel = 'modelscope/deepseek-ai/DeepSeek-V4-Pro-0813'
     )
 
@@ -55,7 +55,7 @@ function Resolve-CrewHarnessArgs {
     else { $HarnessArgs.Trim() }
 
     $hasExplicitModel = $resolved -match '(?i)(?:^|\s)--model(?:\s|=)'
-    if ($Harness -ieq 'pi' -and $Backend -eq 'vscode-task' -and -not $hasExplicitModel) {
+    if ($Harness -ieq 'pi' -and ($Backend -eq 'vscode-task' -or $Backend -eq 'vscode-task-auto') -and -not $hasExplicitModel) {
         $resolved = if ($resolved) { "--model $PiModel $resolved" } else { "--model $PiModel" }
     }
     return $resolved
@@ -111,7 +111,7 @@ function Write-CrewTaskManifest {
         [Parameter(Mandatory)][string]$PrimaryStatusPath,
         [Parameter(Mandatory)][string]$TaskBriefPath,
         [Parameter(Mandatory)][string]$ScoutReportPath,
-            [Parameter(Mandatory)][ValidateSet('wt', 'vscode', 'vscode-task')][string]$TerminalBackend
+            [Parameter(Mandatory)][ValidateSet('wt', 'vscode', 'vscode-task', 'vscode-task-auto')][string]$TerminalBackend
     )
 
     $manifest = [ordered]@{
@@ -132,6 +132,9 @@ function Write-CrewTaskManifest {
         DispatchedAtUtc        = '{0:u}' -f (Get-Date).ToUniversalTime()
         TerminalBackend        = $TerminalBackend
         TerminalLaunchStatus   = 'not-attempted'
+        TerminalLaunchSpec     = $null
+        TerminalLaunchSpecHash = $null
+        LaunchRequestId        = $null
         TornDownAtUtc          = $null
     }
     Write-CrewUtf8File -Path $ManifestPath -Content ($manifest | ConvertTo-Json -Depth 4)

@@ -26,3 +26,6 @@ evals/replays/*-viewer.html
 .crew/events.log
 .crew/.watch-state.json
 .crew/candidates.json
+
+# crew-mode VS Code auto-launch queue (dispatch requests and result event logs)
+.crew/launch-queue/

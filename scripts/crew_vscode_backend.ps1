@@ -185,3 +185,175 @@ function Start-CrewVsCode {
         return [pscustomobject]@{ Launched = $false; Detail = $_.Exception.Message }
     }
 }
+
+#
+# vscode-task-auto backend: publish an immutable launch request that a local
+# VS Code extension picks up and runs in the already-open primary window. The
+# launcher builds one canonical execution spec (type/command/args/cwd) and its
+# SHA-256 hash, stores both in the task manifest and the request, then polls the
+# append-only result log for the first terminal launch event.
+
+function New-CrewExecutionSpec {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$HarnessPath,
+        [AllowEmptyString()][string]$HarnessArgs,
+        [Parameter(Mandatory)][string]$WorkerPrompt,
+        [Parameter(Mandatory)][string]$WorktreePath
+    )
+
+    # Mirrors Add-CrewVsCodeTaskEntry's argument construction so the canonical
+    # spec and the registered task entry byte-for-byte describe the same run.
+    $argList = @()
+    foreach ($arg in ($HarnessArgs -split '\s+' | Where-Object { $_ })) { $argList += $arg }
+    $argList += $WorkerPrompt
+    return [ordered]@{
+        specVersion = 1
+        type        = 'shell'
+        command     = $HarnessPath
+        args        = [string[]]$argList
+        cwd         = $WorktreePath
+    }
+}
+
+function Get-CrewExecutionSpecHash {
+    # Byte-identical to vscode/crew-launcher/lib/spec.js canonicalString +
+    # specHash: one LF-joined string of the same ordered fields, UTF-8, SHA-256
+    # hex. A regression test in test_crew_lifecycle.ps1 pins a shared vector.
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Spec)
+
+    $lines = @(
+        "specVersion=$($Spec['specVersion'])",
+        "type=$($Spec['type'])",
+        "command=$($Spec['command'])",
+        "args=$($Spec['args'].Count)"
+    )
+    foreach ($arg in $Spec['args']) { $lines += [string]$arg }
+    $lines += "cwd=$($Spec['cwd'])"
+    $canonical = $lines -join "`n"
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($canonical)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
+function Add-CrewVsCodeAutoRequest {
+    # Publishes one immutable request record and atomically moves it into place. The request never carries a free-form shell command - only
+    # the pinned spec and its hash.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$RequestId,
+        [Parameter(Mandatory)][int]$Issue,
+        [Parameter(Mandatory)][string]$TaskName,
+        [Parameter(Mandatory)][string]$WorktreePath,
+        [Parameter(Mandatory)][System.Collections.IDictionary]$ExecutionSpec,
+        [Parameter(Mandatory)][string]$ManifestPath
+    )
+
+    $specHash = Get-CrewExecutionSpecHash -Spec $ExecutionSpec
+    $requestsDir = Join-Path (Join-Path (Join-Path $RepoRoot '.crew') 'launch-queue') 'requests'
+    if (-not (Test-Path -LiteralPath $requestsDir)) {
+        New-Item -ItemType Directory -Path $requestsDir -Force | Out-Null
+    }
+    $request = [ordered]@{
+        schemaVersion     = 1
+        requestId         = $RequestId
+        issue             = $Issue
+        taskName          = $TaskName
+        worktreePath      = $WorktreePath
+        executionSpec     = $ExecutionSpec
+        executionSpecHash = $specHash
+        manifestPath      = $ManifestPath
+        createdUtc        = '{0:u}' -f (Get-Date).ToUniversalTime()
+    }
+    $json = $request | ConvertTo-Json -Depth 6
+    $finalPath = Join-Path $requestsDir ($RequestId + '.json')
+    $tempPath = Join-Path $requestsDir ('.tmp-' + [guid]::NewGuid().ToString('N'))
+    [System.IO.File]::WriteAllText($tempPath, $json + "`n", [System.Text.UTF8Encoding]::new($false))
+    try {
+        [System.IO.File]::Move($tempPath, $finalPath)
+    }
+    catch {
+        if (Test-Path -LiteralPath $tempPath) { Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue }
+        throw
+    }
+    return $finalPath
+}
+
+function Get-CrewVsCodeAutoLaunchEvent {
+    # Returns the first terminal launch event kind written by the extension, or
+    # $null when the extension has not (yet) produced one.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$RequestId
+    )
+
+    $resultsDir = Join-Path (Join-Path (Join-Path $RepoRoot '.crew') 'launch-queue') 'results'
+    $eventsPath = Join-Path $resultsDir ($RequestId + '.events.jsonl')
+    if (-not (Test-Path -LiteralPath $eventsPath)) { return $null }
+    foreach ($line in Get-Content -LiteralPath $eventsPath) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        try { $event = $line | ConvertFrom-Json } catch { continue }
+        if ($event.event -in @('accepted', 'started', 'already-running', 'refused', 'failed')) {
+            return $event.event
+        }
+    }
+    return $null
+}
+
+function Wait-CrewVsCodeAutoLaunch {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$RequestId,
+        [int]$TimeoutSeconds = 10
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $event = Get-CrewVsCodeAutoLaunchEvent -RepoRoot $RepoRoot -RequestId $RequestId
+        if ($event) { return $event }
+        Start-Sleep -Milliseconds 250
+    } while ((Get-Date) -lt $deadline)
+    return $null
+}
+
+function Remove-CrewVsCodeAutoRecords {
+    # Removes only the request and result records owned by one request id.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$RequestId
+    )
+
+    $launchQueue = Join-Path (Join-Path $RepoRoot '.crew') 'launch-queue'
+    $requestPath = Join-Path (Join-Path $launchQueue 'requests') ($RequestId + '.json')
+    $resultsPath = Join-Path (Join-Path $launchQueue 'results') ($RequestId + '.events.jsonl')
+    $removed = 0
+    if (Test-Path -LiteralPath $requestPath) { Remove-Item -LiteralPath $requestPath -Force; $removed++ }
+    if (Test-Path -LiteralPath $resultsPath) { Remove-Item -LiteralPath $resultsPath -Force; $removed++ }
+    return [pscustomobject]@{ Removed = $removed }
+}
+
+function Get-CrewVsCodeAutoLaunchStatus {
+    # Maps an extension launch event (or $null from the poll window) to the
+    # manifest status/detail the launcher records.
+    [CmdletBinding()]
+    param([AllowNull()][string]$LaunchEvent)
+
+    switch ($LaunchEvent) {
+        'accepted'        { return [pscustomobject]@{ Status = 'launched'; Detail = 'extension accepted the task for execution' } }
+        'started'         { return [pscustomobject]@{ Status = 'launched'; Detail = 'worker process started in the current window' } }
+        'already-running' { return [pscustomobject]@{ Status = 'already-running'; Detail = 'a matching worker is already running' } }
+        'refused'         { return [pscustomobject]@{ Status = 'refused'; Detail = 'extension refused the request; see the request event log' } }
+        'failed'          { return [pscustomobject]@{ Status = 'failed'; Detail = 'extension failed to start the task' } }
+        default           { return [pscustomobject]@{ Status = 'pending-extension'; Detail = 'no extension result within the poll window (extension missing or disabled)' } }
+    }
+}

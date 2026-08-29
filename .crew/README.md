@@ -47,8 +47,12 @@ Pass `-Backend wt` to open a new Windows Terminal tab instead.
 Pass `-Backend vscode-task` to register a "Crew: IHA-<issue> worker" task in this
 checkout's `.vscode/tasks.json` without launching anything - then start it from
 the terminal panel of an already-running window (Terminal > Run Task), which is
-the only way to land a worker inside a window that is already open, because the
-VS Code CLI cannot inject terminals into running windows.
+the only way to land a worker inside a window that is already open without help,
+because the VS Code CLI cannot inject terminals into running windows.
+Pass `-Backend vscode-task-auto` to register the same task and publish a launch
+request into `.crew/launch-queue` that a local, opt-in VS Code extension runs in
+the already-open window - no `Run Task` click. See
+[the extension README](../vscode/crew-launcher/README.md).
 
 By default, it opens an interactive PowerShell prompt and does not start an AI harness.
 Pass `-Harness <executable>` to start any installed command-line harness interactively.
@@ -60,13 +64,16 @@ Pass `-Harness <executable>` to start any installed command-line harness interac
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy scout -Harness aider
 # Register the worker as a task in this checkout's terminal panel (pi example):
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness pi -Backend vscode-task
+# Register and auto-launch it in the current window (pi example):
+.\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness pi -Backend vscode-task-auto
 ```
 
 With `-Harness codex`, codex starts with `--yolo` unless `-HarnessArgs` supplies
 different arguments. Other harnesses start without extra arguments.
 
-With `-Backend vscode-task`, the harness is started with the task brief as its
-initial prompt argument, so it begins working on its contract immediately.
+With `-Backend vscode-task` or `-Backend vscode-task-auto`, the harness is started
+with the task brief as its initial prompt argument, so it begins working on its
+contract immediately.
 Every backend passes the brief to the harness this way; no human needs to type
 anything into the worker session.
 
@@ -82,6 +89,24 @@ launcher also writes `.vscode/tasks.json` into the worktree defining a dedicated
 terminal task that runs on folder open, so the harness starts in VS Code's terminal panel as
 a switchable terminal tab. One-time prerequisite: allow automatic tasks when prompted, or set
 `"task.allowAutomaticTasks": "on"`. With `-Harness shell`, no automatic task is written.
+
+### VS Code auto-launch backend
+
+Pass `-Backend vscode-task-auto` to land a worker in an already-open window without
+clicking **Run Task**. The launcher registers the usual workspace task and publishes
+an immutable launch request into `.crew/launch-queue/requests`. A local, opt-in
+extension (`vscode/crew-launcher`) watches that queue and calls the VS Code Tasks API
+on the matching task in the current window.
+
+Prerequisites:
+
+- Install the packaged extension and reload VS Code.
+- Trust the workspace.
+- Turn on the opt-in: `"crew.vscodeTaskAuto.enabled": true` (default off).
+
+The extension executes only a pre-registered workspace task whose `type`, `command`,
+`args`, and `cwd` exactly match the canonical spec pinned in the task manifest; any
+mismatch is `refused`. See [the extension README](../vscode/crew-launcher/README.md).
 
 ## Intake rules (enforced by the mate)
 
@@ -191,7 +216,7 @@ Use the manifest-aware teardown command for newly dispatched tasks:
 Teardown never forces removal of a dirty worktree.
 For a scout, it refuses to remove the worktree unless the durable report exists and the operator explicitly confirms the handoff with `-ConfirmScoutReportHandoff`.
 On success, it leaves the primary manifest in place and records that the task was torn down.
-For tasks dispatched with `-Backend vscode-task`, teardown also removes the matching `Crew: IHA-<issue> worker` entry from this checkout's `.vscode/tasks.json`.
+For tasks dispatched with `-Backend vscode-task`, teardown also removes the matching `Crew: IHA-<issue> worker` entry from this checkout's `.vscode/tasks.json`. For `-Backend vscode-task-auto`, teardown additionally removes that request's queue and result records from `.crew/launch-queue`.
 
 When no crew is active, stop the watcher.
 The retained manifest, brief, status, and durable scout report support later inspection and manual recovery.

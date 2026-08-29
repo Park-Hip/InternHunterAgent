@@ -15,8 +15,10 @@ param(
     # via a generated .vscode/tasks.json (requires allowing automatic tasks);
     # vscode-task registers a "Crew: IHA-<issue> worker" task in THIS checkout's
     # .vscode/tasks.json without launching anything - start it from the terminal
-    # panel of an already-running window via Terminal > Run Task.
-    [ValidateSet('wt', 'vscode', 'vscode-task')][string]$Backend = 'vscode',
+    # panel of an already-running window via Terminal > Run Task; vscode-task-auto
+    # registers the same task and publishes a launch request that a local,
+    # opt-in VS Code extension runs in the already-open window.
+    [ValidateSet('wt', 'vscode', 'vscode-task', 'vscode-task-auto')][string]$Backend = 'vscode',
     # Dry-run prints the plan without touching disk.
     [switch]$WhatIfMode,
     [string]$RepoRoot
@@ -85,6 +87,10 @@ if ($WhatIfMode) {
         Write-Output ("  task     : register 'Crew: IHA-{0} worker ({1})' in this checkout's .vscode/tasks.json (cwd = worktree, harness gets the brief as its initial prompt)" -f $Issue, $Harness)
         Write-Output '  start    : Ctrl+Shift+P > Tasks: Run Task > the registered worker task'
     }
+    elseif ($Backend -eq 'vscode-task-auto') {
+        Write-Output ("  task     : register 'Crew: IHA-{0} worker ({1})' and publish an auto-launch request" -f $Issue, $Harness)
+        Write-Output '  start    : a local VS Code extension runs the task in this window (opt-in required)'
+    }
     elseif ($Backend -eq 'vscode') {
         if ($Harness -eq 'shell') {
             Write-Output ("  terminal : new VS Code window on {0} (no automatic task)" -f $wtPath)
@@ -107,12 +113,12 @@ if ($WhatIfMode) {
     exit 0
 }
 
-if ($Backend -eq 'vscode-task' -and $Harness -eq 'shell') {
-    throw '-Backend vscode-task starts the worker from your terminal panel and requires -Harness <executable>.'
+if (($Backend -eq 'vscode-task' -or $Backend -eq 'vscode-task-auto') -and $Harness -eq 'shell') {
+    throw "-Backend $Backend starts the worker from your terminal panel and requires -Harness <executable>."
 }
 # Relaunch of an existing dispatched task: reuse its worktree, brief, and
 # manifest; only (re-)register the terminal-panel task entry.
-if ($Backend -eq 'vscode-task' -and (Test-Path -LiteralPath $wtPath)) {
+if (($Backend -eq 'vscode-task' -or $Backend -eq 'vscode-task-auto') -and (Test-Path -LiteralPath $wtPath)) {
     if (-not (Test-Path -LiteralPath $paths.PrimaryManifestPath)) {
         throw "worktree exists at '$wtPath' without a task manifest; cannot relaunch."
     }
@@ -120,6 +126,41 @@ if ($Backend -eq 'vscode-task' -and (Test-Path -LiteralPath $wtPath)) {
     Add-CrewVsCodeTaskEntry -RepoRoot $RepoRoot -WorktreePath $wtPath -TaskName $taskName `
         -HarnessPath $harnessExecutable.Source -HarnessArgs $(if ($resolvedHarnessArgs) { $resolvedHarnessArgs } else { '' }) `
         -WorkerPrompt $workerPrompt | Out-Null
+
+    if ($Backend -eq 'vscode-task-auto') {
+        $existing = Read-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath
+        if ($existing.LaunchRequestId) {
+            Remove-CrewVsCodeAutoRecords -RepoRoot $RepoRoot -RequestId $existing.LaunchRequestId | Out-Null
+        }
+        $spec = New-CrewExecutionSpec -HarnessPath $harnessExecutable.Source `
+            -HarnessArgs $(if ($resolvedHarnessArgs) { $resolvedHarnessArgs } else { '' }) `
+            -WorkerPrompt $workerPrompt -WorktreePath $wtPath
+        $specHash = Get-CrewExecutionSpecHash -Spec $spec
+        $requestId = "IHA-$Issue-$([guid]::NewGuid().ToString('N'))"
+        Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes @{
+            State                  = 'dispatched'
+            TerminalBackend        = 'vscode-task-auto'
+            TerminalLaunchSpec     = $spec
+            TerminalLaunchSpecHash = $specHash
+            LaunchRequestId        = $requestId
+        } | Out-Null
+        Add-CrewVsCodeAutoRequest -RepoRoot $RepoRoot -RequestId $requestId -Issue $Issue `
+            -TaskName $taskName -WorktreePath $wtPath -ExecutionSpec $spec `
+            -ManifestPath $paths.PrimaryManifestPath | Out-Null
+        $launchEvent = Wait-CrewVsCodeAutoLaunch -RepoRoot $RepoRoot -RequestId $requestId
+        $launch = Get-CrewVsCodeAutoLaunchStatus -LaunchEvent $launchEvent
+        Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes @{
+            TerminalLaunchStatus = $launch.Status
+            TerminalLaunchDetail = $launch.Detail
+        } | Out-Null
+        Write-CrewHeartbeat -HeartbeatPath $paths.PrimaryHeartbeatPath -Phase 'dispatched' | Out-Null
+        Write-Output "relaunch   : reused worktree $wtPath"
+        Write-Output "task       : '$taskName' registered in .vscode/tasks.json"
+        Write-Output "request    : $requestId published to .crew\launch-queue"
+        Write-Output "launch     : $($launch.Status) - $($launch.Detail)"
+        exit 0
+    }
+
     Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes @{
         State                = 'dispatched'
         TerminalBackend      = 'vscode-task'
@@ -191,11 +232,39 @@ if ($Harness -ne 'shell') {
     # The brief as initial prompt - the harness starts working immediately.
     $sessionCommand += " '$escapedPrompt'"
 }
-if ($Backend -eq 'vscode-task') {
+if ($Backend -eq 'vscode-task' -or $Backend -eq 'vscode-task-auto') {
     $taskName = "Crew: IHA-$Issue worker ($Harness)"
     Add-CrewVsCodeTaskEntry -RepoRoot $RepoRoot -WorktreePath $wtPath -TaskName $taskName `
         -HarnessPath $harnessExecutable.Source -HarnessArgs $(if ($resolvedHarnessArgs) { $resolvedHarnessArgs } else { '' }) `
         -WorkerPrompt $workerPrompt | Out-Null
+
+    if ($Backend -eq 'vscode-task-auto') {
+        $spec = New-CrewExecutionSpec -HarnessPath $harnessExecutable.Source `
+            -HarnessArgs $(if ($resolvedHarnessArgs) { $resolvedHarnessArgs } else { '' }) `
+            -WorkerPrompt $workerPrompt -WorktreePath $wtPath
+        $specHash = Get-CrewExecutionSpecHash -Spec $spec
+        $requestId = "IHA-$Issue-$([guid]::NewGuid().ToString('N'))"
+        Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes @{
+            TerminalLaunchSpec     = $spec
+            TerminalLaunchSpecHash = $specHash
+            LaunchRequestId        = $requestId
+        } | Out-Null
+        Add-CrewVsCodeAutoRequest -RepoRoot $RepoRoot -RequestId $requestId -Issue $Issue `
+            -TaskName $taskName -WorktreePath $wtPath -ExecutionSpec $spec `
+            -ManifestPath $paths.PrimaryManifestPath | Out-Null
+        $launchEvent = Wait-CrewVsCodeAutoLaunch -RepoRoot $RepoRoot -RequestId $requestId
+        $launch = Get-CrewVsCodeAutoLaunchStatus -LaunchEvent $launchEvent
+        Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes @{
+            TerminalLaunchStatus = $launch.Status
+            TerminalLaunchDetail = $launch.Detail
+        } | Out-Null
+        Write-Output "worktree   : $wtPath (branch $branch)"
+        Write-Output "task       : '$taskName' registered in .vscode/tasks.json"
+        Write-Output "request    : $requestId published to .crew\launch-queue"
+        Write-Output "launch     : $($launch.Status) - $($launch.Detail)"
+        exit 0
+    }
+
     Update-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Changes @{
         TerminalLaunchStatus = 'awaiting-task-run'
         TerminalLaunchDetail = "registered '$taskName' in .vscode/tasks.json (cwd = worktree, harness gets the brief as initial prompt); start via Terminal > Run Task"

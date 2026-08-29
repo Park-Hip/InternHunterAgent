@@ -9,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     Identity,
+    Index,
     Numeric,
     Text,
     UniqueConstraint,
@@ -133,6 +134,12 @@ class IngestionRun(Base):
         CheckConstraint(
             "outcome IN ('completed', 'safety_aborted', 'failed')",
             name="ck_ingestion_runs_outcome",
+        ),
+        Index("ix_ingestion_runs_finished_at", "finished_at"),
+        Index(
+            "ix_ingestion_runs_source_started_at",
+            "source",
+            "started_at",
         ),
     )
 

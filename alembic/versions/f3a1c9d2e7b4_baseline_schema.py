@@ -1,7 +1,9 @@
 """baseline schema
 
-Reproduces the schema built by scripts/init_db.sql exactly, so that
-`alembic upgrade head` is a clean no-op on an already-initialised database.
+This revision is the canonical executable baseline. It reproduces exactly the
+schema that the retired scripts/init_db.sql used to build by hand, so that
+`alembic upgrade head` is a clean no-op on a database initialised before the
+retirement.
 
 Revision ID: f3a1c9d2e7b4
 Revises:

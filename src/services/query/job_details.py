@@ -1,7 +1,7 @@
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError
 
-from src.core.db import session_factory
+from src.core.db import agent_session_factory
 from src.services.query.executor import ExecutorError
 
 
@@ -10,7 +10,7 @@ def fetch_job_details(ids: list[int]) -> list[dict]:
         return []
 
     try:
-        with session_factory() as session:
+        with agent_session_factory() as session:
             session.execute(text("SET TRANSACTION READ ONLY"))
             # This column list mirrors config/prompts.yaml -> prompts.schema_context,
             # the 16-column frozen contract, in that file's own order. The two must

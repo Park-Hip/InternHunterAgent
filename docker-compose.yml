@@ -28,6 +28,7 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+psycopg://internhunter:internhunter@postgres:5432/internhunter
+      AGENT_DATABASE_URL: postgresql+psycopg://internhunter_agent:internhunter@postgres:5432/internhunter
       LANGFUSE_BASE_URL: http://host.docker.internal:3000
     depends_on:
       postgres:

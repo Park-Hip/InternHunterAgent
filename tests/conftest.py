@@ -7,6 +7,10 @@ os.environ.setdefault(
     "DATABASE_URL",
     "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter",
 )
+os.environ.setdefault(
+    "AGENT_DATABASE_URL",
+    "postgresql+psycopg://internhunter_agent:internhunter@localhost:5433/internhunter",
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:

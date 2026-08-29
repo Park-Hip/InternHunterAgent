@@ -2,7 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError
 from psycopg.errors import UndefinedColumn
 
-from src.core.db import session_factory
+from src.core.db import agent_session_factory
 
 
 class ExecutorError(Exception):
@@ -15,7 +15,7 @@ class UndefinedColumnError(ExecutorError):
 
 def execute_validated_sql(sql: str) -> list[dict]:
     try:
-        with session_factory() as session:
+        with agent_session_factory() as session:
             session.execute(text("SET TRANSACTION READ ONLY"))
             result = session.execute(text(sql))
             return [dict(row) for row in result.mappings().all()]

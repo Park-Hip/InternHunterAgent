@@ -11,6 +11,12 @@ const {
   validateRequestAndManifest,
   assessTaskMatch,
 } = require('./lib/validation');
+const {
+  findWorkspaceCandidate,
+  inspectRegisteredTask,
+  RECOVERY_RELOAD,
+  RECOVERY_UNREADABLE,
+} = require('./lib/discovery');
 const { appendEvent, hasTerminalEvent } = require('./lib/jsonl');
 
 const CONFIG_SECTION = 'crew.vscodeTaskAuto';
@@ -89,30 +95,52 @@ function registerLifecycle() {
   });
 }
 
-// Locate the workspace task registered under the request's taskName. Both a
-// missing task and a present-but-not-yet-matching task are retried: VS Code
+// Locate the workspace task registered under the request's taskName. A present
+// candidate and a present-but-not-yet-matching candidate are retried: VS Code
 // reloads .vscode/tasks.json asynchronously, so a relaunch can briefly observe
-// the stale same-name task. Only the final attempt settles on a verdict.
-async function findMatchingTask(spec, taskName, platform) {
+// the stale same-name task. Matching is folder-scope based (lib/discovery.js),
+// never the localized Task.source string, so a valid workspace task is not
+// mislabeled as missing. Only the final attempt settles on a verdict.
+async function findMatchingTask(root, spec, taskName, platform) {
   let sawCandidate = false;
   let lastShape = null;
   for (let attempt = 0; attempt < FETCH_ATTEMPTS; attempt += 1) {
-    const tasks = await vscode.tasks.fetchTasks({ type: 'shell' });
-    const candidate = tasks.find(
-      (task) => task.source === 'Workspace' && task.name === taskName,
-    );
+    let tasks = [];
+    try {
+      tasks = await vscode.tasks.fetchTasks({ type: 'shell' });
+    } catch {
+      tasks = [];
+    }
+    const candidate = findWorkspaceCandidate(tasks, taskName, root, platform);
     if (candidate) {
       sawCandidate = true;
-      lastShape = extractTaskShape(candidate);
+      lastShape = candidate.shape;
       if (shapesEqual(spec, lastShape, platform)) {
-        return { status: 'matched', task: candidate, shape: lastShape };
+        return { status: 'matched', task: candidate.task, shape: lastShape };
       }
     }
     if (attempt < FETCH_ATTEMPTS - 1) {
       await delay(FETCH_RETRY_MS);
     }
   }
-  return sawCandidate ? { status: 'mismatch', shape: lastShape } : { status: 'not-found' };
+  if (sawCandidate) {
+    return { status: 'mismatch', shape: lastShape };
+  }
+
+  // The live registry never surfaced the task. Read the primary checkout's
+  // .vscode/tasks.json to give an accurate verdict: a valid task present only
+  // on disk is a stale/unavailable registry (recoverable), not a missing task.
+  const registered = inspectRegisteredTask(root, taskName, spec, platform);
+  if (registered.status === 'present-match') {
+    return { status: 'registry-unavailable', recovery: RECOVERY_RELOAD };
+  }
+  if (registered.status === 'unreadable') {
+    return { status: 'registry-unavailable', recovery: RECOVERY_UNREADABLE };
+  }
+  if (registered.status === 'present-mismatch') {
+    return { status: 'mismatch', shape: registered.shape };
+  }
+  return { status: 'not-found' };
 }
 
 async function processRequest(root, requestPath) {
@@ -153,7 +181,11 @@ async function processRequest(root, requestPath) {
   appendEvent(rp, 'validated');
 
   const spec = request.executionSpec;
-  const found = await findMatchingTask(spec, request.taskName, platform);
+  const found = await findMatchingTask(root, spec, request.taskName, platform);
+  if (found.status === 'registry-unavailable') {
+    appendEvent(rp, 'refused', { reason: 'registry-unavailable', instruction: found.recovery });
+    return;
+  }
   const notFoundReason = found.status === 'mismatch'
     ? 'task-mismatch'
     : (found.status === 'not-found' ? 'task-not-found' : null);

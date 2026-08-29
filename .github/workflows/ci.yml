@@ -69,6 +69,7 @@ jobs:
       # satisfy Settings validation at load. NEVER real credentials.
       GROQ_API_KEY: "unused-in-ci"
       DATABASE_URL: "postgresql+psycopg://ci:ci@localhost:5432/ci"
+      AGENT_DATABASE_URL: "postgresql+psycopg://ci_agent:ci@localhost:5432/ci"
       LANGFUSE_SECRET_KEY: "unused-in-ci"
       LANGFUSE_PUBLIC_KEY: "unused-in-ci"
       # Importing deepeval otherwise phones home. The replay gate claims to make
@@ -125,6 +126,7 @@ jobs:
       # Connect to the real Postgres service for the migration chain.
       ALEMBIC_DATABASE_URL: "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval"
       DATABASE_URL: "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval"
+      AGENT_DATABASE_URL: "postgresql+psycopg://internhunter_agent:internhunter@localhost:5433/internhunter_eval"
       # Dummy values — only needed to satisfy Settings validation at load.
       GROQ_API_KEY: "unused-in-ci"
       LANGFUSE_SECRET_KEY: "unused-in-ci"

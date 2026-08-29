@@ -27,10 +27,15 @@ traces and project metadata.
 Those stores have separate owners, lifecycles, and schemas, and no overlap.
 
 **Required environment.**
-The database URL and the Langfuse keys, where tracing degrades gracefully if the Langfuse keys are
-absent.
+The database URL, the agent-read database URL, and the Langfuse keys, where tracing degrades gracefully if the Langfuse keys are absent.
 Provider keys are optional at boot and validated by the branch that needs them, so a checkout runs
 with only the selected provider's key.
+
+The agent-facing SQL-read path uses `AGENT_DATABASE_URL`, a dedicated least-privilege credential
+backed by a separate PostgreSQL role with `SELECT` only on `clean_jobs`. The writer paths
+(ingestion, Alembic, LangGraph checkpoint persistence) continue using `DATABASE_URL`.
+`AGENT_DATABASE_URL` is required at boot; absence fails closed and must never silently fall back
+to `DATABASE_URL`.
 
 **Tunable parameters** live in `config/settings.yaml`, read through `src/core/config.py`:
 `agent.react.*` for the outer model, `agent.sql_generation.*` for the nested SQL-generation model,

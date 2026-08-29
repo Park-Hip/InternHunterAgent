@@ -14,9 +14,9 @@ def _mock_session(mock_session_factory: MagicMock) -> MagicMock:
 
 
 class ExecuteValidatedSqlTests(unittest.TestCase):
-    @patch("src.services.query.executor.session_factory")
-    def test_maps_result_rows_to_list_of_dicts(self, mock_session_factory: MagicMock) -> None:
-        session = _mock_session(mock_session_factory)
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_maps_result_rows_to_list_of_dicts(self, mock_agent_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_agent_session_factory)
         mock_result = MagicMock()
         mock_result.mappings.return_value.all.return_value = [
             {"title": "Data Analyst", "company": "Acme"},
@@ -34,9 +34,9 @@ class ExecuteValidatedSqlTests(unittest.TestCase):
             ],
         )
 
-    @patch("src.services.query.executor.session_factory")
-    def test_sets_read_only_transaction_before_running_query(self, mock_session_factory: MagicMock) -> None:
-        session = _mock_session(mock_session_factory)
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_sets_read_only_transaction_before_running_query(self, mock_agent_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_agent_session_factory)
         mock_result = MagicMock()
         mock_result.mappings.return_value.all.return_value = []
         session.execute.return_value = mock_result
@@ -46,25 +46,25 @@ class ExecuteValidatedSqlTests(unittest.TestCase):
         first_statement = str(session.execute.call_args_list[0].args[0])
         self.assertIn("READ ONLY", first_statement.upper())
 
-    @patch("src.services.query.executor.session_factory")
-    def test_raises_executor_error_on_operational_error(self, mock_session_factory: MagicMock) -> None:
-        session = _mock_session(mock_session_factory)
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_raises_executor_error_on_operational_error(self, mock_agent_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_agent_session_factory)
         session.execute.side_effect = OperationalError("SELECT 1", {}, Exception("connection refused"))
 
         with self.assertRaises(ExecutorError):
             execute_validated_sql("SELECT title FROM clean_jobs")
 
-    @patch("src.services.query.executor.session_factory")
-    def test_raises_executor_error_on_dbapi_error(self, mock_session_factory: MagicMock) -> None:
-        session = _mock_session(mock_session_factory)
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_raises_executor_error_on_dbapi_error(self, mock_agent_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_agent_session_factory)
         session.execute.side_effect = DBAPIError("SELECT 1", {}, Exception("db failure"))
 
         with self.assertRaises(ExecutorError):
             execute_validated_sql("SELECT title FROM clean_jobs")
 
-    @patch("src.services.query.executor.session_factory")
-    def test_session_is_closed_on_failure(self, mock_session_factory: MagicMock) -> None:
-        session = _mock_session(mock_session_factory)
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_session_is_closed_on_failure(self, mock_agent_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_agent_session_factory)
         session.execute.side_effect = OperationalError("SELECT 1", {}, Exception("boom"))
 
         with self.assertRaises(ExecutorError):
@@ -72,9 +72,9 @@ class ExecuteValidatedSqlTests(unittest.TestCase):
 
         session.__exit__.assert_called_once()
 
-    @patch("src.services.query.executor.session_factory")
-    def test_session_is_closed_on_success(self, mock_session_factory: MagicMock) -> None:
-        session = _mock_session(mock_session_factory)
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_session_is_closed_on_success(self, mock_agent_session_factory: MagicMock) -> None:
+        session = _mock_session(mock_agent_session_factory)
         mock_result = MagicMock()
         mock_result.mappings.return_value.all.return_value = []
         session.execute.return_value = mock_result

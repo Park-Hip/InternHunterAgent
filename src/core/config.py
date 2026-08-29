@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str | None = None
     DEEPSEEK_API_KEY: str | None = None
     DATABASE_URL: str = Field(..., min_length=1)
+    AGENT_DATABASE_URL: str = Field(..., min_length=1)
     HEALTHCHECKS_URL: str | None = None
 
     # Tracing is optional at boot. The tracing layer emits a non-fatal startup

@@ -33,6 +33,7 @@ It never contains secret values.
 | `OPENROUTER_API_KEY` | `.env` only | Deliberately undeclared | Not used | Eval-judge fallback key (OpenRouter arm of `build_judge()`); not declared for Render. The active judge runs on Google AI Studio via `GOOGLE_API_KEY`. |
 | `GOOGLE_API_KEY` | `.env` only | Deliberately undeclared | Not used | Active eval-judge key (`gemma-4-31b-it` via Google AI Studio); not declared for Render. |
 | `DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | GitHub `DATABASE_URL` secret | Cron and migrations use Neon's direct, non-pooled host. |
+| `AGENT_DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | Not used | Agent-facing SQL reads use a dedicated least-privilege credential. Absence must fail closed. Do not fall back to `DATABASE_URL`. |
 | `LANGFUSE_SECRET_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |
 | `LANGFUSE_PUBLIC_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |
 | `LANGFUSE_BASE_URL` | `.env`; Render dashboard | Dashboard value, `sync: false` | Not used | Local default targets a local Langfuse endpoint. |
@@ -125,6 +126,48 @@ uv run python -m src.services.ingestion.loader
 
 `reset_local_db.ps1` drops the local objects via `scripts/reset_db.sql` (a drop-only
 script with no schema DDL) and then applies `uv run alembic upgrade head`.
+
+### Create the agent-read least-privilege role
+
+The serving path reads `clean_jobs` through `AGENT_DATABASE_URL`, a dedicated PostgreSQL role with
+`SELECT` only. The writer role (`DATABASE_URL`) retains its existing privileges.
+Never grant write access to the agent-read role.
+
+Run the following against the production Neon database using the writer DSN (the one set as
+`DATABASE_URL`):
+
+```sql
+-- 1. Create the reader role with a strong password.
+CREATE ROLE internhunter_agent NOLOGIN;
+
+-- 2. Grant CONNECT on the database.
+GRANT CONNECT ON DATABASE internhunter TO internhunter_agent;
+
+-- 3. Grant USAGE on the public schema.
+GRANT USAGE ON SCHEMA public TO internhunter_agent;
+
+-- 4. Grant SELECT only on clean_jobs — nothing else.
+GRANT SELECT ON clean_jobs TO internhunter_agent;
+```
+
+After creating the role, generate a password and set it as `AGENT_DATABASE_URL` in the Render
+dashboard (key: `AGENT_DATABASE_URL`, sync: false). The connection string format is:
+
+```
+postgresql+psycopg://internhunter_agent:<password>@<host>:5432/internhunter
+```
+
+**Rotation.** When rotating the reader credential, generate a new password, update the Render
+secret, and revoke the old role after confirming the new one works:
+
+```sql
+-- Revoke after confirming the new credential succeeds.
+REVOKE ALL ON DATABASE internhunter FROM internhunter_agent;
+DROP ROLE internhunter_agent;
+-- Then re-run the CREATE ROLE / GRANT sequence above with the new password.
+```
+
+Never put a production DSN or password in this repository, tests, logs, or PR descriptions.
 
 ### Apply a schema migration
 

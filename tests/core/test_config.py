@@ -23,6 +23,7 @@ class ConfigLoadTests(unittest.TestCase):
     def test_load_settings_uses_project_root_when_cwd_changes(self) -> None:
         required_env = {
             "DATABASE_URL": "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter",
+            "AGENT_DATABASE_URL": "postgresql+psycopg://internhunter_agent:internhunter@localhost:5433/internhunter",
             "GROQ_API_KEY": "groq-test-key",
             "LANGFUSE_SECRET_KEY": "langfuse-secret",
             "LANGFUSE_PUBLIC_KEY": "langfuse-public",
@@ -65,7 +66,7 @@ class ConfigLoadTests(unittest.TestCase):
 
         self.assertIn("Failed to load runtime settings.", str(ctx.exception))
         self.assertIn(
-            "Missing required environment variables: DATABASE_URL",
+            "Missing required environment variables: AGENT_DATABASE_URL, DATABASE_URL",
             str(ctx.exception),
         )
 
@@ -73,6 +74,7 @@ class ConfigLoadTests(unittest.TestCase):
         """No provider key is required at boot; the selected branch validates its own."""
         selected_provider_env = {
             "DATABASE_URL": "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter",
+            "AGENT_DATABASE_URL": "postgresql+psycopg://internhunter_agent:internhunter@localhost:5433/internhunter",
             "DEEPSEEK_API_KEY": "deepseek-test-key",
             "LANGFUSE_SECRET_KEY": "langfuse-secret",
             "LANGFUSE_PUBLIC_KEY": "langfuse-public",
@@ -94,6 +96,7 @@ class ConfigLoadTests(unittest.TestCase):
     def test_load_settings_allows_missing_langfuse_credentials(self) -> None:
         required_env = {
             "DATABASE_URL": "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter",
+            "AGENT_DATABASE_URL": "postgresql+psycopg://internhunter_agent:internhunter@localhost:5433/internhunter",
             "DEEPSEEK_API_KEY": "deepseek-test-key",
         }
         config_module.Settings.model_config = SettingsConfigDict(

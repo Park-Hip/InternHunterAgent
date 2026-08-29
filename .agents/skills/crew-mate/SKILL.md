@@ -12,6 +12,23 @@ mechanics stay below deck unless an escalation demands them.
 
 Conventions live in `.crew/README.md`; this file defines only your behavior.
 
+## Captain command grammar
+
+Normalize these short captain phrases before taking an external action. Report the
+receipt named below; do not claim completion from the agent's own narration.
+
+| Captain phrase | Normalized action | Required result / receipt |
+|---|---|---|
+| `register #<n>` or `register task #<n>` | Register a VS Code task | Run `scripts/crew_start.ps1 -Issue <n> -Autonomy ship|scout -Harness pi -Backend vscode-task`. This writes the matching `Crew: IHA-<n> worker` task in the primary checkout and launches **no** window or terminal. Its default Pi model is exactly `modelscope/deepseek-ai/DeepSeek-V4-Pro-0813`; never substitute a DashScope or OpenRouter model. Report task label, tasks-file path, and worktree cwd. |
+| `launch #<n>` or `open worker #<n>` | Launch a new VS Code worker window | Use the explicit `vscode` backend. Report worktree path and launch result. |
+| `review #<n>` or `review PR #<n>` | Publish an independent crew PR review | Dispatch a fresh reviewer using `crew-pr-review` plus `code-review-and-quality`. The reviewer must return the publisher receipt: review URL/id, current head SHA, event, state, and inline-comment count. |
+| `status`, `progress`, `current progress`, or `how is the crew doing` | Reconcile and report current progress | Reconcile from disk, then run `scripts/crew_progress_report.ps1 -Format markdown`; return that Markdown only. |
+
+For `run #<n>` or another phrase that could mean either registration in the current
+VS Code window or a new window, ask exactly: “Register it in this VS Code window, or
+open its own VS Code window?” Do not infer a backend. The normal plan/issue and
+shared-surface gates still apply to every dispatch.
+
 ## Intake
 
 For each requested task:
@@ -23,11 +40,12 @@ For each requested task:
    `src/**/models.py` or `config/settings.yaml`, judged from the briefs'
    files-in-scope.
 4. Fill the brief from the plan (`.crew/_brief.template.md`). For a VS Code
-   terminal-panel launch, dispatch with
-   `scripts/crew_start.ps1 -Issue <n> -Autonomy ship|scout -Harness <executable> -Backend vscode-task`.
+   terminal-panel registration, use the `register` command grammar above:
+   `scripts/crew_start.ps1 -Issue <n> -Autonomy ship|scout -Harness pi -Backend vscode-task`.
    This registers the matching `Crew: IHA-<issue> worker` entry in the primary
    checkout's `.vscode/tasks.json`; start it through **Terminal: Run Task**.
-   Otherwise, launch with `scripts/crew_start.ps1 -Issue <n> -Autonomy ship|scout`.
+   Otherwise, use an explicit backend selected by the captain or ask the command-
+   grammar clarification question; never let `register` fall through to a window launch.
 5. Start `scripts/mate_watch.ps1` if not already running (background job).
 
 ## Supervise
@@ -57,7 +75,7 @@ approved, or dispatchable without that durable data.
 
 ## Review and land
 
-When a ship PR has green checks, dispatch a fresh independent review subagent. Require it to use the `code-review-and-quality` skill and review the PR diff, tests, and verification story across every skill axis. The reviewer records its result as a GitHub PR review comment:
+When a ship PR has green checks, dispatch a fresh independent review subagent. Require it to use both the `crew-pr-review` and `code-review-and-quality` skills, review the PR diff, tests, and verification story across every skill axis, and return the review-publisher receipt. The reviewer records its result as a GitHub PR review comment:
 
 - With required fixes, post a concise review summary and actionable inline comments for line-specific findings. Return the PR to the worker; after fixes are pushed and checks are green, dispatch a new review subagent.
 - With no required fixes, post a concise passing `/code-review` verdict as a review comment. Do not use a GitHub approval: that formal approval belongs only to the maintainer. Never treat a label as review evidence.

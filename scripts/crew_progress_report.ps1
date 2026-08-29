@@ -69,13 +69,13 @@ function Get-TaskPrState {
     param($Task)
     $unknown = [pscustomobject]@{
         Number = $null; Url = $null; State = 'No pull request'; Checks = 'Unknown';
-        Review = 'Unknown'; Summary = 'No pull request'; Failure = $false; AwaitingReview = $false; Landable = $false
+        Review = 'Unknown'; Summary = 'No pull request'; Failure = $false; NeedsSkillReview = $false; AwaitingMaintainerApproval = $false; Landable = $false
     }
     if ($SkipGitHub) { return $unknown }
 
     $oldPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { $raw = & $GitHubCommand pr view $Task.Branch --json number,state,url,statusCheckRollup,reviewDecision,reviews,comments 2>$null }
+    try { $raw = & $GitHubCommand pr view $Task.Branch --json number,state,url,headRefOid,statusCheckRollup,reviewDecision,reviews 2>$null }
     finally { $ErrorActionPreference = $oldPreference }
     if ($LASTEXITCODE -ne 0 -or -not $raw) { return $unknown }
 
@@ -86,24 +86,46 @@ function Get-TaskPrState {
     $checkText = if ($failed -gt 0) { "Checks failing ($failed)" }
                  elseif ($pending -gt 0) { "Checks pending ($pending)" }
                  else { 'Checks green' }
-    $reviewText = switch ($pr.reviewDecision) {
-        'APPROVED' { 'Approved' }
-        'REVIEW_REQUIRED' { 'Awaiting maintainer approval' }
-        $null { 'No review decision' }
-        '' { 'No review decision' }
-        default { [string]$pr.reviewDecision }
-    }
-    $summary = "#$($pr.number) [$($pr.state)]; $checkText; review: $reviewText"
     $reviews = @($pr.reviews)
-    $comments = @($pr.comments)
     $maintainerApproved = @($reviews | Where-Object { $_.state -eq 'APPROVED' -and $_.authorAssociation -in @('OWNER', 'MEMBER') }).Count -gt 0
-    $skillPassingVerdict = @($comments + $reviews | Where-Object {
-        $_.body -match '(?i)/code-review' -and $_.body -match '(?i)\bpass(ing|ed)?\b'
+    # `gh pr view` does not expose the reviewed commit SHA. Read the REST review
+    # records so an editable body marker cannot make an old review look current.
+    $reviewRecords = @()
+    $oldPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $repoRaw = & $GitHubCommand repo view --json nameWithOwner 2>$null
+        if ($LASTEXITCODE -eq 0 -and $repoRaw) {
+            $repo = $repoRaw | ConvertFrom-Json
+            if ($repo.nameWithOwner) {
+                $reviewRaw = & $GitHubCommand api --paginate --slurp "repos/$($repo.nameWithOwner)/pulls/$($pr.number)/reviews?per_page=100" 2>$null
+                if ($LASTEXITCODE -eq 0 -and $reviewRaw) {
+                    $reviewPages = $reviewRaw | ConvertFrom-Json
+                    foreach ($page in @($reviewPages)) { $reviewRecords += @($page) }
+                }
+            }
+        }
+    }
+    finally { $ErrorActionPreference = $oldPreference }
+    $reviewedHeadMarker = if ($pr.headRefOid) { '(?im)^Reviewed head:\s*' + [regex]::Escape([string]$pr.headRefOid) + '\s*$' } else { $null }
+    $skillPassingVerdict = [bool]$reviewedHeadMarker -and @($reviewRecords | Where-Object {
+        $_.commit_id -eq $pr.headRefOid -and $_.state -eq 'COMMENTED' -and $_.body -match '(?i)/code-review' -and $_.body -match '(?i)\bpass(ing|ed)?\b' -and $_.body -match $reviewedHeadMarker
     }).Count -gt 0
+    $checksGreen = ($failed -eq 0 -and $pending -eq 0)
+    $needsSkillReview = ($checksGreen -and -not $skillPassingVerdict)
+    $awaitingMaintainerApproval = ($checksGreen -and $skillPassingVerdict -and $pr.reviewDecision -ne 'APPROVED')
+    $reviewText = if ($needsSkillReview) { 'Independent review required' }
+                  elseif ($awaitingMaintainerApproval) { 'Awaiting maintainer approval' }
+                  elseif ($pr.reviewDecision -eq 'APPROVED') { 'Approved' }
+                  elseif ($null -eq $pr.reviewDecision -or $pr.reviewDecision -eq '') { 'No review decision' }
+                  else { [string]$pr.reviewDecision }
+    $summary = "#$($pr.number) [$($pr.state)]; $checkText; review: $reviewText"
     return [pscustomobject]@{
         Number = $pr.number; Url = $pr.url; State = $pr.state; Checks = $checkText; Review = $reviewText; Summary = $summary
-        Failure = ($failed -gt 0); AwaitingReview = ($failed -eq 0 -and $pending -eq 0 -and $pr.reviewDecision -eq 'REVIEW_REQUIRED')
-        Landable = ($failed -eq 0 -and $pending -eq 0 -and $pr.reviewDecision -eq 'APPROVED')
+        Failure = ($failed -gt 0)
+        NeedsSkillReview = $needsSkillReview
+        AwaitingMaintainerApproval = $awaitingMaintainerApproval
+        Landable = ($checksGreen -and $pr.reviewDecision -eq 'APPROVED' -and $skillPassingVerdict)
         FullyMerged = ($pr.state -eq 'MERGED' -and $maintainerApproved -and $skillPassingVerdict)
     }
 }
@@ -227,7 +249,8 @@ $risks = [System.Collections.Generic.List[string]]::new()
 foreach ($task in $tasks) {
     if (-not $task.WorktreeExists) { $risks.Add("#$($task.Issue): manifest names a missing worktree: $($task.WorktreePath)") }
     if ($task.Pr.Failure) { $actions.Add("#$($task.Issue): resolve failing checks on PR #$($task.Pr.Number)."); $risks.Add("#$($task.Issue): $($task.Pr.Checks).") }
-    elseif ($task.Pr.AwaitingReview) { $actions.Add("#$($task.Issue): review PR #$($task.Pr.Number) for approval.") }
+    elseif ($task.Pr.NeedsSkillReview) { $actions.Add("#$($task.Issue): publish an independent current-head /code-review verdict for PR #$($task.Pr.Number).") }
+    elseif ($task.Pr.AwaitingMaintainerApproval) { $actions.Add("#$($task.Issue): PR #$($task.Pr.Number) has a current passing /code-review verdict; review it for maintainer approval.") }
     if ($task.Autonomy -eq 'scout' -and $task.ScoutReportPath -and (Test-Path -LiteralPath $task.ScoutReportPath)) { $actions.Add("#$($task.Issue): read the durable scout report before deciding follow-up.") }
     if ($task.Status -and $task.Status -match '^(blocked|risk)\b') { $risks.Add("#$($task.Issue): worker status: $($task.Status)") }
 }

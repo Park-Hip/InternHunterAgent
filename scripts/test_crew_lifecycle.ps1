@@ -71,10 +71,17 @@ try {
 
     $tasksPath = Join-Path $repoRoot '.vscode\tasks.json'
     $unrelatedLabel = 'Build: unrelated task'
+    $registeredPiArgs = Resolve-CrewHarnessArgs -Harness 'pi' -HarnessArgs '' -Backend 'vscode-task'
+    Assert-Equal $registeredPiArgs '--model modelscope/deepseek-ai/DeepSeek-V4-Pro-0813' 'Registered Pi task did not select the ModelScope default model.'
+    Assert-Equal (Resolve-CrewHarnessArgs -Harness 'pi' -HarnessArgs '--model dashscope/glm-5.2' -Backend 'vscode-task') '--model dashscope/glm-5.2' 'An explicit Pi model override was not retained.'
+    Assert-Equal (Resolve-CrewHarnessArgs -Harness 'pi' -HarnessArgs '' -Backend 'vscode') '' 'New-window Pi launches must not silently receive the registration-only default.'
     Add-CrewVsCodeTaskEntry -RepoRoot $repoRoot -WorktreePath 'D:\elsewhere\unrelated' -TaskName $unrelatedLabel -HarnessPath 'pi.exe' -HarnessArgs '' -WorkerPrompt 'unrelated' | Out-Null
-    Add-CrewVsCodeTaskEntry -RepoRoot $repoRoot -WorktreePath $vscodePaths.WorktreePath -TaskName 'Crew: IHA-998 worker' -HarnessPath 'pi.exe' -HarnessArgs '' -WorkerPrompt 'probe' | Out-Null
+    Add-CrewVsCodeTaskEntry -RepoRoot $repoRoot -WorktreePath $vscodePaths.WorktreePath -TaskName 'Crew: IHA-998 worker' -HarnessPath 'pi.exe' -HarnessArgs $registeredPiArgs -WorkerPrompt 'probe' | Out-Null
     $before = Get-Content -LiteralPath $tasksPath -Raw | ConvertFrom-Json
     Assert-Equal @($before.tasks).Count 2 'Both task entries were not registered.'
+    $registeredTask = @($before.tasks | Where-Object { $_.label -eq 'Crew: IHA-998 worker' })[0]
+    Assert-Equal $registeredTask.options.cwd $vscodePaths.WorktreePath 'Registered Pi task did not target the crew worktree.'
+    Assert-Equal ($registeredTask.args -join ' ') '--model modelscope/deepseek-ai/DeepSeek-V4-Pro-0813 probe' 'Registered Pi task does not carry the ModelScope model argument.'
 
     & (Join-Path $PSScriptRoot 'crew_teardown.ps1') -Issue 998 -RepoRoot $repoRoot | ForEach-Object {
         if ($_ -like 'vscode-task : removed*') { $sawRemovalReport = $true }

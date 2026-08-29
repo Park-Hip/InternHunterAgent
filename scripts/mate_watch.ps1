@@ -101,7 +101,7 @@ function Get-Signature {
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $prJson = & gh pr view $Entry.Branch --json number,state,statusCheckRollup,reviewDecision 2>$null
+        $prJson = & gh pr view $Entry.Branch --json number,state,headRefOid,statusCheckRollup,reviewDecision 2>$null
     }
     finally {
         $ErrorActionPreference = $prevEap
@@ -111,7 +111,27 @@ function Get-Signature {
     $failed = @($pr.statusCheckRollup | Where-Object { $_.conclusion -eq 'FAILURE' }).Count
     $pending = @($pr.statusCheckRollup | Where-Object { $_.status -ne 'COMPLETED' }).Count
     $checks = if ($failed -gt 0) { "fail:$failed" } elseif ($pending -gt 0) { "pending:$pending" } else { 'green' }
-    return 'pr#{0}|{1}|{2}|{3}' -f $pr.number, $pr.state, $checks, $pr.reviewDecision
+    $reviewRecords = @()
+    $repoJson = & gh repo view --json nameWithOwner 2>$null
+    if ($LASTEXITCODE -eq 0 -and $repoJson) {
+        try {
+            $repo = $repoJson | ConvertFrom-Json
+            if ($repo.nameWithOwner) {
+                $reviewJson = & gh api --paginate --slurp "repos/$($repo.nameWithOwner)/pulls/$($pr.number)/reviews?per_page=100" 2>$null
+                if ($LASTEXITCODE -eq 0 -and $reviewJson) {
+                    $reviewPages = $reviewJson | ConvertFrom-Json
+                    foreach ($page in @($reviewPages)) { $reviewRecords += @($page) }
+                }
+            }
+        }
+        catch { $reviewRecords = @() }
+    }
+    $marker = if ($pr.headRefOid) { '(?im)^Reviewed head:\s*' + [regex]::Escape([string]$pr.headRefOid) + '\s*$' } else { $null }
+    $skillVerdict = [bool]$marker -and @($reviewRecords | Where-Object {
+        $_.commit_id -eq $pr.headRefOid -and $_.state -eq 'COMMENTED' -and $_.body -match '(?i)/code-review' -and $_.body -match '(?i)\bpass(ing|ed)?\b' -and $_.body -match $marker
+    }).Count -gt 0
+    $skillState = if ($skillVerdict) { 'skill:pass' } else { 'skill:missing' }
+    return 'pr#{0}|{1}|{2}|{3}|{4}' -f $pr.number, $pr.state, $checks, $pr.reviewDecision, $skillState
 }
 
 function Get-StatusSignature {
@@ -151,9 +171,10 @@ while ($true) {
                 Write-Event "crew/$issue" 'PR_MERGED' ("branch=$($entry.Branch)")
             }
             elseif ($sig -like '*|green|*') {
-                if     ($sig -like '*|APPROVED')   { Write-Event "crew/$issue" 'PR_LANDABLE' 'checks green + approved; auto-merge will land it' }
-                elseif ($sig -like '*REVIEW_REQUIRED') { Write-Event "crew/$issue" 'PR_READY_FOR_REVIEW' 'checks green; awaiting maintainer approval' }
-                else                                { Write-Event "crew/$issue" 'CHECKS_GREEN' ("state=$($sig)") }
+                if     ($sig -like '*|skill:missing') { Write-Event "crew/$issue" 'PR_READY_FOR_REVIEW' 'checks green; independent current-head /code-review verdict required' }
+                elseif ($sig -like '*|APPROVED|skill:pass') { Write-Event "crew/$issue" 'PR_LANDABLE' 'checks green + current /code-review verdict + maintainer approval; auto-merge will land it' }
+                elseif ($sig -like '*|skill:pass') { Write-Event "crew/$issue" 'PR_READY_FOR_REVIEW' 'checks green + current /code-review verdict; awaiting maintainer approval' }
+                else { Write-Event "crew/$issue" 'CHECKS_GREEN' ("state=$($sig)") }
             }
             elseif ($sig -like '*fail:*') {
                 Write-Event "crew/$issue" 'CHECKS_FAILED' ("branch=$($entry.Branch) sig=$sig")

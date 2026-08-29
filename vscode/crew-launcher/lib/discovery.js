@@ -61,14 +61,15 @@ function isPrimaryWorkspaceTask(task, root, platform) {
   return task.scope === TASK_SCOPE_WORKSPACE && task.source === 'Workspace';
 }
 
-// Find the first fetched task whose name and primary-workspace provenance match
-// the request. Returns the live task plus its extracted shape, or null. The
-// caller performs the exact-spec comparison; provenance alone never authorizes
-// execution.
-function findWorkspaceCandidate(tasks, taskName, root, platform) {
+// Enumerate every fetched task whose name and primary-workspace provenance match
+// the request, in API order. VS Code can return a stale same-name candidate
+// before the refreshed exact-spec task, so callers must evaluate the whole list
+// rather than stopping at the first entry.
+function findWorkspaceCandidates(tasks, taskName, root, platform) {
   if (!Array.isArray(tasks)) {
-    return null;
+    return [];
   }
+  const candidates = [];
   for (const task of tasks) {
     if (!task || task.name !== taskName) {
       continue;
@@ -76,9 +77,44 @@ function findWorkspaceCandidate(tasks, taskName, root, platform) {
     if (!isPrimaryWorkspaceTask(task, root, platform)) {
       continue;
     }
-    return { task, shape: extractTaskShape(task) };
+    candidates.push({ task, shape: extractTaskShape(task) });
+  }
+  return candidates;
+}
+
+// Select the candidate whose extracted shape deep-equals the pinned spec. Exact
+// spec equality is what authorizes execution, and it must be evaluated against
+// every eligible candidate, not just the first.
+function selectExactMatch(candidates, spec, platform) {
+  if (!Array.isArray(candidates)) {
+    return null;
+  }
+  for (const candidate of candidates) {
+    if (candidate && shapesEqual(spec, candidate.shape, platform)) {
+      return candidate;
+    }
   }
   return null;
+}
+
+// Turn the post-retry facts (live candidates observed, last extracted shape, and
+// the on-disk registry inspection) into the terminal discovery verdict. A
+// matching on-disk task wins over a stale live mismatch: the registry, not the
+// request, is what needs recovery.
+function classifyOutcome({ sawCandidate, lastShape, registered }) {
+  if (registered.status === 'present-match') {
+    return { status: 'registry-unavailable', recovery: RECOVERY_RELOAD };
+  }
+  if (registered.status === 'unreadable') {
+    return { status: 'registry-unavailable', recovery: RECOVERY_UNREADABLE };
+  }
+  if (registered.status === 'present-mismatch') {
+    return { status: 'mismatch', shape: registered.shape };
+  }
+  if (sawCandidate) {
+    return { status: 'mismatch', shape: lastShape };
+  }
+  return { status: 'not-found' };
 }
 
 // A tasks.json entry has { type, command, args, options: { cwd } } directly, the
@@ -128,7 +164,9 @@ module.exports = {
   RECOVERY_UNREADABLE,
   taskScopePath,
   isPrimaryWorkspaceTask,
-  findWorkspaceCandidate,
+  findWorkspaceCandidates,
+  selectExactMatch,
+  classifyOutcome,
   diskEntryShape,
   inspectRegisteredTask,
 };

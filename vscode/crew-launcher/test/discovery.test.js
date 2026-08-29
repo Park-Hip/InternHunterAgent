@@ -9,9 +9,13 @@ const path = require('node:path');
 const {
   TASK_SCOPE_GLOBAL,
   TASK_SCOPE_WORKSPACE,
+  RECOVERY_RELOAD,
+  RECOVERY_UNREADABLE,
   taskScopePath,
   isPrimaryWorkspaceTask,
-  findWorkspaceCandidate,
+  findWorkspaceCandidates,
+  selectExactMatch,
+  classifyOutcome,
   inspectRegisteredTask,
 } = require('../lib/discovery');
 const { shapesEqual } = require('../lib/spec');
@@ -49,6 +53,23 @@ function workspaceTask(overrides = {}) {
   }, overrides);
 }
 
+// A same-name primary-workspace task whose execution spec does NOT match SPEC.
+function staleWorkspaceTask() {
+  return workspaceTask({
+    definition: {
+      type: 'shell',
+      command: 'C:\\tools\\stale.exe',
+      args: ['--model', 'x'],
+      options: { cwd: ROOT },
+    },
+    execution: {
+      command: 'C:\\tools\\stale.exe',
+      args: ['--model', 'x'],
+      options: { cwd: ROOT },
+    },
+  });
+}
+
 function diskEntry(overrides = {}) {
   return Object.assign({
     label: TASK_NAME,
@@ -62,45 +83,62 @@ function diskEntry(overrides = {}) {
 test('resolves a primary-workspace task whose source is not the string "Workspace"', () => {
   // Regression for TASK-SOURCE-FILTER-333: the source label must not gate
   // matching when folder scope already proves the task belongs to the root.
-  const candidate = findWorkspaceCandidate([workspaceTask()], TASK_NAME, ROOT, PLATFORM);
-  assert.ok(candidate, 'expected a candidate');
-  assert.equal(shapesEqual(SPEC, candidate.shape, PLATFORM), true);
+  const candidates = findWorkspaceCandidates([workspaceTask()], TASK_NAME, ROOT, PLATFORM);
+  assert.equal(candidates.length, 1);
+  assert.equal(shapesEqual(SPEC, candidates[0].shape, PLATFORM), true);
+});
+
+test('selects the exact-spec candidate when a stale candidate comes first', () => {
+  const stale = staleWorkspaceTask();
+  const valid = workspaceTask();
+  const candidates = findWorkspaceCandidates([stale, valid], TASK_NAME, ROOT, PLATFORM);
+  assert.equal(candidates.length, 2);
+  const match = selectExactMatch(candidates, SPEC, PLATFORM);
+  assert.ok(match, 'expected an exact-spec match');
+  assert.equal(match.task, valid, 'expected the valid candidate, not the stale first one');
+  assert.equal(shapesEqual(SPEC, match.shape, PLATFORM), true);
+});
+
+test('selectExactMatch returns null when no candidate matches the spec', () => {
+  const candidates = findWorkspaceCandidates([staleWorkspaceTask()], TASK_NAME, ROOT, PLATFORM);
+  assert.equal(selectExactMatch(candidates, SPEC, PLATFORM), null);
+  assert.equal(selectExactMatch([], SPEC, PLATFORM), null);
+  assert.equal(selectExactMatch(null, SPEC, PLATFORM), null);
 });
 
 test('matches folder scope case-insensitively on win32', () => {
   const task = workspaceTask({ scope: { uri: { fsPath: 'd:\\crew\\iha-333\\' } } });
-  const candidate = findWorkspaceCandidate([task], TASK_NAME, ROOT, PLATFORM);
-  assert.ok(candidate);
+  assert.equal(findWorkspaceCandidates([task], TASK_NAME, ROOT, PLATFORM).length, 1);
 });
 
 test('ignores a same-name task scoped to a different folder', () => {
   const task = workspaceTask({ scope: { uri: { fsPath: 'D:\\crew\\IHA-999' } } });
-  assert.equal(findWorkspaceCandidate([task], TASK_NAME, ROOT, PLATFORM), null);
+  assert.equal(findWorkspaceCandidates([task], TASK_NAME, ROOT, PLATFORM).length, 0);
 });
 
 test('ignores a user task whose scope collapses to workspace-wide without provenance', () => {
   const task = workspaceTask({ scope: TASK_SCOPE_WORKSPACE, source: 'User' });
-  assert.equal(findWorkspaceCandidate([task], TASK_NAME, ROOT, PLATFORM), null);
+  assert.equal(findWorkspaceCandidates([task], TASK_NAME, ROOT, PLATFORM).length, 0);
 });
 
 test('ignores a global task', () => {
   const task = workspaceTask({ scope: TASK_SCOPE_GLOBAL, source: 'User' });
-  assert.equal(findWorkspaceCandidate([task], TASK_NAME, ROOT, PLATFORM), null);
+  assert.equal(findWorkspaceCandidates([task], TASK_NAME, ROOT, PLATFORM).length, 0);
 });
 
 test('ignores a task with no scope and no workspace source label', () => {
   const task = workspaceTask({ scope: undefined, source: 'some-extension' });
-  assert.equal(findWorkspaceCandidate([task], TASK_NAME, ROOT, PLATFORM), null);
+  assert.equal(findWorkspaceCandidates([task], TASK_NAME, ROOT, PLATFORM).length, 0);
 });
 
 test('ignores a differently-named task in the primary folder', () => {
   const task = workspaceTask({ name: 'Crew: IHA-333 worker (other)' });
-  assert.equal(findWorkspaceCandidate([task], TASK_NAME, ROOT, PLATFORM), null);
+  assert.equal(findWorkspaceCandidates([task], TASK_NAME, ROOT, PLATFORM).length, 0);
 });
 
-test('returns null for a non-array task list', () => {
-  assert.equal(findWorkspaceCandidate(null, TASK_NAME, ROOT, PLATFORM), null);
-  assert.equal(findWorkspaceCandidate(undefined, TASK_NAME, ROOT, PLATFORM), null);
+test('returns an empty list for a non-array task list', () => {
+  assert.deepEqual(findWorkspaceCandidates(null, TASK_NAME, ROOT, PLATFORM), []);
+  assert.deepEqual(findWorkspaceCandidates(undefined, TASK_NAME, ROOT, PLATFORM), []);
 });
 
 test('accepts the legacy numeric workspace scope only alongside the Workspace source', () => {
@@ -122,6 +160,43 @@ test('taskScopePath reads Uri-like, plain object, and string scopes', () => {
   assert.equal(taskScopePath(TASK_SCOPE_WORKSPACE), null);
   assert.equal(taskScopePath(undefined), null);
   assert.equal(taskScopePath(null), null);
+});
+
+test('classifyOutcome treats a stale live candidate plus a matching on-disk task as recoverable', () => {
+  const outcome = classifyOutcome({
+    sawCandidate: true,
+    lastShape: { type: 'shell', command: 'C:\\tools\\stale.exe', args: ['--model', 'x'], cwd: ROOT },
+    registered: { status: 'present-match' },
+  });
+  assert.equal(outcome.status, 'registry-unavailable');
+  assert.equal(outcome.recovery, RECOVERY_RELOAD);
+});
+
+test('classifyOutcome prefers the disk verdict over a stale live mismatch', () => {
+  const withDiskMismatch = classifyOutcome({
+    sawCandidate: true,
+    lastShape: { type: 'shell', command: 'C:\\tools\\stale.exe', args: ['--model', 'x'], cwd: ROOT },
+    registered: { status: 'present-mismatch', shape: { command: 'C:\\tools\\evil.exe' } },
+  });
+  assert.equal(withDiskMismatch.status, 'mismatch');
+
+  const withUnreadable = classifyOutcome({
+    sawCandidate: true,
+    lastShape: null,
+    registered: { status: 'unreadable' },
+  });
+  assert.equal(withUnreadable.status, 'registry-unavailable');
+  assert.equal(withUnreadable.recovery, RECOVERY_UNREADABLE);
+});
+
+test('classifyOutcome reports a genuine mismatch and a genuine miss', () => {
+  const staleShape = { type: 'shell', command: 'C:\\tools\\stale.exe', args: ['--model', 'x'], cwd: ROOT };
+  const mismatch = classifyOutcome({ sawCandidate: true, lastShape: staleShape, registered: { status: 'absent' } });
+  assert.equal(mismatch.status, 'mismatch');
+  assert.equal(mismatch.shape, staleShape);
+
+  const miss = classifyOutcome({ sawCandidate: false, lastShape: null, registered: { status: 'absent' } });
+  assert.equal(miss.status, 'not-found');
 });
 
 function writeTasksFile(dir, document) {

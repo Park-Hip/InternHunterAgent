@@ -15,7 +15,9 @@ const {
   selectExactMatch,
   classifyOutcome,
   inspectRegisteredTask,
+  RECOVERY_TASKS_API_ERROR,
 } = require('./lib/discovery');
+const { discoverExactTask } = require('./lib/readiness');
 const { appendEvent, hasTerminalEvent } = require('./lib/jsonl');
 
 const CONFIG_SECTION = 'crew.vscodeTaskAuto';
@@ -23,8 +25,6 @@ const CREW_DIR = '.crew';
 const QUEUE_REL = path.join(CREW_DIR, 'launch-queue');
 const QUEUE_GLOB = '.crew/launch-queue/requests/*.json';
 const TERMINAL_EVENTS = new Set(['accepted', 'started', 'already-running', 'refused', 'failed']);
-const FETCH_ATTEMPTS = 8;
-const FETCH_RETRY_MS = 500;
 
 // A live TaskExecution maps to the request id that initiated it, so lifecycle
 // events can attribute started/ended to the correct result log.
@@ -67,10 +67,6 @@ function readManifest(root, issue) {
   }
 }
 
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function registerLifecycle() {
   vscode.tasks.onDidStartTaskProcess((event) => {
     const requestId = executionToRequest.get(event.execution);
@@ -94,41 +90,95 @@ function registerLifecycle() {
   });
 }
 
-// Locate the workspace task registered under the request's taskName. Every
-// eligible same-name candidate per fetch is evaluated for an exact-spec match:
-// VS Code can surface a stale same-name task before the refreshed one, so the
-// first candidate is not enough. Matching is folder-scope based
-// (lib/discovery.js), never the localized Task.source string. Only the final
-// attempt settles on the terminal verdict.
-async function findMatchingTask(root, spec, taskName, platform) {
-  let sawCandidate = false;
-  let lastShape = null;
-  for (let attempt = 0; attempt < FETCH_ATTEMPTS; attempt += 1) {
-    let tasks = [];
-    try {
-      tasks = await vscode.tasks.fetchTasks({ type: 'shell' });
-    } catch {
-      tasks = [];
+// A public configuration change is a readiness hint only: it may prompt an
+// earlier fetch, but it never authorizes task execution. Polling remains bounded
+// and the live Task object must still pass every provenance and exact-spec gate.
+function createConfigurationHintWaiter() {
+  let pendingHint = false;
+  let resolveWait = null;
+  let timer = null;
+
+  function finish(signal) {
+    if (!resolveWait) {
+      return;
     }
-    const candidates = findWorkspaceCandidates(tasks, taskName, root, platform);
-    const match = selectExactMatch(candidates, spec, platform);
-    if (match) {
-      return { status: 'matched', task: match.task, shape: match.shape };
+    const resolve = resolveWait;
+    resolveWait = null;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
     }
-    if (candidates.length > 0) {
-      sawCandidate = true;
-      lastShape = candidates[candidates.length - 1].shape;
+    if (signal === 'configuration-change') {
+      pendingHint = false;
     }
-    if (attempt < FETCH_ATTEMPTS - 1) {
-      await delay(FETCH_RETRY_MS);
-    }
+    resolve(signal);
   }
 
-  // The live registry never surfaced an exact match. Classify using the primary
-  // checkout's .vscode/tasks.json: a stale live candidate alongside a matching
-  // on-disk task is a recoverable registry problem, not a missing task.
-  const registered = inspectRegisteredTask(root, taskName, spec, platform);
-  return classifyOutcome({ sawCandidate, lastShape, registered });
+  const subscription = vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration('tasks')) {
+      pendingHint = true;
+      finish('configuration-change');
+    }
+  });
+
+  return {
+    waitForHint(timeoutMs) {
+      if (pendingHint) {
+        pendingHint = false;
+        return Promise.resolve('configuration-change');
+      }
+      return new Promise((resolve) => {
+        resolveWait = resolve;
+        timer = setTimeout(() => finish('poll-timeout'), timeoutMs);
+        if (pendingHint) {
+          finish('configuration-change');
+        }
+      });
+    },
+    dispose() {
+      subscription.dispose();
+      finish('poll-timeout');
+    },
+  };
+}
+
+// Locate the workspace task registered under the request's taskName. Every
+// eligible same-name candidate per fetch is evaluated for an exact-spec match;
+// the public configuration event only shortens a bounded polling wait. Per-fetch
+// result evidence is deliberately redacted to counts and categories.
+async function findMatchingTask(root, spec, taskName, platform, rp) {
+  const hints = createConfigurationHintWaiter();
+  try {
+    const result = await discoverExactTask({
+      fetchTasks: () => vscode.tasks.fetchTasks({ type: 'shell' }),
+      findCandidates: findWorkspaceCandidates,
+      selectExactMatch,
+      taskName,
+      root,
+      spec,
+      platform,
+      waitForHint: (timeoutMs) => hints.waitForHint(timeoutMs),
+      onAttempt: (evidence) => appendEvent(rp, 'discovery', evidence),
+    });
+    if (result.status === 'matched') {
+      return result;
+    }
+    if (result.status === 'fetch-error') {
+      return { status: 'registry-error', recovery: RECOVERY_TASKS_API_ERROR };
+    }
+
+    // The live registry never surfaced an exact match. Classify using the
+    // primary checkout's .vscode/tasks.json: it remains diagnostic evidence
+    // only, never an executable task source.
+    const registered = inspectRegisteredTask(root, taskName, spec, platform);
+    return classifyOutcome({
+      sawCandidate: result.sawCandidate,
+      lastShape: result.lastShape,
+      registered,
+    });
+  } finally {
+    hints.dispose();
+  }
 }
 
 async function processRequest(root, requestPath) {
@@ -169,9 +219,9 @@ async function processRequest(root, requestPath) {
   appendEvent(rp, 'validated');
 
   const spec = request.executionSpec;
-  const found = await findMatchingTask(root, spec, request.taskName, platform);
-  if (found.status === 'registry-unavailable') {
-    appendEvent(rp, 'refused', { reason: 'registry-unavailable', instruction: found.recovery });
+  const found = await findMatchingTask(root, spec, request.taskName, platform, rp);
+  if (found.status === 'registry-unavailable' || found.status === 'registry-error') {
+    appendEvent(rp, 'refused', { reason: found.status, instruction: found.recovery });
     return;
   }
   const notFoundReason = found.status === 'mismatch'

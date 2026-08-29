@@ -33,6 +33,11 @@ brief. Your entire world is that brief.
   whenever state materially changes: dispatched, implemented, tests green, PR open,
   checks green.
   Use the primary-checkout path from the task manifest.
+- Refresh the primary checkout's `.crew/<issue>-heartbeat.json` on the same cadence
+  as progress lines, and at least every 10 minutes while the task is running:
+  `{"updatedAtUtc":"<ISO-8601 UTC now>","phase":"<current activity>"}`.
+  A fresh heartbeat is what keeps the mate from reporting you as stalled; a long
+  quiet stretch of reading, testing, or thinking does not count against you.
 
 ## Scout task
 
@@ -41,11 +46,14 @@ brief. Your entire world is that brief.
   Never leave the only copy in the disposable worktree.
 - **Never push. Never open a PR.**
 - Record completion the same way as ship workers via `<issue>-status.md`.
+- Refresh `.crew/<issue>-heartbeat.json` as described under the ship contract so a
+  long investigation is never mistaken for a stalled worker.
 - After the report handoff, the mate runs `crew_teardown.ps1` with explicit scout
   report confirmation.
 
 ## Blocked or uncertain
 
-Stop. Write the blocker into `.crew/<issue>-status.md` as the last line. Do not
-guess past the contract; do not widen scope; do not message the maintainer - the
-mate reads statuses and escalates.
+Stop. Write the blocker into `.crew/<issue>-status.md` as the last line and set
+`.crew/<issue>-heartbeat.json` phase to `blocked`. Do not guess past the contract;
+do not widen scope; do not message the maintainer - the mate reads statuses and
+escalates.

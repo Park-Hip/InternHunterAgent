@@ -99,6 +99,8 @@ escalate conflicts, and confirm checks re-run on the rebased tips.
 - Repeated check failures on the same PR (two consecutive failures).
 - Shared-surface lock conflict discovered after dispatch.
 - Scout finding that needs a maintainer decision.
+- A worker stalled past its heartbeat threshold (`WORKER_STALLED`), needing a
+  restart or abandon decision.
 
 ## State discipline
 

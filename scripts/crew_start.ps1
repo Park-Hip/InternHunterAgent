@@ -77,6 +77,7 @@ if ($WhatIfMode) {
     Write-Output ("  worktree : git worktree add `"{0}`" -b {1} origin/main" -f $wtPath, $branch)
     Write-Output ("  brief    : primary and task-local .crew\{0}-brief.md" -f $Issue)
     Write-Output ("  manifest : .crew\{0}-task.json" -f $Issue)
+    Write-Output ("  heartbeat: .crew\{0}-heartbeat.json (initial phase 'dispatched')" -f $Issue)
     if ($Autonomy -eq 'scout') {
         Write-Output ("  report   : {0}" -f $paths.ScoutReportPath)
     }
@@ -125,6 +126,7 @@ if ($Backend -eq 'vscode-task' -and (Test-Path -LiteralPath $wtPath)) {
         TerminalLaunchStatus = 'awaiting-task-run'
         TerminalLaunchDetail = "registered '$taskName' in .vscode/tasks.json (cwd = worktree, harness gets the brief as initial prompt); start via Terminal > Run Task"
     } | Out-Null
+    Write-CrewHeartbeat -HeartbeatPath $paths.PrimaryHeartbeatPath -Phase 'dispatched' | Out-Null
     Write-Output "relaunch   : reused worktree $wtPath"
     Write-Output "task       : '$taskName' registered in .vscode/tasks.json"
     Write-Output "next       : Ctrl+Shift+P > Tasks: Run Task > '$taskName' - it starts in this window's terminal panel"
@@ -170,6 +172,7 @@ Write-CrewTaskManifest -ManifestPath $paths.PrimaryManifestPath -Issue $Issue -I
     -Title $ghIssue.title -Autonomy $Autonomy -Branch $branch -RepoRoot $RepoRoot -WorktreePath $wtPath `
     -PrimaryBriefPath $paths.PrimaryBriefPath -PrimaryStatusPath $paths.PrimaryStatusPath `
     -TaskBriefPath $paths.TaskBriefPath -ScoutReportPath $paths.ScoutReportPath -TerminalBackend $Backend | Out-Null
+Write-CrewHeartbeat -HeartbeatPath $paths.PrimaryHeartbeatPath -Phase 'dispatched' | Out-Null
 Copy-CrewTaskContractFiles -PrimaryBriefPath $paths.PrimaryBriefPath -TaskBriefPath $paths.TaskBriefPath `
     -PrimaryManifestPath $paths.PrimaryManifestPath -TaskManifestPath $paths.TaskManifestPath
 

@@ -28,6 +28,7 @@ function Get-CrewTaskPaths {
         WorktreePath       = $worktreePath
         PrimaryBriefPath   = Join-Path $crewPath "$Issue-brief.md"
         PrimaryStatusPath  = Join-Path $crewPath "$Issue-status.md"
+        PrimaryHeartbeatPath = Join-Path $crewPath "$Issue-heartbeat.json"
         PrimaryManifestPath = Join-Path $crewPath "$Issue-task.json"
         TaskBriefPath      = Join-Path $worktreePath ".crew\$Issue-brief.md"
         TaskManifestPath   = Join-Path $worktreePath ".crew\$Issue-task.json"
@@ -72,6 +73,27 @@ function Write-CrewUtf8File {
         New-Item -ItemType Directory -Path $directory -Force | Out-Null
     }
     [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Write-CrewHeartbeat {
+    # Durable worker-liveness record. The launcher writes the initial heartbeat;
+    # the worker refreshes it on a cadence so the watcher can tell a live-but-quiet
+    # worker from a stalled one. `updatedAtUtc` is an ISO-8601 UTC instant.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$HeartbeatPath,
+        [Parameter(Mandatory)][string]$Phase,
+        [string]$UpdatedAtUtc
+    )
+
+    $timestamp = if ($UpdatedAtUtc) { $UpdatedAtUtc } else { (Get-Date).ToUniversalTime().ToString('o') }
+    $heartbeat = [ordered]@{
+        SchemaVersion = 1
+        updatedAtUtc  = $timestamp
+        phase         = $Phase
+    }
+    Write-CrewUtf8File -Path $HeartbeatPath -Content ($heartbeat | ConvertTo-Json)
+    return $heartbeat
 }
 
 function Write-CrewTaskManifest {

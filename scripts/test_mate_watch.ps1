@@ -88,6 +88,25 @@ if "%CREW_WATCH_PENDING%"=="1" (
     $thirdEvents = Get-Content -LiteralPath (Join-Path $repo '.crew\events.log') -Raw
     Assert-True (($thirdEvents -split "`r?`n" | Where-Object { $_ -match 'independent current-head /code-review verdict required' }).Count -ge 2) 'A maintainer-approved PR without the independent verdict must still request that verdict.'
 
+    # Heartbeat / stalled-worker scenario. A heartbeat older than the threshold must
+    # emit exactly one WORKER_STALLED; a fresh heartbeat clears it without a repeat;
+    # a second stale beat re-arms the event.
+    $hbPath = Join-Path $repo '.crew\777-heartbeat.json'
+    Write-Utf8 -Path $hbPath -Content ('{"updatedAtUtc":"' + (Get-Date).ToUniversalTime().AddMinutes(-20).ToString('o') + '","phase":"implementing"}')
+    & $watchScript -Once -NoToast -RepoRoot $repo -StalledAfterSec 60 -IdleSweeps 120 | Out-Null
+    $stallEvents = Get-Content -LiteralPath (Join-Path $repo '.crew\events.log') -Raw
+    Assert-True ($stallEvents -match 'WORKER_STALLED') 'A heartbeat older than the threshold must emit WORKER_STALLED.'
+
+    Write-Utf8 -Path $hbPath -Content ('{"updatedAtUtc":"' + (Get-Date).ToUniversalTime().ToString('o') + '","phase":"tests-green"}')
+    & $watchScript -Once -NoToast -RepoRoot $repo -StalledAfterSec 60 -IdleSweeps 120 | Out-Null
+    $clearedEvents = Get-Content -LiteralPath (Join-Path $repo '.crew\events.log') -Raw
+    Assert-True (@($clearedEvents -split "`r?`n" | Where-Object { $_ -match 'WORKER_STALLED' }).Count -eq 1) 'A fresh heartbeat must clear the stall without re-emitting.'
+
+    Write-Utf8 -Path $hbPath -Content ('{"updatedAtUtc":"' + (Get-Date).ToUniversalTime().AddMinutes(-20).ToString('o') + '","phase":"implementing"}')
+    & $watchScript -Once -NoToast -RepoRoot $repo -StalledAfterSec 60 -IdleSweeps 120 | Out-Null
+    $rearmedEvents = Get-Content -LiteralPath (Join-Path $repo '.crew\events.log') -Raw
+    Assert-True (@($rearmedEvents -split "`r?`n" | Where-Object { $_ -match 'WORKER_STALLED' }).Count -eq 2) 'A stall that recurs after a clear must re-emit WORKER_STALLED.'
+
     Write-Output 'mate watch probes passed' 
 }
 finally {

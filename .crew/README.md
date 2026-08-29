@@ -133,11 +133,15 @@ The response must be non-empty.
 - `<issue>-status.md` - worker-written progress lines in the primary checkout.
   The last non-empty line wins.
 
+- `<issue>-heartbeat.json` - durable worker heartbeat in the primary checkout:
+  `{"updatedAtUtc":"<ISO-8601 UTC>","phase":"<activity>"}`. Written on dispatch by
+  `crew_start.ps1` and refreshed by the worker; its age drives stalled detection.
+
 - `events.log` - structured events appended by `mate_watch.ps1` in the format `<UTC timestamp> | <subject> | <event> | <detail>`.
-  Event kinds: `PR_OPENED`, `CHECKS_GREEN`, `CHECKS_FAILED`, `PR_READY_FOR_REVIEW`, `PR_LANDABLE`, `PR_MERGED`, `PR_GONE`, `WORKER_STATUS_CHANGED`, plus direct completion events: `SCOUT_REPORT_READY` (a scout task's durable report appeared) and `WORKER_IDLE` (a worktree's dirty-file count unchanged across sweeps).
+  Event kinds: `PR_OPENED`, `CHECKS_GREEN`, `CHECKS_FAILED`, `PR_READY_FOR_REVIEW`, `PR_LANDABLE`, `PR_MERGED`, `PR_GONE`, `WORKER_STATUS_CHANGED`, plus direct completion events `SCOUT_REPORT_READY` (a scout task's durable report appeared) and `WORKER_IDLE` (a worktree's dirty-file count unchanged across sweeps - informational, not a health verdict), and the health event `WORKER_STALLED` (a worker's heartbeat has been stale past `StalledAfterSec`).
 - `.watch-state.json` - watcher bookkeeping that is safe to delete when no crew is active.
 
-The watcher raises a Windows toast for escalation-grade events (`CHECKS_FAILED`, `PR_READY_FOR_REVIEW`, `PR_LANDABLE`, `PR_MERGED`, `SCOUT_REPORT_READY`, `WORKER_IDLE`) so completion and failures surface without polling. Suppress with `mate_watch.ps1 -NoToast`; tune the idle threshold with `-IdleSweeps <n>` (default 5).
+The watcher raises a Windows toast for escalation-grade events (`CHECKS_FAILED`, `PR_READY_FOR_REVIEW`, `PR_LANDABLE`, `PR_MERGED`, `SCOUT_REPORT_READY`, `WORKER_STALLED`) so completion and failures surface without polling. `WORKER_IDLE` (unchanged dirty-file count) is informational and raises no toast. Suppress with `mate_watch.ps1 -NoToast`; tune the idle threshold with `-IdleSweeps <n>` (default 5) and the stall threshold with `-StalledAfterSec <n>` (default 900).
 
 ## Progress reports
 
@@ -170,6 +174,8 @@ The mate escalates exactly these and nothing else:
 - Shared-surface lock conflicts discovered after dispatch.
 
 - Scout findings that require a maintainer decision.
+
+- A worker stalled past its heartbeat threshold.
 
 Everything else is reported as outcomes, not narrated as mechanics.
 

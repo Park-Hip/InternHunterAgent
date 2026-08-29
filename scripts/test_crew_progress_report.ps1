@@ -54,6 +54,8 @@ try {
     Write-TaskFixture -Root $temporaryRoot -Issue 995 -Autonomy ship -Branch 'crew/995-merged-without-evidence' -Scope @('docs/crew.md')
     Write-TaskFixture -Root $temporaryRoot -Issue 994 -Autonomy ship -Branch 'crew/994-current-verdict' -Scope @('docs/crew.md') -Goal 'Await maintainer approval after the current independent review.'
     Write-TaskFixture -Root $temporaryRoot -Issue 993 -Autonomy ship -Branch 'crew/993-approved-without-skill' -Scope @('docs/crew.md') -Goal 'Require an independent review even after a maintainer approval.'
+    Write-TaskFixture -Root $temporaryRoot -Issue 992 -Autonomy ship -Branch 'crew/992-stalled' -Scope @('docs/crew.md') -Goal 'Stalled worker probe.'
+    Write-Utf8 (Join-Path $temporaryRoot '.crew\992-heartbeat.json') '{"updatedAtUtc":"2026-08-01T00:00:00Z","phase":"implementing"}'
     Write-Utf8 (Join-Path $temporaryRoot '.crew\events.log') "2026-08-28 07:01:00Z | crew/999 | PR_READY_FOR_REVIEW | checks green`n2026-08-28 07:02:00Z | crew/997 | SCOUT_REPORT_READY | report present`n"
 
     $candidate = [ordered]@{ schemaVersion = 1; candidates = @(
@@ -134,7 +136,7 @@ exit /b 1
     Write-Utf8 $fakeGhPath $fakeGh
 
     $data = (& $reportScript -RepoRoot $temporaryRoot -Format data -GitHubCommand $fakeGhPath | ConvertFrom-Json)
-    Assert-True (@($data.ActiveTasks).Count -eq 5) 'Every non-merged task must appear exactly once.'
+    Assert-True (@($data.ActiveTasks).Count -eq 6) 'Every non-merged task must appear exactly once.'
     Assert-True (@($data.ActiveTasks | Where-Object Issue -in @(995, 996)).Count -eq 0) 'A merged PR must not remain active.'
     Assert-True (@($data.FullyMergedPrs).Count -eq 1 -and $data.FullyMergedPrs[0].Issue -eq 996) 'Only PRs with merged, maintainer-approval, and skill-verdict evidence belong in fully merged PRs.'
     Assert-True ([bool]($data.DataWarnings -match '#995: PR #995 is merged but lacks durable')) 'Merged PRs without qualifying evidence must remain visible as a warning.'
@@ -147,6 +149,7 @@ exit /b 1
     Assert-True ([bool]($data.MaintainerActions -match 'failing checks on PR #998')) 'Failed checks must produce an action.'
     Assert-True ([bool]($data.MaintainerActions -match 'durable scout report')) 'Scout report handoff must produce an action.'
     Assert-True ([bool]($data.Risks -match 'BLOCKED: focused check fails')) 'Blocked worker status must be a risk.'
+    Assert-True ([bool]($data.Risks -match '992.*worker heartbeat stale')) 'A stale heartbeat must surface as a risk.'
     Assert-True ((@($data.NextCompatibleTasks | Where-Object Issue -eq 1001))[0].Compatibility -eq 'waiting') 'settings collision must wait.'
     Assert-True ((@($data.NextCompatibleTasks | Where-Object Issue -eq 1002))[0].Compatibility -eq 'dispatchable') 'clear candidate must be dispatchable.'
     Assert-True ((@($data.NextCompatibleTasks | Where-Object Issue -eq 1003))[0].Compatibility -eq 'waiting') 'unapproved candidate must wait.'
@@ -162,7 +165,7 @@ exit /b 1
     $defaultReport = & $reportScript -RepoRoot $temporaryRoot -GitHubCommand $fakeGhPath
     $markdown = & $reportScript -RepoRoot $temporaryRoot -Format markdown -GitHubCommand $fakeGhPath
     $html = & $reportScript -RepoRoot $temporaryRoot -Format html -GitHubCommand $fakeGhPath
-    foreach ($needle in @('#999', '#998', '#997', '#995', '#996', '#1001', '#1002', '#1003', 'G-RESEARCH', 'G1', 'Evidence / source')) {
+    foreach ($needle in @('#999', '#998', '#997', '#995', '#996', '#992', '#1001', '#1002', '#1003', 'G-RESEARCH', 'G1', 'Evidence / source')) {
         Assert-True ($markdown -match [regex]::Escape($needle)) "Markdown misses $needle."
         Assert-True ($html -match [regex]::Escape($needle)) "HTML misses $needle."
     }

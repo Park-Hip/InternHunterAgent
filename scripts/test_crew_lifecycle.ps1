@@ -36,6 +36,7 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $repoRoot '.crew') -Force | Out-Null
     $paths = Get-CrewTaskPaths -RepoRoot $repoRoot -Issue 999
     Assert-Equal $paths.WorktreeRoot (Join-Path $temporaryRoot 'InternHunterAgent-worktrees') 'Worktree root calculation failed.'
+    Assert-Equal $paths.PrimaryHeartbeatPath (Join-Path $repoRoot '.crew\999-heartbeat.json') 'Heartbeat path derivation failed.'
     Invoke-TestGit -Arguments @('-C', $repoRoot, 'worktree', 'add', $paths.WorktreePath, '-b', 'crew/999-lifecycle-probe', 'main')
 
     Write-CrewUtf8File -Path $paths.PrimaryBriefPath -Content '# Brief: lifecycle probe'
@@ -43,6 +44,10 @@ try {
     Copy-CrewTaskContractFiles -PrimaryBriefPath $paths.PrimaryBriefPath -TaskBriefPath $paths.TaskBriefPath -PrimaryManifestPath $paths.PrimaryManifestPath -TaskManifestPath $paths.TaskManifestPath
     if (-not (Test-Path -LiteralPath $paths.TaskBriefPath)) { throw 'Task-local brief was not created.' }
     if (-not (Test-Path -LiteralPath $paths.TaskManifestPath)) { throw 'Task-local manifest was not created.' }
+    Write-CrewHeartbeat -HeartbeatPath $paths.PrimaryHeartbeatPath -Phase 'dispatched' | Out-Null
+    $hb = Get-Content -LiteralPath $paths.PrimaryHeartbeatPath -Raw | ConvertFrom-Json
+    Assert-Equal $hb.phase 'dispatched' 'Heartbeat did not record the phase.'
+    if (-not $hb.updatedAtUtc) { throw 'Heartbeat did not record an updatedAtUtc timestamp.' }
 
     try {
         & (Join-Path $PSScriptRoot 'crew_teardown.ps1') -Issue 999 -RepoRoot $repoRoot

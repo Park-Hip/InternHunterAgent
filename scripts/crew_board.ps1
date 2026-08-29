@@ -1,6 +1,6 @@
 # crew_board.ps1 - current-state read for crew mode.
 # One command, one glance: every crew worktree with its branch, dirty-file count,
-# last worker status line, and PR verdict (checks + review decision).
+# last worker status line, heartbeat age, and PR verdict (checks + review decision).
 # Used by the mate on every turn and by the maintainer directly.
 
 [CmdletBinding()]
@@ -51,6 +51,23 @@ foreach ($c in $crews) {
         if ($last) { $status = $last.Trim() }
     }
 
+    $heartbeatLine = 'none'
+    $heartbeatFile = Join-Path $RepoRoot ".crew\$($c.Issue)-heartbeat.json"
+    if (Test-Path -LiteralPath $heartbeatFile) {
+        try {
+            $hb = Get-Content -LiteralPath $heartbeatFile -Raw | ConvertFrom-Json
+            $hbText = [string]$hb.phase
+            try {
+                $hbTime = [DateTimeOffset]::Parse([string]$hb.updatedAtUtc, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal)
+                $hbAge = [DateTimeOffset]::UtcNow - $hbTime.ToUniversalTime()
+                $hbText = "{0} · {1}m ago" -f $hb.phase, [int]$hbAge.TotalMinutes
+            }
+            catch { }
+            $heartbeatLine = $hbText
+        }
+        catch { $heartbeatLine = 'unreadable' }
+    }
+
     $prLine = '(no PR yet)'
     $prJson = gh pr view $c.Branch --json number,state,url,statusCheckRollup,reviewDecision 2>$null
     if ($LASTEXITCODE -eq 0 -and $prJson) {
@@ -71,6 +88,7 @@ foreach ($c in $crews) {
     Write-Output ('---')
     Write-Output ('issue #{0}  branch {1}  ({2} dirty files)' -f $c.Issue, $c.Branch, $dirty)
     Write-Output ('worker : {0}' -f $status)
+    Write-Output ('beat   : {0}' -f $heartbeatLine)
     Write-Output ('pr     : {0}' -f $prLine)
 }
 

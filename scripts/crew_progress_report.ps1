@@ -8,6 +8,7 @@ param(
     [string]$RepoRoot,
     [string]$CandidatePath,
     [string]$OutputPath,
+    [ValidateRange(30, 86400)][int]$StalledAfterSec = 900,
     [switch]$SkipGitHub,
     # Test seam: defaults to the GitHub CLI used by normal reports.
     [string]$GitHubCommand = 'gh'
@@ -152,11 +153,27 @@ function Get-ActiveTasks {
 
         $statusPath = if ($manifest.PrimaryStatusPath) { $manifest.PrimaryStatusPath } else { Join-Path $crewRoot "$($manifest.Issue)-status.md" }
         $worktreeExists = [bool]($manifest.WorktreePath -and (Test-Path -LiteralPath $manifest.WorktreePath))
+        $heartbeat = $null
+        $heartbeatAgeSec = $null
+        $heartbeatPath = Join-Path $crewRoot "$($manifest.Issue)-heartbeat.json"
+        if (Test-Path -LiteralPath $heartbeatPath) {
+            try { $heartbeat = Get-Content -LiteralPath $heartbeatPath -Raw | ConvertFrom-Json } catch { }
+        }
+        if ($heartbeat -and $heartbeat.updatedAtUtc) {
+            try {
+                $hbTime = [DateTimeOffset]::Parse([string]$heartbeat.updatedAtUtc, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal)
+                $heartbeatAgeSec = ([DateTimeOffset]::UtcNow - $hbTime.ToUniversalTime()).TotalSeconds
+            }
+            catch { }
+        }
+        $scoutDone = ($manifest.Autonomy -eq 'scout' -and $manifest.ScoutReportPath -and (Test-Path -LiteralPath $manifest.ScoutReportPath))
+        $stalled = ($null -ne $heartbeatAgeSec -and $heartbeatAgeSec -ge $StalledAfterSec -and -not $scoutDone)
         $task = [pscustomobject]@{
             Issue = [int]$manifest.Issue; Title = [string]$manifest.Title; Autonomy = [string]$manifest.Autonomy
             Branch = [string]$manifest.Branch; DispatchedAtUtc = [string]$manifest.DispatchedAtUtc
             WorktreePath = [string]$manifest.WorktreePath; WorktreeExists = $worktreeExists
             Status = Get-LastNonEmptyLine -Path $statusPath; ScoutReportPath = [string]$manifest.ScoutReportPath
+            Heartbeat = $heartbeat; HeartbeatAgeSec = $heartbeatAgeSec; Stalled = $stalled
             Goal = ''; Evidence = $null; FilesInScope = @(); Pr = $null
         }
         if ($manifest.PrimaryBriefPath -and (Test-Path -LiteralPath $manifest.PrimaryBriefPath)) {
@@ -253,6 +270,7 @@ foreach ($task in $tasks) {
     elseif ($task.Pr.AwaitingMaintainerApproval) { $actions.Add("#$($task.Issue): PR #$($task.Pr.Number) has a current passing /code-review verdict; review it for maintainer approval.") }
     if ($task.Autonomy -eq 'scout' -and $task.ScoutReportPath -and (Test-Path -LiteralPath $task.ScoutReportPath)) { $actions.Add("#$($task.Issue): read the durable scout report before deciding follow-up.") }
     if ($task.Status -and $task.Status -match '^(blocked|risk)\b') { $risks.Add("#$($task.Issue): worker status: $($task.Status)") }
+    if ($task.Stalled) { $risks.Add("#$($task.Issue): worker heartbeat stale for $([int]($task.HeartbeatAgeSec / 60))m (last phase: $($task.Heartbeat.phase)).") }
 }
 $report = [pscustomobject]@{
     SchemaVersion = 2

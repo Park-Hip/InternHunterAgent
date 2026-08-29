@@ -24,6 +24,11 @@ const RECOVERY_UNREADABLE =
   '.vscode/tasks.json exists but could not be read as JSON. Repair the file, ' +
   'reload the window, then re-dispatch the worker. No process was started.';
 
+const RECOVERY_TASKS_API_ERROR =
+  'VS Code Tasks API discovery failed before the worker could be verified. ' +
+  'Reload the window, confirm the registered task in Tasks: Run Task, then ' +
+  're-dispatch the worker. No process was started.';
+
 // Resolve the filesystem path of a folder-scoped Task. A WorkspaceFolder exposes
 // uri.fsPath; tests and some older metadata may hand us a Uri-like object or a
 // plain path directly.
@@ -162,6 +167,7 @@ module.exports = {
   TASK_SCOPE_WORKSPACE,
   RECOVERY_RELOAD,
   RECOVERY_UNREADABLE,
+  RECOVERY_TASKS_API_ERROR,
   taskScopePath,
   isPrimaryWorkspaceTask,
   findWorkspaceCandidates,

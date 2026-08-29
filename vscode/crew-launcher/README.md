@@ -69,16 +69,25 @@ Any failure writes an immutable `refused` (or `already-running`) event and never
 after every check passes does the extension call `vscode.tasks.executeTask` on the exactly-matching
 task; the task's existing presentation produces the dedicated, focused terminal tab.
 
-When the registered task exists in `.vscode/tasks.json` but VS Code does not surface it to the
-Tasks API (a stale or unavailable task registry), the extension refuses with `registry-unavailable`
-and records a precise recovery instruction instead of a misleading `task-not-found`. Reload the
-window and re-dispatch, or run the task manually via **Tasks: Run Task**.
+After stage-one validation, the extension waits up to 15 seconds for the **live** Tasks API to
+return an exact task. It polls with bounded exponential backoff (250 ms to 2 s), and a public
+`workspace.onDidChangeConfiguration` event affecting `tasks` is only a hint to poll sooner. The
+hint and the on-disk task file never authorize execution; only the fetched Task object can pass the
+existing provenance, exact-shape, harness, and duplicate-execution gates. A thrown Tasks API call
+fails closed immediately. A task still unavailable after the deadline refuses with
+`registry-unavailable`; an API error refuses with `registry-error`. Both carry a recovery
+instruction to reload the window, confirm the registered task in **Tasks: Run Task**, and
+re-dispatch with a new request.
 
 ## Results
 
 Each request has an append-only event log at
-`.crew/launch-queue/results/<requestId>.events.jsonl`. Events are `validated`, `matched`,
-`accepted`, `started`, `ended`, `already-running`, `refused`, and `failed`, each timestamped.
+`.crew/launch-queue/results/<requestId>.events.jsonl`. Events are `validated`, `discovery`,
+`matched`, `accepted`, `started`, `ended`, `already-running`, `refused`, and `failed`, each
+timestamped. Every `discovery` event records a fetch attempt number, its trigger (`initial`,
+`poll-timeout`, or `configuration-change`), and only a redacted outcome/category and eligible
+candidate count. It never records task commands, arguments, paths, task shapes, or raw API errors.
 A `refused` event carries a `reason` (`task-not-found`, `task-mismatch`, `registry-unavailable`,
-`harness-missing`, or a stage-one reason) and, for recovery cases, an `instruction`.
-The launcher maps the first terminal event to the manifest `TerminalLaunchStatus`.
+`registry-error`, `harness-missing`, or a stage-one reason) and, for recovery cases, an
+`instruction`. The launcher maps the first terminal event to the manifest
+`TerminalLaunchStatus`.

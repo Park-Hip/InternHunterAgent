@@ -119,6 +119,41 @@ For the instrument's layout, seams, grading, and limits see
   and chart metrics are out of scope.
 - **The harness measures; it does not remediate.**
 
+### 7.6 Black-box HTTP/SSE multi-turn probes
+
+The in-process evaluation harness validates agent seams and conversational context, but it does not
+prove FastAPI session handling, persistence, or SSE framing and termination across a real multi-turn
+product interaction. A bounded black-box probe suite lives in
+`tests/api/test_stream.py` (class `StreamMultiTurnTests`) and exercises the public
+`POST /api/v1/agent/chat/stream` endpoint directly via `TestClient`.
+
+#### What the probes cover
+
+| Test | What it verifies |
+|---|---|
+| `test_multi_turn_session_continuity` | The same `session_id` sent across two turns is echoed back in both SSE `session` events |
+| `test_multi_turn_session_isolation` | Two distinct `session_id` values produce distinct SSE `session` events with no cross-talk |
+| `test_multi_turn_correction_referent_handled` | Turn 2's streamed token text carries a bounded referent back to turn 1's topic (semantic criterion) |
+| `test_multi_turn_refusal_after_normal_prior_turn` | A successful first turn is followed by an in-band `error` + `done` on the second turn |
+| `test_completed_stream_ends_with_done` | A normal stream terminates with a `done` event as the last SSE frame |
+| `test_aborted_stream_emits_error_then_done` | A mid-run runtime exception yields an in-band `error` event followed by `done` |
+
+#### Credential and live-provider contract
+
+These probes are **fully offline and require no credentials or live provider access**.
+The runtime is replaced by a test-double (`_MultiTurnRuntime`) that yields deterministic
+SSE-event dicts; no database, no Langfuse, no LLM API key is touched.
+They exercise the product boundary — the FastAPI route, the SSE framing layer,
+and the session-id passthrough — without invoking any production seam.
+
+#### Where to extend
+
+- Add new probe scenarios in `StreamMultiTurnTests` in `tests/api/test_stream.py`.
+- Do **not** modify `src/api/routes/query.py`, `src/api/schemas.py`, or any production route
+  without a separately approved proposal.
+- Do not introduce async production scoring, copy the full offline scenario registry through HTTP,
+  or add live-provider calls into the test suite.
+
 
 ## Provider quotas and evaluation cost
 

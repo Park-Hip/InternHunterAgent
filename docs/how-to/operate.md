@@ -186,6 +186,11 @@ Do not use a `-pooler` host for migrations.
 The guarded production adoption sequence remains in
 [the cron activation runbook](cron-activation-runbook.md), section 3 D6.
 
+For breaking-schema changes that require an incompatible type or semantic shift, follow the
+[expand–migrate–contract procedure](../reference/schema.md#expandmigratecontract-procedure).
+That procedure must complete before any destructive migration or contraction step; it ensures
+the frozen agent-visible contract stays consistent across prompts, fixtures, and evaluations.
+
 ## Ingestion cron
 
 The schedule is currently disabled: the two `schedule:` / `cron:` lines in

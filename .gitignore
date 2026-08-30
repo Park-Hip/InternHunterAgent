@@ -11,6 +11,8 @@ __pycache__/
 evals/runs/*
 !evals/runs/iha266-calibration-v7-judge-scores.json
 !evals/runs/iha266-calibration-v7-agreement-report.json
+!evals/runs/iha346-calibration-v8-judge-scores.json
+!evals/runs/iha346-calibration-v8-agreement-report.json
 .lavish/
 
 # Agent-skill installs whose docs reference artifacts created by later workflows

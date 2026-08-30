@@ -211,3 +211,184 @@ class StreamOpenAPITests(unittest.TestCase):
             _server_sent_event(event="token", data={"text": "first\nsecond"}),
             'event: token\ndata: {"text": "first\\nsecond"}\n\n',
         )
+
+
+class _MultiTurnRuntime:
+    """A runtime mock that yields different SSE events per call, enabling multi-turn HTTP probes."""
+
+    def __init__(self) -> None:
+        self.call_count = 0
+        self.calls: list[tuple[str, str, str | None]] = []
+        self._events_per_turn: list[list[dict[str, str | bool | None]]] = []
+        self._raise_during_turn: bool = False
+
+    def set_turn_events(self, events: list[dict[str, str | bool | None]]) -> None:
+        self._events_per_turn.append(events)
+
+    def set_raise_during_turn(self) -> None:
+        self._raise_during_turn = True
+
+    async def astream(self, query: str, session_id: str, user_id: str | None = None):
+        self.call_count += 1
+        self.calls.append((query, session_id, user_id))
+        if self._events_per_turn:
+            idx = min(self.call_count - 1, len(self._events_per_turn) - 1)
+            events = self._events_per_turn[idx]
+            for i, event in enumerate(events):
+                yield event
+                if self._raise_during_turn and i == len(events) - 1:
+                    raise RuntimeError("database password leaked")
+            return
+        if self.call_count == 1:
+            yield {"type": "token", "text": "First answer"}
+            yield {"type": "metadata", "trace_id": "t-1", "trace_url": None}
+        else:
+            yield {"type": "token", "text": "Second answer"}
+            yield {"type": "metadata", "trace_id": "t-2", "trace_url": None}
+
+
+class StreamMultiTurnTests(unittest.TestCase):
+    """Black-box HTTP/SSE probes for multi-turn conversation behavior."""
+
+    def setUp(self) -> None:
+        self.app = create_app(rate_limit="1000/minute", docs_enabled=False)
+        self.runtime = _MultiTurnRuntime()
+        self.app.state.runtime = self.runtime
+        self.client = TestClient(self.app)
+
+    def test_multi_turn_session_continuity(self) -> None:
+        """Same session_id across two turns is echoed back by the server each time."""
+        session_id = "persistent-session"
+        for _ in range(2):
+            response = self.client.post(
+                "/api/v1/agent/chat/stream",
+                json={"query": "next job", "session_id": session_id},
+            )
+            self.assertEqual(response.status_code, 200)
+            events = _parse_sse_events(response.text)
+            self.assertEqual(events[0][0], "session")
+            self.assertEqual(events[0][1]["session_id"], session_id)
+
+        self.assertEqual(self.runtime.call_count, 2)
+        for query, sid, uid in self.runtime.calls:
+            self.assertEqual(sid, session_id)
+
+    def test_multi_turn_session_isolation(self) -> None:
+        """Different session_ids produce different session events and do not leak state."""
+        session_a = "session-alpha"
+        session_b = "session-beta"
+
+        response_a = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "query for alpha", "session_id": session_a},
+        )
+        self.assertEqual(response_a.status_code, 200)
+        events_a = _parse_sse_events(response_a.text)
+        self.assertEqual(events_a[0][1]["session_id"], session_a)
+
+        response_b = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "query for beta", "session_id": session_b},
+        )
+        self.assertEqual(response_b.status_code, 200)
+        events_b = _parse_sse_events(response_b.text)
+        self.assertEqual(events_b[0][1]["session_id"], session_b)
+        self.assertNotEqual(events_a[0][1]["session_id"], events_b[0][1]["session_id"])
+
+        self.assertEqual(self.runtime.call_count, 2)
+        session_ids_seen = {sid for _, sid, _ in self.runtime.calls}
+        self.assertEqual(session_ids_seen, {session_a, session_b})
+
+    def test_multi_turn_correction_referent_handled(self) -> None:
+        """Turn 2 yields a response that semantically references turn 1 content."""
+        self.runtime.set_turn_events([
+            {"type": "token", "text": "Acme uses Python"},
+            {"type": "metadata", "trace_id": "t-c1", "trace_url": None},
+        ])
+        self.runtime.set_turn_events([
+            {"type": "token", "text": "Acme also uses SQL"},
+            {"type": "metadata", "trace_id": "t-c2", "trace_url": None},
+        ])
+        session_id = "referent-session"
+
+        self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "What stack does Acme use?", "session_id": session_id},
+        )
+        response = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "Which language does Acme use for queries?", "session_id": session_id},
+        )
+        self.assertEqual(response.status_code, 200)
+        events = _parse_sse_events(response.text)
+        token_events = [e for e in events if e[0] == "token"]
+        self.assertEqual(len(token_events), 1)
+        self.assertIn("Acme", token_events[0][1]["text"])
+        self.assertIn("SQL", token_events[0][1]["text"])
+
+    def test_multi_turn_refusal_after_normal_prior_turn(self) -> None:
+        """A normal first turn succeeds; a subsequent turn returns an in-band error before done."""
+        self.runtime.set_turn_events([
+            {"type": "token", "text": "ok"},
+            {"type": "metadata", "trace_id": None, "trace_url": None},
+        ])
+        # Second turn: yield nothing, then raise provider-busy error
+        async def _refusal_astream(**kwargs):
+            yield {"type": "token", "text": "partial"}
+            raise RuntimeError("provider quota exhausted")
+
+        self.runtime.astream = _refusal_astream
+
+        first = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "list jobs", "session_id": "refusal-session"},
+        )
+        self.assertEqual(first.status_code, 200)
+        first_events = _parse_sse_events(first.text)
+        self.assertEqual(first_events[-1][0], "done")
+
+        second = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "list more", "session_id": "refusal-session"},
+        )
+        self.assertEqual(second.status_code, 200)
+        second_events = _parse_sse_events(second.text)
+        event_types = [e[0] for e in second_events]
+        self.assertIn("error", event_types)
+        self.assertIn("done", event_types)
+        error_event = next(e for e in second_events if e[0] == "error")
+        self.assertEqual(error_event[1]["code"], PROVIDER_BUSY_ERROR_CODE)
+        self.assertTrue(error_event[1]["retryable"])
+
+    def test_completed_stream_ends_with_done(self) -> None:
+        """A stream that yields tokens and metadata terminates with a done event."""
+        response = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "list data engineer jobs", "session_id": "completion-session"},
+        )
+        self.assertEqual(response.status_code, 200)
+        events = _parse_sse_events(response.text)
+        event_types = [e[0] for e in events]
+        self.assertEqual(event_types[-1], "done")
+        self.assertEqual(event_types[0], "session")
+
+    def test_aborted_stream_emits_error_then_done(self) -> None:
+        """A stream that fails mid-run emits an error event followed by done."""
+        self.runtime.set_turn_events([
+            {"type": "token", "text": "Partial answer"},
+        ])
+        self.runtime.set_raise_during_turn()
+
+        response = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "crash me", "session_id": "abort-session"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("database password leaked", response.text)
+        events = _parse_sse_events(response.text)
+        event_types = [e[0] for e in events]
+        self.assertEqual(event_types, ["session", "token", "error", "done"])
+        error_event = next(e for e in events if e[0] == "error")
+        self.assertEqual(error_event[1]["code"], INTERNAL_ERROR_CODE)
+        self.assertFalse(error_event[1]["retryable"])
+        self.assertEqual(events[-1][0], "done")

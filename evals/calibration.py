@@ -127,6 +127,7 @@ def calibration_report(
     """Compare available judge scores with human labels without overwriting them."""
     groups: dict[str, list[tuple[bool, bool]]] = defaultdict(list)
     unavailable: list[str] = []
+    disagreements: list[dict[str, Any]] = []
     for case in corpus["cases"]:
         result = results.get(case["id"], {})
         if result.get("status") != AVAILABLE or not isinstance(
@@ -134,9 +135,9 @@ def calibration_report(
         ):
             unavailable.append(case["id"])
             continue
-        if threshold is None:
-            continue
-        row = (result["score"] >= threshold, case["human"]["overall"] == "PASS")
+        predicted = result["score"] >= threshold if threshold is not None else None
+        actual = case["human"]["overall"] == "PASS"
+        row = (predicted, actual) if threshold is not None else None
         scenario_class = case["scenario_id"].split("-", 1)[0]
         lineage_groups = (
             tuple(
@@ -146,14 +147,28 @@ def calibration_report(
             if "prompt_versions" in case
             else (f"prompt_version:{case['prompt_version']}",)
         )
-        for group in (
-            "overall",
-            f"class:{scenario_class}",
-            f"language:{case['language']}",
-            *lineage_groups,
-            "assertion_type:semantic",
-        ):
-            groups[group].append(row)
+        if row is not None:
+            for group in (
+                "overall",
+                f"class:{scenario_class}",
+                f"language:{case['language']}",
+                *lineage_groups,
+                "assertion_type:semantic",
+            ):
+                groups[group].append(row)
+            if predicted != actual:
+                disagreements.append(
+                    {
+                        "case_id": case["id"],
+                        "scenario_id": case["scenario_id"],
+                        "class": scenario_class,
+                        "judge_score": result["score"],
+                        "judge_pass": predicted,
+                        "human_label": case["human"]["overall"],
+                        "rationale": case["human"]["rationale"],
+                        "judge_rationale": result.get("rationale", ""),
+                    }
+                )
 
     def metrics(rows: list[tuple[bool, bool]]) -> dict[str, Any]:
         tp = sum(predicted and actual for predicted, actual in rows)
@@ -172,7 +187,31 @@ def calibration_report(
         "threshold": threshold,
         "groups": {key: metrics(value) for key, value in sorted(groups.items())},
         "unavailable_case_ids": unavailable,
+        "disagreements": disagreements,
     }
+
+
+def sweep_thresholds(
+    corpus: dict[str, Any],
+    results: dict[str, dict[str, Any]],
+    start: float = 0.1,
+    stop: float = 1.0,
+    step: float = 0.1,
+) -> list[dict[str, Any]]:
+    """Sweep thresholds and return per-threshold metrics for every group."""
+    sweep_points: list[dict[str, Any]] = []
+    threshold = start
+    while threshold <= stop + 1e-9:
+        rounded = round(threshold, 1)
+        report = calibration_report(corpus, results, threshold=rounded)
+        entry: dict[str, Any] = {"threshold": rounded}
+        for key, metrics in report["groups"].items():
+            entry[key] = metrics
+        entry["disagreement_count"] = len(report["disagreements"])
+        entry["unavailable_count"] = len(report["unavailable_case_ids"])
+        sweep_points.append(entry)
+        threshold += step
+    return sweep_points
 
 
 def score_calibration(corpus: dict[str, Any]) -> dict[str, dict[str, Any]]:

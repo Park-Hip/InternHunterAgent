@@ -145,3 +145,138 @@ def test_calibration_scoring_keeps_human_labels_separate_from_judge_results(
 
     assert set(results) == {item["id"] for item in corpus["cases"]}
     assert all("human" not in result for result in results.values())
+
+
+def test_v8_corpus_is_versioned_vietnamese_and_targets_disagreement_classes() -> None:
+    from pathlib import Path
+
+    corpus = load_calibration(Path("evals/calibration_v8.yaml"))
+
+    assert corpus["corpus_id"] == "vietnamese-semantic-v8"
+    assert {item["language"] for item in corpus["cases"]} == {"vi"}
+    classes = {item["scenario_id"].split("-", 1)[0] for item in corpus["cases"]}
+    assert classes == {"HON", "HLP"}
+    # All cases target the six disagreement scenarios from v7.
+    expected_scenarios = {
+        "HON-CURRENCY-1",
+        "HON-ZERO-RESULTS-1",
+        "HON-FREE-TEXT-1",
+        "HON-GENERAL-KNOWLEDGE-1",
+        "HLP-SENIOR-TITLE-1",
+        "HLP-ABSTRACTION-1",
+    }
+    assert {item["scenario_id"] for item in corpus["cases"]} == expected_scenarios
+
+
+def test_v8_corpus_has_independent_provenance_and_balanced_labels() -> None:
+    from pathlib import Path
+
+    corpus = load_calibration(Path("evals/calibration_v8.yaml"))
+    assert {item["source"] for item in corpus["cases"]} == {"independently_authored_holdout"}
+    labels_by_scenario: dict[str, list[str]] = defaultdict(list)
+    for case in corpus["cases"]:
+        labels_by_scenario[case["scenario_id"]].append(case["human"]["overall"])
+    assert all(sorted(labels) == ["FAIL", "PASS"] for labels in labels_by_scenario.values())
+
+
+def test_v7_remains_unchanged_after_v8_addition() -> None:
+    from pathlib import Path
+
+    v7 = load_calibration()
+    assert v7["corpus_id"] == "vietnamese-semantic-v7"
+    assert len(v7["cases"]) == 36
+    v8 = load_calibration(Path("evals/calibration_v8.yaml"))
+    assert v8["corpus_id"] == "vietnamese-semantic-v8"
+    assert len(v8["cases"]) == 12
+    v7_ids = {item["id"] for item in v7["cases"]}
+    v8_ids = {item["id"] for item in v8["cases"]}
+    assert v7_ids.isdisjoint(v8_ids)
+
+
+def test_calibration_report_exposes_disagreements(tmp_path) -> None:
+    path = tmp_path / "disagree.yaml"
+    path.write_text(
+        """schema_version: 1
+corpus_id: disagree-test
+cases:
+  - id: case-a
+    scenario_id: HON-CURRENCY-1
+    language: vi
+    prompt_version: v6
+    source: independently_authored_holdout
+    trajectory:
+      - question: question
+        answer: answer
+    human:
+      overall: FAIL
+      rationale: human says fail
+  - id: case-b
+    scenario_id: HON-ZERO-RESULTS-1
+    language: vi
+    prompt_version: v6
+    source: independently_authored_holdout
+    trajectory:
+      - question: question
+        answer: answer
+    human:
+      overall: PASS
+      rationale: human says pass
+""",
+        encoding="utf-8",
+    )
+    corpus = load_calibration(path)
+    results = {
+        "case-a": {"status": "AVAILABLE", "score": 0.5, "rationale": "judge says pass"},
+        "case-b": {"status": "AVAILABLE", "score": 0.2, "rationale": "judge says fail"},
+    }
+    report = calibration_report(corpus, results, threshold=0.3)
+    assert len(report["disagreements"]) == 2
+    ids = {d["case_id"] for d in report["disagreements"]}
+    assert ids == {"case-a", "case-b"}
+    case_a = next(d for d in report["disagreements"] if d["case_id"] == "case-a")
+    assert case_a["judge_pass"] is True
+    assert case_a["human_label"] == "FAIL"
+    assert case_a["class"] == "HON"
+
+
+def test_sweep_thresholds_returns_points_for_every_decimal(tmp_path) -> None:
+    path = tmp_path / "sweep.yaml"
+    path.write_text(
+        """schema_version: 1
+corpus_id: sweep-test
+cases:
+  - id: a
+    scenario_id: HON-CURRENCY-1
+    language: vi
+    prompt_version: v6
+    source: independently_authored_holdout
+    trajectory:
+      - question: q
+        answer: a
+    human:
+      overall: PASS
+      rationale: ok
+""",
+        encoding="utf-8",
+    )
+    corpus = load_calibration(path)
+    results = {"a": {"status": "AVAILABLE", "score": 0.55}}
+    sweep = calibration.sweep_thresholds(corpus, results, start=0.1, stop=0.6, step=0.1)
+    thresholds = [point["threshold"] for point in sweep]
+    assert thresholds == [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+    # Score 0.55 passes at thresholds <= 0.5 and fails at 0.6.
+    assert sweep[0]["overall"]["recall"] == 1.0
+    assert sweep[4]["overall"]["recall"] == 1.0
+    assert sweep[5]["overall"]["recall"] == 0.0
+    assert all("sample_size" in point["overall"] for point in sweep)
+
+
+def test_calibration_report_includes_unavailable_and_disagreement_counts() -> None:
+    from pathlib import Path
+
+    corpus = load_calibration(Path("evals/calibration_v8.yaml"))
+    # Only score half the cases; leave the rest unavailable.
+    first_six = {case["id"]: {"status": "AVAILABLE", "score": 0.9} for case in corpus["cases"][:6]}
+    report = calibration_report(corpus, first_six, threshold=0.5)
+    assert len(report["unavailable_case_ids"]) == 6
+    assert report["groups"]["overall"]["sample_size"] == 6

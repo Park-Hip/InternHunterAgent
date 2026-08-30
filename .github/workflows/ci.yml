@@ -185,7 +185,7 @@ jobs:
     # or when the RELEASE_GATE_ENABLED repository/environment variable is set.
     if: >-
       (github.event_name == 'workflow_dispatch' && github.event.inputs.enabled == 'true') ||
-      (github.event_name == 'push' && env.RELEASE_GATE_ENABLED == 'true')
+      (github.event_name == 'push' && vars.RELEASE_GATE_ENABLED == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

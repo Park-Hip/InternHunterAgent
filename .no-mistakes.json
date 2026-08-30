@@ -1,0 +1,39 @@
+{
+  "$schema": "https://kunchenguid.github.io/no-mistakes/repo-config/v1",
+  "pipeline": {
+    "targetBranch": "main",
+    "steps": {
+      "review": {
+        "autoFixLimit": 0,
+        "ignorePaths": [
+          ".crew/",
+          ".claude/",
+          ".worktrees/",
+          "research/",
+          "node_modules/",
+          ".venv/",
+          "__pycache__/"
+        ]
+      },
+      "test": {
+        "commands": ["uv run pytest -m crew"],
+        "evidence": {
+          "storeInRepo": false
+        }
+      },
+      "lint": {
+        "commands": [
+          "uv run ruff check .",
+          "uv run mypy ."
+        ],
+        "autoFixLimit": 3
+      },
+      "document": {
+        "autoFixLimit": 1
+      }
+    }
+  },
+  "ui": {
+    "theme": "dark"
+  }
+}

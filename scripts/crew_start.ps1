@@ -15,10 +15,12 @@ param(
     # via a generated .vscode/tasks.json (requires allowing automatic tasks);
     # vscode-task registers a "Crew: IHA-<issue> worker" task in THIS checkout's
     # .vscode/tasks.json without launching anything - start it from the terminal
-    # panel of an already-running window via Terminal > Run Task; vscode-task-auto
-    # registers the same task and publishes a launch request that a local,
+    # panel of an already-running window via Terminal > Run Task; this is the
+    # default backend because it lands workers inside the maintainer's existing
+    # window without spawning extra chrome; vscode-task-auto registers the same
+    # task and publishes a launch request that a local,
     # opt-in VS Code extension runs in the already-open window.
-    [ValidateSet('wt', 'vscode', 'vscode-task', 'vscode-task-auto')][string]$Backend = 'vscode',
+    [ValidateSet('wt', 'vscode', 'vscode-task', 'vscode-task-auto')][string]$Backend = 'vscode-task',
     # Dry-run prints the plan without touching disk.
     [switch]$WhatIfMode,
     [string]$RepoRoot

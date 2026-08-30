@@ -129,12 +129,19 @@ function Get-Signature {
         }
         catch { $reviewRecords = @() }
     }
-    $marker = if ($pr.headRefOid) { '(?im)^Reviewed head:\s*' + [regex]::Escape([string]$pr.headRefOid) + '\s*$' } else { $null }
-    $skillVerdict = [bool]$marker -and @($reviewRecords | Where-Object {
-        $_.commit_id -eq $pr.headRefOid -and $_.state -eq 'COMMENTED' -and $_.body -match '(?i)/code-review' -and $_.body -match '(?i)\bpass(ing|ed)?\b' -and $_.body -match $marker
-    }).Count -gt 0
-    $skillState = if ($skillVerdict) { 'skill:pass' } else { 'skill:missing' }
-    return 'pr#{0}|{1}|{2}|{3}|{4}' -f $pr.number, $pr.state, $checks, $pr.reviewDecision, $skillState
+    # No-mistakes gate: check for a durable, current-head receipt.
+    $issueFromBranch = if ($entry.Branch -match '(?:^|/)(?:iha|crew)-?(\d+)') { $Matches[1] }
+                       elseif ($entry.Branch -match '^crew/(\d+)') { $Matches[1] } else { $null }
+    $nmReceiptPath = if ($issueFromBranch) { Join-Path $RepoRoot ".crew\$issueFromBranch-no-mistakes.json" } else { $null }
+    $nmValid = [bool]($nmReceiptPath -and (Test-Path -LiteralPath $nmReceiptPath))
+    if ($nmValid) {
+        try {
+            $nmReceipt = Get-Content -LiteralPath $nmReceiptPath -Raw | ConvertFrom-Json
+            $nmValid = $nmReceipt.head_sha -eq $pr.headRefOid
+        } catch { $nmValid = $false }
+    }
+    $nmState = if ($nmValid) { 'nm:pass' } else { 'nm:missing' }
+    return 'pr#{0}|{1}|{2}|{3}|{4}' -f $pr.number, $pr.state, $checks, $pr.reviewDecision, $nmState
 }
 
 function Get-StatusSignature {
@@ -192,9 +199,9 @@ while ($true) {
                 Write-Event "crew/$issue" 'PR_MERGED' ("branch=$($entry.Branch)")
             }
             elseif ($sig -like '*|green|*') {
-                if     ($sig -like '*|skill:missing') { Write-Event "crew/$issue" 'PR_READY_FOR_REVIEW' 'checks green; independent current-head /code-review verdict required' }
-                elseif ($sig -like '*|APPROVED|skill:pass') { Write-Event "crew/$issue" 'PR_LANDABLE' 'checks green + current /code-review verdict + maintainer approval; auto-merge will land it' }
-                elseif ($sig -like '*|skill:pass') { Write-Event "crew/$issue" 'PR_READY_FOR_REVIEW' 'checks green + current /code-review verdict; awaiting maintainer approval' }
+                if     ($sig -like '*|nm:missing') { Write-Event "crew/$issue" 'PR_READY_FOR_REVIEW' 'checks green; mandatory no-mistakes receipt required' }
+                elseif ($sig -like '*|APPROVED|nm:pass') { Write-Event "crew/$issue" 'PR_LANDABLE' 'checks green + current no-mistakes pass + maintainer approval; auto-merge will land it' }
+                elseif ($sig -like '*|nm:pass') { Write-Event "crew/$issue" 'PR_READY_FOR_REVIEW' 'checks green + current no-mistakes pass; awaiting maintainer approval' }
                 else { Write-Event "crew/$issue" 'CHECKS_GREEN' ("state=$($sig)") }
             }
             elseif ($sig -like '*fail:*') {

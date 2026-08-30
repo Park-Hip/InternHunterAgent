@@ -135,6 +135,8 @@ function Write-CrewTaskManifest {
         TerminalLaunchSpec     = $null
         TerminalLaunchSpecHash = $null
         LaunchRequestId        = $null
+        NoMistakesReceiptPath  = $null
+        NoMistakesValid        = $false
         TornDownAtUtc          = $null
     }
     Write-CrewUtf8File -Path $ManifestPath -Content ($manifest | ConvertTo-Json -Depth 4)
@@ -177,6 +179,25 @@ function Copy-CrewTaskContractFiles {
 
     Write-CrewUtf8File -Path $TaskBriefPath -Content (Get-Content -LiteralPath $PrimaryBriefPath -Raw)
     Write-CrewUtf8File -Path $TaskManifestPath -Content (Get-Content -LiteralPath $PrimaryManifestPath -Raw)
+}
+
+function Get-CrewNoMistakesStatus {
+    # Returns the current no-mistakes gate status for a task manifest.
+    # A ship task is gate-ready only when NoMistakesValid is $true and the
+    # durable receipt path exists on disk.
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$ManifestPath)
+
+    $manifest = Read-CrewTaskManifest -ManifestPath $ManifestPath
+    $valid = [bool]$manifest.NoMistakesValid
+    $path  = if ($manifest.NoMistakesReceiptPath) { $manifest.NoMistakesReceiptPath } else { $null }
+    $exists = if ($path) { Test-Path -LiteralPath $path } else { $false }
+    return [pscustomobject]@{
+        Valid    = $valid
+        Path     = $path
+        Exists   = $exists
+        Ready    = ($valid -and $exists)
+    }
 }
 
 function Assert-CrewTeardownAllowed {

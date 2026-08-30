@@ -1,4 +1,4 @@
-# test_mate_watch.ps1 - deterministic current-head review-gate probes for mate_watch.
+# test_mate_watch.ps1 - deterministic current-head no-mistakes-gate probes for mate_watch.
 
 [CmdletBinding()]
 param()
@@ -41,6 +41,8 @@ try {
 
     $bin = Join-Path $root 'bin'
     New-Item -ItemType Directory -Path $bin -Force | Out-Null
+    # No receipt written yet - first sweep must show nm:missing.
+
     $fakeGh = @'
 @echo off
 echo %* | findstr /c:"repo view" >nul
@@ -50,19 +52,15 @@ if not errorlevel 1 (
 )
 echo %* | findstr /c:"/reviews" >nul
 if not errorlevel 1 (
-  if "%CREW_WATCH_SKILL_PASS%"=="1" (
-    echo [[{"commit_id":"head-777","state":"COMMENTED","body":"/code-review passing verdict\nReviewed head: head-777"}]]
-  ) else (
-    echo [[]]
-  )
+  echo []
   exit /b 0
 )
 if "%CREW_WATCH_PENDING%"=="1" (
   echo {"number":777,"state":"OPEN","headRefOid":"head-777","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"status":"IN_PROGRESS","conclusion":""}],"comments":[],"reviews":[]}
 ) else if "%CREW_WATCH_APPROVED%"=="1" (
   echo {"number":777,"state":"OPEN","headRefOid":"head-777","reviewDecision":"APPROVED","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}],"comments":[],"reviews":[{"state":"APPROVED","body":"Maintainer approval"}]}
-) else if "%CREW_WATCH_SKILL_PASS%"=="1" (
-  echo {"number":777,"state":"OPEN","headRefOid":"head-777","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}],"comments":[],"reviews":[{"state":"COMMENTED","body":"/code-review passing verdict\nReviewed head: head-777"}]}
+) else if "%CREW_WATCH_NM_PASS%"=="1" (
+  echo {"number":777,"state":"OPEN","headRefOid":"head-777","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}],"comments":[],"reviews":[]}
 ) else (
   echo {"number":777,"state":"OPEN","headRefOid":"head-777","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}],"comments":[],"reviews":[]}
 )
@@ -75,18 +73,32 @@ if "%CREW_WATCH_PENDING%"=="1" (
     Remove-Item Env:CREW_WATCH_PENDING -ErrorAction SilentlyContinue
     & $watchScript -Once -NoToast -RepoRoot $repo | Out-Null
     $firstEvents = Get-Content -LiteralPath (Join-Path $repo '.crew\events.log') -Raw
-    Assert-True ($firstEvents -match 'independent current-head /code-review verdict required') "Green PR without a current verdict must request the independent review first. Events: $firstEvents"
+    Assert-True ($firstEvents -match 'mandatory no-mistakes receipt required') "Green PR without a no-mistakes receipt must request the gate first. Events: $firstEvents"
 
-    $env:CREW_WATCH_SKILL_PASS = '1'
+    # Write a valid no-mistakes receipt before the second sweep.
+    $nmReceiptPath = Join-Path $repo '.crew\777-no-mistakes.json'
+    Write-Utf8 -Path $nmReceiptPath -Content '{"head_sha":"head-777","steps":["review","test","lint"],"completedUtc":"2026-08-30T12:00:00Z"}'
+    $env:CREW_WATCH_NM_PASS = '1'
     & $watchScript -Once -NoToast -RepoRoot $repo | Out-Null
     $secondEvents = Get-Content -LiteralPath (Join-Path $repo '.crew\events.log') -Raw
-    Assert-True ($secondEvents -match 'current /code-review verdict; awaiting maintainer approval') 'Only a current passing verdict may advance the watcher to maintainer approval.'
+    Assert-True ($secondEvents -match 'current no-mistakes pass; awaiting maintainer approval') 'Only a current passing no-mistakes receipt may advance the watcher to maintainer approval.'
 
-    Remove-Item Env:CREW_WATCH_SKILL_PASS -ErrorAction SilentlyContinue
+    Remove-Item Env:CREW_WATCH_NM_PASS -ErrorAction SilentlyContinue
+    # Remove the valid receipt so the third sweep sees nm:missing again.
+    Remove-Item -LiteralPath $nmReceiptPath -ErrorAction SilentlyContinue
     $env:CREW_WATCH_APPROVED = '1'
     & $watchScript -Once -NoToast -RepoRoot $repo | Out-Null
     $thirdEvents = Get-Content -LiteralPath (Join-Path $repo '.crew\events.log') -Raw
-    Assert-True (($thirdEvents -split "`r?`n" | Where-Object { $_ -match 'independent current-head /code-review verdict required' }).Count -ge 2) 'A maintainer-approved PR without the independent verdict must still request that verdict.'
+    Assert-True (($thirdEvents -split "`r?`n" | Where-Object { $_ -match 'mandatory no-mistakes receipt required' }).Count -ge 2) 'A maintainer-approved PR without the no-mistakes receipt must still request that receipt.'
+
+    # Stale receipt test: write a receipt with a different head_sha so the gate rejects it.
+    $nmReceiptPath = Join-Path $repo '.crew\777-no-mistakes.json'
+    Write-Utf8 -Path $nmReceiptPath -Content '{"head_sha":"stale-sha-777","steps":["review","test","lint"],"completedUtc":"2026-08-30T11:00:00Z"}'
+    $env:CREW_WATCH_PENDING = '1'
+    & $watchScript -Once -NoToast -RepoRoot $repo | Out-Null
+    Remove-Item Env:CREW_WATCH_PENDING -ErrorAction SilentlyContinue
+    $staleEvents = Get-Content -LiteralPath (Join-Path $repo '.crew\events.log') -Raw
+    Assert-True ($staleEvents -match 'mandatory no-mistakes receipt required') 'A stale no-mistakes receipt must not make a PR ready.'
 
     # Heartbeat / stalled-worker scenario. A heartbeat older than the threshold must
     # emit exactly one WORKER_STALLED; a fresh heartbeat clears it without a repeat;
@@ -107,12 +119,12 @@ if "%CREW_WATCH_PENDING%"=="1" (
     $rearmedEvents = Get-Content -LiteralPath (Join-Path $repo '.crew\events.log') -Raw
     Assert-True (@($rearmedEvents -split "`r?`n" | Where-Object { $_ -match 'WORKER_STALLED' }).Count -eq 2) 'A stall that recurs after a clear must re-emit WORKER_STALLED.'
 
-    Write-Output 'mate watch probes passed' 
+    Write-Output 'mate watch probes passed'
 }
 finally {
     Set-Location -LiteralPath $initialLocation
     Remove-Item Env:CREW_WATCH_PENDING -ErrorAction SilentlyContinue
-    Remove-Item Env:CREW_WATCH_SKILL_PASS -ErrorAction SilentlyContinue
+    Remove-Item Env:CREW_WATCH_NM_PASS -ErrorAction SilentlyContinue
     Remove-Item Env:CREW_WATCH_APPROVED -ErrorAction SilentlyContinue
     $env:PATH = $oldPath
     if (Test-Path -LiteralPath $repo) {

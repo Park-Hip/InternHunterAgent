@@ -12,13 +12,12 @@ This document is canonical for crew conventions.
 | Role | What it does |
 |---|---|
 | Maintainer (captain) | Approves plans, approves ship merges on GitHub, answers escalations. Nothing else. |
-| Mate | One standing agent session. Validates intake, writes briefs, launches workers and independent PR reviewers, supervises, orders landings, escalates exactly what is listed below. |
+| Mate | One standing agent session. Validates intake, writes briefs, launches workers, supervises, checks the mandatory no-mistakes gate, orders landings, escalates exactly what is listed below. |
 | Workers | One session per task in its own disposable worktree. Reads only its brief. Ships open PRs; scouts write reports. Never push outside their contract, never merge. |
-| Review subagent | Independently reviews one ship PR using the `code-review-and-quality` skill. Records its verdict and actionable findings on the PR; never merges. |
 
 ## Task shapes
 
-- **Ship** - changes code or docs and delivers through a PR opened with `gh pr merge --squash --auto` and `Closes #<issue>`.
+- **Ship** - changes code or docs and delivers through a PR opened with `gh pr merge --squash --auto` and `Closes #<issue>`. Ship workers run the no-mistakes pipeline before PR submission and persist a durable receipt.
 
 - **Scout** - investigates only and writes its report to the durable path recorded in its task manifest.
   Scouts never push.
@@ -29,11 +28,11 @@ Changing shape is a decision for the maintainer.
 ## Durable task lifecycle
 
 New task worktrees are created at `..\InternHunterAgent-worktrees\IHA-<issue>`.
-The `<issue>-task.json` manifest in the primary checkout's `.crew\` directory is the authoritative locator for the task's worktree, brief, branch, terminal backend, and scout report path.
+The `<issue>-task.json` manifest in the primary checkout's `.crew\` directory is the authoritative locator for the task's worktree, brief, branch, terminal backend, scout report path, and no-mistakes receipt path.
 The launcher also copies the brief and manifest into the task worktree, so a worker can read its contract locally from `.crew\<issue>-brief.md`.
 
 For scout tasks, the durable report path is `research\crew\<issue>-report.md` in the primary checkout.
-The worker must not leave the only report copy inside its disposable worktree.
+The worker must not leave the only report copy inside the disposable worktree.
 
 Existing worktrees keep their `IHA-<issue>` names and locations.
 The launcher never moves them.
@@ -42,13 +41,11 @@ Teardown for an existing task without a manifest remains a manual, path-specific
 ## Visible worker sessions
 
 `scripts/crew_start.ps1` launches the worker through an explicit terminal backend.
-By default it opens the task worktree in a new VS Code window.
-Pass `-Backend wt` to open a new Windows Terminal tab instead.
-Pass `-Backend vscode-task` to register a "Crew: IHA-<issue> worker" task in this
+The **default backend is `vscode-task`**: it registers a "Crew: IHA-<issue> worker" task in this
 checkout's `.vscode/tasks.json` without launching anything - then start it from
-the terminal panel of an already-running window (Terminal > Run Task), which is
-the only way to land a worker inside a window that is already open without help,
-because the VS Code CLI cannot inject terminals into running windows.
+the terminal panel of an already-running window (Terminal > Run Task).
+Pass `-Backend wt` to open a new Windows Terminal tab instead.
+Pass `-Backend vscode` to open the task worktree in a new VS Code window.
 Pass `-Backend vscode-task-auto` to register the same task and publish a launch
 request into `.crew/launch-queue` that a local, opt-in VS Code extension runs in
 the already-open window - no `Run Task` click. See
@@ -62,7 +59,8 @@ Pass `-Harness <executable>` to start any installed command-line harness interac
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness claude
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy scout -Harness pi
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy scout -Harness aider
-# Register the worker as a task in this checkout's terminal panel (pi example):
+# Register the worker as a task in this checkout's terminal panel (default backend):
+.\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness pi
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness pi -Backend vscode-task
 # Register and auto-launch it in the current window (pi example):
 .\scripts\crew_start.ps1 -Issue 123 -Autonomy ship -Harness pi -Backend vscode-task-auto
@@ -81,14 +79,21 @@ The launcher validates the selected executable on `PATH` before it creates the w
 Use `-Harness shell` when you want to choose or start a harness manually.
 Use `-WhatIfMode` to inspect the worktree root, manifest, brief, report, and backend launch plan without changing disk.
 
-### VS Code backend (default)
+### VS Code task backend (default)
 
-The VS Code CLI cannot inject a session into an already-running window, so each dispatch
-opens its own new VS Code window on the worktree folder. When a harness is selected, the
-launcher also writes `.vscode/tasks.json` into the worktree defining a dedicated integrated-
-terminal task that runs on folder open, so the harness starts in VS Code's terminal panel as
-a switchable terminal tab. One-time prerequisite: allow automatic tasks when prompted, or set
-`"task.allowAutomaticTasks": "on"`. With `-Harness shell`, no automatic task is written.
+The default `-Backend vscode-task` registers a workspace task in the primary
+checkout's `.vscode/tasks.json` so the maintainer can start the worker from
+the integrated terminal panel of an already-running VS Code window
+(Terminal > Run Task). The CLI cannot inject terminals into running windows, so
+this is the only way to land a worker inside a window that is already open
+without help. With `-Harness shell`, no automatic task is written.
+
+### VS Code backend
+
+Pass `-Backend vscode` to open the task worktree in a new VS Code window and
+auto-start the harness in the integrated terminal panel via a generated
+`.vscode/tasks.json` (requires allowing automatic tasks). One-time prerequisite:
+set `"task.allowAutomaticTasks": "on"`.
 
 ### VS Code auto-launch backend
 
@@ -124,16 +129,18 @@ Parallelism is bounded by these rules, not by a fixed number of workers.
 Every landed ship PR has, by construction, passed all four gates.
 
 1. Required CI checks green.
-2. An independent review subagent has reviewed the PR with the `code-review-and-quality` skill.
-3. That review has a recorded passing `/code-review` verdict with no unresolved required findings.
+2. A durable, head-bound no-mistakes receipt proves the mandatory pre-approval gate passed for the branch's current head.
+3. The no-mistakes receipt matches the PR's current HEAD SHA; stale receipts are rejected.
 4. The maintainer's approving review.
 
-When a ship PR has green checks, the mate dispatches a fresh, independent review subagent. The reviewer examines the change and its verification story across the skill's correctness, readability, architecture, security, and performance axes. It records the result as a GitHub PR **review comment**: a concise passing verdict when no required fixes remain, or a summary of required fixes when they do. Required findings are posted as actionable inline PR comments when they apply to a specific line; otherwise they belong in the review summary. The reviewer never uses a GitHub approval as its passing verdict, leaving that formal approval exclusively to the maintainer. Labels are optional dashboard metadata and never evidence of review.
-
-A required finding sends the PR back to its worker. After the worker pushes the fixes and checks are green again, the mate dispatches a new independent review; the PR is not ready for maintainer approval until that re-review records a passing verdict. The mate then presents the PR with its number, one-line summary, top risks, and manual check.
+When a ship PR has green checks, the mate runs `scripts/crew_no_mistakes.ps1` against the PR branch.
+A current passing receipt (valid `head_sha`, durable path on disk) combined with green CI makes the PR ready for maintainer escalation.
+The old independent reviewer dispatch, `review #<n>` command, and `/code-review` verdict procedure have been removed.
+No subagent is dispatched for PR review. No `/code-review` comment is posted or awaited.
+Labels are optional dashboard metadata and never evidence of review.
 
 PRs open with `gh pr merge --squash --auto`.
-GitHub holds them until the protected CI and maintainer-approval gates hold; the mate additionally enforces the delegated-review gates above.
+GitHub holds them until the protected CI and maintainer-approval gates hold; the mate additionally enforces the no-mistakes gate above.
 The mate executes the serial landing order: merge, rebase remaining worktrees onto the new tip, then continue.
 The mate never merges manually and cannot bypass protection.
 
@@ -146,6 +153,17 @@ gh api repos/Park-Hip/InternHunterAgent/branches/main/protection/required_pull_r
 
 The response must be non-empty.
 
+## No-mistakes gate
+
+Every ship worker runs the no-mistakes pipeline (`no-mistakes axi`) before opening the PR.
+The pipeline enforces a fixed sequence — intent, rebase, review, test, document, lint, push, PR, CI — and writes a durable receipt when all local gates pass.
+
+The receipt is stored as `.no-mistakes-receipt.json` in the repo root, and a task-local copy at `.crew/<issue>-no-mistakes.json` in the primary checkout carries the validated `head_sha`, the completed steps, and a timestamp.
+The mate's `crew_no_mistakes.ps1` adapter rejects receipts whose `head_sha` does not match the branch's current HEAD, preventing stale evidence from making a PR ready.
+
+The repository no-mistakes configuration lives in `.no-mistakes.json`.
+This task does **not** add the upstream `require-no-mistakes` GitHub Action as a required branch-protection check; the mandatory gate is enforced at the Crew lifecycle layer, not at the GitHub branch-protection layer.
+
 ## Files
 
 - `_brief.template.md` - skeleton filled by the mate or `crew_start.ps1`.
@@ -153,7 +171,7 @@ The response must be non-empty.
 - `<issue>-brief.md` - primary-checkout copy of the contract for one task.
   The task-local copy is at `.crew\<issue>-brief.md` in its worktree.
 
-- `<issue>-task.json` - durable, primary-checkout task manifest and authoritative locator for newly dispatched tasks.
+- `<issue>-task.json` - durable, primary-checkout task manifest and authoritative locator for newly dispatched tasks. Includes `NoMistakesReceiptPath` and `NoMistakesValid` fields for ship tasks.
 
 - `<issue>-status.md` - worker-written progress lines in the primary checkout.
   The last non-empty line wins.
@@ -161,6 +179,8 @@ The response must be non-empty.
 - `<issue>-heartbeat.json` - durable worker heartbeat in the primary checkout:
   `{"updatedAtUtc":"<ISO-8601 UTC>","phase":"<activity>"}`. Written on dispatch by
   `crew_start.ps1` and refreshed by the worker; its age drives stalled detection.
+
+- `<issue>-no-mistakes.json` - durable no-mistakes receipt written by the worker after a passing pipeline run; used by the mate to verify the mandatory gate.
 
 - `events.log` - structured events appended by `mate_watch.ps1` in the format `<UTC timestamp> | <subject> | <event> | <detail>`.
   Event kinds: `PR_OPENED`, `CHECKS_GREEN`, `CHECKS_FAILED`, `PR_READY_FOR_REVIEW`, `PR_LANDABLE`, `PR_MERGED`, `PR_GONE`, `WORKER_STATUS_CHANGED`, plus direct completion events `SCOUT_REPORT_READY` (a scout task's durable report appeared) and `WORKER_IDLE` (a worktree's dirty-file count unchanged across sweeps - informational, not a health verdict), and the health event `WORKER_STALLED` (a worker's heartbeat has been stale past `StalledAfterSec`).
@@ -172,7 +192,7 @@ The watcher raises a Windows toast for escalation-grade events (`CHECKS_FAILED`,
 
 When the maintainer asks for crew progress, the mate first reconciles durable state and then uses `scripts/crew_progress_report.ps1 -Format markdown`. Markdown is the captain-facing default; use `-Format html` only when the maintainer explicitly asks for HTML, and `-Format data` when the structured payload itself is needed. All three formats are derived from the same payload.
 
-The report has a fixed order: maintainer actions, active tasks, risks, fully merged PRs, recent material changes, and next-compatible tasks. Active tasks render as a table with the task goal, PR state, and evidence/source. A task brief should cite its durable research or approved plan in an `## Evidence` section with Source, Heading, Label, and Finding fields; the report falls back to that brief's Goal when no complete citation exists. Merged PRs are excluded from active tasks. A fully merged PR requires GitHub's merged state, a maintainer approval, and a passing `/code-review` verdict. Empty sections are explicit. It does not infer worker progress, ETA, evidence, approval, or dispatch decisions beyond the state it reads.
+The report has a fixed order: maintainer actions, active tasks, risks, fully merged PRs, recent material changes, and next-compatible tasks. Active tasks render as a table with the task goal, PR state, and evidence/source. A task brief should cite its durable research or approved plan in an `## Evidence` section with Source, Heading, Label, and Finding fields; the report falls back to that brief's Goal when no complete citation exists. Merged PRs are excluded from active tasks. A fully merged PR requires GitHub's merged state, a maintainer approval, and a current passing no-mistakes receipt. Empty sections are explicit. It does not infer worker progress, ETA, evidence, approval, or dispatch decisions beyond the state it reads.
 
 `.crew/candidates.json` is an ignored local runtime record for **undispatched** candidates. The mate creates or updates a candidate after durable local evidence is available, and removes it after dispatch or abandonment. Its top-level shape is `{ "schemaVersion": 1, "candidates": [] }`. Every candidate requires `issue`, `type` (`ship` or `scout`), `goal`, `filesInScope`, `planStatus`, `compatibility`, and an `evidence` object with `source`, `heading`, `label`, and `excerpt`. `source` is a local durable path; `heading` and `label` are stable finding/gap identifiers. The reporter ignores incomplete records and exposes a data warning instead of inventing provenance. It rechecks plan approval and the active `src/**/models.py` / `config/settings.yaml` shared-surface lock before marking a record dispatchable; it never dispatches automatically.
 
@@ -190,7 +210,7 @@ The mate escalates exactly these and nothing else:
 
 - Plan approval.
 
-- A ship PR ready for approving review.
+- A ship PR ready for approving review (requires green CI + current no-mistakes pass).
 
 - Merge conflicts it cannot resolve by rebasing.
 

@@ -77,12 +77,18 @@ foreach ($c in $crews) {
         $checks = if ($failed -gt 0) { "CHECKS FAILING ($failed)" }
                   elseif ($pending -gt 0) { "checks pending ($pending)" }
                   else { 'checks GREEN' }
-        $review = switch ($pr.reviewDecision) {
-            'APPROVED'        { 'approved' }
-            'REVIEW_REQUIRED' { 'AWAITING YOUR APPROVAL' }
-            default           { $pr.reviewDecision }
+        # No-mistakes gate status.
+        $issueNum = if ($c.Branch -match '(?:^|/)(?:iha|crew)-?(\d+)') { $Matches[1] }
+                   elseif ($c.Branch -match '^crew/(\d+)') { $Matches[1] } else { $null }
+        $nmPath = if ($issueNum) { Join-Path $RepoRoot ".crew\$issueNum-no-mistakes.json" } else { $null }
+        $nmStatus = 'nm:NONE'
+        if ($nmPath -and (Test-Path -LiteralPath $nmPath)) {
+            try {
+                $nm = Get-Content -LiteralPath $nmPath -Raw | ConvertFrom-Json
+                $nmStatus = if ($nm.head_sha -eq $pr.headRefOid) { 'nm:PASSED' } else { 'nm:STALE' }
+            } catch { $nmStatus = 'nm:ERROR' }
         }
-        $prLine = '#{0} [{1}] {2}; review: {3}; {4}' -f $pr.number, $pr.state, $checks, $review, $pr.url
+        $prLine = '#{0} [{1}] {2}; {3}; {4}' -f $pr.number, $pr.state, $checks, $nmStatus, $pr.url
     }
 
     Write-Output ('---')

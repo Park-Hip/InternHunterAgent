@@ -1,6 +1,6 @@
 ---
 name: crew-mate
-description: Act as the crew mate - the single mediator interface for crew mode (.crew/README.md). Dispatch worker sessions and independent PR reviewers, supervise from disk state, order serial landings, and escalate only listed decisions. TRIGGER when the maintainer asks to use crew mode, run or dispatch issues, asks for crew status, or wants tasks supervised while away.
+description: Act as the crew mate - the single mediator interface for crew mode (.crew/README.md). Dispatch worker sessions, supervise from disk state, order serial landings, and escalate only listed decisions. The mandatory no-mistakes gate must pass (with a current-head durable receipt) before any ship PR is escalated for maintainer approval. TRIGGER when the maintainer asks to use crew mode, run or dispatch issues, asks for crew status, or wants tasks supervised while away.
 ---
 
 # Crew mate contract
@@ -21,12 +21,11 @@ receipt named below; do not claim completion from the agent's own narration.
 |---|---|---|
 | `register #<n>` or `register task #<n>` | Register a VS Code task | Run `scripts/crew_start.ps1 -Issue <n> -Autonomy ship|scout -Harness pi -Backend vscode-task`. This writes the matching `Crew: IHA-<n> worker` task in the primary checkout and launches **no** window or terminal. Its default Pi model is exactly `modelscope/deepseek-ai/DeepSeek-V4-Pro-0813`; never substitute a DashScope or OpenRouter model. Report task label, tasks-file path, and worktree cwd. |
 | `launch #<n>` or `open worker #<n>` | Launch a new VS Code worker window | Use the explicit `vscode` backend. Report worktree path and launch result. |
-| `review #<n>` or `review PR #<n>` | Publish an independent crew PR review | Dispatch a fresh reviewer using `crew-pr-review` plus `code-review-and-quality`. The reviewer must return the publisher receipt: review URL/id, current head SHA, event, state, and inline-comment count. |
 | `status`, `progress`, `current progress`, or `how is the crew doing` | Reconcile and report current progress | Reconcile from disk, then run `scripts/crew_progress_report.ps1 -Format markdown`; return that Markdown only. |
 
 For `run #<n>` or another phrase that could mean either registration in the current
-VS Code window or a new window, ask exactly: “Register it in this VS Code window, or
-open its own VS Code window?” Do not infer a backend. The normal plan/issue and
+VS Code window or a new window, ask exactly: "Register it in this VS Code window, or
+open its own VS Code window?" Do not infer a backend. The normal plan/issue and
 shared-surface gates still apply to every dispatch.
 
 ## Intake
@@ -65,22 +64,30 @@ not hand-write a substitute report. Its fixed order is actions, active tasks, ri
 fully merged PRs, recent material changes, and next-compatible tasks. Active tasks
 are a table that cites each task's durable research or approved-plan evidence; use the
 task brief's Goal only when that citation is unavailable. Do not list a merged PR as
-active. List a PR as fully merged only after its independent skill review has a
-current passing verdict, the maintainer has approved it on GitHub, and GitHub shows it
-as merged. The HTML report remains available only when the maintainer explicitly asks
-for it: use `-Format html`. Use the report's explicit empty states and provenance
-warnings as written. Candidate evidence must name a durable local source path plus a
-stable heading and finding/gap label; never claim a candidate is compatible,
-approved, or dispatchable without that durable data.
+active. List a PR as fully merged only after its no-mistakes gate has a current passing
+receipt, the maintainer has approved it on GitHub, and GitHub shows it as merged. The
+HTML report remains available only when the maintainer explicitly asks for it: use
+`-Format html`. Use the report's explicit empty states and provenance warnings as written.
+Candidate evidence must name a durable local source path plus a stable heading and
+finding/gap label; never claim a candidate is compatible, approved, or dispatchable
+without that durable data.
 
 ## Review and land
 
-When a ship PR has green checks, dispatch a fresh independent review subagent. Require it to use both the `crew-pr-review` and `code-review-and-quality` skills, review the PR diff, tests, and verification story across every skill axis, and return the review-publisher receipt. The reviewer records its result as a GitHub PR review comment:
+When a ship PR has green checks, verify the mandatory no-mistakes gate before escalating:
 
-- With required fixes, post a concise review summary and actionable inline comments for line-specific findings. Return the PR to the worker; after fixes are pushed and checks are green, dispatch a new review subagent.
-- With no required fixes, post a concise passing `/code-review` verdict as a review comment. Do not use a GitHub approval: that formal approval belongs only to the maintainer. Never treat a label as review evidence.
+1. Run `scripts/crew_no_mistakes.ps1 -RepoRoot <primary-checkout>` against the PR branch.
+2. The script must return `Valid: true` with a matching `head_sha`. A stale receipt
+   (head_sha from an older commit) is rejected and the PR is not ready.
+3. With a current no-mistakes pass plus green CI, escalate the PR once:
+   PR number, one-line summary, top risks, manual check. Then wait.
 
-Only after a current passing verdict and no unresolved required findings may you escalate a ship PR:
+**No independent reviewer is dispatched.** The old `crew-pr-review` procedure and
+`/code-review` verdict have been replaced by the mandatory no-mistakes gate.
+Do not dispatch a review subagent, do not run `crew_pr_review.ps1`, and do not
+look for `/code-review` verdicts in PR comments.
+
+Only after a current passing no-mistakes receipt and green CI may you escalate a ship PR:
 
 - Escalate it once: PR number, one-line summary, top risks, manual check. Then wait.
 - The maintainer approves on GitHub. Branch protection holds the merge until then;
@@ -94,7 +101,7 @@ escalate conflicts, and confirm checks re-run on the rebased tips.
 ## Escalate exactly these - nothing else
 
 - Plan approval (unchanged gate).
-- Ship PR ready for approving review.
+- Ship PR ready for approving review (requires current no-mistakes pass + green CI).
 - Merge conflict you cannot resolve by rebase alone.
 - Repeated check failures on the same PR (two consecutive failures).
 - Shared-surface lock conflict discovered after dispatch.

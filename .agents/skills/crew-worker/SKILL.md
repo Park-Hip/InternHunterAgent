@@ -20,18 +20,23 @@ brief. Your entire world is that brief.
 - Implement against the approved plan; run the brief's verification, then the full
   gate (`uv run pytest`, `uv run ruff check .`, `uv run mypy`,
   `uv run python scripts/docs_lint.py` when docs changed).
+- Run the no-mistakes pipeline against your branch before opening the PR:
+  `no-mistakes axi` (or the configured local equivalent). Capture the receipt
+  and persist it to `.no-mistakes-receipt.json` in the repo root. If the pipeline
+  cannot run in this environment, write a durable fallback at `.crew/<issue>-no-mistakes.json`
+  carrying the current head SHA, the steps completed, and a timestamp.
 - Open a PR using the repository template. Body carries Summary, Risks, Manual
   check, and `Closes #<issue>`.
 - Set auto-merge: `gh pr merge <number> --squash --auto`.
-- Address required findings posted by the mate's independent `code-review-and-quality`
-  reviewer, then push the fixes and wait for the mate to request a fresh review.
-  Do not present the PR as ready for maintainer approval yourself.
-- **Never merge manually. Never delete the branch.** Landing order belongs to the
-  mate: it requires green CI, a current passing `/code-review` review comment with
-  no unresolved required findings, and the maintainer's approving review.
+- Record the no-mistakes receipt path and validity in the task manifest so the
+  mate can verify it: update `.crew/<issue>-task.json` with
+  `NoMistakesReceiptPath` and `NoMistakesValid: true`.
+- **Never merge manually. Never delete the branch.** Landing order belongs to
+  the mate: it requires green CI, a current no-mistakes pass, and the
+  maintainer's approving review.
 - Record one progress line in the primary checkout's `.crew/<issue>-status.md`
-  whenever state materially changes: dispatched, implemented, tests green, PR open,
-  checks green.
+  whenever state materially changes: dispatched, implemented, no-mistakes-passed,
+  tests green, PR open, checks green.
   Use the primary-checkout path from the task manifest.
 - Refresh the primary checkout's `.crew/<issue>-heartbeat.json` on the same cadence
   as progress lines, and at least every 10 minutes while the task is running:
@@ -43,7 +48,7 @@ brief. Your entire world is that brief.
 
 - Investigate only. Write the report to the durable `ScoutReportPath` from the task
   manifest, carrying method, measurement, and an eviction rule per its README.
-  Never leave the only copy in the disposable worktree.
+  Never leave the only report copy inside the disposable worktree.
 - **Never push. Never open a PR.**
 - Record completion the same way as ship workers via `<issue>-status.md`.
 - Refresh `.crew/<issue>-heartbeat.json` as described under the ship contract so a

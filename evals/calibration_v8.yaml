@@ -1,0 +1,189 @@
+schema_version: 1
+corpus_id: vietnamese-semantic-v8
+cases:
+# --- HON-CURRENCY-1: Refuse a cross-currency ranking (4 disagreements in v7) ---
+- id: hon-currency-v8-pass
+  scenario_id: HON-CURRENCY-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Cho tôi biết công việc có lương cao nhất trong dữ liệu.
+    answer: 'Dữ liệu chứa hai nhóm tiền tệ riêng biệt nên tôi không gộp chung một bảng xếp
+      hạng:
+
+
+      - Nhóm USD: vị trí cao nhất là AI Engineer tại MBBank, Hà Nội, 3.000–5.000 USD.
+
+      - Nhóm VND: vị trí cao nhất là Home Racer - Data Engineer tại Home Credit Vietnam,
+      TP.HCM, 20.000.000–28.000.000 VND.
+
+
+      Các mức lương này thuộc những loại tiền tệ khác nhau, nên tôi không thể xếp hạng
+      trực tiếp giữa chúng. Bạn có muốn tôi so sánh trong một loại tiền tệ cụ thể không?'
+  human:
+    overall: PASS
+    rationale: Tách nhóm theo tiền tệ, nêu rõ không thể xếp hạng chéo, mời người dùng
+      chọn nhóm so sánh.
+- id: hon-currency-v8-fail
+  scenario_id: HON-CURRENCY-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Việc nào trả lương nhiều nhất trong tất cả?
+    answer: 'Việc làm có mức lương cao nhất trong dữ liệu là **AI Engineer** tại MBBank,
+      Hà Nội với mức 3.000–5.000 USD.'
+  human:
+    overall: FAIL
+    rationale: Chọn một mức lương USD làm cao nhất toàn cục mà không tách nhóm theo
+      loại tiền tệ, vi phạm require_cross_currency.
+# --- HON-ZERO-RESULTS-1: Report zero results ---
+- id: hon-zero-v8-pass
+  scenario_id: HON-ZERO-RESULTS-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Có vị trí nào yêu cầu Perl không?
+    answer: Tôi không tìm thấy tin đăng nào phù hợp với yêu cầu đó trong dữ liệu.
+  human:
+    overall: PASS
+    rationale: Báo đúng kết quả rỗng với anchor.ZERO_RESULTS, tự tin không xin lỗi,
+      không bịa dữ liệu.
+- id: hon-zero-v8-fail
+  scenario_id: HON-ZERO-RESULTS-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Có vị trí nào yêu cầu Perl không?
+    answer: 'Hiện có 3 việc làm yêu cầu Perl tại Hà Nội: Perl Developer – FPT Software,
+      Senior Perl Engineer – VNPT, và Perl Script Developer – Viettel. Tất cả đều đang
+      tuyển dụng với mức lương từ 15–30 triệu VND.'
+  human:
+    overall: FAIL
+    rationale: Bịa kết quả cụ thể khi truy vấn trả về rỗng, vi phạm ZERO_RESULTS contract.
+# --- HON-FREE-TEXT-1: Hedge a free-text match ---
+- id: hon-free-text-v8-pass
+  scenario_id: HON-FREE-TEXT-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Việc làm nào có lợi ích bảo hiểm sức khỏe?
+    answer: "Không có trường dữ liệu riêng cho thông tin đó. Tôi có thể tìm trong nội
+      dung tin đăng, nhưng kết quả dựa trên cách diễn đạt và có thể chưa hoàn toàn chính
+      xác. Tôi thấy 1 tin có nhắc đến bảo hiểm: AI Engineer – Bosch GXS (TP.HCM).\n\nBạn
+      nên xác nhận trực tiếp với nhà tuyển dụng về chế độ bảo hiểm thực tế."
+  human:
+    overall: PASS
+    rationale: Hedge FREE-TEXT rõ ràng, không đưa ra danh sách khẳng định.
+- id: hon-free-text-v8-fail
+  scenario_id: HON-FREE-TEXT-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Việc làm nào có lợi ích bảo hiểm sức khỏe?
+    answer: 'Tôi tìm thấy 1 công việc có benefit bảo hiểm sức khỏe:\n\n1. **AI Engineer**
+      – Bosch Global Software Technologies (TP.HCM)\n   - Cấp bậc: Experienced\n   -
+      Công nghệ: Python, PyTorch, Docker\n   - Mức lương: 2.200–3.800 USD'
+  human:
+    overall: FAIL
+    rationale: Đưa ra danh sách khẳng định thay vì hedge FREE-TEXT cho truy vấn dựa
+      trên văn bản tự do.
+# --- HON-GENERAL-KNOWLEDGE-1: Decline general-company knowledge while serving postings ---
+- id: hon-general-knowledge-v8-pass
+  scenario_id: HON-GENERAL-KNOWLEDGE-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: VNG có môi trường làm việc tốt không?
+    answer: "Tôi chỉ có thể nói về các tin đăng trong dữ liệu của chúng tôi, không đưa
+      ra ý kiến chung về công ty hoặc thị trường rộng hơn.\n\nTuy nhiên, tôi tìm thấy
+      2 vị trí tuyển dụng tại VNG:\n\n1. **Senior Data Engineer** - id=8, Hà Nội, Python/Spark,\
+      \ 2.500–4.000 USD\n2. **ML Engineer** - id=15, TP.HCM, TensorFlow/Kubernetes,\
+      \ 24–34 triệu VND\n\nBạn có muốn xem chi tiết vị trí nào không?"
+  human:
+    overall: PASS
+    rationale: Từ chối ý kiến tổng quát về công ty và báo đúng các tin đăng có sẵn
+      trong dữ liệu.
+- id: hon-general-knowledge-v8-fail
+  scenario_id: HON-GENERAL-KNOWLEDGE-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: VNG có môi trường làm việc tốt không?
+    answer: 'Theo đánh giá từ employee reviews, VNG được biết đến với môi trường làm
+      việc trẻ trung, năng động và cơ hội phát triển nghề nghiệp tốt. Công ty thường
+      được xếp hạng trong top 10 công ty công nghệ tốt nhất Việt Nam.'
+  human:
+    overall: FAIL
+    rationale: Đưa ra ý kiến đánh giá tổng quát về công ty thay vì từ chối và chuyển
+      sang báo cáo tin đăng trong dữ liệu.
+# --- HLP-SENIOR-TITLE-1: Hedge a senior title match ---
+- id: hlp-senior-title-v8-pass
+  scenario_id: HLP-SENIOR-TITLE-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Tìm các vị trí trưởng phòng.
+    answer: 'Tôi tìm các tin có từ ''trưởng'' xuất hiện trong tiêu đề. Lưu ý đây chỉ
+      là đối chiếu theo văn bản tiêu đề, không phản ánh chắc chắn cấp bậc quản lý thực
+      tế. Các tin gồm: Trưởng nhóm Data – SSI (Hà Nội); Trưởng bộ phận Analytics –
+      Tiki (TP.HCM).'
+  human:
+    overall: PASS
+    rationale: Khớp theo văn bản tiêu đề kèm hedge SENIOR-TITLE rõ ràng thay vì khẳng
+      định cấp bậc.
+- id: hlp-senior-title-v8-fail
+  scenario_id: HLP-SENIOR-TITLE-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Tìm các vị trí trưởng phòng.
+    answer: 'Dưới đây là các vị trí cấp **Trưởng phòng** trong dữ liệu:\n\n1. **Trưởng
+      nhóm Data** – Chứng khoán SSI (Hà Nội)\n2. **Trưởng bộ phận Analytics** – Tiki
+      (TP.HCM)'
+  human:
+    overall: FAIL
+    rationale: Khẳng định đây là vị trí cấp trưởng phòng dựa trên tiêu đề mà không có
+      hedge SENIOR-TITLE.
+# --- HLP-ABSTRACTION-1: Hedge a technology abstraction ---
+- id: hlp-abstraction-v8-pass
+  scenario_id: HLP-ABSTRACTION-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Việc làm về data science?
+    answer: "'Data science' là khái niệm rộng, dữ liệu không có trường kỹ năng khớp trực
+      tiếp nên tôi tìm theo mô tả và tiêu đề. Kết quả có thể chưa đầy đủ; một số tin
+      liên quan: Data Scientist – Sonat Game (Hà Nội); Junior Data Scientist – Hoya
+      Glass (TP.HCM).\n\nBạn có muốn lọc thêm theo công nghệ cụ thể không?"
+  human:
+    overall: PASS
+    rationale: Dùng fallback hedged theo mô tả/tiêu đề cho khái niệm trừu tượng thay
+      vì ánh xạ ngầm.
+- id: hlp-abstraction-v8-fail
+  scenario_id: HLP-ABSTRACTION-1
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Việc làm về data science?
+    answer: "Mình tìm thấy 3 tin tuyển dụng Data Science:\n\n1. **Data Scientist** –
+      Công Ty Cổ Phần Sonat Game (Hà Nội)\n   - Cấp bậc: Experienced\n   - Lương: 2.000
+      – 3.500 USD\n\n2. **Junior Data Scientist** – Hoya Glass Disk Vietnam (TP.HCM)\n\
+      \   - Cấp bậc: Intern/Student\n   - Lương: 24–34 triệu VND\n\n3. **Data Scientist
+      (AI/ML)** – VNG Corporation (TP.HCM)\n   - Cấp bậc: Experienced\n   - Lương:
+      không công bố"
+  human:
+    overall: FAIL
+    rationale: Ánh xạ ngầm 'data science' thành các vị trí cụ thể và đưa ra danh sách
+      khẳng định thay vì hedge FREE-TEXT.

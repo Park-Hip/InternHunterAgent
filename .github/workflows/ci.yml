@@ -3,6 +3,12 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  # The release-gate job below runs only on push to main or v-prefixed tags;
+  # the push trigger is required so that job can ever fire.  Ordinary PRs are
+  # still gated by the provider-free replay lane in the `checks` job.
+  push:
+    branches: [main]
+    tags: ['v*']
 
 # Least privilege: the gate only reads the repo and runs local checks.
 permissions:

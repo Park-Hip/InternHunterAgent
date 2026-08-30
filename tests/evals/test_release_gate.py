@@ -57,7 +57,7 @@ class TestReleaseGateCollection:
             lambda _: {"a": _make_result("UNAVAILABLE")},
         )
         from evals.test_release_gate import _run_gate
-        with pytest.raises(AssertionError, match="scored zero cases"):
+        with pytest.raises(AssertionError, match="unavailable"):
             _run_gate()
 
 
@@ -131,7 +131,31 @@ class TestReleaseGateThreshold:
             lambda _: {"a": _make_result("UNAVAILABLE")},
         )
         from evals.test_release_gate import _run_gate
-        with pytest.raises(AssertionError, match="scored zero cases"):
+        with pytest.raises(AssertionError, match="unavailable"):
+            _run_gate()
+
+    def test_gate_fails_on_partial_outage(self, monkeypatch) -> None:
+        """Partial scoring loss (some unavailable, some scored) must fail closed.
+
+        A judge outage on one class while the other scores perfectly must not
+        let the gate pass — unavailable cases are dropped from every metric group
+        and would otherwise leave recall at 1.0 on the scored subset.
+        """
+        corpus = _make_corpus([
+            _make_case("a", "SAF-T-1", "PASS"),
+            _make_case("b", "HON-T-1", "PASS"),
+        ])
+        monkeypatch.setattr(calibration, "load_calibration", lambda: corpus)
+        monkeypatch.setattr(
+            calibration, "score_calibration",
+            lambda _: {
+                "a": _make_result(AVAILABLE, 0.9),
+                # HON case is unavailable (provider/judge outage)
+                "b": _make_result("UNAVAILABLE"),
+            },
+        )
+        from evals.test_release_gate import _run_gate
+        with pytest.raises(AssertionError, match="unavailable"):
             _run_gate()
 
 

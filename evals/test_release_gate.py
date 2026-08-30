@@ -55,6 +55,15 @@ def _run_gate() -> dict:
     if unavailable:
         print(f"  unavailable: {unavailable}")
 
+    # Fail-closed on partial scoring loss: an unavailable case is a provider or
+    # judge outage that must not be silently dropped from every metric group.
+    # Even if the scored subset keeps recall at 1.0, a partial run cannot certify
+    # the release policy.
+    assert not unavailable, (
+        f"release gate scored {len(available_cases)}/{len(results)} cases; "
+        f"{len(unavailable)} unavailable — provider or judge outage: {unavailable}"
+    )
+
     breached: list[str] = []
     for group, metrics in report["groups"].items():
         recall = metrics.get("recall")
@@ -92,3 +101,4 @@ def test_release_gate_enforces_threshold_and_reports_per_class() -> None:
        < 1.0, the test fails with a summary that names every breached group.
     """
     _run_gate()
+

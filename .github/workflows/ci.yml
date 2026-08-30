@@ -127,6 +127,9 @@ jobs:
       ALEMBIC_DATABASE_URL: "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval"
       DATABASE_URL: "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval"
       AGENT_DATABASE_URL: "postgresql+psycopg://internhunter_agent:internhunter@localhost:5433/internhunter_eval"
+      # Throwaway database for the downgrade round-trip test; distinct from the
+      # one used by the upgrade / check steps above.
+      SCRATCH_DATABASE_URL: "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_scratch"
       # Dummy values — only needed to satisfy Settings validation at load.
       GROQ_API_KEY: "unused-in-ci"
       LANGFUSE_SECRET_KEY: "unused-in-ci"
@@ -143,6 +146,9 @@ jobs:
 
       - run: uv sync --frozen
 
+      - name: Create scratch database
+        run: createdb -U internhunter -h localhost -p 5433 internhunter_scratch
+
       # G1: Prove the chain can take a blank database to head.
       - name: Upgrade blank database to head
         run: uv run alembic upgrade head
@@ -150,3 +156,7 @@ jobs:
       # G2: Prove the ORM metadata is not ahead of the revision chain.
       - name: Check ORM metadata matches migration chain
         run: uv run alembic check
+
+      # G3: Prove the downgrade path and re-upgrade both succeed.
+      - name: Run migration round-trip test
+        run: uv run pytest tests/migrations/test_baseline_roundtrip.py -q

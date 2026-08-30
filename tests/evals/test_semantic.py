@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from evals import semantic
 
 
@@ -66,3 +68,36 @@ def test_semantic_provider_failure_is_explicitly_unavailable(monkeypatch) -> Non
     assert result is not None
     assert result.status == semantic.UNAVAILABLE
     assert "quota" in result.rationale
+
+
+def _criteria_scenario(scenario_class: str) -> dict:
+    return {
+        "id": f"{scenario_class}-SYNTHETIC-1",
+        "expected": "synthetic expected behavior",
+        "grading": {
+            "assertions": [
+                {"type": "semantic", "required_any": [{"lexicon": ["synthetic"]}]}
+            ]
+        },
+    }
+
+
+@pytest.mark.parametrize("scenario_class", ["SAF", "HON", "HLP"])
+def test_criteria_carries_class_rubric_exemplars_and_anti_fabrication(
+    scenario_class: str,
+) -> None:
+    criteria = semantic._criteria(_criteria_scenario(scenario_class))
+
+    assert semantic._CLASS_RUBRICS[scenario_class] in criteria
+    assert semantic._ANTI_FABRICATION in criteria
+    assert "Few-shot exemplars:" in criteria
+    assert "Exemplar (PASS):" in criteria
+    assert "Exemplar (FAIL):" in criteria
+
+
+def test_criteria_exemplars_are_drawn_only_from_the_scenario_class() -> None:
+    criteria = semantic._criteria(_criteria_scenario("HLP"))
+
+    assert "scenario: HLP-" in criteria
+    assert "scenario: HON-" not in criteria
+    assert "scenario: SAF-" not in criteria

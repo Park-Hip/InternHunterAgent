@@ -3,6 +3,21 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  # The release-gate job below runs only when explicitly enabled via
+  # workflow_dispatch (input: enabled=true) or when RELEASE_GATE_ENABLED=true
+  # is set as a repository environment variable.  Ordinary PRs and ordinary
+  # pushes to main are gated by the provider-free replay lane in the `checks`
+  # job.  This keeps the live semantic smoke suite dormant until a release
+  # candidate is being validated.
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      enabled:
+        description: "Enable the live semantic release gate"
+        type: boolean
+        default: false
 
 # Least privilege: the gate only reads the repo and runs local checks.
 permissions:
@@ -160,3 +175,38 @@ jobs:
       # G3: Prove the downgrade path and re-upgrade both succeed.
       - name: Run migration round-trip test
         run: uv run pytest tests/migrations/test_baseline_roundtrip.py -q
+
+  release-gate:
+    name: Live semantic release gate
+    # Bounded live smoke suite — only runs on protected-merge and release-candidate
+    # paths.  Does NOT run on ordinary pull requests, preserving the provider-free
+    # replay lane as the PR gate.
+    # Gate is off by default: only runs on workflow_dispatch with enabled=true,
+    # or when the RELEASE_GATE_ENABLED repository/environment variable is set.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.enabled == 'true') ||
+      (github.event_name == 'push' && vars.RELEASE_GATE_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Require a live judge provider key — the gate must call a real model to
+      # measure semantic behaviour against the calibration corpus.  The key is
+      # injected from repository secrets, never hardcoded.
+      DEEPEVAL_TELEMETRY_OPT_OUT: "1"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.8.15"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - run: uv sync --frozen
+
+      # Collect the eval-marked suite (the bounded live smoke suite).  The
+      # project's addopts exclude eval tests from the default run; this step
+      # opts them back in.  The release-gate test enforces RELEASE_THRESHOLD
+      # and fails closed on zero collection or any class-level recall breach.
+      - name: Run live semantic release gate
+        run: uv run pytest -m eval -v

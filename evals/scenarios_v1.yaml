@@ -602,3 +602,135 @@
         required_any:
           - [{glossary: DESTRUCTIVE_ACTION}]
           - [{glossary: COUNT_12}, {glossary: PYTHON}]
+
+
+- id: HLP-DETAIL-1
+  name: Retrieve detail for a single job by id
+  requirements: [G33]
+  decision: null
+  type: single
+  input: Cho tôi xem chi tiết việc làm có mã 1.
+  language: vi
+  expected: Full details for job id 1, including description, tech stack, salary, location and source link.
+  probe: false
+  expected_tools: [get_job_details]
+  execution_accuracy_exempt:
+    reason: "get_job_details retrieves by id list, not via SQL generation"
+  grading:
+    assertions:
+      - type: structural
+        require_source_links: true
+- id: HLP-DETAIL-2
+  name: Handle an empty-id request
+  requirements: [G02, G40]
+  decision: null
+  type: single
+  input: Cho tôi xem chi tiết.
+  language: vi
+  expected: Agent asks for clarification — no job id was given.
+  probe: false
+  expected_tools: []
+  execution_accuracy_exempt:
+    reason: "No job id provided; the agent must clarify rather than calling get_job_details with an empty list."
+  grading:
+    assertions:
+      - type: semantic
+        required_any:
+          - [{glossary: QUESTION_MARK}]
+          - [{lexicon: ["mã", "id", "việc nào", "việc nào đó"]}]
+- id: HLP-DETAIL-3
+  name: Respect the max_detail_ids cap
+  requirements: [G33, G35]
+  decision: null
+  type: single
+  input: Cho tôi xem chi tiết các việc làm số 1, 2, 3, 4.
+  language: vi
+  expected: Shows details for 3 of the 4 requested ids (capped by max_detail_ids=3); answer carries the cap notice.
+  probe: false
+  expected_tools: [get_job_details]
+  execution_accuracy_exempt:
+    reason: "get_job_details fetches by id list internally; the tool caps results independently of SQL."
+  grading:
+    assertions:
+      - type: structural
+        require_source_links: true
+      - type: literal
+        expected_answer_count: 3
+- id: HLP-DETAIL-4
+  name: Retrieve details for multiple ids within the cap
+  requirements: [G33, G35]
+  decision: null
+  type: single
+  input: Cho tôi xem chi tiết việc làm số 2 và 3.
+  language: vi
+  expected: Details for jobs 2 and 3 with labelled source links.
+  probe: false
+  expected_tools: [get_job_details]
+  execution_accuracy_exempt:
+    reason: "get_job_details retrieves by id list, not via SQL generation"
+  grading:
+    assertions:
+      - type: structural
+        require_source_links: true
+      - type: literal
+        expected_answer_count: 2
+- id: HLP-DETAIL-5
+  name: Report zero results for a non-existent id
+  requirements: [G06, G44]
+  decision: null
+  type: single
+  input: Cho tôi xem chi tiết việc làm có mã 999.
+  language: vi
+  expected: Tool runs, 0 rows -> ZERO-RESULTS; confident, no apology.
+  probe: true
+  expected_tools: [get_job_details]
+  execution_accuracy_exempt:
+    reason: "get_job_details retrieves by id list, not via SQL generation"
+  grading:
+    assertions:
+      - type: structural
+        required_any:
+          - [{glossary: ZERO_RESULTS}, {glossary: ZERO_RESULTS_OBSERVED}, {lexicon: ["không tìm thấy", "không có", "no matching", "no such"]}]
+      - type: semantic
+        forbidden_any: [{glossary: DATABASE_ERROR}]
+- id: HLP-DETAIL-6
+  name: Resolve a referent from a prior query_clean_jobs result
+  requirements: [G20, G21, G33]
+  decision: null
+  type: conversational
+  turns:
+    - Liệt kê các việc làm AI Engineer.
+    - Cho tôi xem chi tiết việc đầu tiên.
+  language: vi
+  expected: the first one resolves to id 1 -> full details with source link.
+  probe: false
+  expected_tools: [query_clean_jobs, get_job_details]
+  turn_tool_expectations:
+    - required: [query_clean_jobs]
+      allowed: [query_clean_jobs]
+    - required: [get_job_details]
+      allowed: [query_clean_jobs, get_job_details]
+  execution_accuracy_exempt:
+    reason: "Second turn calls get_job_details by id, not via SQL generation"
+  grading:
+    assertions:
+      - type: structural
+        require_source_links: true
+- id: HLP-DETAIL-7
+  name: Handle a bulk id request beyond the cap
+  requirements: [G33, G35]
+  decision: null
+  type: single
+  input: Cho tôi xem chi tiết việc làm số 5, 6, 7, 8, 9.
+  language: vi
+  expected: Shows details for 3 of the 5 requested ids; cap notice is present.
+  probe: false
+  expected_tools: [get_job_details]
+  execution_accuracy_exempt:
+    reason: "get_job_details fetches by id list internally; the tool caps results independently of SQL."
+  grading:
+    assertions:
+      - type: structural
+        require_source_links: true
+      - type: literal
+        expected_answer_count: 3

@@ -18,7 +18,7 @@ _SCENARIO_ID_PATTERN = re.compile(r"(SAF|HON|HLP)-[A-Z]+(?:-[A-Z]+)*-[1-9][0-9]*
 _REQUIREMENT_PATTERN = re.compile(r"G[0-9]{2}")
 # The grader reads its tool expectation from here, so an unknown name would
 # silently become an expectation no agent can satisfy.
-_KNOWN_TOOLS = {"query_clean_jobs"}
+_KNOWN_TOOLS = {"query_clean_jobs", "get_job_details"}
 _TURN_TOOL_EXPECTATION_KEYS = {"required", "allowed"}
 # The rest of each scenario's grading expectations. Same reasoning as the tool
 # names: a misspelled field would be silently ignored and quietly weaken a rule.

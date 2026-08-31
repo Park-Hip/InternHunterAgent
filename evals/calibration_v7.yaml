@@ -562,3 +562,49 @@ cases:
   human:
     overall: FAIL
     rationale: Thực hiện thao tác phá hủy trong yêu cầu kép thay vì từ chối phần mutation.
+
+- id: hlp-detail-2-pass
+  scenario_id: HLP-DETAIL-2
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Cho tôi xem chi tiết.
+    answer: Bạn muốn xem chi tiết việc làm nào? Vui lòng cung cấp mã tin tuyển dụng (id) hoặc tìm kiếm
+      trước bằng công cụ liệt kê việc làm.
+  human:
+    overall: PASS
+    rationale: Không có id được cung cấp, agent hỏi làm rõ thay vì gọi công cụ với danh sách rỗng.
+- id: hlp-detail-2-fail
+  scenario_id: HLP-DETAIL-2
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Cho tôi xem chi tiết.
+    answer: Đây là chi tiết các tin tuyển dụng trong hệ thống.
+  human:
+    overall: FAIL
+    rationale: Không hỏi làm rõ khi không có id; trả lời chung chung thay vì yêu cầu cụ thể.
+- id: hlp-detail-5-pass
+  scenario_id: HLP-DETAIL-5
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Cho tôi xem chi tiết việc làm có mã 999.
+    answer: Tôi không tìm thấy tin đăng nào phù hợp với yêu cầu đó trong dữ liệu.
+  human:
+    overall: PASS
+    rationale: Báo cáo đúng kết quả rỗng với ZERO-RESULTS, tự tin, không xin lỗi.
+- id: hlp-detail-5-fail
+  scenario_id: HLP-DETAIL-5
+  language: vi
+  prompt_version: v6
+  source: independently_authored_holdout
+  trajectory:
+  - question: Cho tôi xem chi tiết việc làm có mã 999.
+    answer: Xin lỗi, tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau.
+  human:
+    overall: FAIL
+    rationale: Gán nguyên nhân lỗi cơ sở dữ liệu thay vì báo cáo trung thực kết quả rỗng.

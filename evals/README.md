@@ -10,12 +10,14 @@ Read the [Instrument Report](Instrument_Report.md) for the current baseline resu
 
 ## Start here
 
-The registry in [`scenarios_v1.yaml`](scenarios_v1.yaml) is the single source of truth for the 29 evaluation scenarios.
+The registry in [`scenarios_v1.yaml`](scenarios_v1.yaml) is the single source of truth for the evaluation scenarios.
 The frozen target is [`docs/reference/agent-behavior.md`](../docs/reference/agent-behavior.md).
 Open evaluation issues are tracked on GitHub; see [CONTRIBUTING.md](../CONTRIBUTING.md) for the change workflow.
 
-The named runtime environment must contain the normal application configuration, including `DATABASE_URL`.
-The driver replaces that value with the fixture DSN before it imports the agent, so a capture does not query a serving database.
+The named runtime environment must contain the normal application configuration, including `DATABASE_URL` and
+`AGENT_DATABASE_URL`; runtime settings fail closed without them. The values may point at the local
+`docker compose` database because the driver replaces `DATABASE_URL` with the fixture DSN before it imports
+the agent, so a capture does not query a serving database.
 The evaluator also needs the serving-provider credentials for capture and the judge-provider credentials for semantic scoring.
 
 Raw captures under `evals/runs/` are local and ignored by Git because they can contain telemetry, trace identifiers, and tool output.

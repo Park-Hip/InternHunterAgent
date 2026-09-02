@@ -23,7 +23,6 @@ The full 44-case calibration remains available for diagnostic runs via ``calibra
 from __future__ import annotations
 
 from collections import defaultdict
-import os
 import pytest
 
 from evals import calibration
@@ -88,7 +87,7 @@ def _check_prerequisites() -> None:
             f"release gate: unsupported judge provider '{provider}' in config/settings.yaml; "
             f"supported: {list(key_env)}"
         )
-    if not os.environ.get(required_key):
+    if not getattr(config.settings, required_key, None):
         raise RuntimeError(
             f"release gate: missing required credential {required_key} (judge provider='{provider}'); "
             f"set it before running the live gate."

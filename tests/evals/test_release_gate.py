@@ -68,12 +68,37 @@ class TestReleaseGatePrerequisites:
 
     def test_gate_raises_when_judge_key_is_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A missing GOOGLE_API_KEY must produce a clear RuntimeError."""
-        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-        monkeypatch.delenv("GROQ_API_KEY", raising=False)
-        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        import src.core.config as config_mod
+        fake_settings = config_mod.Settings(
+            DATABASE_URL="postgres://x/x",
+            AGENT_DATABASE_URL="postgres://x/x",
+        )
+        fake_settings.GOOGLE_API_KEY = None
+        fake_settings.config_yaml = {
+            "api": {"stream_heartbeat_seconds": 15},
+            "eval": {"judge": {"provider": "google"}},
+        }
+        monkeypatch.setattr(config_mod, "load_settings", lambda **kwargs: fake_settings)
         from evals.test_release_gate import _check_prerequisites
         with pytest.raises(RuntimeError, match="missing required credential"):
             _check_prerequisites()
+
+    def test_gate_accepts_credential_loaded_from_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A credential supplied through Settings must satisfy the gate."""
+        import src.core.config as config_mod
+        fake_settings = config_mod.Settings(
+            DATABASE_URL="postgres://x/x",
+            AGENT_DATABASE_URL="postgres://x/x",
+        )
+        fake_settings.GOOGLE_API_KEY = "loaded-from-settings"
+        fake_settings.config_yaml = {
+            "api": {"stream_heartbeat_seconds": 15},
+            "eval": {"judge": {"provider": "google"}},
+        }
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.setattr(config_mod, "load_settings", lambda **kwargs: fake_settings)
+        from evals.test_release_gate import _check_prerequisites
+        _check_prerequisites()
 
     def test_gate_raises_when_provider_is_unsupported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """An unsupported judge provider must fail with a named list of supported providers."""

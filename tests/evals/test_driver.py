@@ -998,6 +998,22 @@ def test_freeze_preserves_a_not_evaluated_execution_result(tmp_path: Path) -> No
     assert turn["expected_execution_accuracy"] == "NOT_EVALUATED"
 
 
+def test_freeze_preserves_a_not_evaluated_grade(tmp_path: Path) -> None:
+    capture, grade = _capture_and_grade_from_replay()
+    grade["scenarios"]["HON-CURRENCY-1"][0]["status"] = "NOT_EVALUATED"
+    capture_path = tmp_path / "capture.json"
+    grade_path = tmp_path / "grade.json"
+    output = tmp_path / "frozen.json"
+    capture_path.write_text(json.dumps(capture), encoding="utf-8")
+    grade_path.write_text(json.dumps(grade), encoding="utf-8")
+
+    frozen = driver.freeze_capture(capture_path, grade_path, output)
+
+    validate_replay(frozen)
+    turn = frozen["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]
+    assert turn["expected_grade"] == "NOT_EVALUATED"
+
+
 def test_freeze_derives_an_exempt_execution_result_from_the_registry(
     tmp_path: Path,
 ) -> None:

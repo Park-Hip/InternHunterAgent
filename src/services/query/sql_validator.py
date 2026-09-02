@@ -47,7 +47,7 @@ DELIMITED_IDENTIFIER_PATTERN = re.compile(r'"(?:[^"]|"")*"')
 # Server-side functions that can read files, connect to other services, or block a
 # connection. Match function calls only, including double-quoted identifiers.
 SERVER_SIDE_FUNCTION_PATTERN = re.compile(
-    r'(?<![A-Za-z0-9_])(?:"(?:lo_\w+|pg_\w+|file_lo_\w+|dblink(?:_\w+)?|postgres_fdw_\w+)"|(?:lo_\w+|pg_\w+|file_lo_\w+|dblink(?:_\w+)?|postgres_fdw_\w+))\s*\(',
+    r'(?<![A-Za-z0-9_$\u0080-\U0010FFFF])(?:"(?:lo_\w+|pg_\w+|file_lo_\w+|dblink(?:_\w+)?|postgres_fdw_\w+)"|(?:lo_\w+|pg_\w+|file_lo_\w+|dblink(?:_\w+)?|postgres_fdw_\w+))\s*\(',
     re.IGNORECASE,
 )
 
@@ -63,7 +63,7 @@ TABLE_REF_PATTERN = re.compile(
 # old-style (implicit) join. Matches FROM, a table (optionally with an alias), then a
 # comma. TABLE_REF_PATTERN alone can't catch the second table here, so this guards it.
 FROM_CLAUSE_LIST_PATTERN = re.compile(
-    r'\bFROM\s+(?:ONLY\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)(?:\s+(?:AS\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_]*))?\s*,',
+    r'\bFROM\s+(?:ONLY\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)(?:\s+(?:AS\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_]*)(?:\s*\([^)]*\))?)?\s*,',
     re.IGNORECASE,
 )
 

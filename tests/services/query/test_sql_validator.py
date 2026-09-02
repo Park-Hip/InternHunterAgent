@@ -108,6 +108,12 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
+    def test_rejects_comma_join_with_alias_column_list(self) -> None:
+        result = validate_sql("SELECT * FROM clean_jobs AS c(title), raw_jobs")
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
     def test_rejects_comma_join_with_unicode_delimited_alias(self) -> None:
         result = validate_sql('SELECT * FROM clean_jobs AS U&"c\\0061", raw_jobs')
 
@@ -177,6 +183,12 @@ class ValidateSqlTests(unittest.TestCase):
 
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
+
+    def test_allows_distinct_function_with_dangerous_suffix(self) -> None:
+        result = validate_sql("SELECT x$lo_import('/tmp/x') FROM clean_jobs")
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.reason, "")
 
     def test_rejects_dblink_function(self) -> None:
         result = validate_sql(

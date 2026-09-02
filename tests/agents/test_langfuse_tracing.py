@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -114,6 +115,31 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
         as_type="span", name="agent-chat"
     )
     client.get_current_trace_id.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_stream_latency_updates_the_bound_request_span_across_tasks() -> None:
+    client = MagicMock()
+    span = MagicMock()
+    latency = langfuse.StreamLatency()
+    latency.attach_span(span)
+
+    async def mark_visible() -> None:
+        latency.mark_user_visible()
+
+    async def mark_complete() -> None:
+        latency.complete("success")
+
+    with patch.object(langfuse, "get_langfuse_client", return_value=client):
+        await asyncio.create_task(mark_visible())
+        await asyncio.create_task(mark_complete())
+
+    assert span.update.call_count == 2
+    client.update_current_span.assert_not_called()
+    metadata = span.update.call_args.kwargs["metadata"]
+    assert metadata["user_visible_ttft_ms"] is not None
+    assert metadata["stream_completion_ms"] is not None
+    assert metadata["outcome"] == "success"
 
 
 @pytest.mark.asyncio

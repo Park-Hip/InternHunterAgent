@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from threading import Lock
 from time import perf_counter
-from typing import Any, Literal, cast
+from typing import Any, Callable, Literal, cast
 
 from langfuse import Langfuse, LangfuseSpan, propagate_attributes
 from langfuse.api import NotFoundError
@@ -44,6 +44,7 @@ class StreamLatency:
     user_visible_ttft_ms: int | None = None
     completion_ms: int | None = None
     outcome: Literal["success", "error", "cancelled"] | None = None
+    _span: LangfuseSpan | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         global _request_sequence
@@ -52,6 +53,9 @@ class StreamLatency:
             self.cold_start = (
                 "process-first-agent-request" if _request_sequence == 1 else "warm"
             )
+
+    def attach_span(self, span: LangfuseSpan) -> None:
+        self._span = span
 
     def mark_user_visible(self) -> None:
         if self.user_visible_ttft_ms is None:
@@ -71,19 +75,21 @@ class StreamLatency:
         client = get_langfuse_client()
         if client is None:
             return
+        metadata = {
+            "latency_unit": "ms",
+            "server_e2e_ms": self.completion_ms,
+            "user_visible_ttft_ms": self.user_visible_ttft_ms,
+            "stream_completion_ms": self.completion_ms,
+            "outcome": self.outcome,
+            "cold_start": self.cold_start,
+            "environment": get_langfuse_environment(),
+            "model": _react_model_name(),
+        }
         try:
-            client.update_current_span(
-                metadata={
-                    "latency_unit": "ms",
-                    "server_e2e_ms": self.completion_ms,
-                    "user_visible_ttft_ms": self.user_visible_ttft_ms,
-                    "stream_completion_ms": self.completion_ms,
-                    "outcome": self.outcome,
-                    "cold_start": self.cold_start,
-                    "environment": get_langfuse_environment(),
-                    "model": _react_model_name(),
-                }
-            )
+            if self._span is not None:
+                self._span.update(metadata=metadata)
+            else:
+                client.update_current_span(metadata=metadata)
         except Exception:
             logger.warning("langfuse.stream_latency_diagnostic_failed")
 
@@ -249,6 +255,7 @@ async def langfuse_request_trace(
     repeat: int | None = None,
     session_id: str | None = None,
     user_id: str | None = None,
+    on_span_started: Callable[[LangfuseSpan], None] | None = None,
 ) -> AsyncIterator[str | None]:
     """Scope one root Langfuse observation to an asynchronous agent request."""
     if _langfuse_handler is None:
@@ -267,7 +274,11 @@ async def langfuse_request_trace(
         if client is None:
             yield None
             return
-        with client.start_as_current_observation(as_type="span", name=trace_name):
+        with client.start_as_current_observation(
+            as_type="span", name=trace_name
+        ) as span:
+            if on_span_started is not None:
+                on_span_started(span)
             yield client.get_current_trace_id()
 
 

@@ -95,8 +95,21 @@ async def stream_agent_response(
         user_id=user_id,
         latency=latency,
     )
+    runtime_events: asyncio.Queue[dict[str, str | None] | Exception | None] = (
+        asyncio.Queue(maxsize=1)
+    )
+
+    async def consume_runtime_stream() -> None:
+        try:
+            async for event in runtime_stream:
+                await runtime_events.put(event)
+        except Exception as exc:
+            await runtime_events.put(exc)
+        finally:
+            await runtime_events.put(None)
+
     detach_runtime_task = False
-    next_event: asyncio.Task[dict[str, str | None]] | None = None
+    runtime_task = asyncio.create_task(consume_runtime_stream())
     try:
         while True:
             remaining = deadline - loop.time()
@@ -105,17 +118,20 @@ async def stream_agent_response(
                     "Streamed agent turn exceeded its serving deadline."
                 )
 
-            next_event = asyncio.create_task(anext(runtime_stream))
-            done, _ = await asyncio.wait({next_event}, timeout=remaining)
-            if not done:
-                next_event.cancel()
-                next_event.add_done_callback(_consume_background_task_result)
+            try:
+                event = await asyncio.wait_for(runtime_events.get(), timeout=remaining)
+            except TimeoutError as exc:
+                runtime_task.cancel()
+                runtime_task.add_done_callback(_consume_background_task_result)
                 detach_runtime_task = True
                 raise AgentTurnDeadlineExceededError(
                     "Streamed agent turn exceeded its serving deadline."
-                )
+                ) from exc
 
-            event = next_event.result()
+            if event is None:
+                break
+            if isinstance(event, Exception):
+                raise event
             if event["type"] == "metadata":
                 metadata_event = event
                 if not saw_token:
@@ -135,7 +151,6 @@ async def stream_agent_response(
                 saw_token = True
 
             yield event
-    except StopAsyncIteration:
         if not saw_token:
             logger.warning(
                 "stream_agent_response.empty_answer_fallback",
@@ -185,9 +200,8 @@ async def stream_agent_response(
             }
     finally:
         if not detach_runtime_task:
-            if next_event is not None and not next_event.done():
-                next_event.cancel()
-                await asyncio.gather(next_event, return_exceptions=True)
-            await runtime_stream.aclose()
+            if not runtime_task.done():
+                runtime_task.cancel()
+            await asyncio.gather(runtime_task, return_exceptions=True)
 
     yield {"type": "done"}

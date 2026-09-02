@@ -83,7 +83,6 @@ class AgentRuntime:
         )
 
         async def _produce_stream() -> None:
-            saw_visible_token = False
             try:
                 async for chunk, metadata in self.agent.astream(
                     messages,
@@ -96,12 +95,7 @@ class AgentRuntime:
                     tool_call_chunks = getattr(chunk, "tool_call_chunks", None)
                     if not isinstance(content, str) or not content or tool_call_chunks:
                         continue
-                    saw_visible_token = True
                     await events.put({"type": "token", "text": content})
-                # The service emits its fixed fallback for an otherwise empty
-                # successful stream. Mark it before this root span closes.
-                if not saw_visible_token and latency is not None:
-                    latency.mark_user_visible()
                 await events.put({"type": "complete"})
             except Exception as exc:
                 await events.put(exc)
@@ -112,6 +106,7 @@ class AgentRuntime:
             trace_name="agent-chat-stream",
             session_id=session_id,
             user_id=user_id,
+            on_span_started=latency.attach_span if latency is not None else None,
         ) as trace_id:
             producer = asyncio.create_task(_produce_stream())
             try:

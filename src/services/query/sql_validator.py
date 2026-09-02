@@ -22,6 +22,8 @@ DENYLISTED_KEYWORDS = {
     "EXEC",
     "EXECUTE",
     "CALL",
+    "INTO",
+    "COPY",
 }
 
 # Blocks Postgres catalog/metadata tables: any identifier starting with `pg_`
@@ -36,6 +38,13 @@ TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # out literal contents before the table check so a value like '%raw_jobs%' or a company
 # name isn't mistaken for a table reference.
 STRING_LITERAL_PATTERN = re.compile(r"'(?:[^']|'')*'")
+
+# Server-side functions that can read files, connect to other services, or block a
+# connection. Match function calls only, so identifiers with these prefixes are allowed.
+SERVER_SIDE_FUNCTION_PATTERN = re.compile(
+    r"\b(?:lo_\w+|pg_\w+|file_lo_\w+|dblink(?:_\w+)?|postgres_fdw_\w+)\s*\(",
+    re.IGNORECASE,
+)
 
 # The table name that immediately follows a FROM or JOIN keyword. Captures the
 # identifier (group 1), which may be schema-qualified (letters/digits/underscore/dot).
@@ -66,8 +75,9 @@ def validate_sql(sql: str) -> ValidationResult:
       3. Read-only: must begin with SELECT.
       4. No SQL comment sequences (`--`, `/* */`) — a common injection vector.
       5. No write/DDL/procedure verbs (DENYLISTED_KEYWORDS).
-      6. No Postgres system/catalog tables (SYSTEM_TABLE_PATTERN).
-      7. Single-table allowlist: every table referenced must be `clean_jobs`.
+      6. No server-side file, network, or blocking function calls.
+      7. No Postgres system/catalog tables (SYSTEM_TABLE_PATTERN).
+      8. Single-table allowlist: every table referenced must be `clean_jobs`.
 
     Read-only enforcement at execution time is handled separately by the executor's
     `SET TRANSACTION READ ONLY`; this layer restricts *scope* (which statements and
@@ -101,6 +111,10 @@ def validate_sql(sql: str) -> ValidationResult:
     forbidden = sorted(DENYLISTED_KEYWORDS & tokens)
     if forbidden:
         return _invalid(statement, f"Unsafe keyword(s) detected: {', '.join(forbidden)}")
+
+    # Block functions that can access server files, connect to remote services, or sleep.
+    if SERVER_SIDE_FUNCTION_PATTERN.search(masked):
+        return _invalid(statement, "Server-side function calls are not allowed")
 
     # Block access to Postgres catalog/metadata tables.
     if SYSTEM_TABLE_PATTERN.search(statement):

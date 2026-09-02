@@ -148,6 +148,26 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
+    def test_rejects_select_into(self) -> None:
+        result = validate_sql("SELECT * INTO raw_jobs FROM clean_jobs")
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_rejects_large_object_import(self) -> None:
+        result = validate_sql("SELECT *, lo_import('/etc/passwd') FROM clean_jobs")
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_rejects_dblink_function(self) -> None:
+        result = validate_sql(
+            "SELECT dblink_connect('host=internal.example') FROM clean_jobs"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
 
 if __name__ == "__main__":
     unittest.main()

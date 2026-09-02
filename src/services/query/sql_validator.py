@@ -37,7 +37,8 @@ TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # SQL string literals: single-quoted strings (with escaped quotes) and PostgreSQL
 # dollar-quoted strings. Their contents must not participate in safety checks.
 SQL_LITERAL_OR_UNICODE_IDENTIFIER_PATTERN = re.compile(
-    r"[Ee]'(?:[^'\\]|\\.|'')*'|'(?:[^']|'')*'|(?<![A-Za-z0-9_$\u0080-\U0010FFFF])(?P<delimiter>\$(?:[A-Za-z_\u0080-\U0010FFFF][A-Za-z0-9_\u0080-\U0010FFFF]*)?\$).*?(?P=delimiter)|"
+    r"[Ee]'(?:[^'\\]|\\.|'')*'|'(?:[^']|'')*'|(?P<quoted_identifier>\"(?:[^\"]|\"\")*\")|"
+    r"(?<![A-Za-z0-9_$\u0080-\U0010FFFF])(?P<delimiter>\$(?:[A-Za-z_\u0080-\U0010FFFF][A-Za-z0-9_\u0080-\U0010FFFF]*)?\$).*?(?P=delimiter)|"
     r"U&\"(?P<identifier>(?:[^\"]|\"\")*)\"(?:\s+UESCAPE\s+(?:E)?'(?P<escape>(?:[^']|'')*)')?",
     re.DOTALL | re.IGNORECASE,
 )
@@ -62,7 +63,7 @@ TABLE_REF_PATTERN = re.compile(
 # old-style (implicit) join. Matches FROM, a table (optionally with an alias), then a
 # comma. TABLE_REF_PATTERN alone can't catch the second table here, so this guards it.
 FROM_CLAUSE_LIST_PATTERN = re.compile(
-    r'\bFROM\s+(?:ONLY\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s*,',
+    r'\bFROM\s+(?:ONLY\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)(?:\s+(?:AS\s+)?[A-Za-z_][A-Za-z0-9_]*)?\s*,',
     re.IGNORECASE,
 )
 
@@ -119,6 +120,9 @@ def _decode_unicode_identifier(match: re.Match[str]) -> str:
 
 
 def _mask_literal_or_normalize_identifier(match: re.Match[str]) -> str:
+    quoted_identifier = match.group("quoted_identifier")
+    if quoted_identifier is not None:
+        return quoted_identifier
     if match.group("identifier") is None:
         return "''"
     return _decode_unicode_identifier(match)

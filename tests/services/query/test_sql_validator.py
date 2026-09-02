@@ -96,6 +96,12 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
+    def test_rejects_comma_join_with_as_aliases(self) -> None:
+        result = validate_sql("SELECT * FROM clean_jobs AS c, raw_jobs AS r")
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
     def test_rejects_bare_select_from_other_table(self) -> None:
         result = validate_sql("SELECT * FROM raw_jobs")
 
@@ -237,6 +243,14 @@ class ValidateSqlTests(unittest.TestCase):
     def test_rejects_dangerous_function_before_dollar_quoted_literal(self) -> None:
         result = validate_sql(
             "SELECT 1 AS x$tag$, lo_import('/etc/passwd'), $tag$foo$tag$ FROM clean_jobs"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_rejects_dangerous_function_after_quoted_dollar_tag(self) -> None:
+        result = validate_sql(
+            'SELECT "$tag$", lo_import(\'/etc/passwd\'), $tag$foo$tag$ FROM clean_jobs'
         )
 
         self.assertFalse(result.valid)

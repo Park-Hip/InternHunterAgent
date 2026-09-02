@@ -53,13 +53,16 @@ SERVER_SIDE_FUNCTION_PATTERN = re.compile(
 # The table name that immediately follows a FROM or JOIN keyword. Captures the
 # identifier (group 1), which may be schema-qualified (letters/digits/underscore/dot).
 # Every captured name must equal ALLOWED_TABLE.
-TABLE_REF_PATTERN = re.compile(r"\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_.]*)", re.IGNORECASE)
+TABLE_REF_PATTERN = re.compile(
+    r'\b(?:FROM|JOIN)\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)', re.IGNORECASE
+)
 
 # A comma-separated table list in the FROM clause — `FROM clean_jobs, raw_jobs` — the
 # old-style (implicit) join. Matches FROM, a table (optionally with an alias), then a
 # comma. TABLE_REF_PATTERN alone can't catch the second table here, so this guards it.
 FROM_CLAUSE_LIST_PATTERN = re.compile(
-    r"\bFROM\s+[A-Za-z_][A-Za-z0-9_.]*(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s*,", re.IGNORECASE
+    r'\bFROM\s+(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s*,',
+    re.IGNORECASE,
 )
 
 
@@ -179,7 +182,7 @@ def validate_sql(sql: str) -> ValidationResult:
         return _invalid(statement, f"Unsafe keyword(s) detected: {', '.join(forbidden)}")
 
     # Block access to Postgres catalog/metadata tables.
-    if SYSTEM_TABLE_PATTERN.search(statement):
+    if SYSTEM_TABLE_PATTERN.search(masked):
         return _invalid(statement, "Access to system tables is not allowed")
 
     # Reject old-style comma joins (`FROM clean_jobs, raw_jobs`).
@@ -188,7 +191,11 @@ def validate_sql(sql: str) -> ValidationResult:
 
     # Reject if any FROM/JOIN target is a table other than clean_jobs (e.g. JOIN raw_jobs).
     table_refs = TABLE_REF_PATTERN.findall(masked)
-    if any(ref.lower() != ALLOWED_TABLE for ref in table_refs):
+    if any(
+        (ref[1:-1].replace('""', '"') if ref.startswith('"') else ref).lower()
+        != ALLOWED_TABLE
+        for ref in table_refs
+    ):
         return _invalid(statement, "Query may only reference the clean_jobs table")
 
     return ValidationResult(valid=True, sql=statement)

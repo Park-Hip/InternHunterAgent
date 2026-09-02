@@ -214,6 +214,18 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
+    def test_rejects_unicode_escaped_non_allowlisted_table(self) -> None:
+        result = validate_sql('SELECT * FROM U&"raw\\005fjobs"')
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_rejects_unicode_escaped_system_table(self) -> None:
+        result = validate_sql('SELECT * FROM U&"pg\\005fclass"')
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
     def test_allows_denylisted_keyword_as_delimited_identifier(self) -> None:
         result = validate_sql('SELECT title AS "into", company AS "copy" FROM clean_jobs')
 

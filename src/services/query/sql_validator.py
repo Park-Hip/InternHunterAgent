@@ -37,7 +37,7 @@ TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # SQL string literals: single-quoted strings (with escaped quotes) and PostgreSQL
 # dollar-quoted strings. Their contents must not participate in safety checks.
 SQL_LITERAL_OR_UNICODE_IDENTIFIER_PATTERN = re.compile(
-    r"[Ee]'(?:[^'\\]|\\.|'')*'|'(?:[^']|'')*'|(?<![A-Za-z0-9_$\u0080-\U0010FFFF])(?P<delimiter>\$(?:[^\W\d]\w*)?\$).*?(?P=delimiter)|"
+    r"[Ee]'(?:[^'\\]|\\.|'')*'|'(?:[^']|'')*'|(?<![A-Za-z0-9_$\u0080-\U0010FFFF])(?P<delimiter>\$(?:[A-Za-z_\u0080-\U0010FFFF][A-Za-z0-9_\u0080-\U0010FFFF]*)?\$).*?(?P=delimiter)|"
     r"U&\"(?P<identifier>(?:[^\"]|\"\")*)\"(?:\s+UESCAPE\s+(?:E)?'(?P<escape>(?:[^']|'')*)')?",
     re.DOTALL | re.IGNORECASE,
 )
@@ -114,7 +114,8 @@ def _decode_unicode_identifier(match: re.Match[str]) -> str:
             raise ValueError("Invalid Unicode code point")
         decoded.append(chr(code_point))
 
-    return f'"{"".join(decoded)}"'
+    normalized_identifier = "".join(decoded).replace('"', '""')
+    return f'"{normalized_identifier}"'
 
 
 def _mask_literal_or_normalize_identifier(match: re.Match[str]) -> str:

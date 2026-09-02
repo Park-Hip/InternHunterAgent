@@ -228,6 +228,12 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
+    def test_rejects_unicode_escaped_table_with_embedded_quote(self) -> None:
+        result = validate_sql('SELECT * FROM U&"clean_jobs\\0022raw"')
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
     def test_rejects_dangerous_function_before_dollar_quoted_literal(self) -> None:
         result = validate_sql(
             "SELECT 1 AS x$tag$, lo_import('/etc/passwd'), $tag$foo$tag$ FROM clean_jobs"
@@ -284,6 +290,12 @@ class ValidateSqlTests(unittest.TestCase):
 
     def test_allows_dangerous_function_text_in_non_ascii_dollar_quote(self) -> None:
         result = validate_sql("SELECT $é$lo_import('/etc/passwd')$é$ FROM clean_jobs")
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.reason, "")
+
+    def test_allows_dangerous_function_text_in_emoji_dollar_quote(self) -> None:
+        result = validate_sql("SELECT $😀$lo_import('/etc/passwd')$😀$ FROM clean_jobs")
 
         self.assertTrue(result.valid)
         self.assertEqual(result.reason, "")

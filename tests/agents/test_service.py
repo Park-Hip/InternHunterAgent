@@ -108,6 +108,56 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             17,
         )
 
+    @patch("src.agents.service.StreamLatency")
+    async def test_stream_marks_ttft_only_when_a_visible_token_is_emitted(
+        self, mock_latency_class
+    ) -> None:
+        async def token_stream(**_kwargs):
+            yield {"type": "token", "text": "Visible answer"}
+            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=token_stream)
+        events = [
+            event
+            async for event in stream_agent_response(
+                query="what internships are available?",
+                runtime=runtime,
+                session_id="session-visible-token",
+            )
+        ]
+
+        self.assertEqual([event["type"] for event in events], ["session", "token", "metadata", "done"])
+        mock_latency_class.return_value.mark_user_visible.assert_called_once_with()
+        runtime.astream.assert_called_once_with(
+            query="what internships are available?",
+            session_id="session-visible-token",
+            user_id=None,
+            latency=mock_latency_class.return_value,
+        )
+
+    @patch("src.agents.service.StreamLatency")
+    async def test_error_before_a_visible_token_does_not_mark_ttft(
+        self, mock_latency_class
+    ) -> None:
+        async def failing_stream(**_kwargs):
+            raise RuntimeError("provider failed")
+            yield  # pragma: no cover - keeps this an async generator
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=failing_stream)
+        events = [
+            event
+            async for event in stream_agent_response(
+                query="what internships are available?",
+                runtime=runtime,
+                session_id="session-no-visible-token",
+            )
+        ]
+
+        self.assertEqual([event["type"] for event in events], ["session", "error", "done"])
+        mock_latency_class.return_value.mark_user_visible.assert_not_called()
+
     @patch("src.agents.service.get_stream_turn_timeout_seconds", return_value=0.01)
     @patch("src.agents.service.logger")
     async def test_stream_deadline_cancels_runtime_and_yields_one_safe_error_then_done(

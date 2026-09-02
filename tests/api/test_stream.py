@@ -228,7 +228,13 @@ class _MultiTurnRuntime:
     def set_raise_during_turn(self) -> None:
         self._raise_during_turn = True
 
-    async def astream(self, query: str, session_id: str, user_id: str | None = None):
+    async def astream(
+        self,
+        query: str,
+        session_id: str,
+        user_id: str | None = None,
+        latency=None,
+    ):
         self.call_count += 1
         self.calls.append((query, session_id, user_id))
         if self._events_per_turn:

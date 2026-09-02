@@ -169,6 +169,24 @@ def test_build_langfuse_config_rejects_unknown_entry_points() -> None:
         langfuse.build_langfuse_config(entry_point="api:debug")
 
 
+def test_stream_latency_records_error_without_visible_ttft() -> None:
+    client = MagicMock()
+    latency = langfuse.StreamLatency()
+
+    with patch.object(langfuse, "get_langfuse_client", return_value=client):
+        latency.complete("error")
+
+    metadata = client.update_current_span.call_args.kwargs["metadata"]
+    assert metadata["latency_unit"] == "ms"
+    assert metadata["server_e2e_ms"] == metadata["stream_completion_ms"]
+    assert metadata["server_e2e_ms"] is not None
+    assert metadata["user_visible_ttft_ms"] is None
+    assert metadata["outcome"] == "error"
+    assert metadata["cold_start"] in {"process-first-agent-request", "warm"}
+    assert metadata["environment"] in {"local", "production", "evaluation"}
+    assert metadata["model"] == "deepseek-v4-flash"
+
+
 def test_record_agent_response_failure_updates_the_active_span_with_safe_metadata() -> (
     None
 ):

@@ -443,11 +443,10 @@ old guide is obsolete.
 
 **Required GitHub Actions secrets** (maintainer-configured): `DATABASE_URL` (Neon **direct,
 non-pooled**),
-`HEALTHCHECKS_URL`. `GROQ_API_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_PUBLIC_KEY` are **placeholder
-literals**
+`HEALTHCHECKS_URL`. `AGENT_DATABASE_URL` / `GROQ_API_KEY` / `LANGFUSE_SECRET_KEY` /
+`LANGFUSE_PUBLIC_KEY` are **placeholder literals**
 in the workflow (`"unused-by-ingestion"`), not real secrets — the CLI validates their presence at
-import but
-reads none of their values (proven by T0019.6 Check B).
+import but reads none of their values (proven by T0019.6 Check B).
 - ☑ `DATABASE_URL` secret set (direct host)  ☑ `HEALTHCHECKS_URL` secret set — 2026-08-13,
   proven by run `31693930488` reaching `ingestion.schema_ok` (a missing `DATABASE_URL` fails at
   config load) and emitting `ingestion.ping_sent`.

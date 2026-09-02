@@ -20,7 +20,7 @@ The earliest failed seam is the primary diagnosis.
 If routing failed, a later missing SQL comparison is `NOT_EVALUATED`, not a second infrastructure failure.
 If generated SQL failed execution accuracy, an incorrect answer downstream remains evidence of that earlier SQL failure.
 
-The evaluator creates the same agent used by the product and binds it to a frozen 22-row fixture database.
+The evaluator creates the same agent used by the product and binds it to a frozen 24-row fixture database.
 The fixture makes the SQL contract repeatable and manually inspectable, but it is not a production-corpus quality sample.
 
 ## Authority and the three kinds of check

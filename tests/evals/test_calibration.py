@@ -184,7 +184,7 @@ def test_v7_remains_unchanged_after_v8_addition() -> None:
 
     v7 = load_calibration()
     assert v7["corpus_id"] == "vietnamese-semantic-v7"
-    assert len(v7["cases"]) == 40
+    assert len(v7["cases"]) == 44
     v8 = load_calibration(Path("evals/calibration_v8.yaml"))
     assert v8["corpus_id"] == "vietnamese-semantic-v8"
     assert len(v8["cases"]) == 12

@@ -80,7 +80,7 @@ Added by T0019.3 (2026-07-18) as hidden lifecycle bookkeeping — written by
 ## Frozen Eval Fixture
 
 The `internhunter_eval` database built from `evals/fixtures/seed_eval_db.sql` is the frozen
-data fixture for the v1 golden dataset. The fixture contains 22 rows. Reproducible prompt
+data fixture for the v1 golden dataset. The fixture contains 24 rows. Reproducible prompt
 comparison requires both the schema contract and the fixture data to stay stable unless a
 ticket explicitly declares a recalibration.
 

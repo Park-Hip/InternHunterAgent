@@ -29,7 +29,12 @@ threshold:
 # Set the judge provider key for your configured provider (see config/settings.yaml).
 export GOOGLE_API_KEY="..."   # or GROQ_API_KEY / OPENROUTER_API_KEY
 
-# The gate runs against the narrowed corpus; no database is needed.
+# Settings requires these URLs, but the gate scores recorded trajectories and
+# never connects to either database.  Use non-production placeholder values.
+export DATABASE_URL="postgresql+psycopg://ci:ci@localhost:5432/ci"
+export AGENT_DATABASE_URL="postgresql+psycopg://ci_agent:ci@localhost:5432/ci"
+
+# The gate runs against the narrowed corpus; no database service is needed.
 uv run pytest -m eval -v
 ```
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 import unittest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import ANY, MagicMock, AsyncMock, patch
 
 from src.agents.service import (
     BUSY_MESSAGE,
@@ -129,11 +129,13 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([event["type"] for event in events], ["session", "token", "metadata", "done"])
         mock_latency_class.return_value.mark_user_visible.assert_called_once_with()
+        mock_latency_class.return_value.complete.assert_called_once_with("success")
         runtime.astream.assert_called_once_with(
             query="what internships are available?",
             session_id="session-visible-token",
             user_id=None,
             latency=mock_latency_class.return_value,
+            completion_event=ANY,
         )
 
     @patch("src.agents.service.StreamLatency")

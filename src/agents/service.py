@@ -89,11 +89,13 @@ async def stream_agent_response(
 
     loop = asyncio.get_running_loop()
     deadline = loop.time() + get_stream_turn_timeout_seconds(settings.config_yaml)
+    completion_event = asyncio.Event()
     runtime_stream = runtime.astream(
         query=query,
         session_id=session_id,
         user_id=user_id,
         latency=latency,
+        completion_event=completion_event,
     )
     runtime_events: asyncio.Queue[dict[str, str | None] | Exception | None] = (
         asyncio.Queue(maxsize=1)
@@ -109,6 +111,7 @@ async def stream_agent_response(
             await runtime_events.put(None)
 
     detach_runtime_task = False
+    stream_succeeded = False
     runtime_task = asyncio.create_task(consume_runtime_stream())
     try:
         while True:
@@ -144,7 +147,7 @@ async def stream_agent_response(
                     saw_token = True
                 yield metadata_event
                 metadata_emitted = True
-                continue
+                break
 
             if event["type"] == "token":
                 latency.mark_user_visible()
@@ -161,6 +164,7 @@ async def stream_agent_response(
 
         if not metadata_emitted:
             yield metadata_event
+        stream_succeeded = True
     except AgentTurnDeadlineExceededError as exc:
         logger.error(
             "stream_agent_response.failed",
@@ -199,9 +203,15 @@ async def stream_agent_response(
                 "retryable": False,
             }
     finally:
-        if not detach_runtime_task:
+        if not detach_runtime_task and not stream_succeeded:
             if not runtime_task.done():
                 runtime_task.cancel()
             await asyncio.gather(runtime_task, return_exceptions=True)
 
-    yield {"type": "done"}
+    try:
+        yield {"type": "done"}
+    finally:
+        if stream_succeeded:
+            latency.complete("success")
+            completion_event.set()
+            await asyncio.gather(runtime_task, return_exceptions=True)

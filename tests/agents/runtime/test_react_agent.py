@@ -173,13 +173,12 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
     @patch("src.agents.runtime.react_agent.get_langfuse_client")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config")
-    async def test_streaming_flushes_exports_before_emitting_the_trace_url(
+    async def test_streaming_flushes_exports_after_the_done_event(
         self,
         mock_build_langfuse_config,
         mock_langfuse_request_trace,
         mock_get_langfuse_client,
     ) -> None:
-        """The trace is readable server-side before its URL reaches the client."""
         call_order: list[str] = []
 
         async def _fake_stream(*_args, **_kwargs):
@@ -203,9 +202,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             [
                 "event:session",
                 "event:token",
-                "flush",
                 "event:metadata",
                 "event:done",
+                "flush",
             ],
         )
         mock_client.flush.assert_called_once()

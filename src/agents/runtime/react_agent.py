@@ -70,6 +70,7 @@ class AgentRuntime:
         user_id: str | None = None,
         session_id: str | None = None,
         latency: StreamLatency | None = None,
+        completion_event: asyncio.Event | None = None,
     ) -> AsyncGenerator[dict[str, str | None], None]:
         config = build_langfuse_config(
             entry_point="api:chat-stream",
@@ -109,38 +110,53 @@ class AgentRuntime:
             on_span_started=latency.attach_span if latency is not None else None,
         ) as trace_id:
             producer = asyncio.create_task(_produce_stream())
+            stream_completed = False
             try:
                 while True:
                     event = await events.get()
                     if isinstance(event, Exception):
                         if latency is not None:
                             latency.complete("error")
+                        stream_completed = True
                         raise event
                     if event["type"] == "complete":
-                        if latency is not None:
-                            latency.complete("success")
+                        if completion_event is None:
+                            if latency is not None:
+                                latency.complete("success")
+                            stream_completed = True
                         break
                     yield event
+
+                if completion_event is not None:
+                    trace_url = None
+                    if trace_id is not None and client is not None:
+                        trace_url = client.get_trace_url(trace_id=trace_id)
+                    yield {
+                        "type": "metadata",
+                        "trace_id": trace_id,
+                        "trace_url": trace_url,
+                    }
+                    await completion_event.wait()
+                    stream_completed = True
             finally:
-                # This runs while the request span remains active, so a cancelled
-                # consumer is measured and the producer cannot leak.
                 if not producer.done():
                     producer.cancel()
-                    if latency is not None:
-                        latency.complete("cancelled")
+                if not stream_completed and latency is not None:
+                    latency.complete("cancelled")
                 await asyncio.gather(producer, return_exceptions=True)
                 if client is not None:
                     await asyncio.to_thread(client.flush)
 
-        trace_url = None
-        if trace_id is not None and client is not None:
-            trace_url = client.get_trace_url(trace_id=trace_id)
+        if completion_event is None:
+            trace_url = None
+            if trace_id is not None and client is not None:
+                trace_url = client.get_trace_url(trace_id=trace_id)
 
-        yield {
-            "type": "metadata",
-            "trace_id": trace_id,
-            "trace_url": trace_url,
-        }
+            yield {
+                "type": "metadata",
+                "trace_id": trace_id,
+                "trace_url": trace_url,
+            }
 
     def _build_messages(self, query: str) -> dict[str, list[HumanMessage]]:
         return {"messages": [HumanMessage(content=query)]}

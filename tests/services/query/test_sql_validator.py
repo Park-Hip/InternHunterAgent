@@ -102,6 +102,18 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
+    def test_rejects_comma_join_with_delimited_alias(self) -> None:
+        result = validate_sql('SELECT * FROM clean_jobs AS "c", raw_jobs')
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_rejects_comma_join_with_unicode_delimited_alias(self) -> None:
+        result = validate_sql('SELECT * FROM clean_jobs AS U&"c\\0061", raw_jobs')
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
     def test_rejects_bare_select_from_other_table(self) -> None:
         result = validate_sql("SELECT * FROM raw_jobs")
 

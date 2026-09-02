@@ -77,9 +77,9 @@ The capture, deterministic grade, and execution-accuracy reports are written und
 `evals/runs/` convention and are git-ignored raw artifacts (they carry telemetry and trace
 identifiers). They are:
 
-- `evals/runs/v11-baseline-20260902.json` (capture manifest + turns)
-- `evals/runs/v11-baseline-20260902-execution.json` (execution accuracy)
-- `evals/runs/v11-baseline-20260902-grade.json` (deterministic grade)
+
+
+
 
 The capture manifest records `baseline_eligible: true` with a clean worktree state and all three
 prompt surfaces stamped `v11`, so findings are attributable to the current prompt rather than the

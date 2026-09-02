@@ -114,6 +114,12 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
+    def test_rejects_comma_join_after_only_inheritance_marker(self) -> None:
+        result = validate_sql("SELECT * FROM ONLY clean_jobs *, raw_jobs")
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
     def test_rejects_comma_join_with_delimited_alias_column(self) -> None:
         result = validate_sql('SELECT * FROM clean_jobs AS c(")"), raw_jobs')
 

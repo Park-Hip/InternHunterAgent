@@ -62,7 +62,7 @@ TABLE_REF_PATTERN = re.compile(
 # old-style (implicit) join. Matches FROM, a table (optionally with an alias), then a
 # comma. TABLE_REF_PATTERN alone can't catch the second table here, so this guards it.
 FROM_CLAUSE_LIST_PATTERN = re.compile(
-    r'\bFROM\s+(?:ONLY\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)(?:\s+(?:AS\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_]*)(?:\s*\((?:"(?:[^"]|"")*"|[^)])*\))?)?\s*,',
+    r'\bFROM\s+(?:ONLY\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)(?:\s*\*)?(?:\s+(?:AS\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_]*)(?:\s*\((?:"(?:[^"]|"")*"|[^)])*\))?)?\s*,',
     re.IGNORECASE,
 )
 

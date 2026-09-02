@@ -283,6 +283,31 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
         await asyncio.wait_for(cleaned_up.wait(), timeout=0.3)
 
+    @patch("src.agents.service.get_stream_turn_timeout_seconds", return_value=0.01)
+    @patch("src.agents.service.StreamLatency")
+    async def test_deadline_completes_as_error_after_done(
+        self, mock_latency_class, _mock_timeout
+    ) -> None:
+        async def blocked_stream(**_kwargs):
+            await asyncio.Event().wait()
+            yield  # pragma: no cover
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=blocked_stream)
+        stream = stream_agent_response(
+            query="what internships are available?",
+            runtime=runtime,
+            session_id="session-deadline-outcome",
+        )
+
+        self.assertEqual((await anext(stream))["type"], "session")
+        self.assertEqual((await anext(stream))["type"], "error")
+        self.assertEqual((await anext(stream))["type"], "done")
+        mock_latency_class.return_value.complete.assert_not_called()
+        with self.assertRaises(StopAsyncIteration):
+            await anext(stream)
+        mock_latency_class.return_value.complete.assert_called_once_with("error")
+
     @patch("src.agents.service.logger")
     async def test_stream_failure_logs_and_yields_generic_message(self, mock_logger) -> None:
         async def failing_stream(**_kwargs):

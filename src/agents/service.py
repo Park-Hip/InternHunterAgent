@@ -114,7 +114,6 @@ async def stream_agent_response(
                 pass
 
     detach_runtime_task = False
-    deferred_runtime_cleanup = False
     done_emitted = False
     stream_outcome: Literal["success", "error"] | None = None
     runtime_task = asyncio.create_task(consume_runtime_stream())
@@ -147,7 +146,6 @@ async def stream_agent_response(
                 exception = event["exception"]
                 if not isinstance(exception, Exception):
                     raise RuntimeError("Runtime failed without an exception")
-                deferred_runtime_cleanup = True
                 raise exception
             if event["type"] == "metadata":
                 metadata_event = event
@@ -182,6 +180,7 @@ async def stream_agent_response(
         done_emitted = True
         yield {"type": "done"}
     except AgentTurnDeadlineExceededError as exc:
+        stream_outcome = "error"
         logger.error(
             "stream_agent_response.failed",
             session_id=session_id,
@@ -226,10 +225,13 @@ async def stream_agent_response(
     finally:
         if stream_outcome is not None and done_emitted:
             latency.complete(stream_outcome)
-            if stream_outcome == "success" or deferred_runtime_cleanup:
-                completion_event.set()
+            completion_event.set()
+            if not detach_runtime_task:
                 await asyncio.gather(runtime_task, return_exceptions=True)
-        elif not detach_runtime_task:
-            if not runtime_task.done():
-                runtime_task.cancel()
-            await asyncio.gather(runtime_task, return_exceptions=True)
+        else:
+            latency.complete("cancelled")
+            completion_event.set()
+            if not detach_runtime_task:
+                if not runtime_task.done():
+                    runtime_task.cancel()
+                await asyncio.gather(runtime_task, return_exceptions=True)

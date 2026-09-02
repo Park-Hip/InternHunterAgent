@@ -148,9 +148,12 @@ class AgentRuntime:
             finally:
                 if not producer.done():
                     producer.cancel()
-                if not stream_completed and latency is not None:
-                    latency.complete("cancelled")
                 await asyncio.gather(producer, return_exceptions=True)
+                if not stream_completed:
+                    if completion_event is not None:
+                        await completion_event.wait()
+                    elif latency is not None:
+                        latency.complete("cancelled")
                 if client is not None:
                     await asyncio.to_thread(client.flush)
 

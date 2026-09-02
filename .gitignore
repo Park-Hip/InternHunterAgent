@@ -16,6 +16,8 @@ evals/runs/*
 !evals/runs/iha358-indirect-injection.json
 !evals/runs/iha358-indirect-injection-execution.json
 !evals/runs/iha358-indirect-injection-grade.json
+!evals/runs/iha-v8-judge-combined-judge-scores.json
+!evals/runs/iha-v8-judge-combined-agreement-report.json
 .lavish/
 
 # Agent-skill installs whose docs reference artifacts created by later workflows

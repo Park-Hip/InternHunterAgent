@@ -53,11 +53,12 @@ They are readable history, not active regression fixtures.
 `FAIL` means a check under the agent's control failed.
 `INFRA` means required evidence is missing because infrastructure failed, such as a quota or provider failure.
 `UNRUN` means the turn or scenario was never attempted.
-`NOT_EVALUATED` means the scenario's decisive behavioral contract lives entirely in the deferred semantic tier — the deterministic grader cannot independently verify it. A `NOT_EVALUATED` turn is excluded from the pass-rate denominator so the summary cannot be inflated by unverified safety or honesty claims. A turn still carries a `NOT_EVALUATED` semantic check inside its check list, but the turn-level grade is `NOT_EVALUATED`, not `PASS`.
+`NOT_EVALUATED` is a check-level outcome, not a turn verdict.
+It means the check did not apply to the available evidence, such as SQL execution after an earlier routing failure produced no SQL.
 `EXEMPT` is an execution-accuracy result for a scenario that has no SQL contract, such as a pure refusal.
 `AVAILABLE` and `UNAVAILABLE` describe whether the semantic judge returned a usable result.
 
-`INFRA`, `UNRUN`, and `NOT_EVALUATED` do not enter pass-rate denominators.
+`INFRA` and `UNRUN` do not enter pass-rate denominators.
 `NOT_EVALUATED` never turns an applicable failure into `INFRA` or `PASS`.
 
 ## Run the complete baseline workflow
@@ -92,6 +93,19 @@ uv run python -m evals.score --run evals/runs/<run>.json
 The scorer writes results into the ignored raw capture and can resume after an interruption.
 It spends judge quota and can take about an hour for a full registry because it deliberately throttles judge calls.
 It does not overwrite a human calibration label or alter the deterministic grade.
+
+Score the calibration corpus with the real judge and emit the per-class agreement report.
+This is the supported writer of calibration judge evidence (`evals/runs/*-judge-scores.json` plus the
+agreement report); it is resumable and never writes back into the human labels.
+
+```powershell
+uv run python -m evals.calibration_score --corpus v7 --corpus v8 --out evals/runs/iha-v8-judge-combined-judge-scores.json
+uv run python -m evals.calibration_score --agreement-of evals/runs/iha-v8-judge-combined-judge-scores.json --out evals/runs/iha-v8-judge-combined-agreement-report.json
+```
+
+The agreement report selects one release threshold per class (SAF/HON/HLP plus the pooled overall bar)
+recall-first, and reports precision, false-pass counts, and 95% Wilson intervals. The live gate
+(`uv run pytest -m eval -v`) enforces exactly those per-class bars against the combined corpus.
 
 Freeze the capture, replay it, and generate a local viewer.
 
@@ -131,11 +145,6 @@ An answer that claims it performed a mutation, fabricates results where none exi
 Every accepted phrase keeps a focused negative test in `tests/evals/test_grader.py` protecting that boundary.
 Widen a rule only through a proposal; registry lexicon entries live in [`scenarios_v1.yaml`](scenarios_v1.yaml) next to the assertion they belong to.
 
-## Release gate
-
-The bounded live semantic release gate is documented in
-[docs/how-to/release-gate.md](../docs/how-to/release-gate.md).
-
 ## Files
 
 | File | Role |
@@ -145,8 +154,10 @@ The bounded live semantic release gate is documented in
 | `execution_accuracy.py` | Compares generated and reference SQL against the frozen fixture. |
 | `grader.py` | Produces independent deterministic check outcomes and the first failing seam. |
 | `score.py` | Runs the resumable judge pass over a recorded capture. |
-| `calibration_v6.yaml` | Versioned human-labelled Vietnamese semantic corpus. |
-| `calibration_release_gate.yaml` | Release-gate corpus; its policy and invocation are in the [release-gate how-to](../docs/how-to/release-gate.md). |
+| `calibration.py` | Loads, merges, sweeps, and reports the versioned human-labelled corpora; owns the per-class release thresholds. |
+| `calibration_v7.yaml` / `calibration_v8.yaml` | Immutable, human-labelled Vietnamese semantic corpora (v7 = calibration, v8 = independent holdout). |
+| `calibration_score.py` | Resumably scores the corpora with the real judge and emits judge-scores + agreement-report artifacts. |
+| `holdout.py` | Compatibility + independent-holdout view over the versioned corpora. |
 | `replay.py` | CI's provider-free replay gate. Discovers every artifact in `replays/`. |
 | `viewer.py` | Local HTML evidence viewer. |
 | `Instrument_Report.md` | Dated baseline, calibration, disagreement, and unresolved-case record. |

@@ -96,7 +96,7 @@ Treat a disagreement as evidence to classify, not as a reason to pick the conven
 3. Check whether the disputed assertion was applicable.
 4. Compare the human judgement with the semantic score and rationale when it is `AVAILABLE`.
 5. Label the disagreement as an agent behavior failure, a deterministic grader defect, a semantic judge disagreement, or infrastructure.
-6. Add an independently written labelled case to `calibration_v6.yaml` when the disagreement tests semantic behavior.
+6. Add an independently written labelled case to `calibration_v8.yaml` when the disagreement tests semantic behavior.
 7. Record why the label won and rerun only the appropriate offline stage.
 
 A judge score must never silently replace a human label.

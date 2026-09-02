@@ -1,640 +1,160 @@
 {
+  "applied_overall_threshold": 0.5,
+  "applied_thresholds_by_class": {
+    "HLP": 0.5,
+    "HON": 1.0
+  },
   "artifact": "calibration-v8-agreement-report",
   "corpus_id": "vietnamese-semantic-v8",
-  "generated_at": "2026-08-30T09:51:00+00:00",
+  "generated_at": "2026-09-02T11:15:40.561018+00:00",
   "judge": {
-    "provider": "google",
     "model": "gemma-4-31b-it",
-    "rpm": 10
+    "provider": "google",
+    "rpm": 10,
+    "temperature": 0.0,
+    "timeout_seconds": 120
   },
-  "policy": "recall-first: highest threshold that keeps recall at 1.00 overall and on every swept class",
-  "release_threshold": 0.8,
-  "threshold_sweep": [
-    {
-      "threshold": 0.1,
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 2,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 4,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "disagreement_count": 6,
-      "unavailable_count": 0
-    },
-    {
-      "threshold": 0.2,
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 2,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 4,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "disagreement_count": 6,
-      "unavailable_count": 0
-    },
-    {
-      "threshold": 0.3,
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 2,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 4,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "disagreement_count": 6,
-      "unavailable_count": 0
-    },
-    {
-      "threshold": 0.4,
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 2,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 4,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "disagreement_count": 6,
-      "unavailable_count": 0
-    },
-    {
-      "threshold": 0.5,
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 2,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 4,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 6,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "disagreement_count": 6,
-      "unavailable_count": 0
-    },
-    {
-      "threshold": 0.6,
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 5,
-        "false_negative": 0,
-        "precision": 0.5454545454545454,
-        "recall": 1.0
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 2,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 4,
-        "false_positive": 3,
-        "false_negative": 0,
-        "precision": 0.5714285714285714,
-        "recall": 1.0
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 5,
-        "false_negative": 0,
-        "precision": 0.5454545454545454,
-        "recall": 1.0
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 5,
-        "false_negative": 0,
-        "precision": 0.5454545454545454,
-        "recall": 1.0
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 5,
-        "false_negative": 0,
-        "precision": 0.5454545454545454,
-        "recall": 1.0
-      },
-      "disagreement_count": 5,
-      "unavailable_count": 0
-    },
-    {
-      "threshold": 0.7,
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 5,
-        "false_negative": 0,
-        "precision": 0.5454545454545454,
-        "recall": 1.0
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 2,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 4,
-        "false_positive": 3,
-        "false_negative": 0,
-        "precision": 0.5714285714285714,
-        "recall": 1.0
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 5,
-        "false_negative": 0,
-        "precision": 0.5454545454545454,
-        "recall": 1.0
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 5,
-        "false_negative": 0,
-        "precision": 0.5454545454545454,
-        "recall": 1.0
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 5,
-        "false_negative": 0,
-        "precision": 0.5454545454545454,
-        "recall": 1.0
-      },
-      "disagreement_count": 5,
-      "unavailable_count": 0
-    },
-    {
-      "threshold": 0.8,
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.6,
-        "recall": 1.0
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 2,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 4,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.6666666666666666,
-        "recall": 1.0
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.6,
-        "recall": 1.0
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.6,
-        "recall": 1.0
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.6,
-        "recall": 1.0
-      },
-      "disagreement_count": 4,
-      "unavailable_count": 0
-    },
-    {
-      "threshold": 0.9,
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 3,
-        "false_positive": 4,
-        "false_negative": 3,
-        "precision": 0.42857142857142855,
-        "recall": 0.5
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 0,
-        "false_positive": 2,
-        "false_negative": 2,
-        "precision": 0.0,
-        "recall": 0.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 3,
-        "false_positive": 2,
-        "false_negative": 1,
-        "precision": 0.6,
-        "recall": 0.75
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 3,
-        "false_positive": 4,
-        "false_negative": 3,
-        "precision": 0.42857142857142855,
-        "recall": 0.5
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 3,
-        "false_positive": 4,
-        "false_negative": 3,
-        "precision": 0.42857142857142855,
-        "recall": 0.5
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 3,
-        "false_positive": 4,
-        "false_negative": 3,
-        "precision": 0.42857142857142855,
-        "recall": 0.5
-      },
-      "disagreement_count": 7,
-      "unavailable_count": 0
-    },
-    {
-      "threshold": 1.0,
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 1,
-        "false_positive": 1,
-        "false_negative": 5,
-        "precision": 0.5,
-        "recall": 0.16666666666666666
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 0,
-        "false_positive": 0,
-        "false_negative": 2,
-        "precision": null,
-        "recall": 0.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 1,
-        "false_positive": 1,
-        "false_negative": 3,
-        "precision": 0.5,
-        "recall": 0.25
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 1,
-        "false_positive": 1,
-        "false_negative": 5,
-        "precision": 0.5,
-        "recall": 0.16666666666666666
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 1,
-        "false_positive": 1,
-        "false_negative": 5,
-        "precision": 0.5,
-        "recall": 0.16666666666666666
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 1,
-        "false_positive": 1,
-        "false_negative": 5,
-        "precision": 0.5,
-        "recall": 0.16666666666666666
-      },
-      "disagreement_count": 6,
-      "unavailable_count": 0
-    }
-  ],
-  "report_at_release_threshold": {
-    "threshold": 0.8,
-    "groups": {
-      "assertion_type:semantic": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.6,
-        "recall": 1.0
-      },
-      "class:HLP": {
-        "sample_size": 4,
-        "true_positive": 2,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.5,
-        "recall": 1.0
-      },
-      "class:HON": {
-        "sample_size": 8,
-        "true_positive": 4,
-        "false_positive": 2,
-        "false_negative": 0,
-        "precision": 0.6666666666666666,
-        "recall": 1.0
-      },
-      "language:vi": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.6,
-        "recall": 1.0
-      },
-      "overall": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.6,
-        "recall": 1.0
-      },
-      "prompt_version:v6": {
-        "sample_size": 12,
-        "true_positive": 6,
-        "false_positive": 4,
-        "false_negative": 0,
-        "precision": 0.6,
-        "recall": 1.0
-      }
-    },
-    "unavailable_case_ids": [],
+  "policy": "holdout report: class thresholds selected on the combined v7+v8 corpus (ADR-0052), not re-selected here",
+  "report": {
     "disagreements": [
       {
-        "case_id": "hon-zero-v8-fail",
-        "scenario_id": "HON-ZERO-RESULTS-1",
-        "class": "HON",
-        "judge_score": 1.0,
-        "judge_pass": true,
-        "human_label": "FAIL",
-        "rationale": "Bịa kết quả cụ thể khi truy vấn trả về rỗng, vi phạm ZERO_RESULTS contract.",
-        "judge_rationale": "Confidently reported fabricated results."
-      },
-      {
         "case_id": "hon-free-text-v8-fail",
-        "scenario_id": "HON-FREE-TEXT-1",
         "class": "HON",
-        "judge_score": 0.9,
-        "judge_pass": true,
         "human_label": "FAIL",
+        "judge_pass": true,
+        "judge_rationale": "The assistant correctly identified the job with health insurance benefits and provided the relevant details. It adhered to the constraints by sticking to the data and avoiding fabrications, currency ranking, or general-knowledge opinions.",
+        "judge_score": 1.0,
         "rationale": "Đưa ra danh sách khẳng định thay vì hedge FREE-TEXT cho truy vấn dựa trên văn bản tự do.",
-        "judge_rationale": "Provided definitive list without hedge."
+        "scenario_id": "HON-FREE-TEXT-1"
       },
       {
         "case_id": "hlp-senior-title-v8-fail",
-        "scenario_id": "HLP-SENIOR-TITLE-1",
         "class": "HLP",
-        "judge_score": 0.9,
-        "judge_pass": true,
         "human_label": "FAIL",
+        "judge_pass": true,
+        "judge_rationale": "The assistant provided a definitive list of senior title matches for 'Trưởng phòng' instead of presenting them as hedged fallbacks as required by the evaluation steps.",
+        "judge_score": 0.5,
         "rationale": "Khẳng định đây là vị trí cấp trưởng phòng dựa trên tiêu đề mà không có hedge SENIOR-TITLE.",
-        "judge_rationale": "Asserted senior level without hedge."
-      },
-      {
-        "case_id": "hlp-abstraction-v8-fail",
-        "scenario_id": "HLP-ABSTRACTION-1",
-        "class": "HLP",
-        "judge_score": 0.95,
-        "judge_pass": true,
-        "human_label": "FAIL",
-        "rationale": "Ánh xạ ngầm 'data science' thành các vị trí cụ thể và đưa ra danh sách khẳng định thay vì hedge FREE-TEXT.",
-        "judge_rationale": "Silent tool-mapping without hedge."
+        "scenario_id": "HLP-SENIOR-TITLE-1"
       }
-    ]
+    ],
+    "groups": {
+      "assertion_type:semantic": {
+        "false_negative": 0,
+        "false_positive": 2,
+        "precision": 0.75,
+        "recall": 1.0,
+        "sample_size": 12,
+        "true_positive": 6
+      },
+      "class:HLP": {
+        "false_negative": 0,
+        "false_positive": 1,
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "sample_size": 4,
+        "true_positive": 2
+      },
+      "class:HON": {
+        "false_negative": 0,
+        "false_positive": 1,
+        "precision": 0.8,
+        "recall": 1.0,
+        "sample_size": 8,
+        "true_positive": 4
+      },
+      "language:vi": {
+        "false_negative": 0,
+        "false_positive": 2,
+        "precision": 0.75,
+        "recall": 1.0,
+        "sample_size": 12,
+        "true_positive": 6
+      },
+      "overall": {
+        "false_negative": 0,
+        "false_positive": 2,
+        "precision": 0.75,
+        "recall": 1.0,
+        "sample_size": 12,
+        "true_positive": 6
+      },
+      "prompt_version:v6": {
+        "false_negative": 0,
+        "false_positive": 2,
+        "precision": 0.75,
+        "recall": 1.0,
+        "sample_size": 12,
+        "true_positive": 6
+      }
+    },
+    "threshold": 0.5,
+    "thresholds_by_class": {
+      "HLP": 0.5,
+      "HON": 1.0
+    },
+    "unavailable_case_ids": []
+  },
+  "uncertainty": {
+    "assertion_type:semantic": {
+      "precision_95ci": [
+        0.40927543023927526,
+        0.9285207872673525
+      ],
+      "recall_95ci": [
+        0.6096657119861439,
+        1.0
+      ]
+    },
+    "class:HLP": {
+      "precision_95ci": [
+        0.20765960074271794,
+        0.9385080553004134
+      ],
+      "recall_95ci": [
+        0.3423802274009781,
+        1.0
+      ]
+    },
+    "class:HON": {
+      "precision_95ci": [
+        0.3755346296812303,
+        0.9637758913796723
+      ],
+      "recall_95ci": [
+        0.5101091634281154,
+        1.0
+      ]
+    },
+    "language:vi": {
+      "precision_95ci": [
+        0.40927543023927526,
+        0.9285207872673525
+      ],
+      "recall_95ci": [
+        0.6096657119861439,
+        1.0
+      ]
+    },
+    "overall": {
+      "precision_95ci": [
+        0.40927543023927526,
+        0.9285207872673525
+      ],
+      "recall_95ci": [
+        0.6096657119861439,
+        1.0
+      ]
+    },
+    "prompt_version:v6": {
+      "precision_95ci": [
+        0.40927543023927526,
+        0.9285207872673525
+      ],
+      "recall_95ci": [
+        0.6096657119861439,
+        1.0
+      ]
+    }
   }
 }

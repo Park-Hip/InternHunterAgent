@@ -1,6 +1,6 @@
 # Release threshold is recall-first at 0.30 on corpus v7
 
-> **Status:** Active · **Decided:** 2026-08-26
+> **Status:** Superseded by ADR-0052 · **Decided:** 2026-08-26
 
 ## Decision
 

@@ -485,7 +485,7 @@ def flatten_turns(
     return turns
 
 
-_NON_MEASURED = frozenset({"INFRA", "UNRUN", "UNGRADED"})
+_NON_MEASURED = frozenset({"INFRA", "UNRUN", "UNGRADED", "NOT_EVALUATED"})
 
 
 def load_pricing() -> dict[str, dict[str, float]]:

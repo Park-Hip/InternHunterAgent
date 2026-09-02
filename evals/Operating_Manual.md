@@ -46,14 +46,14 @@ An authorization to report a diagnostic metric is not authorization to impose a 
 | `FAIL` | The agent violated an applicable deterministic check. | Verify the earliest failing seam and route it as product behavior work. |
 | `INFRA` | Required evidence was not captured because of a provider, quota, database, or other external failure. | Repair or rerun the affected measurement. Do not count it as a pass. |
 | `UNRUN` | The capture did not attempt the turn or scenario. | Resume or replace the capture. Do not publish it as complete coverage. |
-| `NOT_EVALUATED` | A single check was inapplicable to recorded evidence. | Keep the earlier applicable result and do not relabel this as `INFRA`. |
+| `NOT_EVALUATED` | A single check was inapplicable to recorded evidence, **or** the scenario's decisive behavioral contract is deferred to the semantic judge and the deterministic grader has no structural/literal rule to decide it. | Keep the earlier applicable result and do not relabel this as `INFRA`. For a grade-level `NOT_EVALUATED`, the summary excludes the turn from the pass-rate denominator. |
 | `EXEMPT` | Execution accuracy is intentionally absent because the scenario has no SQL contract. | Verify the registry exemption remains appropriate. |
 | `AVAILABLE` | The semantic judge returned a score and rationale. | Compare it with the human label or sample review. |
 | `UNAVAILABLE` | The semantic judge did not produce a usable result. | Preserve the error and keep the result for rerun. |
 
-Pass-rate denominators exclude `INFRA` and `UNRUN` turns.
+Pass-rate denominators exclude `INFRA`, `UNRUN`, and grade-level `NOT_EVALUATED` turns.
 They do not convert missing coverage into success.
-`NOT_EVALUATED` is visible beside the related seam and does not decide the turn-level grade by itself.
+A check-level `NOT_EVALUATED` is visible beside the related seam and does not decide the turn-level grade by itself.
 
 ## Baseline review workflow
 

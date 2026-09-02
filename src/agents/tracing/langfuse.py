@@ -190,7 +190,10 @@ def build_langfuse_tags(
 
     tags = [
         entry_point,
-        *(f"prompt:{surface}:{version}" for surface, version in load_prompt_versions().items()),
+        *(
+            f"prompt:{surface}:{version}"
+            for surface, version in load_prompt_versions().items()
+        ),
         f"provider:{provider}",
         f"model:{model}",
     ]

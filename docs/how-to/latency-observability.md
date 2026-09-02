@@ -1,5 +1,7 @@
 # Latency observability
 
+> **Last verified:** 2026-09-02
+
 > **Eviction:** This guide leaves when request telemetry is replaced by a reviewed, equivalent measurement contract.
 
 The streamed chat request span (`agent-chat-stream`) carries application timing metadata. These are server-side measurements for diagnostic and later percentile analysis; they are not a public latency claim.

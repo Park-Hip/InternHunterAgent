@@ -66,7 +66,10 @@ class StreamQueryRouteTests(unittest.TestCase):
         self.assertEqual(response.headers["cache-control"], "no-cache")
         self.assertEqual(response.headers["x-accel-buffering"], "no")
         events = _parse_sse_events(response.text)
-        self.assertEqual([event_type for event_type, _ in events], ["session", "token", "token", "metadata", "done"])
+        self.assertEqual(
+            [event_type for event_type, _ in events],
+            ["session", "token", "token", "metadata", "done"],
+        )
         self.assertEqual(events[0][1], {"session_id": "session-123"})
         self.assertEqual(events[1][1], {"text": "There are "})
         self.assertEqual(events[2][1], {"text": "3 roles."})
@@ -92,11 +95,16 @@ class StreamQueryRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         events = _parse_sse_events(response.text)
-        self.assertEqual([event_type for event_type, _ in events], ["session", "token", "metadata", "done"])
+        self.assertEqual(
+            [event_type for event_type, _ in events],
+            ["session", "token", "metadata", "done"],
+        )
         self.assertEqual(events[1][1], {"text": FALLBACK_ANSWER})
         self.assertEqual(events[2][1], {"trace_id": None, "trace_url": None})
 
-    def test_stream_route_returns_in_band_error_and_done_for_mid_run_failure(self) -> None:
+    def test_stream_route_returns_in_band_error_and_done_for_mid_run_failure(
+        self,
+    ) -> None:
         async def _fake_astream(**kwargs):
             yield {"type": "token", "text": "Partial answer"}
             raise RuntimeError("database password leaked")
@@ -111,7 +119,10 @@ class StreamQueryRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("database password leaked", response.text)
         events = _parse_sse_events(response.text)
-        self.assertEqual([event_type for event_type, _ in events], ["session", "token", "error", "done"])
+        self.assertEqual(
+            [event_type for event_type, _ in events],
+            ["session", "token", "error", "done"],
+        )
         self.assertEqual(
             events[2][1],
             {
@@ -137,7 +148,9 @@ class StreamQueryRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("provider quota exhausted", response.text)
         events = _parse_sse_events(response.text)
-        self.assertEqual([event_type for event_type, _ in events], ["session", "error", "done"])
+        self.assertEqual(
+            [event_type for event_type, _ in events], ["session", "error", "done"]
+        )
         self.assertEqual(
             events[1][1],
             {
@@ -185,9 +198,9 @@ class StreamOpenAPITests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         schema = response.json()
-        content = schema["paths"]["/api/v1/agent/chat/stream"]["post"][
-            "responses"
-        ]["200"]["content"]
+        content = schema["paths"]["/api/v1/agent/chat/stream"]["post"]["responses"][
+            "200"
+        ]["content"]
         self.assertIn("text/event-stream", content)
 
         event_schema = content["text/event-stream"]["schema"]
@@ -200,9 +213,7 @@ class StreamOpenAPITests(unittest.TestCase):
         self.assertEqual(len(event_schema["oneOf"]), 5)
 
         error_ref = discriminator["mapping"]["error"]
-        error_schema = event_schema["$defs"][
-            error_ref.rsplit("/", maxsplit=1)[-1]
-        ]
+        error_schema = event_schema["$defs"][error_ref.rsplit("/", maxsplit=1)[-1]]
         self.assertTrue(
             {"message", "code", "retryable"}.issubset(error_schema["properties"])
         )
@@ -309,14 +320,18 @@ class StreamMultiTurnTests(unittest.TestCase):
 
     def test_multi_turn_correction_referent_handled(self) -> None:
         """Turn 2 yields a response that semantically references turn 1 content."""
-        self.runtime.set_turn_events([
-            {"type": "token", "text": "Acme uses Python"},
-            {"type": "metadata", "trace_id": "t-c1", "trace_url": None},
-        ])
-        self.runtime.set_turn_events([
-            {"type": "token", "text": "Acme also uses SQL"},
-            {"type": "metadata", "trace_id": "t-c2", "trace_url": None},
-        ])
+        self.runtime.set_turn_events(
+            [
+                {"type": "token", "text": "Acme uses Python"},
+                {"type": "metadata", "trace_id": "t-c1", "trace_url": None},
+            ]
+        )
+        self.runtime.set_turn_events(
+            [
+                {"type": "token", "text": "Acme also uses SQL"},
+                {"type": "metadata", "trace_id": "t-c2", "trace_url": None},
+            ]
+        )
         session_id = "referent-session"
 
         self.client.post(
@@ -325,7 +340,10 @@ class StreamMultiTurnTests(unittest.TestCase):
         )
         response = self.client.post(
             "/api/v1/agent/chat/stream",
-            json={"query": "Which language does Acme use for queries?", "session_id": session_id},
+            json={
+                "query": "Which language does Acme use for queries?",
+                "session_id": session_id,
+            },
         )
         self.assertEqual(response.status_code, 200)
         events = _parse_sse_events(response.text)
@@ -336,10 +354,13 @@ class StreamMultiTurnTests(unittest.TestCase):
 
     def test_multi_turn_refusal_after_normal_prior_turn(self) -> None:
         """A normal first turn succeeds; a subsequent turn returns an in-band error before done."""
-        self.runtime.set_turn_events([
-            {"type": "token", "text": "ok"},
-            {"type": "metadata", "trace_id": None, "trace_url": None},
-        ])
+        self.runtime.set_turn_events(
+            [
+                {"type": "token", "text": "ok"},
+                {"type": "metadata", "trace_id": None, "trace_url": None},
+            ]
+        )
+
         # Second turn: yield nothing, then raise provider-busy error
         async def _refusal_astream(**kwargs):
             yield {"type": "token", "text": "partial"}
@@ -372,7 +393,10 @@ class StreamMultiTurnTests(unittest.TestCase):
         """A stream that yields tokens and metadata terminates with a done event."""
         response = self.client.post(
             "/api/v1/agent/chat/stream",
-            json={"query": "list data engineer jobs", "session_id": "completion-session"},
+            json={
+                "query": "list data engineer jobs",
+                "session_id": "completion-session",
+            },
         )
         self.assertEqual(response.status_code, 200)
         events = _parse_sse_events(response.text)
@@ -382,9 +406,11 @@ class StreamMultiTurnTests(unittest.TestCase):
 
     def test_aborted_stream_emits_error_then_done(self) -> None:
         """A stream that fails mid-run emits an error event followed by done."""
-        self.runtime.set_turn_events([
-            {"type": "token", "text": "Partial answer"},
-        ])
+        self.runtime.set_turn_events(
+            [
+                {"type": "token", "text": "Partial answer"},
+            ]
+        )
         self.runtime.set_raise_during_turn()
 
         response = self.client.post(

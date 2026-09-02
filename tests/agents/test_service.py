@@ -47,7 +47,9 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             },
         )
 
-    async def test_generate_agent_response_generates_session_id_when_omitted(self) -> None:
+    async def test_generate_agent_response_generates_session_id_when_omitted(
+        self,
+    ) -> None:
         runtime = AsyncMock()
         runtime.ainvoke.return_value = {
             "answer": "The current time is 14:01:52.",
@@ -93,7 +95,9 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
 
 class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
-    def test_stream_turn_timeout_uses_deterministic_fallback_for_missing_or_invalid_config(self) -> None:
+    def test_stream_turn_timeout_uses_deterministic_fallback_for_missing_or_invalid_config(
+        self,
+    ) -> None:
         self.assertEqual(get_stream_turn_timeout_seconds({}), 120)
         for invalid_value in (0, -1, True, "17"):
             with self.subTest(invalid_value=invalid_value):
@@ -104,7 +108,9 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
                     120,
                 )
         self.assertEqual(
-            get_stream_turn_timeout_seconds({"agent": {"stream_turn_timeout_seconds": 17}}),
+            get_stream_turn_timeout_seconds(
+                {"agent": {"stream_turn_timeout_seconds": 17}}
+            ),
             17,
         )
 
@@ -127,7 +133,10 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             )
         ]
 
-        self.assertEqual([event["type"] for event in events], ["session", "token", "metadata", "done"])
+        self.assertEqual(
+            [event["type"] for event in events],
+            ["session", "token", "metadata", "done"],
+        )
         mock_latency_class.return_value.mark_user_visible.assert_called_once_with()
         mock_latency_class.return_value.complete.assert_called_once_with("success")
         runtime.astream.assert_called_once_with(
@@ -157,7 +166,9 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             )
         ]
 
-        self.assertEqual([event["type"] for event in events], ["session", "error", "done"])
+        self.assertEqual(
+            [event["type"] for event in events], ["session", "error", "done"]
+        )
         mock_latency_class.return_value.mark_user_visible.assert_not_called()
 
     @patch("src.agents.service.StreamLatency")
@@ -165,7 +176,10 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         self, mock_latency_class
     ) -> None:
         async def failing_stream(*, completion_event, **_kwargs):
-            yield {"type": "runtime_error", "exception": RuntimeError("provider failed")}
+            yield {
+                "type": "runtime_error",
+                "exception": RuntimeError("provider failed"),
+            }
             await completion_event.wait()
 
         runtime = MagicMock()
@@ -309,7 +323,9 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         mock_latency_class.return_value.complete.assert_called_once_with("error")
 
     @patch("src.agents.service.logger")
-    async def test_stream_failure_logs_and_yields_generic_message(self, mock_logger) -> None:
+    async def test_stream_failure_logs_and_yields_generic_message(
+        self, mock_logger
+    ) -> None:
         async def failing_stream(**_kwargs):
             raise RuntimeError("db is down")
             yield  # pragma: no cover — makes this an async generator
@@ -342,7 +358,9 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[-1], {"type": "done"})
 
         mock_logger.error.assert_called_once()
-        self.assertEqual(mock_logger.error.call_args.args[0], "stream_agent_response.failed")
+        self.assertEqual(
+            mock_logger.error.call_args.args[0], "stream_agent_response.failed"
+        )
         kwargs = mock_logger.error.call_args.kwargs
         self.assertEqual(kwargs["session_id"], "session-1")
         self.assertIn("db is down", kwargs["error"])

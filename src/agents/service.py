@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from collections.abc import AsyncGenerator
-from typing import Literal, Mapping, TypeVar, TypedDict
+from typing import Literal, Mapping, TypeVar, TypedDict, cast
 
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing.langfuse import StreamLatency
@@ -84,7 +84,11 @@ async def stream_agent_response(
     yield {"type": "session", "session_id": session_id}
 
     saw_token = False
-    metadata_event = {"type": "metadata", "trace_id": None, "trace_url": None}
+    metadata_event: Mapping[str, str | bool | None] = {
+        "type": "metadata",
+        "trace_id": None,
+        "trace_url": None,
+    }
     metadata_emitted = False
 
     loop = asyncio.get_running_loop()
@@ -97,8 +101,8 @@ async def stream_agent_response(
         latency=latency,
         completion_event=completion_event,
     )
-    runtime_events: asyncio.Queue[dict[str, object] | Exception | None] = (
-        asyncio.Queue(maxsize=1)
+    runtime_events: asyncio.Queue[dict[str, object] | Exception | None] = asyncio.Queue(
+        maxsize=1
     )
 
     async def consume_runtime_stream() -> None:
@@ -148,7 +152,7 @@ async def stream_agent_response(
                     raise RuntimeError("Runtime failed without an exception")
                 raise exception
             if event["type"] == "metadata":
-                metadata_event = event
+                metadata_event = cast(Mapping[str, str | bool | None], event)
                 if not saw_token:
                     logger.warning(
                         "stream_agent_response.empty_answer_fallback",
@@ -165,7 +169,7 @@ async def stream_agent_response(
                 latency.mark_user_visible()
                 saw_token = True
 
-            yield event
+            yield cast(Mapping[str, str | bool | None], event)
         if not saw_token:
             logger.warning(
                 "stream_agent_response.empty_answer_fallback",

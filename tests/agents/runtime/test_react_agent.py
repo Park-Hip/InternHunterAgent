@@ -154,7 +154,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         mock_client.get_trace_url.assert_called_once_with(trace_id="trace-123")
         latency.complete.assert_called_once_with("success")
 
-    async def test_astream_leaves_empty_stream_ttft_for_the_visible_fallback(self) -> None:
+    async def test_astream_leaves_empty_stream_ttft_for_the_visible_fallback(
+        self,
+    ) -> None:
         async def _fake_stream(*_args, **_kwargs):
             if False:
                 yield None
@@ -166,7 +168,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         events = [event async for event in runtime.astream("hello", latency=latency)]
 
-        self.assertEqual(events, [{"type": "metadata", "trace_id": None, "trace_url": None}])
+        self.assertEqual(
+            events, [{"type": "metadata", "trace_id": None, "trace_url": None}]
+        )
         latency.mark_user_visible.assert_not_called()
         latency.complete.assert_called_once_with("success")
 
@@ -218,7 +222,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         mock_langfuse_request_trace,
         mock_get_langfuse_client,
     ) -> None:
-        current_trace: ContextVar[str | None] = ContextVar("current_trace", default=None)
+        current_trace: ContextVar[str | None] = ContextVar(
+            "current_trace", default=None
+        )
 
         @asynccontextmanager
         async def _request_trace(**_kwargs):
@@ -242,8 +248,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         runtime = AgentRuntime(agent=fake_agent)
 
         events = [
-            event
-            async for event in stream_agent_response("hello", runtime=runtime)
+            event async for event in stream_agent_response("hello", runtime=runtime)
         ]
 
         self.assertEqual(
@@ -467,7 +472,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         for response, expected_category in cases:
             with self.subTest(response=response):
-                answer, category = runtime._extract_answer_with_failure_category(response)
+                answer, category = runtime._extract_answer_with_failure_category(
+                    response
+                )
                 self.assertEqual(answer, "")
                 self.assertEqual(category, expected_category)
 

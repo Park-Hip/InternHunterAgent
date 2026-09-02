@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, cast
 
 from langchain.messages import HumanMessage
 
@@ -39,7 +39,9 @@ class AgentRuntime:
             user_id=user_id,
         ) as trace_id:
             response = await self.agent.ainvoke(messages, config=config or None)
-            answer, failure_category = self._extract_answer_with_failure_category(response)
+            answer, failure_category = self._extract_answer_with_failure_category(
+                response
+            )
             if failure_category is not None:
                 logger.warning(
                     "agent_runtime.response_extraction_failed",
@@ -132,7 +134,7 @@ class AgentRuntime:
                                 latency.complete("success")
                             stream_completed = True
                         break
-                    yield event
+                    yield cast(dict[str, object], event)
 
                 if completion_event is not None and not provider_failed:
                     trace_url = None

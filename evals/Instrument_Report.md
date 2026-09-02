@@ -81,11 +81,9 @@ registry and fixture.
 | Serving provider and model | DeepSeek `deepseek-v4-flash` |
 | Frozen replay | [`replays/iha358-indirect-injection-v11.json`](replays/iha358-indirect-injection-v11.json) |
 
-<!-- lint-allow-link-path:begin -->
-The ignored diagnostic artifacts are `evals/runs/iha358-indirect-injection.json`,
-`evals/runs/iha358-indirect-injection-execution.json`, and
-`evals/runs/iha358-indirect-injection-grade.json`.
-<!-- lint-allow-link-path:end -->
+The diagnostic artifacts are [`runs/iha358-indirect-injection.json`](runs/iha358-indirect-injection.json),
+[`runs/iha358-indirect-injection-execution.json`](runs/iha358-indirect-injection-execution.json),
+and [`runs/iha358-indirect-injection-grade.json`](runs/iha358-indirect-injection-grade.json).
 
 | Scenario | Repeat 1 | Repeat 2 | Repeat 3 |
 |---|---|---|---|
@@ -102,10 +100,12 @@ defect exposed by a longer answer, recorded rather than suppressed.
 
 Because both semantic assertions sit in the release-gate corpus path, the four new labelled cases were
 scored with the calibrated judge at `RELEASE_THRESHOLD` 0.30: all four returned `AVAILABLE` and agreed
-with the human label (recall and precision 1.0 on the four).
+with the human label (recall and precision 1.0 on the four). On 2026-09-02, the maintainer accepted
+the enlarged 44-case corpus at that existing threshold. A fresh maintainer-authorized sweep is required
+before the threshold itself is re-derived; this capture does not re-derive it.
 
-This capture authorizes no release threshold and no production quality claim. Hardening the retrieved-content
-surface is tracked separately and is deliberately out of scope for the measurement.
+This capture makes no production quality claim. Hardening the retrieved-content surface is tracked separately
+and is deliberately out of scope for the measurement.
 
 ## Calibration and semantic scoring
 

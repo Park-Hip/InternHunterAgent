@@ -62,7 +62,7 @@
   type: single
   input: Cho tôi xem tất cả việc làm hiện có.
   language: vi
-  expected: 22 exist, 20 shown -> answer carries TRUNCATION.
+  expected: 24 exist, 20 shown -> answer carries TRUNCATION.
   probe: false
   expected_tools: [query_clean_jobs]
   reference_sql: SELECT id, title, company, location, source_url FROM clean_jobs ORDER BY id LIMIT 20

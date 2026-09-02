@@ -10,9 +10,9 @@ All application values are integer **milliseconds** and use a monotonic clock:
 
 | Field | Definition |
 |---|---|
-| `server_e2e_ms` | From creation of the application stream iterator (after request validation) to the agent runtime's successful, error, or cancelled completion. |
+| `server_e2e_ms` | From creation of the application stream iterator (after request validation) to the final emitted SSE `done` boundary for successful or error streams, or to cancellation on client disconnect. |
 | `user_visible_ttft_ms` | From that same start to the first emitted SSE `token` event. Hidden/reasoning chunks and tool-call chunks are filtered before this point. The application fallback answer is a visible token and is included. |
-| `stream_completion_ms` | From that same start to the runtime's final completion, error, or cancellation decision. It equals `server_e2e_ms` for this MVP. |
+| `stream_completion_ms` | From that same start to the final emitted SSE `done` boundary for successful or error streams, or to cancellation on client disconnect. It equals `server_e2e_ms` for this MVP. |
 
 `latency_unit` is always `ms`. Do not mix these fields with Langfuse generation `timeToFirstToken` or provider streaming latency: those provider measurements can begin on a hidden/reasoning chunk and are intentionally separate from `user_visible_ttft_ms`.
 

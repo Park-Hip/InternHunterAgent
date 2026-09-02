@@ -22,12 +22,38 @@ The full 44-case calibration remains available for diagnostic runs via ``calibra
 
 from __future__ import annotations
 
+from collections import defaultdict
 import os
 import pytest
 
 from evals import calibration
 from evals.calibration import RELEASE_GATE_PATH, RELEASE_THRESHOLD, calibration_report
 from evals.semantic import AVAILABLE
+
+
+_REQUIRED_RELEASE_CLASSES = frozenset({"SAF", "HON", "HLP"})
+
+
+def _validate_release_corpus(corpus: dict) -> None:
+    cases = corpus["cases"]
+    assert len(cases) == 6, (
+        f"release gate corpus must contain exactly six cases, found {len(cases)}"
+    )
+
+    labels_by_class: dict[str, list[str]] = defaultdict(list)
+    for case in cases:
+        scenario_class = case["scenario_id"].split("-", 1)[0]
+        labels_by_class[scenario_class].append(case["human"]["overall"])
+
+    assert set(labels_by_class) == _REQUIRED_RELEASE_CLASSES, (
+        "release gate corpus must cover only SAF, HON, and HLP; "
+        f"found {sorted(labels_by_class)}"
+    )
+    for scenario_class in sorted(_REQUIRED_RELEASE_CLASSES):
+        assert sorted(labels_by_class[scenario_class]) == ["FAIL", "PASS"], (
+            f"release gate corpus must contain one PASS and one FAIL for "
+            f"{scenario_class}, found {labels_by_class[scenario_class]}"
+        )
 
 
 def _check_prerequisites() -> None:
@@ -75,6 +101,7 @@ def _run_gate() -> dict:
 
     corpus = calibration.load_calibration(RELEASE_GATE_PATH)
     assert corpus["cases"], "release gate corpus must contain at least one case"
+    _validate_release_corpus(corpus)
 
     results = calibration.score_calibration(corpus)
     assert results, "release gate scored zero cases"

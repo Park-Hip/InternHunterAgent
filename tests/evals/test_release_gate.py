@@ -43,6 +43,26 @@ def _make_result(status: str, score: float | None = None) -> dict:
     }
 
 
+def _release_corpus() -> dict:
+    return _make_corpus([
+        _make_case("saf-pass", "SAF-T-1", "PASS"),
+        _make_case("saf-fail", "SAF-T-2", "FAIL"),
+        _make_case("hon-pass", "HON-T-1", "PASS"),
+        _make_case("hon-fail", "HON-T-2", "FAIL"),
+        _make_case("hlp-pass", "HLP-T-1", "PASS"),
+        _make_case("hlp-fail", "HLP-T-2", "FAIL"),
+    ])
+
+
+def _passing_results(corpus: dict) -> dict[str, dict]:
+    return {
+        case["id"]: _make_result(
+            AVAILABLE, 0.9 if case["human"]["overall"] == "PASS" else 0.1
+        )
+        for case in corpus["cases"]
+    }
+
+
 class TestReleaseGatePrerequisites:
     """Verify the gate fails early and clearly when required credentials are missing."""
 
@@ -87,13 +107,29 @@ class TestReleaseGateCollection:
         with pytest.raises(AssertionError, match="at least one case"):
             _run_gate()
 
+    def test_gate_fails_when_required_class_is_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A release corpus missing HLP must not certify the gate."""
+        corpus = _release_corpus()
+        corpus["cases"] = [
+            case for case in corpus["cases"] if not case["scenario_id"].startswith("HLP-")
+        ] + [
+            _make_case("saf-extra-pass", "SAF-T-3", "PASS"),
+            _make_case("saf-extra-fail", "SAF-T-4", "FAIL"),
+        ]
+        monkeypatch.setattr(calibration, "load_calibration", lambda path=None: corpus)
+        from evals.test_release_gate import _run_gate
+        with pytest.raises(AssertionError, match="SAF, HON, and HLP"): 
+            _run_gate()
+
     def test_gate_fails_when_no_cases_score(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Zero AVAILABLE results must fail the gate."""
-        corpus = _make_corpus([_make_case("a", "SAF-T-1", "PASS")])
+        corpus = _release_corpus()
         monkeypatch.setattr(calibration, "load_calibration", lambda path=None: corpus)
         monkeypatch.setattr(
             calibration, "score_calibration",
-            lambda _: {"a": _make_result("UNAVAILABLE")},
+            lambda _: {
+                case["id"]: _make_result("UNAVAILABLE") for case in corpus["cases"]
+            },
         )
         from evals.test_release_gate import _run_gate
         with pytest.raises(AssertionError, match="unavailable"):
@@ -105,69 +141,44 @@ class TestReleaseGateThreshold:
 
     def test_gate_passes_when_recall_is_perfect(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """All-AVAILABLE, all-above-threshold scores must pass."""
-        corpus = _make_corpus([
-            _make_case("a", "SAF-T-1", "PASS"),
-            _make_case("b", "SAF-T-2", "FAIL"),
-            _make_case("c", "HON-T-1", "PASS"),
-            _make_case("d", "HON-T-2", "FAIL"),
-        ])
+        corpus = _release_corpus()
         monkeypatch.setattr(calibration, "load_calibration", lambda path=None: corpus)
-        monkeypatch.setattr(
-            calibration, "score_calibration",
-            lambda _: {
-                "a": _make_result(AVAILABLE, 0.9),
-                "b": _make_result(AVAILABLE, 0.1),
-                "c": _make_result(AVAILABLE, 0.8),
-                "d": _make_result(AVAILABLE, 0.2),
-            },
-        )
+        monkeypatch.setattr(calibration, "score_calibration", lambda _: _passing_results(corpus))
         from evals.test_release_gate import _run_gate
         # Should not raise.
         _run_gate()
 
     def test_gate_fails_when_overall_recall_breaches(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A below-threshold score on a PASS case must break recall and fail."""
-        corpus = _make_corpus([
-            _make_case("a", "SAF-T-1", "PASS"),
-        ])
+        corpus = _release_corpus()
+        results = _passing_results(corpus)
+        results["saf-pass"] = _make_result(AVAILABLE, 0.2)
         monkeypatch.setattr(calibration, "load_calibration", lambda path=None: corpus)
-        # Score below RELEASE_THRESHOLD → predicted FAIL for a human PASS → FN.
-        monkeypatch.setattr(
-            calibration, "score_calibration",
-            lambda _: {"a": _make_result(AVAILABLE, 0.2)},
-        )
+        monkeypatch.setattr(calibration, "score_calibration", lambda _: results)
         from evals.test_release_gate import _run_gate
         with pytest.raises(AssertionError, match="threshold breached"):
             _run_gate()
 
     def test_gate_fails_when_class_recall_breaches(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Recall < 1.0 on any class must fail the gate."""
-        corpus = _make_corpus([
-            _make_case("sa1", "SAF-T-1", "PASS"),
-            _make_case("sa2", "SAF-T-2", "FAIL"),
-            _make_case("ho1", "HON-T-1", "PASS"),
-        ])
+        corpus = _release_corpus()
+        results = _passing_results(corpus)
+        results["hon-pass"] = _make_result(AVAILABLE, 0.2)
         monkeypatch.setattr(calibration, "load_calibration", lambda path=None: corpus)
-        monkeypatch.setattr(
-            calibration, "score_calibration",
-            lambda _: {
-                "sa1": _make_result(AVAILABLE, 0.9),
-                "sa2": _make_result(AVAILABLE, 0.2),
-                # HON-T-1 is human PASS, score 0.2 (< threshold) → predicted FAIL → FN.
-                "ho1": _make_result(AVAILABLE, 0.2),
-            },
-        )
+        monkeypatch.setattr(calibration, "score_calibration", lambda _: results)
         from evals.test_release_gate import _run_gate
         with pytest.raises(AssertionError, match="class:HON"):
             _run_gate()
 
     def test_gate_fails_with_unavailable_cases(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """All-unavailable cases must fail the gate."""
-        corpus = _make_corpus([_make_case("a", "SAF-T-1", "PASS")])
+        corpus = _release_corpus()
         monkeypatch.setattr(calibration, "load_calibration", lambda path=None: corpus)
         monkeypatch.setattr(
             calibration, "score_calibration",
-            lambda _: {"a": _make_result("UNAVAILABLE")},
+            lambda _: {
+                case["id"]: _make_result("UNAVAILABLE") for case in corpus["cases"]
+            },
         )
         from evals.test_release_gate import _run_gate
         with pytest.raises(AssertionError, match="unavailable"):
@@ -180,19 +191,11 @@ class TestReleaseGateThreshold:
         let the gate pass — unavailable cases are dropped from every metric group
         and would otherwise leave recall at 1.0 on the scored subset.
         """
-        corpus = _make_corpus([
-            _make_case("a", "SAF-T-1", "PASS"),
-            _make_case("b", "HON-T-1", "PASS"),
-        ])
+        corpus = _release_corpus()
+        results = _passing_results(corpus)
+        results["hon-pass"] = _make_result("UNAVAILABLE")
         monkeypatch.setattr(calibration, "load_calibration", lambda path=None: corpus)
-        monkeypatch.setattr(
-            calibration, "score_calibration",
-            lambda _: {
-                "a": _make_result(AVAILABLE, 0.9),
-                # HON case is unavailable (provider/judge outage)
-                "b": _make_result("UNAVAILABLE"),
-            },
-        )
+        monkeypatch.setattr(calibration, "score_calibration", lambda _: results)
         from evals.test_release_gate import _run_gate
         with pytest.raises(AssertionError, match="unavailable"):
             _run_gate()
@@ -203,26 +206,20 @@ class TestReleaseGateReporting:
 
     def test_summary_names_selected_count_and_threshold(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
         """The printed summary must include selected-case count and threshold."""
-        corpus = _make_corpus([_make_case("a", "SAF-T-1", "PASS")])
+        corpus = _release_corpus()
         monkeypatch.setattr(calibration, "load_calibration", lambda path=None: corpus)
-        monkeypatch.setattr(
-            calibration, "score_calibration",
-            lambda _: {"a": _make_result(AVAILABLE, 0.9)},
-        )
+        monkeypatch.setattr(calibration, "score_calibration", lambda _: _passing_results(corpus))
         from evals.test_release_gate import _run_gate
         _run_gate()
         captured = capsys.readouterr()
-        assert "1 scored" in captured.out
+        assert "6 scored" in captured.out
         assert "threshold=0.3" in captured.out
 
     def test_summary_names_class_results(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
         """Per-class metrics must appear in the summary."""
-        corpus = _make_corpus([_make_case("a", "SAF-T-1", "PASS")])
+        corpus = _release_corpus()
         monkeypatch.setattr(calibration, "load_calibration", lambda path=None: corpus)
-        monkeypatch.setattr(
-            calibration, "score_calibration",
-            lambda _: {"a": _make_result(AVAILABLE, 0.9)},
-        )
+        monkeypatch.setattr(calibration, "score_calibration", lambda _: _passing_results(corpus))
         from evals.test_release_gate import _run_gate
         _run_gate()
         captured = capsys.readouterr()

@@ -864,7 +864,7 @@ def build_viewer_html(
       <section class="card"><div class="card-head"><h2>Run health</h2><span class="progress">${esc(d.class_source || '')}</span></div>
       <div class="statgrid">
         ${stat('Captured turns', String(d.turns ?? 0))}
-        ${stat('Overall pass rate', pct(d.pass_rate), `${(d.counts && d.counts.PASS) || 0} PASS · ${d.measured ?? 0} measured (INFRA/UNRUN excluded)`)}
+        ${stat('Overall pass rate', pct(d.pass_rate), `${(d.counts && d.counts.PASS) || 0} PASS · ${d.measured ?? 0} measured (INFRA/UNRUN/NOT_EVALUATED excluded)`)}
         ${latency}
         ${stat('Tokens in / out', `${fmt(usage.input_tokens)} / ${fmt(usage.output_tokens)}`, `${usage.turns_with_telemetry ?? 0} of ${d.turns ?? 0} turns report usage`)}
         ${stat('Total tokens', fmt(usage.total_tokens))}

@@ -37,7 +37,7 @@ TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # SQL string literals: single-quoted strings (with escaped quotes) and PostgreSQL
 # dollar-quoted strings. Their contents must not participate in safety checks.
 SQL_LITERAL_OR_UNICODE_IDENTIFIER_PATTERN = re.compile(
-    r"'(?:[^']|'')*'|(?<![A-Za-z0-9_$\u0080-\U0010FFFF])(?P<delimiter>\$(?:[^\W\d]\w*)?\$).*?(?P=delimiter)|"
+    r"[Ee]'(?:[^'\\]|\\.|'')*'|'(?:[^']|'')*'|(?<![A-Za-z0-9_$\u0080-\U0010FFFF])(?P<delimiter>\$(?:[^\W\d]\w*)?\$).*?(?P=delimiter)|"
     r"U&\"(?P<identifier>(?:[^\"]|\"\")*)\"(?:\s+UESCAPE\s+(?:E)?'(?P<escape>(?:[^']|'')*)')?",
     re.DOTALL | re.IGNORECASE,
 )
@@ -193,8 +193,9 @@ def validate_sql(sql: str) -> ValidationResult:
     # Reject if any FROM/JOIN target is a table other than clean_jobs (e.g. JOIN raw_jobs).
     table_refs = TABLE_REF_PATTERN.findall(masked)
     if any(
-        (ref[1:-1].replace('""', '"') if ref.startswith('"') else ref).lower()
-        != ALLOWED_TABLE
+        ref[1:-1].replace('""', '"') != ALLOWED_TABLE
+        if ref.startswith('"')
+        else ref.lower() != ALLOWED_TABLE
         for ref in table_refs
     ):
         return _invalid(statement, "Query may only reference the clean_jobs table")

@@ -190,6 +190,14 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertTrue(result.valid)
         self.assertEqual(result.reason, "")
 
+    def test_rejects_dangerous_function_after_escape_string_literal(self) -> None:
+        result = validate_sql(
+            "SELECT E'foo\\\'' || lo_import('/etc/passwd') FROM clean_jobs"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
     def test_rejects_unicode_escaped_large_object_import(self) -> None:
         result = validate_sql(
             "SELECT U&\"lo\\005fimport\"('/etc/passwd') FROM clean_jobs"
@@ -261,6 +269,12 @@ class ValidateSqlTests(unittest.TestCase):
 
         self.assertTrue(result.valid)
         self.assertEqual(result.reason, "")
+
+    def test_rejects_case_distinct_delimited_table(self) -> None:
+        result = validate_sql('SELECT * FROM "CLEAN_JOBS"')
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
 
     def test_allows_denylisted_keyword_as_delimited_identifier(self) -> None:
         result = validate_sql('SELECT title AS "into", company AS "copy" FROM clean_jobs')

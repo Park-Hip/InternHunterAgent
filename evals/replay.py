@@ -186,7 +186,7 @@ def validate_replay(replay: dict[str, Any]) -> None:
                     raise ValueError(
                         f"Replay scenario {scenario_id} has an invalid expected execution status"
                     )
-                if turn["expected_grade"] not in {"PASS", "FAIL"}:
+                if turn["expected_grade"] not in {"PASS", "FAIL", "NOT_EVALUATED"}:
                     raise ValueError(
                         f"Replay scenario {scenario_id} has an invalid expected grade"
                     )

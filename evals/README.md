@@ -53,12 +53,11 @@ They are readable history, not active regression fixtures.
 `FAIL` means a check under the agent's control failed.
 `INFRA` means required evidence is missing because infrastructure failed, such as a quota or provider failure.
 `UNRUN` means the turn or scenario was never attempted.
-`NOT_EVALUATED` is a check-level outcome, not a turn verdict.
-It means the check did not apply to the available evidence, such as SQL execution after an earlier routing failure produced no SQL.
+`NOT_EVALUATED` means the scenario's decisive behavioral contract lives entirely in the deferred semantic tier — the deterministic grader cannot independently verify it. A `NOT_EVALUATED` turn is excluded from the pass-rate denominator so the summary cannot be inflated by unverified safety or honesty claims. A turn still carries a `NOT_EVALUATED` semantic check inside its check list, but the turn-level grade is `NOT_EVALUATED`, not `PASS`.
 `EXEMPT` is an execution-accuracy result for a scenario that has no SQL contract, such as a pure refusal.
 `AVAILABLE` and `UNAVAILABLE` describe whether the semantic judge returned a usable result.
 
-`INFRA` and `UNRUN` do not enter pass-rate denominators.
+`INFRA`, `UNRUN`, and `NOT_EVALUATED` do not enter pass-rate denominators.
 `NOT_EVALUATED` never turns an applicable failure into `INFRA` or `PASS`.
 
 ## Run the complete baseline workflow

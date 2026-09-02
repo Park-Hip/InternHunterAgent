@@ -184,6 +184,33 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             await anext(stream)
         mock_latency_class.return_value.complete.assert_called_once_with("error")
 
+    async def test_disconnect_cleans_up_with_a_buffered_runtime_event(self) -> None:
+        second_event_buffered = asyncio.Event()
+        runtime_cancelled = asyncio.Event()
+
+        async def buffered_stream(**_kwargs):
+            try:
+                yield {"type": "token", "text": "first"}
+                yield {"type": "token", "text": "second"}
+                second_event_buffered.set()
+                await asyncio.Event().wait()
+            finally:
+                runtime_cancelled.set()
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=buffered_stream)
+        stream = stream_agent_response(
+            query="what internships are available?",
+            runtime=runtime,
+            session_id="session-buffered-disconnect",
+        )
+
+        self.assertEqual((await anext(stream))["type"], "session")
+        self.assertEqual((await anext(stream))["text"], "first")
+        await asyncio.wait_for(second_event_buffered.wait(), timeout=0.1)
+        await asyncio.wait_for(stream.aclose(), timeout=0.1)
+        self.assertTrue(runtime_cancelled.is_set())
+
     @patch("src.agents.service.get_stream_turn_timeout_seconds", return_value=0.01)
     @patch("src.agents.service.logger")
     async def test_stream_deadline_cancels_runtime_and_yields_one_safe_error_then_done(

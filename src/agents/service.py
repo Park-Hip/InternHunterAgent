@@ -108,7 +108,10 @@ async def stream_agent_response(
         except Exception as exc:
             await runtime_events.put(exc)
         finally:
-            await runtime_events.put(None)
+            try:
+                runtime_events.put_nowait(None)
+            except asyncio.QueueFull:
+                pass
 
     detach_runtime_task = False
     deferred_runtime_cleanup = False
@@ -117,6 +120,9 @@ async def stream_agent_response(
     runtime_task = asyncio.create_task(consume_runtime_stream())
     try:
         while True:
+            if runtime_task.done() and runtime_events.empty():
+                break
+
             remaining = deadline - loop.time()
             if remaining <= 0:
                 raise AgentTurnDeadlineExceededError(

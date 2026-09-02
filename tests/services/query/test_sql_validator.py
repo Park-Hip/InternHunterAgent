@@ -168,6 +168,28 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
+    def test_rejects_quoted_large_object_import(self) -> None:
+        result = validate_sql('SELECT "lo_import"(\'/etc/passwd\') FROM clean_jobs')
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_rejects_schema_qualified_quoted_dblink_function(self) -> None:
+        result = validate_sql(
+            'SELECT "public"."dblink_connect"(\'host=internal.example\') FROM clean_jobs'
+        )
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_allows_dangerous_function_text_in_dollar_quoted_literal(self) -> None:
+        result = validate_sql(
+            "SELECT $payload$lo_import('/etc/passwd')$payload$ FROM clean_jobs"
+        )
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.reason, "")
+
 
 if __name__ == "__main__":
     unittest.main()

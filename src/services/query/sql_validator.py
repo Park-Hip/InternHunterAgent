@@ -34,15 +34,17 @@ SYSTEM_TABLE_PATTERN = re.compile(r"\bpg_\w*|\binformation_schema\b", re.IGNOREC
 # Used to split the statement into whole words for the denylist check.
 TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
-# A single-quoted string literal, allowing escaped quotes (`''` inside). Used to blank
-# out literal contents before the table check so a value like '%raw_jobs%' or a company
-# name isn't mistaken for a table reference.
-STRING_LITERAL_PATTERN = re.compile(r"'(?:[^']|'')*'")
+# SQL string literals: single-quoted strings (with escaped quotes) and PostgreSQL
+# dollar-quoted strings. Their contents must not participate in safety checks.
+STRING_LITERAL_PATTERN = re.compile(
+    r"'(?:[^']|'')*'|(?P<delimiter>\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$).*?(?P=delimiter)",
+    re.DOTALL,
+)
 
 # Server-side functions that can read files, connect to other services, or block a
-# connection. Match function calls only, so identifiers with these prefixes are allowed.
+# connection. Match function calls only, including double-quoted identifiers.
 SERVER_SIDE_FUNCTION_PATTERN = re.compile(
-    r"\b(?:lo_\w+|pg_\w+|file_lo_\w+|dblink(?:_\w+)?|postgres_fdw_\w+)\s*\(",
+    r'(?<![A-Za-z0-9_])(?:"(?:lo_\w+|pg_\w+|file_lo_\w+|dblink(?:_\w+)?|postgres_fdw_\w+)"|(?:lo_\w+|pg_\w+|file_lo_\w+|dblink(?:_\w+)?|postgres_fdw_\w+))\s*\(',
     re.IGNORECASE,
 )
 

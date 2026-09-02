@@ -36,12 +36,12 @@ TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 # SQL string literals: single-quoted strings (with escaped quotes) and PostgreSQL
 # dollar-quoted strings. Their contents must not participate in safety checks.
-STRING_LITERAL_PATTERN = re.compile(
-    r"'(?:[^']|'')*'|(?P<delimiter>\$(?:[^\W\d]\w*)?\$).*?(?P=delimiter)",
-    re.DOTALL,
+SQL_LITERAL_OR_UNICODE_IDENTIFIER_PATTERN = re.compile(
+    r"'(?:[^']|'')*'|(?P<delimiter>\$(?:[^\W\d]\w*)?\$).*?(?P=delimiter)|"
+    r"U&\"(?P<identifier>(?:[^\"]|\"\")*)\"(?:\s+UESCAPE\s+'(?P<escape>(?:[^']|'')*)')?",
+    re.DOTALL | re.IGNORECASE,
 )
 DELIMITED_IDENTIFIER_PATTERN = re.compile(r'"(?:[^"]|"")*"')
-UNICODE_IDENTIFIER_PATTERN = re.compile(r'U&"(?P<identifier>(?:[^"]|"")*)"', re.IGNORECASE)
 
 # Server-side functions that can read files, connect to other services, or block a
 # connection. Match function calls only, including double-quoted identifiers.
@@ -69,38 +69,54 @@ def _invalid(sql: str, reason: str) -> ValidationResult:
 
 def _decode_unicode_identifier(match: re.Match[str]) -> str:
     identifier = match.group("identifier")
+    escape = match.group("escape")
+    if escape is not None and len(escape) != 1:
+        raise ValueError("Invalid Unicode escape character")
+
+    escape_char = escape or "\\"
     decoded: list[str] = []
     index = 0
     while index < len(identifier):
-        if identifier[index] != "\\":
+        if identifier[index] != escape_char:
             decoded.append(identifier[index])
             index += 1
             continue
 
-        if index + 1 < len(identifier) and identifier[index + 1] == "\\":
-            decoded.append("\\")
+        if index + 1 < len(identifier) and identifier[index + 1] == escape_char:
+            decoded.append(escape_char)
             index += 2
             continue
 
         hex_digits = identifier[index + 1 : index + 5]
         if len(hex_digits) == 4 and all(char in "0123456789abcdefABCDEF" for char in hex_digits):
-            decoded.append(chr(int(hex_digits, 16)))
+            code_point = int(hex_digits, 16)
             index += 5
-            continue
-
-        if identifier[index + 1 : index + 2] == "+":
+        elif identifier[index + 1 : index + 2] == "+":
             hex_digits = identifier[index + 2 : index + 8]
-            if len(hex_digits) == 6 and all(
+            if len(hex_digits) != 6 or not all(
                 char in "0123456789abcdefABCDEF" for char in hex_digits
             ):
-                decoded.append(chr(int(hex_digits, 16)))
-                index += 8
+                decoded.append(escape_char)
+                index += 1
                 continue
+            code_point = int(hex_digits, 16)
+            index += 8
+        else:
+            decoded.append(escape_char)
+            index += 1
+            continue
 
-        decoded.append("\\")
-        index += 1
+        if code_point == 0 or 0xD800 <= code_point <= 0xDFFF or code_point > 0x10FFFF:
+            raise ValueError("Invalid Unicode code point")
+        decoded.append(chr(code_point))
 
     return f'"{"".join(decoded)}"'
+
+
+def _mask_literal_or_normalize_identifier(match: re.Match[str]) -> str:
+    if match.group("identifier") is None:
+        return "''"
+    return _decode_unicode_identifier(match)
 
 
 def validate_sql(sql: str) -> ValidationResult:
@@ -144,12 +160,15 @@ def validate_sql(sql: str) -> ValidationResult:
     # Blank out string-literal contents so a literal that happens to contain a denylisted
     # word or a table name (e.g. WHERE description ILIKE '%replace%') isn't mistaken for
     # a real keyword or table reference by the checks below.
-    masked = STRING_LITERAL_PATTERN.sub("''", statement)
-
-    normalized = UNICODE_IDENTIFIER_PATTERN.sub(_decode_unicode_identifier, masked)
+    try:
+        masked = SQL_LITERAL_OR_UNICODE_IDENTIFIER_PATTERN.sub(
+            _mask_literal_or_normalize_identifier, statement
+        )
+    except ValueError:
+        return _invalid(statement, "Invalid Unicode identifier")
 
     # Block functions that can access server files, connect to remote services, or sleep.
-    if SERVER_SIDE_FUNCTION_PATTERN.search(normalized):
+    if SERVER_SIDE_FUNCTION_PATTERN.search(masked):
         return _invalid(statement, "Server-side function calls are not allowed")
 
     # Split into whole words and reject any that is a denylisted verb (case-insensitive).

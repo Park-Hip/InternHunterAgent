@@ -198,6 +198,22 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
+    def test_rejects_custom_unicode_escaped_blocking_function(self) -> None:
+        result = validate_sql(
+            "SELECT U&\"pg!005fsleep\" UESCAPE '!'(10) FROM clean_jobs"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_rejects_invalid_unicode_code_point(self) -> None:
+        result = validate_sql(
+            "SELECT U&\"lo\\+FFFFFF\"('/etc/passwd') FROM clean_jobs"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
     def test_allows_denylisted_keyword_as_delimited_identifier(self) -> None:
         result = validate_sql('SELECT title AS "into", company AS "copy" FROM clean_jobs')
 

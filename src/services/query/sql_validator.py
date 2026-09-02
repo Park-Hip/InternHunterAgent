@@ -37,7 +37,7 @@ TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # SQL string literals: single-quoted strings (with escaped quotes) and PostgreSQL
 # dollar-quoted strings. Their contents must not participate in safety checks.
 SQL_LITERAL_OR_UNICODE_IDENTIFIER_PATTERN = re.compile(
-    r"'(?:[^']|'')*'|(?<![\w$])(?P<delimiter>\$(?:[^\W\d]\w*)?\$).*?(?P=delimiter)|"
+    r"'(?:[^']|'')*'|(?<![A-Za-z0-9_$\u0080-\U0010FFFF])(?P<delimiter>\$(?:[^\W\d]\w*)?\$).*?(?P=delimiter)|"
     r"U&\"(?P<identifier>(?:[^\"]|\"\")*)\"(?:\s+UESCAPE\s+(?:E)?'(?P<escape>(?:[^']|'')*)')?",
     re.DOTALL | re.IGNORECASE,
 )
@@ -54,14 +54,15 @@ SERVER_SIDE_FUNCTION_PATTERN = re.compile(
 # identifier (group 1), which may be schema-qualified (letters/digits/underscore/dot).
 # Every captured name must equal ALLOWED_TABLE.
 TABLE_REF_PATTERN = re.compile(
-    r'\b(?:FROM|JOIN)\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)', re.IGNORECASE
+    r'\b(?:FROM|JOIN)\s+(?:ONLY\s+)?("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)',
+    re.IGNORECASE,
 )
 
 # A comma-separated table list in the FROM clause — `FROM clean_jobs, raw_jobs` — the
 # old-style (implicit) join. Matches FROM, a table (optionally with an alias), then a
 # comma. TABLE_REF_PATTERN alone can't catch the second table here, so this guards it.
 FROM_CLAUSE_LIST_PATTERN = re.compile(
-    r'\bFROM\s+(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s*,',
+    r'\bFROM\s+(?:ONLY\s+)?(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_.]*)(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s*,',
     re.IGNORECASE,
 )
 

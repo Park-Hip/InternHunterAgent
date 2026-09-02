@@ -65,11 +65,13 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           HEALTHCHECKS_URL: ${{ secrets.HEALTHCHECKS_URL }}
-          # Not read by any ingestion code path. src/core/config.py's Settings
-          # model declares these required-no-default and validates at import,
-          # so the CLI cannot start without them (verified: check B). These are
-          # placeholders to satisfy validation — never real credentials, because
-          # ingestion is deterministic and calls no LLM.
+          # AGENT_DATABASE_URL, GROQ_API_KEY, and Langfuse keys are not read by
+          # any ingestion code path. src/core/config.py's Settings model declares
+          # them required-no-default and validates at import, so the CLI cannot
+          # start without them (verified: check B). These are placeholders to
+          # satisfy validation — never real credentials, because ingestion is
+          # deterministic and calls no LLM.
+          AGENT_DATABASE_URL: "unused-by-ingestion"
           GROQ_API_KEY: "unused-by-ingestion"
           LANGFUSE_SECRET_KEY: "unused-by-ingestion"
           LANGFUSE_PUBLIC_KEY: "unused-by-ingestion"

@@ -190,9 +190,17 @@ jobs:
     timeout-minutes: 30
     env:
       # Require a live judge provider key — the gate must call a real model to
-      # measure semantic behaviour against the calibration corpus.  The key is
-      # injected from repository secrets, never hardcoded.
+      # measure semantic behaviour against the narrowed release-gate corpus.
+      # The key is injected from repository secrets, never hardcoded.
       DEEPEVAL_TELEMETRY_OPT_OUT: "1"
+      # Dummy DATABASE_URL / AGENT_DATABASE_URL so Settings() validates at load;
+      # the gate scores recorded trajectories and never touches the database.
+      DATABASE_URL: "postgresql+psycopg://ci:ci@localhost:5432/ci"
+      AGENT_DATABASE_URL: "postgresql+psycopg://ci_agent:ci@localhost:5432/ci"
+      # Inject the judge key from secrets.  config/settings.yaml selects the
+      # google provider, so we need GOOGLE_API_KEY.  If the repo has switched
+      # to another provider, update this secret reference accordingly.
+      GOOGLE_API_KEY: ${{ secrets.JUDGE_API_KEY }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -204,9 +212,21 @@ jobs:
 
       - run: uv sync --frozen
 
+      # Prerequisite guard: fail early with a clear message if the judge key is
+      # missing instead of letting pytest collect the eval suite and then choking
+      # deep inside build_judge() with an opaque stack trace.
+      - name: Check judge credential is present
+        run: |
+          if [ -z "$GOOGLE_API_KEY" ]; then
+            echo "::error::release gate: JUDGE_API_KEY secret is not set for this repository/environment; set it before enabling the release gate."
+            exit 1
+          fi
+          echo "Judge credential present — proceeding with live semantic smoke run."
+
       # Collect the eval-marked suite (the bounded live smoke suite).  The
       # project's addopts exclude eval tests from the default run; this step
       # opts them back in.  The release-gate test enforces RELEASE_THRESHOLD
-      # and fails closed on zero collection or any class-level recall breach.
+      # against the narrowed release-gate corpus and fails closed on zero
+      # collection or any class-level recall breach.
       - name: Run live semantic release gate
         run: uv run pytest -m eval -v

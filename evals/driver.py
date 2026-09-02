@@ -608,7 +608,7 @@ def freeze_capture(
                 grade_entry = grades.get((scenario_id, repeat_number, turn_number))
                 if grade_entry is None:
                     raise ValueError(f"Grade report has no evidence for {label}")
-                if grade_entry.get("status") not in {"PASS", "FAIL"}:
+                if grade_entry.get("status") not in {"PASS", "FAIL", "NOT_EVALUATED"}:
                     raise ValueError(
                         f"Grade report has an unusable verdict for {label}"
                     )

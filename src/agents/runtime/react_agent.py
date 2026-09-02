@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, cast
 
 from langchain.messages import HumanMessage
 
@@ -10,6 +10,7 @@ from src.agents.tracing.langfuse import (
     get_langfuse_client,
     langfuse_request_trace,
     record_agent_response_failure,
+    StreamLatency,
 )
 from src.core.logger import logger
 
@@ -38,7 +39,9 @@ class AgentRuntime:
             user_id=user_id,
         ) as trace_id:
             response = await self.agent.ainvoke(messages, config=config or None)
-            answer, failure_category = self._extract_answer_with_failure_category(response)
+            answer, failure_category = self._extract_answer_with_failure_category(
+                response
+            )
             if failure_category is not None:
                 logger.warning(
                     "agent_runtime.response_extraction_failed",
@@ -68,7 +71,9 @@ class AgentRuntime:
         query: str,
         user_id: str | None = None,
         session_id: str | None = None,
-    ) -> AsyncGenerator[dict[str, str | None], None]:
+        latency: StreamLatency | None = None,
+        completion_event: asyncio.Event | None = None,
+    ) -> AsyncGenerator[dict[str, object], None]:
         config = build_langfuse_config(
             entry_point="api:chat-stream",
         )
@@ -76,70 +81,94 @@ class AgentRuntime:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
 
-        trace_id: str | None = None
         events: asyncio.Queue[dict[str, str | None] | Exception] = asyncio.Queue(
             maxsize=1
         )
 
         async def _produce_stream() -> None:
             try:
-                async with langfuse_request_trace(
-                    entry_point="api:chat-stream",
-                    trace_name="agent-chat-stream",
-                    session_id=session_id,
-                    user_id=user_id,
-                ) as trace_id:
-                    async for chunk, metadata in self.agent.astream(
-                        messages,
-                        config=config or None,
-                        stream_mode="messages",
-                    ):
-                        if metadata.get("langgraph_node") != "model":
-                            continue
-                        content = getattr(chunk, "content", None)
-                        tool_call_chunks = getattr(chunk, "tool_call_chunks", None)
-                        if (
-                            not isinstance(content, str)
-                            or not content
-                            or tool_call_chunks
-                        ):
-                            continue
-                        await events.put({"type": "token", "text": content})
-                await events.put({"type": "complete", "trace_id": trace_id})
+                async for chunk, metadata in self.agent.astream(
+                    messages,
+                    config=config or None,
+                    stream_mode="messages",
+                ):
+                    if metadata.get("langgraph_node") != "model":
+                        continue
+                    content = getattr(chunk, "content", None)
+                    tool_call_chunks = getattr(chunk, "tool_call_chunks", None)
+                    if not isinstance(content, str) or not content or tool_call_chunks:
+                        continue
+                    await events.put({"type": "token", "text": content})
+                await events.put({"type": "complete"})
             except Exception as exc:
                 await events.put(exc)
 
         client = get_langfuse_client()
-        producer = asyncio.create_task(_produce_stream())
-        try:
-            while True:
-                event = await events.get()
-                if isinstance(event, Exception):
-                    raise event
-                if event["type"] == "complete":
-                    trace_id = event["trace_id"]
-                    break
-                yield event
-        finally:
-            # Flushing here - and never after the metadata yield - keeps the
-            # trace readable the moment its URL reaches the client, and still
-            # drains the exporter when the consumer disconnects and closes the
-            # generator instead of draining it.
-            if not producer.done():
-                producer.cancel()
-            await asyncio.gather(producer, return_exceptions=True)
-            if client is not None:
-                await asyncio.to_thread(client.flush)
+        async with langfuse_request_trace(
+            entry_point="api:chat-stream",
+            trace_name="agent-chat-stream",
+            session_id=session_id,
+            user_id=user_id,
+            on_span_started=latency.attach_span if latency is not None else None,
+        ) as trace_id:
+            producer = asyncio.create_task(_produce_stream())
+            stream_completed = False
+            provider_failed = False
+            try:
+                while True:
+                    event = await events.get()
+                    if isinstance(event, Exception):
+                        if completion_event is None:
+                            if latency is not None:
+                                latency.complete("error")
+                            stream_completed = True
+                            raise event
+                        provider_failed = True
+                        yield {"type": "runtime_error", "exception": event}
+                        await completion_event.wait()
+                        stream_completed = True
+                        break
+                    if event["type"] == "complete":
+                        if completion_event is None:
+                            if latency is not None:
+                                latency.complete("success")
+                            stream_completed = True
+                        break
+                    yield cast(dict[str, object], event)
 
-        trace_url = None
-        if trace_id is not None and client is not None:
-            trace_url = client.get_trace_url(trace_id=trace_id)
+                if completion_event is not None and not provider_failed:
+                    trace_url = None
+                    if trace_id is not None and client is not None:
+                        trace_url = client.get_trace_url(trace_id=trace_id)
+                    yield {
+                        "type": "metadata",
+                        "trace_id": trace_id,
+                        "trace_url": trace_url,
+                    }
+                    await completion_event.wait()
+                    stream_completed = True
+            finally:
+                if not producer.done():
+                    producer.cancel()
+                await asyncio.gather(producer, return_exceptions=True)
+                if not stream_completed:
+                    if completion_event is not None:
+                        await completion_event.wait()
+                    elif latency is not None:
+                        latency.complete("cancelled")
+                if client is not None:
+                    await asyncio.to_thread(client.flush)
 
-        yield {
-            "type": "metadata",
-            "trace_id": trace_id,
-            "trace_url": trace_url,
-        }
+        if completion_event is None:
+            trace_url = None
+            if trace_id is not None and client is not None:
+                trace_url = client.get_trace_url(trace_id=trace_id)
+
+            yield {
+                "type": "metadata",
+                "trace_id": trace_id,
+                "trace_url": trace_url,
+            }
 
     def _build_messages(self, query: str) -> dict[str, list[HumanMessage]]:
         return {"messages": [HumanMessage(content=query)]}

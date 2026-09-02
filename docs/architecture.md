@@ -574,10 +574,12 @@ The compiled graph was inspected directly to confirm which node emits the answer
 Re-confirm with a node-and-content probe if the LangChain version or the factory changes.
 
 **Metadata timing: trace data trails the answer.**
-Trace identity only exists after the run completes and Langfuse flushes, so it cannot lead the
-stream.
-The event order is therefore fixed: tokens first, then a single trailing metadata event once the
-trace link is resolvable, then a terminal done event.
+Trace identity is available while the request span is active, but the runtime emits its link only
+after it has finished producing answer tokens.
+For a successful stream, the event order is therefore fixed: tokens first, then one trailing
+metadata event, then a terminal done event.
+Latency completion and the Langfuse flush happen after that final done boundary, so the completed
+span includes the full user-visible stream lifecycle.
 The UI shows the answer immediately and the trace link appears a beat later.
 `session_id`, by contrast, is known before the run and is emitted as the **first** event so the
 client can pin the conversation key immediately.

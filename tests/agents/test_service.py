@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 import unittest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import ANY, MagicMock, AsyncMock, patch
 
 from src.agents.service import (
     BUSY_MESSAGE,
@@ -47,7 +47,9 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             },
         )
 
-    async def test_generate_agent_response_generates_session_id_when_omitted(self) -> None:
+    async def test_generate_agent_response_generates_session_id_when_omitted(
+        self,
+    ) -> None:
         runtime = AsyncMock()
         runtime.ainvoke.return_value = {
             "answer": "The current time is 14:01:52.",
@@ -93,7 +95,9 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
 
 class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
-    def test_stream_turn_timeout_uses_deterministic_fallback_for_missing_or_invalid_config(self) -> None:
+    def test_stream_turn_timeout_uses_deterministic_fallback_for_missing_or_invalid_config(
+        self,
+    ) -> None:
         self.assertEqual(get_stream_turn_timeout_seconds({}), 120)
         for invalid_value in (0, -1, True, "17"):
             with self.subTest(invalid_value=invalid_value):
@@ -104,9 +108,122 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
                     120,
                 )
         self.assertEqual(
-            get_stream_turn_timeout_seconds({"agent": {"stream_turn_timeout_seconds": 17}}),
+            get_stream_turn_timeout_seconds(
+                {"agent": {"stream_turn_timeout_seconds": 17}}
+            ),
             17,
         )
+
+    @patch("src.agents.service.StreamLatency")
+    async def test_stream_marks_ttft_only_when_a_visible_token_is_emitted(
+        self, mock_latency_class
+    ) -> None:
+        async def token_stream(**_kwargs):
+            yield {"type": "token", "text": "Visible answer"}
+            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=token_stream)
+        events = [
+            event
+            async for event in stream_agent_response(
+                query="what internships are available?",
+                runtime=runtime,
+                session_id="session-visible-token",
+            )
+        ]
+
+        self.assertEqual(
+            [event["type"] for event in events],
+            ["session", "token", "metadata", "done"],
+        )
+        mock_latency_class.return_value.mark_user_visible.assert_called_once_with()
+        mock_latency_class.return_value.complete.assert_called_once_with("success")
+        runtime.astream.assert_called_once_with(
+            query="what internships are available?",
+            session_id="session-visible-token",
+            user_id=None,
+            latency=mock_latency_class.return_value,
+            completion_event=ANY,
+        )
+
+    @patch("src.agents.service.StreamLatency")
+    async def test_error_before_a_visible_token_does_not_mark_ttft(
+        self, mock_latency_class
+    ) -> None:
+        async def failing_stream(**_kwargs):
+            raise RuntimeError("provider failed")
+            yield  # pragma: no cover - keeps this an async generator
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=failing_stream)
+        events = [
+            event
+            async for event in stream_agent_response(
+                query="what internships are available?",
+                runtime=runtime,
+                session_id="session-no-visible-token",
+            )
+        ]
+
+        self.assertEqual(
+            [event["type"] for event in events], ["session", "error", "done"]
+        )
+        mock_latency_class.return_value.mark_user_visible.assert_not_called()
+
+    @patch("src.agents.service.StreamLatency")
+    async def test_runtime_error_completes_after_the_error_and_done_events(
+        self, mock_latency_class
+    ) -> None:
+        async def failing_stream(*, completion_event, **_kwargs):
+            yield {
+                "type": "runtime_error",
+                "exception": RuntimeError("provider failed"),
+            }
+            await completion_event.wait()
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=failing_stream)
+        stream = stream_agent_response(
+            query="what internships are available?",
+            runtime=runtime,
+            session_id="session-runtime-error",
+        )
+
+        self.assertEqual((await anext(stream))["type"], "session")
+        self.assertEqual((await anext(stream))["type"], "error")
+        self.assertEqual((await anext(stream))["type"], "done")
+        mock_latency_class.return_value.complete.assert_not_called()
+        with self.assertRaises(StopAsyncIteration):
+            await anext(stream)
+        mock_latency_class.return_value.complete.assert_called_once_with("error")
+
+    async def test_disconnect_cleans_up_with_a_buffered_runtime_event(self) -> None:
+        second_event_buffered = asyncio.Event()
+        runtime_cancelled = asyncio.Event()
+
+        async def buffered_stream(**_kwargs):
+            try:
+                yield {"type": "token", "text": "first"}
+                yield {"type": "token", "text": "second"}
+                second_event_buffered.set()
+                await asyncio.Event().wait()
+            finally:
+                runtime_cancelled.set()
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=buffered_stream)
+        stream = stream_agent_response(
+            query="what internships are available?",
+            runtime=runtime,
+            session_id="session-buffered-disconnect",
+        )
+
+        self.assertEqual((await anext(stream))["type"], "session")
+        self.assertEqual((await anext(stream))["text"], "first")
+        await asyncio.wait_for(second_event_buffered.wait(), timeout=0.1)
+        await asyncio.wait_for(stream.aclose(), timeout=0.1)
+        self.assertTrue(runtime_cancelled.is_set())
 
     @patch("src.agents.service.get_stream_turn_timeout_seconds", return_value=0.01)
     @patch("src.agents.service.logger")
@@ -180,8 +297,35 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
         await asyncio.wait_for(cleaned_up.wait(), timeout=0.3)
 
+    @patch("src.agents.service.get_stream_turn_timeout_seconds", return_value=0.01)
+    @patch("src.agents.service.StreamLatency")
+    async def test_deadline_completes_as_error_after_done(
+        self, mock_latency_class, _mock_timeout
+    ) -> None:
+        async def blocked_stream(**_kwargs):
+            await asyncio.Event().wait()
+            yield  # pragma: no cover
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=blocked_stream)
+        stream = stream_agent_response(
+            query="what internships are available?",
+            runtime=runtime,
+            session_id="session-deadline-outcome",
+        )
+
+        self.assertEqual((await anext(stream))["type"], "session")
+        self.assertEqual((await anext(stream))["type"], "error")
+        self.assertEqual((await anext(stream))["type"], "done")
+        mock_latency_class.return_value.complete.assert_not_called()
+        with self.assertRaises(StopAsyncIteration):
+            await anext(stream)
+        mock_latency_class.return_value.complete.assert_called_once_with("error")
+
     @patch("src.agents.service.logger")
-    async def test_stream_failure_logs_and_yields_generic_message(self, mock_logger) -> None:
+    async def test_stream_failure_logs_and_yields_generic_message(
+        self, mock_logger
+    ) -> None:
         async def failing_stream(**_kwargs):
             raise RuntimeError("db is down")
             yield  # pragma: no cover — makes this an async generator
@@ -214,7 +358,9 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[-1], {"type": "done"})
 
         mock_logger.error.assert_called_once()
-        self.assertEqual(mock_logger.error.call_args.args[0], "stream_agent_response.failed")
+        self.assertEqual(
+            mock_logger.error.call_args.args[0], "stream_agent_response.failed"
+        )
         kwargs = mock_logger.error.call_args.kwargs
         self.assertEqual(kwargs["session_id"], "session-1")
         self.assertIn("db is down", kwargs["error"])

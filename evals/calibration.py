@@ -13,6 +13,7 @@ from evals.scenarios import load_scenarios
 
 CALIBRATION_PATH = Path(__file__).with_name("calibration_v7.yaml")
 CALIBRATION_V8_PATH = Path(__file__).with_name("calibration_v8.yaml")
+RELEASE_GATE_PATH = Path(__file__).with_name("calibration_release_gate.yaml")
 # Legacy aggregate threshold chosen by the recall-first sweep against the original
 # v7 corpus (n=36, judge google/gemma-4-31b-it); see ADR-0047. It is retained for
 # the aggregate "overall" view only. Per-class release thresholds supersede this

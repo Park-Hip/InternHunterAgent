@@ -220,6 +220,22 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
+    def test_rejects_dangerous_function_before_dollar_quoted_literal(self) -> None:
+        result = validate_sql(
+            "SELECT 1 AS x$tag$, lo_import('/etc/passwd'), $tag$foo$tag$ FROM clean_jobs"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
+    def test_rejects_escape_string_unicode_escaped_large_object_import(self) -> None:
+        result = validate_sql(
+            "SELECT U&\"lo!005fimport\" UESCAPE E'!'('/etc/passwd') FROM clean_jobs"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertTrue(result.reason)
+
     def test_rejects_unicode_escaped_system_table(self) -> None:
         result = validate_sql('SELECT * FROM U&"pg\\005fclass"')
 

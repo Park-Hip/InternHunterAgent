@@ -37,8 +37,8 @@ TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # SQL string literals: single-quoted strings (with escaped quotes) and PostgreSQL
 # dollar-quoted strings. Their contents must not participate in safety checks.
 SQL_LITERAL_OR_UNICODE_IDENTIFIER_PATTERN = re.compile(
-    r"'(?:[^']|'')*'|(?P<delimiter>\$(?:[^\W\d]\w*)?\$).*?(?P=delimiter)|"
-    r"U&\"(?P<identifier>(?:[^\"]|\"\")*)\"(?:\s+UESCAPE\s+'(?P<escape>(?:[^']|'')*)')?",
+    r"'(?:[^']|'')*'|(?<![\w$])(?P<delimiter>\$(?:[^\W\d]\w*)?\$).*?(?P=delimiter)|"
+    r"U&\"(?P<identifier>(?:[^\"]|\"\")*)\"(?:\s+UESCAPE\s+(?:E)?'(?P<escape>(?:[^']|'')*)')?",
     re.DOTALL | re.IGNORECASE,
 )
 DELIMITED_IDENTIFIER_PATTERN = re.compile(r'"(?:[^"]|"")*"')

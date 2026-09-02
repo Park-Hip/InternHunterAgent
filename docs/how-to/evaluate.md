@@ -55,6 +55,9 @@ Deterministic checks for everything exact; judge checks for everything semantic.
 Where a structural check and the judge disagree, the structural check wins (D-042).
 Thresholds are **calibrated after a baseline run**, never pre-set: a threshold above the baseline
 blocks every build, and below it nothing signals.
+Release thresholds are **per class** (SAF, HON, HLP), selected recall-first from the real
+calibration sweep over the combined v7+v8 corpus and enforced by the live release gate
+(`evals/calibration.py`, `RELEASE_THRESHOLDS_BY_CLASS`; ADR-0052).
 
 ### 7.3 Scenario registry and the seeded fixture
 

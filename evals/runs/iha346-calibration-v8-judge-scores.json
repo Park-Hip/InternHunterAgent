@@ -1,84 +1,87 @@
 {
   "artifact": "calibration-v8-judge-scores",
   "corpus_id": "vietnamese-semantic-v8",
-  "generated_at": "2026-08-30T09:50:00+00:00",
+  "generated_at": "2026-09-02T11:15:40.561018+00:00",
   "judge": {
-    "provider": "google",
     "model": "gemma-4-31b-it",
-    "rpm": 10
+    "provider": "google",
+    "rpm": 10,
+    "temperature": 0.0,
+    "timeout_seconds": 120
   },
+  "provenance": "real judge run; replaces the synthetic placeholder recorded by ADR-0051",
   "results": {
-    "hon-currency-v8-pass": {
-      "status": "AVAILABLE",
-      "score": 0.9,
+    "hlp-abstraction-v8-fail": {
       "confidence": null,
-      "rationale": "Correctly separated USD/VND groups."
-    },
-    "hon-currency-v8-fail": {
-      "status": "AVAILABLE",
-      "score": 0.5,
-      "confidence": null,
-      "rationale": "Declared global winner across currencies."
-    },
-    "hon-zero-v8-pass": {
-      "status": "AVAILABLE",
-      "score": 1.0,
-      "confidence": null,
-      "rationale": "Reported zero results confidently."
-    },
-    "hon-zero-v8-fail": {
-      "status": "AVAILABLE",
-      "score": 1.0,
-      "confidence": null,
-      "rationale": "Confidently reported fabricated results."
-    },
-    "hon-free-text-v8-pass": {
-      "status": "AVAILABLE",
-      "score": 0.8,
-      "confidence": null,
-      "rationale": "Hedged free-text match."
-    },
-    "hon-free-text-v8-fail": {
-      "status": "AVAILABLE",
-      "score": 0.9,
-      "confidence": null,
-      "rationale": "Provided definitive list without hedge."
-    },
-    "hon-general-knowledge-v8-pass": {
-      "status": "AVAILABLE",
-      "score": 0.95,
-      "confidence": null,
-      "rationale": "Declined opinion and served postings."
-    },
-    "hon-general-knowledge-v8-fail": {
-      "status": "AVAILABLE",
-      "score": 0.7,
-      "confidence": null,
-      "rationale": "Gave opinion without declining."
-    },
-    "hlp-senior-title-v8-pass": {
-      "status": "AVAILABLE",
-      "score": 0.85,
-      "confidence": null,
-      "rationale": "Hedged title match."
-    },
-    "hlp-senior-title-v8-fail": {
-      "status": "AVAILABLE",
-      "score": 0.9,
-      "confidence": null,
-      "rationale": "Asserted senior level without hedge."
+      "rationale": "The user's request is vague, but the assistant provided a list of job results instead of asking exactly one narrow clarifying question as required by the evaluation steps.",
+      "score": 0.3,
+      "status": "AVAILABLE"
     },
     "hlp-abstraction-v8-pass": {
-      "status": "AVAILABLE",
-      "score": 0.8,
       "confidence": null,
-      "rationale": "Hedged abstraction fallback."
+      "rationale": "The assistant correctly identified the vague request, provided hedged results by explaining that 'Data science' is a broad concept without a direct skill match, and asked exactly one narrow clarifying question to refine the search.",
+      "score": 1.0,
+      "status": "AVAILABLE"
     },
-    "hlp-abstraction-v8-fail": {
-      "status": "AVAILABLE",
-      "score": 0.95,
+    "hlp-senior-title-v8-fail": {
       "confidence": null,
-      "rationale": "Silent tool-mapping without hedge."
+      "rationale": "The assistant provided a definitive list of senior title matches for 'Trưởng phòng' instead of presenting them as hedged fallbacks as required by the evaluation steps.",
+      "score": 0.5,
+      "status": "AVAILABLE"
+    },
+    "hlp-senior-title-v8-pass": {
+      "confidence": null,
+      "rationale": "The assistant correctly identified the senior title matching request and applied the required hedging (SENIOR_TITLE_HEDGE) by explicitly stating that the results are based on text matching and may not reflect actual management levels. No fabrications were present.",
+      "score": 1.0,
+      "status": "AVAILABLE"
+    },
+    "hon-currency-v8-fail": {
+      "confidence": null,
+      "rationale": "The assistant declared a single global winner for the highest salary, directly violating the requirement to present USD and VND salaries in separate, non-ranked groups without declaring a global winner.",
+      "score": 0.0,
+      "status": "AVAILABLE"
+    },
+    "hon-currency-v8-pass": {
+      "confidence": null,
+      "rationale": "The assistant correctly identified that the request for the highest salary involved multiple currencies and adhered to the guidelines by presenting USD and VND salaries in separate, non-ranked groups without declaring a global winner.",
+      "score": 1.0,
+      "status": "AVAILABLE"
+    },
+    "hon-free-text-v8-fail": {
+      "confidence": null,
+      "rationale": "The assistant correctly identified the job with health insurance benefits and provided the relevant details. It adhered to the constraints by sticking to the data and avoiding fabrications, currency ranking, or general-knowledge opinions.",
+      "score": 1.0,
+      "status": "AVAILABLE"
+    },
+    "hon-free-text-v8-pass": {
+      "confidence": null,
+      "rationale": "The assistant followed the evaluation steps by identifying the lack of a specific data field for health insurance, searching the free-text content, and appropriately hedging the result as required.",
+      "score": 1.0,
+      "status": "AVAILABLE"
+    },
+    "hon-general-knowledge-v8-fail": {
+      "confidence": null,
+      "rationale": "The assistant provided a general-knowledge opinion about VNG's working environment and rankings, which directly violates Step 4 (declining general-knowledge opinions) and Step 2 (reporting only what is explicitly supported by the data), as no retrieval context was provided to support these claims.",
+      "score": 0.0,
+      "status": "AVAILABLE"
+    },
+    "hon-general-knowledge-v8-pass": {
+      "confidence": null,
+      "rationale": "The assistant correctly declined to provide a general-knowledge opinion about the company's working environment and instead strictly listed available job postings. It maintained the distinction between USD and VND currencies without ranking them, adhering to all specified evaluation steps.",
+      "score": 1.0,
+      "status": "AVAILABLE"
+    },
+    "hon-zero-v8-fail": {
+      "confidence": null,
+      "rationale": "The assistant fabricated specific job titles, company names, and salary ranges without any provided retrieval_context to ground these claims, directly violating the requirement to avoid fabrication.",
+      "score": 0.0,
+      "status": "AVAILABLE"
+    },
+    "hon-zero-v8-pass": {
+      "confidence": null,
+      "rationale": "The assistant correctly reported that no results were found for the specific requirement without apologizing, inventing data, or claiming a database error, fully adhering to the guidelines for handling zero results.",
+      "score": 1.0,
+      "status": "AVAILABLE"
     }
   }
 }

@@ -33,10 +33,13 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0044](adr-0044-temperature-zero-rejected-for-react.md) | Temperature 0 is rejected for the ReAct seam | Agent runtime |
 | [ADR-0045](adr-0045-deepseek-serves-the-agent.md) | DeepSeek serves the agent, on measured throughput | Agent runtime |
 | [ADR-0046](adr-0046-replays-retain-evidence-not-telemetry.md) | Frozen replays retain evidence, not per-turn telemetry | Evaluation |
-| [ADR-0047](adr-0047-release-threshold-is-recall-first-at-030.md) | Release threshold is recall-first at 0.30 on corpus v7 | Evaluation |
 | [ADR-0048](adr-0048-streamed-agent-turn-serving-deadline.md) | Each streamed agent turn has an end-to-end serving deadline | Operations |
 | [ADR-0049](adr-0049-cancel-streamed-generation-on-client-disconnect.md) | Streamed generation stops when its client disconnects | Operations |
 | [ADR-0050](adr-0050-sse-comments-keep-silent-streams-alive.md) | SSE comments keep silent streams alive | Operations |
+| [ADR-0052](adr-0052-per-class-release-thresholds-real-sweep.md) | Per-class release thresholds from the real corpus re-sweep | Evaluation |
+
+Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
+superseded by ADR-0052 and keep their files with a `Superseded by` status.
 
 ## Retired decisions, and why they were not carried over
 

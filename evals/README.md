@@ -94,6 +94,19 @@ The scorer writes results into the ignored raw capture and can resume after an i
 It spends judge quota and can take about an hour for a full registry because it deliberately throttles judge calls.
 It does not overwrite a human calibration label or alter the deterministic grade.
 
+Score the calibration corpus with the real judge and emit the per-class agreement report.
+This is the supported writer of calibration judge evidence (`evals/runs/*-judge-scores.json` plus the
+agreement report); it is resumable and never writes back into the human labels.
+
+```powershell
+uv run python -m evals.calibration_score --corpus v7 --corpus v8 --out evals/runs/iha-v8-judge-combined-judge-scores.json
+uv run python -m evals.calibration_score --agreement-of evals/runs/iha-v8-judge-combined-judge-scores.json --out evals/runs/iha-v8-judge-combined-agreement-report.json
+```
+
+The agreement report selects one release threshold per class (SAF/HON/HLP plus the pooled overall bar)
+recall-first, and reports precision, false-pass counts, and 95% Wilson intervals. The live gate
+(`uv run pytest -m eval -v`) enforces exactly those per-class bars against the combined corpus.
+
 Freeze the capture, replay it, and generate a local viewer.
 
 ```powershell
@@ -141,7 +154,10 @@ Widen a rule only through a proposal; registry lexicon entries live in [`scenari
 | `execution_accuracy.py` | Compares generated and reference SQL against the frozen fixture. |
 | `grader.py` | Produces independent deterministic check outcomes and the first failing seam. |
 | `score.py` | Runs the resumable judge pass over a recorded capture. |
-| `calibration_v6.yaml` | Versioned human-labelled Vietnamese semantic corpus. |
+| `calibration.py` | Loads, merges, sweeps, and reports the versioned human-labelled corpora; owns the per-class release thresholds. |
+| `calibration_v7.yaml` / `calibration_v8.yaml` | Immutable, human-labelled Vietnamese semantic corpora (v7 = calibration, v8 = independent holdout). |
+| `calibration_score.py` | Resumably scores the corpora with the real judge and emits judge-scores + agreement-report artifacts. |
+| `holdout.py` | Compatibility + independent-holdout view over the versioned corpora. |
 | `replay.py` | CI's provider-free replay gate. Discovers every artifact in `replays/`. |
 | `viewer.py` | Local HTML evidence viewer. |
 | `Instrument_Report.md` | Dated baseline, calibration, disagreement, and unresolved-case record. |

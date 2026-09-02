@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from evals.calibration import calibration_report, load_calibration
 from evals.grader import Evidence
+
+# The independent semantic holdout: 12 cases authored with
+# ``source: independently_authored_holdout`` against the six v7 disagreements
+# (ADR-0051). It is never used to re-derive a human label.
+SEMANTIC_HOLDOUT_PATH = Path(__file__).with_name("calibration_v8.yaml")
 
 
 @dataclass(frozen=True)
@@ -27,6 +34,26 @@ def _load_holdout() -> tuple[HoldoutCase, ...]:
 
 
 HOLDOUT = _load_holdout()
+
+
+def load_semantic_holdout() -> dict[str, Any]:
+    """Return the independent semantic holdout corpus (v8, 12 cases)."""
+    return load_calibration(SEMANTIC_HOLDOUT_PATH)
+
+
+def holdout_report(
+    results: dict[str, dict],
+    threshold: float | None = None,
+    *,
+    thresholds_by_class: dict[str, float] | None = None,
+) -> dict:
+    """Score-only view of the holdout corpus against human labels."""
+    return calibration_report(
+        load_semantic_holdout(),
+        results,
+        threshold,
+        thresholds_by_class=thresholds_by_class,
+    )
 
 
 def calibrate_holdout(results: dict[str, dict], threshold: float | None = None) -> dict:

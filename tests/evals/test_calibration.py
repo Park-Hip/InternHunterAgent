@@ -193,6 +193,31 @@ def test_v7_remains_unchanged_after_v8_addition() -> None:
     assert v7_ids.isdisjoint(v8_ids)
 
 
+def test_calibration_corpora_are_immutable_by_content_hash() -> None:
+    """Pin the committed calibration labels byte-for-byte.
+
+    Per-class release thresholds are derived from these human labels. A silent
+    label rewrite would move the goalposts after the threshold is published, so
+    the two corpora are pinned by SHA-256; any edit must be an explicit,
+    reviewed change that updates this pin in the same pull request.
+    """
+    from pathlib import Path
+    import hashlib
+
+    pinned = {
+        "evals/calibration_v7.yaml":
+            "d7dba7967e0c2e664aa911820c9da9a890ac2de12ca1be95a89a911b08e403e6",
+        "evals/calibration_v8.yaml":
+            "5299446ece8d38532b6357f2e27c13607576d093b28b4cb40b9d02e93b4dbd7d",
+    }
+    for rel, want in pinned.items():
+        digest = hashlib.sha256(Path(rel).read_bytes()).hexdigest()
+        assert digest == want, (
+            f"{rel} content changed ({digest}); the calibration corpus is "
+            "immutable — update the pinned hash deliberately, never silently"
+        )
+
+
 def test_calibration_report_exposes_disagreements(tmp_path) -> None:
     path = tmp_path / "disagree.yaml"
     path.write_text(
@@ -280,3 +305,95 @@ def test_calibration_report_includes_unavailable_and_disagreement_counts() -> No
     report = calibration_report(corpus, first_six, threshold=0.5)
     assert len(report["unavailable_case_ids"]) == 6
     assert report["groups"]["overall"]["sample_size"] == 6
+
+
+def test_load_combined_calibration_merges_v7_and_v8() -> None:
+    combined = calibration.load_combined_calibration()
+
+    assert combined["corpus_id"] == (
+        "vietnamese-semantic-v7+vietnamese-semantic-v8"
+    )
+    assert len(combined["cases"]) == 56
+    ids = [case["id"] for case in combined["cases"]]
+    assert len(ids) == len(set(ids))
+    assert {case["scenario_id"].split("-", 1)[0] for case in combined["cases"]} == {
+        "SAF", "HON", "HLP",
+    }
+
+
+def test_select_per_class_thresholds_is_recall_first_per_class() -> None:
+    corpus = {
+        "schema_version": 1,
+        "corpus_id": "sweep-thresholds-test",
+        "cases": [
+            {"id": "s1", "scenario_id": "SAF-T-1", "language": "vi",
+             "prompt_version": "v6", "source": "t",
+             "trajectory": [{"question": "q", "answer": "a"}],
+             "human": {"overall": "PASS", "rationale": "r"}},
+            {"id": "s2", "scenario_id": "SAF-T-1", "language": "vi",
+             "prompt_version": "v6", "source": "t",
+             "trajectory": [{"question": "q", "answer": "a"}],
+             "human": {"overall": "FAIL", "rationale": "r"}},
+            {"id": "h1", "scenario_id": "HON-T-1", "language": "vi",
+             "prompt_version": "v6", "source": "t",
+             "trajectory": [{"question": "q", "answer": "a"}],
+             "human": {"overall": "PASS", "rationale": "r"}},
+            {"id": "h2", "scenario_id": "HON-T-1", "language": "vi",
+             "prompt_version": "v6", "source": "t",
+             "trajectory": [{"question": "q", "answer": "a"}],
+             "human": {"overall": "FAIL", "rationale": "r"}},
+        ],
+    }
+    results = {
+        "s1": {"status": "AVAILABLE", "score": 0.9},
+        "s2": {"status": "AVAILABLE", "score": 0.1},
+        "h1": {"status": "AVAILABLE", "score": 0.4},
+        "h2": {"status": "AVAILABLE", "score": 0.1},
+    }
+    selection = calibration.select_per_class_thresholds(
+        corpus, results, classes=("SAF", "HON")
+    )
+
+    thresholds = selection["thresholds_by_class"]
+    # SAF keeps recall 1.0 through 0.9 (its PASS case scores 0.9); HON through 0.4.
+    assert thresholds["SAF"] == 0.9
+    assert thresholds["HON"] == 0.4
+    # Overall recall is bound by the lowest PASS score (0.4 here).
+    assert thresholds["overall"] == 0.4
+    assert len(selection["sweep"]) == 10
+
+
+def test_build_agreement_report_attaches_uncertainty_bounds() -> None:
+    corpus = {
+        "schema_version": 1,
+        "corpus_id": "agreement-test",
+        "cases": [
+            {"id": "a", "scenario_id": "SAF-T-1", "language": "vi",
+             "prompt_version": "v6", "source": "t",
+             "trajectory": [{"question": "q", "answer": "a"}],
+             "human": {"overall": "PASS", "rationale": "r"}},
+            {"id": "b", "scenario_id": "SAF-T-1", "language": "vi",
+             "prompt_version": "v6", "source": "t",
+             "trajectory": [{"question": "q", "answer": "a"}],
+             "human": {"overall": "FAIL", "rationale": "r"}},
+        ],
+    }
+    results = {
+        "a": {"status": "AVAILABLE", "score": 0.9},
+        "b": {"status": "AVAILABLE", "score": 0.1},
+    }
+    report = calibration.build_agreement_report(corpus, results)
+
+    assert set(report) == {
+        "thresholds_by_class", "threshold_sweep",
+        "report_at_release_thresholds", "uncertainty",
+    }
+    ci = report["uncertainty"]["class:SAF"]["recall_95ci"]
+    assert isinstance(ci, list) and len(ci) == 2 and 0.0 <= ci[0] <= ci[1] <= 1.0
+
+
+def test_wilson_interval_bounds_extremes() -> None:
+    lo, hi = calibration.wilson_interval(0, 5)
+    assert lo == 0.0 and hi < 1.0
+    lo, hi = calibration.wilson_interval(5, 5)
+    assert lo > 0.0 and hi == 1.0

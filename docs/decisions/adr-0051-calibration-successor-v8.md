@@ -1,6 +1,6 @@
 # Calibration successor v8: grow by disagreement and risk
 
-> **Status:** Proposed · **Decided:** 2026-08-30
+> **Status:** Superseded by ADR-0052 · **Decided:** 2026-08-30
 
 ## Context
 

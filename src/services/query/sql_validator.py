@@ -37,9 +37,11 @@ TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # SQL string literals: single-quoted strings (with escaped quotes) and PostgreSQL
 # dollar-quoted strings. Their contents must not participate in safety checks.
 STRING_LITERAL_PATTERN = re.compile(
-    r"'(?:[^']|'')*'|(?P<delimiter>\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$).*?(?P=delimiter)",
+    r"'(?:[^']|'')*'|(?P<delimiter>\$(?:[^\W\d]\w*)?\$).*?(?P=delimiter)",
     re.DOTALL,
 )
+DELIMITED_IDENTIFIER_PATTERN = re.compile(r'"(?:[^"]|"")*"')
+UNICODE_IDENTIFIER_PATTERN = re.compile(r'U&"(?P<identifier>(?:[^"]|"")*)"', re.IGNORECASE)
 
 # Server-side functions that can read files, connect to other services, or block a
 # connection. Match function calls only, including double-quoted identifiers.
@@ -63,6 +65,42 @@ FROM_CLAUSE_LIST_PATTERN = re.compile(
 
 def _invalid(sql: str, reason: str) -> ValidationResult:
     return ValidationResult(valid=False, sql=sql, reason=reason)
+
+
+def _decode_unicode_identifier(match: re.Match[str]) -> str:
+    identifier = match.group("identifier")
+    decoded: list[str] = []
+    index = 0
+    while index < len(identifier):
+        if identifier[index] != "\\":
+            decoded.append(identifier[index])
+            index += 1
+            continue
+
+        if index + 1 < len(identifier) and identifier[index + 1] == "\\":
+            decoded.append("\\")
+            index += 2
+            continue
+
+        hex_digits = identifier[index + 1 : index + 5]
+        if len(hex_digits) == 4 and all(char in "0123456789abcdefABCDEF" for char in hex_digits):
+            decoded.append(chr(int(hex_digits, 16)))
+            index += 5
+            continue
+
+        if identifier[index + 1 : index + 2] == "+":
+            hex_digits = identifier[index + 2 : index + 8]
+            if len(hex_digits) == 6 and all(
+                char in "0123456789abcdefABCDEF" for char in hex_digits
+            ):
+                decoded.append(chr(int(hex_digits, 16)))
+                index += 8
+                continue
+
+        decoded.append("\\")
+        index += 1
+
+    return f'"{"".join(decoded)}"'
 
 
 def validate_sql(sql: str) -> ValidationResult:
@@ -108,15 +146,18 @@ def validate_sql(sql: str) -> ValidationResult:
     # a real keyword or table reference by the checks below.
     masked = STRING_LITERAL_PATTERN.sub("''", statement)
 
+    normalized = UNICODE_IDENTIFIER_PATTERN.sub(_decode_unicode_identifier, masked)
+
+    # Block functions that can access server files, connect to remote services, or sleep.
+    if SERVER_SIDE_FUNCTION_PATTERN.search(normalized):
+        return _invalid(statement, "Server-side function calls are not allowed")
+
     # Split into whole words and reject any that is a denylisted verb (case-insensitive).
-    tokens = {token.upper() for token in TOKEN_PATTERN.findall(masked)}
+    token_masked = DELIMITED_IDENTIFIER_PATTERN.sub('""', masked)
+    tokens = {token.upper() for token in TOKEN_PATTERN.findall(token_masked)}
     forbidden = sorted(DENYLISTED_KEYWORDS & tokens)
     if forbidden:
         return _invalid(statement, f"Unsafe keyword(s) detected: {', '.join(forbidden)}")
-
-    # Block functions that can access server files, connect to remote services, or sleep.
-    if SERVER_SIDE_FUNCTION_PATTERN.search(masked):
-        return _invalid(statement, "Server-side function calls are not allowed")
 
     # Block access to Postgres catalog/metadata tables.
     if SYSTEM_TABLE_PATTERN.search(statement):

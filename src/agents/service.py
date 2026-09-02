@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from collections.abc import AsyncGenerator
-from typing import Mapping, TypeVar, TypedDict
+from typing import Literal, Mapping, TypeVar, TypedDict
 
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing.langfuse import StreamLatency
@@ -97,7 +97,7 @@ async def stream_agent_response(
         latency=latency,
         completion_event=completion_event,
     )
-    runtime_events: asyncio.Queue[dict[str, str | None] | Exception | None] = (
+    runtime_events: asyncio.Queue[dict[str, object] | Exception | None] = (
         asyncio.Queue(maxsize=1)
     )
 
@@ -111,7 +111,9 @@ async def stream_agent_response(
             await runtime_events.put(None)
 
     detach_runtime_task = False
-    stream_succeeded = False
+    deferred_runtime_cleanup = False
+    done_emitted = False
+    stream_outcome: Literal["success", "error"] | None = None
     runtime_task = asyncio.create_task(consume_runtime_stream())
     try:
         while True:
@@ -135,6 +137,12 @@ async def stream_agent_response(
                 break
             if isinstance(event, Exception):
                 raise event
+            if event["type"] == "runtime_error":
+                exception = event["exception"]
+                if not isinstance(exception, Exception):
+                    raise RuntimeError("Runtime failed without an exception")
+                deferred_runtime_cleanup = True
+                raise exception
             if event["type"] == "metadata":
                 metadata_event = event
                 if not saw_token:
@@ -164,7 +172,9 @@ async def stream_agent_response(
 
         if not metadata_emitted:
             yield metadata_event
-        stream_succeeded = True
+        stream_outcome = "success"
+        done_emitted = True
+        yield {"type": "done"}
     except AgentTurnDeadlineExceededError as exc:
         logger.error(
             "stream_agent_response.failed",
@@ -179,7 +189,10 @@ async def stream_agent_response(
             "code": PROVIDER_BUSY_ERROR_CODE,
             "retryable": True,
         }
+        done_emitted = True
+        yield {"type": "done"}
     except Exception as exc:
+        stream_outcome = "error"
         provider_busy = classify_provider_busy_error(exc)
         logger.error(
             "stream_agent_response.failed",
@@ -202,16 +215,15 @@ async def stream_agent_response(
                 "code": INTERNAL_ERROR_CODE,
                 "retryable": False,
             }
-    finally:
-        if not detach_runtime_task and not stream_succeeded:
-            if not runtime_task.done():
-                runtime_task.cancel()
-            await asyncio.gather(runtime_task, return_exceptions=True)
-
-    try:
+        done_emitted = True
         yield {"type": "done"}
     finally:
-        if stream_succeeded:
-            latency.complete("success")
-            completion_event.set()
+        if stream_outcome is not None and done_emitted:
+            latency.complete(stream_outcome)
+            if stream_outcome == "success" or deferred_runtime_cleanup:
+                completion_event.set()
+                await asyncio.gather(runtime_task, return_exceptions=True)
+        elif not detach_runtime_task:
+            if not runtime_task.done():
+                runtime_task.cancel()
             await asyncio.gather(runtime_task, return_exceptions=True)

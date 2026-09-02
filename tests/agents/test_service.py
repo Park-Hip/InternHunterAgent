@@ -160,6 +160,30 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([event["type"] for event in events], ["session", "error", "done"])
         mock_latency_class.return_value.mark_user_visible.assert_not_called()
 
+    @patch("src.agents.service.StreamLatency")
+    async def test_runtime_error_completes_after_the_error_and_done_events(
+        self, mock_latency_class
+    ) -> None:
+        async def failing_stream(*, completion_event, **_kwargs):
+            yield {"type": "runtime_error", "exception": RuntimeError("provider failed")}
+            await completion_event.wait()
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=failing_stream)
+        stream = stream_agent_response(
+            query="what internships are available?",
+            runtime=runtime,
+            session_id="session-runtime-error",
+        )
+
+        self.assertEqual((await anext(stream))["type"], "session")
+        self.assertEqual((await anext(stream))["type"], "error")
+        self.assertEqual((await anext(stream))["type"], "done")
+        mock_latency_class.return_value.complete.assert_not_called()
+        with self.assertRaises(StopAsyncIteration):
+            await anext(stream)
+        mock_latency_class.return_value.complete.assert_called_once_with("error")
+
     @patch("src.agents.service.get_stream_turn_timeout_seconds", return_value=0.01)
     @patch("src.agents.service.logger")
     async def test_stream_deadline_cancels_runtime_and_yields_one_safe_error_then_done(

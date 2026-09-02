@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 import unittest
@@ -234,6 +235,7 @@ class _MultiTurnRuntime:
         session_id: str,
         user_id: str | None = None,
         latency=None,
+        completion_event: asyncio.Event | None = None,
     ):
         self.call_count += 1
         self.calls.append((query, session_id, user_id))

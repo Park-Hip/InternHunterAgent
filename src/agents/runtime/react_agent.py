@@ -71,7 +71,7 @@ class AgentRuntime:
         session_id: str | None = None,
         latency: StreamLatency | None = None,
         completion_event: asyncio.Event | None = None,
-    ) -> AsyncGenerator[dict[str, str | None], None]:
+    ) -> AsyncGenerator[dict[str, object], None]:
         config = build_langfuse_config(
             entry_point="api:chat-stream",
         )
@@ -111,14 +111,21 @@ class AgentRuntime:
         ) as trace_id:
             producer = asyncio.create_task(_produce_stream())
             stream_completed = False
+            provider_failed = False
             try:
                 while True:
                     event = await events.get()
                     if isinstance(event, Exception):
-                        if latency is not None:
-                            latency.complete("error")
+                        if completion_event is None:
+                            if latency is not None:
+                                latency.complete("error")
+                            stream_completed = True
+                            raise event
+                        provider_failed = True
+                        yield {"type": "runtime_error", "exception": event}
+                        await completion_event.wait()
                         stream_completed = True
-                        raise event
+                        break
                     if event["type"] == "complete":
                         if completion_event is None:
                             if latency is not None:
@@ -127,7 +134,7 @@ class AgentRuntime:
                         break
                     yield event
 
-                if completion_event is not None:
+                if completion_event is not None and not provider_failed:
                     trace_url = None
                     if trace_id is not None and client is not None:
                         trace_url = client.get_trace_url(trace_id=trace_id)

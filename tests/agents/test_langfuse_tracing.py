@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -117,6 +118,31 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
 
 
 @pytest.mark.asyncio
+async def test_stream_latency_updates_the_bound_request_span_across_tasks() -> None:
+    client = MagicMock()
+    span = MagicMock()
+    latency = langfuse.StreamLatency()
+    latency.attach_span(span)
+
+    async def mark_visible() -> None:
+        latency.mark_user_visible()
+
+    async def mark_complete() -> None:
+        latency.complete("success")
+
+    with patch.object(langfuse, "get_langfuse_client", return_value=client):
+        await asyncio.create_task(mark_visible())
+        await asyncio.create_task(mark_complete())
+
+    assert span.update.call_count == 2
+    client.update_current_span.assert_not_called()
+    metadata = span.update.call_args.kwargs["metadata"]
+    assert metadata["user_visible_ttft_ms"] is not None
+    assert metadata["stream_completion_ms"] is not None
+    assert metadata["outcome"] == "success"
+
+
+@pytest.mark.asyncio
 async def test_request_trace_tags_an_evaluation_scenario_and_repeat() -> None:
     """`evals/harness.py` names `scenario_id` and `repeat` at this call site.
 
@@ -167,6 +193,24 @@ async def test_request_trace_is_a_no_op_when_tracing_is_disabled() -> None:
 def test_build_langfuse_config_rejects_unknown_entry_points() -> None:
     with pytest.raises(ValueError, match="Unsupported Langfuse entry point"):
         langfuse.build_langfuse_config(entry_point="api:debug")
+
+
+def test_stream_latency_records_error_without_visible_ttft() -> None:
+    client = MagicMock()
+    latency = langfuse.StreamLatency()
+
+    with patch.object(langfuse, "get_langfuse_client", return_value=client):
+        latency.complete("error")
+
+    metadata = client.update_current_span.call_args.kwargs["metadata"]
+    assert metadata["latency_unit"] == "ms"
+    assert metadata["server_e2e_ms"] == metadata["stream_completion_ms"]
+    assert metadata["server_e2e_ms"] is not None
+    assert metadata["user_visible_ttft_ms"] is None
+    assert metadata["outcome"] == "error"
+    assert metadata["cold_start"] in {"process-first-agent-request", "warm"}
+    assert metadata["environment"] in {"local", "production", "evaluation"}
+    assert metadata["model"] == "deepseek-v4-flash"
 
 
 def test_record_agent_response_failure_updates_the_active_span_with_safe_metadata() -> (

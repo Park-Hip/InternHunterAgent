@@ -1,10 +1,12 @@
 # Release gate
 
+> **Last verified:** 2026-09-02
+>
 > **Eviction:** This procedure leaves when the gate corpus, threshold, or CI
 > integration changes.
 
 How to invoke the bounded live semantic release gate and interpret its output.
-The gate is the final quality barrier before a release candidate reaches production.
+The gate validates a release candidate's safety, honesty, and core-helpfulness checks.
 
 ## What the gate does
 
@@ -26,8 +28,8 @@ threshold:
 ### Locally
 
 ```bash
-# Set the judge provider key for your configured provider (see config/settings.yaml).
-export GOOGLE_API_KEY="..."   # or GROQ_API_KEY / OPENROUTER_API_KEY
+# The configured judge provider is Google (see config/settings.yaml).
+export GOOGLE_API_KEY="..."
 
 # Settings requires these URLs, but the gate scores recorded trajectories and
 # never connects to either database.  Use non-production placeholder values.
@@ -52,7 +54,7 @@ The gate is **off by default**.  It runs only when explicitly enabled:
 
 The CI job (`release-gate` in `.github/workflows/ci.yml`) reads the judge key
 from the `JUDGE_API_KEY` repository secret.  If the secret is absent the job
-fails at the prerequisite-check step with a actionable error message.
+fails at the prerequisite-check step with an actionable error message.
 
 ## Interpreting output
 

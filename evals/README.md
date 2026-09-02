@@ -134,16 +134,8 @@ Widen a rule only through a proposal; registry lexicon entries live in [`scenari
 
 ## Release gate
 
-A bounded live semantic smoke suite runs as the final quality barrier before a release
-candidate reaches production.  It is described in [docs/how-to/release-gate.md](../docs/how-to/release-gate.md).
-
-```bash
-# Local invocation (requires the judge provider key for the configured provider):
-uv run pytest -m eval -v
-```
-
-In CI the gate is off by default and runs only on explicit enablement
-(`workflow_dispatch` with `enabled=true`, or the `RELEASE_GATE_ENABLED` repository variable).
+The bounded live semantic release gate is documented in
+[docs/how-to/release-gate.md](../docs/how-to/release-gate.md).
 
 ## Files
 
@@ -155,7 +147,7 @@ In CI the gate is off by default and runs only on explicit enablement
 | `grader.py` | Produces independent deterministic check outcomes and the first failing seam. |
 | `score.py` | Runs the resumable judge pass over a recorded capture. |
 | `calibration_v6.yaml` | Versioned human-labelled Vietnamese semantic corpus. |
-| `calibration_release_gate.yaml` | Narrowed release-gate corpus (6 critical cases: one PASS + one FAIL per SAF/HON/HLP class). |
+| `calibration_release_gate.yaml` | Release-gate corpus; its policy and invocation are in the [release-gate how-to](../docs/how-to/release-gate.md). |
 | `replay.py` | CI's provider-free replay gate. Discovers every artifact in `replays/`. |
 | `viewer.py` | Local HTML evidence viewer. |
 | `Instrument_Report.md` | Dated baseline, calibration, disagreement, and unresolved-case record. |

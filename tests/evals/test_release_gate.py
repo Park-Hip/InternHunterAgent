@@ -143,7 +143,7 @@ class TestReleaseGateCollection:
         ]
         monkeypatch.setattr(calibration, "load_calibration", lambda path=None: corpus)
         from evals.test_release_gate import _run_gate
-        with pytest.raises(AssertionError, match="SAF, HON, and HLP"): 
+        with pytest.raises(AssertionError, match="SAF, HON, and HLP"):
             _run_gate()
 
     def test_gate_fails_when_no_cases_score(self, monkeypatch: pytest.MonkeyPatch) -> None:

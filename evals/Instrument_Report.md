@@ -42,7 +42,7 @@ driver's retry policy; no turn was dropped.
 | Capture window | 2026-09-02T04:05:35Z to 2026-09-02T04:13:29Z |
 | Run ID | `8e7208f3-1cb3-4586-9cec-cd81f17bde67` |
 | Git SHA | `6426c3c0c0a1ba72021f3a124b0c2137955ff6c8` |
-| Prompt version | `v11` (system, schema_context, sql_generation); `v12` hardening added 2026-09-03 for issue #359 |
+| Prompt version | `v11` (system, schema_context, sql_generation); `system` v12 hardening added 2026-09-03 for issue #359 |
 | Registry hash | `20a5adc5e0370dc49f93da57db1cdb06079d47c638e2ba58a674d93a76d0a5aa` |
 | Registry scenarios | 36 (88 repeats, 94 turns) |
 | Fixture hash | `c871cfc518ffb4f96f96b62b4f9b9ffc21b20fdc91c8244a3281a4bbed722b88` |

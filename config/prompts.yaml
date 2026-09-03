@@ -2,8 +2,8 @@
 # evidence for unrelated prompt surfaces remains comparable.
 prompt_versions:
   system: v12
-  schema_context: v12
-  sql_generation: v12
+  schema_context: v11
+  sql_generation: v11
 
 prompts:
   system_prompt: |

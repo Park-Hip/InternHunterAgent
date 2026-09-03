@@ -195,8 +195,8 @@ class LoadPromptVersionsTests(unittest.TestCase):
     def test_yaml_declares_independent_prompt_versions(self) -> None:
         assert load_prompt_versions() == {
             "system": "v12",
-            "schema_context": "v12",
-            "sql_generation": "v12",
+            "schema_context": "v11",
+            "sql_generation": "v11",
         }
 
     def test_yaml_sql_rules_carry_the_issue_243_superlative_and_salary_contract(self) -> None:

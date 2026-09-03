@@ -45,7 +45,6 @@ from src.agents.tracing.langfuse import (
 SCORER_VERSION = "harness-score-v1"
 
 QUERY_TOOL_NAME = "query_clean_jobs"
-DETAIL_TOOL_NAME = "get_job_details"
 GENERATE_SQL_SPAN_NAME = "generate_sql"
 
 _judge = None
@@ -237,37 +236,28 @@ def _find_span(spans: list[dict], **matches) -> dict | None:
 
 
 def _extract_sql_span(trace_dict: dict) -> tuple[dict | None, dict | None]:
-    """Locate a tool span and its optional nested LLM span.
+    """Locate the tool span for query_clean_jobs and its nested LLM span.
 
-    Handles both `query_clean_jobs` (which has a sibling `generate_sql` LLM span)
-    and `get_job_details` (which has no nested LLM call — it fetches directly from
-    the database).
+    The nested `generate_sql` model.invoke only produces its own span
+    because the tool forwards the injected RunnableConfig into it; without
+    that forwarding this LLM call would be invisible to the trace.
 
-    The nested `generate_sql` model.invoke only produces its own span because the
-    tool forwards the injected RunnableConfig into it; without that forwarding this
-    LLM call would be invisible to the trace.
-
-    That forwarded config is the *tool node's* config, not one re-scoped to the
-    tool's own run (LangChain's `@tool` machinery injects the parent `config` into
-    the function's `RunnableConfig` param verbatim, rather than the `child_config`
-    it uses internally — see `langchain_core.tools.base._get_runnable_config_param`
-    callers). So the generate_sql LLM span lands as a *sibling* of the tool span,
-    both children of the same tool-node run, not nested under the tool span.
+    That forwarded config is the *tool node's* config, not one re-scoped to
+    the tool's own run (LangChain's `@tool` machinery injects the parent
+    `config` into the function's `RunnableConfig` param verbatim, rather
+    than the `child_config` it uses internally — see
+    `langchain_core.tools.base._get_runnable_config_param` callers). So the
+    generate_sql LLM span lands as a *sibling* of the tool span, both
+    children of the same tool-node run, not nested under the tool span.
     """
     tool_spans = trace_dict.get("toolSpans") or []
     llm_spans = trace_dict.get("llmSpans") or []
 
     tool_span = _find_span(tool_spans, name=QUERY_TOOL_NAME)
     if tool_span is None:
-        tool_span = _find_span(tool_spans, name=DETAIL_TOOL_NAME)
-    if tool_span is None:
         return None, None
 
-    # Only query_clean_jobs has a nested generate_sql LLM span; get_job_details
-    # calls the database directly with no intermediate LLM call.
     sql_span = _find_span(llm_spans, parentUuid=tool_span.get("parentUuid"))
-    if sql_span is not None and sql_span.get("name") != GENERATE_SQL_SPAN_NAME:
-        sql_span = None
     return tool_span, sql_span
 
 

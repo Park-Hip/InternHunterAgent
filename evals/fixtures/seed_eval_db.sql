@@ -11,7 +11,7 @@
 -- rows carry 'Intern/Student'. listing_expires_on mirrors the production source's future
 -- expiry dates with 18 future values plus 4 NULLs for missing-expiry handling. created_on
 -- mirrors the source record-creation date with all 24 rows populated across mid-May to
--- early-July 2026; the Home Credit Data Analyst row is the unique most-recent created_on.
+-- early-July 2026; the ML Engineer - Document Intelligence row (vnw-eval-024) is the unique most-recent created_on.
 -- No golden pin depends on source/external_id. C6 now reads job_level across the 4 Data Engineer
 -- rows (3 Experienced (non-manager), 1 Manager), while C7 is the absent-attribute
 -- application-deadline honesty probe.

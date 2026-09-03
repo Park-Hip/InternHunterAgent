@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -138,6 +139,12 @@ def class_of(scenario_id: str) -> str:
     return scenario_id.split("-", 1)[0]
 
 
+@lru_cache(maxsize=1)
+def _scenarios_by_id() -> dict[str, dict[str, Any]]:
+    """Index the committed scenario registry by id (read-only)."""
+    return {scenario["id"]: scenario for scenario in load_scenarios()}
+
+
 def load_combined_calibration(
     paths: tuple[Path, ...] = (CALIBRATION_PATH, CALIBRATION_V8_PATH),
 ) -> dict[str, Any]:
@@ -206,10 +213,17 @@ def calibration_report(
             if "prompt_versions" in case
             else (f"prompt_version:{case['prompt_version']}",)
         )
+        scenario = _scenarios_by_id().get(case["scenario_id"], {})
+        failure_mode = scenario.get("failure_mode")
         if row is not None:
             for group in (
                 "overall",
                 f"class:{scenario_class}",
+                *(
+                    (f"failure_mode:{failure_mode}",)
+                    if isinstance(failure_mode, str) and failure_mode
+                    else ()
+                ),
                 f"language:{case['language']}",
                 *lineage_groups,
                 "assertion_type:semantic",

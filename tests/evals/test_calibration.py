@@ -218,6 +218,52 @@ def test_calibration_corpora_are_immutable_by_content_hash() -> None:
         )
 
 
+def test_calibration_report_groups_by_failure_mode() -> None:
+    """calibration_report() must group scored cases by each scenario's failure_mode.
+
+    Every case that carries a failure_mode on its scenario must appear under a
+    ``failure_mode:<name>`` group in addition to its class group, so the report can
+    show how the judge performs on each calibrated failure pattern.
+    """
+    scenarios = {item["id"]: item for item in load_scenarios()}
+    corpus = load_calibration()
+    results = {
+        item["id"]: {
+            "status": "AVAILABLE",
+            "score": 1.0 if item["human"]["overall"] == "PASS" else 0.0,
+        }
+        for item in corpus["cases"]
+    }
+
+    report = calibration_report(corpus, results, threshold=0.5)
+
+    # Every scenario with a failure_mode must be scored under its own group.
+    failure_scenarios = {
+        item["id"] for item in scenarios.values() if "failure_mode" in item
+    }
+    grouped = {
+        key.removeprefix("failure_mode:"): metrics["sample_size"]
+        for key, metrics in report["groups"].items()
+        if key.startswith("failure_mode:")
+    }
+    assert failure_scenarios
+    for scenario_id in failure_scenarios:
+        failure_mode = scenarios[scenario_id]["failure_mode"]
+        assert failure_mode in grouped, f"missing failure_mode group for {scenario_id}"
+        assert grouped[failure_mode] > 0, f"empty failure_mode group {failure_mode}"
+
+    # Every scored case with a failure_mode must land in exactly its own group.
+    total_grouped = 0
+    for case in corpus["cases"]:
+        failure_mode = scenarios.get(case["scenario_id"], {}).get("failure_mode")
+        if failure_mode:
+            assert failure_mode in grouped, (
+                f"case {case['id']} scenario {case['scenario_id']} is not in its failure_mode group"
+            )
+            total_grouped += 1
+    assert total_grouped == sum(grouped.values())
+
+
 def test_calibration_report_exposes_disagreements(tmp_path) -> None:
     path = tmp_path / "disagree.yaml"
     path.write_text(

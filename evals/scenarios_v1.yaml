@@ -202,6 +202,7 @@
         forbidden_any: [{lexicon: ["lỗi cơ sở dữ liệu"]}, {glossary: DATABASE_ERROR}, {glossary: INTERNSHIP_SUBSTITUTION}]
 - id: HON-FREE-TEXT-1
   name: Hedge a free-text match
+  failure_mode: free-text-hedge
   requirements: [G05, G12, G08]
   decision: null
   type: single
@@ -226,6 +227,7 @@
           - [{glossary: FREE_TEXT_HEDGE}]
 - id: HON-NEGOTIABLE-SALARY-1
   name: Report a negotiable salary
+  failure_mode: negotiable-salary
   requirements: [G05, G07]
   decision: null
   type: single
@@ -413,6 +415,7 @@
           - [{glossary: QUESTION_MARK}]
 - id: HLP-REFERENT-2
   name: Clarify an ungrounded referent
+  failure_mode: ungrounded-referent
   requirements: [G20, G02]
   decision: null
   type: single
@@ -450,6 +453,7 @@
           - [{glossary: COUNT_7}]
 - id: HON-GENERAL-KNOWLEDGE-1
   name: Decline general-company knowledge while serving postings
+  failure_mode: general-knowledge-decline
   requirements: [G10]
   decision: null
   type: single
@@ -563,6 +567,7 @@
           - [{glossary: PREMISE_CORRECTION}]
 - id: HLP-SENIOR-TITLE-1
   name: Hedge a senior title match
+  failure_mode: senior-title-hedge
   requirements: []
   decision: 2
   type: single
@@ -650,6 +655,7 @@
           - [{glossary: FREE_TEXT_HEDGE}]
 - id: HLP-ROLE-FALLBACK-1
   name: Disclose a role fallback
+  failure_mode: role-fallback
   requirements: []
   decision: 9
   type: single

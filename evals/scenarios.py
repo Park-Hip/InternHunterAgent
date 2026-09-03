@@ -38,7 +38,7 @@ _EXECUTION_COMPARISONS = {
 }
 _ASSERTION_TYPES = {"literal", "structural", "semantic"}
 _ASSERTION_FIELDS = {
-    "literal": {"expected_answer_count", "count_only", "forbidden_patterns"},
+    "literal": {"expected_answer_count", "count_only", "forbidden_patterns", "required_patterns"},
     "structural": {
         "require_vietnamese",
         "require_source_links",
@@ -196,6 +196,22 @@ def _validate_assertion_fields(
             except re.error as exc:
                 raise ValueError(
                     f"Scenario {scenario_id} forbidden pattern {pattern!r} does not compile: {exc}"
+                ) from exc
+
+    if "required_patterns" in assertion:
+        patterns = assertion["required_patterns"]
+        if not isinstance(patterns, list) or not patterns:
+            raise ValueError(f"Scenario {scenario_id} required_patterns must be a non-empty list")
+        for pattern in patterns:
+            if not isinstance(pattern, str):
+                raise ValueError(
+                    f"Scenario {scenario_id} required_patterns must be regular-expression strings"
+                )
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(
+                    f"Scenario {scenario_id} required pattern {pattern!r} does not compile: {exc}"
                 ) from exc
 
 

@@ -210,6 +210,11 @@
   grading:
     execution_comparison: ids_only
     assertions:
+      - type: literal
+        required_patterns:
+          - "(?i)(no dedicated field|không có trường dữ liệu riêng|no specific field)"
+          - "(?i)(based on.*description|dựa trên.*mô tả|found in.*text)"
+          - "(?i)(may not be accurate|có thể chưa chính xác|not fully accurate)"
       - type: structural
         require_source_links: true
       - type: semantic
@@ -230,7 +235,16 @@
     execution_comparison: ids_only
     assertions:
       - type: literal
-        forbidden_patterns: ['(?:\b(?:usd|vnd|đô\s*la(?:\s*mỹ)?|dollars?|đồng)\b|[$₫])\s*(?:\d[\d.,\s]*)?(?:/|\s+(?:mỗi|per))\s*(?:tháng|month)\b']
+        forbidden_patterns:
+          - '(?:\b(?:usd|vnd|đô\s*la(?:\s*mỹ)?|dollars?|đồng)\b|[$₫])\s*(?:\d[\d.,\s]*)?(?:/|\s+(?:mỗi|per))\s*(?:tháng|month)\b'
+          - "(?i)not available in the database"
+          - "(?i)không có trong dữ liệu"
+          - "(?i)không tìm thấy.*lương"
+          - "(?i)doesn't include"
+          - "(?i)không ghi nhận"
+        required_patterns:
+          - "(?i)(negotiable|thương lượng|có thể thương lượng)"
+          - "(?i)(not disclosed|không công bố|chưa công bố)"
       - type: semantic
         required_any:
           - [{glossary: NEGOTIABLE_SALARY}]
@@ -441,6 +455,10 @@
     reason: Opinion request has no single retrieval query.
   grading:
     assertions:
+      - type: literal
+        required_patterns:
+          - "(?i)(postings?|tin đăng|job(s|s)?|vị trí)"
+          - "(?i)\\d"
       - type: semantic
         required_any:
           - [{glossary: GENERAL_KNOWLEDGE}]
@@ -547,6 +565,10 @@
   grading:
     execution_comparison: ids_only
     assertions:
+      - type: literal
+        required_patterns:
+          - "(?i)(cách viết trong tiêu đề|only in the title|title text|based on title|matching.*title)"
+          - "(?i)(not a level|không phải cấp độ|not necessarily|may not reflect|không phản ánh)"
       - type: structural
         require_source_links: true
         reject_title_to_level_inference: true
@@ -630,6 +652,10 @@
   grading:
     execution_comparison: ids_only
     assertions:
+      - type: literal
+        required_patterns:
+          - "(?i)(other|khác|nhóm khác|fallback|alternative)"
+          - "(?i)(title|tiêu đề|description|mô tả)"
       - type: structural
         require_source_links: true
       - type: semantic

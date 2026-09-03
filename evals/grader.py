@@ -82,6 +82,7 @@ class TextRule:
     required_any: tuple[tuple[str, ...], ...] = ()
     forbidden_any: tuple[str, ...] = ()
     forbidden_patterns: tuple[str, ...] = ()
+    required_patterns: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,15 @@ def _text_checks(answer: str | None, rule: TextRule, tier: str) -> list[Check]:
             tier=tier,
         )
         for pattern in rule.forbidden_patterns
+    )
+    checks.extend(
+        Check(
+            name="required_pattern_present",
+            passed=re.search(pattern, normalized, flags=re.IGNORECASE) is not None,
+            detail=f"required pattern {pattern!r} {'present' if re.search(pattern, normalized, flags=re.IGNORECASE) is not None else 'absent'}",
+            tier=tier,
+        )
+        for pattern in rule.required_patterns
     )
     return checks
 
@@ -809,12 +819,14 @@ def _text_rule(scenario_id: str, assertion: dict[str, Any]) -> TextRule | None:
         anchor for term in assertion.get("forbidden_any", ()) for anchor in _term(scenario_id, term)
     )
     patterns = tuple(assertion.get("forbidden_patterns", ()))
-    if not (required or forbidden or patterns):
+    required_patterns = tuple(assertion.get("required_patterns", ()))
+    if not (required or forbidden or patterns or required_patterns):
         return None
     return TextRule(
         required_any=required,
         forbidden_any=forbidden,
         forbidden_patterns=patterns,
+        required_patterns=required_patterns,
     )
 
 

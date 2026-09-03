@@ -33,7 +33,7 @@ It never contains secret values.
 | `OPENROUTER_API_KEY` | `.env` only | Deliberately undeclared | Not used | Eval-judge fallback key (OpenRouter arm of `build_judge()`); not declared for Render. The active judge runs on Google AI Studio via `GOOGLE_API_KEY`. |
 | `GOOGLE_API_KEY` | `.env` only | Deliberately undeclared | Not used | Active eval-judge key (`gemma-4-31b-it` via Google AI Studio); not declared for Render. |
 | `DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | GitHub `DATABASE_URL` secret | Cron and migrations use Neon's direct, non-pooled host. |
-| `AGENT_DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | Not used | Agent-facing SQL reads use a dedicated least-privilege credential. Absence must fail closed. Do not fall back to `DATABASE_URL`. |
+| `AGENT_DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Agent-facing SQL reads use a dedicated least-privilege credential. Ingestion validates its presence but does not read it. Absence must fail closed. Do not fall back to `DATABASE_URL`. |
 | `LANGFUSE_SECRET_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |
 | `LANGFUSE_PUBLIC_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |
 | `LANGFUSE_BASE_URL` | `.env`; Render dashboard | Dashboard value, `sync: false` | Not used | Local default targets a local Langfuse endpoint. |
@@ -274,8 +274,9 @@ external host, credential, or healthcheck from this document; provisioning is a 
 
 - Runtime settings require `DATABASE_URL` and the required provider and tracing variables before the
   API can start.
-- The ingestion workflow deliberately supplies literal unused provider and tracing placeholders,
-  because ingestion needs configuration validation but makes no provider or tracing call.
+- The ingestion workflow deliberately supplies literal unused `AGENT_DATABASE_URL`, provider, and
+  tracing placeholders because ingestion needs configuration validation but makes no database,
+  provider, or tracing call.
 - Rebuild the API image with `docker compose build --no-cache api` after changing copied YAML
   configuration so Docker cannot reuse a stale configuration layer.
 - On native Windows, run the API through Docker rather than `uv run uvicorn`; the async checkpointer

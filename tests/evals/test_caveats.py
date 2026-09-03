@@ -8,8 +8,6 @@ answers that include them.
 
 from __future__ import annotations
 
-import pytest
-
 from evals.grader import Evidence, FAIL, PASS, grade_evidence
 
 

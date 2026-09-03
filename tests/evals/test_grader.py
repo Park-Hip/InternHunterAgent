@@ -412,6 +412,7 @@ def test_general_company_opinion_allows_a_direct_decline_or_grounded_postings() 
             execution_accuracy={"status": "EXEMPT"},
         ),
     )
+    assert no_digit.status == FAIL
     # A grounded posting answer that includes a posting count/ID passes the
     # literal gate; the semantic GENERAL_KNOWLEDGE assertion is then deferred
     # to the judge tier, yielding PASS at the judge tier.

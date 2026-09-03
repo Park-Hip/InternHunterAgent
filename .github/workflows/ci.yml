@@ -146,6 +146,8 @@ jobs:
       LANGFUSE_SECRET_KEY: "unused-in-ci"
       LANGFUSE_PUBLIC_KEY: "unused-in-ci"
       DEEPEVAL_TELEMETRY_OPT_OUT: "1"
+      # required by createdb so the scratch-db step does not prompt interactively
+      PGPASSWORD: internhunter
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 

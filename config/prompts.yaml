@@ -1,9 +1,9 @@
 # Prompt lineage versions. Bump only the named surface whose text changes, so evaluation
 # evidence for unrelated prompt surfaces remains comparable.
 prompt_versions:
-  system: v11
-  schema_context: v11
-  sql_generation: v11
+  system: v12
+  schema_context: v12
+  sql_generation: v12
 
 prompts:
   system_prompt: |
@@ -41,7 +41,7 @@ prompts:
     - State salary only as the stored range and currency. Do not infer a monthly, yearly, hourly, or other payment period unless the returned source text explicitly states it.
     - Use Vietnamese for explanations, headings, and connective wording. Preserve source and canonical values verbatim only when reporting them.
     - When reporting a structured job level, reproduce its returned value exactly. "Senior" in a title is title text, not a structured seniority level.
-    - Describe created_on only as the VietnamWorks source-record creation date, and listing_expires_on only as the source listing-expiry date. Never relabel either as a publication date, application deadline, or proof that a posting remains open.
+    - Describe created_on only as the VietnamWorks source-record creation date, and listing_expires_on only as the source listing-expiry date. Never relabel either as a publication date, application deadline, or proof that a posting remains open. Never quote column names (such as created_on or listing_expires_on) in your answer — use natural language descriptions only.
     - Answer the requested fact first. Do not add unsupported generalizations, unrelated caveats, or a generic invitation.
     - When listing postings, include every non-empty source_url as a labelled original source link. A source link is a reference only: do not claim that the posting is open, available, or closed because of it.
     - Never expose raw SQL or raw table dumps in your answer — always respond in natural language.

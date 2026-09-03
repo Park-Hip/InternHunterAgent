@@ -67,6 +67,9 @@ def test_driver_binds_tracing_to_the_evaluation_environment(
 
     driver._bind_fixture_environment()
 
+    fixture_url = driver.fixture_database_url()
+    assert driver.os.environ["DATABASE_URL"] == fixture_url
+    assert driver.os.environ["AGENT_DATABASE_URL"] == fixture_url
     assert driver.os.environ["LANGFUSE_TRACING_ENVIRONMENT"] == "evaluation"
     assert driver.os.environ["LANGFUSE_ENABLED"] == "false"
 
@@ -176,7 +179,8 @@ def _case(scenario_id: str = "HLP-TEST-1", probe: bool = False) -> dict:
 def test_manifest_records_reproducibility_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LANGFUSE_ENABLED", "false")
+    monkeypatch.setattr(driver, "get_langfuse_client", lambda: None)
+    monkeypatch.setattr(driver, "get_langfuse_handler", lambda: None)
     monkeypatch.setattr(driver, "_git_sha", lambda: "abc123")
     monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
     _stub_fingerprint(monkeypatch)
@@ -205,7 +209,9 @@ def test_manifest_records_reproducibility_inputs(
     assert manifest["prompt_versions"] == load_prompt_versions()
 
 
-def test_manifest_names_each_prompt_surface_it_ran(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_manifest_names_each_prompt_surface_it_ran(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A test-only system version change leaves unrelated lineage intact.
 
     T0024.1 put a version label on the prompt so runs recorded either side of a prompt
@@ -530,12 +536,23 @@ def test_a_success_between_quota_failures_resets_the_halt_counter(
     )
 
 
-def test_manifest_records_tracing_when_operator_opts_in(
+def test_manifest_records_tracing_only_when_langfuse_initialized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An operator who enables Langfuse must not get a manifest claiming tracing was off."""
+    """An enabled environment is not tracing when initialization left no components."""
     monkeypatch.setenv("LANGFUSE_ENABLED", "true")
-    monkeypatch.setattr(driver, "_git_sha", lambda: "abc123")
+    monkeypatch.setattr(driver, "get_langfuse_client", lambda: None)
+    monkeypatch.setattr(driver, "get_langfuse_handler", lambda: None)
+    _stub_fingerprint(monkeypatch)
+
+    assert driver.build_manifest()["tracing"]["langfuse_enabled"] is False
+
+
+def test_manifest_records_tracing_when_langfuse_initialized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(driver, "get_langfuse_client", lambda: object())
+    monkeypatch.setattr(driver, "get_langfuse_handler", lambda: object())
     _stub_fingerprint(monkeypatch)
 
     assert driver.build_manifest()["tracing"]["langfuse_enabled"] is True
@@ -945,7 +962,9 @@ def test_freeze_sanitizes_langfuse_metadata_and_retains_replay_evidence(
     frozen = driver.freeze_capture(capture_path, grade_path, output)
 
     validate_replay(frozen)
-    frozen_seams = frozen["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]["seams"]
+    frozen_seams = frozen["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0][
+        "seams"
+    ]
     assert frozen_seams == {
         "question": seams["question"],
         "answer": seams["answer"],
@@ -1073,7 +1092,10 @@ def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
                                 "status": "COMPLETE",
                                 "dataset_run_id": "session-1-run",
                                 "turns": [
-                                    {"turn": 1, "seams": {"trace_id": "trace-session-1"}}
+                                    {
+                                        "turn": 1,
+                                        "seams": {"trace_id": "trace-session-1"},
+                                    }
                                 ],
                             }
                         ],

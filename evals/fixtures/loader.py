@@ -24,9 +24,9 @@ def fixture_database_url() -> str:
 
     Reads the YAML directly instead of going through ``src.core.config.settings``,
     and that is load-bearing rather than lazy. ``load_settings()`` constructs and
-    *caches* ``Settings()``, which takes ``DATABASE_URL`` from the environment and
-    ``.env``. ``evals/driver.py`` calls this to discover the fixture DSN and only
-    then writes it into ``DATABASE_URL``. Resolving through ``settings`` would
+    *caches* ``Settings()``, which takes both database URLs from the environment
+    and ``.env``. ``evals/driver.py`` calls this to discover the fixture DSN and
+    only then writes it into both database URLs. Resolving through ``settings`` would
     freeze the cache against the serving database first, and every later write
     would be ignored - so a capture would silently run the agent against
     production data instead of the frozen fixture.
@@ -42,7 +42,9 @@ def fixture_database_url() -> str:
 
     database_url = fixture_cfg.get("database_url")
     if not isinstance(database_url, str) or not database_url.strip():
-        raise ValueError("Missing or empty 'eval.fixture.database_url' in config/settings.yaml")
+        raise ValueError(
+            "Missing or empty 'eval.fixture.database_url' in config/settings.yaml"
+        )
     return database_url
 
 

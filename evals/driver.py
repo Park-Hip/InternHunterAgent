@@ -106,7 +106,9 @@ def _git_sha() -> str:
 
 def _bind_fixture_environment() -> None:
     """Bind native driver runs before any src module can freeze Settings()."""
-    os.environ["DATABASE_URL"] = fixture_database_url()
+    fixture_url = fixture_database_url()
+    os.environ["DATABASE_URL"] = fixture_url
+    os.environ["AGENT_DATABASE_URL"] = fixture_url
     # Evaluation traffic is intentionally traced in its own environment. This retains
     # trace IDs for score writeback without mixing captures with serving traffic.
     os.environ["LANGFUSE_TRACING_ENVIRONMENT"] = "evaluation"
@@ -129,12 +131,8 @@ def _native_provider_environment():
 
 
 def _tracing_enabled() -> bool:
-    """Mirror src/agents/tracing/langfuse.py so the manifest cannot disagree with the run."""
-    return os.environ.get("LANGFUSE_ENABLED", "true").lower() not in {
-        "0",
-        "false",
-        "no",
-    }
+    """Report whether both Langfuse tracing components initialized for this run."""
+    return get_langfuse_client() is not None and get_langfuse_handler() is not None
 
 
 _bind_fixture_environment()

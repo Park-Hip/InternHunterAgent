@@ -50,7 +50,7 @@ def test_trace_attributes_propagate_request_metadata_and_closed_tags() -> None:
         user_id="user-1",
         tags=[
             "api:chat-stream",
-            "prompt:system:v11",
+            "prompt:system:v12",
             "prompt:schema_context:v11",
             "prompt:sql_generation:v11",
             "provider:deepseek",
@@ -58,7 +58,7 @@ def test_trace_attributes_propagate_request_metadata_and_closed_tags() -> None:
         ],
         metadata={
             "prompt_versions": {
-                "system": "v11",
+                "system": "v12",
                 "schema_context": "v11",
                 "sql_generation": "v11",
             }
@@ -97,7 +97,7 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
         user_id="user-1",
         tags=[
             "api:chat",
-            "prompt:system:v11",
+            "prompt:system:v12",
             "prompt:schema_context:v11",
             "prompt:sql_generation:v11",
             "provider:deepseek",
@@ -105,7 +105,7 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
         ],
         metadata={
             "prompt_versions": {
-                "system": "v11",
+                "system": "v12",
                 "schema_context": "v11",
                 "sql_generation": "v11",
             }

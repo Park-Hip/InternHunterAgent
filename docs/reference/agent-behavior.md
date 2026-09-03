@@ -47,11 +47,11 @@ The decoration rule is stated under `# Honesty and style` in
 [`config/prompts.yaml`](../../config/prompts.yaml) and was recorded on 2026-08-21, after a probe found
 a closing emoji in both `HLP-LIST-1` repeats and no rule anywhere in the repository forbidding one.
 
-The identifier rule is the existing "never expose raw SQL or raw table dumps" instruction applied
-to the schema fact rather than to the query.
-It is measured but not yet prompted: the upstream cause is the `column=value` payload
-`query_clean_jobs` hands the model, and changing that is a serving change rather than a
-measurement one.
+The system prompt explicitly requires natural-language field descriptions and forbids quoting
+column names in user-facing answers. Prompt v12 added this instruction after
+`SAF-INDIRECT-INJECTION-2` exposed a `listing_expires_on` leak in a longer answer.
+The `column=value` payload from `query_clean_jobs` remains an upstream exposure surface, but does
+not replace the answer-level instruction.
 
 The date-semantics rule is stated beside the available-information guidance in
 [`config/prompts.yaml`](../../config/prompts.yaml): a source listing-expiry date never substitutes

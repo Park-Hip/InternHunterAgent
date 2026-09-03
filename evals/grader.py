@@ -1040,6 +1040,8 @@ def _scenario_outcome(
             status = INFRA
         elif UNRUN in statuses:
             status = UNRUN
+        elif NOT_EVALUATED in statuses:
+            status = NOT_EVALUATED
         else:
             status = PASS
         repeats.append({"repeat": number, "status": status})

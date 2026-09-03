@@ -54,6 +54,7 @@ An authorization to report a diagnostic metric is not authorization to impose a 
 Pass-rate denominators exclude `INFRA`, `UNRUN`, and grade-level `NOT_EVALUATED` turns.
 They do not convert missing coverage into success.
 A check-level `NOT_EVALUATED` is visible beside the related seam and does not decide the turn-level grade by itself.
+A scenario whose required repeats are all grade-level `NOT_EVALUATED` reports `NOT_EVALUATED` as its scenario outcome, never `PASS`.
 
 ## Baseline review workflow
 

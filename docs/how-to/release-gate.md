@@ -10,15 +10,20 @@ The gate validates a release candidate's safety, honesty, and core-helpfulness c
 
 ## What the gate does
 
-The release gate runs a **narrow, release-critical subset** of the semantic
-calibration corpus against a live judge model and enforces a recall-first
-threshold:
+The release gate runs the **full combined calibration corpus** (v7 + v8, 56 cases)
+against a live judge model and enforces recall-first per-class thresholds defined
+in [ADR-0052](../decisions/adr-0052-per-class-release-thresholds-real-sweep.md):
 
-- **Corpus:** `evals/calibration_release_gate.yaml` — six cases (one PASS + one
-  FAIL per class: SAF, HON, HLP).  The full 44-case calibration in
-  `evals/calibration_v7.yaml` remains available for diagnostic runs but is not
-  part of the gate.
-- **Threshold:** `RELEASE_THRESHOLD = 0.30` (see [ADR-0047](../decisions/adr-0047-release-threshold-is-recall-first-at-030.md)).
+- **Corpus:** `evals/calibration_v7.yaml` (44 cases) + `evals/calibration_v8.yaml` (12 holdout cases).
+- **Thresholds (per ADR-0052):**
+
+  | Class | Threshold | n | Recall | Notes |
+  |---|---:|---:|---:|---|
+  | `SAF` | 1.0 | 14 | 1.00 | Every human-PASS scores exactly 1.0 |
+  | `HON` | 1.0 | 22 | 1.00 | Recall-first; 4 false passes recorded |
+  | `HLP` | 0.5 | 20 | 1.00 | Pinned at 0.5 by `hlp-compound-pass` |
+  | overall | 0.5 | 56 | 1.00 | Aggregate bar follows weakest PASS |
+
 - **Policy:** every class (SAF, HON, HLP) and the overall group must have recall
   = 1.00.  Any unavailable case (provider outage, judge crash) fails the gate
   closed — partial runs cannot certify the release.
@@ -45,12 +50,13 @@ opaque stack trace deep inside the judge client.
 
 ### In CI
 
-The gate is **off by default**.  It runs only when explicitly enabled:
+The gate is **manual-only** — it runs **exclusively** via GitHub Actions
+`workflow_dispatch` with the *Enable the live semantic release gate* input checked.
+It never fires on ordinary PRs, merges, or tag pushes.  Deterministic checks
+(run fixtures, replay, grading) run on every change in the `checks` CI job.
 
-1. **Workflow dispatch:** go to the Actions tab, select *CI*, click *Run workflow*,
-   and check *Enable the live semantic release gate*.
-2. **Repository variable:** set `RELEASE_GATE_ENABLED=true` on the repository
-   Settings → Variables page.
+1. Go to the Actions tab, select *CI*, click *Run workflow*, and check
+   **Enable the live semantic release gate**.
 
 The CI job (`release-gate` in `.github/workflows/ci.yml`) reads the judge key
 from the `JUDGE_API_KEY` repository secret.  If the secret is absent the job
@@ -61,14 +67,11 @@ fails at the prerequisite-check step with an actionable error message.
 The gate prints a summary like:
 
 ```
-=== release-gate: 6 scored, 0 unavailable, threshold=0.3 ===
-  [PASS] assertion_type:semantic: n=6, recall=1.000, precision=1.000
-  [PASS] class:HLP: n=2, recall=1.000, precision=1.000
-  [PASS] class:HON: n=2, recall=1.000, precision=1.000
-  [PASS] class:SAF: n=2, recall=1.000, precision=1.000
-  [PASS] language:vi: n=6, recall=1.000, precision=1.000
-  [PASS] overall: n=6, recall=1.000, precision=1.000
-  [PASS] prompt_version:v6: n=6, recall=1.000, precision=1.000
+=== release-gate: 56 scored, 0 unavailable, threshold=per-class ===
+  [PASS] class:SAF: n=14, threshold=1.0, recall=1.000, precision=1.000, false_passes=0
+  [PASS] class:HON: n=22, threshold=1.0, recall=1.000, precision=0.733, false_passes=4
+  [PASS] class:HLP: n=20, threshold=0.5, recall=1.000, precision=0.714, false_passes=4
+  [PASS] overall: n=56, recall=1.000, precision=0.778, false_passes=8
 ```
 
 - **PASS** means recall ≥ 1.0 for that group.
@@ -91,8 +94,8 @@ The gate prints a summary like:
 - **Adding cases:** edit `evals/calibration_release_gate.yaml`.  Every case must
   reference a scenario in `evals/scenarios_v1.yaml` that has a semantic
   assertion.
-- **Changing the threshold:** edit `RELEASE_THRESHOLD` in
-  `evals/calibration.py`.  A fresh maintainer-authorized sweep is required
-  before changing it (see ADR-0047).
+- **Changing the threshold:** edit `RELEASE_THRESHOLDS_BY_CLASS` in
+  `evals/calibration.py`.  A fresh maintainer-authorized sweep over the combined
+  v7+v8 corpus is required before changing it (see [ADR-0052](../decisions/adr-0052-per-class-release-thresholds-real-sweep.md)).
 - **Switching the judge provider:** update `config/settings.yaml` and the CI
   secret reference in `.github/workflows/ci.yml` accordingly.

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from evals.harness import _extract_sql_span, DETAIL_TOOL_NAME, QUERY_TOOL_NAME
 
 

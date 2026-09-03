@@ -16,11 +16,12 @@ Open evaluation issues are tracked on GitHub; see [CONTRIBUTING.md](../CONTRIBUT
 
 The named runtime environment must contain the normal application configuration, including `DATABASE_URL` and
 `AGENT_DATABASE_URL`; runtime settings fail closed without them. The values may point at the local
-`docker compose` database because the driver replaces `DATABASE_URL` with the fixture DSN before it imports
-the agent, so a capture does not query a serving database.
+`docker compose` database because the driver replaces both database URLs with the fixture DSN before it
+imports the agent, so a capture does not query a serving database.
 The evaluator also needs the serving-provider credentials for capture and the judge-provider credentials for semantic scoring.
 
 Raw captures under `evals/runs/` are local and ignored by Git because they can contain telemetry, trace identifiers, and tool output.
+Their `manifest.tracing.langfuse_enabled` field is true only when both Langfuse components initialized; it does not guarantee exports succeed, which can still fail separately (for example, with HTTP 401 credentials).
 Committed replays under `evals/replays/` are sanitized evidence that CI can reproduce without a serving model or judge call.
 The replay gate discovers and validates **every** artifact in `evals/replays/`, so a stale or newly added file fails loudly instead of being silently skipped:
 

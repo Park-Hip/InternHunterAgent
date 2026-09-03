@@ -10,6 +10,8 @@ this directory and point the rest of the suite at the fixture database.
 from __future__ import annotations
 
 import os
+from collections.abc import Generator
+
 import pytest
 
 from evals.fixtures.loader import fixture_database_url
@@ -31,7 +33,7 @@ def _reset_database_caches() -> None:
 
     config = sys.modules.get("src.core.config")
     if config is not None:
-        config._settings_cache = None
+        setattr(config, "_settings_cache", None)
 
     db = sys.modules.get("src.core.db")
     if db is None:
@@ -41,8 +43,8 @@ def _reset_database_caches() -> None:
         if engine is not None:
             engine.dispose()
         setattr(db, engine_name, None)
-    db._session_factory = None
-    db._agent_session_factory = None
+    setattr(db, "_session_factory", None)
+    setattr(db, "_agent_session_factory", None)
 
 
 def pytest_collection_finish(session: object) -> None:
@@ -53,7 +55,7 @@ def pytest_collection_finish(session: object) -> None:
 
 
 @pytest.fixture(autouse=True)
-def fixture_database_environment() -> None:
+def fixture_database_environment() -> Generator[None, None, None]:
     fixture_url = fixture_database_url()
     os.environ["DATABASE_URL"] = fixture_url
     os.environ["AGENT_DATABASE_URL"] = fixture_url

@@ -209,7 +209,9 @@ def test_manifest_records_reproducibility_inputs(
     assert manifest["prompt_versions"] == load_prompt_versions()
 
 
-def test_manifest_names_each_prompt_surface_it_ran(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_manifest_names_each_prompt_surface_it_ran(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A test-only system version change leaves unrelated lineage intact.
 
     T0024.1 put a version label on the prompt so runs recorded either side of a prompt
@@ -960,7 +962,9 @@ def test_freeze_sanitizes_langfuse_metadata_and_retains_replay_evidence(
     frozen = driver.freeze_capture(capture_path, grade_path, output)
 
     validate_replay(frozen)
-    frozen_seams = frozen["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0]["seams"]
+    frozen_seams = frozen["scenarios"]["HON-CURRENCY-1"]["repeats"][0]["turns"][0][
+        "seams"
+    ]
     assert frozen_seams == {
         "question": seams["question"],
         "answer": seams["answer"],
@@ -1088,7 +1092,10 @@ def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
                                 "status": "COMPLETE",
                                 "dataset_run_id": "session-1-run",
                                 "turns": [
-                                    {"turn": 1, "seams": {"trace_id": "trace-session-1"}}
+                                    {
+                                        "turn": 1,
+                                        "seams": {"trace_id": "trace-session-1"},
+                                    }
                                 ],
                             }
                         ],

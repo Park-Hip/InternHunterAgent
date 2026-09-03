@@ -235,7 +235,7 @@ def test_cross_currency_winner_is_retained_for_semantic_evaluation_not_failed_by
         "HON-CURRENCY-1",
         Evidence(
             answer=(
-                "These salaries are in different currencies, so I cannot rank them directly. "
+                "These salaries are in different currencies, so a global ranking is not available in the database. "
                 "The highest-paid job is Sonat Game."
             ),
             tools_called=["query_clean_jobs"],

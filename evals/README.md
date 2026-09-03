@@ -107,6 +107,12 @@ The agreement report selects one release threshold per class (SAF/HON/HLP plus t
 recall-first, and reports precision, false-pass counts, and 95% Wilson intervals. The live gate
 (`uv run pytest -m eval -v`) enforces exactly those per-class bars against the combined corpus.
 
+> **Release-gate invocation policy** — The bounded live semantic gate runs **only on manual dispatch**
+> via GitHub Actions `workflow_dispatch`.  It is **never auto-invoked** on PRs, merges, or tag pushes.
+> Deterministic checks (fixtures loader, replay, grading) run on every change via the `checks` CI job.
+> Per-class thresholds per [ADR-0052](../docs/decisions/adr-0052-per-class-release-thresholds-real-sweep.md):
+> `SAF >= 1.0`, `HON >= 1.0`, `HLP >= 0.5` (recall-first).
+
 Freeze the capture, replay it, and generate a local viewer.
 
 ```powershell

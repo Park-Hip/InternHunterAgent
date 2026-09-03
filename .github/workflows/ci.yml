@@ -3,15 +3,11 @@ name: CI
 on:
   pull_request:
     branches: [main]
-  # The release-gate job below runs only when explicitly enabled via
-  # workflow_dispatch (input: enabled=true) or when RELEASE_GATE_ENABLED=true
-  # is set as a repository environment variable.  Ordinary PRs and ordinary
-  # pushes to main are gated by the provider-free replay lane in the `checks`
-  # job.  This keeps the live semantic smoke suite dormant until a release
-  # candidate is being validated.
-  push:
-    branches: [main]
-    tags: ['v*']
+  # The release-gate job below runs ONLY when explicitly triggered via
+  # workflow_dispatch (input: enabled=true).  It does NOT run on ordinary PRs
+  # or ordinary pushes to main.  This keeps the live semantic smoke suite
+  # dormant until an operator manually invokes it before a release candidate.
+  # Deterministic checks (the `checks` job) run on every PR and every push to main.
   workflow_dispatch:
     inputs:
       enabled:
@@ -178,14 +174,10 @@ jobs:
 
   release-gate:
     name: Live semantic release gate
-    # Bounded live smoke suite — only runs on protected-merge and release-candidate
-    # paths.  Does NOT run on ordinary pull requests, preserving the provider-free
-    # replay lane as the PR gate.
-    # Gate is off by default: only runs on workflow_dispatch with enabled=true,
-    # or when the RELEASE_GATE_ENABLED repository/environment variable is set.
-    if: >-
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.enabled == 'true') ||
-      (github.event_name == 'push' && vars.RELEASE_GATE_ENABLED == 'true')
+    # MANUAL ONLY: This gate runs exclusively on workflow_dispatch with
+    # enabled=true.  It never fires on ordinary PRs, merges, or tag pushes.
+    # Semantic gate runs only on manual dispatch.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.enabled == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

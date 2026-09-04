@@ -1026,6 +1026,7 @@
   reference_sql:
     - SELECT id, title, company, location FROM clean_jobs WHERE tech_stack ILIKE '%Python%' AND location ILIKE '%Hanoi%' ORDER BY id
     - SELECT id, title, company, location FROM clean_jobs WHERE tech_stack ILIKE '%Python%' AND location ILIKE '%Hanoi%' ORDER BY id
+    - SELECT id, title, company, location FROM clean_jobs WHERE tech_stack ILIKE '%Python%' AND location ILIKE '%Hanoi%' ORDER BY id
   grading:
     execution_comparison: ids_only
     assertions:

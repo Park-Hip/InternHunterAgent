@@ -239,21 +239,14 @@ class TestMultiTurnErrorBubble(unittest.TestCase):
         assert GENERIC_ERROR_MESSAGE == error_event[1]["message"]
         assert events[-1][0] == "done"
 
-    def test_provider_busy_is_retryable_after_normal_turn(self) -> None:
+    def test_provider_busy_is_retryable_after_normal_prior_turn(self) -> None:
         """A normal first turn succeeds; a subsequent turn returns a retryable provider-busy error."""
-        self.runtime.set_turn_events(
-            [
-                {"type": "token", "text": "ok"},
-                {"type": "metadata", "trace_id": None, "trace_url": None},
-            ]
-        )
 
         async def _refusal_astream(**kwargs):
             yield {"type": "token", "text": "partial"}
             raise RuntimeError("provider quota exhausted")
 
-        self.runtime.astream = _refusal_astream
-
+        # First request uses the default runtime (normal response)
         first = self.client.post(
             "/api/v1/agent/chat/stream",
             json={"query": "list jobs", "session_id": "error-carryover-session"},
@@ -261,6 +254,9 @@ class TestMultiTurnErrorBubble(unittest.TestCase):
         assert first.status_code == 200
         first_events = _parse_sse_events(first.text)
         assert first_events[-1][0] == "done"
+
+        # Replace astream AFTER the first request so only the second turn is affected
+        self.runtime.astream = _refusal_astream
 
         second = self.client.post(
             "/api/v1/agent/chat/stream",

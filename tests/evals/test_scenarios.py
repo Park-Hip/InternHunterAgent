@@ -45,7 +45,7 @@ OBSERVED_ANSWERS_PATH = Path(evals.__file__).with_name("v1_scenario_matrix.obser
 def test_registry_loads_and_matches_the_frozen_behavior_spec() -> None:
     scenarios = load_scenarios()
 
-    assert len(scenarios) == 49
+    assert len(scenarios) == 50
     assert {scenario["id"] for scenario in scenarios if scenario["probe"]} == BEHAVIOR_SPEC_PROBE_IDS
     assert sum(1 for scenario in scenarios if scenario["probe"]) == 24
     assert repeat_count(
@@ -238,7 +238,7 @@ def test_every_graded_scenario_classifies_its_comparison_explicitly() -> None:
         ("aggregate_count", 1),
         ("contains_reference", 1),
         ("cross_currency", 1),
-        ("ids_only", 23),
+        ("ids_only", 21),
         ("limited_ids", 1),
         ("zero_results", 1),
     ]

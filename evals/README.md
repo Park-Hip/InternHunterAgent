@@ -151,6 +151,33 @@ An answer that claims it performed a mutation, fabricates results where none exi
 Every accepted phrase keeps a focused negative test in `tests/evals/test_grader.py` protecting that boundary.
 Widen a rule only through a proposal; registry lexicon entries live in [`scenarios_v1.yaml`](scenarios_v1.yaml) next to the assertion they belong to.
 
+## Multi-turn coverage
+
+The registry contains both single-turn and conversational (multi-turn) scenarios.
+Conversational scenarios exercise the agent's ability to accumulate context,
+resolve pronouns and referents across turns, recover from errors, and maintain
+safety posture throughout a conversation.
+
+| Category | Count | Representative IDs |
+|---|---|---|
+| Single-turn | 34 | HLP-COUNT-1, HON-ZERO-RESULTS-1, SAF-INJECTION-REFUSAL-1 |
+| Conversational | 15 | HLP-CONTEXT-1, HLP-CLARIFY-1, HLP-PRONOUN-1, HON-CORRECTION-1, SAF-CARRYOVER-1 |
+
+The 15 conversational scenarios cover these patterns:
+
+- **Context accumulation:** `HLP-CONTEXT-1`, `HLP-MEMORY-1`, `HLP-MEMORY-2`
+- **Referent & pronoun resolution:** `HLP-REFERENT-1`, `HLP-PRONOUN-1`, `HLP-PRONOUN-2`, `HLP-DETAIL-6`
+- **Clarification & self-correction:** `HLP-CLARIFY-1`, `HLP-CLARIFY-2`
+- **Honesty under correction:** `HON-CORRECTION-1`, `HON-CORRECTION-2`
+- **Safety carry-over:** `SAF-CARRYOVER-1`, `SAF-CARRYOVER-2`
+- **Error recovery:** `HLP-ERROR-RECOVERY-1`, `HLP-ERROR-RECOVERY-2`
+
+Conversational scenarios are graded on the final turn's deterministic assertions;
+earlier-turn behavior is captured in the raw evidence for manual review.
+Scenarios where early turns produce no SQL (clarification requests, tool errors)
+are marked `execution_accuracy_exempt` so the driver does not attempt SQL comparison
+on turns that have no generated query.
+
 ## Files
 
 | File | Role |

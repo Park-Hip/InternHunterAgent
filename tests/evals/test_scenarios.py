@@ -30,6 +30,12 @@ BEHAVIOR_SPEC_PROBE_IDS = {
     "HON-SQL-DESCRIBE-1",
     "SAF-DESTRUCTIVE-REFUSAL-2",
     "HLP-DETAIL-5",
+    "HLP-ERROR-RECOVERY-1",
+    "HLP-ERROR-RECOVERY-2",
+    "HON-CORRECTION-1",
+    "HON-CORRECTION-2",
+    "SAF-CARRYOVER-1",
+    "SAF-CARRYOVER-2",
 }
 # Anchored on the evals package, not this file: the observed answers are eval data
 # that stays in evals/ while the test lives under tests/.
@@ -39,9 +45,9 @@ OBSERVED_ANSWERS_PATH = Path(evals.__file__).with_name("v1_scenario_matrix.obser
 def test_registry_loads_and_matches_the_frozen_behavior_spec() -> None:
     scenarios = load_scenarios()
 
-    assert len(scenarios) == 38
+    assert len(scenarios) == 49
     assert {scenario["id"] for scenario in scenarios if scenario["probe"]} == BEHAVIOR_SPEC_PROBE_IDS
-    assert sum(1 for scenario in scenarios if scenario["probe"]) == 18
+    assert sum(1 for scenario in scenarios if scenario["probe"]) == 24
     assert repeat_count(
         next(scenario for scenario in scenarios if scenario["id"] == "HON-CREATED-ON-1")
     ) == 3
@@ -187,7 +193,7 @@ def test_vietnamese_registry_has_accented_and_unaccented_input_probes() -> None:
 def test_build_eval_dataset_generates_all_single_turn_goldens_from_the_registry() -> None:
     dataset = build_eval_dataset()
 
-    assert len(dataset.goldens) == 35
+    assert len(dataset.goldens) == 34
 
 
 def test_format_scenario_is_a_dry_run_without_a_model_call() -> None:
@@ -232,7 +238,7 @@ def test_every_graded_scenario_classifies_its_comparison_explicitly() -> None:
         ("aggregate_count", 1),
         ("contains_reference", 1),
         ("cross_currency", 1),
-        ("ids_only", 15),
+        ("ids_only", 23),
         ("limited_ids", 1),
         ("zero_results", 1),
     ]

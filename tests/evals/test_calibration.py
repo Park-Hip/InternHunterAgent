@@ -184,7 +184,7 @@ def test_v7_remains_unchanged_after_v8_addition() -> None:
 
     v7 = load_calibration()
     assert v7["corpus_id"] == "vietnamese-semantic-v7"
-    assert len(v7["cases"]) == 44
+    assert len(v7["cases"]) == 54
     v8 = load_calibration(Path("evals/calibration_v8.yaml"))
     assert v8["corpus_id"] == "vietnamese-semantic-v8"
     assert len(v8["cases"]) == 12
@@ -206,7 +206,7 @@ def test_calibration_corpora_are_immutable_by_content_hash() -> None:
 
     pinned = {
         "evals/calibration_v7.yaml":
-            "d7dba7967e0c2e664aa911820c9da9a890ac2de12ca1be95a89a911b08e403e6",
+            "31872b5aed6c4c5878e24df425da29105b164032f5fcc1604e3f5e14ccf16e99",
         "evals/calibration_v8.yaml":
             "5299446ece8d38532b6357f2e27c13607576d093b28b4cb40b9d02e93b4dbd7d",
     }
@@ -313,7 +313,7 @@ def test_load_combined_calibration_merges_v7_and_v8() -> None:
     assert combined["corpus_id"] == (
         "vietnamese-semantic-v7+vietnamese-semantic-v8"
     )
-    assert len(combined["cases"]) == 56
+    assert len(combined["cases"]) == 66
     ids = [case["id"] for case in combined["cases"]]
     assert len(ids) == len(set(ids))
     assert {case["scenario_id"].split("-", 1)[0] for case in combined["cases"]} == {

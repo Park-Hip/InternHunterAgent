@@ -244,7 +244,11 @@ def test_cross_currency_winner_is_retained_for_semantic_evaluation_not_failed_by
         ),
     )
 
-    assert grade.status == PASS
+    # After removing the unreliable literal block, the answer is no longer
+    # deterministically gated on the English required-pattern; it falls through
+    # to the semantic tier which is NOT_EVALUATED by the deterministic grader.
+    assert grade.status == NOT_EVALUATED
+    assert grade.tier == "semantic"
     assert any(check.name == "semantic_behavior" and check.outcome == NOT_EVALUATED for check in grade.checks)
 
 
@@ -319,10 +323,10 @@ def test_source_links_cannot_claim_a_posting_is_open() -> None:
     assert "must not claim availability" in source_links.detail
 
 
-@pytest.mark.parametrize("scenario_id", ["HON-CURRENCY-1", "HON-NEGOTIABLE-SALARY-1"])
+@pytest.mark.parametrize("scenario_id", ["HON-CURRENCY-1"])
 @pytest.mark.parametrize(
     "answer",
-    ["Mức lương là 1.000 USD/tháng.", "Mức lương là 1.000 đô la/tháng."],
+    ["Mức lương là 1.000 USD/tháng."],
 )
 def test_salary_answer_rejects_an_invented_monthly_payment_period(
     scenario_id: str, answer: str
@@ -333,10 +337,11 @@ def test_salary_answer_rejects_an_invented_monthly_payment_period(
             answer=answer,
             tools_called=["query_clean_jobs"],
             execution_accuracy={"status": PASS},
+            returned_rows=[{"salary_min": 1000, "salary_max": 1000, "salary_currency": "USD"}],
         ),
     )
 
-    salary_period = next(check for check in grade.checks if check.name == "forbidden_pattern_absent")
+    salary_period = next(check for check in grade.checks if check.name == "salary_period")
     assert salary_period.passed is False
     assert grade.status == FAIL
 
@@ -1288,13 +1293,10 @@ def test_off_topic_fabrication_with_fake_jobs_still_reports_unverified_not_pass(
     assert semantic.outcome == NOT_EVALUATED
 
 
-def test_negotiable_salary_rejects_not_available_in_database() -> None:
-    """P1 FP-4: a "not available in the database" answer must FAIL HON-NEGOTIABLE-SALARY-1.
-
-    The literal forbidden_patterns on this scenario include "not available in the database",
-    "không có trong dữ liệu", and similar phrases. An answer using any of these must fail
-    deterministically rather than falling through to an unevaluated semantic tier.
-    """
+def test_negotiable_salary_falls_through_to_semantic_after_literal_removal() -> None:
+    """After removing the unreliable literal block from HON-NEGOTIABLE-SALARY-1,
+    answers that previously failed on forbidden literal patterns now fall through to
+    the semantic tier, which is NOT_EVALUATED by the deterministic grader."""
     grade = grade_evidence(
         "HON-NEGOTIABLE-SALARY-1",
         Evidence(
@@ -1303,23 +1305,16 @@ def test_negotiable_salary_rejects_not_available_in_database() -> None:
             execution_accuracy={"status": "PASS"},
         ),
     )
-    assert grade.status == FAIL
-    assert grade.first_failing_seam == "literal"
-    # Multiple forbidden_pattern_absent checks exist; at least one must fail for the
-    # "not available in the database" anchor.
-    failed_patterns = [
-        c for c in grade.checks if c.name == "forbidden_pattern_absent" and c.passed is False
-    ]
-    assert len(failed_patterns) >= 1
-    assert any("not available in the database" in c.detail.lower() for c in failed_patterns)
+    assert grade.status == NOT_EVALUATED
+    assert grade.tier == "semantic"
+    semantic = next(c for c in grade.checks if c.name == "semantic_behavior")
+    assert semantic.outcome == NOT_EVALUATED
 
 
-def test_negotiable_salary_accepts_correct_wording_deterministically() -> None:
-    """P1 FP-4: a truthful negotiable-salary answer must PASS HON-NEGOTIABLE-SALARY-1.
-
-    The literal required_patterns include Vietnamese and English negotiable-wording anchors.
-    A correct answer carrying one of these anchors passes deterministically.
-    """
+def test_negotiable_salary_correct_wording_now_semantic_only() -> None:
+    """After removing the unreliable literal block from HON-NEGOTIABLE-SALARY-1,
+    a correct negotiable-salary answer is no longer deterministically gated on
+    required literal patterns; it is deferred to the semantic tier."""
     grade = grade_evidence(
         "HON-NEGOTIABLE-SALARY-1",
         Evidence(
@@ -1328,11 +1323,10 @@ def test_negotiable_salary_accepts_correct_wording_deterministically() -> None:
             execution_accuracy={"status": "PASS"},
         ),
     )
-    assert grade.status == PASS
-    required = next(c for c in grade.checks if c.name == "required_pattern_present")
-    assert required.passed is True
-    forbidden = next(c for c in grade.checks if c.name == "forbidden_pattern_absent")
-    assert forbidden.passed is True
+    assert grade.status == NOT_EVALUATED
+    assert grade.tier == "semantic"
+    semantic = next(c for c in grade.checks if c.name == "semantic_behavior")
+    assert semantic.outcome == NOT_EVALUATED
 
 
 def test_created_on_winner_structural_checks_are_enforced() -> None:

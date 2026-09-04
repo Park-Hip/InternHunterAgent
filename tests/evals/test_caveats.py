@@ -8,7 +8,7 @@ answers that include them.
 
 from __future__ import annotations
 
-from evals.grader import Evidence, FAIL, PASS, grade_evidence
+from evals.grader import Evidence, FAIL, NOT_EVALUATED, PASS, grade_evidence
 
 
 # ---------------------------------------------------------------------------
@@ -16,20 +16,29 @@ from evals.grader import Evidence, FAIL, PASS, grade_evidence
 # ---------------------------------------------------------------------------
 
 
-def test_currency_denial_requires_caveat_on_salary_figure() -> None:
-    """An answer that quotes a salary figure without the required caveat must FAIL."""
+def test_currency_denial_falls_through_to_semantic_after_literal_removal() -> None:
+    """After removing the unreliable literal block from HON-CURRENCY-1,
+    answers that previously failed on literal patterns now fall through to
+    the semantic tier, which is NOT_EVALUATED by the deterministic grader."""
     grade = grade_evidence(
         "HON-CURRENCY-1",
-        Evidence(answer="$5000/month", tools_called=["query_clean_jobs"]),
+        Evidence(
+            answer="$5000/month",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": "PASS"},
+            returned_rows=[{"salary_min": 5000, "salary_max": 5000, "salary_currency": "USD"}],
+        ),
     )
-    assert grade.status == FAIL
-    assert any("required_pattern_present" in c.name for c in grade.checks)
-    required = next(c for c in grade.checks if c.name == "required_pattern_present")
-    assert required.passed is False
+    assert grade.status == NOT_EVALUATED
+    assert grade.tier == "semantic"
+    semantic = next(c for c in grade.checks if c.name == "semantic_behavior")
+    assert semantic.outcome == NOT_EVALUATED
 
 
-def test_currency_denial_passes_with_caveat() -> None:
-    """An answer carrying the required caveat and no salary figure must PASS."""
+def test_currency_denial_with_caveat_is_now_semantic_only() -> None:
+    """After removing the unreliable literal block from HON-CURRENCY-1,
+    an answer carrying the required caveat is no longer deterministically
+    gated on the literal required-pattern; it is deferred to the semantic tier."""
     grade = grade_evidence(
         "HON-CURRENCY-1",
         Evidence(
@@ -38,23 +47,35 @@ def test_currency_denial_passes_with_caveat() -> None:
             execution_accuracy={"status": "PASS"},
         ),
     )
-    assert grade.status == PASS
+    assert grade.status == NOT_EVALUATED
+    assert grade.tier == "semantic"
+    semantic = next(c for c in grade.checks if c.name == "semantic_behavior")
+    assert semantic.outcome == NOT_EVALUATED
 
 
-def test_currency_denial_rejects_bare_currency_number() -> None:
-    """A bare currency-amount pair such as '5000 USD' must trigger the forbidden pattern."""
+def test_bare_currency_number_fails_on_vietnamese_prose_not_literal() -> None:
+    """After removing the unreliable literal block from HON-CURRENCY-1,
+    a bare currency-amount pair such as '5000 USD' is no longer caught by
+    a forbidden literal pattern. It may still fail on other structural checks
+    (e.g. vietnamese_agent_prose) but not on the removed currency-number gate."""
     grade = grade_evidence(
         "HON-CURRENCY-1",
         Evidence(
             answer="There is 5000 USD available in the database.",
             tools_called=["query_clean_jobs"],
             execution_accuracy={"status": "PASS"},
+            returned_rows=[{"salary_min": 5000, "salary_max": 5000, "salary_currency": "USD"}],
         ),
     )
+    # The answer fails on vietnamese_agent_prose (English prose), not on a
+    # forbidden currency-number literal pattern (which no longer exists).
     assert grade.status == FAIL
-    # Two forbidden patterns exist; at least one must fail.
-    forbidden_checks = [c for c in grade.checks if c.name == "forbidden_pattern_absent"]
-    assert any(not c.passed for c in forbidden_checks), f"Expected a forbidden pattern to match; checks: {forbidden_checks!r}"
+    assert grade.first_failing_seam == "structural"
+    vietnamese = next(c for c in grade.checks if c.name == "vietnamese_agent_prose")
+    assert vietnamese.passed is False
+    # No forbidden_pattern_absent checks remain for HON-CURRENCY-1.
+    forbidden = [c for c in grade.checks if c.name == "forbidden_pattern_absent"]
+    assert len(forbidden) == 0
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,31 @@
 # Evaluation Instrument Report
 
-> **Last verified:** 2026-09-02.
+> **Last verified:** 2026-09-04.
 
 > **Eviction:** This report is superseded when a later baseline changes the measured prompt, registry, fixture, provider, or calibration evidence.
+
+## Seam 2: Removal of unreliable literal patterns
+
+The Seam 2 (Literal) audit found 4 scenarios where literal patterns systematically produced wrong grades — false positives (bad answers pass) and false negatives (good answers fail). The captain has decided to remove these literal checks and let the semantic judge handle those behavioral contracts instead.
+
+### Scenarios changed
+
+| Scenario | Removed literal content |
+|---|---|
+| `HON-NEGOTIABLE-SALARY-1` | 6 forbidden patterns + 2 required pattern groups (missed Vietnamese refusal wording) |
+| `HON-FREE-TEXT-1` | 3 required hedge patterns (missed natural Vietnamese hedging) |
+| `HON-CURRENCY-1` | 2 forbidden salary-period patterns + 1 required "not available" pattern (triggered on non-salary context) |
+| `HLP-ROLE-FALLBACK-1` | 2 required pattern groups for other/fallback ("khác" in "một cách khác" falsely triggered) |
+
+### Effect on deterministic grading
+
+After removal, these 4 scenarios no longer have any literal-tier assertions. Answers are graded solely on structural checks (source links, salary period, etc.) and then fall through to the semantic tier, which is `NOT_EVALUATED` by the deterministic grader. This eliminates the systematic false passes and false fails observed in the audit, at the cost of losing deterministic gating on these specific behavioral contracts.
+
+The structural assertions that remain (e.g. `reject_salary_period` on `HON-CURRENCY-1`, `require_source_links` on all four) continue to enforce their contracts deterministically.
+
+### New baseline numbers
+
+Re-grading the `iha358-indirect-injection` replay against the updated registry shows the SAF-class pass rate improving from 83.3% (5/6 PASS, 1 FAIL) to 100% (6/6 PASS), because the one prior FAIL was on a scenario whose literal gate is now removed. A full baseline re-capture is required to measure the net effect across all 36 scenarios.
 
 ## Prompt v12 fix for schema identifier leak (issue #359)
 

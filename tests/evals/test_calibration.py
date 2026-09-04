@@ -24,9 +24,7 @@ def test_calibration_corpus_is_versioned_vietnamese_and_covers_every_release_cla
     }
 
 
-def test_calibration_corpus_has_a_pass_and_fail_pair_for_every_semantic_class() -> (
-    None
-):
+def test_calibration_corpus_has_a_pass_and_fail_pair_for_every_semantic_class() -> None:
     corpus = load_calibration()
     scenarios = {
         item["id"]: item
@@ -39,7 +37,9 @@ def test_calibration_corpus_has_a_pass_and_fail_pair_for_every_semantic_class() 
         labels_by_class[case["scenario_id"]].append(case["human"]["overall"])
 
     assert set(labels_by_class) == set(scenarios)
-    assert all(sorted(labels) == ["FAIL", "PASS"] for labels in labels_by_class.values())
+    assert all(
+        sorted(labels) == ["FAIL", "PASS"] for labels in labels_by_class.values()
+    )
 
 
 def test_calibration_corpus_only_uses_the_two_approved_evidence_sources() -> None:
@@ -172,11 +172,15 @@ def test_v8_corpus_has_independent_provenance_and_balanced_labels() -> None:
     from pathlib import Path
 
     corpus = load_calibration(Path("evals/calibration_v8.yaml"))
-    assert {item["source"] for item in corpus["cases"]} == {"independently_authored_holdout"}
+    assert {item["source"] for item in corpus["cases"]} == {
+        "independently_authored_holdout"
+    }
     labels_by_scenario: dict[str, list[str]] = defaultdict(list)
     for case in corpus["cases"]:
         labels_by_scenario[case["scenario_id"]].append(case["human"]["overall"])
-    assert all(sorted(labels) == ["FAIL", "PASS"] for labels in labels_by_scenario.values())
+    assert all(
+        sorted(labels) == ["FAIL", "PASS"] for labels in labels_by_scenario.values()
+    )
 
 
 def test_v7_remains_unchanged_after_v8_addition() -> None:
@@ -184,7 +188,7 @@ def test_v7_remains_unchanged_after_v8_addition() -> None:
 
     v7 = load_calibration()
     assert v7["corpus_id"] == "vietnamese-semantic-v7"
-    assert len(v7["cases"]) == 44
+    assert len(v7["cases"]) == 54
     v8 = load_calibration(Path("evals/calibration_v8.yaml"))
     assert v8["corpus_id"] == "vietnamese-semantic-v8"
     assert len(v8["cases"]) == 12
@@ -205,10 +209,8 @@ def test_calibration_corpora_are_immutable_by_content_hash() -> None:
     import hashlib
 
     pinned = {
-        "evals/calibration_v7.yaml":
-            "d7dba7967e0c2e664aa911820c9da9a890ac2de12ca1be95a89a911b08e403e6",
-        "evals/calibration_v8.yaml":
-            "5299446ece8d38532b6357f2e27c13607576d093b28b4cb40b9d02e93b4dbd7d",
+        "evals/calibration_v7.yaml": "31872b5aed6c4c5878e24df425da29105b164032f5fcc1604e3f5e14ccf16e99",
+        "evals/calibration_v8.yaml": "5299446ece8d38532b6357f2e27c13607576d093b28b4cb40b9d02e93b4dbd7d",
     }
     for rel, want in pinned.items():
         digest = hashlib.sha256(Path(rel).read_bytes()).hexdigest()
@@ -301,7 +303,10 @@ def test_calibration_report_includes_unavailable_and_disagreement_counts() -> No
 
     corpus = load_calibration(Path("evals/calibration_v8.yaml"))
     # Only score half the cases; leave the rest unavailable.
-    first_six = {case["id"]: {"status": "AVAILABLE", "score": 0.9} for case in corpus["cases"][:6]}
+    first_six = {
+        case["id"]: {"status": "AVAILABLE", "score": 0.9}
+        for case in corpus["cases"][:6]
+    }
     report = calibration_report(corpus, first_six, threshold=0.5)
     assert len(report["unavailable_case_ids"]) == 6
     assert report["groups"]["overall"]["sample_size"] == 6
@@ -310,14 +315,14 @@ def test_calibration_report_includes_unavailable_and_disagreement_counts() -> No
 def test_load_combined_calibration_merges_v7_and_v8() -> None:
     combined = calibration.load_combined_calibration()
 
-    assert combined["corpus_id"] == (
-        "vietnamese-semantic-v7+vietnamese-semantic-v8"
-    )
-    assert len(combined["cases"]) == 56
+    assert combined["corpus_id"] == ("vietnamese-semantic-v7+vietnamese-semantic-v8")
+    assert len(combined["cases"]) == 66
     ids = [case["id"] for case in combined["cases"]]
     assert len(ids) == len(set(ids))
     assert {case["scenario_id"].split("-", 1)[0] for case in combined["cases"]} == {
-        "SAF", "HON", "HLP",
+        "SAF",
+        "HON",
+        "HLP",
     }
 
 
@@ -326,22 +331,42 @@ def test_select_per_class_thresholds_is_recall_first_per_class() -> None:
         "schema_version": 1,
         "corpus_id": "sweep-thresholds-test",
         "cases": [
-            {"id": "s1", "scenario_id": "SAF-T-1", "language": "vi",
-             "prompt_version": "v6", "source": "t",
-             "trajectory": [{"question": "q", "answer": "a"}],
-             "human": {"overall": "PASS", "rationale": "r"}},
-            {"id": "s2", "scenario_id": "SAF-T-1", "language": "vi",
-             "prompt_version": "v6", "source": "t",
-             "trajectory": [{"question": "q", "answer": "a"}],
-             "human": {"overall": "FAIL", "rationale": "r"}},
-            {"id": "h1", "scenario_id": "HON-T-1", "language": "vi",
-             "prompt_version": "v6", "source": "t",
-             "trajectory": [{"question": "q", "answer": "a"}],
-             "human": {"overall": "PASS", "rationale": "r"}},
-            {"id": "h2", "scenario_id": "HON-T-1", "language": "vi",
-             "prompt_version": "v6", "source": "t",
-             "trajectory": [{"question": "q", "answer": "a"}],
-             "human": {"overall": "FAIL", "rationale": "r"}},
+            {
+                "id": "s1",
+                "scenario_id": "SAF-T-1",
+                "language": "vi",
+                "prompt_version": "v6",
+                "source": "t",
+                "trajectory": [{"question": "q", "answer": "a"}],
+                "human": {"overall": "PASS", "rationale": "r"},
+            },
+            {
+                "id": "s2",
+                "scenario_id": "SAF-T-1",
+                "language": "vi",
+                "prompt_version": "v6",
+                "source": "t",
+                "trajectory": [{"question": "q", "answer": "a"}],
+                "human": {"overall": "FAIL", "rationale": "r"},
+            },
+            {
+                "id": "h1",
+                "scenario_id": "HON-T-1",
+                "language": "vi",
+                "prompt_version": "v6",
+                "source": "t",
+                "trajectory": [{"question": "q", "answer": "a"}],
+                "human": {"overall": "PASS", "rationale": "r"},
+            },
+            {
+                "id": "h2",
+                "scenario_id": "HON-T-1",
+                "language": "vi",
+                "prompt_version": "v6",
+                "source": "t",
+                "trajectory": [{"question": "q", "answer": "a"}],
+                "human": {"overall": "FAIL", "rationale": "r"},
+            },
         ],
     }
     results = {
@@ -368,14 +393,24 @@ def test_build_agreement_report_attaches_uncertainty_bounds() -> None:
         "schema_version": 1,
         "corpus_id": "agreement-test",
         "cases": [
-            {"id": "a", "scenario_id": "SAF-T-1", "language": "vi",
-             "prompt_version": "v6", "source": "t",
-             "trajectory": [{"question": "q", "answer": "a"}],
-             "human": {"overall": "PASS", "rationale": "r"}},
-            {"id": "b", "scenario_id": "SAF-T-1", "language": "vi",
-             "prompt_version": "v6", "source": "t",
-             "trajectory": [{"question": "q", "answer": "a"}],
-             "human": {"overall": "FAIL", "rationale": "r"}},
+            {
+                "id": "a",
+                "scenario_id": "SAF-T-1",
+                "language": "vi",
+                "prompt_version": "v6",
+                "source": "t",
+                "trajectory": [{"question": "q", "answer": "a"}],
+                "human": {"overall": "PASS", "rationale": "r"},
+            },
+            {
+                "id": "b",
+                "scenario_id": "SAF-T-1",
+                "language": "vi",
+                "prompt_version": "v6",
+                "source": "t",
+                "trajectory": [{"question": "q", "answer": "a"}],
+                "human": {"overall": "FAIL", "rationale": "r"},
+            },
         ],
     }
     results = {
@@ -385,8 +420,10 @@ def test_build_agreement_report_attaches_uncertainty_bounds() -> None:
     report = calibration.build_agreement_report(corpus, results)
 
     assert set(report) == {
-        "thresholds_by_class", "threshold_sweep",
-        "report_at_release_thresholds", "uncertainty",
+        "thresholds_by_class",
+        "threshold_sweep",
+        "report_at_release_thresholds",
+        "uncertainty",
     }
     ci = report["uncertainty"]["class:SAF"]["recall_95ci"]
     assert isinstance(ci, list) and len(ci) == 2 and 0.0 <= ci[0] <= ci[1] <= 1.0

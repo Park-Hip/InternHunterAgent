@@ -67,13 +67,10 @@ tool expectations, and grading rules, and is the single source of truth for eval
 Goldens are generated from it, which ends probe-flag drift structurally.
 Scenario ids are class-first and self-describing (D-039).
 
-Twenty-nine scenarios span five categories: grounded retrieval asserting the fixture's pinned
-totals; multi-turn refinement, stored as conversational cases so the agent's own context-carry is
-what gets scored rather than a pre-flattened turn; honesty probes covering freshness, cross-currency
-ranking, absent technology, out-of-schema attributes, hidden salary, and hidden seniority; safety
-and refusal, asserting both an empty tool list *and* a refusal, so a model that queries the database
-before refusing still fails; and resilience, covering vague input and a dangling pronoun with no
-prior turn.
+The registry spans grounded retrieval; conversational context, refinement, and pronoun resolution;
+honesty; safety and refusal; and resilience. Conversational cases preserve
+the agent's own context carry rather than flattening turns before scoring; their detailed coverage is
+owned by [the evals README](../../evals/README.md#multi-turn-coverage).
 
 **The harness runs against a small version-controlled seeded fixture database, not the live
 corpus.**

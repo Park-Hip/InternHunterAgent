@@ -8,7 +8,12 @@ import pytest
 
 import evals
 from evals.execution_accuracy import validate_execution_comparison
-from evals.scenarios import build_eval_dataset, format_scenario, load_scenarios, repeat_count
+from evals.scenarios import (
+    build_eval_dataset,
+    format_scenario,
+    load_scenarios,
+    repeat_count,
+)
 
 # Copied from docs/Agent_Behavior_Spec.md section 4, the frozen behavior target.
 BEHAVIOR_SPEC_PROBE_IDS = {
@@ -30,22 +35,44 @@ BEHAVIOR_SPEC_PROBE_IDS = {
     "HON-SQL-DESCRIBE-1",
     "SAF-DESTRUCTIVE-REFUSAL-2",
     "HLP-DETAIL-5",
+    "HLP-ERROR-RECOVERY-1",
+    "HLP-ERROR-RECOVERY-2",
+    "HON-CORRECTION-1",
+    "HON-CORRECTION-2",
+    "SAF-CARRYOVER-1",
+    "SAF-CARRYOVER-2",
 }
 # Anchored on the evals package, not this file: the observed answers are eval data
 # that stays in evals/ while the test lives under tests/.
-OBSERVED_ANSWERS_PATH = Path(evals.__file__).with_name("v1_scenario_matrix.observed.json")
+OBSERVED_ANSWERS_PATH = Path(evals.__file__).with_name(
+    "v1_scenario_matrix.observed.json"
+)
 
 
 def test_registry_loads_and_matches_the_frozen_behavior_spec() -> None:
     scenarios = load_scenarios()
 
-    assert len(scenarios) == 38
-    assert {scenario["id"] for scenario in scenarios if scenario["probe"]} == BEHAVIOR_SPEC_PROBE_IDS
-    assert sum(1 for scenario in scenarios if scenario["probe"]) == 18
-    assert repeat_count(
-        next(scenario for scenario in scenarios if scenario["id"] == "HON-CREATED-ON-1")
-    ) == 3
-    assert repeat_count(next(scenario for scenario in scenarios if scenario["id"] == "HLP-COUNT-1")) == 2
+    assert len(scenarios) == 50
+    assert {
+        scenario["id"] for scenario in scenarios if scenario["probe"]
+    } == BEHAVIOR_SPEC_PROBE_IDS
+    assert sum(1 for scenario in scenarios if scenario["probe"]) == 24
+    assert (
+        repeat_count(
+            next(
+                scenario
+                for scenario in scenarios
+                if scenario["id"] == "HON-CREATED-ON-1"
+            )
+        )
+        == 3
+    )
+    assert (
+        repeat_count(
+            next(scenario for scenario in scenarios if scenario["id"] == "HLP-COUNT-1")
+        )
+        == 2
+    )
 
 
 def test_registry_carries_class_first_ids_and_traceability() -> None:
@@ -78,7 +105,10 @@ def test_registry_carries_class_first_ids_and_traceability() -> None:
     assert scenarios["HLP-SENIOR-TITLE-1"]["requirements"] == []
     assert scenarios["HON-SQL-DESCRIBE-1"]["expected_tools"] == []
     assert scenarios["SAF-INJECTION-RESILIENCE-1"]["expected_tools"] == []
-    assert scenarios["SAF-INJECTION-RESILIENCE-1"]["name"] == "Decline an embedded injection request"
+    assert (
+        scenarios["SAF-INJECTION-RESILIENCE-1"]["name"]
+        == "Decline an embedded injection request"
+    )
     for scenario_id in ("SAF-INDIRECT-INJECTION-1", "SAF-INDIRECT-INJECTION-2"):
         scenario = scenarios[scenario_id]
         assert scenario["probe"] is True
@@ -93,18 +123,22 @@ def test_registry_carries_class_first_ids_and_traceability() -> None:
             [{"glossary": "POSTING_CONTEXT"}],
         ]
         assert "forbidden_any" not in semantic_assertion
-    assert "Declines to process embedded prompt-injection content" in scenarios[
-        "SAF-INJECTION-RESILIENCE-1"
-    ]["expected"]
+    assert (
+        "Declines to process embedded prompt-injection content"
+        in scenarios["SAF-INJECTION-RESILIENCE-1"]["expected"]
+    )
     resilience_assertion = next(
-        a for a in scenarios["SAF-INJECTION-RESILIENCE-1"]["grading"]["assertions"]
+        a
+        for a in scenarios["SAF-INJECTION-RESILIENCE-1"]["grading"]["assertions"]
         if a["type"] == "semantic"
     )
     assert resilience_assertion["required_any"] == [
         [{"glossary": "INJECTION_DECLINE"}],
         [{"glossary": "POSTING_CONTEXT"}],
     ]
-    assert scenarios["SAF-DESTRUCTIVE-REFUSAL-2"]["expected_tools"] == ["query_clean_jobs"]
+    assert scenarios["SAF-DESTRUCTIVE-REFUSAL-2"]["expected_tools"] == [
+        "query_clean_jobs"
+    ]
     created_on_assertion = scenarios["HON-CREATED-ON-1"]["grading"]["assertions"][0]
     assert created_on_assertion["type"] == "structural"
     assert created_on_assertion["required_any"] == [
@@ -116,7 +150,9 @@ def test_registry_carries_class_first_ids_and_traceability() -> None:
     }
 
 
-def test_refusal_and_zero_result_rules_carry_the_deterministic_wording_contract() -> None:
+def test_refusal_and_zero_result_rules_carry_the_deterministic_wording_contract() -> (
+    None
+):
     """Proposal #250: refusal and zero-result acceptance is deterministic, not judge-only.
 
     The structural rule holds the widened anchor set reviewed against T0027; the semantic
@@ -139,9 +175,7 @@ def test_refusal_and_zero_result_rules_carry_the_deterministic_wording_contract(
     structural = next(a for a in zero_results if a["type"] == "structural")
     assert structural["require_source_links"] is True
     lexicon = next(
-        term["lexicon"]
-        for term in structural["required_any"][0]
-        if "lexicon" in term
+        term["lexicon"] for term in structural["required_any"][0] if "lexicon" in term
     )
     assert "không tìm thấy việc làm" in lexicon
     assert "chưa có vị trí nào" in lexicon
@@ -181,18 +215,25 @@ def test_vietnamese_registry_has_accented_and_unaccented_input_probes() -> None:
         "accented": "Chỉ những việc ở Hà Nội.",
         "unaccented": "Chi nhung viec o Ha Noi.",
     }
-    assert scenarios["HLP-LOCATION-SYNONYM-1"]["input_variants"]["accented"] == "Việc làm ở Sài Gòn."
+    assert (
+        scenarios["HLP-LOCATION-SYNONYM-1"]["input_variants"]["accented"]
+        == "Việc làm ở Sài Gòn."
+    )
 
 
-def test_build_eval_dataset_generates_all_single_turn_goldens_from_the_registry() -> None:
+def test_build_eval_dataset_generates_all_single_turn_goldens_from_the_registry() -> (
+    None
+):
     dataset = build_eval_dataset()
 
-    assert len(dataset.goldens) == 35
+    assert len(dataset.goldens) == 34
 
 
 def test_format_scenario_is_a_dry_run_without_a_model_call() -> None:
     c1 = next(
-        scenario for scenario in load_scenarios() if scenario["id"] == "HON-CREATED-ON-1"
+        scenario
+        for scenario in load_scenarios()
+        if scenario["id"] == "HON-CREATED-ON-1"
     )
 
     output = format_scenario(c1)
@@ -208,14 +249,18 @@ def test_format_scenario_is_a_dry_run_without_a_model_call() -> None:
 
     assert "Turn tool expectations:" in format_scenario(referent)
     general_knowledge = next(
-        scenario for scenario in load_scenarios() if scenario["id"] == "HON-GENERAL-KNOWLEDGE-1"
+        scenario
+        for scenario in load_scenarios()
+        if scenario["id"] == "HON-GENERAL-KNOWLEDGE-1"
     )
     assert "Tool expectation:" in format_scenario(general_knowledge)
 
 
 def test_every_graded_scenario_classifies_its_comparison_explicitly() -> None:
     """D-b: the registry states row identity or exact per scenario, the grader never infers it."""
-    graded = [scenario for scenario in load_scenarios() if scenario.get("reference_sql")]
+    graded = [
+        scenario for scenario in load_scenarios() if scenario.get("reference_sql")
+    ]
     modes = {
         scenario["id"]: scenario.get("grading", {}).get("execution_comparison")
         for scenario in graded
@@ -232,7 +277,7 @@ def test_every_graded_scenario_classifies_its_comparison_explicitly() -> None:
         ("aggregate_count", 1),
         ("contains_reference", 1),
         ("cross_currency", 1),
-        ("ids_only", 15),
+        ("ids_only", 21),
         ("limited_ids", 1),
         ("zero_results", 1),
     ]
@@ -347,11 +392,15 @@ def test_loader_rejects_an_unknown_expected_tool(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="expected_tools must be a list of known tool names"):
+    with pytest.raises(
+        ValueError, match="expected_tools must be a list of known tool names"
+    ):
         load_scenarios(registry)
 
 
-def test_loader_rejects_a_turn_tool_contract_with_an_unallowed_requirement(tmp_path) -> None:
+def test_loader_rejects_a_turn_tool_contract_with_an_unallowed_requirement(
+    tmp_path,
+) -> None:
     registry = tmp_path / "scenarios.yaml"
     registry.write_text(
         """
@@ -410,7 +459,8 @@ def test_loader_rejects_an_unknown_grading_field(tmp_path) -> None:
 
 def test_loader_rejects_a_required_group_that_cannot_match(tmp_path) -> None:
     registry = _registry_with_grading(
-        tmp_path, "    assertions:\n      - type: semantic\n        required_any:\n          - []\n"
+        tmp_path,
+        "    assertions:\n      - type: semantic\n        required_any:\n          - []\n",
     )
 
     with pytest.raises(ValueError, match="required_any group must be a non-empty list"):
@@ -419,7 +469,8 @@ def test_loader_rejects_a_required_group_that_cannot_match(tmp_path) -> None:
 
 def test_loader_rejects_a_forbidden_pattern_that_does_not_compile(tmp_path) -> None:
     registry = _registry_with_grading(
-        tmp_path, '    assertions:\n      - type: literal\n        forbidden_patterns: ["(unclosed"]\n'
+        tmp_path,
+        '    assertions:\n      - type: literal\n        forbidden_patterns: ["(unclosed"]\n',
     )
 
     with pytest.raises(ValueError, match="does not compile"):
@@ -428,7 +479,8 @@ def test_loader_rejects_a_forbidden_pattern_that_does_not_compile(tmp_path) -> N
 
 def test_loader_rejects_an_unknown_assertion_type(tmp_path) -> None:
     registry = _registry_with_grading(
-        tmp_path, "    assertions:\n      - type: probabilistic\n        required_any: []\n"
+        tmp_path,
+        "    assertions:\n      - type: probabilistic\n        required_any: []\n",
     )
 
     with pytest.raises(ValueError, match="unknown assertion type"):
@@ -438,18 +490,28 @@ def test_loader_rejects_an_unknown_assertion_type(tmp_path) -> None:
 @pytest.mark.parametrize(
     ("grading", "message"),
     [
-        ("    assertions:\n      - type: literal\n        count_only: false\n", "count_only must be true"),
-        ("    assertions:\n      - type: literal\n        count_only: true\n", "requires expected_answer_count"),
+        (
+            "    assertions:\n      - type: literal\n        count_only: false\n",
+            "count_only must be true",
+        ),
+        (
+            "    assertions:\n      - type: literal\n        count_only: true\n",
+            "requires expected_answer_count",
+        ),
     ],
 )
-def test_loader_validates_count_only_assertions(tmp_path, grading: str, message: str) -> None:
+def test_loader_validates_count_only_assertions(
+    tmp_path, grading: str, message: str
+) -> None:
     registry = _registry_with_grading(tmp_path, grading)
 
     with pytest.raises(ValueError, match=message):
         load_scenarios(registry)
 
 
-def test_loader_rejects_a_semantic_requirement_encoded_as_a_bare_literal_phrase(tmp_path) -> None:
+def test_loader_rejects_a_semantic_requirement_encoded_as_a_bare_literal_phrase(
+    tmp_path,
+) -> None:
     registry = _registry_with_grading(
         tmp_path,
         "    assertions:\n      - type: semantic\n        required_any:\n          - [must refuse]\n",

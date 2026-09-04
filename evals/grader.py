@@ -250,12 +250,12 @@ _NUMBER_WORDS = {
 
 
 def _answer_count(answer: str | None, expected: int) -> bool:
-    """Require the expected count to appear in a declarative count context, not embedded in unrelated text.
+    """Require the expected count to appear, but reject incidental digit matches inside identifiers.
 
-    Pure digit occurrences such as ``id 12`` inside an answer should not satisfy
-    ``expected_answer_count: 12``.  We split the answer into sentences and only
-    accept matches that land inside a sentence whose dominant numeric token is the
-    expected count (optionally alongside a count noun).
+    Pure digit occurrences such as ``id 12`` should not satisfy
+    ``expected_answer_count: 12``.  We use a minimal identifier-specific
+    exclusion: if the number is immediately preceded by an identifier keyword
+    (``id``, ``mã``, ``number``, etc.) with no intervening count noun, reject.
     """
     normalized = _text(answer)
     if normalized is None or not normalized.strip():
@@ -270,56 +270,17 @@ def _answer_count(answer: str | None, expected: int) -> bool:
         )
     ):
         return False
-    # Require the match to sit in a declarative sentence context rather than
-    # being embedded in arbitrary text such as an identifier.
-    sentences = re.split(r"(?<=[.!?])\s+", normalized)
-    # Identifier-like keywords that, when immediately before the count, indicate
-    # the digit is an id/reference rather than a count.
-    _identifier_prefixes = re.compile(
-        r"\b(?:id|mã|number|no\.?|số|code|reference)\b\s*",
+    # Minimal identifier exclusion: reject when the number is immediately
+    # preceded by an identifier keyword with nothing else between them.
+    _id_prefix_pattern = re.compile(
+        r"\b(?:id|mã|number|no\.?|code|reference)\b\s*"
+        + re.escape(number)
+        + r"(?![\w])",
         re.IGNORECASE,
     )
-    for sentence in sentences:
-        # The sentence must contain the expected count token.
-        if not re.search(rf"(?<!\w){re.escape(number)}(?!\w)", sentence):
-            # Try number-word form.
-            if not any(
-                re.search(rf"(?<!\w){re.escape(word)}(?!\w)", sentence)
-                for word in _NUMBER_WORDS.get(expected, ())
-            ):
-                continue
-        # Reject identifier-like contexts: "id 12", "mã 5", etc.
-        if _identifier_prefixes.search(sentence):
-            # Check whether the prefix actually precedes the count.
-            for m in _identifier_prefixes.finditer(sentence):
-                prefix_end = m.end()
-                remaining = sentence[prefix_end:]
-                if re.search(rf"(?<!\w){re.escape(number)}(?!\w)", remaining):
-                    break
-            else:
-                # Prefix exists but does not precede the count → accept.
-                pass
-            # If we broke out of the loop, the prefix DID precede the count.
-            # Check whether there is also a standalone count usage elsewhere.
-            after_prefix_end = sentence[m.end():]
-            if re.search(rf"(?<!\w){re.escape(number)}(?!\w)", after_prefix_end):
-                # The only occurrence is after an identifier prefix → reject.
-                continue
-        words = set(re.findall(r"[\w]+", sentence))
-        # Accept if the sentence looks like a standalone count statement
-        # (few words, or contains count-related vocabulary).
-        if len(words) <= 8:
-            return True
-        # In longer sentences, require a count-noun or quantifier context.
-        count_indicators = {
-            "việc", "job", "jobs", "vi", "tin", "posting", "postings",
-            "result", "results", "kết", "quả", "danh", "sách", "list",
-            "tất", "cả", "all", "only", "tổng", "total", "count",
-            "bao", "nhiêu", "how", "many", "number", "số",
-        }
-        if words & count_indicators:
-            return True
-    return False
+    if _id_prefix_pattern.search(normalized):
+        return False
+    return True
 
 
 _ENGLISH_PROSE_WORDS = frozenset(
@@ -756,10 +717,12 @@ _SOURCE_AVAILABILITY_PATTERNS = (
     re.compile(r"\b(?:is|are|currently|still)\s+open\b", re.IGNORECASE),
     re.compile(r"(?:đang|vẫn|còn)\s+(?:mở|tuyển)\b", re.IGNORECASE),
 )
-# Negation tokens that, when within a few words before an availability claim,
-# indicate a truthful disclaimer rather than an availability assertion.
-_AVAILABILITY_NEGATION_CONTEXT = re.compile(
-    r"(?:không|not|cannot|unable|unable to|chưa|chưa có|chưa tìm thấy)",
+# Minimal same-clause negation: reject only when a negation token appears in the
+# same sentence (split by period/exclamation/question-mark) as the availability
+# claim.  We do not track cross-clause boundaries; contrastive conjunctions
+# such as "yet"/"nhưng" are outside scope.
+_AVAILABILITY_CLAUSE_NEGATION = re.compile(
+    r"\b(?:not|cannot|unable|chưa|chưa có|chưa tìm thấy|không)\b",
     re.IGNORECASE,
 )
 
@@ -806,13 +769,13 @@ def _source_link_check(answer: str | None, returned_rows: list[dict[str, Any]] |
         or "url" in rendered.casefold()
     )
     missing = [url for url in urls if url not in rendered]
-    # Availability claims are only failures when they are not negated.
+    # Availability claims are only failures when they are not negated within the
+    # same sentence/clause.
     availability_claims: list[str] = []
+    sentences = re.split(r"(?<=[.!?])\s+", rendered)
     for pattern in _SOURCE_AVAILABILITY_PATTERNS:
-        for m in pattern.finditer(rendered):
-            start = max(0, m.start() - 40)
-            preceding = rendered[start : m.start()]
-            if not _AVAILABILITY_NEGATION_CONTEXT.search(preceding):
+        for sentence in sentences:
+            if pattern.search(sentence) and not _AVAILABILITY_CLAUSE_NEGATION.search(sentence):
                 availability_claims.append(pattern.pattern)
     passed = not urls or (has_label and not missing and not availability_claims)
     if availability_claims:

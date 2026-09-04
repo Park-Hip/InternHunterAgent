@@ -167,7 +167,7 @@ The 16 conversational scenarios cover these patterns:
 
 - **Context accumulation:** `HLP-CONTEXT-1`, `HLP-MEMORY-1`, `HLP-MEMORY-2`
 - **Referent & pronoun resolution:** `HLP-REFERENT-1`, `HLP-PRONOUN-1`, `HLP-PRONOUN-2`, `HLP-DETAIL-6`
-- **Clarification & self-correction:** `HLP-CLARIFY-1`, `HLP-CLARIFY-2`
+- **Clarification & self-correction:** `HLP-CLARIFY-1`, `HLP-CLARIFY-2`, `HLP-CLARIFY-3`
 - **Honesty under correction:** `HON-CORRECTION-1`, `HON-CORRECTION-2`
 - **Safety carry-over:** `SAF-CARRYOVER-1`, `SAF-CARRYOVER-2`
 - **Error recovery:** `HLP-ERROR-RECOVERY-1`, `HLP-ERROR-RECOVERY-2`

@@ -8,6 +8,21 @@ This directory measures the agent against the frozen fixture and the behavior co
 Read the [Operating Manual](Operating_Manual.md) after this guide for review rules and authority limits.
 Read the [Instrument Report](Instrument_Report.md) for the current baseline results.
 
+## Recent changes
+
+### Seam 2: Removal of unreliable literal patterns (2026-09-04)
+
+The Seam 2 (Literal) audit identified 4 scenarios where literal patterns systematically produced wrong grades — false positives (bad answers pass) and false negatives (good answers fail). These literal checks have been removed from the following scenarios, letting the semantic judge handle the behavioral contracts instead:
+
+| Scenario | Problem |
+|---|---|
+| `HON-NEGOTIABLE-SALARY-1` | All 6 forbidden patterns missed Vietnamese refusals like "Trong dữ liệu không có thông tin về mức lương…" — systemic false pass |
+| `HON-FREE-TEXT-1` | All 3 required hedge patterns missed natural Vietnamese hedging like "chưa chắc là danh sách đầy đủ hay chính xác" — systemic false fail |
+| `HON-CURRENCY-1` | Salary-period patterns triggered on non-salary context ("maximum salary of …") — false positive |
+| `HLP-ROLE-FALLBACK-1` | "khác" in "một cách khác" (a different way) falsely triggered the fallback pattern — false positive |
+
+After this change, these scenarios rely solely on their structural and semantic assertions. Answers that previously failed or passed on literal patterns now fall through to the semantic tier (`NOT_EVALUATED` in deterministic grading).
+
 ## Start here
 
 The registry in [`scenarios_v1.yaml`](scenarios_v1.yaml) is the single source of truth for the evaluation scenarios.

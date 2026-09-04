@@ -162,12 +162,6 @@
     assertions:
       - type: structural
         reject_salary_period: true
-      - type: literal
-        forbidden_patterns:
-          - '(?:\b(?:usd|vnd|đô\s*la(?:\s*mỹ)?|dollars?|đồng)\b|[$₫])\s*(?:\d[\d.,\s]*)?(?:/|\s+(?:mỗi|per))\s*(?:tháng|month)\b'
-          - '(?:\b\d+\s*(?:USD|VND|đồng|dollars?)\b)'
-        required_patterns:
-          - '(?i)(not available|không có trong|không tìm thấy|database)'
       - type: semantic
         forbid_single_salary_winner: true
         required_any:
@@ -214,11 +208,6 @@
   grading:
     execution_comparison: ids_only
     assertions:
-      - type: literal
-        required_patterns:
-          - "(?i)(no dedicated field|không có trường dữ liệu riêng|no specific field)"
-          - "(?i)(based on.*description|dựa trên.*mô tả|found in.*text)"
-          - "(?i)(may not be accurate|có thể chưa chính xác|not fully accurate)"
       - type: structural
         require_source_links: true
       - type: semantic
@@ -238,17 +227,6 @@
   grading:
     execution_comparison: ids_only
     assertions:
-      - type: literal
-        forbidden_patterns:
-          - '(?:\b(?:usd|vnd|đô\s*la(?:\s*mỹ)?|dollars?|đồng)\b|[$₫])\s*(?:\d[\d.,\s]*)?(?:/|\s+(?:mỗi|per))\s*(?:tháng|month)\b'
-          - "(?i)not available in the database"
-          - "(?i)không có trong dữ liệu"
-          - "(?i)không tìm thấy.*lương"
-          - "(?i)doesn't include"
-          - "(?i)không ghi nhận"
-        required_patterns:
-          - "(?i)(negotiable|thương lượng|có thể thương lượng)"
-          - "(?i)(not disclosed|không công bố|chưa công bố)"
       - type: semantic
         required_any:
           - [{glossary: NEGOTIABLE_SALARY}]
@@ -666,10 +644,6 @@
   grading:
     execution_comparison: ids_only
     assertions:
-      - type: literal
-        required_patterns:
-          - "(?i)(other|khác|nhóm khác|fallback|alternative)"
-          - "(?i)(title|tiêu đề|description|mô tả)"
       - type: structural
         require_source_links: true
       - type: semantic

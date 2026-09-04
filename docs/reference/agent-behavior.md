@@ -3,8 +3,8 @@
 
 > **Status**
 > - Frozen: 2026-07-11 under T0015.2. The freeze protects the requirements under test, the probe
->   protocol, and the settled decisions — not the per-scenario inputs and expected outputs that
->   §4a-4c duplicated from `evals/scenarios_v1.yaml`, which T0028.2 cut on 2026-08-14.
+>   protocol, and the settled decisions — not per-scenario inputs and expected outputs, which
+>   `evals/scenarios_v1.yaml` owns.
 > - `behavior_glossary` is landed in `config/prompts.yaml` and is translated into Vietnamese under
 >   T0033.2.
 > - The glossary has 19 canonical strings and matching Vietnamese grader anchors.
@@ -187,56 +187,10 @@ Data Engineer `job_level` = 3× Experienced (non-manager) + 1× Manager. Newest 
 Home Credit Data Analyst row. No COBOL / Rust / Google rows.
 
 **Legend:** `Probe?` = honesty/safety-critical → must be correct on **all** reruns (G45, ≥3×).
-Every scenario is carried by [`evals/scenarios_v1.yaml`](../../evals/scenarios_v1.yaml), which owns
-each scenario's fixture rows, input (or turns), and expected behavior; the tables below name the
-scenario and the requirement it tests, and do not restate that data.
-
-### 4a. Registry scenarios
-
-| ID | Requirements | Probe? |
-|---|---|---|
-| HLP-COUNT-1 | G01,G14,G30,G33 | no |
-| HLP-LIST-1 | G14,G33,G35 | no |
-| HLP-TECH-STACK-1 | G13,G33,G35 | no |
-| HLP-TRUNCATION-1 | G08,G34,G36 | no |
-| HLP-CONTEXT-1 | G20,G21,G12 | no |
-| HLP-REFERENT-1 | G20,G21,G16 | no |
-| HON-CREATED-ON-1 | G17,G07 | **yes** |
-| HON-CURRENCY-1 | G09,G04 | **yes** |
-| HON-ZERO-RESULTS-1 | G06,G44 | **yes** |
-| HON-FREE-TEXT-1 | G05,G12,G08 | **yes** |
-| HON-NEGOTIABLE-SALARY-1 | G05,G07 | **yes** |
-| HLP-SENIORITY-1 | G18,G14 | no |
-| HON-ABSENT-FIELD-1 | G05,G07 | **yes** |
-| HON-OPEN-STATUS-1 | G05,G07 | **yes** |
-| SAF-DESTRUCTIVE-REFUSAL-1 | G25 | **yes** |
-| SAF-OFF-TOPIC-REDIRECT-1 | G24 | **yes** |
-| SAF-INJECTION-REFUSAL-1 | G26,G27 | **yes** |
-| HLP-CLARIFY-1 | G02,G40 | no |
-| HLP-REFERENT-2 | G20,G02 | no |
-
-### 4b. Coverage-gap scenarios
-
-The manual pass needs only the serving provider + the fixture DB, so these high-value scenarios
-remain in the registry. **Decision (T0015.2): include all five in v1.**
-
-| ID | Requirements | Probe? |
-|---|---|---|
-| HLP-COMPOUND-1 | G03 | no |
-| HON-GENERAL-KNOWLEDGE-1 | G10 | **yes** |
-| SAF-INJECTION-RESILIENCE-1 | G26 | **yes** |
-| HON-PREMISE-CORRECTION-1 | G44 | **yes** |
-
-### 4c. Decision-specific probe scenarios (verify the settled §12 picks)
-
-| ID | Decision | Probe? |
-|---|---|---|
-| HLP-SENIOR-TITLE-1 | #2 senior title | no |
-| HON-SQL-DESCRIBE-1 | #4 show SQL | **yes** |
-| HLP-LOCATION-SYNONYM-1 | #7 synonym | no |
-| HLP-ABSTRACTION-1 | #8 abstraction | no |
-| HLP-ROLE-FALLBACK-1 | #9 role fallback | no |
-| SAF-DESTRUCTIVE-REFUSAL-2 | #3 compound refuse | **yes** |
+[`evals/scenarios_v1.yaml`](../../evals/scenarios_v1.yaml) is the authoritative scenario registry:
+it owns each scenario's fixture rows, input (or turns), requirements, probe flag, and expected
+behavior. See [the evals README](../../evals/README.md#multi-turn-coverage) for the registry's
+conversational-coverage summary.
 
 ---
 
@@ -254,7 +208,7 @@ rows is acceptable. If probes stay flaky after the T0015.5 few-shots, record the
 
 - Running the scenarios (T0015.4) or editing prompt content — few-shots, SP/SG rule edits for
   decisions #6/#7/#9/#10 (T0015.5).
-- Adding any of the §4b gap scenarios to `golden_dataset.json` (harness-track follow-up).
+- Adding registry scenarios to `golden_dataset.json` (harness-track follow-up).
 - Any schema/DDL/API change (frozen at T0013.5) and the automated judge harness (separate track).
 
 ## Provenance

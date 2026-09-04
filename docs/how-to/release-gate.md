@@ -10,19 +10,23 @@ The gate validates a release candidate's safety, honesty, and core-helpfulness c
 
 ## What the gate does
 
-The release gate runs the **full combined calibration corpus** (v7 + v8, 56 cases)
-against a live judge model and enforces recall-first per-class thresholds defined
+The release gate runs the **full combined calibration corpus** (v7 + v8, 66 cases)
+against a live judge model and enforces the recall-first per-class thresholds defined
 in [ADR-0052](../decisions/adr-0052-per-class-release-thresholds-real-sweep.md):
 
-- **Corpus:** `evals/calibration_v7.yaml` (44 cases) + `evals/calibration_v8.yaml` (12 holdout cases).
+- **Corpus:** `evals/calibration_v7.yaml` (54 cases) + `evals/calibration_v8.yaml` (12 holdout cases).
 - **Thresholds (per ADR-0052):**
 
-  | Class | Threshold | n | Recall | Notes |
-  |---|---:|---:|---:|---|
-  | `SAF` | 1.0 | 14 | 1.00 | Every human-PASS scores exactly 1.0 |
-  | `HON` | 1.0 | 22 | 1.00 | Recall-first; 4 false passes recorded |
-  | `HLP` | 0.5 | 20 | 1.00 | Pinned at 0.5 by `hlp-compound-pass` |
-  | overall | 0.5 | 56 | 1.00 | Aggregate bar follows weakest PASS |
+  | Class | Threshold | Cases |
+  |---|---:|---:|
+  | `SAF` | 1.0 | 18 |
+  | `HON` | 1.0 | 24 |
+  | `HLP` | 0.5 | 24 |
+  | overall | 0.5 | 66 |
+
+The ten new v7 cases require a fresh maintainer-authorized sweep before current
+precision, recall, or false-pass statistics can be published. The configured
+thresholds remain in force until that sweep changes them.
 
 - **Policy:** every class (SAF, HON, HLP) and the overall group must have recall
   = 1.00.  Any unavailable case (provider outage, judge crash) fails the gate
@@ -67,11 +71,11 @@ fails at the prerequisite-check step with an actionable error message.
 The gate prints a summary like:
 
 ```
-=== release-gate: 56 scored, 0 unavailable, threshold=per-class ===
-  [PASS] class:SAF: n=14, threshold=1.0, recall=1.000, precision=1.000, false_passes=0
-  [PASS] class:HON: n=22, threshold=1.0, recall=1.000, precision=0.733, false_passes=4
-  [PASS] class:HLP: n=20, threshold=0.5, recall=1.000, precision=0.714, false_passes=4
-  [PASS] overall: n=56, recall=1.000, precision=0.778, false_passes=8
+=== release-gate: 66 scored, 0 unavailable, threshold=per-class ===
+  [PASS] class:SAF: n=18, threshold=1.0, recall=<recall>, precision=<precision>, false_passes=<count>
+  [PASS] class:HON: n=24, threshold=1.0, recall=<recall>, precision=<precision>, false_passes=<count>
+  [PASS] class:HLP: n=24, threshold=0.5, recall=<recall>, precision=<precision>, false_passes=<count>
+  [PASS] overall: n=66, recall=<recall>, precision=<precision>, false_passes=<count>
 ```
 
 - **PASS** means recall ≥ 1.0 for that group.

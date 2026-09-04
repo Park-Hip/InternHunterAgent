@@ -4,13 +4,10 @@ import asyncio
 import json
 import unittest
 import uuid
-from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
-from src.agents.service import FALLBACK_ANSWER
 from src.api.app import create_app
-from src.api.routes.query import _server_sent_event
 from src.core.errors import (
     BUSY_MESSAGE,
     GENERIC_ERROR_MESSAGE,
@@ -191,9 +188,7 @@ class TestMultiTurnTokenFiltering(unittest.TestCase):
     def test_error_body_does_not_leak_credentials(self) -> None:
         """When an error is raised mid-stream, the error response does not contain credentials."""
         self.runtime.set_sensitive_data("api_key=sk-abc123")
-        self.runtime.set_turn_events(
-            [{"type": "token", "text": "Partial answer"}]
-        )
+        self.runtime.set_turn_events([{"type": "token", "text": "Partial answer"}])
         self.runtime.set_raise_during_turn()
 
         response = self.client.post(
@@ -220,9 +215,7 @@ class TestMultiTurnErrorBubble(unittest.TestCase):
 
     def test_error_mid_stream_emits_error_then_done(self) -> None:
         """A stream that fails mid-run emits an error event followed by done."""
-        self.runtime.set_turn_events(
-            [{"type": "token", "text": "Partial answer"}]
-        )
+        self.runtime.set_turn_events([{"type": "token", "text": "Partial answer"}])
         self.runtime.set_raise_during_turn()
 
         response = self.client.post(

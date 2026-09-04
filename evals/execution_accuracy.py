@@ -362,8 +362,16 @@ def compare_result_sets(
         observed = Counter(
             _value_key(currency) for currency, ids in generated_groups for _ in ids
         ) if generated_groups is not None else Counter()
-        reference_by_currency = dict(reference_groups)
-        generated_by_currency = dict(generated_groups) if generated_groups is not None else {}
+        # FF-2: compare within-currency id sets rather than exact id order.
+        # The prompt contract requires one non-ranked group per currency; it does
+        # not specify a within-group sort key, so any ordering of the same ids is
+        # acceptable.
+        reference_by_currency = {currency: set(ids) for currency, ids in reference_groups}
+        generated_by_currency = (
+            {currency: set(ids) for currency, ids in generated_groups}
+            if generated_groups is not None
+            else {}
+        )
         matches = generated_groups is not None and reference_by_currency == generated_by_currency
         reference_ids = Counter(_value_key(job_id) for _, ids in reference_groups for job_id in ids)
         generated_ids = Counter(

@@ -157,7 +157,7 @@ Widen a rule only through a proposal; registry lexicon entries live in [`scenari
 |---|---|
 | `scenarios_v1.yaml` | Registry-owned questions, repeats, tool expectations, execution contracts, and assertions. |
 | `driver.py` | Captures, checkpoints, records lineage, and freezes sanitized replays. |
-| `execution_accuracy.py` | Compares generated and reference SQL against the frozen fixture. |
+| `execution_accuracy.py` | Compares generated and reference SQL against the frozen fixture. `cross_currency` compares within-currency id **sets** (not ordered lists) because the prompt contract requires one non-ranked group per currency but does not specify a within-group sort key — see FF-2 below. |
 | `grader.py` | Produces independent deterministic check outcomes and the first failing seam. |
 | `score.py` | Runs the resumable judge pass over a recorded capture. |
 | `calibration.py` | Loads, merges, sweeps, and reports the versioned human-labelled corpora; owns the per-class release thresholds. |
@@ -168,6 +168,12 @@ Widen a rule only through a proposal; registry lexicon entries live in [`scenari
 | `viewer.py` | Local HTML evidence viewer. |
 | `Instrument_Report.md` | Dated baseline, calibration, disagreement, and unresolved-case record. |
 | `Operating_Manual.md` | Maintainer review and disagreement workflow. |
+
+## Design notes
+
+### FF-2: `cross_currency` within-group ordering
+
+The `cross_currency` execution comparison uses **set equality** for posting ids within each currency group rather than exact list equality. The prompt contract (G09) states the agent must "return one non-ranked group per currency; no global winner" — it never names a within-group sort key. Requiring exact id order was a false-fail: a faithful agent that groups by currency without an explicit within-group `ORDER BY` was deterministically rejected even though the id sets matched. See `tests/evals/test_execution_accuracy.py::test_cross_currency_accepts_different_within_group_order` for the regression test.
 
 ## Manual completion check
 

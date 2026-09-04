@@ -73,6 +73,8 @@
     assertions:
       - type: structural
         require_source_links: true
+        required_any:
+          - [{glossary: TRUNCATION}]
       - type: literal
         expected_answer_count: 20
 - id: HLP-CONTEXT-1

@@ -267,10 +267,13 @@ def test_committed_replay_is_never_silently_omitted_from_discovery() -> None:
     # with issue #251 (prompt-v10 abstraction-capture freeze, 2026-08-26).
     # iha358-indirect-injection-v11.json joined with issue #358 (indirect-injection
     # probe freeze against the 24-row fixture, prompt-v11).
+    # iha-deterministic-integrity-cleanup-v11.json joined with the deterministic
+    # integrity cleanup (v11 structural written-answer coverage, issue-based).
     assert discovered == {
         REPLAY_PATH.name,
         "iha251-hlp-abstraction-v10.json",
         "iha358-indirect-injection-v11.json",
+        "iha-deterministic-integrity-cleanup-v11.json",
     }
     for name in ARCHIVED_REPLAY_NAMES:
         assert name not in discovered

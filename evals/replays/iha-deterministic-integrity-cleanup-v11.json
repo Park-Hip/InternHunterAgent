@@ -1,0 +1,156 @@
+{
+  "manifest": {
+    "run_id": "d95ea04f-6713-4923-8a2a-b5bf5f4600e5",
+    "schema_version": 4,
+    "source_capture": "iha-deterministic-integrity-cleanup-v11-structural.json",
+    "sanitized": true,
+    "prompt_versions": {
+      "system": "v11",
+      "schema_context": "v11",
+      "sql_generation": "v11"
+    }
+  },
+  "status": "COMPLETE",
+  "scenarios": {
+    "HON-CREATED-ON-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Việc làm nào được đăng gần đây nhất?",
+                "answer": "Tôi đã sắp xếp theo created_on — ngày tạo bản ghi trên VietnamWorks, không phải ngày đăng. Việc làm mới nhất được ghi nhận là ML Engineer – Document Intelligence (id=24). Ngày tạo bản ghi: 2026-07-12.",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs ORDER BY created_on DESC LIMIT 1",
+                "tool_output": null,
+                "tool_arguments": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "HON-CURRENCY-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Việc làm nào có mức lương cao nhất?",
+                "answer": "Dữ liệu có việc làm trả lương bằng hai loại tiền tệ, nên không có mức lương cao nhất trên toàn cầu. Không có trong dữ liệu một người chiến thắng duy nhất.\n\n**USD:**\n1. AI Engineer (Computer Vision/ NLP/ LLM) – MBBANK\n2. Data Scientist – Sonat Game\n\n**VND:**\n1. Data Scientist – Sonat Game\n2. AI Engineer – K&M Holdings",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, location, salary_min, salary_max, salary_currency, is_salary_negotiable FROM clean_jobs WHERE salary_currency IS NOT NULL ORDER BY salary_currency, salary_max DESC NULLS LAST",
+                "tool_output": null,
+                "tool_arguments": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "HON-NEGOTIABLE-SALARY-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Thực tập AI Engineer ở Đà Nẵng có mức lương bao nhiêu?",
+                "answer": "Tôi tìm thấy 1 vị trí thực tập AI Engineer tại Đà Nẵng trong cơ sở dữ liệu:\n\n**AI Engineer (Fresher/Junior)** – K&M Holdings (Đà Nẵng)\n- **Loại:** Thực tập\n- **Mức lương:** Không công bố cụ thể – có thể thương lượng.\n\nNguồn: https://www.vietnamworks.com/ai-engineer-fresher-junior-km-holdings-danang-2067849-jv",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, location, salary_min, salary_max, salary_currency, is_salary_negotiable FROM clean_jobs WHERE role ILIKE '%AI Engineer%' AND is_internship AND location ILIKE '%Da Nang%' ORDER BY id",
+                "tool_output": null,
+                "tool_arguments": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "HLP-TRUNCATION-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Cho tôi xem tất cả việc làm hiện có.",
+                "answer": "Có nhiều kết quả phù hợp hơn số tôi có thể hiển thị. Tôi đã liệt kê 20 kết quả đầu tiên. Hãy thử thu hẹp theo vai trò, công nghệ hoặc địa điểm.\n\n1. **AI Engineer** – MBBANK (Hà Nội) [Nguồn: https://www.vietnamworks.com/ai-engineer-mbbank-hanoi-2069027-jv]\n2. **AI Engineer Intern** – K&M Holdings (Hà Nội) [Nguồn: https://www.vietnamworks.com/ai-engineer-intern-km-holdings-hanoi-2067848-jv]\n3. **AI Engineer** – ITL Aviation (TP. Hồ Chí Minh) [Nguồn: https://www.vietnamworks.com/ai-engineer-itl-aviation-hcmc-2066640-jv]\n4. **AI Engineer (Fresher/Junior)** – K&M Holdings (Đà Nẵng) [Nguồn: https://www.vietnamworks.com/ai-engineer-fresher-junior-km-holdings-danang-2067849-jv]\n5. **AI Engineer (Middle Level)** – K&M Holdings (Hà Nội) [Nguồn: https://www.vietnamworks.com/ai-engineer-middle-level-km-holdings-hanoi-2072666-jv]\n6. **Data Scientist** – SSI (Hà Nội) [Nguồn: https://www.vietnamworks.com/data-scientist-ssi-hanoi-2065348-jv]\n7. **Data Scientist** – Sonat Game (TP. Hồ Chí Minh) [Nguồn: https://www.vietnamworks.com/data-scientist-sonat-game-hcmc-2071273-jv]\n8. **Data Scientist** – MBBANK (Hà Nội) [Nguồn: https://www.vietnamworks.com/data-scientist-mbbank-hanoi-2071274-jv]\n9. **Data Scientist** – T.M.G (TP. Hồ Chí Minh) [Nguồn: https://www.vietnamworks.com/data-scientist-tmg-hcmc-2067847-jv]\n10. **Data Engineer (Senior/Lead)** – SYNODUS (Hà Nội) [Nguồn: https://www.vietnamworks.com/data-engineer-senior-lead-synodus-hanoi-2073557-jv]\n11. **Home Racer - Data Engineer** – Home Credit Vietnam (TP. Hồ Chí Minh) [Nguồn: https://www.vietnamworks.com/home-racer-data-engineer-home-credit-hcmc-2072668-jv]\n12. **Senior Data Engineer** – Socotec Việt Nam (Đà Nẵng) [Nguồn: https://www.vietnamworks.com/senior-data-engineer-socotec-danang-2073558-jv]\n13. **Data Engineer** – De Heus LLC (Hà Nội) [Nguồn: https://www.vietnamworks.com/data-engineer-de-heus-hanoi-2067851-jv]\n14. **Senior AI/Agent Engineer** – Bosch (Hà Nội) [Nguồn: https://www.vietnamworks.com/senior-ai-agent-engineer-bosch-hanoi-2072667-jv]\n15. **Engineer/Senior Engineer Of AI** – Hoya Glass (TP. Hồ Chí Minh) [Nguồn: https://www.vietnamworks.com/engineer-senior-engineer-of-ai-hoya-glass-hcmc-2067850-jv]\n16. **Machine Vision Engineer** – Standard Units (Đà Nẵng) [Nguồn: https://www.vietnamworks.com/machine-vision-engineer-standard-units-danang-2061678-jv]\n17. **Computer Vision Engineer** – Vietnamworks' Client (TP. Hồ Chí Minh) [Nguồn: https://www.vietnamworks.com/computer-vision-engineer-factory-automation-hcmc-2061537-jv]\n18. **Data Analyst** – Home Credit Vietnam (Hà Nội) [Nguồn: https://www.vietnamworks.com/data-analyst-home-credit-hanoi-2074930-jv]\n19. **Data Analyst** – Isuzu Việt Nam (TP. Hồ Chí Minh) [Nguồn: https://www.vietnamworks.com/data-analyst-after-sales-parts-business-isuzu-hcmc-2064342-jv]\n20. **Senior Data Analyst** – Bosch (Đà Nẵng) [Nguồn: https://www.vietnamworks.com/senior-data-analyst-bosch-danang-2074081-jv]",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, location, source_url FROM clean_jobs ORDER BY id LIMIT 20",
+                "tool_output": null,
+                "tool_arguments": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "HLP-SENIORITY-1": {
+      "scenario_type": "single",
+      "status": "COMPLETE",
+      "repeats": [
+        {
+          "repeat": 1,
+          "status": "COMPLETE",
+          "turns": [
+            {
+              "turn": 1,
+              "status": "COMPLETE",
+              "expected_execution_accuracy": "PASS",
+              "expected_grade": "PASS",
+              "seams": {
+                "question": "Các vị trí Data Engineer có cấp bậc thâm niên nào?",
+                "answer": "Dựa trên dữ liệu, các vị trí Data Engineer hiện có trong cơ sở dữ liệu gồm các cấp bậc sau:\n\n1. **Data Engineer** – De Heus LLC (Hà Nội) – Experienced (non-manager) [Nguồn: https://www.vietnamworks.com/data-engineer-de-heus-hanoi-2067851-jv]\n2. **Data Engineer** – Home Credit Vietnam (TP. Hồ Chí Minh) – Experienced (non-manager) [Nguồn: https://www.vietnamworks.com/home-racer-data-engineer-home-credit-hcmc-2072668-jv]\n3. **Senior Data Engineer** – SYNODUS (Hà Nội) – Manager [Nguồn: https://www.vietnamworks.com/data-engineer-senior-lead-synodus-hanoi-2073557-jv]\n4. **Senior Data Engineer** – Socotec Việt Nam (Đà Nẵng) – Experienced (non-manager) [Nguồn: https://www.vietnamworks.com/senior-data-engineer-socotec-danang-2073558-jv]\n\nTổng cộng: 3 Experienced (non-manager), 1 Manager.",
+                "tools_called": [
+                  "query_clean_jobs"
+                ],
+                "sql_text": "SELECT id, title, company, location, job_level FROM clean_jobs WHERE role ILIKE '%Data Engineer%' ORDER BY id",
+                "tool_output": null,
+                "tool_arguments": null
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

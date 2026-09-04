@@ -1383,3 +1383,99 @@ def test_created_on_winner_structural_checks_are_enforced() -> None:
     ]
     assert len(failed_phrases) >= 1
     assert any("listed on" in c.detail for c in failed_phrases)
+
+
+def test_hlp_truncation_requires_truncation_disclosure() -> None:
+    """FP-6: HLP-TRUNCATION-1 must require a TRUNCATION disclosure.
+
+    An answer that lists 20 postings without saying more exist must FAIL.
+    An answer that includes the truncation caveat must PASS.
+    """
+    urls = [f"https://example.com/{i}" for i in range(1, 21)]
+    rows = [{"id": i, "source_url": u} for i, u in enumerate(urls, 1)]
+
+    # No truncation disclosure → FAIL on required_substance.
+    grade_no_truncation = grade_evidence(
+        "HLP-TRUNCATION-1",
+        Evidence(
+            answer="Dưới đây là 20 việc làm.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=rows,
+            capture_prompt_versions=load_prompt_versions(),
+        ),
+    )
+    assert grade_no_truncation.status == FAIL
+    required = next(c for c in grade_no_truncation.checks if c.name == "required_substance_1")
+    assert required.passed is False
+
+    # Truncation disclosure present → PASS.
+    grade_with_truncation = grade_evidence(
+        "HLP-TRUNCATION-1",
+        Evidence(
+            answer=(
+                "Nguồn: "
+                + " ".join(f"[{i}] {u}" for i, u in enumerate(urls, 1))
+                + ". Có nhiều kết quả phù hợp hơn số tôi có thể hiển thị. "
+                + "Tôi đã liệt kê 20 kết quả đầu tiên. "
+                + "Hãy thử thu hẹp theo vai trò, công nghệ hoặc địa điểm."
+            ),
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=rows,
+            capture_prompt_versions=load_prompt_versions(),
+        ),
+    )
+    assert grade_with_truncation.status == PASS
+    required = next(c for c in grade_with_truncation.checks if c.name == "required_substance_1")
+    assert required.passed is True
+
+
+def test_source_links_disclaimer_with_negation_passes() -> None:
+    """FF-1: A truthful disclaimer containing negated availability language must pass source_links."""
+    url = "https://example.com/job/1"
+    grade = grade_evidence(
+        "HLP-DETAIL-1",
+        Evidence(
+            answer=(
+                f"Liên kết nguồn gốc: {url}. "
+                "Lưu ý: liên kết này chỉ là tham chiếu, "
+                "không đảm bảo tin tuyển dụng còn mở hay đã đóng."
+            ),
+            tools_called=["get_job_details"],
+            execution_accuracy={"status": "EXEMPT"},
+            returned_rows=[{"source_url": url}],
+            capture_prompt_versions=load_prompt_versions(),
+        ),
+    )
+    source_links = next(c for c in grade.checks if c.name == "source_links")
+    assert source_links.passed is True
+
+
+def test_source_links_label_vocabulary_accepts_link_and_url() -> None:
+    """FF-3: The source_links check accepts 'Link:', 'đường dẫn', and 'url' as labels."""
+    url = "https://example.com/job/1"
+    for label in [f"Link: {url}", f"đường dẫn: {url}", f"url: {url}"]:
+        grade = grade_evidence(
+            "HLP-LIST-1",
+            Evidence(
+                answer=label,
+                tools_called=["query_clean_jobs"],
+                execution_accuracy={"status": PASS},
+                returned_rows=[{"source_url": url}],
+                capture_prompt_versions=load_prompt_versions(),
+            ),
+        )
+        source_links = next(c for c in grade.checks if c.name == "source_links")
+        assert source_links.passed is True, f"label {label!r} should be accepted"
+
+
+def test_answer_count_rejects_identifier_context() -> None:
+    """FP-7: _answer_count must not match incidental digits inside identifiers."""
+    # "id 12" should NOT satisfy expected_answer_count=12.
+    assert _answer_count("Xem việc làm id 12.", 12) is False
+    assert _answer_count("Việc mã 12.", 12) is False
+    # But legitimate count statements should still pass.
+    assert _answer_count("Có 12 việc làm.", 12) is True
+    assert _answer_count("There are 12 jobs.", 12) is True
+    assert _answer_count("12 jobs available.", 12) is True

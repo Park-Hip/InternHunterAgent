@@ -221,16 +221,18 @@ def test_cross_currency_rejects_a_single_currency_ranking(monkeypatch) -> None:
 @pytest.mark.parametrize(
     "generated",
     [
+        # Wrong id: references id 2 but generated has id 10 (different set within USD group)
         [
             {"id": 10, "salary_currency": "USD"},
             {"id": 11, "salary_currency": "USD"},
             {"id": 12, "salary_currency": "VND"},
             {"id": 14, "salary_currency": "VND"},
         ],
+        # Wrong currency grouping: interleaved currencies
         [
-            {"id": 2, "salary_currency": "USD"},
             {"id": 1, "salary_currency": "USD"},
             {"id": 3, "salary_currency": "VND"},
+            {"id": 2, "salary_currency": "USD"},
             {"id": 4, "salary_currency": "VND"},
         ],
     ],
@@ -256,7 +258,32 @@ def test_cross_currency_requires_reference_postings_in_rank_order(monkeypatch, g
     ]
 
 
-def test_cross_currency_accepts_the_reference_postings_in_each_currency_group(monkeypatch) -> None:
+def test_cross_currency_accepts_different_within_group_order(monkeypatch) -> None:
+    """FF-2: within-currency id order is not part of the contract.
+
+    The prompt requires one non-ranked group per currency but does not specify
+    a within-group sort key, so any permutation of the same ids within each
+    currency group is acceptable.
+    """
+    reference = [
+        {"id": 1, "salary_currency": "USD"},
+        {"id": 2, "salary_currency": "USD"},
+        {"id": 3, "salary_currency": "VND"},
+        {"id": 4, "salary_currency": "VND"},
+    ]
+    generated = [
+        {"id": 2, "salary_currency": "USD"},
+        {"id": 1, "salary_currency": "USD"},
+        {"id": 4, "salary_currency": "VND"},
+        {"id": 3, "salary_currency": "VND"},
+    ]
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: generated if sql == "generated" else reference,
+    )
+
+    result = compare_result_sets("generated", "reference", comparison_mode="cross_currency")
+    assert result["status"] == "PASS"
     rows = [
         {"id": 1, "salary_currency": "USD"},
         {"id": 2, "salary_currency": "USD"},
@@ -511,3 +538,29 @@ def test_cli_writes_a_utf8_report_the_grader_can_consume(tmp_path, monkeypatch, 
     assert json.loads(output_path.read_text(encoding="utf-8")) == {
         "rows": [{"company": company, "created_on": "2026-08-13"}]
     }
+
+
+def test_cross_currency_ignores_within_group_order(monkeypatch) -> None:
+    """FF-2: within-currency id order is not part of the cross-currency contract.
+
+    A generated query that groups by currency but does not sort within each
+    group must still pass when the id sets per currency match the reference.
+    """
+    reference = [
+        {"id": 1, "salary_currency": "USD"},
+        {"id": 2, "salary_currency": "USD"},
+        {"id": 3, "salary_currency": "VND"},
+        {"id": 4, "salary_currency": "VND"},
+    ]
+    generated = [
+        {"id": 2, "salary_currency": "USD"},
+        {"id": 1, "salary_currency": "USD"},
+        {"id": 4, "salary_currency": "VND"},
+        {"id": 3, "salary_currency": "VND"},
+    ]
+    monkeypatch.setattr(
+        "evals.execution_accuracy.execute_query",
+        lambda sql, database_url=None: generated if sql == "generated" else reference,
+    )
+    result = compare_result_sets("generated", "reference", comparison_mode="cross_currency")
+    assert result["status"] == "PASS"

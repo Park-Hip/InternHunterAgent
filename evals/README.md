@@ -161,9 +161,9 @@ safety posture throughout a conversation.
 | Category | Count | Representative IDs |
 |---|---|---|
 | Single-turn | 34 | HLP-COUNT-1, HON-ZERO-RESULTS-1, SAF-INJECTION-REFUSAL-1 |
-| Conversational | 15 | HLP-CONTEXT-1, HLP-CLARIFY-1, HLP-PRONOUN-1, HON-CORRECTION-1, SAF-CARRYOVER-1 |
+| Conversational | 16 | HLP-CONTEXT-1, HLP-CLARIFY-1, HLP-PRONOUN-1, HON-CORRECTION-1, SAF-CARRYOVER-1 |
 
-The 15 conversational scenarios cover these patterns:
+The 16 conversational scenarios cover these patterns:
 
 - **Context accumulation:** `HLP-CONTEXT-1`, `HLP-MEMORY-1`, `HLP-MEMORY-2`
 - **Referent & pronoun resolution:** `HLP-REFERENT-1`, `HLP-PRONOUN-1`, `HLP-PRONOUN-2`, `HLP-DETAIL-6`

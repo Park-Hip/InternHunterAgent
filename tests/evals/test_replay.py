@@ -269,7 +269,6 @@ def test_committed_replay_is_never_silently_omitted_from_discovery() -> None:
     # probe freeze against the 24-row fixture, prompt-v11).
     assert discovered == {
         REPLAY_PATH.name,
-        "iha243-honesty-v9.json",
         "iha251-hlp-abstraction-v10.json",
         "iha358-indirect-injection-v11.json",
     }

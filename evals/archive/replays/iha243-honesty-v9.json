@@ -230,5 +230,10 @@
         }
       ]
     }
+  },
+  "_archived": {
+    "reason": "Replay no longer validates against current grader rules (mandatory caveat patterns added in PR #373).",
+    "archived_at": "2026-09-03",
+    "original_path": "evals/replays/iha243-honesty-v9.json"
   }
 }

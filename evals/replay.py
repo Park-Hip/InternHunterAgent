@@ -22,6 +22,7 @@ ARCHIVED_REPLAY_NAMES = frozenset(
         "t0024.4-v3-obligations.json",
         "t0025.7-acceptance.json",
         "v6-baseline-20260823.json",
+        "iha243-honesty-v9.json",
     }
 )
 

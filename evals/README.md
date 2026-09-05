@@ -55,12 +55,12 @@ uv run pytest -q tests/evals
 # Capture (only serving-model call)
 uv run python -m evals.driver --output evals/runs/<run>.json
 
-# Grade (no model)
-uv run python -m evals.execution_accuracy evals/runs/<run>.json --output evals/runs/<run>-execution.json
-uv run python -m evals.grader --run evals/runs/<run>.json --execution-accuracy evals/runs/<run>-execution.json --output evals/runs/<run>-grade.json
-
 # Score (semantic judge, after capture)
 uv run python -m evals.score --run evals/runs/<run>.json
+
+# Grade (no new model call; consumes persisted semantic scores)
+uv run python -m evals.execution_accuracy evals/runs/<run>.json --output evals/runs/<run>-execution.json
+uv run python -m evals.grader --run evals/runs/<run>.json --execution-accuracy evals/runs/<run>-execution.json --output evals/runs/<run>-grade.json
 
 # Freeze + replay (CI gate)
 uv run python -m evals.driver freeze evals/runs/<run>.json --grade evals/runs/<run>-grade.json -o evals/replays/<run>.json
@@ -83,7 +83,7 @@ evals/
 ├── pipeline.md                   Five-step pipeline, result-term table, quick commands
 ├── scenarios_v1.yaml             Single source of truth: registry-owned cases, assertions, SQL, tools
 │
-├── semantic/                     Semantic judge tier (diagnostic until authorized)
+├── semantic/                     Semantic judge tier and calibrated grading
 │   ├── index.md                  What the tier is for; authority; D-042 relationship
 │   ├── judge.md                  DeepEval judge wrapper, provider arms, throttle, config
 │   ├── rubric.md                 SAF/HON/HLP rubrics, failure modes, anti-directives
@@ -151,4 +151,4 @@ The Seam 2 (Literal) audit identified 4 scenarios where literal patterns systema
 | `HON-CURRENCY-1` | Salary-period patterns triggered on non-salary context ("maximum salary of …") — false positive |
 | `HLP-ROLE-FALLBACK-1` | "khác" in "một cách khác" (a different way) falsely triggered the fallback pattern — false positive |
 
-After this change, these scenarios rely solely on their structural and semantic assertions. Answers that previously failed or passed on literal patterns now fall through to the semantic tier (`NOT_EVALUATED` in deterministic grading).
+After this change, these scenarios rely solely on their structural and semantic assertions. Answers that previously failed or passed on literal patterns are evaluated by the semantic tier when a persisted numeric judge score is available; otherwise their semantic check is `NOT_EVALUATED`.

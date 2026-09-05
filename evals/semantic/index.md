@@ -1,6 +1,6 @@
 # Semantic Evaluation Tier
 
-> **Status:** Diagnostic until calibration authorizes a stated use.
+> **Status:** Calibrated scores are consumed by the grader; unavailable scores remain `NOT_EVALUATED`.
 > See [Operating_Manual.md](../Operating_Manual.md#authority-and-the-three-kinds-of-check) for the authority boundary.
 
 ## What this tier is for
@@ -11,10 +11,10 @@ This is the only tier that reasons about meaning rather than observable facts or
 
 ## Authority
 
-The semantic result is **diagnostic** until a maintainer authorizes its calibrated use. The current metric must not be read as a production release gate unless that authorization is recorded in the calibration agreement report.
+The grader consumes an `AVAILABLE` semantic score using the calibrated per-class threshold from `RELEASE_THRESHOLDS_BY_CLASS`; a score below that threshold fails the semantic check. An unavailable or non-numeric score remains `NOT_EVALUATED`.
 
 - During calibration, a human label wins over the judge.
-- After authorization, the calibrated grader may own that stated use.
+- The semantic score is recorded once per repeat and supplied to the grader as evidence; grading makes no judge call.
 - Structural checks always win over semantic checks (D-042).
 
 ## Relationship to D-042
@@ -34,5 +34,5 @@ D-042 (structural wins) means a failed structural check overrides any favorable 
 
 - Uses `DeepEval.ConversationalGEval` with `MultiTurnParams.CONTENT` to evaluate the full conversation, not just the final turn.
 - Provider is deliberately on **Google/gemma** (not the serving provider) to keep evaluation load off the serving account and avoid provider judging its own arm (D-017).
-- Scored separately from the deterministic pass via `evals/score.py` — never inside `driver.py`.
-- Results are `AVAILABLE` (judge returned a score) or `UNAVAILABLE` (provider failure). Both are rerunnable evidence.
+- Scored separately from capture via `evals/score.py` — never inside `driver.py`; the subsequent grader consumes the persisted result.
+- Results are `AVAILABLE` (judge returned a numeric score) or `UNAVAILABLE` (provider failure). Both are rerunnable evidence.

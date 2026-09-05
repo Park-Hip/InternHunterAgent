@@ -5,18 +5,17 @@
 ## Five-step pipeline
 
 ```text
-registry → capture → execution accuracy → deterministic grade → freeze → replay
-                  \→ semantic score ---------------------------> human review
+registry → capture → execution accuracy → semantic score → grade → freeze → replay
 ```
 
 | Step | Input | Output | Authority |
 |---|---|---|---|
 | 1. Capture | Scenario registry + frozen fixture | Raw JSON artifact (`evals/runs/*.json`) | Only model call in entire pipeline |
 | 2. Execution accuracy | Raw capture + fixture DB | SQL comparison report | Deterministic, no provider |
-| 3. Deterministic grade | Raw capture + execution accuracy | Grade report (PASS/FAIL/INFRA/NOT_EVALUATED) | Deterministic, no provider |
-| 4. Freeze | Capture + grade | Sanitized replay (`evals/replays/*.json`) | Provenance-locked, no provider |
-| 5. Replay | Replay artifact | Verification report | CI gate, no provider |
-| 6. Semantic score | Raw capture | Judge scores + rationale | Separate pass, uses judge provider |
+| 3. Semantic score | Raw capture | Persisted judge scores + rationale | Separate pass, uses judge provider |
+| 4. Grade | Raw capture + execution accuracy + semantic scores | Grade report (PASS/FAIL/INFRA/NOT_EVALUATED) | Mechanical; no new provider call |
+| 5. Freeze | Capture + grade | Sanitized replay (`evals/replays/*.json`) | Provenance-locked, no provider |
+| 6. Replay | Replay artifact | Verification report | CI gate, no provider |
 
 ## Step details
 
@@ -50,43 +49,7 @@ uv run python -m evals.execution_accuracy evals/runs/<run>.json --output evals/r
 **Authority:** Deterministic — executes generated SQL and reference SQL against fixture, compares using scenario-declared contract
 **Modes:** exact, contains_reference, ids_only, limited_ids, aggregate_count, zero_results, cross_currency
 
-### Step 3: Deterministic grade
-
-**Command:**
-```powershell
-uv run python -m evals.grader --run evals/runs/<run>.json --execution-accuracy evals/runs/<run>-execution.json --output evals/runs/<run>-grade.json
-```
-
-**Input:** Raw capture + execution accuracy report
-**Output:** Grade report with per-turn checks and outcomes
-**Authority:** Purely mechanical — structural checks win over literal wins over semantic
-**Outputs:** PASS, FAIL, INFRA, NOT_EVALUATED per turn; first_failing_seam
-
-### Step 4: Freeze
-
-**Command:**
-```powershell
-uv run python -m evals.driver freeze evals/runs/<run>.json --grade evals/runs/<run>-grade.json -o evals/replays/<run>.json
-```
-
-**Input:** Raw capture + grade report
-**Output:** Sanitized replay artifact
-**Authority:** Strips all trace identifiers, validates forbidden content, enforces replay schema
-**Invariant:** Commits only the replay, not the raw capture
-
-### Step 5: Replay (CI gate)
-
-**Command:**
-```powershell
-uv run python -m evals.replay --all
-```
-
-**Input:** Every artifact in `evals/replays/`
-**Output:** Verification report (or failure)
-**Authority:** Discovers and validates every artifact — stale or newly added files fail loudly
-**Invariant:** No model call, no judge call
-
-### Step 6: Semantic score
+### Step 3: Semantic score
 
 **Command:**
 ```powershell
@@ -98,6 +61,42 @@ uv run python -m evals.score --run evals/runs/<run>.json
 **Authority:** Separate pass over recorded evidence; resumable and re-runnable
 **Cost:** ~120 judge calls, ~40 minutes at 10 RPM throttle
 
+### Step 4: Grade
+
+**Command:**
+```powershell
+uv run python -m evals.grader --run evals/runs/<run>.json --execution-accuracy evals/runs/<run>-execution.json --output evals/runs/<run>-grade.json
+```
+
+**Input:** Raw capture + execution accuracy report + persisted semantic scores
+**Output:** Grade report with per-turn checks and outcomes
+**Authority:** Mechanical — structural checks win over literal wins over semantic
+**Outputs:** PASS, FAIL, INFRA, NOT_EVALUATED per turn; first_failing_seam
+
+### Step 5: Freeze
+
+**Command:**
+```powershell
+uv run python -m evals.driver freeze evals/runs/<run>.json --grade evals/runs/<run>-grade.json -o evals/replays/<run>.json
+```
+
+**Input:** Raw capture + grade report
+**Output:** Sanitized replay artifact
+**Authority:** Strips all trace identifiers, validates forbidden content, enforces replay schema
+**Invariant:** Commits only the replay, not the raw capture
+
+### Step 6: Replay (CI gate)
+
+**Command:**
+```powershell
+uv run python -m evals.replay --all
+```
+
+**Input:** Every artifact in `evals/replays/`
+**Output:** Verification report (or failure)
+**Authority:** Discovers and validates every artifact — stale or newly added files fail loudly
+**Invariant:** No model call, no judge call
+
 ## Result-term table
 
 | Term | Meaning | Enters pass-rate denominator? |
@@ -106,19 +105,19 @@ uv run python -m evals.score --run evals/runs/<run>.json
 | `FAIL` | A check under the agent's control failed | Yes (as failure) |
 | `INFRA` | Required evidence missing due to external failure | No |
 | `UNRUN` | Turn or scenario was never attempted | No |
-| `NOT_EVALUATED` | Check inapplicable to evidence, or behavioral contract deferred to semantic judge | No |
+| `NOT_EVALUATED` | Check inapplicable to evidence, or a semantic-only contract lacks an `AVAILABLE` judge result | No |
 | `EXEMPT` | Execution accuracy intentionally absent (no SQL contract) | Yes (as pass) |
-| `AVAILABLE` | Semantic judge returned a score | Diagnostic only |
-| `UNAVAILABLE` | Semantic judge did not produce a usable result | Diagnostic only |
+| `AVAILABLE` | Semantic judge returned a numeric score | Grader compares it with the calibrated class threshold |
+| `UNAVAILABLE` | Semantic judge did not produce a usable result | Semantic check remains `NOT_EVALUATED` |
 
 ## Key invariants
 
-1. **Capture is the only serving-model call.** Everything after capture is purely mechanical.
+1. **Capture is the only serving-model call.** Semantic scoring is a separate judge-provider pass over the captured evidence.
 2. **Structural checks win over literal wins over semantic.** A failed structural check overrides all lower-tier results.
-3. **NOT_EVALUATED never becomes INFRA or PASS.** A scenario whose decisive behavior is semantic-only stays NOT_EVALUATED.
+3. **Unavailable semantic evidence never becomes INFRA or PASS.** A semantic-only scenario is `NOT_EVALUATED` only when it has no `AVAILABLE` judge result.
 4. **Human labels are immutable.** Calibration scores never overwrite human annotations.
 5. **Replay is provider-free.** CI validates committed replays without any model or judge credentials.
-6. **Semantic scoring is a later pass.** It runs over recorded evidence, never inside the capture loop.
+6. **Grade after scoring.** The mechanical grader consumes persisted semantic results and makes no judge call.
 
 ## Commands quick reference
 
@@ -131,12 +130,12 @@ uv run pytest -q tests/evals
 # Capture
 uv run python -m evals.driver --output evals/runs/<run>.json
 
+# Score (semantic, after capture)
+uv run python -m evals.score --run evals/runs/<run>.json
+
 # Grade
 uv run python -m evals.execution_accuracy evals/runs/<run>.json --output evals/runs/<run>-execution.json
 uv run python -m evals.grader --run evals/runs/<run>.json --execution-accuracy evals/runs/<run>-execution.json --output evals/runs/<run>-grade.json
-
-# Score (semantic, after capture)
-uv run python -m evals.score --run evals/runs/<run>.json
 
 # Freeze and replay
 uv run python -m evals.driver freeze evals/runs/<run>.json --grade evals/runs/<run>-grade.json -o evals/replays/<run>.json

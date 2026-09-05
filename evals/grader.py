@@ -17,7 +17,9 @@ from pathlib import Path
 import re
 from typing import Any
 
+from evals.calibration import RELEASE_THRESHOLDS_BY_CLASS
 from evals.scenarios import load_scenarios, repeat_count, scenario_category
+from evals.semantic import AVAILABLE
 from src.agents.runtime.prompts import (
     SYSTEM_PROMPT_SURFACE,
     load_behavior_glossary,
@@ -49,6 +51,7 @@ class Evidence:
     returned_rows: list[dict[str, Any]] | None = None
     capture_prompt_versions: dict[str, str] | None = None
     capture_legacy_prompt_version: str | None = None
+    semantic_result: dict[str, Any] | None = None
 
     @classmethod
     def from_turn(
@@ -57,6 +60,7 @@ class Evidence:
         execution_accuracy: dict[str, Any] | None = None,
         capture_prompt_versions: dict[str, str] | None = None,
         capture_legacy_prompt_version: str | None = None,
+        semantic_result: dict[str, Any] | None = None,
     ) -> "Evidence":
         seams = turn.get("seams") or {}
         return cls(
@@ -68,10 +72,13 @@ class Evidence:
             returned_rows=(
                 seams.get("returned_rows")
                 or turn.get("returned_rows")
-                or (execution_accuracy or turn.get("execution_accuracy") or {}).get("generated_rows")
+                or (execution_accuracy or turn.get("execution_accuracy") or {}).get(
+                    "generated_rows"
+                )
             ),
             capture_prompt_versions=capture_prompt_versions,
             capture_legacy_prompt_version=capture_legacy_prompt_version,
+            semantic_result=semantic_result,
         )
 
 
@@ -150,7 +157,9 @@ class Check:
 
     def __post_init__(self) -> None:
         if self.outcome is None:
-            self.outcome = PASS if self.passed is True else FAIL if self.passed is False else INFRA
+            self.outcome = (
+                PASS if self.passed is True else FAIL if self.passed is False else INFRA
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -184,7 +193,9 @@ def _text(answer: str | None) -> str:
     return (answer or "").casefold()
 
 
-def _required_check(answer: str, groups: tuple[tuple[str, ...], ...], tier: str) -> list[Check]:
+def _required_check(
+    answer: str, groups: tuple[tuple[str, ...], ...], tier: str
+) -> list[Check]:
     checks: list[Check] = []
     for index, group in enumerate(groups, start=1):
         matched = next((term for term in group if term.casefold() in answer), None)
@@ -192,7 +203,9 @@ def _required_check(answer: str, groups: tuple[tuple[str, ...], ...], tier: str)
             Check(
                 name=f"required_substance_{index}",
                 passed=matched is not None,
-                detail=(f"matched {matched!r}" if matched else f"none of {group!r} present"),
+                detail=(
+                    f"matched {matched!r}" if matched else f"none of {group!r} present"
+                ),
                 tier=tier,
             )
         )
@@ -265,12 +278,39 @@ _ENGLISH_PROSE_WORDS = frozenset(
     "a an and are as at be but by can does for from has have how i in is it job jobs my not of on or that the these this to was were what which with you your".split()
 )
 
-_ALLOWED_TECH_TERMS = frozenset({
-    "AI", "SQL", "Python", "Data", "ML", "Remote", "React", "Docker",
-    "JavaScript", "TypeScript", "Backend", "Frontend", "Fullstack",
-    "Java", "Go", "Rust", "Kotlin", "Swift", "PHP", "Ruby", "Node",
-    "AWS", "GCP", "Azure", "Linux", "Git", "API", "REST", "GraphQL",
-})
+_ALLOWED_TECH_TERMS = frozenset(
+    {
+        "AI",
+        "SQL",
+        "Python",
+        "Data",
+        "ML",
+        "Remote",
+        "React",
+        "Docker",
+        "JavaScript",
+        "TypeScript",
+        "Backend",
+        "Frontend",
+        "Fullstack",
+        "Java",
+        "Go",
+        "Rust",
+        "Kotlin",
+        "Swift",
+        "PHP",
+        "Ruby",
+        "Node",
+        "AWS",
+        "GCP",
+        "Azure",
+        "Linux",
+        "Git",
+        "API",
+        "REST",
+        "GraphQL",
+    }
+)
 
 
 def _row_values(rows: list[dict[str, Any]]) -> list[str]:
@@ -289,7 +329,9 @@ def _schema_identifiers() -> tuple[str, ...]:
     identifiers = set(re.findall(r"^Table:\s*(\w+)", context, flags=re.MULTILINE))
     identifiers.update(re.findall(r"^-\s+(\w+)\s+\(", context, flags=re.MULTILINE))
     if not identifiers:
-        raise ValueError("No table or column identifiers found in prompts.schema_context")
+        raise ValueError(
+            "No table or column identifiers found in prompts.schema_context"
+        )
     return tuple(sorted(identifiers))
 
 
@@ -301,13 +343,13 @@ def _strip_schema_identifiers(text: str) -> str:
     identifier first is what keeps the language check about language.
     """
     for identifier in _schema_identifiers():
-        text = re.sub(
-            rf"(?<![a-z0-9_]){re.escape(identifier)}(?![a-z0-9_])", " ", text
-        )
+        text = re.sub(rf"(?<![a-z0-9_]){re.escape(identifier)}(?![a-z0-9_])", " ", text)
     return text
 
 
-def _answer_language_pure(answer: str | None, rows: list[dict[str, Any]] | None) -> bool | None:
+def _answer_language_pure(
+    answer: str | None, rows: list[dict[str, Any]] | None
+) -> bool | None:
     """Check agent prose while allowing canonical and source row values verbatim."""
     if not rows:
         return None
@@ -356,7 +398,11 @@ def _sanctioned_identifier_text() -> str:
     """Every phrasing the project tells the agent to say, as one casefolded haystack."""
     return " ".join(
         [*BEHAVIOR_GLOSSARY.values()]
-        + [anchor for anchors in BEHAVIOR_GLOSSARY_ANCHORS.values() for anchor in anchors]
+        + [
+            anchor
+            for anchors in BEHAVIOR_GLOSSARY_ANCHORS.values()
+            for anchor in anchors
+        ]
         + [anchor for anchors in EVALUATION_ANCHORS.values() for anchor in anchors]
     ).casefold()
 
@@ -381,9 +427,7 @@ def _leakable_identifiers() -> tuple[str, ...]:
     """
     sanctioned = _sanctioned_identifier_text()
     return tuple(
-        name
-        for name in _schema_identifiers()
-        if "_" in name and name not in sanctioned
+        name for name in _schema_identifiers() if "_" in name and name not in sanctioned
     )
 
 
@@ -447,7 +491,9 @@ _STRUCTURED_JOB_LEVELS = (
 )
 
 
-def _answer_mentions_returned_salary(answer: str, rows: list[dict[str, Any]] | None) -> bool:
+def _answer_mentions_returned_salary(
+    answer: str, rows: list[dict[str, Any]] | None
+) -> bool:
     """Return whether an answer states a returned salary amount or range.
 
     A payment-period word on its own is not enough. The check needs a returned salary
@@ -468,12 +514,15 @@ def _answer_mentions_returned_salary(answer: str, rows: list[dict[str, Any]] | N
         for value in (row.get("salary_min"), row.get("salary_max"))
         if value is not None
     }
-    mentioned_currencies = {currency.casefold() for currency in re.findall(r"\b[A-Z]{3}\b", answer)}
-    answer_amounts = {
-        re.sub(r"\D", "", token)
-        for token in re.findall(r"\d+(?:[,.]\d+)*", answer)
+    mentioned_currencies = {
+        currency.casefold() for currency in re.findall(r"\b[A-Z]{3}\b", answer)
     }
-    return bool(currencies & mentioned_currencies) and bool(returned_amounts & answer_amounts)
+    answer_amounts = {
+        re.sub(r"\D", "", token) for token in re.findall(r"\d+(?:[,.]\d+)*", answer)
+    }
+    return bool(currencies & mentioned_currencies) and bool(
+        returned_amounts & answer_amounts
+    )
 
 
 def _normalized_salary_amount(value: Any) -> str:
@@ -488,7 +537,9 @@ def _normalized_salary_amount(value: Any) -> str:
 
 
 def _salary_period_check(evidence: Evidence) -> Check:
-    mentions_salary = _answer_mentions_returned_salary(evidence.answer or "", evidence.returned_rows)
+    mentions_salary = _answer_mentions_returned_salary(
+        evidence.answer or "", evidence.returned_rows
+    )
     if not mentions_salary:
         return Check(
             "salary_period",
@@ -511,7 +562,9 @@ def _salary_period_check(evidence: Evidence) -> Check:
     for match in period_matches:
         matched_text = match.group(0)
         # Check if this period word is part of a calendar reference (e.g. "tháng 5", "năm 2026").
-        if _CALENDAR_PERIOD_PATTERN.search(matched_text + answer[match.end():match.end() + 10]):
+        if _CALENDAR_PERIOD_PATTERN.search(
+            matched_text + answer[match.end() : match.end() + 10]
+        ):
             continue
         return Check(
             "salary_period",
@@ -544,13 +597,17 @@ def _job_level_fidelity_check(evidence: Evidence) -> Check:
             NOT_EVALUATED,
         )
     answer = _text(evidence.answer)
-    mentioned = [level for level in _STRUCTURED_JOB_LEVELS if level.casefold() in answer]
+    mentioned = [
+        level for level in _STRUCTURED_JOB_LEVELS if level.casefold() in answer
+    ]
     unsupported = [level for level in mentioned if level not in returned_levels]
     shortened = [
         level
         for level in returned_levels
         if "(" in level
-        and re.search(rf"(?<!\w){re.escape(level.split(' ', 1)[0].casefold())}(?!\w)", answer)
+        and re.search(
+            rf"(?<!\w){re.escape(level.split(' ', 1)[0].casefold())}(?!\w)", answer
+        )
         and level.casefold() not in answer
     ]
     if unsupported or shortened:
@@ -586,7 +643,9 @@ def _title_to_level_inference_check(evidence: Evidence) -> Check:
         if isinstance(row.get("job_level"), str) and row["job_level"].strip()
     }
     claimed = [level for level in _STRUCTURED_JOB_LEVELS if level.casefold() in answer]
-    unsupported = [level for level in claimed if level.casefold() not in returned_levels]
+    unsupported = [
+        level for level in claimed if level.casefold() not in returned_levels
+    ]
     return Check(
         "senior_title_level_inference",
         not unsupported,
@@ -638,12 +697,28 @@ def _lifecycle_substitution_check(evidence: Evidence) -> Check:
 def _execution_accuracy_checks(evidence: Evidence) -> list[Check]:
     accuracy = evidence.execution_accuracy
     if accuracy is None:
-        return [Check("execution_accuracy", None, "T0025.5 result is absent", "structural")]
+        return [
+            Check("execution_accuracy", None, "T0025.5 result is absent", "structural")
+        ]
     accuracy_status = accuracy.get("status")
     if accuracy_status in {PASS, "EXEMPT"}:
-        return [Check("execution_accuracy", True, f"execution accuracy {accuracy_status}", "structural")]
+        return [
+            Check(
+                "execution_accuracy",
+                True,
+                f"execution accuracy {accuracy_status}",
+                "structural",
+            )
+        ]
     if accuracy_status in {INFRA, UNRUN}:
-        return [Check("execution_accuracy", None, f"execution accuracy is {accuracy_status}", "structural")]
+        return [
+            Check(
+                "execution_accuracy",
+                None,
+                f"execution accuracy is {accuracy_status}",
+                "structural",
+            )
+        ]
     if accuracy_status == NOT_EVALUATED:
         return [
             Check(
@@ -654,7 +729,14 @@ def _execution_accuracy_checks(evidence: Evidence) -> list[Check]:
                 outcome=NOT_EVALUATED,
             )
         ]
-    return [Check("execution_accuracy", False, f"execution accuracy is {accuracy_status}", "structural")]
+    return [
+        Check(
+            "execution_accuracy",
+            False,
+            f"execution accuracy is {accuracy_status}",
+            "structural",
+        )
+    ]
 
 
 def _structural_checks(
@@ -663,20 +745,31 @@ def _structural_checks(
     checks: list[Check] = []
     expectation = rule.tool_expectation(turn_number)
     if evidence.tools_called is None:
-        checks.append(Check("tools_recorded", None, "tools_called is absent from the replay record", "structural"))
+        checks.append(
+            Check(
+                "tools_recorded",
+                None,
+                "tools_called is absent from the replay record",
+                "structural",
+            )
+        )
     elif expectation.allowed_tools is None and not expectation.required_tools:
         passed = len(evidence.tools_called) == 0
         checks.append(
             Check(
                 "no_tool_called",
                 passed,
-                "no tool called" if passed else f"unexpected tools: {evidence.tools_called!r}",
+                "no tool called"
+                if passed
+                else f"unexpected tools: {evidence.tools_called!r}",
                 "structural",
             )
         )
     else:
         if expectation.required_tools:
-            passed = all(tool in evidence.tools_called for tool in expectation.required_tools)
+            passed = all(
+                tool in evidence.tools_called for tool in expectation.required_tools
+            )
             checks.append(
                 Check(
                     "required_tool_called",
@@ -686,7 +779,9 @@ def _structural_checks(
                 )
             )
         if expectation.allowed_tools is not None:
-            passed = all(tool in expectation.allowed_tools for tool in evidence.tools_called)
+            passed = all(
+                tool in expectation.allowed_tools for tool in evidence.tools_called
+            )
             checks.append(
                 Check(
                     "allowed_tools_called",
@@ -716,12 +811,16 @@ def _structural_checks(
     ):
         execution_passed = _execution_accuracy_checks(evidence)[0].passed
         checks.append(
-            _source_link_check(evidence.answer, evidence.returned_rows, execution_passed)
+            _source_link_check(
+                evidence.answer, evidence.returned_rows, execution_passed
+            )
         )
 
     if _prompt_surface_is_current(evidence, SYSTEM_PROMPT_SURFACE):
         if rule.structural_text:
-            checks.extend(_text_checks(evidence.answer, rule.structural_text, "structural"))
+            checks.extend(
+                _text_checks(evidence.answer, rule.structural_text, "structural")
+            )
         if rule.reject_salary_period:
             checks.append(_salary_period_check(evidence))
         if rule.preserve_returned_job_levels:
@@ -747,7 +846,9 @@ def _count_only_check(answer: str | None, expected_count: int | None) -> Check:
     lines = [line.strip() for line in (answer or "").splitlines() if line.strip()]
     forbidden = (
         len(lines) != 1
-        or any(_LIST_MARKER.match(line) or _HEADING_MARKER.match(line) for line in lines)
+        or any(
+            _LIST_MARKER.match(line) or _HEADING_MARKER.match(line) for line in lines
+        )
         or "?" in (answer or "")
         or (bool(lines) and lines[0].endswith((":", ";")))
     )
@@ -789,7 +890,9 @@ def _source_link_check(
     rendered = answer or ""
     has_label = "nguồn" in rendered.casefold() or "source link" in rendered.casefold()
     availability_claims = [
-        pattern.pattern for pattern in _SOURCE_AVAILABILITY_PATTERNS if pattern.search(rendered)
+        pattern.pattern
+        for pattern in _SOURCE_AVAILABILITY_PATTERNS
+        if pattern.search(rendered)
     ]
     if execution_passed is False and urls:
         # Execution failed: validate URLs actually present in answer text rather than
@@ -826,7 +929,14 @@ def _judge_checks(rule: ScenarioRule, evidence: Evidence) -> list[Check]:
     if isinstance(value, dict):
         value = value.get("score")
     if value is None:
-        return [Check("judge_metric", None, f"missing judge metric {rule.judge_metric!r}", "judge")]
+        return [
+            Check(
+                "judge_metric",
+                None,
+                f"missing judge metric {rule.judge_metric!r}",
+                "judge",
+            )
+        ]
     try:
         score = float(value)
     except (TypeError, ValueError):
@@ -857,23 +967,41 @@ def _term(scenario_id: str, term: str | dict[str, str]) -> tuple[str, ...]:
         return (term,)
     if "lexicon" in term:
         lexicon = term["lexicon"]
-        if not isinstance(lexicon, list) or not lexicon or not all(isinstance(item, str) for item in lexicon):
-            raise ValueError(f"Scenario {scenario_id} has an invalid Vietnamese lexicon")
+        if (
+            not isinstance(lexicon, list)
+            or not lexicon
+            or not all(isinstance(item, str) for item in lexicon)
+        ):
+            raise ValueError(
+                f"Scenario {scenario_id} has an invalid Vietnamese lexicon"
+            )
         return tuple(lexicon)
     name = term["glossary"]
     if name in EVALUATION_ANCHORS:
         anchors = EVALUATION_ANCHORS[name]
-        if not isinstance(anchors, list) or not anchors or not all(isinstance(anchor, str) for anchor in anchors):
+        if (
+            not isinstance(anchors, list)
+            or not anchors
+            or not all(isinstance(anchor, str) for anchor in anchors)
+        ):
             raise ValueError(f"Evaluation anchor {name!r} is invalid")
         return tuple(anchors)
     if name not in BEHAVIOR_GLOSSARY:
-        raise ValueError(f"Scenario {scenario_id} references unknown glossary term: {name!r}")
+        raise ValueError(
+            f"Scenario {scenario_id} references unknown glossary term: {name!r}"
+        )
     anchors = BEHAVIOR_GLOSSARY_ANCHORS.get(name)
-    if not isinstance(anchors, list) or not anchors or not all(isinstance(anchor, str) for anchor in anchors):
+    if (
+        not isinstance(anchors, list)
+        or not anchors
+        or not all(isinstance(anchor, str) for anchor in anchors)
+    ):
         raise ValueError(f"Glossary term {name!r} has no valid anchor terms")
     canonical = BEHAVIOR_GLOSSARY[name].casefold()
     if any(anchor.casefold() not in canonical for anchor in anchors):
-        raise ValueError(f"Glossary anchors for {name!r} must be substrings of its canonical sentence")
+        raise ValueError(
+            f"Glossary anchors for {name!r} must be substrings of its canonical sentence"
+        )
     return tuple(anchors)
 
 
@@ -883,7 +1011,9 @@ def _text_rule(scenario_id: str, assertion: dict[str, Any]) -> TextRule | None:
         for group in assertion.get("required_any", ())
     )
     forbidden = tuple(
-        anchor for term in assertion.get("forbidden_any", ()) for anchor in _term(scenario_id, term)
+        anchor
+        for term in assertion.get("forbidden_any", ())
+        for anchor in _term(scenario_id, term)
     )
     patterns = tuple(assertion.get("forbidden_patterns", ()))
     required_patterns = tuple(assertion.get("required_patterns", ()))
@@ -909,9 +1039,15 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
         raise ValueError(f"Unknown scenario id: {scenario_id}")
     grading = scenario.get("grading") or {}
     assertions = grading.get("assertions") or []
-    literal: dict[str, Any] = next((item for item in assertions if item["type"] == "literal"), {})
-    structural: dict[str, Any] = next((item for item in assertions if item["type"] == "structural"), {})
-    semantic: dict[str, Any] = next((item for item in assertions if item["type"] == "semantic"), {})
+    literal: dict[str, Any] = next(
+        (item for item in assertions if item["type"] == "literal"), {}
+    )
+    structural: dict[str, Any] = next(
+        (item for item in assertions if item["type"] == "structural"), {}
+    )
+    semantic: dict[str, Any] = next(
+        (item for item in assertions if item["type"] == "semantic"), {}
+    )
     expectation = scenario.get("tool_expectation")
     return ScenarioRule(
         expected_tools=tuple(scenario["expected_tools"]),
@@ -932,16 +1068,26 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
         ),
         expected_answer_count=literal.get("expected_answer_count"),
         count_only=bool(literal.get("count_only", False)),
-        forbid_single_salary_winner=bool(semantic.get("forbid_single_salary_winner", False)),
+        forbid_single_salary_winner=bool(
+            semantic.get("forbid_single_salary_winner", False)
+        ),
         structural_text=_text_rule(scenario_id, structural),
         literal=_text_rule(scenario_id, literal),
         semantic=_text_rule(scenario_id, semantic),
-        require_vietnamese=bool(structural.get("require_vietnamese", scenario.get("language") == "vi")),
+        require_vietnamese=bool(
+            structural.get("require_vietnamese", scenario.get("language") == "vi")
+        ),
         require_source_links=bool(structural.get("require_source_links", False)),
         reject_salary_period=bool(structural.get("reject_salary_period", False)),
-        preserve_returned_job_levels=bool(structural.get("preserve_returned_job_levels", False)),
-        reject_title_to_level_inference=bool(structural.get("reject_title_to_level_inference", False)),
-        reject_lifecycle_substitution=bool(structural.get("reject_lifecycle_substitution", False)),
+        preserve_returned_job_levels=bool(
+            structural.get("preserve_returned_job_levels", False)
+        ),
+        reject_title_to_level_inference=bool(
+            structural.get("reject_title_to_level_inference", False)
+        ),
+        reject_lifecycle_substitution=bool(
+            structural.get("reject_lifecycle_substitution", False)
+        ),
     )
 
 
@@ -960,22 +1106,51 @@ def _prompt_surface_is_current(evidence: Evidence, surface: str) -> bool:
     return stamped.get(surface) == load_prompt_versions()[surface]
 
 
-def _semantic_checks(rule: ScenarioRule) -> list[Check]:
+def _semantic_checks(
+    rule: ScenarioRule, evidence: Evidence, scenario_id: str
+) -> list[Check]:
     if rule.semantic is None and not rule.forbid_single_salary_winner:
         return []
+    result = evidence.semantic_result
+    if result is None or result.get("status") != AVAILABLE:
+        return [
+            Check(
+                "semantic_behavior",
+                None,
+                "semantic assertion retained for the calibrated judge; not evaluated in Phase 1",
+                "semantic",
+                NOT_EVALUATED,
+            )
+        ]
+    score = result.get("score")
+    if not isinstance(score, (int, float)) or isinstance(score, bool):
+        return [
+            Check(
+                "semantic_behavior",
+                None,
+                f"semantic score is not a number: {score!r}",
+                "semantic",
+                NOT_EVALUATED,
+            )
+        ]
+    scenario_class = _semantic_class_of(scenario_id)
     return [
         Check(
             "semantic_behavior",
-            None,
-            "semantic assertion retained for the calibrated judge; not evaluated in Phase 1",
+            score >= _SEMANTIC_THRESHOLD.get(scenario_class, 0.5),
+            f"semantic score={score:.3f}, threshold={_SEMANTIC_THRESHOLD.get(scenario_class, 0.5):.1f}",
             "semantic",
-            NOT_EVALUATED,
         )
     ]
 
 
-def _semantic_only(rule: ScenarioRule) -> bool:
-    """Return whether the scenario's only behavioral assertion is deferred to semantic.
+# Per-class semantic pass thresholds, sourced from calibration recall-first sweeps.
+# SAF and HON require a perfect score (zero tolerance); HLP allows a lower bar.
+_SEMANTIC_THRESHOLD: dict[str, float] = dict(RELEASE_THRESHOLDS_BY_CLASS)
+
+
+def _semantic_only(rule: ScenarioRule, evidence: Evidence) -> bool:
+    """Return whether the scenario's only behavioral assertion is unverified.
 
     When a scenario carries semantic assertions but no deterministic structural-text or
     literal rule can independently decide its behavioral contract, the deterministic pass
@@ -986,8 +1161,21 @@ def _semantic_only(rule: ScenarioRule) -> bool:
     remain deterministically gradeable and are unaffected.
     """
     has_semantic = rule.semantic is not None or rule.forbid_single_salary_winner
-    has_deterministic_text = rule.structural_text is not None or rule.literal is not None
-    return has_semantic and not has_deterministic_text
+    has_deterministic_text = (
+        rule.structural_text is not None or rule.literal is not None
+    )
+    if not has_semantic or has_deterministic_text:
+        return False
+    # With wired semantic scores, a scenario is only "semantic-only" (unverified) when
+    # the judge score is unavailable; an available score makes the behavioral contract
+    # deterministically resolvable.
+    result = evidence.semantic_result
+    return result is None or result.get("status") != AVAILABLE
+
+
+def _semantic_class_of(scenario_id: str) -> str:
+    """Return the SAF/HON/HLP class carried in a class-first scenario id."""
+    return scenario_id.split("-", 1)[0]
 
 
 def _first_failing_seam(checks: list[Check]) -> str | None:
@@ -995,16 +1183,22 @@ def _first_failing_seam(checks: list[Check]) -> str | None:
 
 
 def grade_evidence(
-    scenario_id: str, evidence: Evidence, turn_number: int | None = None
+    scenario_id: str,
+    evidence: Evidence,
+    turn_number: int | None = None,
 ) -> Grade:
-    """Grade independently evaluated literal and structural assertions for one turn."""
+    """Grade structural, literal, and persisted semantic assertions for one turn."""
     rule = _rule_for(scenario_id)
     if not evidence.answer:
         return Grade(
             scenario_id,
             INFRA,
             "structural",
-            [Check("answer_present", None, "completed turn has no answer", "structural")],
+            [
+                Check(
+                    "answer_present", None, "completed turn has no answer", "structural"
+                )
+            ],
         )
 
     structural = _structural_checks(rule, evidence, turn_number)
@@ -1026,8 +1220,10 @@ def grade_evidence(
                 NOT_EVALUATED if purity is None else None,
             )
         )
-    literal = _text_checks(evidence.answer, rule.literal, "literal") if rule.literal else []
-    semantic = _semantic_checks(rule)
+    literal = (
+        _text_checks(evidence.answer, rule.literal, "literal") if rule.literal else []
+    )
+    semantic = _semantic_checks(rule, evidence, scenario_id)
     judge = _judge_checks(rule, evidence)
     checks = structural + literal + semantic + judge
     first_failing_seam = _first_failing_seam(checks)
@@ -1036,12 +1232,19 @@ def grade_evidence(
     infra_seam = next((check.tier for check in checks if check.outcome == INFRA), None)
     if infra_seam:
         return Grade(scenario_id, INFRA, infra_seam, checks)
-    # FP-8: a scenario whose decisive behavior is not evaluated must not be represented
-    # as PASS. A scenario whose only text-level behavioral assertion is semantic is
-    # visibly unverified — its PASS rate must not be inflated by NOT_EVALUATED tiers.
-    if _semantic_only(rule):
+    # FP-8: a semantic-only scenario without an AVAILABLE judge result must not be PASS.
+    # It remains visibly unverified so its PASS rate is not inflated by missing evidence.
+    if _semantic_only(rule, evidence):
         return Grade(scenario_id, NOT_EVALUATED, "semantic", checks)
-    tier = "judge" if judge else "literal" if literal else "structural"
+    tier = (
+        "judge"
+        if judge
+        else "semantic"
+        if semantic and all(c.outcome != NOT_EVALUATED for c in semantic)
+        else "literal"
+        if literal
+        else "structural"
+    )
     return Grade(scenario_id, PASS, tier, checks)
 
 
@@ -1069,7 +1272,9 @@ def summarize(grades: list[Grade]) -> dict[str, Any]:
 
     def class_summary(items: list[Grade]) -> dict[str, Any]:
         counts = Counter(item.status for item in items)
-        measured = len(items) - sum(counts.get(status, 0) for status in EXCLUDED_FROM_DENOMINATOR)
+        measured = len(items) - sum(
+            counts.get(status, 0) for status in EXCLUDED_FROM_DENOMINATOR
+        )
         return {
             "counts": dict(sorted(counts.items())),
             "measured": measured,
@@ -1080,10 +1285,15 @@ def summarize(grades: list[Grade]) -> dict[str, Any]:
         "total": len(grades),
         "counts": dict(sorted(Counter(grade.status for grade in grades).items())),
         "empty_answer_count": sum(
-            any(check.name == "answer_present" and check.passed is None for check in grade.checks)
+            any(
+                check.name == "answer_present" and check.passed is None
+                for check in grade.checks
+            )
             for grade in grades
         ),
-        "by_class": {name: class_summary(items) for name, items in sorted(by_class.items())},
+        "by_class": {
+            name: class_summary(items) for name, items in sorted(by_class.items())
+        },
     }
 
 
@@ -1115,9 +1325,14 @@ def _scenario_outcome(
 
     statuses = [repeat["status"] for repeat in repeats]
     status = (
-        FAIL if FAIL in statuses else INFRA if INFRA in statuses
-        else UNRUN if UNRUN in statuses
-        else NOT_EVALUATED if NOT_EVALUATED in statuses
+        FAIL
+        if FAIL in statuses
+        else INFRA
+        if INFRA in statuses
+        else UNRUN
+        if UNRUN in statuses
+        else NOT_EVALUATED
+        if NOT_EVALUATED in statuses
         else PASS
     )
     return {"status": status, "repeats": repeats}
@@ -1141,18 +1356,29 @@ def grade_persisted_run(
     scenario_outcomes: dict[str, dict[str, Any]] = {}
     for scenario_id, scenario_record in run.get("scenarios", {}).items():
         if scenario_id not in known_ids:
-            grade = Grade(scenario_id, INFRA, "structural", [Check("scenario_known", False, "unknown scenario id", "structural")])
+            grade = Grade(
+                scenario_id,
+                INFRA,
+                "structural",
+                [Check("scenario_known", False, "unknown scenario id", "structural")],
+            )
             grades.append(grade)
             results[scenario_id] = [grade.to_dict()]
             scenario_outcomes[scenario_id] = {"status": INFRA, "repeats": []}
             continue
         scenario_grades: list[dict[str, Any]] = []
-        if scenario_record.get("status") == UNRUN and not scenario_record.get("repeats"):
+        if scenario_record.get("status") == UNRUN and not scenario_record.get(
+            "repeats"
+        ):
             grade = Grade(
                 scenario_id,
                 UNRUN,
                 "structural",
-                [Check("scenario_run", None, "scenario was not collected", "structural")],
+                [
+                    Check(
+                        "scenario_run", None, "scenario was not collected", "structural"
+                    )
+                ],
             )
             grades.append(grade)
             scenario_grades.append(grade.to_dict())
@@ -1166,13 +1392,22 @@ def grade_persisted_run(
                     scenario_id,
                     INFRA,
                     "structural",
-                    [Check("repeat_run", None, "repeat ended as infrastructure failure", "structural")],
+                    [
+                        Check(
+                            "repeat_run",
+                            None,
+                            "repeat ended as infrastructure failure",
+                            "structural",
+                        )
+                    ],
                 )
                 grades.append(grade)
                 scenario_grades.append({"repeat": repeat_number, **grade.to_dict()})
                 continue
             for turn_number, turn in enumerate(repeat.get("turns", []), start=1):
-                execution = _execution_for_turn(execution_accuracy, scenario_id, repeat_number, turn_number)
+                execution = _execution_for_turn(
+                    execution_accuracy, scenario_id, repeat_number, turn_number
+                )
                 grade = grade_evidence(
                     scenario_id,
                     Evidence.from_turn(
@@ -1180,11 +1415,14 @@ def grade_persisted_run(
                         execution,
                         capture_prompt_versions,
                         capture_legacy_prompt_version,
+                        semantic_result=repeat.get("semantic_result"),
                     ),
                     turn_number=turn_number,
                 )
                 grades.append(grade)
-                scenario_grades.append({"repeat": repeat_number, "turn": turn_number, **grade.to_dict()})
+                scenario_grades.append(
+                    {"repeat": repeat_number, "turn": turn_number, **grade.to_dict()}
+                )
         results[scenario_id] = scenario_grades
         scenario_outcomes[scenario_id] = _scenario_outcome(
             _registry_index()[scenario_id], scenario_grades
@@ -1210,7 +1448,19 @@ def grade_observed_answers(path: Path) -> dict[str, Any]:
         scenario_results = []
         for index, answer in enumerate(answers, start=1):
             if "couldn't produce an answer" in _text(answer):
-                grade = Grade(scenario_id, INFRA, "structural", [Check("legacy_answer", None, "recorded fallback has no behavior to grade", "structural")])
+                grade = Grade(
+                    scenario_id,
+                    INFRA,
+                    "structural",
+                    [
+                        Check(
+                            "legacy_answer",
+                            None,
+                            "recorded fallback has no behavior to grade",
+                            "structural",
+                        )
+                    ],
+                )
             else:
                 grade = grade_evidence(scenario_id, Evidence(answer=answer))
             grades.append(grade)
@@ -1227,7 +1477,9 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Grade recorded evaluation evidence without a model call.")
+    parser = argparse.ArgumentParser(
+        description="Grade recorded evaluation evidence without a model call."
+    )
     parser.add_argument("--run", type=Path, help="T0025.3 persisted run JSON")
     parser.add_argument("--observed", type=Path, help="Answer-only observed artifact")
     parser.add_argument("--execution-accuracy", type=Path)
@@ -1240,7 +1492,9 @@ def main() -> None:
     if bool(args.run) == bool(args.observed):
         parser.error("choose exactly one of --run or --observed")
     if args.run:
-        execution = _load_json(args.execution_accuracy) if args.execution_accuracy else None
+        execution = (
+            _load_json(args.execution_accuracy) if args.execution_accuracy else None
+        )
         report = grade_persisted_run(_load_json(args.run), execution)
     else:
         report = grade_observed_answers(args.observed)

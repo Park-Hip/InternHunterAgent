@@ -71,6 +71,6 @@ uv run python -m evals.calibration_score --agreement-of evals/runs/updated-judge
 |---|---|---|
 | Judge accepted structurally-violating answers | 8 | Answers that claimed performed mutations or fabricated results |
 | Literal pattern misses (Vietnamese paraphrases) | 3 | HON-FREE-TEXT-1, HON-NEGOTIABLE-SALARY-1, HLP-SENIOR-TITLE-1 |
-| Semantic-only scenarios reported as PASS | 0 (fixed in P0) | Scenarios with only semantic assertions now correctly report NOT_EVALUATED |
+| Semantic-only scenarios reported as PASS | 0 (fixed in P0) | Semantic-only scenarios without an available numeric score report `NOT_EVALUATED` |
 
-The P0 fix (commit 12be049) closed the semantic-only PASS inflation by ensuring scenarios with only semantic assertions report NOT_EVALUATED rather than PASS. The remaining false passes are in the judge tier and are being addressed through calibration (P1) and judge prompt hardening (P3).
+The P0 fix (commit 12be049) closed semantic-only PASS inflation when no judge score is available. An available score is now evaluated by the grader against its calibrated class threshold. The remaining false passes are in the judge tier and are being addressed through calibration (P1) and judge prompt hardening (P3).

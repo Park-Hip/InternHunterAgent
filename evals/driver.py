@@ -65,20 +65,26 @@ _RETRY_HINT_PATTERN = re.compile(
 # blip and one unlucky retry are both survivable while a hard stop is reached in
 # under a minute of wall clock. Revisit it the first time a real DeepSeek 429 is
 # recorded in a capture's retry_events.
-CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT = int(_retry_cfg.get("consecutive_quota_failures_before_halt", 3))
+CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT = int(
+    _retry_cfg.get("consecutive_quota_failures_before_halt", 3)
+)
 
 # Quota-error signatures match the string representation of an exception against
 # a small set of tokens the provider is known to emit on throttling. Kept as a
 # top-level constant so _is_quota_error is easy to read and unit-test in isolation.
 _QUOTA_ERROR_SIGNATURES: tuple[str, ...] = tuple(
-    str(s) for s in _retry_cfg.get("quota_error_signatures", [
-        "429",
-        "rate limit",
-        "rate_limit",
-        "quota",
-        "tpm",
-        "tokens per minute",
-    ])
+    str(s)
+    for s in _retry_cfg.get(
+        "quota_error_signatures",
+        [
+            "429",
+            "rate limit",
+            "rate_limit",
+            "quota",
+            "tpm",
+            "tokens per minute",
+        ],
+    )
 )
 
 # The 19 columns `evals/fixtures/seed_eval_db.sql` writes, in seed-file order.

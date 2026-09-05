@@ -16,7 +16,16 @@ from deepeval.dataset import EvaluationDataset, Golden
 # touching this line. A future v2 registry stays on its own file; the function
 # signature is the override point, not a second constant here.
 SCENARIOS_PATH = Path(__file__).resolve().parent / "scenarios_v1.yaml"
-_REQUIRED_KEYS = {"id", "name", "requirements", "decision", "type", "expected", "probe", "expected_tools"}
+_REQUIRED_KEYS = {
+    "id",
+    "name",
+    "requirements",
+    "decision",
+    "type",
+    "expected",
+    "probe",
+    "expected_tools",
+}
 _SCENARIO_TYPES = {"single", "conversational"}
 _SCENARIO_ID_PATTERN = re.compile(r"(SAF|HON|HLP)-[A-Z]+(?:-[A-Z]+)*-[1-9][0-9]*")
 _REQUIREMENT_PATTERN = re.compile(r"G[0-9]{2}")
@@ -42,7 +51,12 @@ _EXECUTION_COMPARISONS = {
 }
 _ASSERTION_TYPES = {"literal", "structural", "semantic"}
 _ASSERTION_FIELDS = {
-    "literal": {"expected_answer_count", "count_only", "forbidden_patterns", "required_patterns"},
+    "literal": {
+        "expected_answer_count",
+        "count_only",
+        "forbidden_patterns",
+        "required_patterns",
+    },
     "structural": {
         "require_vietnamese",
         "require_source_links",
@@ -56,9 +70,22 @@ _ASSERTION_FIELDS = {
     "semantic": {"required_any", "forbidden_any", "forbid_single_salary_winner"},
 }
 _PROJECTION_COLUMNS = {
-    "id", "title", "company", "role", "tech_stack", "location", "source_url",
-    "job_level", "listing_expires_on", "created_on", "is_internship", "salary_min",
-    "salary_max", "salary_currency", "is_salary_negotiable", "count",
+    "id",
+    "title",
+    "company",
+    "role",
+    "tech_stack",
+    "location",
+    "source_url",
+    "job_level",
+    "listing_expires_on",
+    "created_on",
+    "is_internship",
+    "salary_min",
+    "salary_max",
+    "salary_currency",
+    "is_salary_negotiable",
+    "count",
 }
 
 
@@ -74,8 +101,10 @@ def _validate_term(scenario_id: str, field: str, term: Any) -> None:
         if isinstance(term["glossary"], str) and term["glossary"].strip():
             return
     if isinstance(term, dict) and set(term) == {"lexicon"}:
-        if isinstance(term["lexicon"], list) and term["lexicon"] and all(
-            isinstance(item, str) and item.strip() for item in term["lexicon"]
+        if (
+            isinstance(term["lexicon"], list)
+            and term["lexicon"]
+            and all(isinstance(item, str) and item.strip() for item in term["lexicon"])
         ):
             return
     raise ValueError(
@@ -97,7 +126,9 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
 
     unknown = grading.keys() - _GRADING_KEYS
     if unknown:
-        raise ValueError(f"Scenario {scenario_id} has unknown grading fields: {sorted(unknown)}")
+        raise ValueError(
+            f"Scenario {scenario_id} has unknown grading fields: {sorted(unknown)}"
+        )
 
     assertions = grading.get("assertions", [])
     if not isinstance(assertions, list):
@@ -107,10 +138,14 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
             raise ValueError(f"Scenario {scenario_id} assertion must be a mapping")
         assertion_type = assertion.get("type")
         if assertion_type not in _ASSERTION_TYPES:
-            raise ValueError(f"Scenario {scenario_id} has unknown assertion type: {assertion_type!r}")
+            raise ValueError(
+                f"Scenario {scenario_id} has unknown assertion type: {assertion_type!r}"
+            )
         fields = set(assertion) - {"type"}
         if not fields:
-            raise ValueError(f"Scenario {scenario_id} {assertion_type} assertion has no fields")
+            raise ValueError(
+                f"Scenario {scenario_id} {assertion_type} assertion has no fields"
+            )
         unsupported = fields - _ASSERTION_FIELDS[assertion_type]
         if unsupported:
             raise ValueError(
@@ -118,7 +153,10 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
             )
         _validate_assertion_fields(scenario_id, assertion_type, assertion)
 
-    if "execution_comparison" in grading and grading["execution_comparison"] not in _EXECUTION_COMPARISONS:
+    if (
+        "execution_comparison" in grading
+        and grading["execution_comparison"] not in _EXECUTION_COMPARISONS
+    ):
         raise ValueError(
             f"Scenario {scenario_id} has an unknown execution_comparison: "
             f"{grading['execution_comparison']!r}"
@@ -126,14 +164,25 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
     if "projection" in grading:
         projection = grading["projection"]
         if not isinstance(projection, dict) or set(projection) != {"exact"}:
-            raise ValueError(f"Scenario {scenario_id} projection must contain exactly 'exact'")
+            raise ValueError(
+                f"Scenario {scenario_id} projection must contain exactly 'exact'"
+            )
         columns = projection["exact"]
-        if not isinstance(columns, list) or not columns or any(
-            not isinstance(column, str) or column not in _PROJECTION_COLUMNS for column in columns
+        if (
+            not isinstance(columns, list)
+            or not columns
+            or any(
+                not isinstance(column, str) or column not in _PROJECTION_COLUMNS
+                for column in columns
+            )
         ):
-            raise ValueError(f"Scenario {scenario_id} projection exact must name known output columns")
+            raise ValueError(
+                f"Scenario {scenario_id} projection exact must name known output columns"
+            )
         if len(columns) != len(set(columns)):
-            raise ValueError(f"Scenario {scenario_id} projection exact must not contain duplicates")
+            raise ValueError(
+                f"Scenario {scenario_id} projection exact must not contain duplicates"
+            )
 
 
 def _validate_assertion_fields(
@@ -157,12 +206,19 @@ def _validate_assertion_fields(
     if "forbid_single_salary_winner" in assertion and not isinstance(
         assertion["forbid_single_salary_winner"], bool
     ):
-        raise ValueError(f"Scenario {scenario_id} forbid_single_salary_winner must be a boolean")
+        raise ValueError(
+            f"Scenario {scenario_id} forbid_single_salary_winner must be a boolean"
+        )
 
-    if "require_vietnamese" in assertion and not isinstance(assertion["require_vietnamese"], bool):
+    if "require_vietnamese" in assertion and not isinstance(
+        assertion["require_vietnamese"], bool
+    ):
         raise ValueError(f"Scenario {scenario_id} require_vietnamese must be a boolean")
 
-    if "require_source_links" in assertion and assertion["require_source_links"] is not True:
+    if (
+        "require_source_links" in assertion
+        and assertion["require_source_links"] is not True
+    ):
         raise ValueError(f"Scenario {scenario_id} require_source_links must be true")
 
     for field in (
@@ -177,7 +233,9 @@ def _validate_assertion_fields(
     if "required_any" in assertion:
         groups = assertion["required_any"]
         if not isinstance(groups, list) or not groups:
-            raise ValueError(f"Scenario {scenario_id} required_any must be a non-empty list")
+            raise ValueError(
+                f"Scenario {scenario_id} required_any must be a non-empty list"
+            )
         # Each group is an OR of alternatives, and all groups must match. An empty
         # group would be unsatisfiable rather than permissive.
         for group in groups:
@@ -189,7 +247,9 @@ def _validate_assertion_fields(
     if "forbidden_patterns" in assertion:
         patterns = assertion["forbidden_patterns"]
         if not isinstance(patterns, list) or not patterns:
-            raise ValueError(f"Scenario {scenario_id} forbidden_patterns must be a non-empty list")
+            raise ValueError(
+                f"Scenario {scenario_id} forbidden_patterns must be a non-empty list"
+            )
         for pattern in patterns:
             if not isinstance(pattern, str):
                 raise ValueError(
@@ -205,7 +265,9 @@ def _validate_assertion_fields(
     if "required_patterns" in assertion:
         patterns = assertion["required_patterns"]
         if not isinstance(patterns, list) or not patterns:
-            raise ValueError(f"Scenario {scenario_id} required_patterns must be a non-empty list")
+            raise ValueError(
+                f"Scenario {scenario_id} required_patterns must be a non-empty list"
+            )
         for pattern in patterns:
             if not isinstance(pattern, str):
                 raise ValueError(
@@ -220,7 +282,10 @@ def _validate_assertion_fields(
 
 
 def _validate_tool_expectation(scenario_id: str, field: str, expectation: Any) -> None:
-    if not isinstance(expectation, dict) or set(expectation) != _TURN_TOOL_EXPECTATION_KEYS:
+    if (
+        not isinstance(expectation, dict)
+        or set(expectation) != _TURN_TOOL_EXPECTATION_KEYS
+    ):
         raise ValueError(
             f"Scenario {scenario_id} {field} must contain required and allowed"
         )
@@ -241,7 +306,9 @@ def _validate_tool_expectation(scenario_id: str, field: str, expectation: Any) -
         )
 
 
-def _validate_turn_tool_expectations(scenario_id: str, scenario: dict[str, Any]) -> None:
+def _validate_turn_tool_expectations(
+    scenario_id: str, scenario: dict[str, Any]
+) -> None:
     """Validate a conversational scenario's optional per-turn tool contract."""
     expectations = scenario.get("turn_tool_expectations")
     if expectations is None:
@@ -250,7 +317,9 @@ def _validate_turn_tool_expectations(scenario_id: str, scenario: dict[str, Any])
         raise ValueError(
             f"Scenario {scenario_id} turn_tool_expectations require a conversational scenario"
         )
-    if not isinstance(expectations, list) or len(expectations) != len(scenario["turns"]):
+    if not isinstance(expectations, list) or len(expectations) != len(
+        scenario["turns"]
+    ):
         raise ValueError(
             f"Scenario {scenario_id} turn_tool_expectations must have one entry per turn"
         )
@@ -281,10 +350,14 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
 
         missing = _REQUIRED_KEYS - scenario.keys()
         if missing:
-            raise ValueError(f"Scenario {scenario.get('id', '<unknown>')} missing keys: {missing}")
+            raise ValueError(
+                f"Scenario {scenario.get('id', '<unknown>')} missing keys: {missing}"
+            )
 
         scenario_id = scenario["id"]
-        if not isinstance(scenario_id, str) or not _SCENARIO_ID_PATTERN.fullmatch(scenario_id):
+        if not isinstance(scenario_id, str) or not _SCENARIO_ID_PATTERN.fullmatch(
+            scenario_id
+        ):
             raise ValueError(
                 "Scenario id must use the <CLASS>-<BEHAVIOR>-<n> taxonomy: "
                 f"{scenario_id!r}"
@@ -295,7 +368,9 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
 
         scenario_type = scenario["type"]
         if scenario_type not in _SCENARIO_TYPES:
-            raise ValueError(f"Scenario {scenario_id} has invalid type: {scenario_type!r}")
+            raise ValueError(
+                f"Scenario {scenario_id} has invalid type: {scenario_type!r}"
+            )
 
         if not isinstance(scenario["name"], str) or not scenario["name"]:
             raise ValueError(f"Scenario {scenario_id} requires a non-empty name")
@@ -310,8 +385,12 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
             raise ValueError(
                 f"Scenario {scenario_id} requirements must be a list of G-code strings"
             )
-        if scenario["decision"] is not None and not isinstance(scenario["decision"], int):
-            raise ValueError(f"Scenario {scenario_id} decision must be an integer or null")
+        if scenario["decision"] is not None and not isinstance(
+            scenario["decision"], int
+        ):
+            raise ValueError(
+                f"Scenario {scenario_id} decision must be an integer or null"
+            )
 
         has_input = "input" in scenario
         has_turns = "turns" in scenario
@@ -320,7 +399,9 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
                 f"Scenario {scenario_id} must have exactly one of 'input' or 'turns'"
             )
         if scenario_type == "single" and not isinstance(scenario["input"], str):
-            raise ValueError(f"Single-turn scenario {scenario_id} requires a string input")
+            raise ValueError(
+                f"Single-turn scenario {scenario_id} requires a string input"
+            )
         if scenario_type == "conversational" and not (
             isinstance(scenario["turns"], list)
             and scenario["turns"]
@@ -343,7 +424,9 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
 
         _validate_turn_tool_expectations(scenario_id, scenario)
         if "tool_expectation" in scenario:
-            _validate_tool_expectation(scenario_id, "tool_expectation", scenario["tool_expectation"])
+            _validate_tool_expectation(
+                scenario_id, "tool_expectation", scenario["tool_expectation"]
+            )
 
         if "grading" in scenario:
             _validate_grading(scenario_id, scenario["grading"])
@@ -427,13 +510,19 @@ def format_scenario(scenario: dict[str, Any]) -> str:
 
 def main(argv: Sequence[str] | None = None) -> None:
     """Provide a no-model CLI for checking the recovered instrument."""
-    parser = argparse.ArgumentParser(description="Inspect evaluation scenarios without running a model.")
-    parser.add_argument("--scenario", help="Scenario id to display. Omit to display every scenario.")
+    parser = argparse.ArgumentParser(
+        description="Inspect evaluation scenarios without running a model."
+    )
+    parser.add_argument(
+        "--scenario", help="Scenario id to display. Omit to display every scenario."
+    )
     args = parser.parse_args(argv)
 
     scenarios = load_scenarios()
     if args.scenario:
-        scenarios = [scenario for scenario in scenarios if scenario["id"] == args.scenario]
+        scenarios = [
+            scenario for scenario in scenarios if scenario["id"] == args.scenario
+        ]
         if not scenarios:
             parser.error(f"Unknown scenario id: {args.scenario}")
 

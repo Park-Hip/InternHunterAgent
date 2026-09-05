@@ -190,7 +190,6 @@ evals/
 │
 ├── runs/                         Raw captures — local, gitignored
 ├── replays/                      Committed sanitized replays — CI reproduces these
-└── tests/                        ← removed; tests live in the repo root under `tests/evals/`
 ```
 
 ## Start-here context (kept from the pre-hub README)

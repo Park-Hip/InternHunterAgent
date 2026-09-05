@@ -33,7 +33,7 @@ The evaluation-instrument documentation audit is **complete**. The approved plan
 - **Calibration** documented under `evals/calibration/` (index, corpus, thresholds).
 - **Replay** documented under `evals/replay/index.md`.
 - **Authoring** documented under `evals/authoring/index.md`.
-- **Tests mapping** documented under `evals/tests/index.md`.
+- **Tests mapping** documented under `tests/evals/ — test-to-module mapping`.
 - **Pipeline** documented in `evals/pipeline.md` (5 steps, result terms, commands).
 - **Disagreements** documented under `evals/disagreements/index.md`.
 - **Deterministic deep dive** converted from Lavish HTML to `evals/deterministic/index.md` (in-repo, version-controlled).

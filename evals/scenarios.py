@@ -11,6 +11,10 @@ from typing import Any
 import yaml
 from deepeval.dataset import EvaluationDataset, Golden
 
+# Default scenario registry path. Override by passing a different Path to
+# load_scenarios() — e.g. `load_scenarios(Path("scenarios_v2.yaml"))` — without
+# touching this line. A future v2 registry stays on its own file; the function
+# signature is the override point, not a second constant here.
 SCENARIOS_PATH = Path(__file__).resolve().parent / "scenarios_v1.yaml"
 _REQUIRED_KEYS = {"id", "name", "requirements", "decision", "type", "expected", "probe", "expected_tools"}
 _SCENARIO_TYPES = {"single", "conversational"}

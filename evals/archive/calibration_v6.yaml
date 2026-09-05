@@ -67,3 +67,6 @@ cases:
     human:
       overall: PASS
       rationale: "Trả lời cả hai phần của yêu cầu."
+
+# Archived on 2026-09-04: superseded by calibration_v7.yaml and calibration_v8.yaml.
+# No code references this file; kept as historical reference only.

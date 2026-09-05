@@ -27,5 +27,5 @@ it does not fix it. Remediation is separate work.
 | How do I author a new scenario? | [`evals/authoring/index.md`](../../evals/authoring/index.md) |
 | How does the no-model replay gate work? | [`evals/replay/index.md`](../../evals/replay/index.md) |
 | How are grader/judge/human disagreements resolved? | [`evals/disagreements/index.md`](../../evals/disagreements/index.md) |
-| Which test pins which behavior? | [`evals/tests/index.md`](../../evals/tests/index.md) |
+| Which test pins which behavior? | [`tests/evals/`](../../tests/evals/) — test-to-module mapping |
 | What is the current baseline and open cases? | [`evals/Instrument_Report.md`](../../evals/Instrument_Report.md) |

@@ -29,24 +29,25 @@ from evals.fixtures.loader import fixture_database_url
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "evals" / "runs"
-MAX_RETRIES = 2
-SDK_MAX_RETRIES = 0
 
-# A provider that states its own wait wins over every ladder below, because only
-# it knows when its window clears. Groq does state one; DeepSeek does not.
-#
-# For a 429 carrying no hint, the wait is exponential with jitter from about one
-# second. The previous 20s/40s ladder was sized to outlast a 60-second per-minute
-# token window, which is Groq's shape under D-045's rejected arm. DeepSeek's 429 is
-# dynamic concurrency backpressure with no window to outlast, so a 20-second first
-# wait spends 20 seconds to learn what one second would have.
-# Jitter is the equal-jitter form: wait uniformly between half the ceiling and the
-# ceiling, so concurrent retries do not resynchronise on the same instant.
-DEFAULT_BACKOFF_SECONDS = (1.0, 2.0)
-QUOTA_BACKOFF_BASE_SECONDS = 1.0
-QUOTA_BACKOFF_MULTIPLIER = 2.0
-MAX_BACKOFF_SECONDS = 90.0
-RETRY_HINT_MARGIN_SECONDS = 1.0
+# Retry constants are externalized in config/settings.yaml under eval.driver.retry.
+# Python defaults below preserve current behavior when the YAML block is absent;
+# build_manifest() reads the YAML directly so the manifest always reflects the
+# live config regardless of what these fallbacks hold.
+_retry_cfg = (
+    yaml.safe_load((ROOT / "config" / "settings.yaml").read_text(encoding="utf-8"))
+    .get("eval", {})
+    .get("driver", {})
+    .get("retry", {})
+)
+MAX_RETRIES = int(_retry_cfg.get("max_retries", 2))
+SDK_MAX_RETRIES = int(_retry_cfg.get("sdk_max_retries", 0))
+_DEFAULT_BACKOFF_RAW = _retry_cfg.get("default_backoff_seconds", [1.0, 2.0])
+DEFAULT_BACKOFF_SECONDS = tuple(float(v) for v in _DEFAULT_BACKOFF_RAW)
+QUOTA_BACKOFF_BASE_SECONDS = float(_retry_cfg.get("quota_backoff_base_seconds", 1.0))
+QUOTA_BACKOFF_MULTIPLIER = float(_retry_cfg.get("quota_backoff_multiplier", 2.0))
+MAX_BACKOFF_SECONDS = float(_retry_cfg.get("max_backoff_seconds", 90.0))
+RETRY_HINT_MARGIN_SECONDS = float(_retry_cfg.get("retry_hint_margin_seconds", 1.0))
 _RETRY_HINT_PATTERN = re.compile(
     r"try again in\s+([0-9]+(?:\.[0-9]+)?)\s*(ms|s)\b", re.IGNORECASE
 )
@@ -54,17 +55,31 @@ _RETRY_HINT_PATTERN = re.compile(
 # How many quota failures in a row end the run, per D-e and R6.2.
 #
 # A single 429 no longer halts the capture: on DeepSeek the next scenario will
-# likely succeed, and finishing all 29 costs about four cents, so halting turns a
+# likely succeed, and finishing the registry costs about four cents, so halting turns a
 # recoverable blip into a PARTIAL artifact and throws away the classification pass
 # that reads it. An account that is genuinely out of credit still has to stop
-# rather than burn 29 scenarios of identical failures, which is what this bounds.
+# rather than burn every scenario of identical failures, which is what this bounds.
 #
 # Three is a guess, not a measurement. The DeepSeek arm recorded zero 429s in 77
 # turns, so no observed rate exists to derive it from. It is chosen so that one
 # blip and one unlucky retry are both survivable while a hard stop is reached in
 # under a minute of wall clock. Revisit it the first time a real DeepSeek 429 is
 # recorded in a capture's retry_events.
-CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT = 3
+CONSECUTIVE_QUOTA_FAILURES_BEFORE_HALT = int(_retry_cfg.get("consecutive_quota_failures_before_halt", 3))
+
+# Quota-error signatures match the string representation of an exception against
+# a small set of tokens the provider is known to emit on throttling. Kept as a
+# top-level constant so _is_quota_error is easy to read and unit-test in isolation.
+_QUOTA_ERROR_SIGNATURES: tuple[str, ...] = tuple(
+    str(s) for s in _retry_cfg.get("quota_error_signatures", [
+        "429",
+        "rate limit",
+        "rate_limit",
+        "quota",
+        "tpm",
+        "tokens per minute",
+    ])
+)
 
 # The 19 columns `evals/fixtures/seed_eval_db.sql` writes, in seed-file order.
 # The three lifecycle columns are excluded deliberately: is_active, first_seen_at,
@@ -650,17 +665,7 @@ def freeze_capture(
 
 def _is_quota_error(exc: BaseException) -> bool:
     text = str(exc).lower()
-    return any(
-        token in text
-        for token in (
-            "429",
-            "rate limit",
-            "rate_limit",
-            "quota",
-            "tpm",
-            "tokens per minute",
-        )
-    )
+    return any(token in text for token in _QUOTA_ERROR_SIGNATURES)
 
 
 def _parse_retry_hint(message: str) -> float | None:
@@ -911,7 +916,7 @@ def _record_scenario_counts(artifact: dict[str, Any]) -> None:
     reached the end of the registry, not that every scenario succeeded: a run that
     survived one quota blip ends `COMPLETE` with a scenario recorded `INFRA`. The
     evidence for that was only ever in the per-scenario records, so a reader had to
-    walk all 29 to learn a capture was short. This puts the count where the other
+    walk every scenario to learn a capture was short. This puts the count where the other
     run-level facts already are.
     """
     counts: dict[str, int] = {}

@@ -2088,14 +2088,7 @@ def test_semantic_threshold_is_class_specific() -> None:
 
 
 def test_multi_turn_semantic_null_score_keeps_not_evaluated() -> None:
-    """A multi-turn scenario whose repeat has an AVAILABLE semantic_result with a null
-    score must not aggregate to PASS. The null score means the behavioral contract is
-    unverified, so the repeat stays NOT_EVALUATED and the scenario outcome propagates
-    that status instead of inflating the pass rate.
-
-    Regression test for: cascade grading incorrectly graded multi-turn scenarios with
-    null semantic scores as PASS because _semantic_only only checked result.status and
-    never validated that the score was a real number."""
+    """An AVAILABLE null score leaves a multi-turn semantic-only scenario unverified."""
     run = {
         "manifest": {"run_id": "multi-turn-null-score"},
         "scenarios": {

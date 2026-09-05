@@ -1166,15 +1166,11 @@ def _semantic_only(rule: ScenarioRule, evidence: Evidence) -> bool:
     )
     if not has_semantic or has_deterministic_text:
         return False
-    # With wired semantic scores, a scenario is only "semantic-only" (unverified) when
-    # the judge score is unavailable; an available score makes the behavioral contract
-    # deterministically resolvable.
+    # A semantic-only contract is resolvable only with a usable judge score.
     result = evidence.semantic_result
     if result is None or result.get("status") != AVAILABLE:
         return True
-    # An AVAILABLE result with a missing or non-numeric score is not truly resolved;
-    # treat it as unverified so the scenario stays NOT_EVALUATED rather than PASSing
-    # on a null score.
+    # Status alone is insufficient: a score must be a non-boolean real number.
     score = result.get("score")
     return not (isinstance(score, (int, float)) and not isinstance(score, bool))
 

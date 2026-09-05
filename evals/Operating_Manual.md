@@ -46,7 +46,7 @@ An authorization to report a diagnostic metric is not authorization to impose a 
 | `FAIL` | The agent violated an applicable deterministic check. | Verify the earliest failing seam and route it as product behavior work. |
 | `INFRA` | Required evidence was not captured because of a provider, quota, database, or other external failure. | Repair or rerun the affected measurement. Do not count it as a pass. |
 | `UNRUN` | The capture did not attempt the turn or scenario. | Resume or replace the capture. Do not publish it as complete coverage. |
-| `NOT_EVALUATED` | A single check was inapplicable to recorded evidence, **or** a semantic-only behavioral contract has no `AVAILABLE` judge result. | Keep the earlier applicable result and do not relabel this as `INFRA`. For a grade-level `NOT_EVALUATED`, the summary excludes the turn from the pass-rate denominator. |
+| `NOT_EVALUATED` | A single check was inapplicable to recorded evidence, **or** a semantic-only behavioral contract has no usable numeric judge score. | Keep the earlier applicable result and do not relabel this as `INFRA`. For a grade-level `NOT_EVALUATED`, the summary excludes the turn from the pass-rate denominator. |
 | `EXEMPT` | Execution accuracy is intentionally absent because the scenario has no SQL contract. | Verify the registry exemption remains appropriate. |
 | `AVAILABLE` | The semantic judge returned a numeric score and rationale. | The grader evaluates it against the calibrated class threshold; compare it with the human label or sample review. |
 | `UNAVAILABLE` | The semantic judge did not produce a usable result. | Preserve the error and keep the result for rerun. |

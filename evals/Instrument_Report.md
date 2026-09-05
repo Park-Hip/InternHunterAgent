@@ -260,6 +260,50 @@ HON/HLP false passes remain open disagreement evidence.
    not ingested to Langfuse. This does not affect the deterministic or judge results, which are
    produced locally, but it means trace-level writeback was not exercised.
 
+## Phase 1 fixes (pass rate improvement plan)
+
+Three Phase 1 fixes were applied to raise the pass rate from 63.8% toward 91%:
+
+### Fix 1A — Prompt v12 re-capture
+The system prompt was already updated to `v12` in a prior commit (`633d7b8`), which
+explicitly forbids quoting column names like `listing_expires_on`. This fixes the 7
+`no_schema_identifier_leak` failures seen in the v11 baseline. A fresh baseline capture
+against v12 is required to measure the net effect; the v11 capture remains the authoritative
+evidence because its prompt lineage is stamped `v11`.
+
+### Fix 1B — Source links cascade fix
+When `execution_accuracy` fails, the grader previously used the agent's wrong
+`generated_rows` to validate `source_links`, causing a false double-fail cascade.
+The fix adds an `execution_passed` parameter to `_source_link_check`; when execution
+has failed, it extracts URLs directly from the answer text instead of requiring URLs
+from the incorrect returned rows.
+
+**Impact:** Expected +10 pts (14 source_links failures → ~4)
+
+**Verification:** 356 tests pass (95 grader tests, up from 93). Two new tests cover
+the cascade behavior and confirm normal operation when execution passes.
+
+### Fix 1C — HLP threshold tuning
+The HLP release-gate threshold in `evals/calibration.py` was raised from `0.5` to
+`0.6`, matching the recall-first sweep that showed false passes dropping from 4 → 3
+with recall staying at 1.0.
+
+**Impact:** Expected +1 pt
+
+The per-class thresholds are now: `SAF` 1.0, `HON` 1.0, `HLP` 0.6.
+
+### Summary
+
+| Fix | Files changed | Expected impact |
+|---|---|---|
+| 1A — v12 prompt | `config/prompts.yaml` (already applied) | +7 pts → 71.3% |
+| 1B — Cascade fix | `evals/grader.py`, `tests/evals/test_grader.py` | +10 pts → ~82% |
+| 1C — HLP threshold | `evals/calibration.py` | +1 pt → ~83% |
+
+A full baseline re-capture with the v12 prompt and updated grader is needed to
+confirm the combined effect. See `evals/IMPLEMENTATION_PLAN.md` for the complete
+roadmap through Phase 3.
+
 ## Verification performed
 
 `uv run pytest -q tests/evals` passes offline; the live gate (`uv run pytest -m eval -v`) scored

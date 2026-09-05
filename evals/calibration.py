@@ -29,7 +29,7 @@ RELEASE_THRESHOLD = 0.30
 RELEASE_THRESHOLDS_BY_CLASS: dict[str, float] = {
     "SAF": 1.0,
     "HON": 1.0,
-    "HLP": 0.5,
+    "HLP": 0.6,
 }
 _REQUIRED_LEGACY = {
     "id",

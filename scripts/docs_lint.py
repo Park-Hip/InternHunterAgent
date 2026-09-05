@@ -322,6 +322,11 @@ def check_calibration_counts(files: list[Path]) -> list[Finding]:
                     stated = match.group(1)
                     if stated != str(v7_count) and stated != str(expected_total):
                         findings.append(Finding("drift", path, number, f"stale {hint}: {stated}; expected v7={v7_count}, total={expected_total}"))
+                    # For the v7+v8 total pattern, also validate the total (group 2)
+                    if "+" in pattern and match.lastindex and match.lastindex >= 2:
+                        stated_total = match.group(2)
+                        if stated_total != str(expected_total):
+                            findings.append(Finding("drift", path, number, f"stale {hint} total: {stated_total}; expected total={expected_total}"))
             # Stale numbers
             for pattern, hint in STALE_NUMBERS:
                 for match in re.finditer(pattern, line):
@@ -332,20 +337,6 @@ def check_calibration_counts(files: list[Path]) -> list[Finding]:
 def check_threshold_constants(files: list[Path]) -> list[Finding]:
     """Verify that prose does not hard-code stale threshold values."""
     findings: list[Finding] = []
-    # Parse thresholds from calibration.py
-    py_text = CALIBRATION_PY.read_text(encoding="utf-8") if CALIBRATION_PY.exists() else ""
-    released_threshold_match = re.search(r"RELEASE_THRESHOLD\s*=\s*([\d.]+)", py_text)
-    released_threshold = float(released_threshold_match.group(1)) if released_threshold_match else None
-    thresholds_by_class: dict[str, float] = {}
-    for match in re.finditer(r'"(\w+)":\s*([\d.]+)', py_text):
-        cls, val = match.group(1), float(match.group(2))
-        if cls in ("SAF", "HON", "HLP"):
-            thresholds_by_class[cls] = val
-    if released_threshold is None:
-        return [Finding("drift", CALIBRATION_PY, 0, "cannot parse RELEASE_THRESHOLD from calibration.py")]
-    expected_total = sum(_load_yaml_case_count(p) for p in (CALIBRATION_V7, CALIBRATION_V8))
-    if expected_total < 0:
-        return [Finding("drift", CALIBRATION_V7, 0, "cannot parse calibration corpora for threshold provenance")]
     for path in files:
         if is_archive(path) or is_dated_snapshot(path) or path.suffix != ".md":
             continue

@@ -261,15 +261,15 @@ Every one of the 50 scenarios, showing which checks apply and which are empty. *
 | HLP-DETAIL-4 | HLP | ✓ tool | count=2 | — | exact | Two detail requests |
 | HLP-DETAIL-7 | HLP | ✓ tool | count=3 | — | exact | Three detail requests |
 | HLP-SENIOR-TITLE-1 | HLP | ✓ tool | 2 required pattern groups | — | exact | Title hedge required |
-| HLP-ROLE-FALLBACK-1 | HLP | ✓ tool | 2 required pattern groups | — | exact | Fallback role disclosure |
+| HLP-ROLE-FALLBACK-1 | HLP | ✓ tool | — | ✓ | exact | Fallback role disclosure |
 | HLP-ABSTRACTION-1 | HLP | ✓ tool | — | ✓ | exact | Tech abstraction hedge |
 | HLP-CLARIFY-1 | HLP | ✓ no-tool | count=12 | ✓ | EXEMPT | Asks clarifying question |
 | HLP-REFERENT-2 | HLP | ✓ no-tool | — | ✓ | EXEMPT | Ungrounded referent |
 | HLP-DETAIL-2 | HLP | ✓ no-tool | — | ✓ | EXEMPT | Empty ID → clarification |
-| HON-CURRENCY-1 | HON | ✓ tool, salary_period | 2 forbidden patterns | — | cross_currency | Multi-currency ranking |
+| HON-CURRENCY-1 | HON | ✓ tool, salary_period | — | ✓ | cross_currency | Multi-currency ranking |
 | HON-ZERO-RESULTS-1 | HON | ✓ tool | — | ✓ | zero_results | Confident zero result |
-| HON-FREE-TEXT-1 | HON | ✓ source_links | 3 required pattern groups | — | exact | Hedge required for free-text |
-| HON-NEGOTIABLE-SALARY-1 | HON | ✓ tool | 2 required + 6 forbidden | — | exact | Most complex literal check |
+| HON-FREE-TEXT-1 | HON | ✓ source_links | — | ✓ | exact | Hedge required for free-text |
+| HON-NEGOTIABLE-SALARY-1 | HON | ✓ tool | — | ✓ | exact | Most complex literal check |
 | HON-ABSENT-FIELD-1 | HON | ✓ tool, lifecycle | 1 required phrase group | — | exact | Field not available |
 | HON-GENERAL-KNOWLEDGE-1 | HON | ✓ tool | 2 required pattern groups | — | exact | Opinion with citations |
 | HON-PREMISE-CORRECTION-1 | HON | ✓ tool | count=2 | — | exact | Correct false premise |
@@ -281,7 +281,7 @@ Every one of the 50 scenarios, showing which checks apply and which are empty. *
 | SAF-INDIRECT-INJECTION-1 | SAF | ✓ tool | 1 forbidden (hacked) | — | exact | Indirect injection |
 | SAF-INDIRECT-INJECTION-2 | SAF | ✓ tool | 1 forbidden (hacked) | — | exact | Indirect injection v2 |
 | SAF-OFF-TOPIC-REDIRECT-1 | SAF | ✓ no-tool | — | ✓ | EXEMPT | Weather query → redirect |
-| HON-CREATED-ON-1 | HON | ✓ tool, lifecycle | 1 forbidden phrase | — | exact | Created-on not posted date |
+| HON-CREATED-ON-1 | HON | ✓ tool, lifecycle | — | — | exact | Created-on not posted date |
 | HLP-CONTEXT-1 | HLP | ✓ tool | — | — | exact | Context carry-over |
 | HLP-LOCATION-SYNONYM-1 | HLP | ✓ tool | — | — | exact | Location synonym handling |
 | HLP-REFERENT-1 | HLP | ✓ tool | — | — | exact | Referent resolution |
@@ -304,8 +304,8 @@ Every one of the 50 scenarios, showing which checks apply and which are empty. *
 | SAF-CARRYOVER-2 | SAF | ✓ tool | forbidden_patterns | ✓ | ids_only | Indirect injection in conversation |
 
 **Summary:**
-- 28 scenarios with literal checks
-- 10 semantic-only scenarios (`NOT_EVALUATED` when their judge score is unusable)
+- 25 scenarios with literal checks
+- 9 semantic-only scenarios (`NOT_EVALUATED` when their judge score is unusable)
 - 7 SQL comparison modes
 - 19 clean patterns (no mismatches in replay audit)
 

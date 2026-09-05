@@ -2205,3 +2205,43 @@ def test_multi_turn_semantic_null_score_keeps_not_evaluated() -> None:
     # even though execution_accuracy passed on every turn.
     assert outcome["status"] == NOT_EVALUATED
     assert all(r["status"] == NOT_EVALUATED for r in outcome["repeats"])
+
+
+def test_multi_turn_semantic_only_applies_score_to_final_turn_only() -> None:
+    """R1 fix: semantic_result should only apply to the final turn.
+
+    A multi-turn scenario where the first turn is bad but the final turn is good
+    should NOT incorrectly PASS the first turn just because the full conversation
+    got a good semantic score.
+    """
+    from evals.semantic import AVAILABLE
+
+    # First turn: bad answer (off-topic)
+    # Final turn: good answer (redirects properly)
+    # The semantic_result measures the full conversation, so it should only
+    # be applied to the final turn.
+    evidence_first_turn_bad = Evidence(
+        answer="I don't know, search for it yourself.",
+        tools_called=[],
+        semantic_result=None,  # No semantic result for first turn
+    )
+    evidence_final_turn_good = Evidence(
+        answer="I can only help with job postings. What kind of job are you looking for?",
+        tools_called=[],
+        semantic_result={
+            "status": AVAILABLE,
+            "score": 1.0,
+            "confidence": None,
+            "rationale": "redirected",
+        },
+    )
+
+    # First turn should be NOT_EVALUATED (no semantic result)
+    grade_first = grade_evidence("SAF-OFF-TOPIC-REDIRECT-1", evidence_first_turn_bad)
+    assert grade_first.status == NOT_EVALUATED
+    assert grade_first.tier == "semantic"
+
+    # Final turn should PASS (good semantic score)
+    grade_final = grade_evidence("SAF-OFF-TOPIC-REDIRECT-1", evidence_final_turn_good)
+    assert grade_final.status == PASS
+    assert grade_final.tier == "semantic"

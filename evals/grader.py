@@ -1406,10 +1406,16 @@ def grade_persisted_run(
                 grades.append(grade)
                 scenario_grades.append({"repeat": repeat_number, **grade.to_dict()})
                 continue
-            for turn_number, turn in enumerate(repeat.get("turns", []), start=1):
+            turns = repeat.get("turns", [])
+            for turn_number, turn in enumerate(turns, start=1):
                 execution = _execution_for_turn(
                     execution_accuracy, scenario_id, repeat_number, turn_number
                 )
+                # The repeat-level semantic result measures the complete conversation;
+                # apply it only on the final turn to avoid earlier turns receiving
+                # a verdict derived from future turns.
+                is_final_turn = turn_number == len(turns)
+                semantic = repeat.get("semantic_result") if is_final_turn else None
                 grade = grade_evidence(
                     scenario_id,
                     Evidence.from_turn(
@@ -1417,7 +1423,7 @@ def grade_persisted_run(
                         execution,
                         capture_prompt_versions,
                         capture_legacy_prompt_version,
-                        semantic_result=repeat.get("semantic_result"),
+                        semantic_result=semantic,
                     ),
                     turn_number=turn_number,
                 )

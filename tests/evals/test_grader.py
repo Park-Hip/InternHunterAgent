@@ -2085,3 +2085,130 @@ def test_semantic_threshold_is_class_specific() -> None:
         c for c in saf_high.checks if c.name == "semantic_behavior"
     )
     assert semantic_saf_high.passed is True
+
+
+def test_multi_turn_semantic_null_score_keeps_not_evaluated() -> None:
+    """A multi-turn scenario whose repeat has an AVAILABLE semantic_result with a null
+    score must not aggregate to PASS. The null score means the behavioral contract is
+    unverified, so the repeat stays NOT_EVALUATED and the scenario outcome propagates
+    that status instead of inflating the pass rate.
+
+    Regression test for: cascade grading incorrectly graded multi-turn scenarios with
+    null semantic scores as PASS because _semantic_only only checked result.status and
+    never validated that the score was a real number."""
+    run = {
+        "manifest": {"run_id": "multi-turn-null-score"},
+        "scenarios": {
+            "HLP-ERROR-RECOVERY-1": {
+                "status": "COMPLETE",
+                "repeats": [
+                    {
+                        "repeat": 1,
+                        "status": "COMPLETE",
+                        "semantic_result": {
+                            "status": AVAILABLE,
+                            "score": None,
+                            "confidence": None,
+                            "rationale": "timeout",
+                        },
+                        "turns": [
+                            {
+                                "turn": 1,
+                                "status": "COMPLETE",
+                                "seams": {
+                                    "answer": "I found some jobs.",
+                                    "tools_called": ["query_clean_jobs"],
+                                    "question": "Find me jobs.",
+                                },
+                            },
+                            {
+                                "turn": 2,
+                                "status": "COMPLETE",
+                                "seams": {
+                                    "answer": "Here are details for job 1.",
+                                    "tools_called": ["get_job_details"],
+                                    "question": "Tell me about job 1.",
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        "repeat": 2,
+                        "status": "COMPLETE",
+                        "semantic_result": {
+                            "status": AVAILABLE,
+                            "score": None,
+                            "confidence": None,
+                            "rationale": "timeout",
+                        },
+                        "turns": [
+                            {
+                                "turn": 1,
+                                "status": "COMPLETE",
+                                "seams": {
+                                    "answer": "I found some jobs.",
+                                    "tools_called": ["query_clean_jobs"],
+                                    "question": "Find me jobs.",
+                                },
+                            },
+                            {
+                                "turn": 2,
+                                "status": "COMPLETE",
+                                "seams": {
+                                    "answer": "Here are details for job 1.",
+                                    "tools_called": ["get_job_details"],
+                                    "question": "Tell me about job 1.",
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        "repeat": 3,
+                        "status": "COMPLETE",
+                        "semantic_result": {
+                            "status": AVAILABLE,
+                            "score": None,
+                            "confidence": None,
+                            "rationale": "timeout",
+                        },
+                        "turns": [
+                            {
+                                "turn": 1,
+                                "status": "COMPLETE",
+                                "seams": {
+                                    "answer": "I found some jobs.",
+                                    "tools_called": ["query_clean_jobs"],
+                                    "question": "Find me jobs.",
+                                },
+                            },
+                            {
+                                "turn": 2,
+                                "status": "COMPLETE",
+                                "seams": {
+                                    "answer": "Here are details for job 1.",
+                                    "tools_called": ["get_job_details"],
+                                    "question": "Tell me about job 1.",
+                                },
+                            },
+                        ],
+                    },
+                ],
+            }
+        },
+    }
+    execution = {
+        "scenarios": {
+            "HLP-ERROR-RECOVERY-1": [
+                {"repeat": 1, "turns": [{"status": PASS}, {"status": PASS}]},
+                {"repeat": 2, "turns": [{"status": PASS}, {"status": PASS}]},
+                {"repeat": 3, "turns": [{"status": PASS}, {"status": PASS}]},
+            ]
+        }
+    }
+
+    report = grade_persisted_run(run, execution)
+    outcome = report["scenario_outcomes"]["HLP-ERROR-RECOVERY-1"]
+    # Every repeat must be NOT_EVALUATED when the semantic score is null,
+    # even though execution_accuracy passed on every turn.
+    assert outcome["status"] == NOT_EVALUATED
+    assert all(r["status"] == NOT_EVALUATED for r in outcome["repeats"])

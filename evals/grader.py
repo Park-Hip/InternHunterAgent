@@ -1170,7 +1170,13 @@ def _semantic_only(rule: ScenarioRule, evidence: Evidence) -> bool:
     # the judge score is unavailable; an available score makes the behavioral contract
     # deterministically resolvable.
     result = evidence.semantic_result
-    return result is None or result.get("status") != AVAILABLE
+    if result is None or result.get("status") != AVAILABLE:
+        return True
+    # An AVAILABLE result with a missing or non-numeric score is not truly resolved;
+    # treat it as unverified so the scenario stays NOT_EVALUATED rather than PASSing
+    # on a null score.
+    score = result.get("score")
+    return not (isinstance(score, (int, float)) and not isinstance(score, bool))
 
 
 def _semantic_class_of(scenario_id: str) -> str:

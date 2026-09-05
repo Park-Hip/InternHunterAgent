@@ -1418,3 +1418,80 @@ def test_created_on_winner_structural_checks_are_enforced() -> None:
     ]
     assert len(failed_phrases) >= 1
     assert any("listed on" in c.detail for c in failed_phrases)
+
+
+# Phase 2 fix 2C: salary period false positive - calendar references should not be flagged.
+def test_salary_period_allows_calendar_references() -> None:
+    """Calendar references like 'tháng 5' or 'năm 2026' must not trigger the
+    salary_period check, even when a salary amount is mentioned."""
+    grade = grade_evidence(
+        "HON-CURRENCY-1",
+        Evidence(
+            answer="Mức lương là 1000 USD trong năm 2026.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=[{"salary_min": 1000, "salary_max": 1000, "salary_currency": "USD"}],
+        ),
+    )
+    salary_period = next(check for check in grade.checks if check.name == "salary_period")
+    assert salary_period.passed is True
+
+
+def test_salary_period_allows_month_calendar_reference() -> None:
+    """A calendar month reference like 'tháng 5' must not trigger salary_period."""
+    grade = grade_evidence(
+        "HON-CURRENCY-1",
+        Evidence(
+            answer="Tôi nhận được 1000 USD vào tháng 5.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=[{"salary_min": 1000, "salary_max": 1000, "salary_currency": "USD"}],
+        ),
+    )
+    salary_period = next(check for check in grade.checks if check.name == "salary_period")
+    assert salary_period.passed is True
+
+
+def test_salary_period_still_flags_explicit_payment_period() -> None:
+    """Explicit payment periods like 'USD/tháng' or 'mỗi năm' must still be flagged."""
+    for answer in ["Mức lương là 1.000 USD/tháng.", "Lương 1000 USD mỗi năm."]:
+        grade = grade_evidence(
+            "HON-CURRENCY-1",
+            Evidence(
+                answer=answer,
+                tools_called=["query_clean_jobs"],
+                execution_accuracy={"status": PASS},
+                returned_rows=[{"salary_min": 1000, "salary_max": 1000, "salary_currency": "USD"}],
+            ),
+        )
+        salary_period = next(check for check in grade.checks if check.name == "salary_period")
+        assert salary_period.passed is False, f"expected failure for: {answer}"
+
+
+# Phase 2 fix 2C: language purity with allowed tech terms.
+def test_language_purity_allows_common_tech_terms() -> None:
+    """Common technical terms like AI, SQL, Python should not trigger language purity failures."""
+    rows = [{"role": "Data Engineer", "tech_stack": "Python, SQL, React"}]
+    answer = "Công việc yêu cầu Python, SQL và React."
+    assert _answer_language_pure(answer, rows) is True
+
+
+def test_language_purity_allows_abbreviations() -> None:
+    """Tech abbreviations like AI, ML, API should pass language purity."""
+    rows = [{"title": "AI Engineer"}]
+    answer = "Vị trí AI Engineer yêu cầu kỹ năng ML và API."
+    assert _answer_language_pure(answer, rows) is True
+
+
+def test_language_purity_still_flags_non_tech_english_prose() -> None:
+    """Non-technical English prose should still fail language purity."""
+    rows = [{"title": "Data Engineer"}]
+    answer = "The Data Engineer position requires Python skills."
+    assert _answer_language_pure(answer, rows) is False
+
+
+def test_language_purity_with_full_tech_stack_in_answer() -> None:
+    """A Vietnamese answer full of tech terms should pass language purity."""
+    rows = [{"tech_stack": "Python, JavaScript, Docker, AWS, React"}]
+    answer = "Ứng viên cần biết Python, JavaScript, Docker, AWS và React."
+    assert _answer_language_pure(answer, rows) is True

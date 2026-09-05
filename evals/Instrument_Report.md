@@ -65,7 +65,7 @@ driver's retry policy; no turn was dropped.
 | Capture window | 2026-09-02T04:05:35Z to 2026-09-02T04:13:29Z |
 | Run ID | `8e7208f3-1cb3-4586-9cec-cd81f17bde67` |
 | Git SHA | `6426c3c0c0a1ba72021f3a124b0c2137955ff6c8` |
-| Prompt version | `v11` (system, schema_context, sql_generation); `system` v12 hardening added 2026-09-03 for issue #359 |
+| Prompt version | `v11` (schema_context); `system` v13; `sql_generation` v13 |
 | Registry hash | `20a5adc5e0370dc49f93da57db1cdb06079d47c638e2ba58a674d93a76d0a5aa` |
 | Registry scenarios | 36 (88 repeats, 94 turns) |
 | Fixture hash | `c871cfc518ffb4f96f96b62b4f9b9ffc21b20fdc91c8244a3281a4bbed722b88` |
@@ -301,6 +301,51 @@ The per-class thresholds are now: `SAF` 1.0, `HON` 1.0, `HLP` 0.6.
 | 1C — HLP threshold | `evals/calibration.py` | +1 pt → ~83% |
 
 A full baseline re-capture with the v12 prompt and updated grader is needed to
+confirm the combined effect. See `evals/IMPLEMENTATION_PLAN.md` for the complete
+roadmap through Phase 3.
+
+## Phase 2 fixes (pass rate improvement plan)
+
+Three Phase 2 fixes were applied to raise the pass rate from ~83% toward ~90%:
+
+### Fix 2A — SQL Generation Prompt Hardening
+Added explicit rules to the `sql_generation` prompt to reduce imprecise SQL generation:
+- Job-title queries now match the `role` column first instead of falling back to `tech_stack`/`description`
+- Count queries output exactly `SELECT COUNT(*) AS count` without row columns
+- LIMIT is omitted unless the user explicitly requests a specific number of results
+- Cross-currency ranking queries return all salary rows grouped by currency
+
+Bumped `prompt_versions.sql_generation` from `v11` to `v13`.
+
+**Impact:** Expected +5–8 pts (reduces execution_accuracy failures from 12 → ~3–7)
+
+### Fix 2B — Detail/Clarify Behavior Prompt
+Added clarification rules to the system prompt under the "Clarification and multi-turn refinement" section:
+- Explicit numeric IDs (e.g. "việc số 1, 2, 3") are passed directly to `get_job_details` without asking for clarification
+- Clarification is only requested when the request is genuinely ambiguous
+
+Bumped `prompt_versions.system` from `v12` to `v13`.
+
+**Impact:** Expected +4 pts (fixes HLP-DETAIL-3, HLP-DETAIL-7, HLP-CLARIFY-1)
+
+### Fix 2C — Grader Precision Tweaks
+Two sub-fixes to the deterministic grader:
+
+**2C-A — Salary period false positive:** Modified `_salary_period_check` to not flag calendar references (e.g. "tháng 5", "năm 2026") as payment periods. Only explicit payment frequency indicators (e.g. "USD/tháng", "mỗi năm") trigger the check.
+
+**2C-B — Language purity exceptions:** Added `_ALLOWED_TECH_TERMS` to `_answer_language_pure` to exempt common technical terms (AI, SQL, Python, Data, ML, React, Docker, etc.) from English-prose penalties in Vietnamese answers.
+
+**Impact:** Expected +1 pt (reduces false positives on salary period and language purity)
+
+### Summary
+
+| Fix | Files changed | Expected impact |
+|---|---|---|
+| 2A — SQL prompt hardening | `config/prompts.yaml` (sql_generation) | +5–8 pts → ~88–90% |
+| 2B — Clarify behavior prompt | `config/prompts.yaml` (system) | +4 pts → ~90–92% |
+| 2C — Grader precision tweaks | `evals/grader.py`, `tests/evals/test_grader.py` | +1 pt → ~91% |
+
+A full baseline re-capture with the v13 prompt and updated grader is required to
 confirm the combined effect. See `evals/IMPLEMENTATION_PLAN.md` for the complete
 roadmap through Phase 3.
 

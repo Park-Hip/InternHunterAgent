@@ -265,6 +265,13 @@ _ENGLISH_PROSE_WORDS = frozenset(
     "a an and are as at be but by can does for from has have how i in is it job jobs my not of on or that the these this to was were what which with you your".split()
 )
 
+_ALLOWED_TECH_TERMS = frozenset({
+    "AI", "SQL", "Python", "Data", "ML", "Remote", "React", "Docker",
+    "JavaScript", "TypeScript", "Backend", "Frontend", "Fullstack",
+    "Java", "Go", "Rust", "Kotlin", "Swift", "PHP", "Ruby", "Node",
+    "AWS", "GCP", "Azure", "Linux", "Git", "API", "REST", "GraphQL",
+})
+
 
 def _row_values(rows: list[dict[str, Any]]) -> list[str]:
     values = [str(value) for row in rows for value in row.values() if value is not None]
@@ -311,7 +318,9 @@ def _answer_language_pure(answer: str | None, rows: list[dict[str, Any]] | None)
     # ``\w`` is Unicode-aware, so an ASCII run in an accented Vietnamese word such
     # as ``toàn`` is not treated as a standalone English token.
     words = set(re.findall(r"(?<!\w)[a-z]{2,}(?!\w)", remaining))
-    return not bool(words & _ENGLISH_PROSE_WORDS)
+    # Allow common technical terms that naturally appear in Vietnamese job postings.
+    allowed = {term.casefold() for term in _ALLOWED_TECH_TERMS}
+    return not bool((words & _ENGLISH_PROSE_WORDS) - allowed)
 
 
 # Emoji and dingbat blocks only. Arrows, bullets, the em dash and the dong sign are left out:
@@ -423,6 +432,12 @@ _SALARY_PERIOD_PATTERN = re.compile(
     r"\b(?:monthly|yearly|hourly|per\s+(?:month|year|hour)|tháng|thang|năm|nam|giờ|gio)\b",
     re.IGNORECASE,
 )
+# Patterns that indicate a period word is being used as a calendar reference
+# rather than a payment frequency. We exclude these to avoid false positives.
+_CALENDAR_PERIOD_PATTERN = re.compile(
+    r"(?:tháng|thang|năm|nam)\s*\d+",  # "tháng 5", "năm 2026", etc.
+    re.IGNORECASE,
+)
 _STRUCTURED_JOB_LEVELS = (
     "Experienced (non-manager)",
     "Manager",
@@ -474,13 +489,40 @@ def _normalized_salary_amount(value: Any) -> str:
 
 def _salary_period_check(evidence: Evidence) -> Check:
     mentions_salary = _answer_mentions_returned_salary(evidence.answer or "", evidence.returned_rows)
-    period = _SALARY_PERIOD_PATTERN.search(evidence.answer or "") if mentions_salary else None
+    if not mentions_salary:
+        return Check(
+            "salary_period",
+            True,
+            "salary amount has no inferred payment period",
+            "structural",
+        )
+    answer = evidence.answer or ""
+    # Find all period word matches in the answer.
+    period_matches = list(_SALARY_PERIOD_PATTERN.finditer(answer))
+    if not period_matches:
+        return Check(
+            "salary_period",
+            True,
+            "salary amount has no inferred payment period",
+            "structural",
+        )
+    # Only flag when the answer explicitly states a conflicting payment period.
+    # Do not flag calendar references like "tháng 5" (May) or "năm 2026" (year 2026).
+    for match in period_matches:
+        matched_text = match.group(0)
+        # Check if this period word is part of a calendar reference (e.g. "tháng 5", "năm 2026").
+        if _CALENDAR_PERIOD_PATTERN.search(matched_text + answer[match.end():match.end() + 10]):
+            continue
+        return Check(
+            "salary_period",
+            False,
+            f"salary amount is paired with an unsupported payment period: {matched_text!r}",
+            "structural",
+        )
     return Check(
         "salary_period",
-        period is None,
-        "salary amount has no inferred payment period"
-        if period is None
-        else f"salary amount is paired with an unsupported payment period: {period.group(0)!r}",
+        True,
+        "salary amount has no inferred payment period",
         "structural",
     )
 

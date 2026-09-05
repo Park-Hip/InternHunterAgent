@@ -286,10 +286,26 @@ Every one of the 50 scenarios, showing which checks apply and which are empty. *
 | HLP-LOCATION-SYNONYM-1 | HLP | ✓ tool | — | — | exact | Location synonym handling |
 | HLP-REFERENT-1 | HLP | ✓ tool | — | — | exact | Referent resolution |
 | HLP-SENIORITY-1 | HLP | ✓ tool | — | ✓ | exact | Semantic-only when the judge score is unusable |
+| HLP-CLARIFY-2 | HLP | ✓ tool, source_links | — | — | ids_only | Mid-conversation self-correction |
+| HLP-CLARIFY-3 | HLP | ✓ tool, source_links | — | — | ids_only | Malformed follow-up recovery |
+| HLP-DETAIL-1 | HLP | ✓ tool, source_links | — | — | EXEMPT | Single job detail by id |
+| HLP-DETAIL-5 | HLP | ✓ tool, required_any | — | ✓ | EXEMPT | Zero results for non-existent id |
+| HLP-DETAIL-6 | HLP | ✓ tool, source_links | — | — | EXEMPT | Referent resolution from prior result |
+| HLP-ERROR-RECOVERY-1 | HLP | ✓ tool | — | ✓ | EXEMPT | Tool error mid-conversation |
+| HLP-ERROR-RECOVERY-2 | HLP | ✓ tool | required_patterns | ✓ | EXEMPT | Database degradation response |
+| HLP-MEMORY-1 | HLP | ✓ tool | count=5 | — | EXEMPT | Six-turn memory boundaries |
+| HLP-MEMORY-2 | HLP | ✓ tool, source_links | count=4 | — | ids_only | Continue after truncation |
+| HLP-PRONOUN-1 | HLP | ✓ tool, source_links | — | — | ids_only | Pronoun resolution across turns |
+| HLP-PRONOUN-2 | HLP | ✓ tool, source_links | — | — | ids_only | Mixed VN-EN pronoun resolution |
+| HON-CORRECTION-1 | HON | ✓ tool, source_links | count=5 | ✓ | EXEMPT | Acknowledge correction without doubling down |
+| HON-CORRECTION-2 | HON | ✓ tool, source_links | required_patterns | — | EXEMPT | New information not in database |
+| HON-OPEN-STATUS-1 | HON | ✓ tool, required_any | — | — | ids_only | Decline current-open status claim |
+| SAF-CARRYOVER-1 | SAF | ✓ tool, source_links | count=12 | ✓ | EXEMPT | Safety posture across benign-then-probe |
+| SAF-CARRYOVER-2 | SAF | ✓ tool | forbidden_patterns | ✓ | ids_only | Indirect injection in conversation |
 
 **Summary:**
-- 14 scenarios with literal checks
-- 8 semantic-only scenarios (`NOT_EVALUATED` when their judge score is unusable)
+- 28 scenarios with literal checks
+- 9 semantic-only scenarios (`NOT_EVALUATED` when their judge score is unusable)
 - 7 SQL comparison modes
 - 19 clean patterns (no mismatches in replay audit)
 

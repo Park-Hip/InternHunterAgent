@@ -46,9 +46,9 @@ An authorization to report a diagnostic metric is not authorization to impose a 
 | `FAIL` | The agent violated an applicable deterministic check. | Verify the earliest failing seam and route it as product behavior work. |
 | `INFRA` | Required evidence was not captured because of a provider, quota, database, or other external failure. | Repair or rerun the affected measurement. Do not count it as a pass. |
 | `UNRUN` | The capture did not attempt the turn or scenario. | Resume or replace the capture. Do not publish it as complete coverage. |
-| `NOT_EVALUATED` | A single check was inapplicable to recorded evidence, **or** the scenario's decisive behavioral contract is deferred to the semantic judge and the deterministic grader has no structural/literal rule to decide it. | Keep the earlier applicable result and do not relabel this as `INFRA`. For a grade-level `NOT_EVALUATED`, the summary excludes the turn from the pass-rate denominator. |
+| `NOT_EVALUATED` | A single check was inapplicable to recorded evidence, **or** a semantic-only behavioral contract has no `AVAILABLE` judge result. | Keep the earlier applicable result and do not relabel this as `INFRA`. For a grade-level `NOT_EVALUATED`, the summary excludes the turn from the pass-rate denominator. |
 | `EXEMPT` | Execution accuracy is intentionally absent because the scenario has no SQL contract. | Verify the registry exemption remains appropriate. |
-| `AVAILABLE` | The semantic judge returned a score and rationale. | Compare it with the human label or sample review. |
+| `AVAILABLE` | The semantic judge returned a numeric score and rationale. | The grader evaluates it against the calibrated class threshold; compare it with the human label or sample review. |
 | `UNAVAILABLE` | The semantic judge did not produce a usable result. | Preserve the error and keep the result for rerun. |
 
 Pass-rate denominators exclude `INFRA`, `UNRUN`, and grade-level `NOT_EVALUATED` turns.
@@ -63,13 +63,14 @@ The order protects the only non-repeatable artifact, which is the serving-model 
 
 1. Confirm the worktree is clean and the fixture is rebuilt.
 2. Capture the registry and retain the raw artifact under `evals/runs/`.
-3. Generate execution accuracy and deterministic grade reports.
-4. Freeze the capture before analyzing the result and commit only the resulting sanitized replay.
-5. Replay the committed artifact with no serving-model or judge credentials.
-6. Score the preserved raw capture through the semantic path when judge credentials are available.
-7. Open the viewer with deterministic and execution reports joined.
-8. Update the instrument report with provenance, coverage, metrics, disagreements, and unresolved cases.
-9. Request maintainer acceptance only after the manual sample below is complete.
+3. Generate the execution-accuracy report.
+4. Score the preserved raw capture through the semantic path when judge credentials are available.
+5. Generate the deterministic grade report, which consumes the persisted semantic scores.
+6. Freeze the capture before analyzing the result and commit only the resulting sanitized replay.
+7. Replay the committed artifact with no serving-model or judge credentials.
+8. Open the viewer with deterministic and execution reports joined.
+9. Update the instrument report with provenance, coverage, metrics, disagreements, and unresolved cases.
+10. Request maintainer acceptance only after the manual sample below is complete.
 
 Never alter prompts, provider configuration, fixture data, registry rules, or a human label in the same pass that measures a baseline.
 That would make a score unable to distinguish model change from measurement change.

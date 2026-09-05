@@ -121,6 +121,10 @@ evals/
 └── archive/                      Historical preserved evidence (readable history, not fixtures)
 ```
 
+## Release roadmap
+
+The full release roadmap is in [`RELEASE_ROADMAP.md`](RELEASE_ROADMAP.md). It documents the current baseline state, phased improvement plan (Phases 1–4), risk register, CI gate architecture, and governance rules for threshold changes and corpus immutability.
+
 ## Start-here context (kept from the pre-hub README)
 
 The registry in [`scenarios_v1.yaml`](scenarios_v1.yaml) is the single source of truth for the evaluation scenarios.

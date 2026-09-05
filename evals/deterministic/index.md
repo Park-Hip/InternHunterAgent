@@ -305,7 +305,7 @@ Every one of the 50 scenarios, showing which checks apply and which are empty. *
 
 **Summary:**
 - 28 scenarios with literal checks
-- 9 semantic-only scenarios (`NOT_EVALUATED` when their judge score is unusable)
+- 10 semantic-only scenarios (`NOT_EVALUATED` when their judge score is unusable)
 - 7 SQL comparison modes
 - 19 clean patterns (no mismatches in replay audit)
 

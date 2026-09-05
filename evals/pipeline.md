@@ -105,7 +105,7 @@ uv run python -m evals.replay --all
 | `FAIL` | A check under the agent's control failed | Yes (as failure) |
 | `INFRA` | Required evidence missing due to external failure | No |
 | `UNRUN` | Turn or scenario was never attempted | No |
-| `NOT_EVALUATED` | Check inapplicable to evidence, or a semantic-only contract lacks an `AVAILABLE` judge result | No |
+| `NOT_EVALUATED` | Check inapplicable to evidence, or a semantic-only contract lacks a usable numeric judge score | No |
 | `EXEMPT` | Execution accuracy intentionally absent (no SQL contract) | Yes (as pass) |
 | `AVAILABLE` | Semantic judge returned a numeric score | Grader compares it with the calibrated class threshold |
 | `UNAVAILABLE` | Semantic judge did not produce a usable result | Semantic check remains `NOT_EVALUATED` |
@@ -114,7 +114,7 @@ uv run python -m evals.replay --all
 
 1. **Capture is the only serving-model call.** Semantic scoring is a separate judge-provider pass over the captured evidence.
 2. **Structural checks win over literal wins over semantic.** A failed structural check overrides all lower-tier results.
-3. **Unavailable semantic evidence never becomes INFRA or PASS.** A semantic-only scenario is `NOT_EVALUATED` only when it has no `AVAILABLE` judge result.
+3. **Unusable semantic evidence never becomes INFRA or PASS.** A semantic-only scenario is `NOT_EVALUATED` when it has no `AVAILABLE` result with a numeric, non-boolean score.
 4. **Human labels are immutable.** Calibration scores never overwrite human annotations.
 5. **Replay is provider-free.** CI validates committed replays without any model or judge credentials.
 6. **Grade after scoring.** The mechanical grader consumes persisted semantic results and makes no judge call.

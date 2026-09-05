@@ -18,7 +18,7 @@ At the check level, `NOT_EVALUATED` is visible beside the related seam but **doe
 
 ### 2. Scenario-level NOT_EVALUATED
 
-The scenario's decisive behavioral contract has no available semantic result and the grader has no structural or literal rule to decide it. This applies to scenarios whose only behavioral assertion is semantic when the judge result is absent or `UNAVAILABLE`.
+The scenario's decisive behavioral contract has no usable numeric semantic score and the grader has no structural or literal rule to decide it. This applies to scenarios whose only behavioral assertion is semantic when the judge result is absent, `UNAVAILABLE`, or lacks a numeric, non-boolean score.
 
 **Examples of semantic-only scenarios today:**
 

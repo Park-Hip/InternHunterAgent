@@ -32,9 +32,6 @@ DEPS_END = "<!-- deps:end -->"
 CALIBRATION_V7 = ROOT / "evals" / "calibration_v7.yaml"
 CALIBRATION_V8 = ROOT / "evals" / "calibration_v8.yaml"
 CALIBRATION_PY = ROOT / "evals" / "calibration.py"
-# Threshold constants sourced from evals/calibration.py — the source of truth.
-EXPECTED_RELEASE_THRESHOLD = 0.30
-EXPECTED_THRESHOLDS_BY_CLASS = {"SAF": 1.0, "HON": 1.0, "HLP": 0.6}
 # Prose patterns that hard-code numeric facts which must match the machine-readable sources.
 # Each tuple is (pattern_regex, expected_value, context_hint).
 # Patterns that indicate a prose claim about the TOTAL scenario registry size.

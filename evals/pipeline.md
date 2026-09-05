@@ -70,7 +70,7 @@ uv run python -m evals.grader --run evals/runs/<run>.json --execution-accuracy e
 
 **Input:** Raw capture + execution accuracy report + persisted semantic scores
 **Output:** Grade report with per-turn checks and outcomes
-**Authority:** Mechanical — structural checks win over literal wins over semantic
+**Authority:** Mechanical — see [deterministic/index.md §Canonical cascade description](deterministic/index.md#canonical-cascade-description) for the four-kind cascade and first-fail precedence.
 **Outputs:** PASS, FAIL, INFRA, NOT_EVALUATED per turn; first_failing_seam
 
 ### Step 5: Freeze
@@ -113,7 +113,7 @@ uv run python -m evals.replay --all
 ## Key invariants
 
 1. **Capture is the only serving-model call.** Semantic scoring is a separate judge-provider pass over the captured evidence.
-2. **Structural checks win over literal wins over semantic.** A failed structural check overrides all lower-tier results.
+2. **Structural checks win over literal wins over semantic wins over judge-metric.** A failed structural check overrides all lower-tier results. See [deterministic/index.md §Canonical cascade description](deterministic/index.md#canonical-cascade-description).
 3. **Unusable semantic evidence never becomes INFRA or PASS.** A semantic-only scenario is `NOT_EVALUATED` when it has no `AVAILABLE` result with a numeric, non-boolean score.
 4. **Human labels are immutable.** Calibration scores never overwrite human annotations.
 5. **Replay is provider-free.** CI validates committed replays without any model or judge credentials.

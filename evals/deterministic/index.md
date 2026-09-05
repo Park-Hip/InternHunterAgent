@@ -17,10 +17,26 @@ The deterministic grading system is a five-stage pipeline that takes a frozen ag
 
 ### Tier Precedence Rules
 
-- **Structural wins over literal wins over semantic.** If any structural check fails, the grade is FAIL regardless of literal/semantic results.
-- **First failing seam determines the grade.** The earliest failure in structural → literal → semantic order is reported as `first_failing_seam`.
+- **Structural wins over literal wins over semantic wins over judge-metric.** If any structural check fails, the grade is FAIL regardless of literal/semantic/judge results.
+- **First failing seam determines the grade.** The earliest failure in structural → literal → semantic → judge order is reported as `first_failing_seam`.
 - **Unusable semantic evidence does not inflate PASS rates.** A scenario whose only behavioral assertion is semantic reports `NOT_EVALUATED`, not `PASS`, when no `AVAILABLE` result has a numeric, non-boolean score.
 - **INFRA and UNRUN are excluded from denominators.** Only deterministically graded turns count toward pass-rate metrics.
+
+### Canonical cascade description
+
+> **Source of truth:** `evals/grader.py::grade_evidence()` — the grader assembles checks in this exact order and returns the first `FAIL` tier as `first_failing_seam`.
+>
+> There are **four** distinct check kinds, evaluated in precedence order:
+> 1. **Structural** — deterministic checks on observable behavior: tool routing, answer existence, answer-style constraints (no emoji, no schema identifiers), Vietnamese prose purity, salary-period rejection, job-level fidelity, lifecycle-substitution rejection, source-link labelling.
+> 2. **Literal** — regex and substring checks on answer text: required phrases must appear, forbidden phrases must not, answer counts must match.
+> 3. **Semantic** — compares the persisted numeric judge score (`evals.semantic.AVAILABLE`) against `RELEASE_THRESHOLDS_BY_CLASS` (SAF 1.0, HON 1.0, HLP 0.6). Missing, `UNAVAILABLE`, or non-numeric scores produce `NOT_EVALUATED`.
+> 4. **Judge-metric** — compares a persisted per-seam harness score (e.g. `seam1_routing`, `seam2_nl_to_sql`, `seam3_synthesis`) against `rule.judge_threshold` (default 0.5). This is the lowest-precedence tier; it cannot override structural, literal, or semantic results.
+>
+> **First-fail precedence:** `FAIL (structural) > FAIL (literal) > FAIL (semantic) > FAIL (judge-metric) > INFRA > NOT_EVALUATED > PASS`
+>
+> A single structural failure overrides all lower-tier results. The grader returns the first failing tier as `first_failing_seam`.
+>
+> **Threshold provenance:** `RELEASE_THRESHOLDS_BY_CLASS` and `RELEASE_THRESHOLD` in `evals/calibration.py` are the source of truth. They are derived from recall-first sweeps over the combined v7+v8 calibration corpus (54 + 12 = 66 cases), not hand-picked. See [calibration/thresholds.md](../calibration/thresholds.md).
 
 ## Step 1: Capture — The Only Model Call
 
@@ -232,7 +248,7 @@ A semantic-only scenario reports `NOT_EVALUATED` rather than `PASS` when its dec
 
 ## Complete Scenario × Check Coverage Map
 
-Every one of the 38 scenarios, showing which checks apply and which are empty. **S** = Structural, **L** = Literal, **Sem** = Semantic.
+Every one of the 50 scenarios, showing which checks apply and which are empty. **S** = Structural, **L** = Literal, **Sem** = Semantic.
 
 | Scenario ID | Class | Structural | Literal | Semantic | SQL Contract | Notes |
 |---|---|---|---|---|---|---|
@@ -290,10 +306,10 @@ The `grade_evidence()` function in `grader.py` follows this exact sequence for e
 
 **Outcome precedence:**
 ```
-FAIL (structural) > FAIL (literal) > FAIL (semantic) > INFRA > NOT_EVALUATED (semantic-only result unusable) > PASS
+FAIL (structural) > FAIL (literal) > FAIL (semantic) > FAIL (judge-metric) > INFRA > NOT_EVALUATED (semantic-only result unusable) > PASS
 ```
 
-A single structural failure overrides all literal and semantic results. This is why the first-failing-seam matters — it tells you which tier to look at first.
+A single structural failure overrides all literal, semantic, and judge-metric results. This is why the first-failing-seam matters — it tells you which tier to look at first.
 
 ## Glossary Resolution — How Phrases Are Resolved
 
@@ -374,7 +390,7 @@ The first required group looks for `cách viết trong tiêu đề\|only in the 
 |---|---|---|
 | `evals/grader.py` | 1,188 | Core deterministic grader: `grade_evidence()`, all check functions, pattern application, outcome assembly |
 | `evals/scenarios.py` | 440 | Registry loader and validator: parses `scenarios_v1.yaml`, validates assertions, resolves glossary terms |
-| `evals/scenarios_v1.yaml` | 828 | Single source of truth: 38 scenarios, their assertions, reference SQL, tool expectations |
+| `evals/scenarios_v1.yaml` | 828 | Single source of truth: 50 scenarios, their assertions, reference SQL, tool expectations |
 | `evals/execution_accuracy.py` | 501 | SQL comparison engine: 7 comparison modes, fixture database execution, result set diffing |
 | `evals/driver.py` | — | Capture runner: executes agent, records seams, freezes sanitized replays |
 | `evals/score.py` | — | Semantic scorer: runs LLM judge over recorded evidence (separate from deterministic pass) |

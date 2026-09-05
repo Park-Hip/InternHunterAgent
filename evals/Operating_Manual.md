@@ -29,9 +29,8 @@ Structural assertions check observable facts such as tool use, SQL result contra
 Literal assertions check fixed, reviewable text conditions such as a secret-like pattern.
 Semantic assertions ask whether the response satisfied a behavior requirement over the complete conversational trajectory.
 
-Structural results take precedence over literal and semantic results.
-The semantic judge has no authority to overwrite a structural result.
-The judge result is diagnostic while calibration is being measured.
+Structural results take precedence over literal, semantic, and judge-metric results.
+The judge-metric check compares a persisted per-seam harness score (e.g. `seam1_routing`, `seam2_nl_to_sql`, `seam3_synthesis`) against `rule.judge_threshold` (default 0.5); it is the lowest-precedence tier and cannot override structural, literal, or semantic results. See [deterministic/index.md §Canonical cascade description](deterministic/index.md#canonical-cascade-description).
 
 During calibration, human review wins over both deterministic and semantic results.
 Each disagreement requires a new or corrected labelled corpus case and a written disposition.

@@ -52,7 +52,7 @@ _REQUIRED_NAMED = {"id", "scenario_id", "language", "prompt_versions", "source",
 
 ## v7 composition
 
-The v7 corpus (`calibration_v7.yaml`, corpus_id: `vietnamese-semantic-v7`) contains **44 cases**:
+The v7 corpus (`calibration_v7.yaml`, corpus_id: `vietnamese-semantic-v7`) contains **54 cases**:
 
 | Source | Count | Description |
 |---|---|---|

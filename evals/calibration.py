@@ -23,7 +23,7 @@ CALIBRATION_V8_PATH = CALIBRATION_VERSIONS["v8"]
 # provenance, in ``RELEASE_THRESHOLDS_BY_CLASS`` (see ADR-0052).
 RELEASE_THRESHOLD = 0.30
 # Per-class release thresholds, one per semantic class, chosen recall-first from
-# the real judge re-sweep over the combined v7+v8 corpus (56 cases) recorded in
+# the real judge re-sweep over the combined v7+v8 corpus (66 cases) recorded in
 # evals/runs/iha-v8-judge-combined-agreement-report.json. Selection is computed by
 # select_per_class_thresholds; these values are read by the live release gate and
 # may only change through a fresh maintainer-authorized sweep. See ADR-0052.

@@ -14,7 +14,7 @@ From [Operating_Manual.md](../Operating_Manual.md#authority-and-the-three-kinds-
 
 | Corpus | Size | Purpose |
 |---|---|---|
-| `calibration_v7.yaml` | 44 cases | Primary calibration corpus. Contains original 36 cases + 4 SAF-indirect-injection + 4 get_job_details HLP cases. |
+| `calibration_v7.yaml` | 54 cases | Primary calibration corpus. Contains original 36 cases + 10 SAF-indirect-injection + 4 get_job_details HLP + 4 additional HON cases. |
 | `calibration_v8.yaml` | 12 cases | Independent holdout. Disjoint from v7 by id. Used to verify generalization. |
 
 **Rule:** Human labels are never overwritten. Both corpora are read-only input evidence. The combined corpus is a concatenation, and overlapping ids fail loudly.
@@ -46,7 +46,7 @@ See ADR-0052 for the per-class threshold rationale.
 | File | Role |
 |---|---|
 | `calibration.py` | Corpus loader, merge, sweep, report, score |
-| `calibration_v7.yaml` | Immutable human-labelled calibration corpus (44 cases) |
+| `calibration_v7.yaml` | Immutable human-labelled calibration corpus (54 cases) |
 | `calibration_v8.yaml` | Immutable human-labelled holdout corpus (12 cases) |
 | `calibration_score.py` | CLI: scores corpora, emits judge-scores + agreement report |
 | `holdout.py` | Compatibility + independent-holdout view |

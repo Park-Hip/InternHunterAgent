@@ -8,7 +8,7 @@ Groq's free tier rationed evaluation to days; throughput, not answer quality, wa
 
 ## Decision
 
-Both profiles serve on DeepSeek: the 29-scenario registry captured in 5m20s, 77 of 77 turns, zero
+Both profiles serve on DeepSeek: the 50-scenario registry captured in 5m20s, 77 of 77 turns, zero
 retries, about four US cents.
 Steps 1 to 3 of the pre-registered rule (safety, honesty, task and tool quality) found no resolvable
 difference; the decision was taken at step 4.

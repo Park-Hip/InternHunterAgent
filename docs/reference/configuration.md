@@ -166,7 +166,7 @@ serving provider's account (D-017).
 
 DeepSeek has no free tier and publishes no per-minute or per-day token limit, only account
 concurrency.
-A full 29-scenario evaluation run measured about four cents at list rates, spending roughly 3.7K
+A full 50-scenario evaluation run measured about four cents at list rates, spending roughly 3.7K
 tokens per turn across 77 turns.
 Serving traffic on the demo is the same per-turn shape.
 For the measured derivation see [T0027.3 DeepSeek arm](../../evals/t0027_deepseek_arm.md); for the

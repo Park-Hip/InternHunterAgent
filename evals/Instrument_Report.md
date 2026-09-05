@@ -1,7 +1,9 @@
 # Evaluation Instrument Report
 
-> **Last verified:** 2026-09-04.
-
+> **Status:** Dated snapshot · **Last verified:** 2026-09-04.
+>
+> This is a point-in-time report, not durable reference. Numbers here (case counts, pass rates, baseline thresholds) reflect the state at verification time and may have changed since. For current reference, see [calibration/index.md](calibration/index.md) and [Operating_Manual.md](Operating_Manual.md).
+>
 > **Eviction:** This report is superseded when a later baseline changes the measured prompt, registry, fixture, provider, or calibration evidence.
 
 ## Seam 2: Removal of unreliable literal patterns

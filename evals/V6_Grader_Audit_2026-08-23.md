@@ -1,7 +1,9 @@
 # V6 Grader Audit
 
-> **Last verified:** 2026-08-23.
-
+> **Status:** Dated snapshot · **Last verified:** 2026-08-23.
+>
+> This is a point-in-time audit report. The findings here have been superseded by later captures and fixes. For current reference, see [Operating_Manual.md](Operating_Manual.md) and [disagreements/index.md](disagreements/index.md).
+>
 > **Eviction:** This audit leaves when a replacement replay and its human-review disposition supersede every finding here.
 
 ## Result

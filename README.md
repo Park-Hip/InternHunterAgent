@@ -98,15 +98,8 @@ and interactive API docs at `/docs`.
 
 ## Documentation
 
-| Doc | What it answers |
-|---|---|
-| [`docs/architecture.md`](docs/architecture.md) | Product scope, architecture, and deliberate exclusions |
-| [`docs/how-to/operate.md`](docs/how-to/operate.md) | How the deployed service, database, and ingestion cron are operated |
-| [`docs/how-to/evaluate.md`](docs/how-to/evaluate.md) | How to run, grade, freeze, and inspect evaluations |
-| [`docs/reference/configuration.md`](docs/reference/configuration.md) | Stack, dependencies, tunables, hosted services |
-| [`docs/reference/schema.md`](docs/reference/schema.md) | Frozen agent-visible `clean_jobs` columns |
-| [`docs/reference/agent-behavior.md`](docs/reference/agent-behavior.md) | Frozen agent behavior requirements |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to change this repository and get it merged |
+All project documentation is organised by Diátaxis quadrant (tutorial, how-to, reference, explanation).
+Start at [`docs/README.md`](docs/README.md) for the full map and role-based routing.
 
 ## Status
 

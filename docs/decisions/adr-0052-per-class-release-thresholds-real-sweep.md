@@ -1,6 +1,7 @@
 # Per-class release thresholds from the real corpus re-sweep
 
 > **Status:** Active · **Decided:** 2026-09-02
+> **Note:** The v7 corpus has grown from 44 to 54 cases since this ADR was written. The v8 corpus remains at 12 cases (total 66). Thresholds in `RELEASE_THRESHOLDS_BY_CLASS` are unchanged; a fresh sweep over the enlarged corpus would be required to verify they still hold.
 
 ## Context
 

@@ -1,8 +1,8 @@
 # T0027.3 DeepSeek Arm
 
-> **Dated evidence, run 2026-08-14.**
-> This records one measured arm and the decision taken from it.
-> It is replaced by a re-measurement, never edited.
+> **Status:** Dated snapshot · **Run:** 2026-08-14.
+>
+> This records one measured arm and the decision taken from it. It is replaced by a re-measurement, never edited. For current evaluation procedures, see [pipeline.md](pipeline.md) and [README.md](README.md).
 
 > **Eviction:** This record leaves when a later dated capture supersedes it.
 

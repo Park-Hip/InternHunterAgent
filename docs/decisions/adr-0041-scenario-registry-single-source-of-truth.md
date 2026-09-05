@@ -6,7 +6,7 @@
 
 `evals/scenarios_v1.yaml` owns the cases, their probe flags, reference SQL, and tool expectations.
 Goldens are generated from it, ending probe-flag drift structurally.
-The 29-scenario set is kept as authored: coverage is audited, not re-authored.
+The 50-scenario set is kept as authored: coverage is audited, not re-authored.
 
 ## Consequences
 

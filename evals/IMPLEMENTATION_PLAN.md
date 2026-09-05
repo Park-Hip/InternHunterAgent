@@ -1,9 +1,8 @@
 # InternHunterAgent — Eval Pass Rate Improvement Plan
 
-**Branch:** `fm/iha-eval-implementation-plan`
-**Baseline:** v11 prompt · 63.8% pass rate (60 PASS / 34 FAIL, 94 turns)
-**Target:** 91–92% after all phases
-**Source reports:** `data/iha-eval-pass-rate-investigation/report.md`, `data/iha-false-pass-resolution/report.md` <!-- lint-allow-link-path -->
+> **Status:** Dated plan · **Date:** 2026-08 (approximate).
+>
+> This is a historical improvement plan, not durable reference. Phases listed here have been executed or superseded. For current evaluation layout and procedures, see [README.md](README.md) and [pipeline.md](pipeline.md).
 
 ---
 

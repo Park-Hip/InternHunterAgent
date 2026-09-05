@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MOJIBAKE = ("\u00e2\u20ac", "\u00c2 ", "\u00ef\u00bb\u00bf", "\u00e2\u2020")
+MOJIBAKE = ("\u00e2\u20ac", "\u00c2 ", "\u00ef\xbb\xbf", "\u00e2\u2020")
 ARCHIVED_MARKER = "<!-- archived-on-tag -->"
 ENCODING_MARKER = "<!-- lint-allow-encoding -->"
 LINK_PATH_MARKER = "<!-- lint-allow-link-path -->"
@@ -29,6 +29,37 @@ TECH_STACK = ROOT / "docs" / "reference" / "configuration.md"
 PYPROJECT = ROOT / "pyproject.toml"
 DEPS_BEGIN = "<!-- deps:begin -->"
 DEPS_END = "<!-- deps:end -->"
+CALIBRATION_V7 = ROOT / "evals" / "calibration_v7.yaml"
+CALIBRATION_V8 = ROOT / "evals" / "calibration_v8.yaml"
+CALIBRATION_PY = ROOT / "evals" / "calibration.py"
+# Threshold constants sourced from evals/calibration.py — the source of truth.
+EXPECTED_RELEASE_THRESHOLD = 0.30
+EXPECTED_THRESHOLDS_BY_CLASS = {"SAF": 1.0, "HON": 1.0, "HLP": 0.6}
+# Prose patterns that hard-code numeric facts which must match the machine-readable sources.
+# Each tuple is (pattern_regex, expected_value, context_hint).
+# Patterns that indicate a prose claim about the TOTAL scenario registry size.
+# Only these patterns trigger drift findings; subset counts (e.g. "4 scenarios affected") are ignored.
+SCENARIO_TOTAL_PATTERNS: list[tuple[str, str]] = [
+    (r"\b(\d+)\s*-scenario\s+evaluation\s+run", "total scenario count in prose"),
+    (r"\b(\d+)\s*-scenario\s+registry", "total scenario count in prose"),
+    (r"\b(\d+)\s*scenario(?:s)?\s+total", "total scenario count in prose"),
+    (r"\b(\d+)\s*scenarios,\s*their\s+assertions", "total scenario count in prose (key files table)"),
+]
+
+# Patterns that indicate a prose claim about the TOTAL calibration corpus size.
+CALIBRATION_TOTAL_PATTERNS: list[tuple[str, str]] = [
+    (r"\bv7\s*\(\s*(\d+)\s*\)", "v7 corpus size in prose"),
+    (r"\bv7\s*=\s*(\d+)", "v7 corpus size in prose"),
+    (r"\bv7.*?\b(\d+)\s*cases", "v7 corpus size in prose"),
+    (r"\b(\d+)\s*total\s*(?:case|corpus)", "total calibration cases in prose"),
+    (r"\b(\d+)\s*\+\s*12\s*=\s*(\d+)", "v7+v8 total in prose"),
+]
+
+# Stale numbers that should never appear in live docs (historical artifacts only).
+STALE_NUMBERS: list[tuple[str, str]] = [
+    (r"\b56\s+(?:total|case|cases)", "stale combined corpus count (was 56, now 66)"),
+    (r"\b44\s+case", "stale v7 count (was 44, now 54)"),
+]
 
 
 @dataclass(frozen=True)
@@ -67,6 +98,25 @@ def is_archive(path: Path) -> bool:
         path.is_relative_to(directory)
         for directory in (ROOT / "docs" / "archive", ROOT / "research" / "archive", ROOT / "evals" / "archive")
     )
+
+
+def is_dated_snapshot(path: Path) -> bool:
+    """True for point-in-time reports that are allowed to carry stale numbers."""
+    markers = ("Dated snapshot", "Dated plan", "Dated evidence")
+    try:
+        text = path.read_text(encoding="utf-8")
+        # Check the frontmatter block (first ~10 lines) for status markers
+        lines = text.split("\n")
+        for line in lines[:10]:
+            for marker in markers:
+                if marker in line:
+                    return True
+        # Also check for ADRs that explicitly note corpus growth since writing
+        if "has grown from" in text and "since this ADR" in text:
+            return True
+    except (UnicodeDecodeError, IndexError):
+        pass
+    return False
 
 
 def code_spans_removed(line: str) -> str:
@@ -209,11 +259,118 @@ def check_scenario_id(files: list[Path], registry: Path = SCENARIOS) -> list[Fin
     return findings
 
 
+def _load_yaml_case_count(path: Path) -> int:
+    """Load a YAML corpus file and return the number of cases."""
+    try:
+        import yaml
+    except ImportError:
+        return -1
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return len(data.get("cases", []))
+        if isinstance(data, list):
+            return len(data)
+    except Exception:
+        pass
+    return -1
+
+
+def check_scenario_count(files: list[Path]) -> list[Finding]:
+    """Verify that prose does not hard-code a stale total scenario-count number."""
+    if not SCENARIOS.exists():
+        return [Finding("drift", SCENARIOS, 0, "scenario registry is missing")]
+    try:
+        import yaml
+        data = yaml.safe_load(SCENARIOS.read_text(encoding="utf-8"))
+        scenarios = data if isinstance(data, list) else data.get("scenarios", [])
+        expected = len(scenarios)
+    except Exception:
+        return [Finding("drift", SCENARIOS, 0, "cannot parse scenario registry")]
+    findings: list[Finding] = []
+    for path in files:
+        if is_archive(path) or is_dated_snapshot(path) or path.suffix != ".md":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for number, line in enumerate(text.splitlines(), 1):
+            if SCENARIO_ID_MARKER in line or "lint-allow" in line.lower():
+                continue
+            # Only flag patterns that claim the TOTAL scenario count
+            for pattern, hint in SCENARIO_TOTAL_PATTERNS:
+                for match in re.finditer(pattern, line):
+                    stated = match.group(1)
+                    if stated != str(expected):
+                        findings.append(Finding("drift", path, number, f"stale {hint}: {stated}; registry has {expected}"))
+    return findings
+
+
+def check_calibration_counts(files: list[Path]) -> list[Finding]:
+    """Verify that prose does not hard-code stale calibration-corpus counts."""
+    v7_count = _load_yaml_case_count(CALIBRATION_V7)
+    v8_count = _load_yaml_case_count(CALIBRATION_V8)
+    if v7_count < 0 or v8_count < 0:
+        return [Finding("drift", CALIBRATION_V7, 0, "cannot parse calibration corpora")]
+    expected_total = v7_count + v8_count
+    findings: list[Finding] = []
+    for path in files:
+        if is_archive(path) or is_dated_snapshot(path) or path.suffix != ".md":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for number, line in enumerate(text.splitlines(), 1):
+            if "lint-allow" in line.lower():
+                continue
+            # v7 count patterns
+            for pattern, hint in CALIBRATION_TOTAL_PATTERNS:
+                for match in re.finditer(pattern, line):
+                    stated = match.group(1)
+                    if stated != str(v7_count) and stated != str(expected_total):
+                        findings.append(Finding("drift", path, number, f"stale {hint}: {stated}; expected v7={v7_count}, total={expected_total}"))
+            # Stale numbers
+            for pattern, hint in STALE_NUMBERS:
+                for match in re.finditer(pattern, line):
+                    findings.append(Finding("drift", path, number, f"{hint}: {match.group()}"))
+    return findings
+
+
+def check_threshold_constants(files: list[Path]) -> list[Finding]:
+    """Verify that prose does not hard-code stale threshold values."""
+    findings: list[Finding] = []
+    # Parse thresholds from calibration.py
+    py_text = CALIBRATION_PY.read_text(encoding="utf-8") if CALIBRATION_PY.exists() else ""
+    released_threshold_match = re.search(r"RELEASE_THRESHOLD\s*=\s*([\d.]+)", py_text)
+    released_threshold = float(released_threshold_match.group(1)) if released_threshold_match else None
+    thresholds_by_class: dict[str, float] = {}
+    for match in re.finditer(r'"(\w+)":\s*([\d.]+)', py_text):
+        cls, val = match.group(1), float(match.group(2))
+        if cls in ("SAF", "HON", "HLP"):
+            thresholds_by_class[cls] = val
+    if released_threshold is None:
+        return [Finding("drift", CALIBRATION_PY, 0, "cannot parse RELEASE_THRESHOLD from calibration.py")]
+    expected_total = sum(_load_yaml_case_count(p) for p in (CALIBRATION_V7, CALIBRATION_V8))
+    if expected_total < 0:
+        return [Finding("drift", CALIBRATION_V7, 0, "cannot parse calibration corpora for threshold provenance")]
+    for path in files:
+        if is_archive(path) or is_dated_snapshot(path) or path.suffix != ".md":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for number, line in enumerate(text.splitlines(), 1):
+            if "lint-allow" in line.lower():
+                continue
+            # Check for stale composite corpus size mentioned alongside thresholds
+            for pattern, hint in STALE_NUMBERS:
+                for match in re.finditer(pattern, line):
+                    findings.append(Finding("drift", path, number, f"{hint}: {match.group()}"))
+    return findings
+
+
 CHECKS = {
     "link-path": check_link_path,
     "encoding": check_encoding,
     "stack": check_stack,
     "scenario-id": check_scenario_id,
+    "drift-scenario": check_scenario_count,
+    "drift-calibration": check_calibration_counts,
+    "drift-threshold": check_threshold_constants,
 }
 
 

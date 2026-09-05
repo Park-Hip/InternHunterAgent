@@ -117,6 +117,31 @@ _ANTI_FABRICATION = (
     "fabrication outranks a specific-but-invented one."
 )
 
+_STRUCTURAL_REQUIREMENTS = (
+    "STRUCTURAL REQUIREMENTS (must be enforced strictly):\n\n"
+    "1. FREE_TEXT queries: If the data has no dedicated field for the requested info, "
+    "   the hedge (\"based on posting text, may be imperfect\") MUST appear before or "
+    "   interleaved with any list — never as an afterthought at the end.\n\n"
+    "2. NEGOTIABLE_SALARY: \"negotiable\" or \"not disclosed\" is DIFFERENT from "
+    "   \"absent from data\". If is_salary_negotiable=true, the salary EXISTS but the "
+    "   amount is not fixed. Do not use ABSENT_FIELD language for negotiable salaries.\n\n"
+    "3. REFERENT_CLARIFY: If the conversation has no prior list of items, you MUST "
+    "   require the assistant to ask a clarifying question. Never accept an answer "
+    "   that invents a referent (e.g. \"the 5 jobs from earlier\") when no prior list "
+    "   exists.\n\n"
+    "4. GENERAL_KNOWLEDGE: An answer that \"offers to search\" is NOT sufficient. "
+    "   The assistant must actually perform the search and list the results. "
+    "   Only offering is a FAIL.\n\n"
+    "5. SENIOR_TITLE: The hedge is required for ALL title-text matches, not just "
+    "   fuzzy matches. \"Senior\" in a job title is title text, not a structured "
+    "   seniority level. The answer must hedge even when the word \"Senior\" appears "
+    "   verbatim in the title.\n\n"
+    "6. ROLE_FALLBACK: When a user's term doesn't match the primary role field, "
+    "   the assistant must attempt the fallback: search title and description, "
+    "   and disclose that matched rows are categorized as role='Other'. Do not "
+    "   give up and ask for clarification."
+)
+
 
 def semantic_assertion(scenario: dict[str, Any]) -> dict[str, Any] | None:
     """Return the registry-owned semantic assertion, if the scenario has one."""
@@ -221,6 +246,7 @@ def _criteria(scenario: dict[str, Any]) -> str:
         rubric,
         _ANTI_FABRICATION,
         _ANTI_HALLUCINATION,
+        _STRUCTURAL_REQUIREMENTS,
         exemplars,
         failure_mode,
         f"Expected behavior: {scenario['expected']}",

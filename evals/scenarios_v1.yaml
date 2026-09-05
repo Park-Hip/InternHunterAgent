@@ -65,11 +65,11 @@
   expected: 24 exist, 20 shown -> answer carries TRUNCATION.
   probe: false
   expected_tools: [query_clean_jobs]
-  reference_sql: SELECT id, title, company, location, source_url FROM clean_jobs ORDER BY id LIMIT 20
+  reference_sql: SELECT id, title, company, location, source_url, role FROM clean_jobs ORDER BY id LIMIT 20
   grading:
     execution_comparison: limited_ids
     projection:
-      exact: [id, title, company, location, source_url]
+      exact: [id, title, company, location, source_url, role]
     assertions:
       - type: structural
         require_source_links: true

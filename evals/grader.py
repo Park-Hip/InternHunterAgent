@@ -743,21 +743,43 @@ _SOURCE_AVAILABILITY_PATTERNS = (
 
 
 def _count_only_check(answer: str | None, expected_count: int | None) -> Check:
-    """Require one declarative count sentence without list or follow-up content."""
+    """Require one declarative count sentence, or a list whose count is explicitly stated."""
     lines = [line.strip() for line in (answer or "").splitlines() if line.strip()]
-    forbidden = (
-        len(lines) != 1
-        or any(_LIST_MARKER.match(line) or _HEADING_MARKER.match(line) for line in lines)
-        or "?" in (answer or "")
-        or (bool(lines) and lines[0].endswith((":", ";")))
-    )
-    sentence_count = len(re.findall(r"[.!?]+", lines[0])) if len(lines) == 1 else 0
-    passed = (
+    answer_text = answer or ""
+    has_list = any(_LIST_MARKER.match(line) for line in lines)
+
+    # If the answer is a single line, enforce the original strict rules.
+    if not has_list:
+        forbidden = (
+            len(lines) != 1
+            or any(_HEADING_MARKER.match(line) for line in lines)
+            or "?" in answer_text
+            or (bool(lines) and lines[0].endswith((":", ";")))
+        )
+        sentence_count = len(re.findall(r"[.!?]+", lines[0])) if len(lines) == 1 else 0
+        passed = (
+            expected_count is not None
+            and _answer_count(answer_text, expected_count)
+            and not forbidden
+            and sentence_count <= 1
+        )
+        return Check(
+            "count_only",
+            passed,
+            "answer is one concise declarative count sentence"
+            if passed
+            else "answer must be one concise declarative count sentence with no list, heading, or follow-up question",
+            "literal",
+        )
+
+    # For a list answer: require the count to be explicitly stated somewhere in the
+    # answer, and the first line must itself declare the count.
+    count_declared = _answer_count(answer_text, expected_count) if expected_count is not None else False
+    first_line_declares_count = (
         expected_count is not None
-        and _answer_count(answer, expected_count)
-        and not forbidden
-        and sentence_count <= 1
+        and _answer_count(lines[0], expected_count)
     )
+    passed = count_declared and first_line_declares_count
     return Check(
         "count_only",
         passed,

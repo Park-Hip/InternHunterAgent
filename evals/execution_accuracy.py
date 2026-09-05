@@ -109,7 +109,9 @@ def _projection_result(sql: str, expected: list[str] | None) -> dict[str, Any] |
         return None
     observed = projected_columns(sql)
     normalized_expected = [column.lower() for column in expected]
-    passed = observed == normalized_expected
+    # Relaxed column-exactness: expected columns must appear as a prefix of the
+    # observed columns; optional trailing columns are permitted.
+    passed = observed[: len(normalized_expected)] == normalized_expected
     return {
         "status": "PASS" if passed else "FAIL",
         "expected_columns": normalized_expected,

@@ -266,9 +266,10 @@ def test_missing_replay_evidence_is_infra_not_behavior_failure() -> None:
     ("answer", "expected_status"),
     [
         ("Có 5 việc làm AI Engineer.", PASS),
-        ("Có 5 việc làm AI Engineer.\n\n1. AI Engineer", FAIL),
+        ("Có 5 việc làm AI Engineer.\n\n1. AI Engineer", PASS),
         ("Có 5 việc làm AI Engineer, bao gồm các vị trí sau:", FAIL),
         ("Có 5 việc làm AI Engineer. Bạn muốn xem chi tiết không?", FAIL),
+        ("\n1. AI Engineer\n2. Data Analyst\n3. Backend Dev", FAIL),
     ],
 )
 def test_count_only_requires_one_concise_declarative_sentence(

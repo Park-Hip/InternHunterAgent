@@ -11,20 +11,44 @@ from evals.execution_accuracy import grade_run
 from evals.grader import grade_persisted_run
 from evals.scenarios import load_scenarios
 from evals.sanitization import FORBIDDEN_CONTENT as _FORBIDDEN_CONTENT
+from src.core.config import settings
 
-REPLAY_PATH = Path(__file__).with_name("replays") / "t0025.9-committed.json"
+
+def _replay_config() -> dict:
+    cfg = (settings.config_yaml.get("eval") or {}).get("replay")
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _default_replay_path() -> Path:
+    """Return the default committed replay path from config, falling back inline."""
+    cfg = _replay_config()
+    default_path = cfg.get("default_path")
+    if isinstance(default_path, str) and default_path.strip():
+        return Path(__file__).with_name("replays") / default_path.strip()
+    return Path(__file__).with_name("replays") / "t0025.9-committed.json"
+
+
+REPLAY_PATH = _default_replay_path()
 ACTIVE_REPLAY_DIR = REPLAY_PATH.parent
 # Historical captures preserved under evals/archive/replays/ (issue #148/#249).
 # They keep their original bytes and provenance but are no longer current
 # regression evidence: the registry moved on, so they no longer validate.
-ARCHIVED_REPLAY_NAMES = frozenset(
-    {
-        "t0024.4-v3-obligations.json",
-        "t0025.7-acceptance.json",
-        "v6-baseline-20260823.json",
-        "iha243-honesty-v9.json",
-    }
-)
+def _archived_replay_names() -> frozenset[str]:
+    cfg = _replay_config()
+    names = cfg.get("archived_names")
+    if isinstance(names, list) and all(isinstance(n, str) for n in names):
+        return frozenset(names)
+    return frozenset(
+        {
+            "t0024.4-v3-obligations.json",
+            "t0025.7-acceptance.json",
+            "v6-baseline-20260823.json",
+            "iha243-honesty-v9.json",
+        }
+    )
+
+
+ARCHIVED_REPLAY_NAMES = _archived_replay_names()
 
 # Schema versions 2 and 3 preserve the legacy file-wide prompt_version. Version 4
 # records independently versioned surfaces. Historical artifacts keep their bytes and

@@ -30,17 +30,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from evals.calibration import CALIBRATION_PATH, load_combined_calibration
+from evals._paths import CALIBRATION_VERSIONS
+from evals.calibration import load_combined_calibration
 from evals.judge import _load_judge_cfg
 from evals.scenarios import load_scenarios
 from evals.semantic import AVAILABLE, evaluate_semantic_repeat, semantic_assertion
 
-_CALIBRATION_V8_PATH = Path(__file__).with_name("calibration_v8.yaml")
-
-_CORPORA = {
-    "v7": CALIBRATION_PATH,
-    "v8": _CALIBRATION_V8_PATH,
-}
+_CORPORA = CALIBRATION_VERSIONS
 
 
 def _utc_now() -> str:

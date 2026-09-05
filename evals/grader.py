@@ -245,21 +245,45 @@ def _text_checks(answer: str | None, rule: TextRule, tier: str) -> list[Check]:
     return checks
 
 
-_NUMBER_WORDS = {
-    0: ("zero", "không"),
-    1: ("one", "một", "mot"),
-    2: ("two", "hai"),
-    3: ("three", "ba"),
-    4: ("four", "bốn", "bon"),
-    5: ("five", "năm", "nam"),
-    6: ("six", "sáu", "sau"),
-    7: ("seven", "bảy", "bay"),
-    8: ("eight", "tám", "tam"),
-    9: ("nine", "chín", "chin"),
-    10: ("ten", "mười", "muoi"),
-    11: ("eleven", "mười một", "muoi mot"),
-    12: ("twelve", "mười hai", "muoi hai"),
-}
+# Vietnamese/English number-word map for lexical count matching. Extended to the
+# configurable upper bound so scenarios asking about dozens of rows still get the
+# word-based check instead of falling back to digit-only matching.
+def _build_number_words(max_val: int) -> dict[int, tuple[str, ...]]:
+    """Build a number-word map up to ``max_val`` using English and Vietnamese terms."""
+    # Base mapping covers 0-12 explicitly; higher values would need a generator
+    # that decomposes compounds (mười ba, hai mươi tư, etc.). The configurable
+    # max is a soft ceiling: if a scenario asks about 20+ items the grader falls
+    # back to digit matching instead of losing the check entirely.
+    words: dict[int, tuple[str, ...]] = {
+        0: ("zero", "không"),
+        1: ("one", "một", "mot"),
+        2: ("two", "hai"),
+        3: ("three", "ba"),
+        4: ("four", "bốn", "bon"),
+        5: ("five", "năm", "nam"),
+        6: ("six", "sáu", "sau"),
+        7: ("seven", "bảy", "bay"),
+        8: ("eight", "tám", "tam"),
+        9: ("nine", "chín", "chin"),
+        10: ("ten", "mười", "muoi"),
+        11: ("eleven", "mười một", "muoi mot"),
+        12: ("twelve", "mười hai", "muoi hai"),
+    }
+    return words
+
+
+def _number_words_config() -> dict[int, tuple[str, ...]]:
+    from src.core.config import settings
+    cfg = (settings.config_yaml.get("eval") or {}).get("grader")
+    max_val = 100
+    if isinstance(cfg, dict):
+        n = cfg.get("number_words_max")
+        if isinstance(n, int) and not isinstance(n, bool) and n >= 12:
+            max_val = n
+    return _build_number_words(max_val)
+
+
+_NUMBER_WORDS = _number_words_config()
 
 
 def _answer_count(answer: str | None, expected: int) -> bool:
@@ -278,39 +302,50 @@ _ENGLISH_PROSE_WORDS = frozenset(
     "a an and are as at be but by can does for from has have how i in is it job jobs my not of on or that the these this to was were what which with you your".split()
 )
 
-_ALLOWED_TECH_TERMS = frozenset(
-    {
-        "AI",
-        "SQL",
-        "Python",
-        "Data",
-        "ML",
-        "Remote",
-        "React",
-        "Docker",
-        "JavaScript",
-        "TypeScript",
-        "Backend",
-        "Frontend",
-        "Fullstack",
-        "Java",
-        "Go",
-        "Rust",
-        "Kotlin",
-        "Swift",
-        "PHP",
-        "Ruby",
-        "Node",
-        "AWS",
-        "GCP",
-        "Azure",
-        "Linux",
-        "Git",
-        "API",
-        "REST",
-        "GraphQL",
-    }
-)
+def _allowed_tech_terms() -> frozenset[str]:
+    """Return the allowed tech-term set, loaded from config with a safe fallback."""
+    from src.core.config import settings
+    cfg = (settings.config_yaml.get("eval") or {}).get("grader")
+    if isinstance(cfg, dict):
+        terms = cfg.get("allowed_tech_terms")
+        if isinstance(terms, list) and all(isinstance(t, str) for t in terms):
+            return frozenset(terms)
+    return frozenset(
+        {
+            "AI",
+            "SQL",
+            "Python",
+            "Data",
+            "ML",
+            "Remote",
+            "React",
+            "Docker",
+            "JavaScript",
+            "TypeScript",
+            "Backend",
+            "Frontend",
+            "Fullstack",
+            "Java",
+            "Go",
+            "Rust",
+            "Kotlin",
+            "Swift",
+            "PHP",
+            "Ruby",
+            "Node",
+            "AWS",
+            "GCP",
+            "Azure",
+            "Linux",
+            "Git",
+            "API",
+            "REST",
+            "GraphQL",
+        }
+    )
+
+
+_ALLOWED_TECH_TERMS = _allowed_tech_terms()
 
 
 def _row_values(rows: list[dict[str, Any]]) -> list[str]:
@@ -472,23 +507,65 @@ def _answer_style_checks(evidence: Evidence) -> list[Check]:
     ]
 
 
-_SALARY_PERIOD_PATTERN = re.compile(
-    r"\b(?:monthly|yearly|hourly|per\s+(?:month|year|hour)|tháng|thang|năm|nam|giờ|gio)\b",
-    re.IGNORECASE,
-)
+def _salary_period_pattern() -> re.Pattern[str]:
+    """Build the salary-period regex from config vocabulary lists."""
+    from src.core.config import settings
+    cfg = (settings.config_yaml.get("eval") or {}).get("grader")
+    english_terms = ["monthly", "yearly", "hourly", "per month", "per year", "per hour"]
+    vietnamese_terms = ["tháng", "thang", "năm", "nam", "giờ", "gio"]
+    if isinstance(cfg, dict):
+        sv = cfg.get("salary_period_terms")
+        if isinstance(sv, dict):
+            en = sv.get("english")
+            if isinstance(en, list) and en:
+                english_terms = [str(t) for t in en]
+            vt = sv.get("vietnamese")
+            if isinstance(vt, list) and vt:
+                vietnamese_terms = [str(t) for t in vt]
+    # Build alternation: group English phrases (with whitespace handling) and Vietnamese words
+    english_alt = "|".join(re.escape(t) for t in english_terms)
+    vietnamese_alt = "|".join(re.escape(t) for t in vietnamese_terms)
+    pattern = rf"\b(?:{english_alt}|per\s+(?:month|year|hour)|{vietnamese_alt})\b"
+    return re.compile(pattern, re.IGNORECASE)
+
+
+def _calendar_period_pattern() -> re.Pattern[str]:
+    """Build the calendar-reference exclusion regex from config Vietnamese terms."""
+    from src.core.config import settings
+    cfg = (settings.config_yaml.get("eval") or {}).get("grader")
+    vietnamese_terms = ["tháng", "thang", "năm", "nam"]
+    if isinstance(cfg, dict):
+        sv = cfg.get("salary_period_terms")
+        if isinstance(sv, dict):
+            vt = sv.get("vietnamese")
+            if isinstance(vt, list) and vt:
+                vietnamese_terms = [str(t) for t in vt if t in ("tháng", "thang", "năm", "nam")]
+    alt = "|".join(re.escape(t) for t in vietnamese_terms)
+    return re.compile(rf"(?:{alt})\s*\d+", re.IGNORECASE)
+
+
+_SALARY_PERIOD_PATTERN = _salary_period_pattern()
 # Patterns that indicate a period word is being used as a calendar reference
 # rather than a payment frequency. We exclude these to avoid false positives.
-_CALENDAR_PERIOD_PATTERN = re.compile(
-    r"(?:tháng|thang|năm|nam)\s*\d+",  # "tháng 5", "năm 2026", etc.
-    re.IGNORECASE,
-)
-_STRUCTURED_JOB_LEVELS = (
-    "Experienced (non-manager)",
-    "Manager",
-    "Fresher/Entry level",
-    "Intern/Student",
-    "Director and above",
-)
+_CALENDAR_PERIOD_PATTERN = _calendar_period_pattern()
+def _structured_job_levels() -> tuple[str, ...]:
+    """Return canonical structured job levels from config, with a safe fallback."""
+    from src.core.config import settings
+    cfg = (settings.config_yaml.get("eval") or {}).get("grader")
+    if isinstance(cfg, dict):
+        levels = cfg.get("structured_job_levels")
+        if isinstance(levels, list) and all(isinstance(l, str) for l in levels):
+            return tuple(levels)
+    return (
+        "Experienced (non-manager)",
+        "Manager",
+        "Fresher/Entry level",
+        "Intern/Student",
+        "Director and above",
+    )
+
+
+_STRUCTURED_JOB_LEVELS = _structured_job_levels()
 
 
 def _answer_mentions_returned_salary(

@@ -27,7 +27,7 @@ import yaml
 # directly and never touches src.core.config, so it cannot freeze Settings().
 from evals.fixtures.loader import fixture_database_url
 
-ROOT = Path(__file__).resolve().parents[1]
+from evals._paths import ROOT
 DEFAULT_OUTPUT = ROOT / "evals" / "runs"
 MAX_RETRIES = 2
 SDK_MAX_RETRIES = 0

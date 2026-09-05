@@ -9,7 +9,9 @@ from langchain_groq import ChatGroq
 from deepeval.models.base_model import DeepEvalBaseLLM
 from src.core.config import settings
 
-_RATE_WINDOW_SECONDS = 60.0
+# Load the shared rate window once; the class below only reads it at construction time.
+_judge_cfg = settings.config_yaml.get("eval", {}).get("judge", {})
+_RATE_WINDOW_SECONDS = float(_judge_cfg.get("rate_window_seconds", 60.0))
 
 
 class _RpmThrottle:
@@ -119,6 +121,14 @@ def build_judge() -> DeepEvalJudge:
         raise ValueError("eval.judge.timeout_seconds must be a positive number")
     max_retries = 0 if os.getenv("EVAL_DRIVER_DISABLE_PROVIDER_RETRIES") == "1" else 2
 
+    # Per-provider max_tokens, falling back to the legacy hardcoded values.
+    _providers_cfg: dict[str, Any] = judge_cfg.get("providers", {})
+    if not isinstance(_providers_cfg, dict):
+        _providers_cfg = {}
+    _provider_max_tokens: dict[str, int] = {
+        k: int(v) for k, v in _providers_cfg.items() if isinstance(v, (int, float))
+    } if isinstance(_providers_cfg, dict) else {}
+
     if provider == "groq":
         if not settings.GROQ_API_KEY:
             raise ValueError("eval.judge.provider is 'groq' but GROQ_API_KEY is unset")
@@ -126,7 +136,7 @@ def build_judge() -> DeepEvalJudge:
         chat_model: BaseChatModel = ChatGroq(
             model_name=model_name,
             temperature=temperature,
-            max_tokens=1024,
+            max_tokens=int(_provider_max_tokens.get("groq", 1024)),
             timeout=timeout,
             max_retries=max_retries,
             streaming=False,
@@ -145,7 +155,7 @@ def build_judge() -> DeepEvalJudge:
         chat_model = ChatGoogleGenerativeAI(
             model=model_name,
             temperature=temperature,
-            max_tokens=4096,
+            max_tokens=int(_provider_max_tokens.get("google", 4096)),
             timeout=timeout,
             max_retries=max_retries,
             google_api_key=settings.GOOGLE_API_KEY,
@@ -168,7 +178,7 @@ def build_judge() -> DeepEvalJudge:
             base_url="https://openrouter.ai/api/v1",
             api_key=settings.OPENROUTER_API_KEY,
             temperature=temperature,
-            max_tokens=4096,
+            max_tokens=int(_provider_max_tokens.get("openrouter", 4096)),
             timeout=timeout,
             max_retries=max_retries,
             streaming=False,

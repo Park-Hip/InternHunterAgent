@@ -11,7 +11,21 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
+from evals._paths import ROOT
+
+# Sampling knobs that the viewer treats as first-class (displayed before dynamic knobs).
+# New knobs that deserve this status should be added here; otherwise they fall through.
+def _fixed_sampling_keys() -> tuple[str, ...]:
+    from src.core.config import settings
+    cfg = (settings.config_yaml.get("eval") or {}).get("viewer")
+    if isinstance(cfg, dict):
+        keys = cfg.get("fixed_sampling_keys")
+        if isinstance(keys, list) and all(isinstance(k, str) for k in keys):
+            return tuple(keys)
+    return ("temperature", "max_tokens")
+
+
+_FIXED_SAMPLING = _fixed_sampling_keys()
 
 # `query_clean_jobs` returns prose, not a Python literal: a header naming the
 # columns, then one `- col=value, col=value` line per row (see
@@ -47,11 +61,6 @@ _JUDGE_SEAMS = {
     "seam3_synthesis": "answer",
 }
 
-# The manifest's sampling block carries these two under fixed names; every other key
-# in it is a reasoning knob, and knobs differ by provider (`reasoning_effort` on Groq,
-# `thinking` on DeepSeek). Reading them generically means a new knob reaches the screen
-# without a viewer change.
-_FIXED_SAMPLING = ("temperature", "max_tokens")
 
 
 def _text(value: Any, empty: str = "Not captured") -> str:

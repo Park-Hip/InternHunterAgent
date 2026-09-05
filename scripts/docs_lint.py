@@ -32,6 +32,9 @@ DEPS_END = "<!-- deps:end -->"
 CALIBRATION_V7 = ROOT / "evals" / "calibration_v7.yaml"
 CALIBRATION_V8 = ROOT / "evals" / "calibration_v8.yaml"
 CALIBRATION_PY = ROOT / "evals" / "calibration.py"
+# Threshold constants sourced from evals/calibration.py — the source of truth.
+EXPECTED_RELEASE_THRESHOLD = 0.30
+EXPECTED_THRESHOLDS_BY_CLASS = {"SAF": 1.0, "HON": 1.0, "HLP": 0.6}
 # Prose patterns that hard-code numeric facts which must match the machine-readable sources.
 # Each tuple is (pattern_regex, expected_value, context_hint).
 # Patterns that indicate a prose claim about the TOTAL scenario registry size.
@@ -40,17 +43,14 @@ SCENARIO_TOTAL_PATTERNS: list[tuple[str, str]] = [
     (r"\b(\d+)\s*-scenario\s+evaluation\s+run", "total scenario count in prose"),
     (r"\b(\d+)\s*-scenario\s+registry", "total scenario count in prose"),
     (r"\b(\d+)\s*scenario(?:s)?\s+total", "total scenario count in prose"),
-    (
-        r"\b(\d+)\s*scenarios,\s*their\s+assertions",
-        "total scenario count in prose (key files table)",
-    ),
+    (r"\b(\d+)\s*scenarios,\s*their\s+assertions", "total scenario count in prose (key files table)"),
 ]
 
 # Patterns that indicate a prose claim about the TOTAL calibration corpus size.
 CALIBRATION_TOTAL_PATTERNS: list[tuple[str, str]] = [
     (r"\bv7\s*\(\s*(\d+)\s*\)", "v7 corpus size in prose"),
     (r"\bv7\s*=\s*(\d+)", "v7 corpus size in prose"),
-    (r"\bv7[^=]*?\b(\d+)\s*cases", "v7 corpus size in prose"),
+    (r"\bv7.*?\b(\d+)\s*cases", "v7 corpus size in prose"),
     (r"\b(\d+)\s*total\s*(?:case|corpus)", "total calibration cases in prose"),
     (r"\b(\d+)\s*\+\s*12\s*=\s*(\d+)", "v7+v8 total in prose"),
 ]
@@ -81,24 +81,13 @@ class Finding:
 def markdown_files(root: Path = ROOT) -> list[Path]:
     """Return tracked and untracked Markdown files while excluding ignored files."""
     result = subprocess.run(
-        [
-            "git",
-            "ls-files",
-            "-z",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "--",
-            "*.md",
-        ],
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.md"],
         cwd=root,
         check=True,
         capture_output=True,
     )
     return sorted(
-        path
-        for name in result.stdout.decode().split("\0")
-        if name
+        path for name in result.stdout.decode().split("\0") if name
         if (path := root / Path(name)).exists()
     )
 
@@ -107,11 +96,7 @@ def is_archive(path: Path) -> bool:
     """True for historical records that intentionally retain stale references."""
     return any(
         path.is_relative_to(directory)
-        for directory in (
-            ROOT / "docs" / "archive",
-            ROOT / "research" / "archive",
-            ROOT / "evals" / "archive",
-        )
+        for directory in (ROOT / "docs" / "archive", ROOT / "research" / "archive", ROOT / "evals" / "archive")
     )
 
 
@@ -138,9 +123,7 @@ def code_spans_removed(line: str) -> str:
     return re.sub(r"`[^`]*`", "", line)
 
 
-def path_from_link(
-    target: str, source: Path, *, repo_rooted: bool = False
-) -> Path | None:
+def path_from_link(target: str, source: Path, *, repo_rooted: bool = False) -> Path | None:
     target = target.strip().split(maxsplit=1)[0].strip("<>")
     target = target.split("#", 1)[0].split("?", 1)[0]
     target = re.split(r"(?:::|:\d)", target, maxsplit=1)[0]
@@ -152,18 +135,7 @@ def path_from_link(
 
 
 def is_repo_path(value: str) -> bool:
-    top_level = (
-        ".github/",
-        "config/",
-        "data/",
-        "docs/",
-        "evals/",
-        "infra/",
-        "research/",
-        "scripts/",
-        "src/",
-        "tests/",
-    )
+    top_level = (".github/", "config/", "data/", "docs/", "evals/", "infra/", "research/", "scripts/", "src/", "tests/")
     if not value.startswith(top_level) or " " in value:
         return False
     candidate = ROOT / value
@@ -190,25 +162,14 @@ def check_link_path(files: list[Path]) -> list[Finding]:
             if line.lstrip().startswith("```"):
                 in_fence = not in_fence
                 continue
-            if (
-                in_fence
-                or link_path_allowed
-                or ARCHIVED_MARKER in line
-                or LINK_PATH_MARKER in line
-            ):
+            if in_fence or link_path_allowed or ARCHIVED_MARKER in line or LINK_PATH_MARKER in line:
                 continue
             targets = [(target, False) for target in link_pattern.findall(line)]
-            targets.extend(
-                (value, True)
-                for value in code_pattern.findall(line)
-                if is_repo_path(value)
-            )
+            targets.extend((value, True) for value in code_pattern.findall(line) if is_repo_path(value))
             for target, repo_rooted in targets:
                 candidate = path_from_link(target, path, repo_rooted=repo_rooted)
                 if candidate is not None and not candidate.exists():
-                    findings.append(
-                        Finding("link-path", path, number, f"missing {target}")
-                    )
+                    findings.append(Finding("link-path", path, number, f"missing {target}"))
     return findings
 
 
@@ -229,11 +190,7 @@ def check_encoding(files: list[Path]) -> list[Finding]:
                 continue
             for sequence in MOJIBAKE:
                 if sequence in code_spans_removed(line):
-                    findings.append(
-                        Finding(
-                            "encoding", path, number, f"mojibake sequence {sequence!r}"
-                        )
-                    )
+                    findings.append(Finding("encoding", path, number, f"mojibake sequence {sequence!r}"))
     return findings
 
 
@@ -255,37 +212,21 @@ def documented_dependencies(text: str) -> set[str]:
     start, end = text.find(DEPS_BEGIN), text.find(DEPS_END)
     if start == -1 or end == -1 or end < start:
         return set()
-    rows = re.findall(
-        r"^\|\s*`([^`]+)`\s*\|", text[start + len(DEPS_BEGIN) : end], re.M
-    )
+    rows = re.findall(r"^\|\s*`([^`]+)`\s*\|", text[start + len(DEPS_BEGIN) : end], re.M)
     return {name.strip().lower() for name in rows}
 
 
 def check_stack(_: list[Path]) -> list[Finding]:
     """Keep dependency claims in Tech Stack aligned with pyproject.toml."""
     if not TECH_STACK.exists():
-        return [
-            Finding(
-                "stack", TECH_STACK, 0, "docs/reference/configuration.md is missing"
-            )
-        ]
+        return [Finding("stack", TECH_STACK, 0, "docs/reference/configuration.md is missing")]
     stack_text = TECH_STACK.read_text(encoding="utf-8")
     if DEPS_BEGIN not in stack_text or DEPS_END not in stack_text:
-        return [
-            Finding(
-                "stack", TECH_STACK, 0, f"missing {DEPS_BEGIN} / {DEPS_END} markers"
-            )
-        ]
+        return [Finding("stack", TECH_STACK, 0, f"missing {DEPS_BEGIN} / {DEPS_END} markers")]
     declared = declared_dependencies(PYPROJECT.read_bytes())
     documented = documented_dependencies(stack_text)
-    findings = [
-        Finding("stack", TECH_STACK, 0, f"dependency {name!r} is not documented")
-        for name in sorted(declared - documented)
-    ]
-    findings.extend(
-        Finding("stack", TECH_STACK, 0, f"documented {name!r} is not a dependency")
-        for name in sorted(documented - declared)
-    )
+    findings = [Finding("stack", TECH_STACK, 0, f"dependency {name!r} is not documented") for name in sorted(declared - documented)]
+    findings.extend(Finding("stack", TECH_STACK, 0, f"documented {name!r} is not a dependency") for name in sorted(documented - declared))
     return findings
 
 
@@ -314,14 +255,7 @@ def check_scenario_id(files: list[Path], registry: Path = SCENARIOS) -> list[Fin
                 continue
             for identifier in SCENARIO_ID.findall(line):
                 if identifier not in known:
-                    findings.append(
-                        Finding(
-                            "scenario-id",
-                            path,
-                            number,
-                            f"{identifier} is absent from {location}",
-                        )
-                    )
+                    findings.append(Finding("scenario-id", path, number, f"{identifier} is absent from {location}"))
     return findings
 
 
@@ -348,7 +282,6 @@ def check_scenario_count(files: list[Path]) -> list[Finding]:
         return [Finding("drift", SCENARIOS, 0, "scenario registry is missing")]
     try:
         import yaml
-
         data = yaml.safe_load(SCENARIOS.read_text(encoding="utf-8"))
         scenarios = data if isinstance(data, list) else data.get("scenarios", [])
         expected = len(scenarios)
@@ -367,14 +300,7 @@ def check_scenario_count(files: list[Path]) -> list[Finding]:
                 for match in re.finditer(pattern, line):
                     stated = match.group(1)
                     if stated != str(expected):
-                        findings.append(
-                            Finding(
-                                "drift",
-                                path,
-                                number,
-                                f"stale {hint}: {stated}; registry has {expected}",
-                            )
-                        )
+                        findings.append(Finding("drift", path, number, f"stale {hint}: {stated}; registry has {expected}"))
     return findings
 
 
@@ -398,38 +324,31 @@ def check_calibration_counts(files: list[Path]) -> list[Finding]:
                 for match in re.finditer(pattern, line):
                     stated = match.group(1)
                     if stated != str(v7_count) and stated != str(expected_total):
-                        findings.append(
-                            Finding(
-                                "drift",
-                                path,
-                                number,
-                                f"stale {hint}: {stated}; expected v7={v7_count}, total={expected_total}",
-                            )
-                        )
-                    # For the v7+v8 total pattern, also validate the total (group 2)
-                    if "+" in pattern and match.lastindex and match.lastindex >= 2:
-                        stated_total = match.group(2)
-                        if stated_total != str(expected_total):
-                            findings.append(
-                                Finding(
-                                    "drift",
-                                    path,
-                                    number,
-                                    f"stale {hint} total: {stated_total}; expected total={expected_total}",
-                                )
-                            )
+                        findings.append(Finding("drift", path, number, f"stale {hint}: {stated}; expected v7={v7_count}, total={expected_total}"))
             # Stale numbers
             for pattern, hint in STALE_NUMBERS:
                 for match in re.finditer(pattern, line):
-                    findings.append(
-                        Finding("drift", path, number, f"{hint}: {match.group()}")
-                    )
+                    findings.append(Finding("drift", path, number, f"{hint}: {match.group()}"))
     return findings
 
 
 def check_threshold_constants(files: list[Path]) -> list[Finding]:
     """Verify that prose does not hard-code stale threshold values."""
     findings: list[Finding] = []
+    # Parse thresholds from calibration.py
+    py_text = CALIBRATION_PY.read_text(encoding="utf-8") if CALIBRATION_PY.exists() else ""
+    released_threshold_match = re.search(r"RELEASE_THRESHOLD\s*=\s*([\d.]+)", py_text)
+    released_threshold = float(released_threshold_match.group(1)) if released_threshold_match else None
+    thresholds_by_class: dict[str, float] = {}
+    for match in re.finditer(r'"(\w+)":\s*([\d.]+)', py_text):
+        cls, val = match.group(1), float(match.group(2))
+        if cls in ("SAF", "HON", "HLP"):
+            thresholds_by_class[cls] = val
+    if released_threshold is None:
+        return [Finding("drift", CALIBRATION_PY, 0, "cannot parse RELEASE_THRESHOLD from calibration.py")]
+    expected_total = sum(_load_yaml_case_count(p) for p in (CALIBRATION_V7, CALIBRATION_V8))
+    if expected_total < 0:
+        return [Finding("drift", CALIBRATION_V7, 0, "cannot parse calibration corpora for threshold provenance")]
     for path in files:
         if is_archive(path) or is_dated_snapshot(path) or path.suffix != ".md":
             continue
@@ -440,9 +359,7 @@ def check_threshold_constants(files: list[Path]) -> list[Finding]:
             # Check for stale composite corpus size mentioned alongside thresholds
             for pattern, hint in STALE_NUMBERS:
                 for match in re.finditer(pattern, line):
-                    findings.append(
-                        Finding("drift", path, number, f"{hint}: {match.group()}")
-                    )
+                    findings.append(Finding("drift", path, number, f"{hint}: {match.group()}"))
     return findings
 
 

@@ -43,7 +43,7 @@ Numbers here are sourced from machine-readable files, not restated as prose.
 | [Semantic judge](../evals/semantic/index.md) | DeepEval wrapper, provider arms, throttle, rubric |
 | [Authoring scenarios](../evals/authoring/index.md) | Grammar, id pattern, assertions, execution comparisons |
 | [Replay](../evals/replay/index.md) | Freeze→sanitize→replay contract; CI gate |
-| [Tests](../evals/README.md#test-to-module-mapping) | Test-to-module mapping; offline vs live split |
+| [Tests](../evals/tests/index.md) | Test-to-module mapping; offline vs live split |
 | [Disagreements](../evals/disagreements/index.md) | Grader-vs-judge-vs-human workflow |
 | [Operating manual](../evals/Operating_Manual.md) | Maintainer review rules, authority boundary, outcome interpretation |
 
@@ -66,7 +66,7 @@ Context and reasoning for readers who want to understand why the system is the w
 | **Operator** | [Operate how-to](how-to/operate.md) → [Evaluation pipeline](../evals/pipeline.md) |
 | **Maintainer** | [Operating manual](../evals/Operating_Manual.md) → [Calibration](../evals/calibration/index.md) |
 | **Contributor** | [Authoring scenarios](../evals/authoring/index.md) → [How-to: evaluate](how-to/evaluate.md) |
-| **Auditor** | [Deterministic grading](../evals/deterministic/index.md) → [Tests](../evals/README.md#test-to-module-mapping) |
+| **Auditor** | [Deterministic grading](../evals/deterministic/index.md) → [Tests](../evals/tests/index.md) |
 | **Decision maker** | [Architecture](architecture.md) → [Decision records](decisions/README.md) |
 
 ## Related documentation
@@ -105,6 +105,8 @@ evals/
 │   └── index.md                  ← Freeze→sanitize→replay contract
 ├── authoring/                    ← How to author and edit scenarios
 │   └── index.md                  ← Grammar, id pattern, assertions
+├── tests/                        ← Test-to-module mapping
+│   └── index.md                  ← Which test pins which behavior
 ├── disagreements/                ← Grader-vs-judge-vs-human workflow
 │   └── index.md                  ← Decision tree; live register pointer
 │

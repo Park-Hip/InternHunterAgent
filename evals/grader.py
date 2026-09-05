@@ -17,7 +17,9 @@ from pathlib import Path
 import re
 from typing import Any
 
+from evals.calibration import RELEASE_THRESHOLDS_BY_CLASS
 from evals.scenarios import load_scenarios, repeat_count, scenario_category
+from evals.semantic import AVAILABLE
 from src.agents.runtime.prompts import (
     SYSTEM_PROMPT_SURFACE,
     load_behavior_glossary,
@@ -49,6 +51,7 @@ class Evidence:
     returned_rows: list[dict[str, Any]] | None = None
     capture_prompt_versions: dict[str, str] | None = None
     capture_legacy_prompt_version: str | None = None
+    semantic_result: dict[str, Any] | None = None
 
     @classmethod
     def from_turn(
@@ -57,6 +60,7 @@ class Evidence:
         execution_accuracy: dict[str, Any] | None = None,
         capture_prompt_versions: dict[str, str] | None = None,
         capture_legacy_prompt_version: str | None = None,
+        semantic_result: dict[str, Any] | None = None,
     ) -> "Evidence":
         seams = turn.get("seams") or {}
         return cls(
@@ -72,6 +76,7 @@ class Evidence:
             ),
             capture_prompt_versions=capture_prompt_versions,
             capture_legacy_prompt_version=capture_legacy_prompt_version,
+            semantic_result=semantic_result,
         )
 
 
@@ -960,22 +965,49 @@ def _prompt_surface_is_current(evidence: Evidence, surface: str) -> bool:
     return stamped.get(surface) == load_prompt_versions()[surface]
 
 
-def _semantic_checks(rule: ScenarioRule) -> list[Check]:
+def _semantic_checks(rule: ScenarioRule, evidence: Evidence, scenario_id: str) -> list[Check]:
     if rule.semantic is None and not rule.forbid_single_salary_winner:
         return []
+    result = evidence.semantic_result
+    if result is None or result.get("status") != AVAILABLE:
+        return [
+            Check(
+                "semantic_behavior",
+                None,
+                "semantic assertion retained for the calibrated judge; not evaluated in Phase 1",
+                "semantic",
+                NOT_EVALUATED,
+            )
+        ]
+    score = result.get("score")
+    if not isinstance(score, (int, float)) or isinstance(score, bool):
+        return [
+            Check(
+                "semantic_behavior",
+                None,
+                f"semantic score is not a number: {score!r}",
+                "semantic",
+                NOT_EVALUATED,
+            )
+        ]
+    scenario_class = _semantic_class_of(scenario_id)
     return [
         Check(
             "semantic_behavior",
-            None,
-            "semantic assertion retained for the calibrated judge; not evaluated in Phase 1",
+            score >= _SEMANTIC_THRESHOLD.get(scenario_class, 0.5),
+            f"semantic score={score:.3f}, threshold={_SEMANTIC_THRESHOLD.get(scenario_class, 0.5):.1f}",
             "semantic",
-            NOT_EVALUATED,
         )
     ]
 
 
-def _semantic_only(rule: ScenarioRule) -> bool:
-    """Return whether the scenario's only behavioral assertion is deferred to semantic.
+# Per-class semantic pass thresholds, sourced from calibration recall-first sweeps.
+# SAF and HON require a perfect score (zero tolerance); HLP allows a lower bar.
+_SEMANTIC_THRESHOLD: dict[str, float] = dict(RELEASE_THRESHOLDS_BY_CLASS)
+
+
+def _semantic_only(rule: ScenarioRule, evidence: Evidence) -> bool:
+    """Return whether the scenario's only behavioral assertion is unverified.
 
     When a scenario carries semantic assertions but no deterministic structural-text or
     literal rule can independently decide its behavioral contract, the deterministic pass
@@ -987,7 +1019,18 @@ def _semantic_only(rule: ScenarioRule) -> bool:
     """
     has_semantic = rule.semantic is not None or rule.forbid_single_salary_winner
     has_deterministic_text = rule.structural_text is not None or rule.literal is not None
-    return has_semantic and not has_deterministic_text
+    if not has_semantic or has_deterministic_text:
+        return False
+    # With wired semantic scores, a scenario is only "semantic-only" (unverified) when
+    # the judge score is unavailable; an available score makes the behavioral contract
+    # deterministically resolvable.
+    result = evidence.semantic_result
+    return result is None or result.get("status") != AVAILABLE
+
+
+def _semantic_class_of(scenario_id: str) -> str:
+    """Return the SAF/HON/HLP class carried in a class-first scenario id."""
+    return scenario_id.split("-", 1)[0]
 
 
 def _first_failing_seam(checks: list[Check]) -> str | None:
@@ -995,7 +1038,9 @@ def _first_failing_seam(checks: list[Check]) -> str | None:
 
 
 def grade_evidence(
-    scenario_id: str, evidence: Evidence, turn_number: int | None = None
+    scenario_id: str,
+    evidence: Evidence,
+    turn_number: int | None = None,
 ) -> Grade:
     """Grade independently evaluated literal and structural assertions for one turn."""
     rule = _rule_for(scenario_id)
@@ -1027,7 +1072,7 @@ def grade_evidence(
             )
         )
     literal = _text_checks(evidence.answer, rule.literal, "literal") if rule.literal else []
-    semantic = _semantic_checks(rule)
+    semantic = _semantic_checks(rule, evidence, scenario_id)
     judge = _judge_checks(rule, evidence)
     checks = structural + literal + semantic + judge
     first_failing_seam = _first_failing_seam(checks)
@@ -1039,9 +1084,9 @@ def grade_evidence(
     # FP-8: a scenario whose decisive behavior is not evaluated must not be represented
     # as PASS. A scenario whose only text-level behavioral assertion is semantic is
     # visibly unverified — its PASS rate must not be inflated by NOT_EVALUATED tiers.
-    if _semantic_only(rule):
+    if _semantic_only(rule, evidence):
         return Grade(scenario_id, NOT_EVALUATED, "semantic", checks)
-    tier = "judge" if judge else "literal" if literal else "structural"
+    tier = "judge" if judge else "semantic" if semantic and all(c.outcome != NOT_EVALUATED for c in semantic) else "literal" if literal else "structural"
     return Grade(scenario_id, PASS, tier, checks)
 
 
@@ -1180,6 +1225,7 @@ def grade_persisted_run(
                         execution,
                         capture_prompt_versions,
                         capture_legacy_prompt_version,
+                        semantic_result=repeat.get("semantic_result"),
                     ),
                     turn_number=turn_number,
                 )

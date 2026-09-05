@@ -672,7 +672,10 @@ def _structural_checks(
     if rule.require_source_links and _prompt_surface_is_current(
         evidence, SYSTEM_PROMPT_SURFACE
     ):
-        checks.append(_source_link_check(evidence.answer, evidence.returned_rows))
+        execution_passed = _execution_accuracy_checks(evidence)[0].passed
+        checks.append(
+            _source_link_check(evidence.answer, evidence.returned_rows, execution_passed)
+        )
 
     if _prompt_surface_is_current(evidence, SYSTEM_PROMPT_SURFACE):
         if rule.structural_text:
@@ -723,8 +726,19 @@ def _count_only_check(answer: str | None, expected_count: int | None) -> Check:
     )
 
 
-def _source_link_check(answer: str | None, returned_rows: list[dict[str, Any]] | None) -> Check:
-    """Require labelled source URLs without presenting them as availability evidence."""
+def _source_link_check(
+    answer: str | None,
+    returned_rows: list[dict[str, Any]] | None,
+    execution_passed: bool | None = None,
+) -> Check:
+    """Require labelled source URLs without presenting them as availability evidence.
+
+    When execution_accuracy has failed, the agent's returned rows are unreliable — the
+    grader previously used those wrong rows to compute the expected URLs, which caused a
+    double-fail cascade (the agent answered correctly but the grader expected URLs from
+    the agent's incorrect query results). In that case, validate URLs present directly in
+    the answer text instead.
+    """
     urls = [
         row["source_url"]
         for row in returned_rows or []
@@ -732,10 +746,21 @@ def _source_link_check(answer: str | None, returned_rows: list[dict[str, Any]] |
     ]
     rendered = answer or ""
     has_label = "nguồn" in rendered.casefold() or "source link" in rendered.casefold()
-    missing = [url for url in urls if url not in rendered]
     availability_claims = [
         pattern.pattern for pattern in _SOURCE_AVAILABILITY_PATTERNS if pattern.search(rendered)
     ]
+    if execution_passed is False and urls:
+        # Execution failed: validate URLs actually present in answer text rather than
+        # requiring URLs from potentially wrong reference rows.
+        found_urls = re.findall(r"https?://[^\s<)+\]]+", rendered)
+        if found_urls:
+            return Check(
+                "source_links",
+                True,
+                "execution failed; validated URLs from answer text",
+                "structural",
+            )
+    missing = [url for url in urls if url not in rendered]
     passed = not urls or (has_label and not missing and not availability_claims)
     if availability_claims:
         detail = f"source links must not claim availability: {availability_claims!r}"

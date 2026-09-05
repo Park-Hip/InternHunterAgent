@@ -323,6 +323,47 @@ def test_source_links_cannot_claim_a_posting_is_open() -> None:
     assert "must not claim availability" in source_links.detail
 
 
+def test_source_links_falls_back_to_answer_urls_when_execution_failed() -> None:
+    """When execution_accuracy fails, validate URLs present in the answer text
+    rather than requiring URLs from the agent's wrong returned rows."""
+    wrong_url = "https://wrong.example.com/job/1"
+    correct_url = "https://correct.example.com/job/1"
+    grade = grade_evidence(
+        "HLP-LIST-1",
+        Evidence(
+            answer=f"Việc làm AI Engineer tại Acme. Nguồn: {correct_url}",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": FAIL},
+            returned_rows=[{"source_url": wrong_url}],
+            capture_prompt_versions=load_prompt_versions(),
+        ),
+    )
+
+    source_links = next(check for check in grade.checks if check.name == "source_links")
+    assert source_links.passed is True
+    assert "execution failed; validated URLs from answer text" in source_links.detail
+
+
+def test_source_links_still_fails_on_wrong_rows_when_execution_passed() -> None:
+    """When execution_accuracy passes, source_links still validates against
+    returned rows as before."""
+    wrong_url = "https://wrong.example.com/job/1"
+    grade = grade_evidence(
+        "HLP-LIST-1",
+        Evidence(
+            answer="Việc làm AI Engineer tại Acme.",
+            tools_called=["query_clean_jobs"],
+            execution_accuracy={"status": PASS},
+            returned_rows=[{"source_url": wrong_url}],
+            capture_prompt_versions=load_prompt_versions(),
+        ),
+    )
+
+    source_links = next(check for check in grade.checks if check.name == "source_links")
+    assert source_links.passed is False
+    assert "missing source URLs" in source_links.detail
+
+
 @pytest.mark.parametrize("scenario_id", ["HON-CURRENCY-1"])
 @pytest.mark.parametrize(
     "answer",

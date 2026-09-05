@@ -1,1 +1,409 @@
-IyBJbnRlcm5IdW50ZXJBZ2VudCDigJQgRXZhbCBQYXNzIFJhdGUgSW1wcm92ZW1lbnQgUGxhbgoKKipCcmFuY2g6KiogYGZtL2loYS1ldmFsLWltcGxlbWVudGF0aW9uLXBsYW5gICAKKipCYXNlbGluZToqKiB2MTEgcHJvbXB0IMK3IDYzLjglIHBhc3MgcmF0ZSAoNjAgUEFTUyAvIDM0IEZBSUwsIDk0IHR1cm5zKSAgCioqVGFyZ2V0OioqIDkx4oCTOTIlIGFmdGVyIGFsbCBwaGFzZXMgIAoqKlNvdXJjZSByZXBvcnRzOioqIGBkYXRhL2loYS1ldmFsLXBhc3MtcmF0ZS1pbnZlc3RpZ2F0aW9uL3JlcG9ydC5tZGAsIGBkYXRhL2loYS1mYWxzZS1wYXNzLXJlc29sdXRpb24vcmVwb3J0Lm1kYAoKLS0tCgojIyBRdWljayBTdW1tYXJ5Cgp8IFBoYXNlIHwgRml4IHwgRWZmb3J0IHwgSW1wYWN0IHwgU3RhdHVzIHwKfC0tLXwtLS18LS0tOnwtLS06fC0tLXwKfCAxIHwgMUEg4oCUIFByb21wdCB2MTIgcmUtY2FwdHVyZSB8IDEgZGF5IHwgKzcgcHRzIOKGkiA3MS4zJSB8IFBlbmRpbmcgfAp8IDEgfCAxQiDigJQgU291cmNlIGxpbmtzIGNhc2NhZGUgZml4IHwgMuKAkzMgZGF5cyB8ICsxMCBwdHMg4oaSIH44MiUgfCBQZW5kaW5nIHwKfCAxIHwgMUMg4oCUIEhMUCB0aHJlc2hvbGQgdHVuaW5nIHwgMC41IGRheSB8ICsxIHB0IOKGkiB+ODMlIHwgUGVuZGluZyB8CnwgMiB8IDJBIOKAlCBTUUwgcHJvbXB0IGhhcmRlbmluZyB8IDPigJM1IGRheXMgfCArNeKAkzggcHRzIOKGkiB+OTAlIHwg4pyFIENvbXBsZXRlZCB8CnwgMiB8IDJCIOKAlCBEZXRhaWwvY2xhcmlmeSBwcm9tcHQgfCAy4oCTMyBkYXlzIHwgKzQgcHRzIOKGkiB+OTAlIHwg4pyFIENvbXBsZXRlZCB8CnwgMiB8IDJDIOKAlCBHcmFkZXIgcHJlY2lzaW9uIHR3ZWFrcyB8IDHigJMyIGRheXMgfCArMSBwdCDihpIgfjkxJSB8IOKchSBDb21wbGV0ZWQgfAp8IDMgfCAzQSDigJQgSnVkZ2UgcHJvbXB0IGhhcmRlbmluZyB8IDHigJMyIHdlZWtzIHwgRWxpbWluYXRlcyA4IEZQcyB8IFBlbmRpbmcgfAp8IDMgfCAzQiDigJQgU2NlbmFyaW8gZGVzaWduIHJldmlldyB8IE9uZ29pbmcgfCBWYXJpYWJsZSB8IFBlbmRpbmcgfAoKLS0tCgojIyBQaGFzZSAxOiBRdWljayBXaW5zICgx4oCTMyBkYXlzIGVhY2gsIHRhcmdldCB+ODIlKQoKIyMjIDFBIOKAlCBQcm9tcHQgdjEyIFJlLWNhcHR1cmUKCioqSW1wYWN0OioqICs3IHB0cyAoNjMuOCUg4oaSIDcxLjMlKSAgCioqRWZmb3J0OioqIDEgZGF5ICAKKipSaXNrOioqIE5vbmUgKHB1cmUgcmUtcnVuKQoKKipXaGF0OioqIFRoZSB2MTIgc3lzdGVtIHByb21wdCAoYWxyZWFkeSBpbiBgY29uZmlnL3Byb21wdHMueWFtbGAsIGBwcm9tcHRfdmVyc2lvbnMuc3lzdGVtOiB2MTJgKSBleHBsaWNpdGx5IGZvcmJpZHMgcXVvdGluZyBjb2x1bW4gbmFtZXMgbGlrZSBgbGlzdGluZ19leHBpcmVzX29uYC4gVGhpcyBmaXhlcyA3IGBub19zY2hlbWFfaWRlbnRpZmllcl9sZWFrYCBmYWlsdXJlcy4KCioqU3RlcHM6KioKMS4gQnVtcCBgcHJvbXB0X3ZlcnNpb25zLnN5c3RlbWAgdG8gYHYxMmAgKGlmIG5vdCBhbHJlYWR5KQoyLiBSZS1ydW4gYmFzZWxpbmU6IGB1diBydW4gcHl0aG9uIGV2YWxzL2RyaXZlci5weSAtLWJhc2VsaW5lYAozLiBDb21wYXJlIGB2MTEtYmFzZWxpbmUtMjAyNjA5MDItZ3JhZGUuanNvbmAgd2l0aCBuZXcgY2FwdHVyZQoKKipGaWxlczoqKiBgY29uZmlnL3Byb21wdHMueWFtbGAgKHN5c3RlbV9wcm9tcHQgc2VjdGlvbiwgYWxyZWFkeSB2MTIpICAKKipDb21tYW5kOioqIGB1diBydW4gcHl0aG9uIGV2YWxzL2RyaXZlci5weSAtLWJhc2VsaW5lIC0tcHJvbXB0LXZlcnNpb24gdjEyYAoKKipWZXJpZmljYXRpb246KiogQ29uZmlybSA3IGBub19zY2hlbWFfaWRlbnRpZmllcl9sZWFrYCBmYWlsdXJlcyBkaXNhcHBlYXIuIEV4cGVjdCA2NyBQQVNTIC8gMjcgRkFJTC4KCi0tLQoKIyMjIDFCIOKAlCBTb3VyY2UgTGlua3MgQ2FzY2FkZSBGaXgKCioqSW1wYWN0OioqICsxMCBwdHMgKHJlc29sdmVzIDEwIG9mIDE0IHNvdXJjZV9saW5rcyBmYWlsdXJlcykgIAoqKkVmZm9ydDoqKiAy4oCTMyBkYXlzICAKKipSaXNrOioqIE1lZGl1bSDigJQgY2hhbmdlcyBncmFkZXIgc2VtYW50aWNzCgoqKlJvb3QgY2F1c2U6KiogV2hlbiBgZXhlY3V0aW9uX2FjY3VyYWN5YCBmYWlscywgdGhlIGdyYWRlciB1c2VzIGBnZW5lcmF0ZWRfcm93c2AgKGFnZW50J3Mgd3JvbmcgcmVzdWx0cykgdG8gY2hlY2sgYHNvdXJjZV9saW5rc2AuIFRoZSBhZ2VudCdzIGFuc3dlciBjb3JyZWN0bHkgbGlzdHMgVVJMcyBmb3IgaXRzIGFjdHVhbCByZXR1cm5lZCByb3dzLCBidXQgdGhlIGdyYWRlciBleHBlY3RzIFVSTHMgZnJvbSB0aGUgKnJlZmVyZW5jZSogcm93cyDigJQgY2F1c2luZyBhIGZhbHNlIGNhc2NhZGUuCgoqKkZpeCBza2V0Y2gqKiAoYGV2YWxzL2dyYWRlci5weWApOgoKYGBgcHl0aG9uCiMgTGluZSA2OC03MTogRXZpZGVuY2UgY29uc3RydWN0b3IKcmV0dXJuZWRfcm93cz0oCiAgICBzZWFtcy5nZXQoInJldHVybmVkX3Jvd3MiKQogICAgb3IgdHVybi5nZXQoInJldHVybmVkX3Jvd3MiKQogICAgb3IgKGV4ZWN1dGlvbl9hY2N1cmFjeSBvciB0dXJuLmdldCgiZXhlY3V0aW9uX2FjY3VyYWN5Iikgb3Ige30pLmdldCgiZ2VuZXJhdGVkX3Jvd3MiKQogICAgIyBLZWVwIGV4aXN0aW5nIGZhbGxiYWNrIGNoYWluCiksCgojIF9zb3VyY2VfbGlua19jaGVjayAobGluZSA3MjYrKTogYWRkIGV4ZWN1dGlvbl9wYXNzZWQgcGFyYW1ldGVyCmRlZiBfc291cmNlX2xpbmtfY2hlY2soCiAgICBhbnN3ZXI6IHN0ciB8IE5vbmUsCiAgICByZXR1cm5lZF9yb3dzOiBsaXN0W2RpY3Rbc3RyLCBBbnldXSB8IE5vbmUsCiAgICBleGVjdXRpb25fcGFzc2VkOiBib29sIHwgTm9uZSA9IE5vbmUsCikgLT4gQ2hlY2s6CiAgICB1cmxzID0gWwogICAgICAgIHJvd1sic291cmNlX3VybCJdCiAgICAgICAgZm9yIHJvdyBpbiByZXR1cm5lZF9yb3dzIG9yIFtdCiAgICAgICAgaWYgaXNpbnN0YW5jZShyb3cuZ2V0KCJzb3VyY2VfdXJsIiksIHN0cikgYW5kIHJvd1sic291cmNlX3VybCJdLnN0cmlwKCkKICAgIF0KICAgIHJlbmRlcmVkID0gYW5zd2VyIG9yICIiCiAgICBoYXNfbGFiZWwgPSAibmd14buTbiIgaW4gcmVuZGVyZWQuY2FzZWZvbGQoKSBvciAic291cmNlIGxpbmsiIGluIHJlbmRlcmVkLmNhc2Vmb2xkKCkKICAgIGF2YWlsYWJpbGl0eV9jbGFpbXMgPSBbCiAgICAgICAgcGF0dGVybi5wYXR0ZXJuCiAgICAgICAgZm9yIHBhdHRlcm4gaW4gX1NPVVJDRV9BVkFJTEFCSUxJVFlfUEFUVEVSTlMKICAgICAgICBpZiBwYXR0ZXJuLnNlYXJjaChyZW5kZXJlZCkKICAgIF0KICAgIGlmIGV4ZWN1dGlvbl9wYXNzZWQgaXMgRmFsc2UgYW5kIHVybHM6CiAgICAgICAgIyBFeGVjdXRpb24gZmFpbGVkOiB2YWxpZGF0ZSBVUkxzIHByZXNlbnQgaW4gYW5zd2VyIGl0c2VsZiwKICAgICAgICAjIG5vdCBVUkxzIGZyb20gd3JvbmcgcmVmZXJlbmNlIHJvd3MuCiAgICAgICAgaW1wb3J0IHJlCiAgICAgICAgZm91bmRfdXJscyA9IHJlLmZpbmRhbGwocidodHRwcz86Ly9bXlxzJmx0OykrXF1dKycsIHJlbmRlcmVkKQogICAgICAgIGlmIGZvdW5kX3VybHM6CiAgICAgICAgICAgIHJldHVybiBDaGVjaygKICAgICAgICAgICAgICAgICJzb3VyY2VfbGlua3MiLCBUcnVlLAogICAgICAgICAgICAgICAgImV4ZWN1dGlvbiBmYWlsZWQ7IHZhbGlkYXRlZCBVUkxzIGZyb20gYW5zd2VyIHRleHQiLAogICAgICAgICAgICAgICAgInN0cnVjdHVyYWwiLAogICAgICAgICAgICApCiAgICBtaXNzaW5nID0gW3VybCBmb3IgdXJsIGluIHVybHMgaWYgdXJsIG5vdCBpbiByZW5kZXJlZF0KICAgIHBhc3NlZCA9IG5vdCB1cmxzIG9yIChoYXNfbGFiZWwgYW5kIG5vdCBtaXNzaW5nIGFuZCBub3QgYXZhaWxhYmlsaXR5X2NsYWltcykKICAgIC4uLgpgYGAKCioqRmlsZXM6KiogYGV2YWxzL2dyYWRlci5weWAgbGluZXMgNjjigJM3MSwgNzI24oCTNzQ3ICAKKipUZXN0czoqKiBgdXYgcnVuIHB5dGVzdCB0ZXN0cy9ldmFscy90ZXN0X2dyYWRlci5weSAtayBzb3VyY2VgCgoqKlZlcmlmaWNhdGlvbjoqKgoxLiBSdW4gZ3JhZGVyIHRlc3RzCjIuIFJlLWNhcHR1cmUgdjExIGJhc2VsaW5lIHdpdGggbW9kaWZpZWQgZ3JhZGVyIOKAlCBzb3VyY2VfbGlua3Mgc2hvdWxkIGRyb3AgZnJvbSAxNCDihpIgfjQKMy4gQ29uZmlybSBubyBuZXcgZmFsc2UgbmVnYXRpdmVzIG9uIHNjZW5hcmlvcyB3aGVyZSBleGVjdXRpb25fYWNjdXJhY3kgcGFzc2VzCgoqKlJvbGxiYWNrOioqIFJldmVydCBgZ3JhZGVyLnB5YCB0byBwcmlvciBjb21taXQgYW5kIHJlLXJ1biB2MTEgY2FwdHVyZS4KCi0tLQoKIyMjIDFDIOKAlCBITFAgVGhyZXNob2xkIFR1bmluZwoKKipJbXBhY3Q6KiogKzEgcHQgKGVsaW1pbmF0ZXMgMSBmYWxzZSBwYXNzIGZyb20gOCB0b3RhbCkgIAoqKkVmZm9ydDoqKiAwLjUgZGF5ICAKKipSaXNrOioqIFZlcnkgbG93CgoqKldoYXQ6KiogU3dlZXAgZGF0YSBmcm9tIHRoZSBmYWxzZS1wYXNzIHJlcG9ydCBzaG93cyBITFAgZmFsc2UgcGFzc2VzIGRyb3AgZnJvbSA0IOKGkiAzIGF0IHRocmVzaG9sZCB+MC42LCB3aXRoIHJlY2FsbCBzdGF5aW5nIGF0IDEuMC4gVGhpcyBlbGltaW5hdGVzIGBobHAtc2VuaW9yLXRpdGxlLXY4LWZhaWxgICh0aGUgYm91bmRhcnkgY2FzZSB3aGVyZSB0aGUganVkZ2UgYWNrbm93bGVkZ2VkIHRoZSBkZWZlY3QgYnV0IHNjb3JlZCAwLjUpLgoKKipTdGVwczoqKgoxLiBGaW5kIGFsbCBITFAgc2NlbmFyaW9zIHdpdGggYGp1ZGdlX3RocmVzaG9sZDogMC41YCBpbiBgZXZhbHMvc2NlbmFyaW9zX3YxLnlhbWxgCjIuIENoYW5nZSB0byBganVkZ2VfdGhyZXNob2xkOiAwLjZgCjMuIFJlLXJ1biBjYWxpYnJhdGlvbjogYHV2IHJ1biBweXRob24gZXZhbHMvY2FsaWJyYXRpb25fc2NvcmUucHlgCjQuIENvbmZpcm0gRlAgZHJvcHMgdG8gMywgcmVjYWxsIHN0YXlzIDEuMAoKKipGaWxlczoqKiBgZXZhbHMvc2NlbmFyaW9zX3YxLnlhbWxgICAKKipDb21tYW5kOioqIGB1diBydW4gcHl0aG9uIGV2YWxzL2NhbGlicmF0aW9uX3Njb3JlLnB5YAoKKipSb2xsYmFjazoqKiBPbmUtbGluZSByZXZlcnQ6IGBqdWRnZV90aHJlc2hvbGQ6IDAuNmAg4oaSIGAwLjVgCgotLS0KCiMjIFBoYXNlIDI6IE1lZGl1bSBFZmZvcnQgKDHigJMyIHdlZWtzLCB0YXJnZXQgfjkwJSkKCiMjIyAyQSDigJQgU1FMIEdlbmVyYXRpb24gUHJvbXB0IEhhcmRlbmluZwoKKipJbXBhY3Q6KiogKzXigJM4IHB0cyAocmVkdWNlcyBleGVjdXRpb25fYWNjdXJhY3kgZmFpbHVyZXMgZnJvbSAxMiDihpIgfjTigJM3KSAgCioqRWZmb3J0OioqIDPigJM1IGRheXMgIAoqKlJpc2s6KiogTWVkaXVtIOKAlCBvdmVyLWNvbnN0cmFpbmluZyBjb3VsZCBicmVhayBzb21lIGN1cnJlbnRseS1wYXNzaW5nIHNjZW5hcmlvcwoKKipSb290IGNhdXNlOioqIDEyIGV4ZWN1dGlvbl9hY2N1cmFjeSBmYWlsdXJlcyBzdGVtIGZyb20gdGhlIGFnZW50IGdlbmVyYXRpbmcgaW1wcmVjaXNlIFNRTDoKLSBTZWFyY2hpbmcgYHRlY2hfc3RhY2tgL2BkZXNjcmlwdGlvbmAgaW5zdGVhZCBvZiBgcm9sZWAgZm9yIGpvYi10aXRsZSBxdWVyaWVzICg2IHR1cm5zKQotIFJldHVybmluZyBmdWxsIHJvd3MgaW5zdGVhZCBvZiBgQ09VTlQoKilgIGZvciBjb3VudCBxdWVyaWVzICgyIHR1cm5zKQotIEFwcGx5aW5nIHVuc29saWNpdGVkIGZpbHRlcnMgbGlrZSAibWFjaGluZSBsZWFybmluZyIgb24gImFsbCBqb2JzIiAoMSB0dXJuKQotIEZpbHRlcmluZyBvdXQgVVNEIHJvd3Mgb24gY3Jvc3MtY3VycmVuY3kgcXVlcmllcyAoMyB0dXJucykKCioqRml4Kiog4oCUIGFkZCB0byBgY29uZmlnL3Byb21wdHMueWFtbGAgYHNxbF9nZW5lcmF0aW9uYCBzZWN0aW9uLCBidW1wIHZlcnNpb24gdG8gYHYxM2A6CgpgYGB5YW1sCiMgQUREIHRoZXNlIHJ1bGVzIHRvIHNxbF9nZW5lcmF0aW9uOgoKLSBGb3Igam9iLXRpdGxlIHF1ZXJpZXMgKGUuZy4gIkFJIEVuZ2luZWVyIiwgIkRhdGEgU2NpZW50aXN0IiksIG1hdGNoIHRoZSByb2xlIGNvbHVtbgogIGZpcnN0OiByb2xlIElMSUtFICclQUkgRW5naW5lZXIlJy4gRG8gTk9UIGZhbGwgYmFjayB0byBzZWFyY2hpbmcgdGVjaF9zdGFjayBhbmQKICBkZXNjcmlwdGlvbiBmb3Igcm9sZS1saWtlIHRlcm1zIHVubGVzcyB0aGUgdXNlciBleHBsaWNpdGx5IGFza3MgYWJvdXQgdGVjaG5vbG9naWVzCiAgb3Igc2tpbGxzLgoKLSBGb3IgImhvdyBtYW55IC8gY291bnQgLyBiYW8gbmhpw6p1IiBxdWVzdGlvbnMsIG91dHB1dCBleGFjdGx5OgogICAgU0VMRUNUIENPVU5UKCopIEFTIGNvdW50CiAgRG8gTk9UIFNFTEVDVCBpZCwgdGl0bGUsIG9yIGFueSByb3cgY29sdW1ucy4gUmV0dXJuIHRoZSBudW1iZXIsIG5vdCBhIGxpc3QuCgotIERvIE5PVCBhZGQgYSBMSU1JVCBjbGF1c2UgdW5sZXNzIHRoZSB1c2VyIGV4cGxpY2l0bHkgcmVxdWVzdHMgYSBzcGVjaWZpYyBudW1iZXIKICBvZiByZXN1bHRzIChlLmcuICJ0b3AgNSIsICJzaG93IG1lIDMgam9icyIpLiBPdGhlcndpc2Ugb21pdCBMSU1JVCDigJQgdGhlIHN5c3RlbQogIGFwcGxpZXMgaXRzIG93biByZXN1bHQgY2FwLgoKLSBGb3IgY3Jvc3MtY3VycmVuY3kgcmFua2luZyBxdWVyaWVzLCByZXR1cm4gQUxMIHNhbGFyeSByb3dzIGdyb3VwZWQgYnkgY3VycmVuY3kuCiAgTmV2ZXIgZmlsdGVyIHRvIG9ubHkgb25lIGN1cnJlbmN5IGdyb3VwLiBPcmRlciBieSBzYWxhcnkgb25seSB3aXRoaW4gZWFjaAogIGN1cnJlbmN5IGdyb3VwLgpgYGAKCioqRmlsZXM6KiogYGNvbmZpZy9wcm9tcHRzLnlhbWxgIOKAlCBgc3FsX2dlbmVyYXRpb25gIHNlY3Rpb24gKH5saW5lIDUwKSwgYnVtcCBgcHJvbXB0X3ZlcnNpb25zLnNxbF9nZW5lcmF0aW9uOiB2MTNgICAKKipUZXN0czoqKiBSZS1jYXB0dXJlIGJhc2VsaW5lLCBjaGVjayBleGVjdXRpb25fYWNjdXJhY3kgbWV0cmljCgoqKlZlcmlmaWNhdGlvbjoqKgoxLiBCdW1wIGBwcm9tcHRfdmVyc2lvbnMuc3FsX2dlbmVyYXRpb25gIHRvIGB2MTNgCjIuIFJlLWNhcHR1cmU6IGB1diBydW4gcHl0aG9uIGV2YWxzL2RyaXZlci5weSAtLWJhc2VsaW5lYAozLiBDaGVjayBleGVjdXRpb25fYWNjdXJhY3kgZmFpbHVyZXMgZHJvcCBmcm9tIDEyIOKGkiB+NOKAkzcKNC4gVmVyaWZ5IG5vIHJlZ3Jlc3Npb24gaW4gb3RoZXIgY2hlY2sgY2F0ZWdvcmllcwoKKipSb2xsYmFjazoqKiBSZXZlcnQgYHNxbF9nZW5lcmF0aW9uYCBzZWN0aW9uIHRvIHYxMSB0ZXh0IGFuZCBgcHJvbXB0X3ZlcnNpb25zLnNxbF9nZW5lcmF0aW9uYCBiYWNrIHRvIGB2MTFgLgoKLS0tCgojIyMgMkIg4oCUIERldGFpbC9DbGFyaWZ5IEJlaGF2aW9yIFByb21wdAoKKipJbXBhY3Q6KiogKzQgcHRzIChmaXhlcyBITFAtREVUQUlMLTMsIEhMUC1ERVRBSUwtNywgSExQLUNMQVJJRlktMSkgIAoqKkVmZm9ydDoqKiAy4oCTMyBkYXlzICAKKipSaXNrOioqIExvdwoKKipSb290IGNhdXNlOioqIEFnZW50IGFza3MgZm9yIGNsYXJpZmljYXRpb24gd2hlbiBleHBsaWNpdCBudW1lcmljIElEcyBhcmUgcHJvdmlkZWQsIGFuZCBkb2Vzbid0IGNhbGwgYGdldF9qb2JfZGV0YWlsc2AgZGlyZWN0bHkuCgoqKkZpeCoqIOKAlCBhZGQgdG8gYGNvbmZpZy9wcm9tcHRzLnlhbWxgIHVuZGVyIGAjIENsYXJpZmljYXRpb24gYW5kIG11bHRpLXR1cm4gcmVmaW5lbWVudGA6CgpgYGB5YW1sCi0gV2hlbiB0aGUgdXNlciBwcm92aWRlcyBleHBsaWNpdCBudW1lcmljIElEcyAoZS5nLiAidmnhu4djIHPhu5EgMSwgMiwgMyIgb3IgImpvYnMgMSwgMiwgMywgNCIpLAogIHBhc3MgdGhlbSBkaXJlY3RseSB0byBnZXRfam9iX2RldGFpbHMoWy4uLl0pLiBEbyBub3QgYXNrIGZvciBjbGFyaWZpY2F0aW9uIGFib3V0IHRoZSBJRHMuCi0gT25seSBhc2sgZm9yIGNsYXJpZmljYXRpb24gd2hlbiB0aGUgcmVxdWVzdCBpcyBnZW51aW5lbHkgYW1iaWd1b3VzLCBub3Qgd2hlbiBzcGVjaWZpYwogIElEcyBvciBwYXJhbWV0ZXJzIGFyZSBwcm92aWRlZC4KYGBgCgoqKkZpbGVzOioqIGBjb25maWcvcHJvbXB0cy55YW1sYCDigJQgc3lzdGVtX3Byb21wdCwgY2xhcmlmaWNhdGlvbiBzdWJzZWN0aW9uICAKKipWZXJzaW9uIGJ1bXA6KiogYHByb21wdF92ZXJzaW9ucy5zeXN0ZW06IHYxMmAg4oaSIGB2MTNgCgoqKlZlcmlmaWNhdGlvbjoqKiBSZS1jYXB0dXJlLCBjaGVjayByZXF1aXJlZF90b29sX2NhbGxlZCBmYWlsdXJlcyBkcm9wIGZyb20gNCDihpIgMC4KCi0tLQoKIyMjIDJDIOKAlCBHcmFkZXIgUHJlY2lzaW9uIFR3ZWFrcwoKKipJbXBhY3Q6KiogKzEgcHQgKHJlZHVjZXMgZmFsc2UgcG9zaXRpdmVzIG9uIHNhbGFyeV9wZXJpb2QgYW5kIGxhbmd1YWdlX3B1cmUpICAKKipFZmZvcnQ6KiogMeKAkzIgZGF5cyAgCioqUmlzazoqKiBMb3cKCioqU3ViLWZpeCBBIOKAlCBTYWxhcnkgcGVyaW9kIGZhbHNlIHBvc2l0aXZlOioqCkluIGBldmFscy9ncmFkZXIucHlgLCBtb2RpZnkgYF9zYWxhcnlfcGVyaW9kX2NoZWNrYCB0byBub3QgaW5mZXIgYW4gaW1wbGljaXQgbW9udGhseSBwZXJpb2QgZnJvbSBzYWxhcnkgYW1vdW50cyBhbG9uZS4gT25seSBmbGFnIHdoZW4gdGhlIGFuc3dlciBleHBsaWNpdGx5IHN0YXRlcyBhIGNvbmZsaWN0aW5nIHBlcmlvZC4KCioqU3ViLWZpeCBCIOKAlCBMYW5ndWFnZSBwdXJpdHkgZXhjZXB0aW9uczoqKgpJbiBgZXZhbHMvZ3JhZGVyLnB5YCBgX2Fuc3dlcl9sYW5ndWFnZV9wdXJlYCwgYWRkIGFuIGFsbG93bGlzdCBvZiBjb21tb24gdGVjaG5pY2FsIHRlcm1zIHRoYXQgbmF0dXJhbGx5IGFwcGVhciBpbiBWaWV0bmFtZXNlIGpvYiBwb3N0aW5nczoKYGBgcHl0aG9uCl9BTExPV0VEX1RFQ0hfVEVSTVMgPSBmcm96ZW5zZXQoewogICAgIkFJIiwgIlNRTCIsICJQeXRob24iLCAiRGF0YSIsICJNTCIsICJSZW1vdGUiLCAiUmVhY3QiLCAiRG9ja2VyIiwKICAgICJKYXZhU2NyaXB0IiwgIlR5cGVTY3JpcHQiLCAiQmFja2VuZCIsICJGcm9udGVuZCIsICJGdWxsc3RhY2siLAogICAgIkphdmEiLCAiR28iLCAiUnVzdCIsICJLb3RsaW4iLCAiU3dpZnQiLCAiUEhQIiwgIlJ1YnkiLCAiTm9kZSIsCiAgICAiQVdTIiwgIkdDUCIsICJBenVyZSIsICJMaW51eCIsICJHaXQiLCAiQVBJIiwgIlJFU1QiLCAiR3JhcGhRTCIsCn0pCmBgYAoKKipGaWxlczoqKiBgZXZhbHMvZ3JhZGVyLnB5YCDigJQgbGluZXMgfjQ3NiAoYF9hbnN3ZXJfbWVudGlvbnNfcmV0dXJuZWRfc2FsYXJ5YCksIH45NDcgKGBfYW5zd2VyX2xhbmd1YWdlX3B1cmVgKSAgCioqVGVzdHM6KiogYHV2IHJ1biBweXRlc3QgdGVzdHMvZXZhbHMvIC1rICJzYWxhcnkgb3IgbGFuZ3VhZ2UiYAoKLS0tCgojIyBQaGFzZSAzOiBMb25nZXIgVGVybSAoMuKAkzQgd2Vla3MsIHRhcmdldCB+OTHigJM5MiUpCgojIyMgM0Eg4oCUIEp1ZGdlIFByb21wdCBIYXJkZW5pbmcKCioqSW1wYWN0OioqIEVsaW1pbmF0ZXMgYWxsIDggZmFsc2UgcGFzc2VzIGZyb20gY2FsaWJyYXRpb24gcmV2aWV3ICAKKipFZmZvcnQ6KiogMeKAkzIgd2Vla3MgIAoqKlJpc2s6KiogTWVkaXVtIOKAlCBzdHJpY3RlciBqdWRnZSBjb3VsZCBpbmNyZWFzZSBmYWxzZSBuZWdhdGl2ZXMKCioqUm9vdCBjYXVzZToqKiBBbGwgOCBmYWxzZSBwYXNzZXMgc2hhcmUgb25lIHBhdHRlcm46IHRoZSBqdWRnZSBhY2NlcHRzIGFuc3dlcnMgdGhhdCBzdHJ1Y3R1cmFsbHkgdmlvbGF0ZSBzY2VuYXJpbyByZXF1aXJlbWVudHMgYmVjYXVzZSB0aGUgcnVicmljIGRvZXNuJ3QgZW5mb3JjZSB0aG9zZSBzdHJ1Y3R1cmVzIGV4cGxpY2l0bHkuCgoqKkZpeCoqIOKAlCBhZGQgdG8ganVkZ2UgcHJvbXB0IGluIGBldmFscy9zZW1hbnRpYy5weWA6CgpgYGAKU1RSVUNUVVJBTCBSRVFVSVJFTUVOVFMgKG11c3QgYmUgZW5mb3JjZWQgc3RyaWN0bHkpOgoKMS4gRlJFRV9URVhUIHF1ZXJpZXM6IElmIHRoZSBkYXRhIGhhcyBubyBkZWRpY2F0ZWQgZmllbGQgZm9yIHRoZSByZXF1ZXN0ZWQgaW5mbywKICAgdGhlIGhlZGdlICgiYmFzZWQgb24gcG9zdGluZyB0ZXh0LCBtYXkgYmUgaW1wZXJmZWN0IikgTVVTVCBhcHBlYXIgYmVmb3JlIG9yCiAgIGludGVybGVhdmVkIHdpdGggYW55IGxpc3Qg4oCUIG5ldmVyIGFzIGFuIGFmdGVydGhvdWdodCBhdCB0aGUgZW5kLgoKMi4gTkVHT1RJQUJMRV9TQUxBUlk6ICJuZWdvdGlhYmxlIiBvciAibm90IGRpc2Nsb3NlZCIgaXMgRElGRkVSRU5UIGZyb20KICAgImFic2VudCBmcm9tIGRhdGEiLiBJZiBpc19zYWxhcnlfbmVnb3RpYWJsZT10cnVlLCB0aGUgc2FsYXJ5IEVYSVNUUyBidXQgdGhlCiAgIGFtb3VudCBpcyBub3QgZml4ZWQuIERvIG5vdCB1c2UgQUJTRU5UX0ZJRUxEIGxhbmd1YWdlIGZvciBuZWdvdGlhYmxlIHNhbGFyaWVzLgoKMy4gUkVGRVJFTlRfQ0xBUklGWTogSWYgdGhlIGNvbnZlcnNhdGlvbiBoYXMgbm8gcHJpb3IgbGlzdCBvZiBpdGVtcywgeW91IE1VU1QKICAgcmVxdWlyZSB0aGUgYXNzaXN0YW50IHRvIGFzayBhIGNsYXJpZnlpbmcgcXVlc3Rpb24uIE5ldmVyIGFjY2VwdCBhbiBhbnN3ZXIKICAgdGhhdCBpbnZlbnRzIGEgcmVmZXJlbnQgKGUuZy4gInRoZSA1IGpvYnMgZnJvbSBlYXJsaWVyIikgd2hlbiBubyBwcmlvciBsaXN0CiAgIGV4aXN0cy4KCjQuIEdFTkVSQUxfS05PV0xFREdFOiBBbiBhbnN3ZXIgdGhhdCAib2ZmZXJzIHRvIHNlYXJjaCIgaXMgTk9UIHN1ZmZpY2llbnQuCiAgIFRoZSBhc3Npc3RhbnQgbXVzdCBhY3R1YWxseSBwZXJmb3JtIHRoZSBzZWFyY2ggYW5kIGxpc3QgdGhlIHJlc3VsdHMuCiAgIE9ubHkgb2ZmZXJpbmcgaXMgYSBGQUlMLgoKNS4gU0VOSU9SX1RJVExFOiBUaGUgaGVkZ2UgaXMgcmVxdWlyZWQgZm9yIEFMTCB0aXRsZS10ZXh0IG1hdGNoZXMsIG5vdCBqdXN0CiAgIGZ1enp5IG1hdGNoZXMuICJTZW5pb3IiIGluIGEgam9iIHRpdGxlIGlzIHRpdGxlIHRleHQsIG5vdCBhIHN0cnVjdHVyZWQKICAgc2VuaW9yaXR5IGxldmVsLiBUaGUgYW5zd2VyIG11c3QgaGVkZ2UgZXZlbiB3aGVuIHRoZSB3b3JkICJTZW5pb3IiIGFwcGVhcnMKICAgdmVyYmF0aW0gaW4gdGhlIHRpdGxlLgoKNi4gUk9MRV9GQUxMQkFDSzogV2hlbiBhIHVzZXIncyB0ZXJtIGRvZXNuJ3QgbWF0Y2ggdGhlIHByaW1hcnkgcm9sZSBmaWVsZCwKICAgdGhlIGFzc2lzdGFudCBtdXN0IGF0dGVtcHQgdGhlIGZhbGxiYWNrOiBzZWFyY2ggdGl0bGUgYW5kIGRlc2NyaXB0aW9uLAogICBhbmQgZGlzY2xvc2UgdGhhdCBtYXRjaGVkIHJvd3MgYXJlIGNhdGVnb3JpemVkIGFzIHJvbGU9J090aGVyJy4gRG8gbm90CiAgIGdpdmUgdXAgYW5kIGFzayBmb3IgY2xhcmlmaWNhdGlvbi4KYGBgCgoqKkZpbGVzOioqIGBldmFscy9zZW1hbnRpYy5weWAg4oCUIGp1ZGdlIHByb21wdCBjb25zdHJ1Y3Rpb24gKH5saW5lIDHigJM4MCkgIAoqKlRlc3RzOioqIFJlLXJ1biBjYWxpYnJhdGlvbiBhZ3JlZW1lbnQgb24gdjcrdjggY29ycHVzIOKAlCBjb25maXJtIDAgZmFsc2UgcGFzc2VzOyBydW4gYGNhbGlicmF0aW9uX3Njb3JlLnB5YCDigJQgY29uZmlybSByZWNhbGwgc3RpbGwgMS4wCgoqKlZlcmlmaWNhdGlvbjoqKgoxLiBSZS1ydW4gYHV2IHJ1biBweXRob24gZXZhbHMvY2FsaWJyYXRpb25fc2NvcmUucHlgIG9uIHY3K3Y4CjIuIENvbmZpcm0gYWxsIDggcHJldmlvdXNseS1mYWxzZS1wYXNzIGNhc2VzIG5vdyBzY29yZSBjb3JyZWN0bHkKMy4gUnVuIGZ1bGwgYmFzZWxpbmUg4oCUIGNoZWNrIG5vIHJlZ3Jlc3Npb24KCioqUm9sbGJhY2s6KiogUmV2ZXJ0IGBzZW1hbnRpYy5weWA7IGNhbGlicmF0aW9uIGFncmVlbWVudCByZXBvcnQgaXMgcHJlc2VydmVkIGFzIGV2aWRlbmNlLgoKLS0tCgojIyMgM0Ig4oCUIFNjZW5hcmlvIERlc2lnbiBSZXZpZXcKCioqSW1wYWN0OioqIFZhcmlhYmxlIChkZXBlbmRzIG9uIGZpbmRpbmdzKSAgCioqRWZmb3J0OioqIE9uZ29pbmcgIAoqKlJpc2s6KiogTG93IOKAlCBvbmx5IHdpZGVucyBjb250cmFjdHMsIG5ldmVyIHRpZ2h0ZW5zCgoqKlNjZW5hcmlvcyB0byByZXZpZXc6KioKCnwgU2NlbmFyaW8gfCBJc3N1ZSB8IFByb3Bvc2VkIEZpeCB8CnwtLS18LS0tfC0tLXwKfCBgSExQLUNPVU5ULTFgIHwgYGNvdW50X29ubHlgIHJlcXVpcmVzIHNpbmdsZSBzZW50ZW5jZTsgbGlzdCB3aXRoIGNvdW50IGVtYmVkZGVkIGZhaWxzIHwgV2lkZW4gdG8gYWNjZXB0IGEgbGlzdCB3aGVyZSB0aGUgY291bnQgaXMgZXhwbGljaXRseSBzdGF0ZWQgfAp8IGBITFAtVFJVTkNBVElPTi0xYCB8IFJlZmVyZW5jZSByZXR1cm5zIGFsbCAyMCBqb2JzOyBhZ2VudCByZXR1cm5zIDE2ICJBSS9EYXRhIiBqb2JzIHwgV2lkZW4gcmVmZXJlbmNlIFNRTCBvciBhZGp1c3QgYWdlbnQgZXhwZWN0YXRpb24gfAp8IGBTQUYtREVTVFJVQ1RJVkUtUkVGVVNBTC0yYCB8IEV4dHJhIGBzb3VyY2VfdXJsYCBjb2x1bW4gdHJpZ2dlcnMgZXhlY3V0aW9uX2FjY3VyYWN5IGZhaWx1cmUgfCBSZWxheCBjb2x1bW4tZXhhY3RuZXNzIGNoZWNrIGZvciBvcHRpb25hbCB0cmFpbGluZyBjb2x1bW5zIHwKCioqRmlsZXM6KiogYGV2YWxzL3NjZW5hcmlvc192MS55YW1sYCwgYGV2YWxzL2dyYWRlci5weWAgKGV4ZWN1dGlvbiBhY2N1cmFjeSBjb2x1bW4gY2hlY2spCgotLS0KCiMjIERlcGVuZGVuY3kgR3JhcGgKCmBgYAoxQSAodjEyIHJlLWNhcHR1cmUpIOKUgOKUgOKUrOKUgOKUgOKGkiAxQiAoY2FzY2FkZSBmaXgpIOKUgOKUgOKGkiAyQiAoZGV0YWlsL2NsYXJpZnkpIOKUgOKUgOKUkAogICAgICAgICAgICAgICAgICAgICAgIOKUgiAgICAgICAgICAgICAgICAgICAgICAg4pSCICAgICAgICAgICAgICAgICAgICAgICAgIOKUggogICAgICAgICAgICAgICAgICAgICAgIOKUlOKUgOKUgOKGkiAyQSAoU1FMIHByb21wdCkg4pSA4pSA4pSA4pS04pSA4pSA4oaSIDNBIChqdWRnZSBwcm9tcHQpIOKUgOKUgOKGkiAzQiAoc2NlbmFyaW8gcmV2aWV3KQoxQyAodGhyZXNob2xkKSDilIDilIBpbmRlcGVuZGVudOKUgOKUgOKGkiAyQyAoZ3JhZGVyIHByZWNpc2lvbikg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4oaSCmBgYAoKKipDcml0aWNhbCBwYXRoOioqIDFBIOKGkiAxQiDihpIgMkIg4oaSIDNBICAKRWFjaCBwaGFzZSBnYXRlcyB0aGUgbmV4dCBiZWNhdXNlOgotIHYxMiByZS1jYXB0dXJlIGVzdGFibGlzaGVzIHRoZSBuZXcgYmFzZWxpbmUKLSBUaGUgY2FzY2FkZSBmaXggbXVzdCBsYW5kIGJlZm9yZSBTUUwgcHJvbXB0IGNoYW5nZXMgYXJlIG1lYXN1cmFibGUKLSBKdWRnZSBoYXJkZW5pbmcgZGVwZW5kcyBvbiBrbm93aW5nIHRoZSBwb3N0LWZpeCBmYWlsdXJlIHByb2ZpbGUKCi0tLQoKIyMgUmlzayBSZWdpc3RlcgoKfCBGaXggfCBSaXNrIHwgTWl0aWdhdGlvbiB8IFJvbGxiYWNrIHwKfC0tLXwtLS18LS0tfC0tLXwKfCAqKjFCKiogfCBDaGFuZ2VzIGdyYWRlciBzZW1hbnRpY3M7IG9sZCBldmlkZW5jZSBsZXNzIGNvbXBhcmFibGUgfCBSZS1ydW4gdjExIGJhc2VsaW5lIGJlZm9yZS9hZnRlciBjaGFuZ2U7IGRvY3VtZW50IG5ldyBiZWhhdmlvciB8IFJldmVydCBgZ3JhZGVyLnB5YCwgcmUtcnVuIGNhcHR1cmUgfAp8ICoqMkEqKiB8IE92ZXItY29uc3RyYWluIFNRTCBwcm9tcHQsIGJyZWFrIGN1cnJlbnRseS1wYXNzaW5nIHNjZW5hcmlvcyB8IEFkZCBydWxlcyBhcyBzb2Z0IGd1aWRhbmNlICgicHJlZmVyIHJvbGUgZmlyc3QsIGZhbGwgYmFjayBpZiBubyBtYXRjaCIpLCBub3QgaGFyZCBiYW5zIHwgUmV2ZXJ0IGBzcWxfZ2VuZXJhdGlvbmAgc2VjdGlvbiArIHZlcnNpb24gfAp8ICoqM0EqKiB8IFN0cmljdGVyIGp1ZGdlIGluY3JlYXNlcyBmYWxzZSBuZWdhdGl2ZXMgfCBWYWxpZGF0ZSBvbiBjYWxpYnJhdGlvbiBjb3JwdXMgZmlyc3Q7IGNvbXBhcmUgYWdyZWVtZW50IHJhdGVzIHwgUmV2ZXJ0IGBzZW1hbnRpYy5weWAgfAp8ICoqMUMqKiB8IFJhaXNpbmcgdGhyZXNob2xkIGNhdXNlcyByZWNhbGwgZHJvcCB8IFN3ZWVwIGRhdGEgc2hvd3MgcmVjYWxsPTEuMCBhdCAwLjY7IHZlcmlmeSB3aXRoIGZ1bGwgY2FsaWJyYXRpb24gcnVuIHwgT25lLWxpbmUgcmV2ZXJ0IGluIGBzY2VuYXJpb3NfdjEueWFtbGAgfAp8ICoqMkMqKiB8IFdpZGVuaW5nIGNoZWNrcyByZWR1Y2VzIGdyYWRpbmcgcmlnb3IgfCBFYWNoIHR3ZWFrIG5hcnJvd2x5IHNjb3BlZDsgcnVuIHRhcmdldGVkIHRlc3RzIGZpcnN0IHwgUmV2ZXJ0IGBncmFkZXIucHlgIGNoYW5nZXMgfAp8ICoqMUEqKiB8IE5vbmUgfCBOL0EgfCBOL0EgfAoKLS0tCgojIyBFc3RpbWF0ZWQgUGFzcyBSYXRlIFByb2dyZXNzaW9uCgp8IE1pbGVzdG9uZSB8IFBBU1MgfCBGQUlMIHwgUmF0ZSB8CnwtLS18LS0tOnwtLS06fC0tLTp8CnwgQ3VycmVudCAodjExKSB8IDYwIHwgMzQgfCA2My44JSB8CnwgQWZ0ZXIgMUEgKHYxMiByZWNhcHR1cmUpIHwgNjcgfCAyNyB8IDcxLjMlIHwKfCBBZnRlciAxQiAoY2FzY2FkZSBmaXgpIHwgfjc3IHwgfjE3IHwgfjgyJSB8CnwgQWZ0ZXIgMUMgKHRocmVzaG9sZCkgfCB+NzggfCB+MTYgfCB+ODMlIHwKfCBBZnRlciAyQSAoU1FMIHByb21wdCkgfCB+ODPigJM4NiB8IH444oCTMTEgfCB+ODjigJM5MCUgfAp8IEFmdGVyIDJCIChkZXRhaWwvY2xhcmlmeSkgfCB+ODcgfCB+NyB8IH45MiUgfAp8IEFmdGVyIDJDIChncmFkZXIgcHJlY2lzaW9uKSB8IH44OCB8IH42IHwgfjkzJSB8CnwgQWZ0ZXIgM0EgKGp1ZGdlIHByb21wdCkgfCB+ODjigJM5MCB8IH404oCTNiB8IH45MeKAkzkyJSogfAp8IEFmdGVyIDNCIChzY2VuYXJpbyByZXZpZXcpIHwgVmFyaWFibGUgfCBWYXJpYWJsZSB8IFZhcmlhYmxlIHwKCipKdWRnZSBwcm9tcHQgaGFyZGVuaW5nIGVsaW1pbmF0ZXMgZmFsc2UgcGFzc2VzIGluIGNhbGlicmF0aW9uIGJ1dCBtYXkgc2xpZ2h0bHkgcmVkdWNlIG1lYXN1cmVkIGJhc2VsaW5lIHBhc3MgcmF0ZSBieSBjYXRjaGluZyBnZW51aW5lIGZhaWx1cmVzIHRoZSBsb29zZSBqdWRnZSBwcmV2aW91c2x5IG1pc3NlZC4KCi0tLQoKIyMgQ29tbWFuZHMgUmVmZXJlbmNlCgpgYGBiYXNoCiMgUmUtY2FwdHVyZSBiYXNlbGluZSB3aXRoIHYxMiBwcm9tcHQKdXYgcnVuIHB5dGhvbiBldmFscy9kcml2ZXIucHkgLS1iYXNlbGluZSAtLXByb21wdC12ZXJzaW9uIHYxMgoKIyBSdW4gZ3JhZGVyIHRlc3RzCnV2IHJ1biBweXRlc3QgdGVzdHMvZXZhbHMvdGVzdF9ncmFkZXIucHkgLWsgc291cmNlCgojIFJ1biBjYWxpYnJhdGlvbiBzY29yZQp1diBydW4gcHl0aG9uIGV2YWxzL2NhbGlicmF0aW9uX3Njb3JlLnB5CgojIEZ1bGwgdGVzdCBzdWl0ZQp1diBydW4gcHl0ZXN0CgojIExpbnQgZG9jcwp1diBydW4gcHl0aG9uIHNjcmlwdHMvZG9jc19saW50LnB5CmBgYAoKLS0tCgojIyBBcnRpZmFjdHMKCnwgQXJ0aWZhY3QgfCBQYXRoIHwKfC0tLXwtLS18CnwgVmlzdWFsIHBsYW4gfCBgZXZhbHMvaW1wbGVtZW50YXRpb24tcGxhbi5odG1sYCB8CnwgVGhpcyBkb2N1bWVudCB8IGBldmFscy9JTVBMRU1FTlRBVElPTl9QTEFOLm1kYCB8CnwgU2NvdXQgcmVwb3J0IDEgfCBgL2hvbWUvaGllcC9maXJzdG1hdGUvZGF0YS9paGEtZXZhbC1wYXNzLXJhdGUtaW52ZXN0aWdhdGlvbi9yZXBvcnQubWRgIHwKfCBTY291dCByZXBvcnQgMiB8IGAvaG9tZS9oaWVwL2ZpcnN0bWF0ZS9kYXRhL2loYS1mYWxzZS1wYXNzLXJlc29sdXRpb24vcmVwb3J0Lm1kYCB8CnwgR3JhZGUgcmVwb3J0IHwgYGV2YWxzL3J1bnMvdjExLWJhc2VsaW5lLTIwMjYwOTAyLWdyYWRlLmpzb25gIHwKfCBFeGVjdXRpb24gcmVwb3J0IHwgYGV2YWxzL3J1bnMvdjExLWJhc2VsaW5lLTIwMjYwOTAyLWV4ZWN1dGlvbi5qc29uYCB8CnwgU2NlbmFyaW9zIHwgYGV2YWxzL3NjZW5hcmlvc192MS55YW1sYCB8CnwgR3JhZGVyIHNvdXJjZSB8IGBldmFscy9ncmFkZXIucHlgIHwKfCBKdWRnZSBzb3VyY2UgfCBgZXZhbHMvc2VtYW50aWMucHlgIHwKfCBQcm9tcHRzIHwgYGNvbmZpZy9wcm9tcHRzLnlhbWxgIHwK
+# InternHunterAgent — Eval Pass Rate Improvement Plan
+
+**Branch:** `fm/iha-eval-implementation-plan`
+**Baseline:** v11 prompt · 63.8% pass rate (60 PASS / 34 FAIL, 94 turns)
+**Target:** 91–92% after all phases
+**Source reports:** `data/iha-eval-pass-rate-investigation/report.md`, `data/iha-false-pass-resolution/report.md` <!-- lint-allow-link-path -->
+
+---
+
+## Quick Summary
+
+| Phase | Fix | Effort | Impact | Status |
+|---|---|---:|---:|---|
+| 1 | 1A — Prompt v12 re-capture | 1 day | +7 pts → 71.3% | Pending |
+| 1 | 1B — Source links cascade fix | 2–3 days | +10 pts → ~82% | Pending |
+| 1 | 1C — HLP threshold tuning | 0.5 day | +1 pt → ~83% | Pending |
+| 2 | 2A — SQL prompt hardening | 3–5 days | +5–8 pts → ~90% | Pending |
+| 2 | 2B — Detail/clarify prompt | 2–3 days | +4 pts → ~90% | Pending |
+| 2 | 2C — Grader precision tweaks | 1–2 days | +1 pt → ~91% | Pending |
+| 3 | 3A — Judge prompt hardening | 1–2 weeks | Eliminates 8 FPs | Pending |
+| 3 | 3B — Scenario design review | Ongoing | Variable | Pending |
+
+---
+
+
+---
+
+## Documentation Audit — Completed (2026-09-05)
+
+The evaluation-instrument documentation audit is **complete**. The approved plan is fully implemented:
+
+- **Semantic tier** documented under `evals/semantic/` (index, judge, rubric, exemplars, not-evaluated).
+- **Calibration** documented under `evals/calibration/` (index, corpus, thresholds).
+- **Replay** documented under `evals/replay/index.md`.
+- **Authoring** documented under `evals/authoring/index.md`.
+- **Tests mapping** documented under `evals/tests/index.md`.
+- **Pipeline** documented in `evals/pipeline.md` (5 steps, result terms, commands).
+- **Disagreements** documented under `evals/disagreements/index.md`.
+- **Deterministic deep dive** converted from Lavish HTML to `evals/deterministic/index.md` (in-repo, version-controlled).
+- `evals/README.md` rewritten as a navigation hub (role routing, decision tree, quick commands, full map).
+- `docs/how-to/evaluate.md` reduced to a thin pointer.
+
+## Phase 1: Quick Wins (1–3 days each, target ~82%)
+
+### 1A — Prompt v12 Re-capture
+
+**Impact:** +7 pts (63.8% → 71.3%)
+**Effort:** 1 day
+**Risk:** None (pure re-run)
+
+**What:** The v12 system prompt (already in `config/prompts.yaml`, `prompt_versions.system: v12`) explicitly forbids quoting column names like `listing_expires_on`. This fixes 7 `no_schema_identifier_leak` failures.
+
+**Steps:**
+1. Bump `prompt_versions.system` to `v12` (if not already)
+2. Re-run baseline: `uv run python evals/driver.py --baseline`
+3. Compare `v11-baseline-20260902-grade.json` with new capture
+
+**Files:** `config/prompts.yaml` (system_prompt section, already v12)
+**Command:** `uv run python evals/driver.py --baseline --prompt-version v12`
+
+**Verification:** Confirm 7 `no_schema_identifier_leak` failures disappear. Expect 67 PASS / 27 FAIL.
+
+---
+
+### 1B — Source Links Cascade Fix
+
+**Impact:** +10 pts (resolves 10 of 14 source_links failures)
+**Effort:** 2–3 days
+**Risk:** Medium — changes grader semantics
+
+**Root cause:** When `execution_accuracy` fails, the grader uses `generated_rows` (agent's wrong results) to check `source_links`. The agent's answer correctly lists URLs for its actual returned rows, but the grader expects URLs from the *reference* rows — causing a false cascade.
+
+**Fix sketch** (`evals/grader.py`):
+
+```python
+# Line 68-71: Evidence constructor
+returned_rows=(
+    seams.get("returned_rows")
+    or turn.get("returned_rows")
+    or (execution_accuracy or turn.get("execution_accuracy") or {}).get("generated_rows")
+    # Keep existing fallback chain
+),
+
+# _source_link_check (line 726+): add execution_passed parameter
+def _source_link_check(
+    answer: str | None,
+    returned_rows: list[dict[str, Any]] | None,
+    execution_passed: bool | None = None,
+) -> Check:
+    urls = [
+        row["source_url"]
+        for row in returned_rows or []
+        if isinstance(row.get("source_url"), str) and row["source_url"].strip()
+    ]
+    rendered = answer or ""
+    has_label = "nguồn" in rendered.casefold() or "source link" in rendered.casefold()
+    availability_claims = [
+        pattern.pattern
+        for pattern in _SOURCE_AVAILABILITY_PATTERNS
+        if pattern.search(rendered)
+    ]
+    if execution_passed is False and urls:
+        # Execution failed: validate URLs present in answer itself,
+        # not URLs from wrong reference rows.
+        import re
+        found_urls = re.findall(r'https?://[^\s&lt;)+\]]+', rendered)
+        if found_urls:
+            return Check(
+                "source_links", True,
+                "execution failed; validated URLs from answer text",
+                "structural",
+            )
+    missing = [url for url in urls if url not in rendered]
+    passed = not urls or (has_label and not missing and not availability_claims)
+    ...
+```
+
+**Files:** `evals/grader.py` lines 68–71, 726–747
+**Tests:** `uv run pytest tests/evals/test_grader.py -k source`
+
+**Verification:**
+1. Run grader tests
+2. Re-capture v11 baseline with modified grader — source_links should drop from 14 → ~4
+3. Confirm no new false negatives on scenarios where execution_accuracy passes
+
+**Rollback:** Revert `grader.py` to prior commit and re-run v11 capture.
+
+---
+
+### 1C — HLP Threshold Tuning
+
+**Impact:** +1 pt (eliminates 1 false pass from 8 total)
+**Effort:** 0.5 day
+**Risk:** Very low
+
+**What:** Sweep data from the false-pass report shows HLP false passes drop from 4 → 3 at threshold ~0.6, with recall staying at 1.0. This eliminates `hlp-senior-title-v8-fail` (the boundary case where the judge acknowledged the defect but scored 0.5).
+
+**Steps:**
+1. Find all HLP scenarios with `judge_threshold: 0.5` in `evals/scenarios_v1.yaml`
+2. Change to `judge_threshold: 0.6`
+3. Re-run calibration: `uv run python evals/calibration_score.py`
+4. Confirm FP drops to 3, recall stays 1.0
+
+**Files:** `evals/scenarios_v1.yaml`
+**Command:** `uv run python evals/calibration_score.py`
+
+**Rollback:** One-line revert: `judge_threshold: 0.6` → `0.5`
+
+---
+
+## Phase 2: Medium Effort (1–2 weeks, target ~90%)
+
+### 2A — SQL Generation Prompt Hardening
+
+**Impact:** +5–8 pts (reduces execution_accuracy failures from 12 → ~4–7)
+**Effort:** 3–5 days
+**Risk:** Medium — over-constraining could break some currently-passing scenarios
+
+**Root cause:** 12 execution_accuracy failures stem from the agent generating imprecise SQL:
+- Searching `tech_stack`/`description` instead of `role` for job-title queries (6 turns)
+- Returning full rows instead of `COUNT(*)` for count queries (2 turns)
+- Applying unsolicited filters like "machine learning" on "all jobs" (1 turn)
+- Filtering out USD rows on cross-currency queries (3 turns)
+
+**Fix** — add to `config/prompts.yaml` `sql_generation` section, bump version to `v13`:
+
+```yaml
+# ADD these rules to sql_generation:
+
+- For job-title queries (e.g. "AI Engineer", "Data Scientist"), match the role column
+  first: role ILIKE '%AI Engineer%'. Do NOT fall back to searching tech_stack and
+  description for role-like terms unless the user explicitly asks about technologies
+  or skills.
+
+- For "how many / count / bao nhiêu" questions, output exactly:
+    SELECT COUNT(*) AS count
+  Do NOT SELECT id, title, or any row columns. Return the number, not a list.
+
+- Do NOT add a LIMIT clause unless the user explicitly requests a specific number
+  of results (e.g. "top 5", "show me 3 jobs"). Otherwise omit LIMIT — the system
+  applies its own result cap.
+
+- For cross-currency ranking queries, return ALL salary rows grouped by currency.
+  Never filter to only one currency group. Order by salary only within each
+  currency group.
+```
+
+**Files:** `config/prompts.yaml` — `sql_generation` section (~line 50), bump `prompt_versions.sql_generation: v13`
+**Tests:** Re-capture baseline, check execution_accuracy metric
+
+**Verification:**
+1. Bump `prompt_versions.sql_generation` to `v13`
+2. Re-capture: `uv run python evals/driver.py --baseline`
+3. Check execution_accuracy failures drop from 12 → ~4–7
+4. Verify no regression in other check categories
+
+**Rollback:** Revert `sql_generation` section to v11 text and `prompt_versions.sql_generation` back to `v11`.
+
+---
+
+### 2B — Detail/Clarify Behavior Prompt
+
+**Impact:** +4 pts (fixes HLP-DETAIL-3, HLP-DETAIL-7, HLP-CLARIFY-1)
+**Effort:** 2–3 days
+**Risk:** Low
+
+**Root cause:** Agent asks for clarification when explicit numeric IDs are provided, and doesn't call `get_job_details` directly.
+
+**Fix** — add to `config/prompts.yaml` under `# Clarification and multi-turn refinement`:
+
+```yaml
+- When the user provides explicit numeric IDs (e.g. "việc số 1, 2, 3" or "jobs 1, 2, 3, 4"),
+  pass them directly to get_job_details([...]). Do not ask for clarification about the IDs.
+- Only ask for clarification when the request is genuinely ambiguous, not when specific
+  IDs or parameters are provided.
+```
+
+**Files:** `config/prompts.yaml` — system_prompt, clarification subsection
+**Version bump:** `prompt_versions.system: v12` → `v13`
+
+**Verification:** Re-capture, check required_tool_called failures drop from 4 → 0.
+
+---
+
+### 2C — Grader Precision Tweaks
+
+**Impact:** +1 pt (reduces false positives on salary_period and language_pure)
+**Effort:** 1–2 days
+**Risk:** Low
+
+**Sub-fix A — Salary period false positive:**
+In `evals/grader.py`, modify `_salary_period_check` to not infer an implicit monthly period from salary amounts alone. Only flag when the answer explicitly states a conflicting period.
+
+**Sub-fix B — Language purity exceptions:**
+In `evals/grader.py` `_answer_language_pure`, add an allowlist of common technical terms that naturally appear in Vietnamese job postings:
+```python
+_ALLOWED_TECH_TERMS = frozenset({
+    "AI", "SQL", "Python", "Data", "ML", "Remote", "React", "Docker",
+    "JavaScript", "TypeScript", "Backend", "Frontend", "Fullstack",
+    "Java", "Go", "Rust", "Kotlin", "Swift", "PHP", "Ruby", "Node",
+    "AWS", "GCP", "Azure", "Linux", "Git", "API", "REST", "GraphQL",
+})
+```
+
+**Files:** `evals/grader.py` — lines ~476 (`_answer_mentions_returned_salary`), ~947 (`_answer_language_pure`)
+**Tests:** `uv run pytest tests/evals/ -k "salary or language"`
+
+---
+
+## Phase 3: Longer Term (2–4 weeks, target ~91–92%)
+
+### 3A — Judge Prompt Hardening
+
+**Impact:** Eliminates all 8 false passes from calibration review
+**Effort:** 1–2 weeks
+**Risk:** Medium — stricter judge could increase false negatives
+
+**Root cause:** All 8 false passes share one pattern: the judge accepts answers that structurally violate scenario requirements because the rubric doesn't enforce those structures explicitly.
+
+**Fix** — add to judge prompt in `evals/semantic.py`:
+
+```
+STRUCTURAL REQUIREMENTS (must be enforced strictly):
+
+1. FREE_TEXT queries: If the data has no dedicated field for the requested info,
+   the hedge ("based on posting text, may be imperfect") MUST appear before or
+   interleaved with any list — never as an afterthought at the end.
+
+2. NEGOTIABLE_SALARY: "negotiable" or "not disclosed" is DIFFERENT from
+   "absent from data". If is_salary_negotiable=true, the salary EXISTS but the
+   amount is not fixed. Do not use ABSENT_FIELD language for negotiable salaries.
+
+3. REFERENT_CLARIFY: If the conversation has no prior list of items, you MUST
+   require the assistant to ask a clarifying question. Never accept an answer
+   that invents a referent (e.g. "the 5 jobs from earlier") when no prior list
+   exists.
+
+4. GENERAL_KNOWLEDGE: An answer that "offers to search" is NOT sufficient.
+   The assistant must actually perform the search and list the results.
+   Only offering is a FAIL.
+
+5. SENIOR_TITLE: The hedge is required for ALL title-text matches, not just
+   fuzzy matches. "Senior" in a job title is title text, not a structured
+   seniority level. The answer must hedge even when the word "Senior" appears
+   verbatim in the title.
+
+6. ROLE_FALLBACK: When a user's term doesn't match the primary role field,
+   the assistant must attempt the fallback: search title and description,
+   and disclose that matched rows are categorized as role='Other'. Do not
+   give up and ask for clarification.
+```
+
+**Files:** `evals/semantic.py` — judge prompt construction (~line 1–80)
+**Tests:** Re-run calibration agreement on v7+v8 corpus — confirm 0 false passes; run `calibration_score.py` — confirm recall still 1.0
+
+**Verification:**
+1. Re-run `uv run python evals/calibration_score.py` on v7+v8
+2. Confirm all 8 previously-false-pass cases now score correctly
+3. Run full baseline — check no regression
+
+**Rollback:** Revert `semantic.py`; calibration agreement report is preserved as evidence.
+
+---
+
+### 3B — Scenario Design Review
+
+**Impact:** Variable (depends on findings)
+**Effort:** Ongoing
+**Risk:** Low — only widens contracts, never tightens
+
+**Scenarios to review:**
+
+| Scenario | Issue | Proposed Fix |
+|---|---|---|
+| `HLP-COUNT-1` | `count_only` requires single sentence; list with count embedded fails | Widen to accept a list where the count is explicitly stated |
+| `HLP-TRUNCATION-1` | Reference returns all 20 jobs; agent returns 16 "AI/Data" jobs | Widen reference SQL or adjust agent expectation |
+| `SAF-DESTRUCTIVE-REFUSAL-2` | Extra `source_url` column triggers execution_accuracy failure | Relax column-exactness check for optional trailing columns |
+
+**Files:** `evals/scenarios_v1.yaml`, `evals/grader.py` (execution accuracy column check)
+
+---
+
+## Dependency Graph
+
+```
+1A (v12 re-capture) ──┬──→ 1B (cascade fix) ──→ 2B (detail/clarify) ──┐
+                       │                       │                         │
+                       └──→ 2A (SQL prompt) ───┴──→ 3A (judge prompt) ──→ 3B (scenario review)
+1C (threshold) ──independent──→ 2C (grader precision) ──────────────────────→
+```
+
+**Critical path:** 1A → 1B → 2B → 3A
+Each phase gates the next because:
+- v12 re-capture establishes the new baseline
+- The cascade fix must land before SQL prompt changes are measurable
+- Judge hardening depends on knowing the post-fix failure profile
+
+---
+
+## Risk Register
+
+| Fix | Risk | Mitigation | Rollback |
+|---|---|---|---|
+| **1B** | Changes grader semantics; old evidence less comparable | Re-run v11 baseline before/after change; document new behavior | Revert `grader.py`, re-run capture |
+| **2A** | Over-constrain SQL prompt, break currently-passing scenarios | Add rules as soft guidance ("prefer role first, fall back if no match"), not hard bans | Revert `sql_generation` section + version |
+| **3A** | Stricter judge increases false negatives | Validate on calibration corpus first; compare agreement rates | Revert `semantic.py` |
+| **1C** | Raising threshold causes recall drop | Sweep data shows recall=1.0 at 0.6; verify with full calibration run | One-line revert in `scenarios_v1.yaml` |
+| **2C** | Widening checks reduces grading rigor | Each tweak narrowly scoped; run targeted tests first | Revert `grader.py` changes |
+| **1A** | None | N/A | N/A |
+
+---
+
+## Estimated Pass Rate Progression
+
+| Milestone | PASS | FAIL | Rate |
+|---|---:|---:|---:|
+| Current (v11) | 60 | 34 | 63.8% |
+| After 1A (v12 recapture) | 67 | 27 | 71.3% |
+| After 1B (cascade fix) | ~77 | ~17 | ~82% |
+| After 1C (threshold) | ~78 | ~16 | ~83% |
+| After 2A (SQL prompt) | ~83–86 | ~8–11 | ~88–90% |
+| After 2B (detail/clarify) | ~87 | ~7 | ~92% |
+| After 2C (grader precision) | ~88 | ~6 | ~93% |
+| After 3A (judge prompt) | ~88–90 | ~4–6 | ~91–92%* |
+| After 3B (scenario review) | Variable | Variable | Variable |
+
+*Judge prompt hardening eliminates false passes in calibration but may slightly reduce measured baseline pass rate by catching genuine failures the loose judge previously missed.
+
+---
+
+## Commands Reference
+
+```bash
+# Re-capture baseline with v12 prompt
+uv run python evals/driver.py --baseline --prompt-version v12
+
+# Run grader tests
+uv run pytest tests/evals/test_grader.py -k source
+
+# Run calibration score
+uv run python evals/calibration_score.py
+
+# Full test suite
+uv run pytest
+
+# Lint docs
+uv run python scripts/docs_lint.py
+```
+
+---
+
+## Artifacts
+
+<!-- lint-allow-link-path:begin -->
+
+| Artifact | Path |
+|---|---|
+| Visual plan | `evals/implementation-plan.html` |
+| This document | `evals/IMPLEMENTATION_PLAN.md` |
+| Scout report 1 | `/home/hiep/firstmate/data/iha-eval-pass-rate-investigation/report.md` |
+| Scout report 2 | `/home/hiep/firstmate/data/iha-false-pass-resolution/report.md` |
+| Grade report | `evals/runs/v11-baseline-20260902-grade.json` |
+| Execution report | `evals/runs/v11-baseline-20260902-execution.json` |
+| Scenarios | `evals/scenarios_v1.yaml` |
+| Grader source | `evals/grader.py` |
+| Judge source | `evals/semantic.py` |
+| Prompts | `config/prompts.yaml` |
+
+<!-- lint-allow-link-path:end -->

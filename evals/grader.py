@@ -37,6 +37,10 @@ EXCLUDED_FROM_DENOMINATOR = frozenset({INFRA, UNRUN, NOT_EVALUATED})
 BEHAVIOR_GLOSSARY = load_behavior_glossary()
 BEHAVIOR_GLOSSARY_ANCHORS = settings.prompts_yaml.get("behavior_glossary_anchors", {})
 EVALUATION_ANCHORS = settings.prompts_yaml.get("evaluation_anchors", {})
+# Default threshold for scenarios that do not override judge_threshold or carry a
+# calibrated per-class semantic threshold. Kept as a module constant so the literal
+# cannot drift from the two call sites without an explicit review.
+DEFAULT_SEMANTIC_THRESHOLD: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -121,7 +125,7 @@ class ScenarioRule:
     literal: TextRule | None = None
     semantic: TextRule | None = None
     judge_metric: str | None = None
-    judge_threshold: float = 0.5
+    judge_threshold: float = DEFAULT_SEMANTIC_THRESHOLD
     require_vietnamese: bool = False
     require_source_links: bool = False
     reject_salary_period: bool = False
@@ -1134,11 +1138,12 @@ def _semantic_checks(
             )
         ]
     scenario_class = _semantic_class_of(scenario_id)
+    threshold = _SEMANTIC_THRESHOLD.get(scenario_class, DEFAULT_SEMANTIC_THRESHOLD)
     return [
         Check(
             "semantic_behavior",
-            score >= _SEMANTIC_THRESHOLD.get(scenario_class, 0.5),
-            f"semantic score={score:.3f}, threshold={_SEMANTIC_THRESHOLD.get(scenario_class, 0.5):.1f}",
+            score >= threshold,
+            f"semantic score={score:.3f}, threshold={threshold:.1f}",
             "semantic",
         )
     ]

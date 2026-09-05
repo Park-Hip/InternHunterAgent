@@ -99,6 +99,22 @@ eval:
     # and the driver runs one turn at a time - so the serving default needs no pacing.
     # Restore 75 together with the groq arm; the T0027.3 capture ran 77 turns at 0.
     turn_pacing_seconds: 0
+    retry:
+      max_retries: 2
+      sdk_max_retries: 0
+      default_backoff_seconds: [1.0, 2.0]
+      quota_backoff_base_seconds: 1.0
+      quota_backoff_multiplier: 2.0
+      max_backoff_seconds: 90.0
+      retry_hint_margin_seconds: 1.0
+      consecutive_quota_failures_before_halt: 3
+      quota_error_signatures:
+        - "429"
+        - "rate limit"
+        - "rate_limit"
+        - "quota"
+        - "tpm"
+        - "tokens per minute"
   # Serving prices in USD per million tokens, read only by the trace viewer's cost
   # dashboard. They are estimates - verify against the provider price page before
   # quoting any number outside this repository.

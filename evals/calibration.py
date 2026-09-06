@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from evals._paths import CALIBRATION_VERSIONS, RELEASE_GATE_PATH
+from evals._paths import CALIBRATION_VERSIONS
 from evals.scenarios import load_scenarios
 from evals.semantic import AVAILABLE, evaluate_semantic_repeat, semantic_assertion
 
@@ -89,10 +89,11 @@ def load_calibration(path: Path = CALIBRATION_PATH) -> dict[str, Any]:
             raise ValueError(
                 "Calibration cases must reference a scenario with a semantic assertion"
             )
-        if not all(isinstance(case[field], str) and case[field] for field in ("language", "source")):
-            raise ValueError(
-                "Calibration cases must stamp language and source"
-            )
+        if not all(
+            isinstance(case[field], str) and case[field]
+            for field in ("language", "source")
+        ):
+            raise ValueError("Calibration cases must stamp language and source")
         if "prompt_versions" in case:
             prompt_versions = case["prompt_versions"]
             if not (
@@ -297,13 +298,21 @@ def select_per_class_thresholds(
         best: float | None = None
         for point in sweep:
             metrics = point.get(f"class:{cls}")
-            if metrics and metrics.get("sample_size", 0) > 0 and metrics.get("recall") == 1.0:
+            if (
+                metrics
+                and metrics.get("sample_size", 0) > 0
+                and metrics.get("recall") == 1.0
+            ):
                 best = point["threshold"]
         selected[cls] = best
     overall: float | None = None
     for point in sweep:
         metrics = point.get("overall")
-        if metrics and metrics.get("sample_size", 0) > 0 and metrics.get("recall") == 1.0:
+        if (
+            metrics
+            and metrics.get("sample_size", 0) > 0
+            and metrics.get("recall") == 1.0
+        ):
             overall = point["threshold"]
     selected["overall"] = overall
     return {"thresholds_by_class": selected, "sweep": sweep}
@@ -366,9 +375,7 @@ def build_agreement_report(
         recall_n = tp + fn
         precision_n = tp + fp
         uncertainty[key] = {
-            "recall_95ci": list(wilson_interval(tp, recall_n))
-            if recall_n
-            else None,
+            "recall_95ci": list(wilson_interval(tp, recall_n)) if recall_n else None,
             "precision_95ci": list(wilson_interval(tp, precision_n))
             if precision_n
             else None,

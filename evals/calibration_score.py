@@ -122,7 +122,9 @@ def score_corpora(
         )
         if usable and not rescore:
             continue
-        result = evaluate_semantic_repeat(scenarios_by_case[case["id"]], _repeat_for_case(case))
+        result = evaluate_semantic_repeat(
+            scenarios_by_case[case["id"]], _repeat_for_case(case)
+        )
         if result is None:
             raise ValueError(
                 f"validated calibration scenario lost its semantic assertion: "
@@ -132,9 +134,7 @@ def score_corpora(
         artifact["generated_at"] = _utc_now()
         persist()
 
-    available = sum(
-        1 for item in results.values() if item.get("status") == AVAILABLE
-    )
+    available = sum(1 for item in results.values() if item.get("status") == AVAILABLE)
     print(
         json.dumps(
             {

@@ -30,6 +30,8 @@ def _default_replay_path() -> Path:
 
 REPLAY_PATH = _default_replay_path()
 ACTIVE_REPLAY_DIR = REPLAY_PATH.parent
+
+
 # Historical captures preserved under evals/archive/replays/ (issue #148/#249).
 # They keep their original bytes and provenance but are no longer current
 # regression evidence: the registry moved on, so they no longer validate.
@@ -84,6 +86,8 @@ _TURN_KEYS = {
 }
 _V2_SEAM_KEYS = {"question", "answer", "tools_called", "sql_text"}
 _V3_SEAM_KEYS = {*_V2_SEAM_KEYS, "tool_output", "tool_arguments"}
+
+
 def active_replay_paths(directory: Path = ACTIVE_REPLAY_DIR) -> list[Path]:
     """Discover every active replay artifact, in deterministic sorted order.
 
@@ -221,9 +225,7 @@ def validate_replay(replay: dict[str, Any]) -> None:
                         f"Replay scenario {scenario_id} seams must be an object"
                     )
                 seam_keys = (
-                    _V3_SEAM_KEYS
-                    if manifest["schema_version"] >= 3
-                    else _V2_SEAM_KEYS
+                    _V3_SEAM_KEYS if manifest["schema_version"] >= 3 else _V2_SEAM_KEYS
                 )
                 _assert_keys(seams, seam_keys, f"Replay scenario {scenario_id} seams")
                 if not all(

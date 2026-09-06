@@ -22,6 +22,7 @@ from src.core.logger import logger
 # was refusing connections, so every one of them pointed at nothing. This module
 # resolves one of them against Langfuse before anyone reads the run as traced.
 
+
 # Export is asynchronous and batched, and Cloud ingestion is not synchronous with
 # the API accepting the batch. A capture of two scenarios finishes in seconds, well
 # inside that window, so the probe flushes first and then retries: without this it
@@ -31,7 +32,9 @@ def _ingestion_retry_delays() -> tuple[float, ...]:
     cfg = (settings.config_yaml.get("eval") or {}).get("writeback")
     if isinstance(cfg, dict):
         delays = cfg.get("ingestion_retry_delays")
-        if isinstance(delays, list) and all(isinstance(d, (int, float)) for d in delays):
+        if isinstance(delays, list) and all(
+            isinstance(d, (int, float)) for d in delays
+        ):
             return tuple(float(d) for d in delays)
     return (0.0, 2.0, 5.0)
 

@@ -6,6 +6,8 @@ import time
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_groq import ChatGroq
 
+from typing import Any
+
 from deepeval.models.base_model import DeepEvalBaseLLM
 from src.core.config import settings
 
@@ -29,7 +31,9 @@ class _RpmThrottle:
             return 0.0
         with self._lock:
             now = time.monotonic()
-            self._call_times = [t for t in self._call_times if now - t < _RATE_WINDOW_SECONDS]
+            self._call_times = [
+                t for t in self._call_times if now - t < _RATE_WINDOW_SECONDS
+            ]
             if len(self._call_times) < self._rpm:
                 self._call_times.append(now)
                 return 0.0
@@ -47,7 +51,9 @@ class _RpmThrottle:
 class DeepEvalJudge(DeepEvalBaseLLM):
     """DeepEvalBaseLLM wrapper around a LangChain chat model, used as the eval judge."""
 
-    def __init__(self, chat_model: BaseChatModel, model_name: str, rpm: int = 0) -> None:
+    def __init__(
+        self, chat_model: BaseChatModel, model_name: str, rpm: int = 0
+    ) -> None:
         self._chat_model = chat_model
         self._model_name = model_name
         self._throttle = _RpmThrottle(rpm)
@@ -107,7 +113,9 @@ def build_judge() -> DeepEvalJudge:
 
     provider = judge_cfg.get("provider")
     if not isinstance(provider, str) or not provider.strip():
-        raise ValueError("Missing or empty 'eval.judge.provider' in config/settings.yaml")
+        raise ValueError(
+            "Missing or empty 'eval.judge.provider' in config/settings.yaml"
+        )
     provider = provider.lower().strip()
 
     model_name = judge_cfg.get("model")
@@ -125,9 +133,11 @@ def build_judge() -> DeepEvalJudge:
     _providers_cfg: dict[str, Any] = judge_cfg.get("providers", {})
     if not isinstance(_providers_cfg, dict):
         _providers_cfg = {}
-    _provider_max_tokens: dict[str, int] = {
-        k: int(v) for k, v in _providers_cfg.items() if isinstance(v, (int, float))
-    } if isinstance(_providers_cfg, dict) else {}
+    _provider_max_tokens: dict[str, int] = (
+        {k: int(v) for k, v in _providers_cfg.items() if isinstance(v, (int, float))}
+        if isinstance(_providers_cfg, dict)
+        else {}
+    )
 
     if provider == "groq":
         if not settings.GROQ_API_KEY:
@@ -150,7 +160,9 @@ def build_judge() -> DeepEvalJudge:
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         if not settings.GOOGLE_API_KEY:
-            raise ValueError("eval.judge.provider is 'google' but GOOGLE_API_KEY is unset")
+            raise ValueError(
+                "eval.judge.provider is 'google' but GOOGLE_API_KEY is unset"
+            )
 
         chat_model = ChatGoogleGenerativeAI(
             model=model_name,

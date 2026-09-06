@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
-from evals._paths import CALIBRATION_VERSIONS, RELEASE_GATE_PATH
+from evals._paths import CALIBRATION_VERSIONS
 from evals.calibration import calibration_report, load_calibration
 from evals.grader import Evidence
 

@@ -274,6 +274,7 @@ def _build_number_words(max_val: int) -> dict[int, tuple[str, ...]]:
 
 def _number_words_config() -> dict[int, tuple[str, ...]]:
     from src.core.config import settings
+
     cfg = (settings.config_yaml.get("eval") or {}).get("grader")
     max_val = 100
     if isinstance(cfg, dict):
@@ -302,9 +303,11 @@ _ENGLISH_PROSE_WORDS = frozenset(
     "a an and are as at be but by can does for from has have how i in is it job jobs my not of on or that the these this to was were what which with you your".split()
 )
 
+
 def _allowed_tech_terms() -> frozenset[str]:
     """Return the allowed tech-term set, loaded from config with a safe fallback."""
     from src.core.config import settings
+
     cfg = (settings.config_yaml.get("eval") or {}).get("grader")
     if isinstance(cfg, dict):
         terms = cfg.get("allowed_tech_terms")
@@ -510,6 +513,7 @@ def _answer_style_checks(evidence: Evidence) -> list[Check]:
 def _salary_period_pattern() -> re.Pattern[str]:
     """Build the salary-period regex from config vocabulary lists."""
     from src.core.config import settings
+
     cfg = (settings.config_yaml.get("eval") or {}).get("grader")
     english_terms = ["monthly", "yearly", "hourly", "per month", "per year", "per hour"]
     vietnamese_terms = ["tháng", "thang", "năm", "nam", "giờ", "gio"]
@@ -532,6 +536,7 @@ def _salary_period_pattern() -> re.Pattern[str]:
 def _calendar_period_pattern() -> re.Pattern[str]:
     """Build the calendar-reference exclusion regex from config Vietnamese terms."""
     from src.core.config import settings
+
     cfg = (settings.config_yaml.get("eval") or {}).get("grader")
     vietnamese_terms = ["tháng", "thang", "năm", "nam"]
     if isinstance(cfg, dict):
@@ -539,7 +544,9 @@ def _calendar_period_pattern() -> re.Pattern[str]:
         if isinstance(sv, dict):
             vt = sv.get("vietnamese")
             if isinstance(vt, list) and vt:
-                vietnamese_terms = [str(t) for t in vt if t in ("tháng", "thang", "năm", "nam")]
+                vietnamese_terms = [
+                    str(t) for t in vt if t in ("tháng", "thang", "năm", "nam")
+                ]
     alt = "|".join(re.escape(t) for t in vietnamese_terms)
     return re.compile(rf"(?:{alt})\s*\d+", re.IGNORECASE)
 
@@ -548,13 +555,16 @@ _SALARY_PERIOD_PATTERN = _salary_period_pattern()
 # Patterns that indicate a period word is being used as a calendar reference
 # rather than a payment frequency. We exclude these to avoid false positives.
 _CALENDAR_PERIOD_PATTERN = _calendar_period_pattern()
+
+
 def _structured_job_levels() -> tuple[str, ...]:
     """Return canonical structured job levels from config, with a safe fallback."""
     from src.core.config import settings
+
     cfg = (settings.config_yaml.get("eval") or {}).get("grader")
     if isinstance(cfg, dict):
         levels = cfg.get("structured_job_levels")
-        if isinstance(levels, list) and all(isinstance(l, str) for l in levels):
+        if isinstance(levels, list) and all(isinstance(level, str) for level in levels):
             return tuple(levels)
     return (
         "Experienced (non-manager)",

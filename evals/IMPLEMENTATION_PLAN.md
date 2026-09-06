@@ -74,12 +74,17 @@ The evaluation-instrument documentation audit is **complete**. The approved plan
 
 ```python
 # Line 68-71: Evidence constructor
-returned_rows=(
-    seams.get("returned_rows")
-    or turn.get("returned_rows")
-    or (execution_accuracy or turn.get("execution_accuracy") or {}).get("generated_rows")
-    # Keep existing fallback chain
-),
+returned_rows = (
+    (
+        seams.get("returned_rows")
+        or turn.get("returned_rows")
+        or (execution_accuracy or turn.get("execution_accuracy") or {}).get(
+            "generated_rows"
+        )
+        # Keep existing fallback chain
+    ),
+)
+
 
 # _source_link_check (line 726+): add execution_passed parameter
 def _source_link_check(
@@ -103,10 +108,12 @@ def _source_link_check(
         # Execution failed: validate URLs present in answer itself,
         # not URLs from wrong reference rows.
         import re
-        found_urls = re.findall(r'https?://[^\s&lt;)+\]]+', rendered)
+
+        found_urls = re.findall(r"https?://[^\s&lt;)+\]]+", rendered)
         if found_urls:
             return Check(
-                "source_links", True,
+                "source_links",
+                True,
                 "execution failed; validated URLs from answer text",
                 "structural",
             )
@@ -232,17 +239,19 @@ def _source_link_check(
 In `evals/grader.py`, modify `_salary_period_check` to not infer an implicit monthly period from salary amounts alone. Only flag when the answer explicitly states a conflicting period.
 
 **Sub-fix B — Language purity exceptions:**
-In `evals/grader.py` `_answer_language_pure`, add an allowlist of common technical terms that naturally appear in Vietnamese job postings:
+In `evals/grader.py` `_answer_language_pure`, add an allowlist of common technical terms that naturally appear in Vietnamese job postings. The allowlist is externalized to `config/settings.yaml` under `eval.grader.allowed_tech_terms` and loaded at module init with a safe fallback:
+
 ```python
-_ALLOWED_TECH_TERMS = frozenset({
-    "AI", "SQL", "Python", "Data", "ML", "Remote", "React", "Docker",
-    "JavaScript", "TypeScript", "Backend", "Frontend", "Fullstack",
-    "Java", "Go", "Rust", "Kotlin", "Swift", "PHP", "Ruby", "Node",
-    "AWS", "GCP", "Azure", "Linux", "Git", "API", "REST", "GraphQL",
-})
+def _allowed_tech_terms() -> frozenset[str]:
+    cfg = (settings.config_yaml.get("eval") or {}).get("grader")
+    if isinstance(cfg, dict):
+        terms = cfg.get("allowed_tech_terms")
+        if isinstance(terms, list) and all(isinstance(t, str) for t in terms):
+            return frozenset(terms)
+    return frozenset({...})  # fallback matches config default
 ```
 
-**Files:** `evals/grader.py` — lines ~476 (`_answer_mentions_returned_salary`), ~947 (`_answer_language_pure`)
+**Files:** `evals/grader.py` — lines ~307 (`_allowed_tech_terms`), ~388 (`_answer_language_pure`)
 **Tests:** `uv run pytest tests/evals/ -k "salary or language"`
 
 ---

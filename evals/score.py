@@ -28,8 +28,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from evals._paths import ROOT
-
 
 def _bind_environment() -> None:
     """Name the environment before the tracing layer reads it at import.

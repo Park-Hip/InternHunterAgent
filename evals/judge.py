@@ -8,9 +8,6 @@ from deepeval.models.base_model import DeepEvalBaseLLM
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_groq import ChatGroq
 
-from typing import Any
-
-from deepeval.models.base_model import DeepEvalBaseLLM
 from src.core.config import settings
 
 # Load the shared rate window once; the class below only reads it at construction time.

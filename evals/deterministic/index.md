@@ -406,8 +406,8 @@ The first required group looks for `cách viết trong tiêu đề\|only in the 
 
 | File | Lines | Role |
 |---|---|---|
-| `evals/grader.py` | 1,517 | Core deterministic grader: `grade_evidence()`, all check functions, pattern application, outcome assembly |
-| `evals/scenarios.py` | 440 | Registry loader and validator: parses `scenarios_v1.yaml`, validates assertions, resolves glossary terms |
+| `evals/grader.py` | 1,652 | Core deterministic grader: `grade_evidence()`, all check functions, pattern application, outcome assembly |
+| `evals/scenarios.py` | 533 | Registry loader and validator: parses `scenarios_v1.yaml`, validates assertions, resolves glossary terms |
 | `evals/scenarios_v1.yaml` | 1,081 | Single source of truth: 50 scenarios, their assertions, reference SQL, tool expectations |
 | `evals/execution_accuracy.py` | 501 | SQL comparison engine: 7 comparison modes, fixture database execution, result set diffing |
 | `evals/driver.py` | — | Capture runner: executes agent, records seams, freezes sanitized replays |

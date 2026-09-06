@@ -134,7 +134,7 @@ def build_conversation(repeat: dict[str, Any]) -> ConversationalTestCase:
         question = seams.get("question")
         answer = seams.get("answer")
         if not isinstance(question, str) or not isinstance(answer, str):
-            raise ValueError("completed turn is missing a question or answer")
+            raise TypeError("completed turn is missing a question or answer")
         turns.extend(
             (
                 Turn(role="user", content=question),
@@ -250,9 +250,12 @@ def evaluate_semantic_repeat(
             async_mode=False,
         )
         metric.measure(build_conversation(repeat))
+        score = metric.score
+        if score is None:
+            score = 0.0
         return SemanticJudgeResult(
             AVAILABLE,
-            float(metric.score),
+            float(score),
             None,
             str(getattr(metric, "reason", "No judge rationale returned.")),
         )

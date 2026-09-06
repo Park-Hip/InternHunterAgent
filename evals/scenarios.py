@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import re
 from collections.abc import Sequence
 from pathlib import Path
-import re
 from typing import Any
 
 import yaml
@@ -132,10 +132,10 @@ def _validate_grading(scenario_id: str, grading: Any) -> None:
 
     assertions = grading.get("assertions", [])
     if not isinstance(assertions, list):
-        raise ValueError(f"Scenario {scenario_id} assertions must be a list")
+        raise TypeError(f"Scenario {scenario_id} assertions must be a list")
     for assertion in assertions:
         if not isinstance(assertion, dict):
-            raise ValueError(f"Scenario {scenario_id} assertion must be a mapping")
+            raise TypeError(f"Scenario {scenario_id} assertion must be a mapping")
         assertion_type = assertion.get("type")
         if assertion_type not in _ASSERTION_TYPES:
             raise ValueError(
@@ -252,7 +252,7 @@ def _validate_assertion_fields(
             )
         for pattern in patterns:
             if not isinstance(pattern, str):
-                raise ValueError(
+                raise TypeError(
                     f"Scenario {scenario_id} forbidden_patterns must be regular-expression strings"
                 )
             try:
@@ -270,7 +270,7 @@ def _validate_assertion_fields(
             )
         for pattern in patterns:
             if not isinstance(pattern, str):
-                raise ValueError(
+                raise TypeError(
                     f"Scenario {scenario_id} required_patterns must be regular-expression strings"
                 )
             try:
@@ -331,7 +331,7 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
     """Load and validate the one versioned evaluation scenario registry."""
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, list):
-        raise ValueError(f"Expected a YAML list in {path}")
+        raise TypeError(f"Expected a YAML list in {path}")
 
     # Report duplicate identifiers before field-level validation so the registry's primary key
     # error remains deterministic even when a copied fixture omits newer metadata.
@@ -346,7 +346,7 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
     ids: set[str] = set()
     for scenario in raw:
         if not isinstance(scenario, dict):
-            raise ValueError("Each scenario must be a mapping")
+            raise TypeError("Each scenario must be a mapping")
 
         missing = _REQUIRED_KEYS - scenario.keys()
         if missing:
@@ -413,7 +413,7 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
         if not isinstance(scenario["expected"], str) or not scenario["expected"]:
             raise ValueError(f"Scenario {scenario_id} requires expected behavior")
         if not isinstance(scenario["probe"], bool):
-            raise ValueError(f"Scenario {scenario_id} probe must be a boolean")
+            raise TypeError(f"Scenario {scenario_id} probe must be a boolean")
         if not (
             isinstance(scenario["expected_tools"], list)
             and all(tool in _KNOWN_TOOLS for tool in scenario["expected_tools"])

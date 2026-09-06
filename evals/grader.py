@@ -8,13 +8,13 @@ over semantic checks, and semantic checks win over the optional judge-metric tie
 from __future__ import annotations
 
 import argparse
+import json
+import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
-import json
 from pathlib import Path
-import re
 from typing import Any
 
 from evals.calibration import RELEASE_THRESHOLDS_BY_CLASS
@@ -61,7 +61,7 @@ class Evidence:
         capture_prompt_versions: dict[str, str] | None = None,
         capture_legacy_prompt_version: str | None = None,
         semantic_result: dict[str, Any] | None = None,
-    ) -> "Evidence":
+    ) -> Evidence:
         seams = turn.get("seams") or {}
         return cls(
             answer=seams.get("answer"),
@@ -300,7 +300,47 @@ def _answer_count(answer: str | None, expected: int) -> bool:
 
 
 _ENGLISH_PROSE_WORDS = frozenset(
-    "a an and are as at be but by can does for from has have how i in is it job jobs my not of on or that the these this to was were what which with you your".split()
+    [
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "but",
+        "by",
+        "can",
+        "does",
+        "for",
+        "from",
+        "has",
+        "have",
+        "how",
+        "i",
+        "in",
+        "is",
+        "it",
+        "job",
+        "jobs",
+        "my",
+        "not",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "these",
+        "this",
+        "to",
+        "was",
+        "were",
+        "what",
+        "which",
+        "with",
+        "you",
+        "your",
+    ]
 )
 
 
@@ -769,13 +809,17 @@ def _lifecycle_substitution_check(evidence: Evidence) -> Check:
     match = _LIFECYCLE_SUBSTITUTION_PATTERN.search(evidence.answer or "")
     clarified = _LIFECYCLE_CLARIFICATION_PATTERN.search(evidence.answer or "")
     passed = match is None or clarified is not None
+    if match is None:
+        matched_text = ""
+    else:
+        matched_text = match.group(0)
     return Check(
         "no_lifecycle_date_substitution",
         passed,
         (
             "absent deadline is not replaced by lifecycle metadata"
             if passed
-            else f"absent deadline is replaced by lifecycle metadata: {match.group(0)!r}"
+            else f"absent deadline is replaced by lifecycle metadata: {matched_text!r}"
         ),
         "structural",
     )
@@ -1118,7 +1162,7 @@ def _rule_for(scenario_id: str) -> ScenarioRule:
     """Read one scenario's assertions out of the frozen registry.
 
     Every field here is registry data (D-041). The grader owns how a rule is
-    *applied* - the three tiers, the four outcomes, and the two regexes below that
+    *applied* - the four tiers, the four outcomes, and the two regexes below that
     are logic rather than data - and owns none of what a given scenario expects.
     """
     scenario = _registry_index().get(scenario_id)
@@ -1516,7 +1560,11 @@ def grade_persisted_run(
                 )
                 grades.append(grade)
                 scenario_grades.append(
-                    {"repeat": repeat_number, "turn": turn_number, **grade.to_dict()}
+                    {
+                        "repeat": repeat_number,
+                        "turn": turn_number,
+                        **grade.to_dict(),
+                    }
                 )
         results[scenario_id] = scenario_grades
         scenario_outcomes[scenario_id] = _scenario_outcome(
@@ -1567,7 +1615,7 @@ def grade_observed_answers(path: Path) -> dict[str, Any]:
 def _load_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise ValueError(f"Expected a JSON object in {path}")
+        raise TypeError(f"Expected a JSON object in {path}")
     return payload
 
 

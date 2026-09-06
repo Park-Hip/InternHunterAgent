@@ -1,3 +1,1 @@
-{
-  "summary": "Fix broken evals/tests links, stale line counts, and grader docstring"
-}
+{"findings": [], "summary": "Fixed ruff formatting, import sorting, and TypeError substitutions in evals Python files"}

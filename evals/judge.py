@@ -2,7 +2,9 @@ import asyncio
 import os
 import threading
 import time
+from typing import Any
 
+from deepeval.models.base_model import DeepEvalBaseLLM
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_groq import ChatGroq
 
@@ -80,7 +82,7 @@ class DeepEvalJudge(DeepEvalBaseLLM):
             return "\n".join(p for p in parts if p)
         return str(content)
 
-    def load_model(self) -> BaseChatModel:
+    def load_model(self, *args: Any, **kwargs: Any) -> BaseChatModel:  # type: ignore[override]
         return self._chat_model
 
     def generate(self, prompt: str) -> str:
@@ -99,11 +101,11 @@ class DeepEvalJudge(DeepEvalBaseLLM):
 def _load_judge_cfg() -> dict:
     eval_cfg = settings.config_yaml.get("eval")
     if not isinstance(eval_cfg, dict):
-        raise ValueError("Missing 'eval' section in config/settings.yaml")
+        raise TypeError("Missing 'eval' section in config/settings.yaml")
 
     judge_cfg = eval_cfg.get("judge")
     if not isinstance(judge_cfg, dict):
-        raise ValueError("Missing 'eval.judge' section in config/settings.yaml")
+        raise TypeError("Missing 'eval.judge' section in config/settings.yaml")
 
     return judge_cfg
 

@@ -454,7 +454,9 @@ def build_seam3_case(case: dict, run: SeamRun) -> LLMTestCase:
     )
 
 
-def score(metrics: list[GEval | ToolCorrectnessMetric], test_case: LLMTestCase) -> dict[str, dict]:
+def score(
+    metrics: list[GEval | ToolCorrectnessMetric], test_case: LLMTestCase
+) -> dict[str, dict]:
     """Measure every metric, isolating failures so one broken metric (e.g. a
     judge JSON hiccup, or a known deepeval bug — see Known_Issues.md) doesn't
     blank out the other scores for this seam."""

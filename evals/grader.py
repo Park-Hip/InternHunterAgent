@@ -273,6 +273,7 @@ def _build_number_words(max_val: int) -> dict[int, tuple[str, ...]]:
 
 
 def _number_words_config() -> dict[int, tuple[str, ...]]:
+    """Load the number-word map from config, falling back to a hard ceiling of 100."""
     from src.core.config import settings
 
     cfg = (settings.config_yaml.get("eval") or {}).get("grader")
@@ -288,6 +289,7 @@ _NUMBER_WORDS = _number_words_config()
 
 
 def _answer_count(answer: str | None, expected: int) -> bool:
+    """Match an expected integer by digit or by any known English/Vietnamese word."""
     normalized = _text(answer)
     number = str(expected)
     return bool(
@@ -352,6 +354,7 @@ _ALLOWED_TECH_TERMS = _allowed_tech_terms()
 
 
 def _row_values(rows: list[dict[str, Any]]) -> list[str]:
+    """Flatten every non-null cell value from rows, longest-first, for greedy matching."""
     values = [str(value) for row in rows for value in row.values() if value is not None]
     return sorted((value for value in values if value), key=len, reverse=True)
 
@@ -782,6 +785,7 @@ def _lifecycle_substitution_check(evidence: Evidence) -> Check:
 
 
 def _execution_accuracy_checks(evidence: Evidence) -> list[Check]:
+    """Translate the persisted execution-accuracy status into a structural Check."""
     accuracy = evidence.execution_accuracy
     if accuracy is None:
         return [

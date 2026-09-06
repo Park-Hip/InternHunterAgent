@@ -57,7 +57,7 @@ def get_judge():
     return _judge
 
 
-def seam1_metrics() -> list:
+def seam1_metrics() -> list[GEval | ToolCorrectnessMetric]:
     """Routing: right tool(s), right NL question passed to it."""
     judge = get_judge()
     return [
@@ -79,7 +79,7 @@ def seam1_metrics() -> list:
     ]
 
 
-def seam2_metrics() -> list:
+def seam2_metrics() -> list[GEval]:
     """Hidden NL->SQL: the SQL the nested `generate_sql` call emitted."""
     judge = get_judge()
     return [
@@ -101,7 +101,7 @@ def seam2_metrics() -> list:
     ]
 
 
-def seam3_metrics() -> list:
+def seam3_metrics() -> list[GEval]:
     """Synthesis: the final user-facing answer."""
     judge = get_judge()
     return [
@@ -229,6 +229,7 @@ class ProviderTelemetryCallback(BaseCallbackHandler):
 
 
 def _find_span(spans: list[dict], **matches) -> dict | None:
+    """Return the first span whose fields all match the supplied key/value pairs."""
     for span in spans:
         if all(span.get(key) == value for key, value in matches.items()):
             return span
@@ -262,6 +263,7 @@ def _extract_sql_span(trace_dict: dict) -> tuple[dict | None, dict | None]:
 
 
 def _llm_output_text(span: dict | None) -> str | None:
+    """Extract trimmed text from a trace span's output payload."""
     if span is None:
         return None
     output = span.get("output")
@@ -452,7 +454,9 @@ def build_seam3_case(case: dict, run: SeamRun) -> LLMTestCase:
     )
 
 
-def score(metrics: list, test_case: LLMTestCase) -> dict[str, dict]:
+def score(
+    metrics: list[GEval | ToolCorrectnessMetric], test_case: LLMTestCase
+) -> dict[str, dict]:
     """Measure every metric, isolating failures so one broken metric (e.g. a
     judge JSON hiccup, or a known deepeval bug — see Known_Issues.md) doesn't
     blank out the other scores for this seam."""

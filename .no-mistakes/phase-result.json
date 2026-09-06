@@ -1,1 +1,1 @@
-{"findings": [], "summary": "Fixed ruff formatting, import sorting, and TypeError substitutions in evals Python files"}
+{"findings": [], "summary": "Rebased branch onto 4ada2a0 and resolved merge conflicts in evals/README.md, evals/calibration.py, evals/judge.py, and evals/scenarios.py"}

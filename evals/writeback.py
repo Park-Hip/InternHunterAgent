@@ -42,7 +42,12 @@ def _ingestion_retry_delays() -> tuple[float, ...]:
 _INGESTION_RETRY_DELAYS = _ingestion_retry_delays()
 
 
-def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:
+def write_scores(
+    trace_id: str | None,
+    results: dict[str, dict],
+    *,
+    calibration_version: str | None = None,
+) -> int:
     """Write every non-None metric score in `results` onto the Langfuse trace
     `trace_id`. Returns the number of scores written; no-ops (returns 0, never
     raises) when `trace_id` is None or Langfuse is disabled (missing creds).
@@ -52,6 +57,12 @@ def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:
     with a 400 the SDK reports asynchronously, so passing both silently wrote
     nothing at all. The dataset run still gets these scores: its run item links
     this trace, so scoring the trace is what puts them under the run.
+
+    After writing individual per-metric scores, also stamps a summary dict onto
+    the trace metadata so the full seam/metric breakdown is visible without
+    querying every score individually. The summary key is ``judge_scores`` and
+    carries every non-None score together with its reason and the calibration
+    corpus version that produced it.
     """
     if trace_id is None or get_langfuse_handler() is None:
         return 0
@@ -61,6 +72,7 @@ def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:
         return 0
 
     written = 0
+    summary: dict[str, dict[str, Any]] = {}
     for seam_name, metric_scores in results.items():
         for metric_name, payload in metric_scores.items():
             score = payload.get("score")
@@ -82,6 +94,31 @@ def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:
                     metric=f"{seam_name}/{metric_name}",
                     error=str(exc),
                 )
+            # Build the per-metric summary entry.
+            summary[f"{seam_name}/{metric_name}"] = {
+                "score": score,
+                "reason": payload.get("reason"),
+            }
+
+    # Stamp the full breakdown plus calibration provenance onto the trace
+    # metadata in one shot so the overview is queryable without joining
+    # individual score records.
+    trace_metadata: dict[str, Any] = {
+        "judge_scores": summary,
+        **(
+            {"calibration_version": calibration_version}
+            if calibration_version is not None
+            else {}
+        ),
+    }
+    try:
+        lf.update_current_span(metadata=trace_metadata)
+    except Exception as exc:  # noqa: BLE001 - metadata stamping must not break scoring
+        logger.warning(
+            "Langfuse trace metadata update failed",
+            trace_id=trace_id,
+            error=str(exc),
+        )
 
     try:
         lf.flush()

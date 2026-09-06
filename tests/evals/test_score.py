@@ -88,8 +88,8 @@ def stub_judge(monkeypatch: pytest.MonkeyPatch) -> list[tuple[dict, SeamRun]]:
 def posted(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     writes: list[dict] = []
 
-    def fake_write_scores(trace_id, results):
-        writes.append({"trace_id": trace_id, "results": results})
+    def fake_write_scores(trace_id, results, *, calibration_version=None):
+        writes.append({"trace_id": trace_id, "results": results, "calibration_version": calibration_version})
         return 1
 
     monkeypatch.setattr(score_module, "write_scores", fake_write_scores)

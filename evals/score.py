@@ -43,6 +43,7 @@ def _bind_environment() -> None:
 
 _bind_environment()
 
+from evals._paths import CALIBRATION_VERSIONS  # noqa: E402
 from evals import harness  # noqa: E402
 from evals.harness import SCORER_VERSION  # noqa: E402
 from evals.semantic import AVAILABLE, evaluate_semantic_repeat, semantic_assertion  # noqa: E402
@@ -182,7 +183,11 @@ def score_artifact(
                 ).to_dict()
                 _write_json(path, artifact)
 
-            written = write_scores(final_run.trace_id, repeat["scores"])
+            written = write_scores(
+                final_run.trace_id,
+                repeat["scores"],
+                calibration_version=CALIBRATION_VERSIONS["v8"].name,
+            )
             repeat["scores_written"] = written
             summary["scores_written"] += written
             _write_json(path, artifact)

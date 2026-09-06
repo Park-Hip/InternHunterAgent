@@ -14,7 +14,7 @@ Start with the role routing below, or jump to the [map](#the-map) to find a spec
 | **Operator** — runs baselines, scores, freezes replays | [pipeline.md](pipeline.md) | [Operating_Manual.md](Operating_Manual.md) |
 | **Maintainer** — reviews results, authorizes thresholds | [Operating_Manual.md](Operating_Manual.md) | [calibration/thresholds.md](calibration/thresholds.md), [disagreements/](disagreements/) |
 | **Contributor** — adds or edits scenarios | [authoring/](authoring/) | [pipeline.md](pipeline.md), [scenarios_v1.yaml](scenarios_v1.yaml) |
-| **Auditor** — checks grading correctness, traceability | [deterministic/](deterministic/) | [semantic/](semantic/), [tests/](../tests/evals/) |
+| **Auditor** — checks grading correctness, traceability | [tiers/](tiers/) | [calibration/](calibration/), [tests/](../tests/evals/) |
 
 ## Decision tree
 
@@ -23,9 +23,9 @@ I need to...
 ├── Run a baseline capture
 │   └── pipeline.md → "Quick commands"
 ├── Understand how grading works (no model calls)
-│   └── deterministic/index.md
+│   └── tiers/index.md
 ├── Understand the semantic judge tier
-│   └── semantic/index.md
+│   └── tiers/semantic.md
 ├── Add or edit a scenario
 │   └── authoring/index.md
 ├── Calibrate thresholds / score the corpus
@@ -152,12 +152,16 @@ evals/
 ├── pipeline.md                   Five-step pipeline, result-term table, quick commands
 ├── scenarios_v1.yaml             Single source of truth: registry-owned cases, assertions, SQL, tools
 │
-├── semantic/                     Semantic judge tier and calibrated grading
-│   ├── index.md                  What the tier is for; authority; D-042 relationship
-│   ├── judge.md                  DeepEval judge wrapper, provider arms, throttle, config
-│   ├── rubric.md                 SAF/HON/HLP rubrics, failure modes, anti-directives
-│   ├── exemplars.md              PASS/FAIL exemplar selection per scenario
-│   └── not-evaluated.md          Two NOT_EVALUATED senses and the invariant
+├── tiers/                      Unified 4-layer cascade architecture
+│   ├── index.md                Overview, cascade precedence, scenario coverage map
+│   ├── execution-accuracy.md   SQL comparison engine: 7 modes, fixture execution
+│   ├── structural.md           Structural checks reference (tool routing, prose, links)
+│   ├── literal.md              Literal checks reference (patterns, glossary resolution)
+│   ├── semantic.md             Semantic tier overview and authority boundary
+│   ├── semantic-judge.md       Judge implementation: provider arms, throttle, wrapper
+│   ├── semantic-rubric.md      SAF/HON/HLP rubrics, failure-mode annotations
+│   ├── semantic-exemplars.md   Few-shot exemplar selection per scenario
+│   └── not-evaluated.md        Two NOT_EVALUATED senses and the invariant
 │
 ├── calibration/                  Human-label corpus + threshold derivation
 │   ├── index.md                  Why calibration exists; two immutable corpora
@@ -172,9 +176,6 @@ evals/
 │
 ├── disagreements/                Grader-vs-judge-vs-human workflow
 │   └── index.md                  Decision tree; live register pointer
-│
-├── deterministic/                Deterministic grading deep dive (converted from HTML)
-│   └── index.md                  Five steps, all checks, coverage map, known weaknesses
 │
 ├── archive/                      Historical preserved evidence (readable history, not fixtures)
 │   ├── replays/                  Archived replays (see replay/index.md)

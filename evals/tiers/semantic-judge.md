@@ -1,10 +1,12 @@
-# Semantic Judge
+# Semantic Judge Implementation
 
 > **Source:** `evals/judge.py`, `evals/semantic.py:232`, `config/settings.yaml`
 
 ## Overview
 
-The semantic judge is a `DeepEvalBaseLLM` wrapper around a LangChain chat model. It is the model that `ConversationalGEval` calls to evaluate a full conversation transcript against a scenario-specific rubric.
+The semantic judge is a `DeepEvalBaseLLM` wrapper around a LangChain chat model. It is the
+model that `ConversationalGEval` calls to evaluate a full conversation transcript against a
+scenario-specific rubric.
 
 ## Provider arms
 
@@ -16,7 +18,9 @@ Three provider arms are wired in `build_judge()`:
 | `groq` | (configurable) | Free-tier arm at 8000 TPM / 200K TPD. Requires `turn_pacing_seconds: 75` to survive the per-minute window. |
 | `openrouter` | (configurable) | OpenAI-wire-protocol fallback; retained for flexibility but not the default. |
 
-**Why the judge is on Google/gemma and not the serving provider:** D-017 — the judge runs on a provider that does not serve the agent. This keeps evaluation load off the serving account and prevents a provider from judging its own arm.
+**Why the judge is on Google/gemma and not the serving provider:** D-017 — the judge runs on
+a provider that does not serve the agent. This keeps evaluation load off the serving account
+and prevents a provider from judging its own arm.
 
 ## DeepEvalJudge wrapper
 
@@ -32,7 +36,9 @@ class DeepEvalJudge(DeepEvalBaseLLM):
 
 ### `_content_to_text` — thinking-block filter
 
-Some providers (notably `google/gemma`) return content as a list of blocks, including `{'type': 'thinking'}` blocks before the answer. `_content_to_text` flattens the content into parseable text by keeping only `text` blocks:
+Some providers (notably `google/gemma`) return content as a list of blocks, including
+`{'type': 'thinking'}` blocks before the answer. `_content_to_text` flattens the content
+into parseable text by keeping only `text` blocks:
 
 ```python
 @staticmethod
@@ -51,11 +57,13 @@ def _content_to_text(content: object) -> str:
     return str(content)
 ```
 
-Without this filter, DeepEval's response parsers would see thinking-content mixed with the actual answer and fail to extract a clean score.
+Without this filter, DeepEval's response parsers would see thinking-content mixed with the
+actual answer and fail to extract a clean score.
 
 ### `_RpmThrottle` — free-tier limiter
 
-The sliding-window throttle keeps judge calls under the provider's RPM cap so a ~120-call judge run does not look stuck on 429 retries:
+The sliding-window throttle keeps judge calls under the provider's RPM cap so a ~120-call
+judge run does not look stuck on 429 retries:
 
 ```python
 class _RpmThrottle:
@@ -100,7 +108,8 @@ metric = ConversationalGEval(
 )
 ```
 
-`MultiTurnParams.CONTENT` tells DeepEval to evaluate the full conversation transcript (all turns), not just the final answer.
+`MultiTurnParams.CONTENT` tells DeepEval to evaluate the full conversation transcript (all
+turns), not just the final answer.
 
 ## Return semantics
 
@@ -111,9 +120,5 @@ metric = ConversationalGEval(
 | `AVAILABLE` | Judge returned a score and rationale |
 | `UNAVAILABLE` | Provider failed (quota, timeout, JSON error) — rerunnable |
 
-An `UNAVAILABLE` result is preserved as evidence and does not become `PASS` or `FAIL`. The scorer resumes after interruption (R3.5).
-
-## Tests
-
-- `tests/evals/test_semantic.py` — mock-based tests for `evaluate_semantic_repeat`, criteria assembly, exemplar selection, and JUDGE-1..JUDGE-6 failure-mode annotations.
-- `evals/test_judge.py` — no-network unit tests for config-to-model wiring (builds `ChatOpenAI` with a dummy key without hitting the network).
+An `UNAVAILABLE` result is preserved as evidence and does not become `PASS` or `FAIL`. The
+scorer resumes after interruption (R3.5).

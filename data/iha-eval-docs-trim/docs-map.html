@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eval Docs Consolidation — Before &amp; After</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232733;
+    --border: #2e3345;
+    --text: #e2e4ed;
+    --text-dim: #8b90a5;
+    --accent: #6c8cff;
+    --accent-dim: #3a4fb5;
+    --green: #4ade80;
+    --green-dim: #166534;
+    --red: #f87171;
+    --red-dim: #991b1b;
+    --yellow: #fbbf24;
+    --yellow-dim: #92400e;
+    --purple: #a78bfa;
+    --purple-dim: #5b21b6;
+    --radius: 8px;
+    --radius-sm: 4px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    min-height: 100vh;
+  }
+  h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; }
+  h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; color: var(--accent); }
+  h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; }
+  .subtitle { color: var(--text-dim); margin-bottom: 2rem; font-size: 0.9rem; }
+  .header { margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; }
+  
+  /* Stats bar */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    text-align: center;
+  }
+  .stat-card .num { font-size: 2rem; font-weight: 700; line-height: 1; }
+  .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card.green .num { color: var(--green); }
+  .stat-card.red .num { color: var(--red); }
+  .stat-card.yellow .num { color: var(--yellow); }
+  .stat-card.purple .num { color: var(--purple); }
+  .stat-card.blue .num { color: var(--accent); }
+
+  /* Layout */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
+  @media (max-width: 900px) { .compare { grid-template-columns: 1fr; } }
+  
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .panel-header {
+    background: var(--surface2);
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .panel-header .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-before { background: var(--red); }
+  .dot-after { background: var(--green); }
+  
+  .tree { padding: 0.75rem; }
+  .tree-node { margin-left: 1.25rem; }
+  .tree-node-root { margin-left: 0; }
+  .tree-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    cursor: default;
+    position: relative;
+  }
+  .tree-item:hover { background: var(--surface2); }
+  .tree-item.dir { font-weight: 500; color: var(--accent); }
+  .tree-item.file { color: var(--text-dim); }
+  .tree-item.deleted { color: var(--red); text-decoration: line-through; opacity: 0.6; }
+  .tree-item.merged { color: var(--yellow); }
+  .tree-item.new { color: var(--green); }
+  .tree-item.moved { color: var(--purple); }
+  .icon { font-size: 0.75rem; flex-shrink: 0; }
+  .tree-children { border-left: 1px solid var(--border); margin-left: 0.5rem; padding-left: 0.5rem; }
+  
+  /* Merge map */
+  .merge-section { margin-bottom: 2rem; }
+  .merge-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  .merge-table th {
+    text-align: left;
+    padding: 0.6rem 1rem;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+  }
+  .merge-table td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .merge-table tr:last-child td { border-bottom: none; }
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .tag-merge { background: var(--accent-dim); color: var(--accent); }
+  .tag-delete { background: var(--red-dim); color: var(--red); }
+  .tag-move { background: var(--purple-dim); color: var(--purple); }
+  .tag-pointer { background: var(--yellow-dim); color: var(--yellow); }
+  .tag-keep { background: var(--green-dim); color: var(--green); }
+  
+  .path { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.78rem; color: var(--text-dim); }
+  .path-new { color: var(--green); }
+  
+  /* Diátaxis section */
+  .taxonomy {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .tax-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+  }
+  .tax-card h3 { font-size: 0.9rem; margin-bottom: 0.5rem; }
+  .tax-card .desc { font-size: 0.78rem; color: var(--text-dim); margin-bottom: 0.75rem; }
+  .tax-card ul { list-style: none; font-size: 0.8rem; }
+  .tax-card li { padding: 0.15rem 0; color: var(--text-dim); }
+  .tax-card li::before { content: "› "; color: var(--accent); }
+  
+  /* Cascade diagram */
+  .cascade {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .cascade-layer {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+  }
+  .cascade-layer:last-child { margin-bottom: 0; }
+  .cascade-layer.l1 { background: rgba(108, 140, 255, 0.1); border: 1px solid rgba(108, 140, 255, 0.3); }
+  .cascade-layer.l2 { background: rgba(74, 222, 128, 0.08); border: 1px solid rgba(74, 222, 128, 0.25); }
+  .cascade-layer.l3 { background: rgba(251, 191, 36, 0.08); border: 1px solid rgba(251, 191, 36, 0.25); }
+  .cascade-layer.l4 { background: rgba(167, 139, 250, 0.08); border: 1px solid rgba(167, 139, 250, 0.25); }
+  .cascade-num { font-weight: 700; font-size: 1.1rem; width: 1.5rem; text-align: center; }
+  .cascade-name { font-weight: 600; }
+  .cascade-desc { color: var(--text-dim); font-size: 0.8rem; }
+  .cascade-arrow { text-align: center; color: var(--text-dim); font-size: 1.2rem; margin: 0.25rem 0; }
+  
+  .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📋 Eval Docs Consolidation Map</h1>
+  <p class="subtitle">Before → After transformation for the InternHunterAgent evaluation documentation surface. Generated 2026-09-06.</p>
+</div>
+
+<div class="stats">
+  <div class="stat-card blue"><div class="num">23</div><div class="label">Before files</div></div>
+  <div class="stat-card green"><div class="num">17</div><div class="label">After files</div></div>
+  <div class="stat-card red"><div class="num">6</div><div class="label">Removed</div></div>
+  <div class="stat-card yellow"><div class="num">8</div><div class="label">Merged/created</div></div>
+  <div class="stat-card purple"><div class="num">2</div><div class="label">Moved to archive</div></div>
+</div>
+
+<h2 class="section-title">The 4-Layer Cascade Architecture</h2>
+<div class="cascade">
+  <div class="cascade-layer l1">
+    <span class="cascade-num">4</span>
+    <div>
+      <div class="cascade-name" style="color:var(--purple)">Semantic Checks (Seam 3)</div>
+      <div class="cascade-desc">LLM judge over full conversation trajectory · calibrated per-class threshold</div>
+    </div>
+  </div>
+  <div class="cascade-arrow">▼ structural wins over literal wins over semantic</div>
+  <div class="cascade-layer l3">
+    <span class="cascade-num">3</span>
+    <div>
+      <div class="cascade-name" style="color:var(--yellow)">Literal Checks (Seam 2)</div>
+      <div class="cascade-desc">Regex and substring matching on answer text · fixed pattern match</div>
+    </div>
+  </div>
+  <div class="cascade-arrow">▼</div>
+  <div class="cascade-layer l2">
+    <span class="cascade-num">2</span>
+    <div>
+      <div class="cascade-name" style="color:var(--green)">Structural Checks (Seam 1)</div>
+      <div class="cascade-desc">Observable facts: tool routing, prose purity, salary period, source links</div>
+    </div>
+  </div>
+  <div class="cascade-arrow">▼</div>
+  <div class="cascade-layer l1">
+    <span class="cascade-num">1</span>
+    <div>
+      <div class="cascade-name" style="color:var(--accent)">Execution Accuracy</div>
+      <div class="cascade-desc">SQL comparison: 7 modes (exact, ids_only, cross_currency, …)</div>
+    </div>
+  </div>
+</div>
+
+<h2 class="section-title">Before / After Doc Tree</h2>
+<div class="compare">
+  <div class="panel">
+    <div class="panel-header"><span class="dot dot-before"></span> BEFORE — Scattered Surface</div>
+    <div class="tree">
+      <div class="tree-node tree-node-root">
+        <div class="tree-item dir"><span class="icon">📁</span> evals/</div>
+        <div class="tree-children">
+          <div class="tree-item file"><span class="icon">📄</span> README.md</div>
+          <div class="tree-item file"><span class="icon">📄</span> pipeline.md</div>
+          <div class="tree-item file"><span class="icon">📄</span> Operating_Manual.md</div>
+          <div class="tree-item file"><span class="icon">📄</span> IMPLEMENTATION_PLAN.md</div>
+          <div class="tree-item file"><span class="icon">📄</span> Instrument_Report.md</div>
+          <div class="tree-item deleted"><span class="icon">✕</span> V6_Grader_Audit_2026-08-23.md</div>
+          <div class="tree-item deleted"><span class="icon">✕</span> t0027_deepseek_arm.md</div>
+          <div class="tree-item dir"><span class="icon">📁</span> calibration/</div>
+          <div class="tree-children">
+            <div class="tree-item file"><span class="icon">📄</span> index.md</div>
+            <div class="tree-item file"><span class="icon">📄</span> corpus.md</div>
+            <div class="tree-item file"><span class="icon">📄</span> thresholds.md</div>
+          </div>
+          <div class="tree-item dir"><span class="icon">📁</span> deterministic/</div>
+          <div class="tree-children">
+            <div class="tree-item deleted"><span class="icon">✕</span> index.md <small>(14 KB, merged)</small></div>
+          </div>
+          <div class="tree-item dir"><span class="icon">📁</span> semantic/</div>
+          <div class="tree-children">
+            <div class="tree-item deleted"><span class="icon">✕</span> index.md <small>(merged)</small></div>
+            <div class="tree-item deleted"><span class="icon">✕</span> judge.md <small>(merged)</small></div>
+            <div class="tree-item deleted"><span class="icon">✕</span> rubric.md <small>(merged)</small></div>
+            <div class="tree-item deleted"><span class="icon">✕</span> exemplars.md <small>(merged)</small></div>
+            <div class="tree-item deleted"><span class="icon">✕</span> not-evaluated.md <small>(moved)</small></div>
+          </div>
+          <div class="tree-item dir"><span class="icon">📁</span> replay/</div>
+          <div class="tree-children">
+            <div class="tree-item file"><span class="icon">📄</span> index.md</div>
+          </div>
+          <div class="tree-item dir"><span class="icon">📁</span> authoring/</div>
+          <div class="tree-children">
+            <div class="tree-item file"><span class="icon">📄</span> index.md</div>
+          </div>
+          <div class="tree-item dir"><span class="icon">📁</span> disagreements/</div>
+          <div class="tree-children">
+            <div class="tree-item file"><span class="icon">📄</span> index.md</div>
+          </div>
+          <div class="tree-item dir"><span class="icon">📁</span> archive/</div>
+          <div class="tree-children">
+            <div class="tree-item file"><span class="icon">📄</span> v1_error_analysis.md</div>
+            <div class="tree-item file"><span class="icon">📄</span> v1_scenario_matrix.md</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><span class="dot dot-after"></span> AFTER — Unified Structure</div>
+    <div class="tree">
+      <div class="tree-node tree-node-root">
+        <div class="tree-item dir"><span class="icon">📁</span> evals/</div>
+        <div class="tree-children">
+          <div class="tree-item file"><span class="icon">📄</span> README.md <small style="color:var(--accent)">(updated)</small></div>
+          <div class="tree-item file"><span class="icon">📄</span> pipeline.md</div>
+          <div class="tree-item file"><span class="icon">📄</span> Operating_Manual.md</div>
+          <div class="tree-item file"><span class="icon">📄</span> IMPLEMENTATION_PLAN.md <small style="color:var(--accent)">(updated)</small></div>
+          <div class="tree-item file"><span class="icon">📄</span> Instrument_Report.md</div>
+          <div class="tree-item dir"><span class="icon">📁</span> calibration/</div>
+          <div class="tree-children">
+            <div class="tree-item file"><span class="icon">📄</span> index.md</div>
+            <div class="tree-item file"><span class="icon">📄</span> corpus.md</div>
+            <div class="tree-item file"><span class="icon">📄</span> thresholds.md</div>
+          </div>
+          <div class="tree-item dir new"><span class="icon">📁</span> tiers/ <small>(NEW — unified cascade)</small></div>
+          <div class="tree-children">
+            <div class="tree-item file new"><span class="icon">📄</span> index.md <small>(4-layer overview + coverage map)</small></div>
+            <div class="tree-item file new"><span class="icon">📄</span> execution-accuracy.md</div>
+            <div class="tree-item file new"><span class="icon">📄</span> structural.md</div>
+            <div class="tree-item file new"><span class="icon">📄</span> literal.md</div>
+            <div class="tree-item file new"><span class="icon">📄</span> semantic.md</div>
+            <div class="tree-item file new"><span class="icon">📄</span> semantic-judge.md</div>
+            <div class="tree-item file new"><span class="icon">📄</span> semantic-rubric.md</div>
+            <div class="tree-item file new"><span class="icon">📄</span> semantic-exemplars.md</div>
+            <div class="tree-item file new"><span class="icon">📄</span> not-evaluated.md</div>
+          </div>
+          <div class="tree-item dir"><span class="icon">📁</span> replay/</div>
+          <div class="tree-children">
+            <div class="tree-item file"><span class="icon">📄</span> index.md</div>
+          </div>
+          <div class="tree-item dir"><span class="icon">📁</span> authoring/</div>
+          <div class="tree-children">
+            <div class="tree-item file"><span class="icon">📄</span> index.md</div>
+          </div>
+          <div class="tree-item dir"><span class="icon">📁</span> disagreements/</div>
+          <div class="tree-children">
+            <div class="tree-item file"><span class="icon">📄</span> index.md</div>
+          </div>
+          <div class="tree-item dir"><span class="icon">📁</span> archive/</div>
+          <div class="tree-children">
+            <div class="tree-item file moved"><span class="icon">📄</span> V6_Grader_Audit_2026-08-23.md</div>
+            <div class="tree-item file moved"><span class="icon">📄</span> t0027_deepseek_arm.md</div>
+            <div class="tree-item file"><span class="icon">📄</span> v1_error_analysis.md</div>
+            <div class="tree-item file"><span class="icon">📄</span> v1_scenario_matrix.md</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<h2 class="section-title">Merge Map</h2>
+<table class="merge-table">
+  <thead>
+    <tr>
+      <th>Action</th>
+      <th>From</th>
+      <th>To</th>
+      <th>Content</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="tag tag-merge">MERGE</span></td>
+      <td class="path">evals/deterministic/index.md</td>
+      <td class="path-new">evals/tiers/index.md</td>
+      <td>Cascade overview, precedence rules, scenario coverage map, key files table</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-merge">MERGE</span></td>
+      <td class="path">evals/deterministic/index.md</td>
+      <td class="path-new">evals/tiers/execution-accuracy.md</td>
+      <td>Layer 1: SQL comparison engine, 7 modes, failure modes</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-merge">MERGE</span></td>
+      <td class="path">evals/deterministic/index.md</td>
+      <td class="path-new">evals/tiers/structural.md</td>
+      <td>Layer 2: structural checks reference (tool routing, prose, salary, links)</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-merge">MERGE</span></td>
+      <td class="path">evals/deterministic/index.md</td>
+      <td class="path-new">evals/tiers/literal.md</td>
+      <td>Layer 3: literal checks reference (patterns, count, glossary resolution)</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-merge">MERGE</span></td>
+      <td class="path">evals/semantic/index.md</td>
+      <td class="path-new">evals/tiers/semantic.md</td>
+      <td>Tier overview, authority, failure-mode annotations, criterion assembly</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-merge">MERGE</span></td>
+      <td class="path">evals/semantic/judge.md</td>
+      <td class="path-new">evals/tiers/semantic-judge.md</td>
+      <td>Judge implementation: provider arms, throttle, wrapper, config</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-merge">MERGE</span></td>
+      <td class="path">evals/semantic/rubric.md</td>
+      <td class="path-new">evals/tiers/semantic-rubric.md</td>
+      <td>Class rubrics, JUDGE-1..6 failure modes, anti-directives</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-merge">MERGE</span></td>
+      <td class="path">evals/semantic/exemplars.md</td>
+      <td class="path-new">evals/tiers/semantic-exemplars.md</td>
+      <td>Few-shot exemplar selection algorithm and rationale</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-move">MOVE</span></td>
+      <td class="path">evals/semantic/not-evaluated.md</td>
+      <td class="path-new">evals/tiers/not-evaluated.md</td>
+      <td>Two senses of NOT_EVALUATED, invariant, pass-rate impact</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-move">MOVE</span></td>
+      <td class="path">evals/V6_Grader_Audit_2026-08-23.md</td>
+      <td class="path-new">evals/archive/V6_Grader_Audit_2026-08-23.md</td>
+      <td>Historical audit — moved to archive as read-only evidence</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-move">MOVE</span></td>
+      <td class="path">evals/t0027_deepseek_arm.md</td>
+      <td class="path-new">evals/archive/t0027_deepseek_arm.md</td>
+      <p>Historical arm doc — moved to archive as read-only evidence</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-delete">DELETE</span></td>
+      <td class="path">evals/deterministic/</td>
+      <td>—</td>
+      <td>Directory removed after content merged into tiers/</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-delete">DELETE</span></td>
+      <td class="path">evals/semantic/</td>
+      <td>—</td>
+      <td>Directory removed after content merged into tiers/</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr class="divider">
+
+<h2 class="section-title">Diátaxis Taxonomy — Ideal Structure</h2>
+<div class="taxonomy">
+  <div class="tax-card">
+    <h3 style="color:var(--accent)">📘 Explanation</h3>
+    <p class="desc">Context and understanding — why things work this way</p>
+    <ul>
+      <li>evals/tiers/index.md — cascade architecture</li>
+      <li>evals/tiers/semantic.md — tier authority &amp; D-042</li>
+      <li>evals/calibration/index.md — why calibration exists</li>
+    </ul>
+  </div>
+  <div class="tax-card">
+    <h3 style="color:var(--green)">🛠 How-To Guides</h3>
+    <p class="desc">Problem-oriented steps to achieve a goal</p>
+    <ul>
+      <li>evals/pipeline.md — run the pipeline</li>
+      <li>evals/Operating_Manual.md — review results</li>
+      <li>evals/authoring/index.md — author scenarios</li>
+      <li>evals/replay/index.md — freeze &amp; replay</li>
+      <li>docs/how-to/evaluate.md — pointer hub</li>
+    </ul>
+  </div>
+  <div class="tax-card">
+    <h3 style="color:var(--yellow)">📖 Reference</h3>
+    <p class="desc">Factual descriptions, schemas, configurations</p>
+    <ul>
+      <li>evals/tiers/execution-accuracy.md</li>
+      <li>evals/tiers/structural.md</li>
+      <li>evals/tiers/literal.md</li>
+      <li>evals/tiers/semantic-judge.md</li>
+      <li>evals/tiers/semantic-rubric.md</li>
+      <li>evals/tiers/semantic-exemplars.md</li>
+      <li>evals/tiers/not-evaluated.md</li>
+      <li>evals/calibration/corpus.md</li>
+      <li>evals/calibration/thresholds.md</li>
+    </ul>
+  </div>
+  <div class="tax-card">
+    <h3 style="color:var(--purple)">🧭 Navigation Hubs</h3>
+    <p class="desc">Entry points that route by role or intent</p>
+    <ul>
+      <li>evals/README.md — role routing, decision tree</li>
+      <li>docs/README.md — system-wide navigation</li>
+      <li>docs/how-to/evaluate.md — eval entry point</li>
+    </ul>
+  </div>
+</div>
+
+<hr class="divider">
+
+<h2 class="section-title">Key Decisions</h2>
+<table class="merge-table">
+  <thead>
+    <tr>
+      <th>Decision</th>
+      <th>Rationale</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Unified <code>tiers/</code> directory</td>
+      <td>The deterministic and semantic docs described overlapping aspects of the same cascade. A single directory with focused files eliminates duplication and makes the tier relationships explicit.</td>
+    </tr>
+    <tr>
+      <td>4-layer cascade as the organizing principle</td>
+      <td>The grading system has exactly 4 evaluative layers (execution accuracy → structural → literal → semantic) plus capture as pre-cascade. This maps cleanly to the Diátaxis explanation category and gives readers an immediate mental model.</td>
+    </tr>
+    <tr>
+      <td>Keep calibration, replay, authoring, disagreements as-is</td>
+      <td>These directories are already well-organized, single-topic, and don't overlap with the tiers. Their internal structure is clean.</td>
+    </tr>
+    <tr>
+      <td>Move V6 audit and t0027 to archive</td>
+      <td>These are historical evidence, not living documentation. The archive/ directory is the correct home for dated, non-active docs.</td>
+    </tr>
+    <tr>
+      <td>Keep <code>docs/how-to/evaluate.md</code> as a pointer</td>
+      <td>It already serves as the thin entry point from the docs/ side. No change needed beyond updating its internal links.</td>
+    </tr>
+    <tr>
+      <td>Preserve <code>IMPLEMENTATION_PLAN.md</code> and <code>Instrument_Report.md</code></td>
+      <td>These are dated but active planning artifacts. They document progress toward a target and provide historical baseline context. Not duplicated elsewhere.</td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

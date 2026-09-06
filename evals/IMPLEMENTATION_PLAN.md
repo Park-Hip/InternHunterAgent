@@ -29,14 +29,15 @@
 
 The evaluation-instrument documentation audit is **complete**. The approved plan is fully implemented:
 
-- **Semantic tier** documented under `evals/semantic/` (index, judge, rubric, exemplars, not-evaluated).
+- **Semantic tier** documented under `evals/tiers/semantic.md` (index, judge, rubric, exemplars).
+- **NOT_EVALUATED semantics** documented under `evals/tiers/not-evaluated.md`.
+- **Deterministic cascade** unified into `evals/tiers/index.md` (4-layer architecture), replacing the separate `deterministic/` and `semantic/` directories.
 - **Calibration** documented under `evals/calibration/` (index, corpus, thresholds).
 - **Replay** documented under `evals/replay/index.md`.
 - **Authoring** documented under `evals/authoring/index.md`.
 - **Tests mapping** documented under `tests/evals/ — test-to-module mapping`.
 - **Pipeline** documented in `evals/pipeline.md` (5 steps, result terms, commands).
 - **Disagreements** documented under `evals/disagreements/index.md`.
-- **Deterministic deep dive** converted from Lavish HTML to `evals/deterministic/index.md` (in-repo, version-controlled).
 - `evals/README.md` rewritten as a navigation hub (role routing, decision tree, quick commands, full map).
 - `docs/how-to/evaluate.md` reduced to a thin pointer.
 

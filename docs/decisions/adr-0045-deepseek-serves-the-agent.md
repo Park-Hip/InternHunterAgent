@@ -22,5 +22,5 @@ has no free tier to fall back on.
 
 ## Evidence
 
-[The DeepSeek arm record](../../evals/t0027_deepseek_arm.md).
+[The DeepSeek arm record](../../evals/archive/t0027_deepseek_arm.md).
 The pre-swap provider evaluation is preserved on git tag docs-history-pre-redesign.

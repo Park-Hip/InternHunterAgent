@@ -169,7 +169,7 @@ concurrency.
 A full 29-scenario evaluation run measured about four cents at list rates, spending roughly 3.7K
 tokens per turn across 77 turns.
 Serving traffic on the demo is the same per-turn shape.
-For the measured derivation see [T0027.3 DeepSeek arm](../../evals/t0027_deepseek_arm.md); for the
+For the measured derivation see [T0027.3 DeepSeek arm](../../evals/archive/t0027_deepseek_arm.md); for the
 judge-side rate-limit caveats see
 the evaluation strategy record on git tag docs-history-pre-redesign, sections 4a and 4b.
 

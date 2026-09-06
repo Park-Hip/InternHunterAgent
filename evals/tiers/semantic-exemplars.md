@@ -4,7 +4,8 @@
 
 ## How exemplars are selected
 
-`_exemplars_for_scenario(scenario_id)` picks one `PASS` and one `FAIL` exemplar from the calibration corpus:
+`_exemplars_for_scenario(scenario_id)` picks one `PASS` and one `FAIL` exemplar from the
+calibration corpus:
 
 ```python
 def _exemplars_for_scenario(scenario_id: str) -> tuple[dict[str, Any], ...]:
@@ -27,16 +28,22 @@ def _exemplars_for_scenario(scenario_id: str) -> tuple[dict[str, Any], ...]:
 1. Exact `scenario_id` match — finds PASS and FAIL cases for the same scenario.
 2. Fallback to class-wide match — finds the first PASS and first FAIL in the same SAF/HON/HLP class.
 
-The corpus is loaded once per process via `@lru_cache(maxsize=1)` from `calibration_v7.yaml` (read-only, no circular import with `evals.calibration`).
+The corpus is loaded once per process via `@lru_cache(maxsize=1)` from `calibration_v7.yaml`
+(read-only, no circular import with `evals.calibration`).
 
 ## Why this replaced old all-class exemplars (P1 false-pass fix, #378)
 
-The old behaviour fetched the first PASS and first FAIL in the class, regardless of scenario. This meant:
+The old behaviour fetched the first PASS and first FAIL in the class, regardless of scenario.
+This meant:
 
-- An `HON-FREE-TEXT-1` judge prompt received `HON-CURRENCY-1` exemplars — examples of cross-currency ranking that have nothing to do with free-text hedging.
-- The judge could not recognize the specific failure mode (definitive list without hedge) because the exemplars illustrated a completely different behavior.
+- An `HON-FREE-TEXT-1` judge prompt received `HON-CURRENCY-1` exemplars — examples of
+  cross-currency ranking that have nothing to do with free-text hedging.
+- The judge could not recognize the specific failure mode (definitive list without hedge)
+  because the exemplars illustrated a completely different behavior.
 
-Prioritizing the exact `scenario_id` means the judge sees a close analogue of the behaviour it is being asked to evaluate. This is what closes the P1 false-pass gaps identified in the grading research.
+Prioritizing the exact `scenario_id` means the judge sees a close analogue of the behaviour
+it is being asked to evaluate. This is what closes the P1 false-pass gaps identified in the
+grading research.
 
 ## Example
 
@@ -64,7 +71,11 @@ Exemplar (FAIL):
 
 ## When no exact match exists
 
-If the scenario has no calibration cases (e.g., a new scenario added after v7), the function falls back to the class. For a hypothetical `HON-UNKNOWN-999` (a synthetic id, not in the registry), it would return the first `HON-CURRENCY-1` PASS and the first `HON-CURRENCY-1` FAIL — better than an empty prompt, but not as precise as scenario-specific exemplars. <!-- lint-allow-scenario-id -->
+If the scenario has no calibration cases (e.g., a new scenario added after v7), the function
+falls back to the class. For a hypothetical `HON-UNKNOWN-999` <!-- lint-allow-scenario-id --> (a synthetic id, not in the
+registry) it would return the first `HON-CURRENCY-1` PASS and
+the first `HON-CURRENCY-1` FAIL — better than an empty prompt, but not as precise as
+scenario-specific exemplars.
 
 ## Format
 
@@ -79,4 +90,5 @@ Exemplar (PASS/FAIL):
   why <PASS/FAIL>: <human rationale>
 ```
 
-This format is embedded in the judge prompt via `_format_exemplars()` and appears between the anti-directives and the failure-mode annotation in `_criteria()`.
+This format is embedded in the judge prompt via `_format_exemplars()` and appears between
+the anti-directives and the failure-mode annotation in `_criteria()`.

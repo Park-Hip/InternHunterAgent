@@ -21,8 +21,8 @@ it does not fix it. Remediation is separate work.
 
 | Question | Document |
 |---|---|
-| What are the three seams (routing / NL→SQL / synthesis)? | [`evals/deterministic/index.md`](../../evals/deterministic/index.md) |
-| What does the semantic judge measure, and on what provider? | [`evals/semantic/index.md`](../../evals/semantic/index.md) |
+| What are the three seams (routing / NL→SQL / synthesis)? | [`evals/tiers/index.md`](../../evals/tiers/index.md) |
+| What does the semantic judge measure, and on what provider? | [`evals/tiers/semantic.md`](../../evals/tiers/semantic.md) |
 | How are thresholds calibrated, and what bars does the gate enforce? | [`evals/calibration/thresholds.md`](../../evals/calibration/thresholds.md) |
 | How do I author a new scenario? | [`evals/authoring/index.md`](../../evals/authoring/index.md) |
 | How does the no-model replay gate work? | [`evals/replay/index.md`](../../evals/replay/index.md) |

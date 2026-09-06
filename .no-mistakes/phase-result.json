@@ -1,4 +1,3 @@
 {
-  "findings": [],
-  "summary": "Fixed stale three-kind section heading to four-kind after judge-metric tier was added"
+  "summary": "Fix broken evals/tests links, stale line counts, and grader docstring"
 }

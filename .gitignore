@@ -36,3 +36,5 @@ evals/replays/*-viewer.html
 
 # crew-mode VS Code auto-launch queue (dispatch requests and result event logs)
 .crew/launch-queue/
+
+.no-mistakes/

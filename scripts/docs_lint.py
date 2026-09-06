@@ -47,7 +47,7 @@ SCENARIO_TOTAL_PATTERNS: list[tuple[str, str]] = [
 CALIBRATION_TOTAL_PATTERNS: list[tuple[str, str]] = [
     (r"\bv7\s*\(\s*(\d+)\s*\)", "v7 corpus size in prose"),
     (r"\bv7\s*=\s*(\d+)", "v7 corpus size in prose"),
-    (r"\bv7.*?\b(\d+)\s*cases", "v7 corpus size in prose"),
+    (r"\bv7[^=]*?\b(\d+)\s*cases", "v7 corpus size in prose"),
     (r"\b(\d+)\s*total\s*(?:case|corpus)", "total calibration cases in prose"),
     (r"\b(\d+)\s*\+\s*12\s*=\s*(\d+)", "v7+v8 total in prose"),
 ]

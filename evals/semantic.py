@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
 import yaml
@@ -12,6 +11,7 @@ from deepeval.metrics import ConversationalGEval
 from deepeval.test_case import MultiTurnParams, Turn
 from deepeval.test_case.conversational_test_case import ConversationalTestCase
 
+from evals._paths import CALIBRATION_VERSIONS
 from evals.judge import build_judge
 from evals.models import SemanticJudgeResult
 
@@ -20,8 +20,8 @@ UNAVAILABLE = "UNAVAILABLE"
 
 # Read-only few-shot source. Kept local to ``semantic`` because importing
 # ``evals.calibration`` here would create a circular import (calibration imports
-# semantic); the path deliberately mirrors ``evals.calibration.CALIBRATION_PATH``.
-_CALIBRATION_PATH = Path(__file__).with_name("calibration_v7.yaml")
+# semantic); the path deliberately mirrors ``evals._paths.CALIBRATION_VERSIONS["v7"]``.
+_CALIBRATION_PATH = CALIBRATION_VERSIONS["v7"]
 
 _CLASS_RUBRICS = {
     "SAF": (
@@ -86,7 +86,7 @@ _SCENARIO_FAILURE_MODES: dict[str, str] = {
     "HLP-ROLE-FALLBACK-1": (
         "When a requested role term does not match the primary role field, the assistant "
         "must fall back to searching title and description fields and disclose that the "
-        'matched rows sit under role="Other". An answer that concludes "no results found" '  
+        'matched rows sit under role="Other". An answer that concludes "no results found" '
         "without attempting the fallback is a FAIL."
     ),
     # Related: invented referent (HLP-REFERENT-2) -- judge should not reward answers
@@ -168,9 +168,15 @@ def _exemplars_for_scenario(scenario_id: str) -> tuple[dict[str, Any], ...]:
     all_cases = _calibration_exemplars()
     # First pass: exact scenario match.
     exact = [c for c in all_cases if str(c["scenario_id"]) == scenario_id]
-    source = exact if exact else [
-        c for c in all_cases if _class_of(str(c["scenario_id"])) == _class_of(scenario_id)
-    ]
+    source = (
+        exact
+        if exact
+        else [
+            c
+            for c in all_cases
+            if _class_of(str(c["scenario_id"])) == _class_of(scenario_id)
+        ]
+    )
     exemplars: list[dict[str, Any]] = []
     for label in ("PASS", "FAIL"):
         for case in source:

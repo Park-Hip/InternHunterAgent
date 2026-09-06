@@ -12,13 +12,22 @@ from typing import Any, Protocol
 
 from langfuse.api import NotFoundError
 
+from src.core.config import settings
 from src.core.logger import logger
 
-DATASET_NAME = "internhunteragent-scenarios-v1"
-DATASET_DESCRIPTION = (
-    "Derived mirror of evals/scenarios_v1.yaml. Do not edit in Langfuse."
+
+def _langfuse_config() -> dict:
+    cfg = (settings.config_yaml.get("eval") or {}).get("langfuse")
+    return cfg if isinstance(cfg, dict) else {}
+
+
+_DATASET_CFG = _langfuse_config()
+DATASET_NAME = _DATASET_CFG.get("dataset_name", "internhunteragent-scenarios-v1")
+DATASET_DESCRIPTION = _DATASET_CFG.get(
+    "dataset_description",
+    "Derived mirror of evals/scenarios_v1.yaml. Do not edit in Langfuse.",
 )
-ITEM_ID_PREFIX = "internhunteragent-scenarios-v1:"
+_ITEM_PREFIX = _DATASET_CFG.get("item_id_prefix", "internhunteragent-scenarios-v1:")
 
 
 class DatasetRunItemsAPI(Protocol):
@@ -57,7 +66,7 @@ class DatasetMirror:
 
 
 def _item_id(scenario_id: str, turn: int) -> str:
-    return f"{ITEM_ID_PREFIX}{scenario_id}:t{turn}"
+    return f"{_ITEM_PREFIX}{scenario_id}:t{turn}"
 
 
 def dataset_run_name(capture_run_id: str, repeat: int) -> str:

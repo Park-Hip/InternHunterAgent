@@ -14,6 +14,7 @@ from typing import Any
 from langfuse.api import NotFoundError
 
 from src.agents.tracing.langfuse import get_langfuse_client, get_langfuse_handler
+from src.core.config import settings
 from src.core.logger import logger
 
 # A trace id in a capture artifact is not evidence that the trace was ingested.
@@ -21,12 +22,24 @@ from src.core.logger import logger
 # was refusing connections, so every one of them pointed at nothing. This module
 # resolves one of them against Langfuse before anyone reads the run as traced.
 
+
 # Export is asynchronous and batched, and Cloud ingestion is not synchronous with
 # the API accepting the batch. A capture of two scenarios finishes in seconds, well
 # inside that window, so the probe flushes first and then retries: without this it
 # reports a healthy run as un-ingested. The ladder is short because the question is
 # "did this arrive at all", not "how fast".
-_INGESTION_RETRY_DELAYS = (0.0, 2.0, 5.0)
+def _ingestion_retry_delays() -> tuple[float, ...]:
+    cfg = (settings.config_yaml.get("eval") or {}).get("writeback")
+    if isinstance(cfg, dict):
+        delays = cfg.get("ingestion_retry_delays")
+        if isinstance(delays, list) and all(
+            isinstance(d, (int, float)) for d in delays
+        ):
+            return tuple(float(d) for d in delays)
+    return (0.0, 2.0, 5.0)
+
+
+_INGESTION_RETRY_DELAYS = _ingestion_retry_delays()
 
 
 def write_scores(trace_id: str | None, results: dict[str, dict]) -> int:

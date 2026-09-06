@@ -11,7 +11,23 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
+from evals._paths import ROOT
+
+
+# Sampling knobs that the viewer treats as first-class (displayed before dynamic knobs).
+# New knobs that deserve this status should be added here; otherwise they fall through.
+def _fixed_sampling_keys() -> tuple[str, ...]:
+    from src.core.config import settings
+
+    cfg = (settings.config_yaml.get("eval") or {}).get("viewer")
+    if isinstance(cfg, dict):
+        keys = cfg.get("fixed_sampling_keys")
+        if isinstance(keys, list) and all(isinstance(k, str) for k in keys):
+            return tuple(keys)
+    return ("temperature", "max_tokens")
+
+
+_FIXED_SAMPLING = _fixed_sampling_keys()
 
 # `query_clean_jobs` returns prose, not a Python literal: a header naming the
 # columns, then one `- col=value, col=value` line per row (see
@@ -47,12 +63,6 @@ _JUDGE_SEAMS = {
     "seam3_synthesis": "answer",
 }
 
-# The manifest's sampling block carries these two under fixed names; every other key
-# in it is a reasoning knob, and knobs differ by provider (`reasoning_effort` on Groq,
-# `thinking` on DeepSeek). Reading them generically means a new knob reaches the screen
-# without a viewer change.
-_FIXED_SAMPLING = ("temperature", "max_tokens")
-
 
 def _text(value: Any, empty: str = "Not captured") -> str:
     if value is None or value == "":
@@ -82,7 +92,11 @@ def _split_row(line: str, columns: list[str]) -> list[str] | None:
         starts.append((position, len(token)))
         cursor = position + len(token)
     return [
-        line[position + width : (starts[index + 1][0] if index + 1 < len(starts) else len(line))]
+        line[
+            position + width : (
+                starts[index + 1][0] if index + 1 < len(starts) else len(line)
+            )
+        ]
         for index, (position, width) in enumerate(starts)
     ]
 
@@ -110,7 +124,13 @@ def _parse_tool_answer(text: str) -> dict[str, Any] | None:
     # The header carries any truncation caveat, which the operator needs in order
     # to judge seam 3's honesty, so it travels with the table instead of being
     # dropped once the rows are parsed out.
-    return {"kind": "table", "count": len(rows), "headers": columns, "rows": rows, "note": lines[0].strip()}
+    return {
+        "kind": "table",
+        "count": len(rows),
+        "headers": columns,
+        "rows": rows,
+        "note": lines[0].strip(),
+    }
 
 
 def _rows(value: Any) -> dict[str, Any]:
@@ -132,7 +152,12 @@ def _rows(value: Any) -> dict[str, Any]:
         headers = list(dict.fromkeys(key for row in rows for key in row))
         values = [[_cell(row.get(header)) for header in headers] for row in rows]
     else:
-        values = [[_cell(cell) for cell in row] if isinstance(row, (list, tuple)) else [_cell(row)] for row in rows]
+        values = [
+            [_cell(cell) for cell in row]
+            if isinstance(row, (list, tuple))
+            else [_cell(row)]
+            for row in rows
+        ]
         width = max((len(row) for row in values), default=0)
         headers = [f"Column {index}" for index in range(1, width + 1)]
         values = [row + [""] * (width - len(row)) for row in values]
@@ -190,7 +215,11 @@ def index_grades(grade: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     index: dict[str, dict[str, Any]] = {}
     for scenario_id, entries in (grade or {}).get("scenarios", {}).items():
         for entry in entries:
-            if not isinstance(entry, dict) or entry.get("repeat") is None or entry.get("turn") is None:
+            if (
+                not isinstance(entry, dict)
+                or entry.get("repeat") is None
+                or entry.get("turn") is None
+            ):
                 continue
             index[f"{scenario_id}/{entry['repeat']}/{entry['turn']}"] = entry
     return index
@@ -207,7 +236,9 @@ def index_execution_results(report: dict[str, Any] | None) -> dict[str, dict[str
                 continue
             for turn_number, result in enumerate(repeat.get("turns", []), start=1):
                 if isinstance(result, dict):
-                    index[f"{scenario_id}/{repeat.get('repeat')}/{turn_number}"] = result
+                    index[f"{scenario_id}/{repeat.get('repeat')}/{turn_number}"] = (
+                        result
+                    )
     return index
 
 
@@ -308,7 +339,9 @@ def _telemetry(record: Any) -> dict[str, Any]:
         "input_tokens": _setting(aggregate.get("input_tokens")),
         "output_tokens": _setting(aggregate.get("output_tokens")),
         "total_tokens": _setting(aggregate.get("total_tokens")),
-        "finish_reasons": ", ".join(map(str, finish_reasons)) if isinstance(finish_reasons, list) and finish_reasons else _setting(finish_reasons),
+        "finish_reasons": ", ".join(map(str, finish_reasons))
+        if isinstance(finish_reasons, list) and finish_reasons
+        else _setting(finish_reasons),
         "calls": [
             [
                 str(number),
@@ -328,13 +361,19 @@ def run_header(manifest: dict[str, Any]) -> dict[str, Any]:
     Two arms of the same scenario set are only comparable if the screen can say what
     each one ran, which is why `providers` is in the manifest (T0027.2).
     """
-    providers = manifest.get("providers") if isinstance(manifest.get("providers"), dict) else {}
+    providers = (
+        manifest.get("providers") if isinstance(manifest.get("providers"), dict) else {}
+    )
     models = manifest.get("models") if isinstance(manifest.get("models"), dict) else {}
-    sampling = manifest.get("sampling") if isinstance(manifest.get("sampling"), dict) else {}
+    sampling = (
+        manifest.get("sampling") if isinstance(manifest.get("sampling"), dict) else {}
+    )
     profiles = list(dict.fromkeys([*providers, *models, *sampling]))
     knobs = [
         key
-        for key in dict.fromkeys(k for profile in profiles for k in (sampling.get(profile) or {}))
+        for key in dict.fromkeys(
+            k for profile in profiles for k in (sampling.get(profile) or {})
+        )
         if key not in _FIXED_SAMPLING
     ]
     rows = []
@@ -351,7 +390,14 @@ def run_header(manifest: dict[str, Any]) -> dict[str, Any]:
             ]
         )
     return {
-        "headers": ["Profile", "Provider", "Model", "Temperature", "Max tokens", *(knob.replace("_", " ").capitalize() for knob in knobs)],
+        "headers": [
+            "Profile",
+            "Provider",
+            "Model",
+            "Temperature",
+            "Max tokens",
+            *(knob.replace("_", " ").capitalize() for knob in knobs),
+        ],
         "rows": rows,
         "facts": [
             ["Git SHA", _setting(manifest.get("git_sha"))],
@@ -443,7 +489,9 @@ def flatten_turns(
             semantic_result = _normalize_semantic_result(repeat_record)
             repeat_turns = repeat_record.get("turns", [])
             for turn_index, turn_record in enumerate(repeat_turns):
-                is_final_turn = bool(repeat_turns) and turn_index == len(repeat_turns) - 1
+                is_final_turn = (
+                    bool(repeat_turns) and turn_index == len(repeat_turns) - 1
+                )
                 seams = turn_record.get("seams", {})
                 tools = seams.get("tools_called", [])
                 key = f"{scenario_id}/{repeat_record.get('repeat', '?')}/{turn_record.get('turn', '?')}"
@@ -461,13 +509,24 @@ def flatten_turns(
                         # Capture status and grade status answer different questions -
                         # "was the turn recorded" against "was the behavior right" - so
                         # they are named apart and never collapsed into one field.
-                        "grade_status": str(turn_grade.get("status", "UNKNOWN")) if turn_grade else "UNGRADED",
-                        "grade_tier": _cell(turn_grade.get("tier")) if turn_grade else "No grade file joined",
+                        "grade_status": str(turn_grade.get("status", "UNKNOWN"))
+                        if turn_grade
+                        else "UNGRADED",
+                        "grade_tier": _cell(turn_grade.get("tier"))
+                        if turn_grade
+                        else "No grade file joined",
                         "checks": _checks(turn_grade),
                         "question": _text(seams.get("question")),
-                        "routing": ", ".join(map(str, tools)) if tools else "No tool call captured",
-                        "expected_tools": ", ".join(map(str, scenario.get("expected_tools", []))) or "No exact tool expectation recorded",
-                        "tool_arguments": _text(seams.get("tool_arguments"), "Not captured"),
+                        "routing": ", ".join(map(str, tools))
+                        if tools
+                        else "No tool call captured",
+                        "expected_tools": ", ".join(
+                            map(str, scenario.get("expected_tools", []))
+                        )
+                        or "No exact tool expectation recorded",
+                        "tool_arguments": _text(
+                            seams.get("tool_arguments"), "Not captured"
+                        ),
                         "sql": _text(seams.get("sql_text")),
                         "rows": _rows(seams.get("tool_output")),
                         "execution": execution_result or {"status": "NOT_CONFIGURED"},
@@ -493,7 +552,9 @@ def load_pricing() -> dict[str, dict[str, float]]:
     try:
         import yaml
 
-        settings = yaml.safe_load((ROOT / "config" / "settings.yaml").read_text(encoding="utf-8"))
+        settings = yaml.safe_load(
+            (ROOT / "config" / "settings.yaml").read_text(encoding="utf-8")
+        )
         return (settings or {}).get("eval", {}).get("pricing_usd_per_mtok") or {}
     except (OSError, ImportError):
         return {}
@@ -514,7 +575,11 @@ def _token_usage(run: dict[str, Any]) -> dict[str, Any]:
                 if not isinstance(turn_record, dict):
                     continue
                 telemetry = turn_record.get("telemetry")
-                usage = telemetry.get("provider_token_usage") if isinstance(telemetry, dict) else None
+                usage = (
+                    telemetry.get("provider_token_usage")
+                    if isinstance(telemetry, dict)
+                    else None
+                )
                 aggregate = usage.get("aggregate") if isinstance(usage, dict) else None
                 if not isinstance(aggregate, dict):
                     continue
@@ -530,12 +595,16 @@ def _token_usage(run: dict[str, Any]) -> dict[str, Any]:
         "output_tokens": output_tokens,
         "total_tokens": total_tokens,
         "turns_with_telemetry": turns_with_telemetry,
-        "latency_average_ms": round(sum(latencies) / len(latencies)) if latencies else None,
+        "latency_average_ms": round(sum(latencies) / len(latencies))
+        if latencies
+        else None,
         "latency_max_ms": max(latencies) if latencies else None,
     }
 
 
-def _cost_estimate(models: list[Any], usage: dict[str, Any], pricing: dict[str, dict[str, float]]) -> dict[str, Any]:
+def _cost_estimate(
+    models: list[Any], usage: dict[str, Any], pricing: dict[str, dict[str, float]]
+) -> dict[str, Any]:
     """Price the run's token totals, refusing to guess when attribution is missing.
 
     Telemetry records tokens per turn, not per model profile. When the manifest
@@ -547,9 +616,15 @@ def _cost_estimate(models: list[Any], usage: dict[str, Any], pricing: dict[str, 
         return {"available": False, "reason": "The manifest records no serving model."}
     unknown = [model for model in distinct if model not in pricing]
     if unknown:
-        return {"available": False, "reason": f"No price is recorded for {', '.join(unknown)}; add it to eval.pricing_usd_per_mtok."}
+        return {
+            "available": False,
+            "reason": f"No price is recorded for {', '.join(unknown)}; add it to eval.pricing_usd_per_mtok.",
+        }
     if len(distinct) > 1:
-        return {"available": False, "reason": f"Tokens are not attributed per model ({', '.join(distinct)}), so no single price applies."}
+        return {
+            "available": False,
+            "reason": f"Tokens are not attributed per model ({', '.join(distinct)}), so no single price applies.",
+        }
     prices = pricing[distinct[0]]
     input_cost = usage["input_tokens"] / 1e6 * float(prices.get("input", 0))
     output_cost = usage["output_tokens"] / 1e6 * float(prices.get("output", 0))
@@ -584,7 +659,9 @@ def build_dashboard(
     if isinstance(summary_classes, dict) and summary_classes:
         for category, entry in summary_classes.items():
             by_class[str(category)] = {
-                "counts": {str(k): int(v) for k, v in (entry.get("counts") or {}).items()},
+                "counts": {
+                    str(k): int(v) for k, v in (entry.get("counts") or {}).items()
+                },
                 "measured": int(entry.get("measured") or 0),
                 "pass_rate": entry.get("pass_rate"),
             }
@@ -593,9 +670,13 @@ def build_dashboard(
         category_counts: dict[str, Counter] = {}
         for turn in flat_turns:
             category = str(turn["scenario_id"]).split("-", maxsplit=1)[0]
-            category_counts.setdefault(category, Counter())[str(turn.get("grade_status"))] += 1
+            category_counts.setdefault(category, Counter())[
+                str(turn.get("grade_status"))
+            ] += 1
         for category, tally in category_counts.items():
-            class_measured = sum(n for status, n in tally.items() if status not in _NON_MEASURED)
+            class_measured = sum(
+                n for status, n in tally.items() if status not in _NON_MEASURED
+            )
             by_class[category] = {
                 "counts": dict(tally),
                 "measured": class_measured,
@@ -619,9 +700,13 @@ def build_dashboard(
             {"category": category, **stats}
             for category, stats in sorted(by_class.items())
         ],
-        "failing_checks": sorted(failing_checks.items(), key=lambda item: (-item[1], item[0])),
+        "failing_checks": sorted(
+            failing_checks.items(), key=lambda item: (-item[1], item[0])
+        ),
         "usage": usage,
-        "cost": _cost_estimate(list((manifest.get("models") or {}).values()), usage, pricing or {}),
+        "cost": _cost_estimate(
+            list((manifest.get("models") or {}).values()), usage, pricing or {}
+        ),
     }
 
 
@@ -637,11 +722,25 @@ def sample_run() -> dict[str, Any]:
             "run_id": "sample-run",
             "git_sha": "0000000",
             "baseline_eligible": False,
-            "providers": {"react": "sample-provider", "sql_generation": "sample-provider"},
-            "models": {"react": "sample-react-model", "sql_generation": "sample-sql-model"},
+            "providers": {
+                "react": "sample-provider",
+                "sql_generation": "sample-provider",
+            },
+            "models": {
+                "react": "sample-react-model",
+                "sql_generation": "sample-sql-model",
+            },
             "sampling": {
-                "react": {"temperature": 0, "max_tokens": 1024, "reasoning_effort": None},
-                "sql_generation": {"temperature": 0, "max_tokens": 512, "reasoning_effort": None},
+                "react": {
+                    "temperature": 0,
+                    "max_tokens": 1024,
+                    "reasoning_effort": None,
+                },
+                "sql_generation": {
+                    "temperature": 0,
+                    "max_tokens": 512,
+                    "reasoning_effort": None,
+                },
             },
         },
         "status": "COMPLETE",
@@ -651,8 +750,49 @@ def sample_run() -> dict[str, Any]:
                     {
                         "repeat": 1,
                         "turns": [
-                            {"turn": 1, "status": "COMPLETE", "seams": {"question": "How many jobs?", "tools_called": ["query_clean_jobs"], "sql_text": "SELECT COUNT(*) FROM clean_jobs", "tool_output": "Found 1 result(s) with columns: count.\n- count=2", "answer": "There are 2 jobs.", "trace_id": "sample-trace-1"}, "telemetry": {"latency_ms": 1200, "provider_token_usage": {"calls": [{"input_tokens": 900, "output_tokens": 40, "total_tokens": 940, "finish_reason": "stop"}], "aggregate": {"input_tokens": 900, "output_tokens": 40, "total_tokens": 940}}, "finish_reasons": ["stop"]}},
-                            {"turn": 2, "status": "COMPLETE", "seams": {"question": "Which companies are listed?", "tools_called": ["query_clean_jobs"], "sql_text": "SELECT company FROM clean_jobs", "tool_output": "Found 2 result(s) with columns: company.\n- company=Acme\n- company=Beta", "answer": "The listed companies are Acme and Beta.", "trace_id": "sample-trace-2"}},
+                            {
+                                "turn": 1,
+                                "status": "COMPLETE",
+                                "seams": {
+                                    "question": "How many jobs?",
+                                    "tools_called": ["query_clean_jobs"],
+                                    "sql_text": "SELECT COUNT(*) FROM clean_jobs",
+                                    "tool_output": "Found 1 result(s) with columns: count.\n- count=2",
+                                    "answer": "There are 2 jobs.",
+                                    "trace_id": "sample-trace-1",
+                                },
+                                "telemetry": {
+                                    "latency_ms": 1200,
+                                    "provider_token_usage": {
+                                        "calls": [
+                                            {
+                                                "input_tokens": 900,
+                                                "output_tokens": 40,
+                                                "total_tokens": 940,
+                                                "finish_reason": "stop",
+                                            }
+                                        ],
+                                        "aggregate": {
+                                            "input_tokens": 900,
+                                            "output_tokens": 40,
+                                            "total_tokens": 940,
+                                        },
+                                    },
+                                    "finish_reasons": ["stop"],
+                                },
+                            },
+                            {
+                                "turn": 2,
+                                "status": "COMPLETE",
+                                "seams": {
+                                    "question": "Which companies are listed?",
+                                    "tools_called": ["query_clean_jobs"],
+                                    "sql_text": "SELECT company FROM clean_jobs",
+                                    "tool_output": "Found 2 result(s) with columns: company.\n- company=Acme\n- company=Beta",
+                                    "answer": "The listed companies are Acme and Beta.",
+                                    "trace_id": "sample-trace-2",
+                                },
+                            },
                         ],
                     }
                 ]
@@ -681,7 +821,7 @@ def build_viewer_html(
     }
     serialized = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
     title = html.escape(f"Trace viewer - {run_id}")
-    return '''<!doctype html>
+    return """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -947,7 +1087,7 @@ def build_viewer_html(
     render();
   </script>
 </body>
-</html>'''.replace("__TITLE__", title).replace("__DATA__", serialized)
+</html>""".replace("__TITLE__", title).replace("__DATA__", serialized)
 
 
 def _read_grade(path: Path, parser: argparse.ArgumentParser) -> dict[str, Any]:
@@ -962,11 +1102,15 @@ def _read_grade(path: Path, parser: argparse.ArgumentParser) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError) as exc:
         parser.error(f"could not read grade file {path}: {exc}")
     if not isinstance(grade, dict) or not isinstance(grade.get("scenarios"), dict):
-        parser.error(f"grade file {path} is not a grader report; expected a top-level 'scenarios' object")
+        parser.error(
+            f"grade file {path} is not a grader report; expected a top-level 'scenarios' object"
+        )
     return grade
 
 
-def _read_execution_accuracy(path: Path, parser: argparse.ArgumentParser) -> dict[str, Any]:
+def _read_execution_accuracy(
+    path: Path, parser: argparse.ArgumentParser
+) -> dict[str, Any]:
     """Load the structured SQL comparison report that explains a seam-2 verdict."""
     try:
         report = json.loads(path.read_text(encoding="utf-8"))
@@ -980,25 +1124,43 @@ def _read_execution_accuracy(path: Path, parser: argparse.ArgumentParser) -> dic
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Generate a local HTML viewer for a scenario-driver run.")
-    parser.add_argument("run", type=Path, nargs="?", help="Scenario-driver run JSON artifact")
-    parser.add_argument("--sample", action="store_true", help="Generate a two-turn sample without a recorded run or model quota")
-    parser.add_argument("--grade", type=Path, help="Grader report JSON to join per turn (optional)")
+    parser = argparse.ArgumentParser(
+        description="Generate a local HTML viewer for a scenario-driver run."
+    )
+    parser.add_argument(
+        "run", type=Path, nargs="?", help="Scenario-driver run JSON artifact"
+    )
+    parser.add_argument(
+        "--sample",
+        action="store_true",
+        help="Generate a two-turn sample without a recorded run or model quota",
+    )
+    parser.add_argument(
+        "--grade", type=Path, help="Grader report JSON to join per turn (optional)"
+    )
     parser.add_argument(
         "--execution-accuracy",
         type=Path,
         help="Execution-accuracy JSON to show generated and reference row evidence",
     )
-    parser.add_argument("--output", type=Path, help="HTML output path (defaults beside the run artifact)")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="HTML output path (defaults beside the run artifact)",
+    )
     args = parser.parse_args(argv)
     if args.sample and args.run:
         parser.error("pass either a run artifact or --sample, not both")
     if not args.sample and not args.run:
         parser.error("provide a run artifact or --sample")
     if args.sample and args.grade:
-        parser.error("--grade joins a grader report to a recorded run; it does not apply to --sample")
+        parser.error(
+            "--grade joins a grader report to a recorded run; it does not apply to --sample"
+        )
     if args.sample and args.execution_accuracy:
-        parser.error("--execution-accuracy joins a recorded run; it does not apply to --sample")
+        parser.error(
+            "--execution-accuracy joins a recorded run; it does not apply to --sample"
+        )
     grade = _read_grade(args.grade, parser) if args.grade else None
     execution_accuracy = (
         _read_execution_accuracy(args.execution_accuracy, parser)
@@ -1014,11 +1176,15 @@ def main(argv: list[str] | None = None) -> None:
         try:
             run = json.loads(args.run.read_text(encoding="utf-8"))
         except FileNotFoundError:
-            parser.error(f"run artifact not found: {args.run}. Create one with: uv run python -m evals.driver --output {args.run}")
+            parser.error(
+                f"run artifact not found: {args.run}. Create one with: uv run python -m evals.driver --output {args.run}"
+            )
         except (OSError, json.JSONDecodeError) as exc:
             parser.error(f"could not read run artifact {args.run}: {exc}")
         if not isinstance(run, dict) or not isinstance(run.get("manifest"), dict):
-            parser.error(f"run artifact {args.run} is not a valid scenario-driver JSON artifact")
+            parser.error(
+                f"run artifact {args.run} is not a valid scenario-driver JSON artifact"
+            )
         from evals.scenarios import load_scenarios
 
         scenarios = load_scenarios()

@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
+from evals._paths import CALIBRATION_VERSIONS
 from evals.calibration import calibration_report, load_calibration
 from evals.grader import Evidence
 
 # The independent semantic holdout: 12 cases authored with
 # ``source: independently_authored_holdout`` against the six v7 disagreements
 # (ADR-0051). It is never used to re-derive a human label.
-SEMANTIC_HOLDOUT_PATH = Path(__file__).with_name("calibration_v8.yaml")
+SEMANTIC_HOLDOUT_PATH = CALIBRATION_VERSIONS["v8"]
 
 
 @dataclass(frozen=True)

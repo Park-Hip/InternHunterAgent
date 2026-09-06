@@ -6,10 +6,14 @@ import time
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_groq import ChatGroq
 
+from typing import Any
+
 from deepeval.models.base_model import DeepEvalBaseLLM
 from src.core.config import settings
 
-_RATE_WINDOW_SECONDS = 60.0
+# Load the shared rate window once; the class below only reads it at construction time.
+_judge_cfg = settings.config_yaml.get("eval", {}).get("judge", {})
+_RATE_WINDOW_SECONDS = float(_judge_cfg.get("rate_window_seconds", 60.0))
 
 
 class _RpmThrottle:
@@ -27,7 +31,9 @@ class _RpmThrottle:
             return 0.0
         with self._lock:
             now = time.monotonic()
-            self._call_times = [t for t in self._call_times if now - t < _RATE_WINDOW_SECONDS]
+            self._call_times = [
+                t for t in self._call_times if now - t < _RATE_WINDOW_SECONDS
+            ]
             if len(self._call_times) < self._rpm:
                 self._call_times.append(now)
                 return 0.0
@@ -45,7 +51,9 @@ class _RpmThrottle:
 class DeepEvalJudge(DeepEvalBaseLLM):
     """DeepEvalBaseLLM wrapper around a LangChain chat model, used as the eval judge."""
 
-    def __init__(self, chat_model: BaseChatModel, model_name: str, rpm: int = 0) -> None:
+    def __init__(
+        self, chat_model: BaseChatModel, model_name: str, rpm: int = 0
+    ) -> None:
         self._chat_model = chat_model
         self._model_name = model_name
         self._throttle = _RpmThrottle(rpm)
@@ -105,7 +113,9 @@ def build_judge() -> DeepEvalJudge:
 
     provider = judge_cfg.get("provider")
     if not isinstance(provider, str) or not provider.strip():
-        raise ValueError("Missing or empty 'eval.judge.provider' in config/settings.yaml")
+        raise ValueError(
+            "Missing or empty 'eval.judge.provider' in config/settings.yaml"
+        )
     provider = provider.lower().strip()
 
     model_name = judge_cfg.get("model")
@@ -119,6 +129,16 @@ def build_judge() -> DeepEvalJudge:
         raise ValueError("eval.judge.timeout_seconds must be a positive number")
     max_retries = 0 if os.getenv("EVAL_DRIVER_DISABLE_PROVIDER_RETRIES") == "1" else 2
 
+    # Per-provider max_tokens, falling back to the legacy hardcoded values.
+    _providers_cfg: dict[str, Any] = judge_cfg.get("providers", {})
+    if not isinstance(_providers_cfg, dict):
+        _providers_cfg = {}
+    _provider_max_tokens: dict[str, int] = (
+        {k: int(v) for k, v in _providers_cfg.items() if isinstance(v, (int, float))}
+        if isinstance(_providers_cfg, dict)
+        else {}
+    )
+
     if provider == "groq":
         if not settings.GROQ_API_KEY:
             raise ValueError("eval.judge.provider is 'groq' but GROQ_API_KEY is unset")
@@ -126,7 +146,7 @@ def build_judge() -> DeepEvalJudge:
         chat_model: BaseChatModel = ChatGroq(
             model_name=model_name,
             temperature=temperature,
-            max_tokens=1024,
+            max_tokens=int(_provider_max_tokens.get("groq", 1024)),
             timeout=timeout,
             max_retries=max_retries,
             streaming=False,
@@ -140,12 +160,14 @@ def build_judge() -> DeepEvalJudge:
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         if not settings.GOOGLE_API_KEY:
-            raise ValueError("eval.judge.provider is 'google' but GOOGLE_API_KEY is unset")
+            raise ValueError(
+                "eval.judge.provider is 'google' but GOOGLE_API_KEY is unset"
+            )
 
         chat_model = ChatGoogleGenerativeAI(
             model=model_name,
             temperature=temperature,
-            max_tokens=4096,
+            max_tokens=int(_provider_max_tokens.get("google", 4096)),
             timeout=timeout,
             max_retries=max_retries,
             google_api_key=settings.GOOGLE_API_KEY,
@@ -168,7 +190,7 @@ def build_judge() -> DeepEvalJudge:
             base_url="https://openrouter.ai/api/v1",
             api_key=settings.OPENROUTER_API_KEY,
             temperature=temperature,
-            max_tokens=4096,
+            max_tokens=int(_provider_max_tokens.get("openrouter", 4096)),
             timeout=timeout,
             max_retries=max_retries,
             streaming=False,

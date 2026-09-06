@@ -23,7 +23,7 @@ If generated SQL failed execution accuracy, an incorrect answer downstream remai
 The evaluator creates the same agent used by the product and binds it to a frozen 24-row fixture database.
 The fixture makes the SQL contract repeatable and manually inspectable, but it is not a production-corpus quality sample.
 
-## Authority and the three kinds of check
+## Authority and the four kinds of check
 
 Structural assertions check observable facts such as tool use, SQL result contracts, row counts, and prohibited identifiers.
 Literal assertions check fixed, reviewable text conditions such as a secret-like pattern.

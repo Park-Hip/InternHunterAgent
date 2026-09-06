@@ -1,7 +1,7 @@
 # Semantic Evaluation Tier
 
 > **Status:** Calibrated scores are consumed by the grader; unavailable scores remain `NOT_EVALUATED`.
-> See [Operating_Manual.md](../Operating_Manual.md#authority-and-the-three-kinds-of-check) for the authority boundary.
+> See [Operating_Manual.md](../Operating_Manual.md#authority-and-the-four-kinds-of-check) for the authority boundary.
 
 ## What this tier is for
 

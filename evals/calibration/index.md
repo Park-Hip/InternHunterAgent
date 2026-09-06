@@ -6,7 +6,7 @@
 
 Calibration derives release thresholds from human labels — never pre-sets them. The core principle is that a threshold chosen before measuring human agreement is arbitrary and cannot be defended. Calibration ensures every released bar is evidence-backed.
 
-From [Operating_Manual.md](../Operating_Manual.md#authority-and-the-three-kinds-of-check):
+From [Operating_Manual.md](../Operating_Manual.md#authority-and-the-four-kinds-of-check):
 
 > Thresholds are **calibrated after a baseline run**, never pre-set: a threshold above the baseline blocks every build, and below it nothing signals.
 

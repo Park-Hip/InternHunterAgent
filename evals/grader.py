@@ -1,8 +1,8 @@
-"""Deterministic three-tier grading for persisted evaluation runs.
+"""Deterministic four-tier grading for persisted evaluation runs.
 
 The grader consumes recorded evidence only. It never creates an agent, calls a model, or
-changes the fixture database. Structural checks win over textual checks, and textual checks
-win over the optional judge tier.
+changes the fixture database. Structural checks win over literal checks, literal checks win
+over semantic checks, and semantic checks win over the optional judge-metric tier.
 """
 
 from __future__ import annotations

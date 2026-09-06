@@ -7,6 +7,7 @@ from functools import lru_cache
 from typing import Any
 
 import yaml
+from deepeval.errors import DeepEvalError
 from deepeval.metrics import ConversationalGEval
 from deepeval.test_case import MultiTurnParams, Turn
 from deepeval.test_case.conversational_test_case import ConversationalTestCase
@@ -187,6 +188,7 @@ def _exemplars_for_scenario(scenario_id: str) -> tuple[dict[str, Any], ...]:
 
 
 def _format_exemplar(case: dict[str, Any]) -> str:
+    """Render one calibration case as a few-shot string for the judge prompt."""
     label = case["human"]["overall"]
     qas = "\n".join(
         f"    user: {turn['question']}\n    assistant: {turn['answer']}"
@@ -201,6 +203,7 @@ def _format_exemplar(case: dict[str, Any]) -> str:
 
 
 def _format_exemplars(exemplars: tuple[dict[str, Any], ...]) -> str:
+    """Join calibrated exemplars into the few-shot block, or return ``""`` when empty."""
     if not exemplars:
         return ""
     lines = ["Few-shot exemplars:"]
@@ -209,6 +212,7 @@ def _format_exemplars(exemplars: tuple[dict[str, Any], ...]) -> str:
 
 
 def _criteria(scenario: dict[str, Any]) -> str:
+    """Build the full judge prompt from the scenario's rubric, exemplars, and constraints."""
     assertion = semantic_assertion(scenario)
     if assertion is None:
         raise ValueError("scenario has no semantic assertion")
@@ -256,7 +260,7 @@ def evaluate_semantic_repeat(
             None,
             str(getattr(metric, "reason", "No judge rationale returned.")),
         )
-    except Exception as exc:  # noqa: BLE001 - a failed judge pass must remain retryable.
+    except (DeepEvalError, RuntimeError) as exc:  # noqa: BLE001 - a failed judge pass must remain retryable.
         return SemanticJudgeResult(
             UNAVAILABLE, None, None, f"DeepEval unavailable: {exc}"
         )

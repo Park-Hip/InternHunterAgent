@@ -106,7 +106,13 @@ def _git_sha() -> str:
 
 
 def _bind_fixture_environment() -> None:
-    """Bind native driver runs before any src module can freeze Settings()."""
+    """Bind native driver runs before any src module can freeze Settings().
+
+    The delayed ``from evals import harness`` below depends on this call having
+    already configured ``DATABASE_URL`` / ``AGENT_DATABASE_URL``, because ``harness``
+    transitively imports ``src.core.config`` which freezes its settings dict on first
+    access; importing ``harness`` before the bind would raise an environment-error.
+    """
     fixture_url = fixture_database_url()
     os.environ["DATABASE_URL"] = fixture_url
     os.environ["AGENT_DATABASE_URL"] = fixture_url
@@ -650,6 +656,7 @@ def freeze_capture(
 
 
 def _is_quota_error(exc: BaseException) -> bool:
+    """Detect whether an exception looks like a provider rate-limit / quota signal."""
     text = str(exc).lower()
     return any(
         token in text
@@ -699,6 +706,7 @@ def _retry_delay(
 
 
 def _seam_dict(run: harness.SeamRun) -> dict[str, Any]:
+    """Project a SeamRun onto the flat dict shape the manifest expects."""
     return {
         "question": run.question,
         "answer": run.answer,
@@ -927,6 +935,7 @@ def _mark_unrun(
     index: int,
     current_id: str,
 ) -> None:
+    """Mark ``current_id`` as INFRA and stamp every remaining scenario as UNRUN."""
     for case in scenarios[index + 1 :]:
         artifact["scenarios"].setdefault(case["id"], {"status": "UNRUN", "repeats": []})
     artifact["scenarios"][current_id]["status"] = "INFRA"

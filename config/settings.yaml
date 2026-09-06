@@ -121,3 +121,96 @@ eval:
   pricing_usd_per_mtok:
     deepseek-v4-flash: { input: 0.28, output: 0.42 }
     qwen/qwen3.6-27b: { input: 0.59, output: 0.79 }
+  writeback:
+    # Delays between verification attempts after a capture flushes to Langfuse.
+    # The ladder is short because the question is "did this arrive at all", not
+    # "how fast". Cloud ingestion is asynchronous and batched; a capture of two
+    # scenarios finishes in seconds, well inside that window.
+    ingestion_retry_delays: [0.0, 2.0, 5.0]
+  replay:
+    # Default committed replay artifact when --replay is omitted.
+    default_path: "t0025.9-committed.json"
+    # Historical captures preserved under evals/archive/replays/ (issue #148/#249).
+    # They keep their original bytes and provenance but are no longer current
+    # regression evidence: the registry moved on, so they no longer validate.
+    # To add a new archived name, copy the format below and keep the set sorted.
+    archived_names:
+      - "t0024.4-v3-obligations.json"
+      - "t0025.7-acceptance.json"
+      - "v6-baseline-20260823.json"
+      - "iha243-honesty-v9.json"
+  langfuse:
+    # These three strings are coupled: renaming one requires renaming all three
+    # and ensuring every capture that references the prefix still lands in the
+    # same dataset. The prefix forms the start of every item id.
+    dataset_name: "internhunteragent-scenarios-v1"
+    dataset_description: "Derived mirror of evals/scenarios_v1.yaml. Do not edit in Langfuse."
+    item_id_prefix: "internhunteragent-scenarios-v1:"
+  viewer:
+    # Sampling knobs treated as "standard" (displayed first) in the trace viewer.
+    # New knobs that deserve first-class treatment should be added here; otherwise
+    # they fall through to the dynamic list.
+    fixed_sampling_keys: ["temperature", "max_tokens"]
+  grader:
+    # Maximum number for the Vietnamese/English number-word lookup used by
+    # _answer_count. Values beyond this bound fall back to digit matching only.
+    number_words_max: 100
+    # Canonical English tech terms that may appear verbatim in Vietnamese prose.
+    # Extend this list when new terms appear in job postings without triggering
+    # the vietnamese_agent_prose check.
+    allowed_tech_terms:
+      - "AI"
+      - "SQL"
+      - "Python"
+      - "Data"
+      - "ML"
+      - "Remote"
+      - "React"
+      - "Docker"
+      - "JavaScript"
+      - "TypeScript"
+      - "Backend"
+      - "Frontend"
+      - "Fullstack"
+      - "Java"
+      - "Go"
+      - "Rust"
+      - "Kotlin"
+      - "Swift"
+      - "PHP"
+      - "Ruby"
+      - "Node"
+      - "AWS"
+      - "GCP"
+      - "Azure"
+      - "Linux"
+      - "Git"
+      - "API"
+      - "REST"
+      - "GraphQL"
+    # Canonical structured job levels that the grader validates against returned
+    # row values. If the fixture vocabulary changes, update both here and the
+    # fixture seed so the health-check test stays green.
+    structured_job_levels:
+      - "Experienced (non-manager)"
+      - "Manager"
+      - "Fresher/Entry level"
+      - "Intern/Student"
+      - "Director and above"
+    # Payment-period vocabulary accepted by the salary_period check, grouped by
+    # language. Each group is merged into a single alternation inside the regex.
+    salary_period_terms:
+      english:
+        - "monthly"
+        - "yearly"
+        - "hourly"
+        - "per month"
+        - "per year"
+        - "per hour"
+      vietnamese:
+        - "tháng"
+        - "thang"
+        - "năm"
+        - "nam"
+        - "giờ"
+        - "gio"

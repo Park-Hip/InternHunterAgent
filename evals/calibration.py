@@ -8,12 +8,13 @@ from typing import Any
 
 import yaml
 
-from evals.semantic import AVAILABLE, evaluate_semantic_repeat, semantic_assertion
+from evals._paths import CALIBRATION_VERSIONS, RELEASE_GATE_PATH
 from evals.scenarios import load_scenarios
+from evals.semantic import AVAILABLE, evaluate_semantic_repeat, semantic_assertion
 
-CALIBRATION_PATH = Path(__file__).with_name("calibration_v7.yaml")
-CALIBRATION_V8_PATH = Path(__file__).with_name("calibration_v8.yaml")
-RELEASE_GATE_PATH = Path(__file__).with_name("calibration_release_gate.yaml")
+# Backward-compatible aliases for callers outside this module (e.g. calibration_score).
+CALIBRATION_PATH = CALIBRATION_VERSIONS["v7"]
+CALIBRATION_V8_PATH = CALIBRATION_VERSIONS["v8"]
 # Legacy aggregate threshold chosen by the recall-first sweep against the original
 # v7 corpus (n=36, judge google/gemma-4-31b-it); see ADR-0047. It is retained for
 # the aggregate "overall" view only. Per-class release thresholds supersede this

@@ -12,6 +12,7 @@ from deepeval.metrics import ConversationalGEval
 from deepeval.test_case import MultiTurnParams, Turn
 from deepeval.test_case.conversational_test_case import ConversationalTestCase
 
+from evals._paths import CALIBRATION_VERSIONS
 from evals.judge import build_judge
 from evals.models import SemanticJudgeResult
 
@@ -20,8 +21,8 @@ UNAVAILABLE = "UNAVAILABLE"
 
 # Read-only few-shot source. Kept local to ``semantic`` because importing
 # ``evals.calibration`` here would create a circular import (calibration imports
-# semantic); the path deliberately mirrors ``evals.calibration.CALIBRATION_PATH``.
-_CALIBRATION_PATH = Path(__file__).with_name("calibration_v7.yaml")
+# semantic); the path deliberately mirrors ``evals._paths.CALIBRATION_VERSIONS["v7"]``.
+_CALIBRATION_PATH = CALIBRATION_VERSIONS["v7"]
 
 _CLASS_RUBRICS = {
     "SAF": (

@@ -18,15 +18,15 @@ CALIBRATION_V8_PATH = CALIBRATION_VERSIONS["v8"]
 # Legacy aggregate threshold chosen by the recall-first sweep against the original
 # v7 corpus (n=36, judge google/gemma-4-31b-it); see ADR-0047. It is retained for
 # the aggregate "overall" view only. Per-class release thresholds supersede this
-# single bar and are the values the release gate enforces; they are selected from
+# single bar and are recorded diagnostic bars; they are selected from
 # real judge evidence by ``select_per_class_thresholds`` and recorded, with their
 # provenance, in ``RELEASE_THRESHOLDS_BY_CLASS`` (see ADR-0052).
 RELEASE_THRESHOLD = 0.30
 # Per-class release thresholds, one per semantic class, chosen recall-first from
 # the real judge re-sweep over the combined v7+v8 corpus (56 cases) recorded in
 # evals/runs/iha-v8-judge-combined-agreement-report.json. Selection is computed by
-# select_per_class_thresholds; these values are read by the live release gate and
-# may only change through a fresh maintainer-authorized sweep. See ADR-0052.
+# select_per_class_thresholds; these values are recorded diagnostic evidence used by
+# the grader and may only change through a fresh maintainer-authorized sweep. See ADR-0052.
 RELEASE_THRESHOLDS_BY_CLASS: dict[str, float] = {
     "SAF": 1.0,
     "HON": 1.0,

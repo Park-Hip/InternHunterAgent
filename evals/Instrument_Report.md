@@ -198,7 +198,7 @@ artifacts are
 [`runs/iha-v8-judge-combined-judge-scores.json`](runs/iha-v8-judge-combined-judge-scores.json) and
 [`runs/iha-v8-judge-combined-agreement-report.json`](runs/iha-v8-judge-combined-agreement-report.json).
 Those 56-case statistics predate the ten multi-turn v7 cases added in #383 and are superseded by
-the live release gate, which scores the full 66-case corpus.
+the current 66-case corpus.
 
 Release thresholds are **per class**, each recall-first (the highest sweep point at which the
 class's recall stays 1.0). The ADR-0052 sweep selected the following bars over the then-56-case
@@ -243,13 +243,14 @@ The review confirmed the following samples.
 The deterministic outcomes are suitable for reproducible regression diagnosis against the frozen
 v11 fixture and registry only; they authorize no production quality claim.
 
-The release gate now enforces per-class thresholds recorded in
-`evals/calibration.py` (`RELEASE_THRESHOLDS_BY_CLASS`: `SAF` 1.0, `HON` 1.0, `HLP` 0.6) over the
-combined 66-case corpus, failing closed on any class recall below 1.0 or any unavailable case
-(ADR-0052). The aggregate `RELEASE_THRESHOLD = 0.30` survives only as the legacy fallback and is
-superseded for enforcement by the per-class map. This authorizes the recall-first release decision
-recorded in ADR-0052 — it does not authorize a production-wide quality claim, and the eight
-HON/HLP false passes remain open disagreement evidence.
+The per-class thresholds recorded in `evals/calibration.py`
+(`RELEASE_THRESHOLDS_BY_CLASS`: `SAF` 1.0, `HON` 1.0, `HLP` 0.6) came from the recall-first sweep
+over the combined 66-case corpus and remain recorded diagnostic evidence (ADR-0052). The live
+semantic release-gate CI path has been retired: release readiness no longer requires a live judge
+run, and the release process publishes no current model-quality certification. The aggregate
+`RELEASE_THRESHOLD = 0.30` survives only as the legacy fallback view. This authorizes a
+recall-first diagnostic, not a production-wide quality claim, and the eight HON/HLP false passes
+remain open disagreement evidence.
 
 ## Unresolved cases and follow-up
 
@@ -362,10 +363,12 @@ roadmap through Phase 3.
 (960 passed), `ruff` and `mypy` are clean, and `uv run python scripts/docs_lint.py` is clean.
 The deterministic fixture loader seeds 24 rows and the committed replay replays cleanly with no
 model call.
-The live semantic gate (`uv run pytest -m eval -v`) enforces the per-class bars (`SAF` 1.0,
-`HON` 1.0, `HLP` 0.6) over the combined 66-case corpus and fails closed on any unavailable case.
-The 2026-09-18 certification run (workflow_dispatch, run 35335276252) failed closed: the judge
-provider returned `500 INTERNAL` for the gate and judge-scaffold cases, so the release must not
-be tagged until a fresh maintainer-authorized run passes.
-The combined judge-scores and agreement-report artifacts are regenerable with
-`uv run python -m evals.calibration_score`.
+The live semantic release-gate CI path has been retired, so release readiness no longer requires
+a live judge run and the release process publishes no current semantic model-quality
+certification.
+The 2026-09-18 attempted certification run (workflow_dispatch, run 35335276252) failed closed:
+`pytest -m eval` collected unrelated serving-agent tests lacking `DEEPSEEK_API_KEY`, and the judge
+returned a provider 500 error; it was not rerun at maintainer direction.
+Deterministic evidence remains: the fixture loader, the replay command, and the full offline suite
+pass, and the combined judge-scores and agreement-report artifacts are regenerable with
+`uv run python -m evals.calibration_score` as diagnostic, non-certifying evidence.

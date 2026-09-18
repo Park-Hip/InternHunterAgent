@@ -193,16 +193,19 @@ the frozen agent-visible contract stays consistent across prompts, fixtures, and
 
 ## Ingestion cron
 
-The schedule is currently disabled: the two `schedule:` / `cron:` lines in
-`.github/workflows/ingestion.yml` remain commented out.
-Manual `workflow_dispatch` is available.
-This is a gated pause, not the intended steady state: an active schedule is a required MVP
-capability under [architecture.md](../architecture.md), so the demo runs below specification until the
-gates clear.
+The scheduled trigger of `.github/workflows/ingestion.yml` is removed under the frozen-data
+portfolio posture.
+The served corpus is a historical snapshot (last measured `2026-08-27`) and is not refreshed;
+`workflow_dispatch` remains for an approved future recovery.
 
-Do not enable the schedule or set its secrets from this document.
-The activation gates, their evidence, order, and sign-off state are maintained in
-[T0020.4 Cron Activation Runbook](cron-activation-runbook.md).
+This is the intended posture for the public portfolio release, not a temporary gate or a state
+"below specification".
+The self-refreshing MVP requirement is recorded as superseded for this release by ADR-0053 (see
+[architecture.md](../architecture.md), section 1.7).
+
+Do not re-arm the schedule or set its secrets from this document.
+Restoring ingestion follows [T0020.4 Cron Activation Runbook](cron-activation-runbook.md) and
+requires a provider-authorized path proven by one manual and one scheduled run.
 The workflow's `DATABASE_URL` must use Neon's direct, non-pooled host because it writes data
 and runs schema safety checks against production.
 
@@ -239,6 +242,11 @@ for any material source-policy change, and retain the fail-closed configuration 
 clear.
 
 ### Unattended inactivity recovery
+
+> **Frozen-data posture note.** The scheduled trigger this job recovers no longer exists: a
+> `workflow_dispatch`-only workflow is not subject to the 60-day inactivity auto-disable. Retaining
+> or decommissioning the provisioned recovery job is a separate maintainer decision and is out of
+> scope for the frozen-data portfolio release.
 
 GitHub automatically disables a public repository's scheduled workflows after 60 days of
 repository inactivity. The unattended REST recovery job (`scripts/recover_ingestion_workflow.py`,
@@ -281,7 +289,8 @@ external host, credential, or healthcheck from this document; provisioning is a 
 - On native Windows, run the API through Docker rather than `uv run uvicorn`; the async checkpointer
   pool is incompatible with the default Proactor event loop.
 - `pages_failed` is an operator-visible ingestion summary field, but it does not yet alter exit
-  status; a page exhausted after retries is retried by the next scheduled run.
+  status; a page exhausted after retries is retried by the next run (manual `workflow_dispatch`
+  under the frozen-data posture).
 - The VietnamWorks preflight is the per-run access gate; the 2026-07-16 human review is
   point-in-time evidence and must be repeated if source behavior or terms change materially.
 - Serving and ingestion deliberately maintain separate exact `clean_jobs` column lists to preserve
@@ -298,8 +307,7 @@ external host, credential, or healthcheck from this document; provisioning is a 
 ## Keep-alive and idle pools
 
 The project targets $0/month, below its $10/month ceiling.
-Render Free can cold-start, and a lightly used GitHub Actions schedule can be auto-disabled after
-60 days of repository inactivity.
+Render Free can cold-start.
 The separate cron-job.org keep-alive job is running on `*/12 7-22 * * *` in ICT and targets
 `GET /api/v1/health`.
 That is 80 pings per day across the intended waking-hours window.

@@ -54,7 +54,7 @@ class ReadinessTests(unittest.TestCase):
             response = self.client.get("/api/v1/ready")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["data_snapshot_date"], "2026-07-14")
+        self.assertEqual(response.json()["data_snapshot_date"], "2026-08-27")
         self.assertEqual(response.json()["data_snapshot_date_provenance"], "configured_fallback")
 
     def test_ready_surfaces_max_last_seen_date(self) -> None:
@@ -75,7 +75,7 @@ class ReadinessTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
-        self.assertEqual(response.json()["data_snapshot_date"], "2026-07-14")
+        self.assertEqual(response.json()["data_snapshot_date"], "2026-08-27")
         self.assertEqual(response.json()["data_snapshot_date_provenance"], "configured_fallback")
 
     def test_ready_skips_date_query_when_db_check_fails(self) -> None:

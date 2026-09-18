@@ -26,7 +26,6 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0034](adr-0034-vietnamworks-robots-and-terms-gate.md) | VietnamWorks automation passed the robots.txt and terms gate | Legal/source |
 | [ADR-0036](adr-0036-source-market-vietnamese-job-boards.md) | The source market is Vietnamese job boards, not global ATS aggregators | Product scope |
 | [ADR-0037](adr-0037-frozen-fixture-baselines.md) | Evaluation baselines freeze fixture data with the agent-visible contract | Evaluation |
-| [ADR-0038](adr-0038-scheduled-ingestion-required.md) | Scheduled ingestion is a required MVP capability, not an optional refresh | Product scope |
 | [ADR-0041](adr-0041-scenario-registry-single-source-of-truth.md) | The scenario registry is the single source of truth for evaluation cases | Evaluation |
 | [ADR-0042](adr-0042-grader-authority-at-calibration.md) | Grader authority passes from human to grader at calibration | Evaluation |
 | [ADR-0043](adr-0043-deepeval-harness-kept-http-discarded.md) | Keep the DeepEval harness, discard its HTTP transport | Evaluation |
@@ -37,9 +36,13 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0049](adr-0049-cancel-streamed-generation-on-client-disconnect.md) | Streamed generation stops when its client disconnects | Operations |
 | [ADR-0050](adr-0050-sse-comments-keep-silent-streams-alive.md) | SSE comments keep silent streams alive | Operations |
 | [ADR-0052](adr-0052-per-class-release-thresholds-real-sweep.md) | Per-class release thresholds from the real corpus re-sweep | Evaluation |
+| [ADR-0053](adr-0053-frozen-data-portfolio-release.md) | The public release is a frozen-data portfolio, not a self-refreshing MVP claim | Product scope |
 
 Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
 superseded by ADR-0052 and keep their files with a `Superseded by` status.
+Record ADR-0038 (scheduled ingestion required for MVP) is superseded by ADR-0053 (frozen-data
+portfolio release) for the public portfolio release and keeps its file with a `Superseded by`
+status.
 
 ## Retired decisions, and why they were not carried over
 

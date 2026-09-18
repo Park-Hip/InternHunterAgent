@@ -42,9 +42,19 @@ class StaticServingTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('data_snapshot_date_provenance === "measured"', response.text)
         self.assertIn(
-            "Dữ liệu thử nghiệm · chưa có ngày cập nhật · tin tuyển dụng công khai, có thể không chính xác.",
+            "Kho dữ liệu lịch sử · ngày chụp chưa rõ · kết quả không xác nhận vị trí đang tuyển.",
             response.text,
         )
+
+    def test_demo_marks_corpus_as_frozen_historical_snapshot(self) -> None:
+        index = self.client.get("/")
+        app = self.client.get("/app.js")
+
+        self.assertNotIn("Hỏi về các vị trí AI và dữ liệu đang tuyển", index.text)
+        for text in (index.text, app.text):
+            self.assertIn("Kho dữ liệu lịch sử", text)
+            self.assertIn("không xác nhận vị trí đang tuyển", text)
+        self.assertIn("ảnh chụp ${date}", app.text)
 
     def test_demo_loads_pinned_same_origin_markdown_dependencies(self) -> None:
         index = self.client.get("/")

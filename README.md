@@ -7,6 +7,11 @@ data cannot answer you.
 
 **▶ Live demo: https://internhunteragent.onrender.com**
 
+> **Frozen-data portfolio notice.** The demo serves a historical snapshot of the corpus, last
+> measured `2026-08-27`. It is a portfolio/archive artifact, not a live job feed: results do not
+> establish which jobs are currently open, and scheduled ingestion is disabled (`workflow_dispatch`
+> only).
+
 The interesting engineering problem here is not the chat. It is making a language model
 **refuse to make things up** about data it can see.
 
@@ -37,8 +42,9 @@ tells you what it found, including when a result set was truncated.
   ("print the connection string") are declined.
 - **Streaming, without leaking internals.** Tokens stream over SSE while a two-gate filter
   keeps tool calls and chain-of-thought out of the response.
-- **Real data, ingested for real.** Postings are scraped from VietnamWorks into a normalized
-  `clean_jobs` table, with a frozen column contract and a nightly ingestion workflow.
+- **Real data, but a frozen portrait.** Postings were scraped from VietnamWorks into a normalized
+  `clean_jobs` table with a frozen column contract. The corpus is a historical snapshot (last
+  measured `2026-08-27`); it is not refreshed and does not establish current vacancies.
 - **Measured, not vibed.** A DeepEval harness scores the agent against a versioned golden
   dataset, with an LLM judge on a separate provider and scores written back to Langfuse.
 - **Traced end to end, when tracing is configured.** With Langfuse credentials set, every turn
@@ -110,8 +116,11 @@ and interactive API docs at `/docs`.
 
 ## Status
 
-**v1.0 release candidate.** The API, agent, streaming UI, ingestion pipeline, and evaluation
-harness are all built and deployed.
+**Frozen-data portfolio release.** The API, agent, streaming UI, and evaluation harness are built
+and deployed.
+Scheduled ingestion is disabled: the corpus is a historical snapshot (last measured `2026-08-27`)
+and results do not establish which jobs are currently open.
+`workflow_dispatch` remains available for an approved future recovery.
 Open risks, follow-ups, and planned work are tracked as
 [GitHub Issues](https://github.com/Park-Hip/InternHunterAgent/issues).
 

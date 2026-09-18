@@ -25,10 +25,7 @@ For planned and research-led changes, invoke the `.agents/skills/change-proposal
 Branch from the tip of `origin/main` in a dedicated git worktree for anything but a trivial edit.
 Keep one coherent change per pull request and rebase onto `origin/main` before review.
 
-Parallel work may be dispatched through crew mode as described in `.crew/README.md`: tasks
-run through the mate interface, bounded by the crew trigger and the shared-surface lock,
-and every ship pull request lands only through required CI plus the maintainer's approving
-review.
+Parallel work is managed through standard issue tracking and PR workflows;
 
 ## 3. Verification
 

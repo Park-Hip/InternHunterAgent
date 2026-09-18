@@ -1,6 +1,6 @@
 # Research records
 
-Investigation-only work ("scout" tasks, see `.crew/README.md`) lands here as
+Investigation-only work lands here as standalone reports
 standalone reports - never as code, never pushed to a branch.
 
 Each record carries three things:

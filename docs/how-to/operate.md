@@ -243,10 +243,9 @@ clear.
 GitHub automatically disables a public repository's scheduled workflows after 60 days of
 repository inactivity. The unattended REST recovery job (`scripts/recover_ingestion_workflow.py`,
 issue #325) re-enables `ingestion.yml` and dispatches exactly one ingestion run when the workflow
-state is `disabled_inactivity`. The maintainer approved this externally automated recovery in
-`.crew/325-approved-plan.md`; it supersedes issue #298's manual-calendar-reminder posture while
-retaining that issue's bans on synthetic commits and on no-op dispatches while the workflow is
-already active. The superseding decision is recorded in full in the
+state is `disabled_inactivity`. The decision to automate this recovery supersedes issue #298's
+manual-calendar-reminder posture while retaining that issue's bans on synthetic commits and on
+no-op dispatches while the workflow is already active. The superseding decision is recorded in full in the
 [cron activation runbook](cron-activation-runbook.md), §8.
 
 The job is idempotent and least-privileged by construction. It reads the workflow state and

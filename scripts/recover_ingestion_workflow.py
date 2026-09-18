@@ -2,7 +2,7 @@
 
 GitHub automatically disables a public repository's scheduled workflows after 60 days of
 repository inactivity. This script is the idempotent, externally scheduled recovery job for
-``.github/workflows/ingestion.yml`` (issue #325, approved plan ``.crew/325-approved-plan.md``).
+``.github/workflows/ingestion.yml`` (issue #325).
 
 Contract (maintainer-approved):
 

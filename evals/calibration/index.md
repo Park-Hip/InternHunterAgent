@@ -27,9 +27,9 @@ From [Operating_Manual.md](../Operating_Manual.md#authority-and-the-three-kinds-
 4. Selects recall-first thresholds per class (`select_per_class_thresholds`).
 5. Emits an agreement report with precision, recall, false-pass counts, and 95% Wilson intervals (`build_agreement_report`).
 
-## Release gate
+## Release thresholds
 
-The live gate (`uv run pytest -m eval -v`) enforces per-class bars from `RELEASE_THRESHOLDS_BY_CLASS`:
+`RELEASE_THRESHOLDS_BY_CLASS` records the recall-first per-class bars:
 
 | Class | Threshold |
 |---|---|
@@ -37,9 +37,10 @@ The live gate (`uv run pytest -m eval -v`) enforces per-class bars from `RELEASE
 | HON | 1.0 |
 | HLP | 0.6 |
 
-These are selected recall-first (highest threshold at which recall = 1.0). An aggregate legacy bar of 0.30 is retained for the "overall" view only but is not enforced by the gate.
+These are selected recall-first (highest threshold at which recall = 1.0). An aggregate legacy bar of 0.30 is retained for the "overall" view only.
+The bars are recorded diagnostic evidence; no live release gate enforces them in CI after the live semantic release-gate path was retired.
 
-See ADR-0052 for the per-class threshold rationale.
+See ADR-0052 for the per-class threshold rationale and [`release-gate.md`](../../docs/how-to/release-gate.md) for the retired gate status.
 
 ## Files
 

@@ -19,5 +19,5 @@ CALIBRATION_VERSIONS: dict[str, Path] = {
     "v8": EVALS_ROOT / "calibration_v8.yaml",
 }
 
-# Release gate configuration for the live evaluation pipeline.
+# Legacy 6-case bootstrap corpus path, superseded by the versioned v7+v8 corpora.
 RELEASE_GATE_PATH = EVALS_ROOT / "calibration_release_gate.yaml"

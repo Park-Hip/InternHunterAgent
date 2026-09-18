@@ -6,8 +6,7 @@ not a recorded capture. It is the supported writer of calibration judge evidence
 under ``evals/runs/``, and the only place that persists calibration judge scores.
 
 The real judge is reached only through the project's existing semantic path:
-``evals.semantic.evaluate_semantic_repeat`` -> ``evals.judge.build_judge``, the
-same call chain the live release gate exercises.
+``evals.semantic.evaluate_semantic_repeat`` -> ``evals.judge.build_judge`.
 
 Usage (from a clean worktree, provider keys present in the environment or
 ``.env``):

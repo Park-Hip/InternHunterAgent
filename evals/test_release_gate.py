@@ -1,23 +1,19 @@
-"""Bounded live semantic release gate.
+"""Opt-in live calibration scoring check (not a release gate).
 
-Runs the committed calibration corpus (v7 + v8) and enforces the per-class
-release thresholds.  This module is the narrowest possible execution path for
-the gate described in issue #344: it calls only ``calibration`` and reports only
-what the threshold contract requires, without touching the agent runtime or the
+Scores the committed calibration corpus (v7 + v8) and reports the per-class
+threshold metrics.  This module calls only ``calibration`` and reports what the
+threshold contract requires, without touching the agent runtime or the
 deterministic grader.
 
 The suite is disabled in the default pytest run by the project's ``-m 'not eval'``
-addopts.  It is selected explicitly with ``-m eval``, which is how CI gates and
-manual smoke runs both invoke it.  A run that selects zero cases fails closed
-rather than silently passing.
+addopts.  It is selected explicitly with ``-m eval`` when an operator wants a live
+diagnostic over the combined corpus.  It is not part of any CI workflow and does
+not certify a release; the live semantic release-gate CI path was retired in #415.
 
-The gate enforces one release threshold per semantic class (SAF, HON, HLP) and
-an aggregate bar: each class must keep recall at 1.0 under its own threshold
-(no human-PASS case is judged a fail), and the overall recall must stay at 1.0.
-False passes (a judge pass on a human-FAIL case) are measured and reported as
-precision, never silently accepted as recall.  Unavailable cases — a provider
-quota hit, a judge crash, anything that prevents scoring — count as fails for
-the classes they touch, keeping the gate fail-closed.
+The check reports one threshold per semantic class (SAF, HON, HLP) and an
+aggregate bar, and fails closed on zero selection, an unavailable case, or a class
+whose recall drops below 1.0.  False passes (a judge pass on a human-FAIL case) are
+measured and reported as precision, never silently accepted as recall.
 """
 
 from __future__ import annotations
@@ -37,7 +33,7 @@ _CLASS_GROUPS = (
 def _run_gate(
     thresholds_by_class: dict[str, float] | None = None,
 ) -> dict:
-    """Execute the release gate and return the report for inspection."""
+    """Score the combined corpus and return the threshold report for inspection."""
     corpus = calibration.load_combined_calibration()
     assert corpus["cases"], "release gate corpus must contain at least one case"
 
@@ -121,15 +117,15 @@ def _run_gate(
 
 @pytest.mark.eval
 def test_release_gate_enforces_threshold_and_reports_per_class() -> None:
-    """Score the calibration corpus and verify per-class release gate semantics.
+    """Score the calibration corpus and verify the per-class threshold report.
 
-    The gate is defined by these invariants that this single test asserts:
+    The report is defined by these invariants that this single test asserts:
 
     1. **Nonzero collection.**  The corpus must contain cases; an empty corpus
        would make the threshold meaningless.
-    2. **Per-class threshold enforcement.**  Every case must be scored, and each
-       class (plus the aggregate) must keep recall at 1.0 under its own release
-       threshold.  Unavailable cases are called out explicitly.
+    2. **Per-class threshold reporting.**  Every case must be scored, and each
+       class (plus the aggregate) must keep recall at 1.0 under its own threshold.
+       Unavailable cases are called out explicitly.
     3. **Fail-closed on breach.**  If any class or the overall group has recall
        < 1.0, the test fails with a summary that names every breached group.
     """

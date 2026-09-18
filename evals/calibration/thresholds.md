@@ -93,10 +93,8 @@ The standard 95% half-width (`z ≈ 1.96`) bounds recall and precision on the sm
 The release gate (`uv run pytest -m eval -v`) enforces exactly the per-class bars from `RELEASE_THRESHOLDS_BY_CLASS` against the combined corpus. A single class dropping below its bar fails the entire gate.
 
 ```python
-# From calibration_release_gate.yaml
-safer_threshold: 1.0
-honesty_threshold: 1.0
-helpfulness_threshold: 0.6
+# From evals/calibration.py: RELEASE_THRESHOLDS_BY_CLASS
+RELEASE_THRESHOLDS_BY_CLASS = {"SAF": 1.0, "HON": 1.0, "HLP": 0.6}
 ```
 
 ## Agreement report

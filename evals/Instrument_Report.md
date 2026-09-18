@@ -182,23 +182,27 @@ and is deliberately out of scope for the measurement.
 
 The approved calibration corpus spans two immutable, versioned registries, now reconciled:
 
-- `vietnamese-semantic-v7` — [`calibration_v7.yaml`](calibration_v7.yaml), **44** cases (SAF 14, HON 14, HLP 16);
+- `vietnamese-semantic-v7` — [`calibration_v7.yaml`](calibration_v7.yaml), **54** cases (SAF 18, HON 16, HLP 20);
 - `vietnamese-semantic-v8` — [`calibration_v8.yaml`](calibration_v8.yaml), **12** cases (HON 8, HLP 4).
 
-That is **56** cases total. An earlier draft of this report cited "40" and "52"; the committed
-`calibration_v7.yaml` carries 44 cases (the original 36, plus four SAF-indirect-injection and four
-`get_job_details` HLP cases), so those figures were stale. Both corpora's human labels remain
-immutable input evidence and are pinned by content hash in CI.
+That is **66** cases total. The committed `calibration_v7.yaml` carries 54 cases (the original 36,
+plus four SAF-indirect-injection, four `get_job_details` HLP cases, and ten multi-turn conversation
+cases added in #383). Both corpora's human labels remain immutable input evidence and are pinned by
+content hash in CI.
 
-All 56 cases were scored with the real configured judge (`google/gemma-4-31b-it` via Google AI
-Studio, temperature 0.0, rpm 10, 120 s timeout) through the supported semantic path, and every
-case returned `AVAILABLE`; none is `UNAVAILABLE`. This supersedes the synthetic v8 scores that
-ADR-0051 recorded as a reporting-shape placeholder. The reproducible artifacts are
+The ADR-0052 recall-first sweep scored the then-current 56 cases with the real configured judge
+(`google/gemma-4-31b-it` via Google AI Studio, temperature 0.0, rpm 10, 120 s timeout) through the
+supported semantic path, and every case returned `AVAILABLE`; none is `UNAVAILABLE`. This supersedes
+the synthetic v8 scores that ADR-0051 recorded as a reporting-shape placeholder. The reproducible
+artifacts are
 [`runs/iha-v8-judge-combined-judge-scores.json`](runs/iha-v8-judge-combined-judge-scores.json) and
 [`runs/iha-v8-judge-combined-agreement-report.json`](runs/iha-v8-judge-combined-agreement-report.json).
+Those 56-case statistics predate the ten multi-turn v7 cases added in #383 and are superseded by
+the live release gate, which scores the full 66-case corpus.
 
-Release thresholds are now **per class**, each recall-first (the highest sweep point at which the
-class's recall stays 1.0):
+Release thresholds are **per class**, each recall-first (the highest sweep point at which the
+class's recall stays 1.0). The ADR-0052 sweep selected the following bars over the then-56-case
+corpus:
 
 | Class | Threshold | n | Precision | Recall | TP | FP | FN | False passes |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -206,6 +210,9 @@ class's recall stays 1.0):
 | `HON` | 1.0 | 22 | 0.733 | 1.00 | 11 | 4 | 0 | 4 |
 | `HLP` | 0.5 | 20 | 0.714 | 1.00 | 10 | 4 | 0 | 4 |
 | `overall` | 0.5 | 56 | 0.778 | 1.00 | 28 | 8 | 0 | 8 |
+
+Fix 1C later raised the HLP bar from 0.5 to 0.6, so the enforced per-class bars are `SAF` 1.0,
+`HON` 1.0, `HLP` 0.6 over the 66-case corpus.
 
 The judge is recall-perfect but not precision-perfect: every disagreement is a **false pass** (a
 judge `PASS` on a human `FAIL` case), concentrated in `HON` and `HLP`, never `SAF`. No false
@@ -237,8 +244,8 @@ The deterministic outcomes are suitable for reproducible regression diagnosis ag
 v11 fixture and registry only; they authorize no production quality claim.
 
 The release gate now enforces per-class thresholds recorded in
-`evals/calibration.py` (`RELEASE_THRESHOLDS_BY_CLASS`: `SAF` 1.0, `HON` 1.0, `HLP` 0.5) over the
-combined 56-case corpus, failing closed on any class recall below 1.0 or any unavailable case
+`evals/calibration.py` (`RELEASE_THRESHOLDS_BY_CLASS`: `SAF` 1.0, `HON` 1.0, `HLP` 0.6) over the
+combined 66-case corpus, failing closed on any class recall below 1.0 or any unavailable case
 (ADR-0052). The aggregate `RELEASE_THRESHOLD = 0.30` survives only as the legacy fallback and is
 superseded for enforcement by the per-class map. This authorizes the recall-first release decision
 recorded in ADR-0052 — it does not authorize a production-wide quality claim, and the eight
@@ -250,7 +257,7 @@ HON/HLP false passes remain open disagreement evidence.
    written disposition before any precision-gating claim (the recall-first release decision itself
    does not depend on them because no human-PASS case is ever misjudged).
 2. The per-class release decision (recall-first, ADR-0052) is recorded, but no production-wide
-   quality claim is authorized, and the `SAF` 1.0 bar rests only on the 14 v7 `SAF` cases (no v8
+   quality claim is authorized, and the `SAF` 1.0 bar rests only on the 18 v7 `SAF` cases (no v8
    holdout arm exists).
 3. The 34 deterministic `FAIL` turns are visible agent behavior findings (chiefly SQL
    `execution_accuracy` and `source_links`) and are out of scope for this measurement publication.
@@ -351,8 +358,14 @@ roadmap through Phase 3.
 
 ## Verification performed
 
-`uv run pytest -q tests/evals` passes offline; the live gate (`uv run pytest -m eval -v`) scored
-all **56** calibration cases (`AVAILABLE`, zero unavailable) and enforced the per-class bars
-(ADR-0052). Deterministic grading and execution accuracy are generated without a model call, and
-`uv run python scripts/docs_lint.py` is clean. The combined judge-scores and agreement-report
-artifacts are regenerable with `uv run python -m evals.calibration_score`.
+`uv run pytest -q tests/evals` passes offline; the deterministic gate (`uv run pytest`) passes
+(960 passed), `ruff` and `mypy` are clean, and `uv run python scripts/docs_lint.py` is clean.
+The deterministic fixture loader seeds 24 rows and the committed replay replays cleanly with no
+model call.
+The live semantic gate (`uv run pytest -m eval -v`) enforces the per-class bars (`SAF` 1.0,
+`HON` 1.0, `HLP` 0.6) over the combined 66-case corpus and fails closed on any unavailable case.
+The 2026-09-18 certification run (workflow_dispatch, run 35335276252) failed closed: the judge
+provider returned `500 INTERNAL` for the gate and judge-scaffold cases, so the release must not
+be tagged until a fresh maintainer-authorized run passes.
+The combined judge-scores and agreement-report artifacts are regenerable with
+`uv run python -m evals.calibration_score`.

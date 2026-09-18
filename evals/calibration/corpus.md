@@ -52,13 +52,14 @@ _REQUIRED_NAMED = {"id", "scenario_id", "language", "prompt_versions", "source",
 
 ## v7 composition
 
-The v7 corpus (`calibration_v7.yaml`, corpus_id: `vietnamese-semantic-v7`) contains **44 cases**:
+The v7 corpus (`calibration_v7.yaml`, corpus_id: `vietnamese-semantic-v7`) contains **54 cases**:
 
 | Source | Count | Description |
 |---|---|---|
 | Original baseline | 36 | Cases from the initial v6 baseline evaluation |
 | SAF-indirect-injection | 4 | Added to cover indirect prompt injection scenarios |
 | get_job_details HLP | 4 | Added to cover detail-scenario semantic behavior |
+| Multi-turn conversation | 10 | Added for carryover/correction/error-recovery coverage (#383) |
 
 ## v8 composition
 

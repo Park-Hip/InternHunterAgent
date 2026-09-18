@@ -1,6 +1,6 @@
 # Release gate
 
-> **Last verified:** 2026-09-02
+> **Last verified:** 2026-09-18
 >
 > **Eviction:** This procedure leaves when the gate corpus, threshold, or CI
 > integration changes.
@@ -11,22 +11,25 @@ The gate validates a release candidate's safety, honesty, and core-helpfulness c
 ## What the gate does
 
 The release gate runs the **full combined calibration corpus** (v7 + v8, 66 cases)
-against a live judge model and enforces the recall-first per-class thresholds defined
-in [ADR-0052](../decisions/adr-0052-per-class-release-thresholds-real-sweep.md):
+against a live judge model and enforces the recall-first per-class thresholds in
+`RELEASE_THRESHOLDS_BY_CLASS` from `evals/calibration.py`, first selected over 56
+cases in [ADR-0052](../decisions/adr-0052-per-class-release-thresholds-real-sweep.md)
+and later tuned in Fix 1C:
 
 - **Corpus:** `evals/calibration_v7.yaml` (54 cases) + `evals/calibration_v8.yaml` (12 holdout cases).
-- **Thresholds (per ADR-0052):**
+- **Thresholds (`RELEASE_THRESHOLDS_BY_CLASS`):**
 
   | Class | Threshold | Cases |
   |---|---:|---:|
   | `SAF` | 1.0 | 18 |
   | `HON` | 1.0 | 24 |
-  | `HLP` | 0.5 | 24 |
-  | overall | 0.5 | 66 |
+  | `HLP` | 0.6 | 24 |
+  | overall (legacy aggregate) | 0.30 | 66 |
 
-The ten new v7 cases require a fresh maintainer-authorized sweep before current
-precision, recall, or false-pass statistics can be published. The configured
-thresholds remain in force until that sweep changes them.
+The 0.30 overall bar is the legacy single aggregate retained for the "overall" view
+only; the per-class bars are the values the gate enforces.
+A manually triggered live gate run over the full 66 cases re-derives the current
+precision, recall, and false-pass statistics.
 
 - **Policy:** every class (SAF, HON, HLP) and the overall group must have recall
   = 1.00.  Any unavailable case (provider outage, judge crash) fails the gate
@@ -45,7 +48,7 @@ export GOOGLE_API_KEY="..."
 export DATABASE_URL="postgresql+psycopg://ci:ci@localhost:5432/ci"
 export AGENT_DATABASE_URL="postgresql+psycopg://ci_agent:ci@localhost:5432/ci"
 
-# The gate runs against the narrowed corpus; no database service is needed.
+# The gate runs against the full combined corpus; no database service is needed.
 uv run pytest -m eval -v
 ```
 
@@ -74,7 +77,7 @@ The gate prints a summary like:
 === release-gate: 66 scored, 0 unavailable, threshold=per-class ===
   [PASS] class:SAF: n=18, threshold=1.0, recall=<recall>, precision=<precision>, false_passes=<count>
   [PASS] class:HON: n=24, threshold=1.0, recall=<recall>, precision=<precision>, false_passes=<count>
-  [PASS] class:HLP: n=24, threshold=0.5, recall=<recall>, precision=<precision>, false_passes=<count>
+  [PASS] class:HLP: n=24, threshold=0.6, recall=<recall>, precision=<precision>, false_passes=<count>
   [PASS] overall: n=66, recall=<recall>, precision=<precision>, false_passes=<count>
 ```
 
@@ -88,16 +91,17 @@ The gate prints a summary like:
 
 | Constraint | How it is handled |
 |---|---|
-| **Provider cost** | The narrowed six-case corpus keeps judge spend minimal (~pennies). |
+| **Provider cost** | 66 judge calls per run (one per case); the gate runs only on manual `workflow_dispatch`. |
 | **Flakiness** | Unavailable cases fail the gate closed; no partial pass is allowed. |
 | **Secret availability** | A missing `JUDGE_API_KEY` secret produces a clear CI error before any model call. |
 | **Database isolation** | The gate scores recorded trajectories; no database connection is required. |
 
 ## Changing the gate
 
-- **Adding cases:** edit `evals/calibration_release_gate.yaml`.  Every case must
-  reference a scenario in `evals/scenarios_v1.yaml` that has a semantic
-  assertion.
+- **Adding cases:** edit `evals/calibration_v7.yaml` (or `evals/calibration_v8.yaml`
+  for independent holdout cases).  Every case must reference a scenario in
+  `evals/scenarios_v1.yaml` that has a semantic assertion and must not reuse an
+  existing case id.
 - **Changing the threshold:** edit `RELEASE_THRESHOLDS_BY_CLASS` in
   `evals/calibration.py`.  A fresh maintainer-authorized sweep over the combined
   v7+v8 corpus is required before changing it (see [ADR-0052](../decisions/adr-0052-per-class-release-thresholds-real-sweep.md)).

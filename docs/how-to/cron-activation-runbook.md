@@ -595,7 +595,7 @@ thread.
 > superseded **only** for the inactivity-recovery path defined below. The bans on synthetic commits
 > and on no-op dispatches while the workflow is active are retained verbatim.
 
-**Approved plan:** `.crew/325-approved-plan.md` (`APPROVED-PLAN-325`, maintainer, 2026-08-28).
+**Approved plan:** maintainer-approved external automation for issue #325.
 **Implementation:** `scripts/recover_ingestion_workflow.py` with focused tests in
 `tests/scripts/test_recover_ingestion_workflow.py`. Provisioning is a maintainer action; the code
 and these docs ship reproducible configuration only and never store a credential, secret, scheduler

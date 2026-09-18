@@ -1,6 +1,6 @@
 # Scheduled ingestion is a required MVP capability, not an optional refresh
 
-> **Status:** Active · **Decided:** 2026-08-12
+> **Status:** Superseded by ADR-0053 · **Decided:** 2026-08-12
 
 ## Decision
 

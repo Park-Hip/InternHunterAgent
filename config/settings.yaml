@@ -4,7 +4,9 @@ api:
   max_query_chars: 2000
   stream_heartbeat_seconds: 15  # SSE comment cadence; keep below normal proxy idle windows.
   demo:
-    data_snapshot_date: "2026-07-14"  # Update whenever the shipped demo corpus changes.
+    # Fallback surfaced by /api/v1/ready when clean_jobs has no measurable
+    # freshness. Frozen at the last successfully measured ingest (2026-08-27).
+    data_snapshot_date: "2026-08-27"
   cors:
     allowed_origins: []  # Set deployed/demo UI origin(s) here later; keep empty for same-origin or no-browser use.
     allow_credentials: false

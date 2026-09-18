@@ -95,14 +95,16 @@ input { font: inherit; color: inherit; }
   color: var(--ink-soft);
 }
 
-/* dateline: a hairline-boxed edition line, doubling as the data disclaimer */
+/* dateline: a prominent frozen-snapshot notice, doubling as the data disclaimer */
 .dateline {
   margin: 1.25rem 0 0;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--hairline);
-  font-size: 0.78rem;
-  letter-spacing: 0.03em;
-  color: var(--muted);
+  padding: 0.85rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: var(--hairline-2);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
 }
 
 /* ---- conversation column --------------------------------------------- */

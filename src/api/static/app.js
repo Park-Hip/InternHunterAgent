@@ -32,26 +32,26 @@ let inFlight = false;   // one stream at a time; lock the inputs while it runs
 let toastTimer = null;
 
 // ===========================================================================
-// Disclaimer / dateline — read the truthful snapshot date from /api/v1/ready.
+// Frozen-snapshot notice / dateline - read the snapshot date from /api/v1/ready.
 // Never crash, never show "undefined": fall back to the dateless sentence.
 // ===========================================================================
 async function loadDateline() {
   const unknownFreshness =
-    "Dữ liệu thử nghiệm · chưa có ngày cập nhật · tin tuyển dụng công khai, có thể không chính xác.";
+    "Kho dữ liệu lịch sử · ngày chụp chưa rõ · kết quả không xác nhận vị trí đang tuyển.";
   try {
     const res = await fetch("/api/v1/ready");
-    if (!res.ok) return;                       // 503 if DB down — keep fallback
+    if (!res.ok) return;                       // 503 if DB down - keep fallback
     const data = await res.json();
     const date = data && data.data_snapshot_date;
     const isMeasured = data && data.data_snapshot_date_provenance === "measured";
     if (date && isMeasured) {
       dateline.textContent =
-        `Dữ liệu thử nghiệm · ảnh chụp ${date} · tin tuyển dụng công khai, có thể không chính xác.`;
+        `Kho dữ liệu lịch sử · ảnh chụp ${date} · kết quả không xác nhận vị trí đang tuyển.`;
     } else {
       dateline.textContent = unknownFreshness;
     }
   } catch {
-    // network error — the fallback text is already in the markup
+    // network error - the fallback text is already in the markup
   }
 }
 

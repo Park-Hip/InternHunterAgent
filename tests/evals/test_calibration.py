@@ -213,7 +213,11 @@ def test_calibration_corpora_are_immutable_by_content_hash() -> None:
         "evals/calibration_v8.yaml": "5299446ece8d38532b6357f2e27c13607576d093b28b4cb40b9d02e93b4dbd7d",
     }
     for rel, want in pinned.items():
-        digest = hashlib.sha256(Path(rel).read_bytes()).hexdigest()
+        # Normalize line endings so the pin matches the committed (LF) content
+        # on every checkout, including Windows machines with core.autocrlf=true.
+        digest = hashlib.sha256(
+            Path(rel).read_bytes().replace(b"\r\n", b"\n")
+        ).hexdigest()
         assert digest == want, (
             f"{rel} content changed ({digest}); the calibration corpus is "
             "immutable — update the pinned hash deliberately, never silently"

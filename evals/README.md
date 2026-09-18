@@ -182,9 +182,9 @@ evals/
 │   ├── v1_scenario_matrix.md     Legacy v1 scenario matrix
 │   └── calibration_v6.yaml       Superseded by v7/v8; no code references it
 │
-├── calibration_v7.yaml           Immutable human-labelled corpus (44 cases)
+├── calibration_v7.yaml           Immutable human-labelled corpus (54 cases)
 ├── calibration_v8.yaml           Immutable independent holdout (12 cases)
-├── calibration_release_gate.yaml Enforced per-class thresholds
+├── calibration_release_gate.yaml Legacy 6-case bootstrap corpus (superseded)
 │
 ├── *.py                          Implementation modules (driver, grader, score, replay, …)
 │

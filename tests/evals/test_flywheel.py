@@ -319,7 +319,7 @@ def test_export_review_creates_file_with_tiers(tmp_path: Path):
     ]
     out = tmp_path / "review.md"
     export_review(candidates, out)
-    text = out.read_text()
+    text = out.read_text(encoding="utf-8")
 
     assert "# Flywheel Review Bundle" in text
     assert "Tier 1 — Deterministic Failures" in text
@@ -342,7 +342,7 @@ def test_export_review_with_fake_data(tmp_path: Path):
     ]
     out = tmp_path / "review.md"
     export_review(candidates, out)
-    text = out.read_text()
+    text = out.read_text(encoding="utf-8")
     assert "SAF-X-1" in text
     assert "trace-1" in text
     assert "injection accepted" in text

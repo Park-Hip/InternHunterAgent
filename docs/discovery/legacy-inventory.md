@@ -1,0 +1,79 @@
+# Legacy component inventory
+
+> **Last verified:** 2026-09-24
+>
+> **Eviction:** This inventory leaves when each approved replacement or retirement has a recorded ADR, characterization evidence where required, and a merged retirement decision.
+
+## How to read this inventory
+
+This inventory records the legacy implementation at commit `f20e688` for [issue #424](https://github.com/Park-Hip/InternHunterAgent/issues/424).
+Its recommendations are provisional refactor dispositions, not approval to change code or infrastructure.
+
+`Confirmed` means source, test, configuration, or workflow inspection directly supports the stated use.
+`Declared` means a configuration or dependency declares a capability without proving it is live.
+`Unknown` means the evidence base did not establish actual use.
+
+The owner column names the architectural boundary responsible for the component, not an individual maintainer.
+The inbound and outbound columns describe source-level dependencies, not a dynamic call graph.
+
+## Runtime and public delivery
+
+| Component | Owner | Inbound dependencies | Outbound dependencies | Actual use and evidence | Test evidence | Risk | Provisional disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/api/app.py` | API composition root | Uvicorn, Render Docker command, local Compose, tests. | API routes, static files, settings, schema guard, checkpointer, runtime factory, Langfuse lifecycle. | Confirmed module-level ASGI entrypoint and application factory. | API startup, static serving, CORS, docs, rate-limit, and readiness tests. | It assembles concrete runtime and tracing dependencies, so its startup path can fail on database schema or checkpoint setup. | Keep the composition-root concept; reshape only after target boundaries are approved. |
+| `src/api/routes/query.py` | API transport | Router registration and HTTP callers. | Service, settings, structured logs, FastAPI SSE. | Confirmed one-shot and streaming routes. | Query, conversation, streaming, disconnect, rate-limit, and schema tests. | Existing JSON and SSE behavior may have external consumers that are not yet inventoried. | Preserve as a compatibility candidate; characterize only required public behavior. |
+| `src/api/routes/health.py` | API transport | Router registration, Render health check, readiness callers. | SQLAlchemy session factory and settings. | Confirmed `/health` and `/ready` routes; Render declares `/api/v1/health`. | Readiness tests. | Snapshot-date fallback can hide schema drift from callers. | Keep liveness and readiness as operational concepts; reassess response shapes. |
+| `src/api/schemas.py` and `src/api/schema_guard.py` | API contract | Routes and OpenAPI generation. | Pydantic and serving database schema inspection. | Confirmed request, response, and stream-event model definitions. | Query, stream, schema-guard, and prompt consistency tests. | Contract and database assumptions are coupled to the legacy corpus. | Preserve public contracts only if an approved compatibility need exists; otherwise replace behind versioning. |
+| `src/api/static/` | Browser delivery | Root static mount and browser visitors. | Fetch-based API consumer and vendored DOM libraries. | Confirmed same-origin browser assets. | Static-serving and conversation tests cover server delivery, not visual quality or deployed browser use. | The UI embodies legacy chat behavior and can silently constrain the new MVP. | Keep as evidence; reshape or replace after the first approved user workflow. |
+| `src/agents/service.py` | Application service | API routes and evaluation callers. | Runtime, tracing latency helper, domain errors. | Confirmed request-level orchestration between transport and runtime. | Service, conversation, query, and stream tests. | It assumes an agent response shape and session behavior that may not match the approved MVP. | Reshape in place if the target still needs an application orchestration seam. |
+| `src/agents/runtime/` | Agent runtime | Service and application factory. | LangChain, LangGraph checkpointing, providers, prompts, tools, tracing. | Confirmed legacy ReAct construction and one-shot or streaming execution. | Factory, provider, prompts, memory, trimming, ReAct, tracing, and stream tests. | The current discovery boundary explicitly defers ReAct and agent-framework selection. | Replace behind a stable application contract if the MVP needs a different execution model. |
+| `src/agents/runtime/provider.py` | Agent runtime | Runtime factory. | DeepSeek and Groq LangChain integrations, provider secrets. | Confirmed source branches for DeepSeek and Groq. | Provider tests. | `langchain-google-genai` and `langchain-openai` are declared but no serving import was found. | Reassess all provider choices after measurable MVP capability requirements exist. |
+| `src/agents/runtime/prompts.py`, `middleware.py`, and `config/prompts.yaml` | Agent runtime | Runtime factory and prompt-registration tooling. | LangChain messages, YAML configuration, model behavior. | Confirmed legacy prompt loading and middleware use. | Prompt, trimming, prompt-consistency, and prompt-surface tests. | Prompt content and model behavior are coupled to a legacy corpus and ReAct workflow. | Retain as evidence; replace or reshape only with evaluation evidence. |
+| `src/agents/tools/` | Tool adapters | Runtime factory and model tool calls. | Query services, tracing, prompt-defined strings. | Confirmed `query_clean_jobs` and `get_job_details` tools. | Tool, formatter, SQL validator, obligation, and prompt-surface tests. | Natural-language-to-SQL and legacy corpus contracts may not meet the new deterministic-analysis requirement. | Replace behind explicit tool contracts when MVP data and analyses are approved. |
+| `src/agents/tracing/` | Tracing adapter | Application lifecycle, runtime, service, and prompt tooling. | Langfuse SDK and settings. | Confirmed Langfuse construction and no-op-oriented paths in source. | Langfuse lifecycle, tracing, and prompt-reference tests. | Hosted trace availability, redaction, and production use were not observed. | Keep the isolated adapter boundary; reassess provider and trace contract later. |
+
+## Core, data, and offline processing
+
+| Component | Owner | Inbound dependencies | Outbound dependencies | Actual use and evidence | Test evidence | Risk | Provisional disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/core/config.py` and `config/settings.yaml` | Configuration | Application, runtime, tracing, ingestion, and scripts. | Environment, `.env`, YAML configuration. | Confirmed centralized loader, although many legacy settings remain. | Configuration and startup tests. | Configuration names and defaults encode legacy provider, corpus, and serving assumptions. | Reshape in place after target configuration requirements are decided. |
+| `src/core/db.py` and `src/core/checkpointer.py` | Core persistence | API, readiness, query, ingestion, and runtime. | SQLAlchemy, PostgreSQL, and LangGraph Postgres checkpointing. | Confirmed separate application and agent database URLs. | Database, checkpointer, readiness, query, and memory tests. | The target data model and session needs are unknown. | Preserve only a thin persistence boundary; reassess concrete stores. |
+| `src/core/errors.py` and `src/core/logger.py` | Core cross-cutting | API, service, runtime, tools, and ingestion. | Structured logging and public-safe error translation. | Confirmed by source imports and request error paths. | Error, query, service, stream, and ingestion tests. | Current error taxonomy reflects the legacy provider and chat workflow. | Keep safe public-error and correlated-logging principles; reshape types. |
+| `src/services/query/` | Legacy query domain service | Agent tools and readiness-adjacent schema guard. | SQLAlchemy, `clean_jobs`, SQL validator, formatter, prompts. | Confirmed legacy corpus query execution. | Executor, details, models, obligations, row-bound, SQL-validator, and formatter tests. | It is coupled to one table, generated SQL, and legacy job fields. | Retire or replace only after source, schema, and deterministic-analysis contracts are selected. |
+| `src/services/ingestion/` | Offline ingestion | Manual GitHub Actions workflow and loader CLI. | VietnamWorks, HTTPX, PostgreSQL, Healthchecks.io, YAML. | Confirmed source and workflow exist, but scheduled ingestion is disabled. | Source, normalization, loader, stores, compliance, safety, and workflow-frozen tests. | Current discovery prohibits collection, and source authority is unresolved. | Retain as evidence only; do not reactivate, reshape, or replace in this refactor. |
+| `alembic/`, `alembic.ini`, and `src/services/ingestion/models.py` | Schema management | Maintainer and CI migration commands. | PostgreSQL and SQLAlchemy metadata. | Confirmed migration chain and CI migration job. | Migration round-trip and schema-safety tests. | Schema changes could damage a retained corpus or conflict with data-strategy decisions. | Keep migration discipline if the target retains a database; make no schema decision now. |
+| `evals/` and evaluation assets | Evaluation | CI, maintainers, fixture loader, and legacy agent service. | Fixture PostgreSQL, optional judge/provider, Langfuse score APIs, filesystem artifacts. | Confirmed offline harness and replay path. | Broad deterministic evaluation, replay, grader, score, and viewer tests. | Existing scenarios measure legacy chat and corpus behavior, not automatically the new MVP. | Reshape reusable harness seams; retain legacy results as historical evidence. |
+| `scripts/register_langfuse_prompts.py` and `scripts/provision_langfuse_models.py` | Operations and tracing | Maintainer or CI commands. | Langfuse API and configuration. | Declared operational scripts; invocation outside tests was not observed. | Dedicated script tests. | Synchronization can modify a hosted project if run without a dry-run guard. | Retain as evidence and isolate from future serving changes. |
+| `scripts/recover_ingestion_workflow.py` | Operations | Render recovery cron. | GitHub Actions API and Healthchecks.io. | Confirmed by `render.yaml` cron declaration. | Dedicated recovery-script tests. | It can re-enable or dispatch a workflow, so a refactor can accidentally revive unauthorized collection. | Retire, retain, or replace only in a separately approved operations and data-authority change. |
+
+## Deployment, configuration, and external services
+
+| Component or service | Owner | Inbound dependencies | Outbound dependencies | Actual use and evidence | Test evidence | Risk | Provisional disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `docker/Dockerfile` and `docker-compose.yml` | Deployment | Local developers and Render web service. | Uvicorn, PostgreSQL, environment file, Docker. | Confirmed image command and local topology. | Indirectly covered by startup tests; no Docker end-to-end evidence was collected. | Drift between local Compose and hosted configuration can mask failures. | Keep as reference and verify only after target runtime is chosen. |
+| `render.yaml` | Deployment | Render Blueprint application. | Render web service, cron, managed secrets, GitHub repository. | Declares a web service and recovery cron. | No live Render inspection was performed. | A source declaration is not proof of live service state, and the cron has operational authority. | Preserve as evidence; do not change deployment in this discovery issue. |
+| `.github/workflows/ci.yml` | Delivery verification | Pull requests. | GitHub-hosted runners and PostgreSQL service containers. | Confirmed deterministic checks plus migration job. | The workflow itself is source evidence; local commands still need final verification. | CI can differ from local environment and does not prove deployed runtime behavior. | Keep verification concepts; reassess gates with the target MVP. |
+| `.github/workflows/ingestion.yml` | Data operations | Manual GitHub Actions dispatch. | GitHub Actions, PostgreSQL, source, Healthchecks.io. | Confirmed manual dispatch only; source comments state schedule removal. | Frozen-workflow tests and ingestion tests. | Manual dispatch remains an external write path. | Freeze as legacy evidence pending a separate data-authority decision. |
+| PostgreSQL and Neon references | Persistence | Application, ingestion, migrations, and local Compose. | SQLAlchemy and Psycopg. | PostgreSQL is source-confirmed; a hosted Neon instance is a legacy documentation claim not verified in this inventory. | Unit tests plus CI PostgreSQL services. | Hosted topology, retention, and data contents are unknown. | Reassess after MVP data requirements and retention policy are approved. |
+| DeepSeek, Groq, Google, OpenAI, and OpenRouter | Model and evaluation integrations | Settings, runtime provider, evaluation configuration, or declared dependencies. | Provider APIs and secrets. | DeepSeek and Groq runtime branches are source-confirmed; the remaining use is declared or evaluation-related. | Provider and evaluation tests use fakes or controlled fixtures. | Provider availability, cost, and quality were not measured in this discovery work. | Defer all provider selection and routing decisions. |
+| Langfuse Cloud | Tracing | Tracing adapter and operational scripts. | Langfuse API and hosted project credentials. | SDK use is source-confirmed; hosted project state is unknown. | Tracing, prompt-reference, evaluation, and script tests. | Trace completeness, redaction, retention, and non-blocking behavior need target-specific validation. | Keep the adapter seam; reconsider the service choice later. |
+| VietnamWorks and Healthchecks.io | Data operations | Ingestion source, compliance checks, loader, and recovery script. | Remote HTTP endpoints and secrets. | Source and call sites are source-confirmed; collection is not authorized. | Ingestion and recovery tests mock remote calls. | Legal authority, availability, and live behavior are unresolved. | Do not use or modify without separately approved data and operations work. |
+
+## Decision register for later phases
+
+| Decision needed | Current evidence | Do not decide until |
+| --- | --- | --- |
+| Migration strategy | Source exposes a public HTTP and browser surface, but deployed consumers are unknown. | MVP compatibility posture and live-consumer inventory are approved. |
+| API and stream compatibility | Source defines JSON and SSE contracts. | The product specification states what users and clients must continue to receive. |
+| Agent runtime and prompt system | A LangChain ReAct implementation exists, but current MVP discovery defers the execution model. | Deterministic analysis, tool, and evaluation requirements are approved. |
+| Data model, source, and ingestion | Legacy `clean_jobs` and VietnamWorks paths exist, while source authority is open. | Data-collection strategy and retention authority are approved. |
+| Provider and tracing services | Concrete integrations are present but not measured here. | Capability, quality, latency, cost, privacy, and reliability criteria are defined. |
+| Deployment and recovery automation | Render and GitHub Actions paths may have active operational effects. | Service ownership, release posture, and rollback requirements are verified. |
+
+## Step 0 exit check
+
+Every source-backed production or request entrypoint is named in [legacy-refactor-baseline.md](legacy-refactor-baseline.md).
+Every inventoried component has an architectural owner, dependency direction, actual-use classification, test evidence, risk, and provisional keep, reshape, replace, or retire recommendation.
+
+These records prepare decisions only.
+They do not authorize refactoring, deletion, dependency removal, migration, source collection, or deployment changes.

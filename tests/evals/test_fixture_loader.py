@@ -43,3 +43,41 @@ def test_load_fixture_migrates_before_seeding() -> None:
     drop_fixture_schema.assert_called_once_with(fixture_dsn)
     upgrade_schema.assert_called_once_with(fixture_dsn)
     run_sql_file.assert_called_once_with(fixture_dsn, loader.SEED_SQL_PATH)
+
+
+def test_fixture_database_endpoint_parses_host_and_port() -> None:
+    with patch(
+        "evals.fixtures.loader.fixture_database_url",
+        return_value="postgresql+psycopg://user:pass@localhost:5433/db",
+    ):
+        assert loader.fixture_database_endpoint() == ("localhost", 5433)
+
+
+def test_fixture_database_endpoint_defaults_port_when_omitted() -> None:
+    with patch(
+        "evals.fixtures.loader.fixture_database_url",
+        return_value="postgresql+psycopg://user:pass@localhost/db",
+    ):
+        assert loader.fixture_database_endpoint() == ("localhost", 5432)
+
+
+def test_fixture_database_reachable_true_when_connect_succeeds() -> None:
+    with (
+        patch(
+            "evals.fixtures.loader.fixture_database_url",
+            return_value="postgresql+psycopg://user:pass@localhost:5433/db",
+        ),
+        patch("evals.fixtures.loader.socket.create_connection") as create,
+    ):
+        assert loader.fixture_database_reachable() is True
+    create.assert_called_once_with(
+        ("localhost", 5433), timeout=loader.FIXTURE_REACHABILITY_TIMEOUT_SECONDS
+    )
+
+
+def test_fixture_database_reachable_false_when_connect_is_refused() -> None:
+    with patch(
+        "evals.fixtures.loader.socket.create_connection",
+        side_effect=ConnectionRefusedError,
+    ):
+        assert loader.fixture_database_reachable() is False

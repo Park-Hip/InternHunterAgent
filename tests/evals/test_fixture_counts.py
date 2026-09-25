@@ -2,12 +2,25 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
-from evals.fixtures.loader import fixture_database_url, load_fixture
+from evals.fixtures.loader import (
+    fixture_database_endpoint,
+    fixture_database_reachable,
+    fixture_database_url,
+    load_fixture,
+)
 from src.api.schema_guard import EXPECTED_COLUMNS
 
 
 @pytest.fixture(scope="module")
 def eval_engine():
+    if not fixture_database_reachable():
+        host, port = fixture_database_endpoint()
+        pytest.skip(
+            f"Fixture Postgres is not reachable at {host}:{port}. "
+            "Start it with `docker compose up -d postgres` and re-run, "
+            "or skip the fixture-count tests."
+        )
+
     try:
         load_fixture()
     except OperationalError as exc:

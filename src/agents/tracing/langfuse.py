@@ -10,6 +10,7 @@ from langfuse import Langfuse, LangfuseSpan, propagate_attributes
 from langfuse.langchain import CallbackHandler
 
 from src.agents.runtime.prompts import (
+    ResolvedPromptBundle,
     load_resolved_prompt_versions,
     load_resolved_prompt_versions_async,
 )
@@ -194,6 +195,7 @@ async def _build_langfuse_tags_async(
     entry_point: str,
     scenario_id: str | None = None,
     repeat: int | None = None,
+    prompts: ResolvedPromptBundle | None = None,
 ) -> list[str]:
     tags = _base_langfuse_tags(
         entry_point=entry_point,
@@ -202,7 +204,11 @@ async def _build_langfuse_tags_async(
     )
     tags[1:1] = [
         f"prompt:{surface}:{version}"
-        for surface, version in (await load_resolved_prompt_versions_async()).items()
+        for surface, version in (
+            prompts.versions()
+            if prompts is not None
+            else await load_resolved_prompt_versions_async()
+        ).items()
     ]
     return tags
 
@@ -262,6 +268,7 @@ async def langfuse_request_trace(
     session_id: str | None = None,
     user_id: str | None = None,
     on_span_started: Callable[[LangfuseSpan], None] | None = None,
+    prompts: ResolvedPromptBundle | None = None,
 ) -> AsyncIterator[str | None]:
     """Scope one root Langfuse observation to an asynchronous agent request."""
     if _langfuse_handler is None:
@@ -272,10 +279,17 @@ async def langfuse_request_trace(
         entry_point=entry_point,
         scenario_id=scenario_id,
         repeat=repeat,
+        prompts=prompts,
     )
     attributes: dict[str, Any] = {
         "tags": tags,
-        "metadata": {"prompt_versions": await load_resolved_prompt_versions_async()},
+        "metadata": {
+            "prompt_versions": (
+                prompts.versions()
+                if prompts is not None
+                else await load_resolved_prompt_versions_async()
+            )
+        },
         "trace_name": trace_name,
     }
     if session_id is not None:

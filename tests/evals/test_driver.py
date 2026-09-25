@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import ANY
 
 import pytest
 
@@ -13,7 +14,7 @@ from evals import driver
 from evals import harness as harness_module
 from evals.harness import ProviderTelemetryCallback, SeamRun
 from evals.replay import REPLAY_SCHEMA_VERSION, load_replay, validate_replay
-from src.agents.runtime.prompts import load_prompt_versions
+from src.agents.runtime.prompts import ResolvedPromptBundle, load_prompt_versions
 from src.agents.tracing import langfuse
 from src.agents.tracing.prompt_registry import ResolvedPrompt
 
@@ -127,16 +128,29 @@ def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
     agent = object()
     factory_calls: list[dict[str, object]] = []
 
-    async def load_system_prompt() -> ResolvedPrompt:
-        return ResolvedPrompt(
-            "system", "resumi-system", "candidate system", "44", object(), False
+    async def resolve_prompts() -> ResolvedPromptBundle:
+        return ResolvedPromptBundle(
+            system=ResolvedPrompt(
+                "system", "resumi-system", "candidate system", "44", object(), False
+            ),
+            schema_context=ResolvedPrompt(
+                "schema_context",
+                "resumi-schema-context",
+                "schema",
+                "31",
+                object(),
+                False,
+            ),
+            sql_generation=ResolvedPrompt(
+                "sql_generation", "resumi-sql-generation", "SQL", "19", object(), False
+            ),
         )
 
     def build_agent(**kwargs: object) -> object:
         factory_calls.append(kwargs)
         return agent
 
-    monkeypatch.setattr(driver.harness, "load_system_prompt_resolution_async", load_system_prompt)
+    monkeypatch.setattr(driver.harness, "resolve_prompt_bundle_async", resolve_prompts)
     monkeypatch.setattr(driver.harness, "agent_factory", build_agent)
     monkeypatch.setattr(driver.harness, "CallbackHandler", lambda **kwargs: object())
     monkeypatch.setattr(
@@ -144,7 +158,13 @@ def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
         "validate_langfuse_trace_context",
         lambda **kwargs: validations.append(kwargs),
     )
+
+    @contextmanager
+    def prompt_attributes(_prompt):
+        yield
+
     monkeypatch.setattr(driver.harness, "langfuse_request_trace", request_trace)
+    monkeypatch.setattr(driver.harness, "langfuse_prompt_attributes", prompt_attributes)
     monkeypatch.setattr(driver.harness, "_run_turn", fake_run_turn)
 
     result = asyncio.run(driver.harness.run_single_turn_case(_case(), repeat=2))
@@ -162,6 +182,7 @@ def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
             "scenario_id": "HLP-TEST-1",
             "repeat": 2,
             "trace_name": "eval-HLP-TEST-1",
+            "prompts": ANY,
         }
     ]
 
@@ -250,6 +271,45 @@ def test_manifest_names_each_prompt_surface_it_ran(
         "schema_context": "v11",
         "sql_generation": "v11",
     }
+
+
+def test_manifest_records_the_resolved_managed_prompt_lineage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
+    _stub_fingerprint(monkeypatch)
+    prompts = ResolvedPromptBundle(
+        system=ResolvedPrompt(
+            "system", "resumi-system", "candidate system", "44", object(), False
+        ),
+        schema_context=ResolvedPrompt(
+            "schema_context",
+            "resumi-schema-context",
+            "candidate schema",
+            "31",
+            object(),
+            False,
+        ),
+        sql_generation=ResolvedPrompt(
+            "sql_generation",
+            "resumi-sql-generation",
+            "candidate sql",
+            "19",
+            object(),
+            False,
+        ),
+    )
+
+    manifest = driver.build_manifest(prompts)
+
+    assert manifest["prompt_versions"] == {
+        "system": "44",
+        "schema_context": "31",
+        "sql_generation": "19",
+    }
+    assert manifest["prompt_hashes"]["system"] == driver._text_sha256(
+        "candidate system"
+    )
 
 
 def test_driver_persists_all_seams_and_resumes_completed_scenario(

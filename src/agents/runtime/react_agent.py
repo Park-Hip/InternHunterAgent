@@ -5,7 +5,11 @@ from typing import Any, cast
 from langchain.messages import HumanMessage, SystemMessage
 
 from src.agents.runtime.factory import agent_factory
-from src.agents.runtime.prompts import load_system_prompt_resolution_async
+from src.agents.runtime.prompts import (
+    ResolvedPromptBundle,
+    prompt_bundle_context,
+    resolve_prompt_bundle_async,
+)
 from src.agents.tracing.langfuse import (
     build_langfuse_config,
     get_langfuse_client,
@@ -24,9 +28,9 @@ class AgentRuntime:
         self._system_prompt_version: str | None = None
         self.agent = agent or agent_factory(checkpointer=checkpointer)
 
-    async def _active_system_prompt(self):
+    async def _active_system_prompt(self, prompts: ResolvedPromptBundle):
         """Refresh the served graph when a managed system-prompt label moves."""
-        prompt = await load_system_prompt_resolution_async()
+        prompt = prompts.system
         if self._managed_agent and prompt.version != self._system_prompt_version:
             self.agent = agent_factory(
                 checkpointer=self._checkpointer,
@@ -47,25 +51,28 @@ class AgentRuntime:
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
-        system_prompt = await self._active_system_prompt()
+        prompts = await resolve_prompt_bundle_async()
+        system_prompt = await self._active_system_prompt(prompts)
 
-        async with langfuse_request_trace(
-            entry_point="api:chat",
-            trace_name="agent-chat",
-            session_id=session_id,
-            user_id=user_id,
-        ) as trace_id:
-            with langfuse_prompt_attributes(system_prompt):
-                response = await self.agent.ainvoke(messages, config=config or None)
-            answer, failure_category = self._extract_answer_with_failure_category(
-                response
-            )
-            if failure_category is not None:
-                logger.warning(
-                    "agent_runtime.response_extraction_failed",
-                    failure_category=failure_category,
+        with prompt_bundle_context(prompts):
+            async with langfuse_request_trace(
+                entry_point="api:chat",
+                trace_name="agent-chat",
+                session_id=session_id,
+                user_id=user_id,
+                prompts=prompts,
+            ) as trace_id:
+                with langfuse_prompt_attributes(system_prompt):
+                    response = await self.agent.ainvoke(messages, config=config or None)
+                answer, failure_category = self._extract_answer_with_failure_category(
+                    response
                 )
-                record_agent_response_failure(category=failure_category)
+                if failure_category is not None:
+                    logger.warning(
+                        "agent_runtime.response_extraction_failed",
+                        failure_category=failure_category,
+                    )
+                    record_agent_response_failure(category=failure_category)
 
         client = get_langfuse_client()
         if client is not None:
@@ -98,7 +105,8 @@ class AgentRuntime:
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
-        system_prompt = await self._active_system_prompt()
+        prompts = await resolve_prompt_bundle_async()
+        system_prompt = await self._active_system_prompt(prompts)
 
         events: asyncio.Queue[dict[str, str | None] | Exception] = asyncio.Queue(
             maxsize=1
@@ -131,9 +139,11 @@ class AgentRuntime:
             on_span_started=observation.attach_trace
             if observation is not None
             else None,
+            prompts=prompts,
         ) as trace_id:
-            with langfuse_prompt_attributes(system_prompt):
-                producer = asyncio.create_task(_produce_stream())
+            with prompt_bundle_context(prompts):
+                with langfuse_prompt_attributes(system_prompt):
+                    producer = asyncio.create_task(_produce_stream())
             stream_completed = False
             provider_failed = False
             try:

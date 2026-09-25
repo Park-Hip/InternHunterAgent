@@ -33,11 +33,15 @@ from deepeval.tracing.trace_test_manager import trace_testing_manager
 from evals.judge import build_judge
 from src.agents.runtime.factory import agent_factory
 from src.agents.runtime.prompts import (
+    ResolvedPromptBundle,
+    active_prompt_bundle,
     load_schema_context_resolution,
-    load_system_prompt_resolution_async,
+    prompt_bundle_context,
+    resolve_prompt_bundle_async,
 )
 from src.agents.tracing.langfuse import (
     get_langfuse_handler,
+    langfuse_prompt_attributes,
     langfuse_request_trace,
     validate_langfuse_trace_context,
 )
@@ -342,8 +346,14 @@ async def _run_turn(
     )
 
 
-async def run_single_turn_case(case: dict, *, repeat: int = 1) -> SeamRun:
-    system_prompt = await load_system_prompt_resolution_async()
+async def run_single_turn_case(
+    case: dict,
+    *,
+    repeat: int = 1,
+    prompts: ResolvedPromptBundle | None = None,
+) -> SeamRun:
+    prompts = prompts or active_prompt_bundle() or await resolve_prompt_bundle_async()
+    system_prompt = prompts.system
     agent = agent_factory(system_prompt=SystemMessage(content=system_prompt.content))
     handler = CallbackHandler(name=case["id"])
     validate_langfuse_trace_context(
@@ -351,18 +361,21 @@ async def run_single_turn_case(case: dict, *, repeat: int = 1) -> SeamRun:
         scenario_id=case["id"],
         repeat=repeat,
     )
-    async with langfuse_request_trace(
-        entry_point="eval:driver",
-        scenario_id=case["id"],
-        repeat=repeat,
-        trace_name=f"eval-{case['id']}",
-    ) as trace_id:
-        return await _run_turn(
-            agent,
-            case["input"],
-            {"callbacks": [handler]},
-            trace_id,
-        )
+    with prompt_bundle_context(prompts):
+        async with langfuse_request_trace(
+            entry_point="eval:driver",
+            scenario_id=case["id"],
+            repeat=repeat,
+            trace_name=f"eval-{case['id']}",
+            prompts=prompts,
+        ) as trace_id:
+            with langfuse_prompt_attributes(system_prompt):
+                return await _run_turn(
+                    agent,
+                    case["input"],
+                    {"callbacks": [handler]},
+                    trace_id,
+                )
 
 
 async def run_conversational_case(
@@ -370,6 +383,7 @@ async def run_conversational_case(
     *,
     repeat: int = 1,
     pause: Callable[[], Awaitable[None]] | None = None,
+    prompts: ResolvedPromptBundle | None = None,
 ) -> tuple[list[SeamRun], ConversationalTestCase]:
     """Run every turn against one persistent thread; return each turn's
     SeamRun plus a ConversationalTestCase transcript of the whole exchange.
@@ -378,7 +392,8 @@ async def run_conversational_case(
     would otherwise spend a second turn's token budget inside the per-minute
     window its first turn just filled.
     """
-    system_prompt = await load_system_prompt_resolution_async()
+    prompts = prompts or active_prompt_bundle() or await resolve_prompt_bundle_async()
+    system_prompt = prompts.system
     agent = agent_factory(
         checkpointer=InMemorySaver(),
         system_prompt=SystemMessage(content=system_prompt.content),
@@ -399,18 +414,21 @@ async def run_conversational_case(
         if turn_index and pause is not None:
             await pause()
         handler = CallbackHandler(thread_id=thread_id)
-        async with langfuse_request_trace(
-            entry_point="eval:driver",
-            scenario_id=case["id"],
-            repeat=repeat,
-            trace_name=f"eval-{thread_id}-turn-{turn_index + 1}",
-        ) as trace_id:
-            seam_run = await _run_turn(
-                agent,
-                message,
-                {**config, "callbacks": [handler]},
-                trace_id,
-            )
+        with prompt_bundle_context(prompts):
+            async with langfuse_request_trace(
+                entry_point="eval:driver",
+                scenario_id=case["id"],
+                repeat=repeat,
+                trace_name=f"eval-{thread_id}-turn-{turn_index + 1}",
+                prompts=prompts,
+            ) as trace_id:
+                with langfuse_prompt_attributes(system_prompt):
+                    seam_run = await _run_turn(
+                        agent,
+                        message,
+                        {**config, "callbacks": [handler]},
+                        trace_id,
+                    )
         runs.append(seam_run)
         turns.append(Turn(role="user", content=message))
         turns.append(

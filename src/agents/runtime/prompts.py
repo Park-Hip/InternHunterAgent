@@ -1,5 +1,9 @@
 """Prompt accessors backed by managed Langfuse versions or release fallbacks."""
 
+from contextvars import ContextVar
+from dataclasses import dataclass
+from contextlib import contextmanager
+from collections.abc import Iterator
 from typing import cast
 
 from langchain.messages import SystemMessage
@@ -16,6 +20,42 @@ from src.agents.tracing.prompt_registry import (
 from src.core.config import settings
 
 
+@dataclass(frozen=True)
+class ResolvedPromptBundle:
+    """One request's immutable view of every managed prompt surface."""
+
+    system: ResolvedPrompt
+    schema_context: ResolvedPrompt
+    sql_generation: ResolvedPrompt
+
+    def for_surface(self, surface: str) -> ResolvedPrompt:
+        return getattr(self, surface)
+
+    def versions(self) -> dict[str, str]:
+        return {
+            surface: self.for_surface(surface).version for surface in PROMPT_SURFACES
+        }
+
+
+_active_prompt_bundle: ContextVar[ResolvedPromptBundle | None] = ContextVar(
+    "active_prompt_bundle", default=None
+)
+
+
+@contextmanager
+def prompt_bundle_context(bundle: ResolvedPromptBundle) -> Iterator[None]:
+    """Keep all nested model calls on the request's resolved prompt versions."""
+    token = _active_prompt_bundle.set(bundle)
+    try:
+        yield
+    finally:
+        _active_prompt_bundle.reset(token)
+
+
+def active_prompt_bundle() -> ResolvedPromptBundle | None:
+    return _active_prompt_bundle.get()
+
+
 def resolve_prompt(surface: str) -> ResolvedPrompt:
     """Return the configured managed version, or the checked-in release fallback."""
     if surface not in PROMPT_SURFACES:
@@ -30,12 +70,27 @@ async def resolve_prompt_async(surface: str) -> ResolvedPrompt:
     return await get_prompt_registry().resolve_async(cast(PromptSurface, surface))
 
 
+async def resolve_prompt_bundle_async() -> ResolvedPromptBundle:
+    """Resolve every prompt once for a request or evaluation capture."""
+    prompts = await get_prompt_registry().prefetch_async()
+    return ResolvedPromptBundle(
+        system=prompts[SYSTEM_PROMPT_SURFACE],
+        schema_context=prompts[SCHEMA_CONTEXT_PROMPT_SURFACE],
+        sql_generation=prompts[SQL_GENERATION_PROMPT_SURFACE],
+    )
+
+
 def load_system_prompt_resolution() -> ResolvedPrompt:
     return resolve_prompt(SYSTEM_PROMPT_SURFACE)
 
 
 async def load_system_prompt_resolution_async() -> ResolvedPrompt:
-    return await resolve_prompt_async(SYSTEM_PROMPT_SURFACE)
+    bundle = active_prompt_bundle()
+    return (
+        bundle.system
+        if bundle is not None
+        else await resolve_prompt_async(SYSTEM_PROMPT_SURFACE)
+    )
 
 
 def _load_release_fallback(yaml_key: str) -> str:
@@ -60,7 +115,12 @@ def load_schema_context_resolution() -> ResolvedPrompt:
 
 
 async def load_schema_context_resolution_async() -> ResolvedPrompt:
-    return await resolve_prompt_async(SCHEMA_CONTEXT_PROMPT_SURFACE)
+    bundle = active_prompt_bundle()
+    return (
+        bundle.schema_context
+        if bundle is not None
+        else await resolve_prompt_async(SCHEMA_CONTEXT_PROMPT_SURFACE)
+    )
 
 
 def load_schema_context() -> str:
@@ -73,7 +133,12 @@ def load_sql_generation_prompt_resolution() -> ResolvedPrompt:
 
 
 async def load_sql_generation_prompt_resolution_async() -> ResolvedPrompt:
-    return await resolve_prompt_async(SQL_GENERATION_PROMPT_SURFACE)
+    bundle = active_prompt_bundle()
+    return (
+        bundle.sql_generation
+        if bundle is not None
+        else await resolve_prompt_async(SQL_GENERATION_PROMPT_SURFACE)
+    )
 
 
 def load_sql_generation_prompt() -> str:
@@ -106,8 +171,8 @@ def load_resolved_prompt_versions() -> dict[str, str]:
 
 async def load_resolved_prompt_versions_async() -> dict[str, str]:
     """Return managed prompt lineage without blocking an asynchronous request loop."""
-    prompts = await get_prompt_registry().prefetch_async()
-    return {surface: prompt.version for surface, prompt in prompts.items()}
+    bundle = active_prompt_bundle() or await resolve_prompt_bundle_async()
+    return bundle.versions()
 
 
 def load_behavior_glossary() -> dict[str, str]:

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from langchain.messages import AIMessage, HumanMessage
 
@@ -72,6 +72,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             trace_name="agent-chat",
             session_id="session-1",
             user_id="user-1",
+            prompts=ANY,
         )
         fake_agent.ainvoke.assert_awaited_once_with(
             {"messages": [HumanMessage(content="what time is it?")]},
@@ -149,6 +150,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             session_id="session-1",
             user_id="user-1",
             on_span_started=latency.attach_trace,
+            prompts=ANY,
         )
         mock_client.flush.assert_called_once()
         mock_client.get_trace_url.assert_called_once_with(trace_id="trace-123")
@@ -166,7 +168,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         latency = MagicMock()
         runtime = AgentRuntime(agent=fake_agent)
 
-        events = [event async for event in runtime.astream("hello", observation=latency)]
+        events = [
+            event async for event in runtime.astream("hello", observation=latency)
+        ]
 
         self.assertEqual(
             events, [{"type": "metadata", "trace_id": None, "trace_url": None}]

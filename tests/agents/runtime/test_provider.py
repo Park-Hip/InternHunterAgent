@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from litellm import get_optional_params
 
 from src.agents.runtime.provider import AgentProvider
 from src.core.config import ConfigLoadError, validate_agent_config
@@ -96,9 +97,17 @@ def test_profiles_resolve_independent_deployments(
     assert groq_kwargs["temperature"] == 0.0
     assert groq_kwargs["streaming"] is False
     assert groq_kwargs["model_kwargs"] == {
-        "reasoning_format": "hidden",
         "reasoning_effort": "none",
+        "allowed_openai_params": ["reasoning_effort"],
+        "extra_body": {"reasoning_format": "hidden"},
     }
+    optional_params = get_optional_params(
+        model=groq_kwargs["model"],
+        custom_llm_provider="groq",
+        **groq_kwargs["model_kwargs"],
+    )
+    assert optional_params["reasoning_effort"] == "none"
+    assert optional_params["extra_body"] == {"reasoning_format": "hidden"}
     assert provider.provider_for("react") == "deepseek"
     assert provider.provider_for("sql_generation") == "groq"
 

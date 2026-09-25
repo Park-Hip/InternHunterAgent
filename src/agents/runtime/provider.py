@@ -21,6 +21,16 @@ def provider_options_to_model_kwargs(deployment: AgentDeployment) -> dict[str, A
         if thinking == "disabled":
             return {"extra_body": {"thinking": {"type": "disabled"}}}
         return {}
+    if deployment.provider == "groq":
+        model_kwargs: dict[str, Any] = {}
+        if "reasoning_effort" in options:
+            model_kwargs["reasoning_effort"] = options["reasoning_effort"]
+            model_kwargs["allowed_openai_params"] = ["reasoning_effort"]
+        if "reasoning_format" in options:
+            model_kwargs["extra_body"] = {
+                "reasoning_format": options["reasoning_format"]
+            }
+        return model_kwargs
     return dict(options)
 
 

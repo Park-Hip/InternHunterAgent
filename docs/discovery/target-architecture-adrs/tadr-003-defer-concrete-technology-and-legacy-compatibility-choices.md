@@ -18,7 +18,8 @@ The target architecture defines ports and dependency rules without selecting the
 The target makes no promise to preserve, version, retire, or replace legacy JSON routes, SSE events, browser behavior, health endpoints, schema, database, deployment, source-collection path, or operational automation.
 
 A future issue must make one concrete decision only when it has the evidence and scope needed for that decision.
-It must record the chosen contract, affected consumers, evaluation or operational criteria, rollback path, and any required compatibility or migration plan.
+It must record the chosen contract, affected consumers where known, evaluation or operational criteria, rollback path, and any required compatibility or migration plan.
+[TADR-004](tadr-004-preserve-legacy-text-delivery-and-operational-baselines.md) is the approved compatibility decision for the existing minimal delivery baseline.
 
 ## Consequences
 
@@ -26,8 +27,9 @@ The target can guide package boundaries and capability constraints without choos
 An implementation issue cannot cite this target as authorization to adopt one of those technologies.
 It must instead propose the smallest technology decision that fulfills a confirmed MVP requirement.
 
-The legacy code and documentation remain evidence, not a compatibility contract or template for the replacement.
-A missing consumer inventory blocks claims about preserving or retiring a public behavior.
+The legacy code and documentation remain evidence, not a template for unrelated replacement design.
+TADR-004 preserves the existing minimal text-delivery baseline without claiming that unknown consumers prove a broader or permanent compatibility obligation.
+A missing consumer inventory blocks a later claim to alter, retire, or expand a public behavior without an explicit owner decision.
 A missing data-authority decision blocks corpus acquisition, refresh, ingestion, and source-provider work.
 
 ## Alternatives considered
@@ -45,7 +47,7 @@ The MVP needs stable responsibility and capability boundaries before later imple
 
 Revisit this ADR when a bounded implementation proposal needs one of the following:
 
-- A public delivery contract with confirmed consumers or an explicit clean-contract decision.
+- A change to the public delivery baseline, with confirmed consumers where available or an explicit owner decision.
 - A persistent corpus and evidence adapter with retention, migration, and rollback requirements.
 - A model-agent runtime with measurable capability, reliability, privacy, and evaluation requirements.
 - An observability adapter with privacy, redaction, retention, and non-blocking failure requirements.

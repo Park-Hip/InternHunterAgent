@@ -131,7 +131,8 @@ The target deliberately treats the following as ports rather than selected imple
 - Deployment, runtime hosting, credentials, and operations.
 
 Legacy JSON routes, SSE events, browser behavior, health endpoints, database schema, legacy corpus contents, ingestion, and deployment configuration are compatibility candidates only.
-No implementation issue may preserve, version, remove, or replace one of those surfaces without an approved compatibility decision and the evidence it requires.
+[TADR-004](target-architecture-adrs/tadr-004-preserve-legacy-text-delivery-and-operational-baselines.md) later selects preservation of the existing minimal text-delivery and operational baseline.
+No implementation issue may alter, remove, replace, or expand one of those surfaces without an approved compatibility decision and the evidence it requires.
 
 ## Relationship to decision records
 

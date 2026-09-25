@@ -5,6 +5,7 @@ ingestion path and the `internhunter` production database.
 """
 
 import os
+import socket
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -17,6 +18,12 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEED_SQL_PATH = Path(__file__).resolve().parent / "seed_eval_db.sql"
 SETTINGS_PATH = REPO_ROOT / "config" / "settings.yaml"
+
+# Seconds to wait for the fixture database to accept a TCP connection before
+# declaring it unavailable. This is a socket preflight only, never a SQL round
+# trip: a full psycopg connect can spend the OS-level IPv6 and IPv4 timeouts
+# before failing, which is what made a missing local Postgres cost minutes.
+FIXTURE_REACHABILITY_TIMEOUT_SECONDS = 2.0
 
 
 def fixture_database_url() -> str:
@@ -46,6 +53,35 @@ def fixture_database_url() -> str:
             "Missing or empty 'eval.fixture.database_url' in config/settings.yaml"
         )
     return database_url
+
+
+def fixture_database_endpoint() -> tuple[str, int]:
+    """Return the (host, port) the fixture DSN targets.
+
+    Defaults to PostgreSQL's own host and port when the DSN omits them, so the
+    preflight stays correct across every dialect spelling this project uses.
+    """
+    url = make_url(fixture_database_url())
+    return url.host or "localhost", url.port or 5432
+
+
+def fixture_database_reachable() -> bool:
+    """Return whether the fixture database accepts a short TCP connection.
+
+    Bounded preflight for ``load_fixture()``. It never performs a database
+    round trip, only a socket connect against the host/port in the fixture DSN,
+    so a local Postgres instance that has not been started is detected in well
+    under a second instead of the multi-minute psycopg timeout it would
+    otherwise take before the fixture-backed test module can skip.
+    """
+    host, port = fixture_database_endpoint()
+    try:
+        with socket.create_connection(
+            (host, port), timeout=FIXTURE_REACHABILITY_TIMEOUT_SECONDS
+        ):
+            return True
+    except OSError:
+        return False
 
 
 def _split_sql_statements(sql: str) -> list[str]:

@@ -13,7 +13,7 @@
 
 - **Status:** Decided
 - **Choice:** The first release supports one one-turn question: which reviewed normalized technologies occur most frequently in a selected AI-job scope within a fixed corpus version.
-- **Why:** A single deterministic vertical slice demonstrates evidence-backed agent behavior without conflating it with comparisons, trends, or advice.
+- **Why:** One bounded agent using deterministic tools demonstrates evidence-backed agent behavior without conflating it with comparisons, trends, or advice.
 - **Boundary:** The release does not support career-level comparisons, trends, semantic skill grouping, or general career advice.
 - **Evidence:** [MVP specification](mvp-spec.md).
 
@@ -36,10 +36,18 @@
 ### D-008 - Deterministic, evidence-backed answers
 
 - **Status:** Decided
-- **Choice:** The system calculates results deterministically and returns the scope, corpus version, calculation, labels, source evidence, and relevant limitations.
+- **Choice:** Registered deterministic tools calculate results and retrieve evidence; the agent returns the scope, corpus version, calculation, labels, source evidence, and relevant limitations from those results.
 - **Why:** Natural-language presentation must not hide the calculation or create claims beyond retained evidence.
 - **Boundary:** Missing evidence, no matching records, and unsupported questions produce a bounded explanation rather than an invented conclusion.
 - **Evidence:** [MVP specification](mvp-spec.md#one-turn-workflow).
+
+### D-009 - Bounded single-agent orchestration
+
+- **Status:** Decided
+- **Choice:** The MVP is exactly one bounded, read-only model agent. For each request, it decides whether and which registered deterministic tools to invoke, supplies schema-valid arguments, and grounds its final factual claims only in deterministic tool outputs and retained evidence.
+- **Why:** The MVP must demonstrate model-mediated tool use rather than a fully deterministic fixed workflow, while preserving deterministic calculations and evidence as the factual authority.
+- **Boundary:** The agent cannot invoke unregistered tools, access or mutate data outside the fixed corpus, invent tool outputs, broaden a requested scope, or make factual claims absent from tool outputs and retained evidence. Tool implementation, framework and ReAct-loop pattern, model provider, fallback, and any future multi-agent topology are deferred.
+- **Evidence:** [MVP specification](mvp-spec.md#bounded-single-agent-contract).
 
 ## Deferred source-research history
 

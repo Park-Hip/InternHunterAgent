@@ -7,28 +7,16 @@ from contextlib import asynccontextmanager, contextmanager
 from typing import Any, Callable, cast
 
 from langfuse import Langfuse, LangfuseSpan, propagate_attributes
-from langfuse.api import NotFoundError
 from langfuse.langchain import CallbackHandler
-from langfuse.model import PromptClient
 
-from src.agents.runtime.prompts import load_prompt_versions
-from src.agents.tracing.prompt_registry import SQL_GENERATION_PROMPT_NAME
+from src.agents.runtime.prompts import load_resolved_prompt_versions
+from src.agents.tracing.prompt_registry import ResolvedPrompt, get_prompt_registry
 from src.agents.tracing.stream import StreamLatency, StreamObservation, StreamOutcome
 from src.core.config import settings
 from src.core.logger import logger
 
-# The handle handed to callers is still a Langfuse object at runtime. Exporting the
-# alias from this layer lets the agent runtime annotate it without importing
-# `langfuse` itself.
-SqlGenerationObservation = LangfuseSpan
-
 _langfuse_handler: CallbackHandler | None = None
 _langfuse: Langfuse | None = None
-# One-shot negative guard: set only when Langfuse confirms the SQL prompt is not
-# registered (NotFoundError), never on a transient failure. Registering the prompt
-# after this process has started will not be picked up until the process restarts;
-# that is acceptable because deploys restart the process.
-_sql_generation_prompt_missing = False
 class LangfuseStreamObservation:
     """Publish neutral stream lifecycle timings to the current Langfuse span."""
 
@@ -173,7 +161,7 @@ def build_langfuse_tags(
         entry_point,
         *(
             f"prompt:{surface}:{version}"
-            for surface, version in load_prompt_versions().items()
+            for surface, version in load_resolved_prompt_versions().items()
         ),
         f"provider:{provider}",
         f"model:{model}",
@@ -217,7 +205,7 @@ def langfuse_trace_attributes(
     )
     attributes: dict[str, Any] = {
         "tags": tags,
-        "metadata": {"prompt_versions": load_prompt_versions()},
+        "metadata": {"prompt_versions": load_resolved_prompt_versions()},
     }
     if trace_name is not None:
         attributes["trace_name"] = trace_name
@@ -315,86 +303,23 @@ def record_agent_response_failure(*, category: str) -> None:
         )
 
 
-async def get_sql_generation_prompt_reference() -> PromptClient | None:
-    """Fetch only the Langfuse reference used to link the direct SQL generation.
-
-    The agent always reads prompt text from config/prompts.yaml.  This best-effort
-    lookup supplies only the server-assigned numeric version the Langfuse SDK needs
-    to attach prompt lineage to a generation observation.
-    """
-    global _sql_generation_prompt_missing
-
-    client = get_langfuse_client()
-    if client is None:
-        return None
-
-    if _sql_generation_prompt_missing:
-        return None
-
-    try:
-        return await asyncio.to_thread(
-            client.get_prompt,
-            SQL_GENERATION_PROMPT_NAME,
-            label="production",
-            type="text",
-            cache_ttl_seconds=60,
-            max_retries=0,
-            # Unit is SECONDS (SDK docstring wrongly says "milliseconds"); keep this
-            # low since it blocks the user-facing streaming chat path on every call.
-            fetch_timeout_seconds=3,
-        )
-    except NotFoundError as exc:
-        # Structural: the prompt genuinely is not registered. It will not fix
-        # itself while this process is running, so stop paying the blocking
-        # lookup on every request until the process restarts.
-        _sql_generation_prompt_missing = True
-        logger.warning(
-            "Langfuse SQL prompt reference unavailable: prompt not registered, "
-            "disabling lookup for this process until it is registered and the "
-            "process restarts",
-            error=str(exc),
-        )
-        return None
-    except Exception as exc:
-        # Transient: a timeout, connection error, or 5xx should not permanently
-        # disable prompt linkage for the life of the process.
-        logger.warning("Langfuse SQL prompt reference unavailable", error=str(exc))
-        return None
-
-
-@asynccontextmanager
-async def sql_generation_observation(
-    question: str,
-) -> AsyncIterator[SqlGenerationObservation | None]:
-    """Scope one prompt-attributed Langfuse observation to the direct SQL generation.
-
-    Yields ``None`` whenever tracing is disabled or the prompt is not registered, so
-    the caller keeps a single code path.  The observation is a span, not a
-    generation: the LangChain callback handler already emits the real generation for
-    the same call with model, token and cost detail, and a second generation wrapped
-    around it would double-count every SQL generation in the Langfuse generation,
-    usage and cost aggregates.
-
-    The SDK attaches native prompt linkage only to generation-like observations and
-    silently drops ``prompt`` on a span, so the fetched reference is recorded as span
-    metadata instead.
-    """
-    reference = await get_sql_generation_prompt_reference()
-    client = get_langfuse_client()
-    if reference is None or client is None:
-        yield None
+@contextmanager
+def langfuse_prompt_attributes(prompt: ResolvedPrompt) -> Iterator[None]:
+    """Attach a native PromptClient to generations made by the LangChain callback."""
+    if prompt.prompt_client is None:
+        yield
         return
+    with propagate_attributes(prompt=prompt.prompt_client):
+        yield
 
-    with client.start_as_current_observation(
-        as_type="span",
-        name="sql_generation",
-        input={"question": question},
-        metadata={
-            "langfuse_prompt_name": reference.name,
-            "langfuse_prompt_version": reference.version,
-        },
-    ) as observation:
-        yield cast(SqlGenerationObservation, observation)
+
+async def prepare_native_prompts_startup() -> None:
+    """Warm every prompt before requests can use the managed prompt deployment."""
+    resolved = await asyncio.to_thread(get_prompt_registry().prefetch)
+    logger.info(
+        "langfuse.prompts_prefetched",
+        prompts={surface: prompt.version for surface, prompt in resolved.items()},
+    )
 
 
 async def diagnose_langfuse_startup() -> None:

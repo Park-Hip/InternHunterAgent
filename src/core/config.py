@@ -100,6 +100,27 @@ def _validate_string_list(value: Any, *, name: str) -> list[str]:
     return value
 
 
+def _validate_prompt_config(config: dict[str, Any]) -> None:
+    agent = config.get("agent")
+    prompts = agent.get("prompts") if isinstance(agent, dict) else None
+    if not isinstance(prompts, dict):
+        raise ConfigLoadError("Missing 'agent.prompts' configuration")
+    label = prompts.get("deployment_label")
+    if label not in {"candidate", "staging", "production"}:
+        raise ConfigLoadError(
+            "agent.prompts.deployment_label must be candidate, staging, or production"
+        )
+    cache_ttl_seconds = prompts.get("cache_ttl_seconds")
+    if (
+        isinstance(cache_ttl_seconds, bool)
+        or not isinstance(cache_ttl_seconds, int)
+        or cache_ttl_seconds < 0
+    ):
+        raise ConfigLoadError(
+            "agent.prompts.cache_ttl_seconds must be a non-negative integer"
+        )
+
+
 def _validate_api_config(config: dict[str, Any]) -> None:
     """Reject an invalid stream heartbeat before the application starts."""
     api = config.get("api")
@@ -192,6 +213,7 @@ def load_settings(*, force_reload: bool = False) -> Settings:
 
     settings.config_yaml = _load_yaml_file(_config_path("settings.yaml"))
     _validate_api_config(settings.config_yaml)
+    _validate_prompt_config(settings.config_yaml)
     _validate_observability_config(settings.config_yaml)
     settings.prompts_yaml = _load_yaml_file(_config_path("prompts.yaml"))
     settings.ingestion_yaml = _load_yaml_file(_config_path("ingestion.yaml"))

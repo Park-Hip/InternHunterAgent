@@ -7,11 +7,11 @@ from langchain_core.runnables import RunnableConfig
 
 from src.agents.runtime.prompts import (
     load_behavior_glossary,
-    load_schema_context,
-    load_sql_generation_prompt,
+    load_schema_context_resolution,
+    load_sql_generation_prompt_resolution,
 )
 from src.agents.runtime.provider import AgentProvider
-from src.agents.tracing.langfuse import sql_generation_observation
+from src.agents.tracing.langfuse import langfuse_prompt_attributes
 from src.core.config import settings
 from src.core.logger import logger
 from src.services.query.executor import (
@@ -63,20 +63,22 @@ def _content_to_text(content: str | list[Any]) -> str:
 
 
 async def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
-    schema_context = load_schema_context()
-    sql_generation_prompt = load_sql_generation_prompt()
+    schema_context = load_schema_context_resolution()
+    sql_generation_prompt = load_sql_generation_prompt_resolution()
     model = AgentProvider().build_model("sql_generation")
     messages = [
         HumanMessage(
-            content=f"{sql_generation_prompt}\n\n{schema_context}\n\nQuestion: {question}"
+            content=(
+                f"{sql_generation_prompt.content}\n\n{schema_context.content}"
+                f"\n\nQuestion: {question}"
+            )
         )
     ]
-    async with sql_generation_observation(question) as observation:
+    # The Langfuse callback creates the generation.  Propagation links that real
+    # generation to the exact SQL prompt version without double-counting it.
+    with langfuse_prompt_attributes(sql_generation_prompt):
         response = await model.ainvoke(messages, config=config)
-        sql = _content_to_text(response.content).strip()
-        if observation is not None:
-            observation.update(output=sql)
-        return sql
+    return _content_to_text(response.content).strip()
 
 
 def _build_answer(table: TableArtifact) -> str:

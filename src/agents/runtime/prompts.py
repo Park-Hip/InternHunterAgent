@@ -1,84 +1,85 @@
+"""Prompt accessors backed by managed Langfuse versions or release fallbacks."""
+
 from langchain.messages import SystemMessage
 
-from src.core.config import settings
-
-SYSTEM_PROMPT_SURFACE = "system"
-SCHEMA_CONTEXT_PROMPT_SURFACE = "schema_context"
-SQL_GENERATION_PROMPT_SURFACE = "sql_generation"
-PROMPT_SURFACES = (
-    SYSTEM_PROMPT_SURFACE,
+from src.agents.tracing.prompt_registry import (
+    PROMPT_SURFACES,
     SCHEMA_CONTEXT_PROMPT_SURFACE,
     SQL_GENERATION_PROMPT_SURFACE,
+    SYSTEM_PROMPT_SURFACE,
+    ResolvedPrompt,
+    get_prompt_registry,
 )
+from src.core.config import settings
+
+
+def resolve_prompt(surface: str) -> ResolvedPrompt:
+    """Return the configured managed version, or the checked-in release fallback."""
+    if surface not in PROMPT_SURFACES:
+        raise ValueError(f"Unsupported prompt surface: {surface}")
+    return get_prompt_registry().resolve(surface)
+
+
+def load_system_prompt_resolution() -> ResolvedPrompt:
+    return resolve_prompt(SYSTEM_PROMPT_SURFACE)
+
+
+def _load_release_fallback(yaml_key: str) -> str:
+    prompts_root = settings.prompts_yaml.get("prompts")
+    if not isinstance(prompts_root, dict):
+        raise ValueError("Missing 'prompts' section in config/prompts.yaml")
+    content = prompts_root.get(yaml_key)
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError(f"Missing or empty 'prompts.{yaml_key}' in config/prompts.yaml")
+    return content.strip()
 
 
 def load_system_prompt() -> SystemMessage:
-    prompts_root = settings.prompts_yaml.get("prompts")
-    if not isinstance(prompts_root, dict):
-        raise ValueError("Missing 'prompts' section in config/prompts.yaml")
+    """Return the reviewed release fallback for offline callers and tests."""
+    return SystemMessage(content=_load_release_fallback("system_prompt"))
 
-    system_prompt = prompts_root.get("system_prompt")
-    if not isinstance(system_prompt, str) or not system_prompt.strip():
-        raise ValueError("Missing or empty 'prompts.system_prompt' in config/prompts.yaml")
 
-    return SystemMessage(content=system_prompt.strip())
+def load_schema_context_resolution() -> ResolvedPrompt:
+    return resolve_prompt(SCHEMA_CONTEXT_PROMPT_SURFACE)
 
 
 def load_schema_context() -> str:
-    prompts_root = settings.prompts_yaml.get("prompts")
-    if not isinstance(prompts_root, dict):
-        raise ValueError("Missing 'prompts' section in config/prompts.yaml")
+    """Return the reviewed release fallback for offline callers and tests."""
+    return _load_release_fallback("schema_context")
 
-    schema_context = prompts_root.get("schema_context")
-    if not isinstance(schema_context, str) or not schema_context.strip():
-        raise ValueError("Missing or empty 'prompts.schema_context' in config/prompts.yaml")
 
-    return schema_context.strip()
+def load_sql_generation_prompt_resolution() -> ResolvedPrompt:
+    return resolve_prompt(SQL_GENERATION_PROMPT_SURFACE)
 
 
 def load_sql_generation_prompt() -> str:
-    prompts_root = settings.prompts_yaml.get("prompts")
-    if not isinstance(prompts_root, dict):
-        raise ValueError("Missing 'prompts' section in config/prompts.yaml")
-
-    sql_generation_prompt = prompts_root.get("sql_generation")
-    if not isinstance(sql_generation_prompt, str) or not sql_generation_prompt.strip():
-        raise ValueError("Missing or empty 'prompts.sql_generation' in config/prompts.yaml")
-
-    return sql_generation_prompt.strip()
+    """Return the reviewed release fallback for offline callers and tests."""
+    return _load_release_fallback("sql_generation")
 
 
 def load_prompt_versions() -> dict[str, str]:
-    """Return the independently versioned prompt lineage surfaces.
-
-    Captures persist this mapping directly. A single aggregate version would make a
-    system-only change look like a schema-context or SQL-generation change too.
-    """
+    """Return release-pinned lineage for offline artifacts and fallback operation."""
     prompt_versions = settings.prompts_yaml.get("prompt_versions")
-    if not isinstance(prompt_versions, dict) or set(prompt_versions) != set(
-        PROMPT_SURFACES
-    ):
+    if not isinstance(prompt_versions, dict) or set(prompt_versions) != set(PROMPT_SURFACES):
         raise ValueError(
             "config/prompts.yaml must declare exactly these prompt_versions: "
             + ", ".join(PROMPT_SURFACES)
         )
     if not all(
-        isinstance(prompt_versions[surface], str)
-        and prompt_versions[surface].strip()
+        isinstance(prompt_versions[surface], str) and prompt_versions[surface].strip()
         for surface in PROMPT_SURFACES
     ):
         raise ValueError("Every prompt_versions value must be a non-empty string")
-
     return {surface: prompt_versions[surface].strip() for surface in PROMPT_SURFACES}
 
 
-def load_behavior_glossary() -> dict[str, str]:
-    """Canonical hedge and refusal phrasings, keyed by token.
+def load_resolved_prompt_versions() -> dict[str, str]:
+    """Return exact remote versions when native prompts are available."""
+    return {surface: resolve_prompt(surface).version for surface in PROMPT_SURFACES}
 
-    Machine source of truth for the phrasings the behavior spec records in prose. These
-    are reference strings: nothing here reaches the model until an obligation resolves one
-    of them at runtime.
-    """
+
+def load_behavior_glossary() -> dict[str, str]:
+    """Canonical hedge and refusal phrasings, keyed by token."""
     glossary = settings.prompts_yaml.get("behavior_glossary")
     if not isinstance(glossary, dict) or not glossary:
         raise ValueError("Missing or empty 'behavior_glossary' in config/prompts.yaml")

@@ -52,6 +52,9 @@ class StartupConfigTests(unittest.TestCase):
             events.append("checkpointer setup")
             return object()
 
+        async def prefetch() -> None:
+            events.append("prompt prefetch")
+
         async def diagnose() -> None:
             events.append("langfuse diagnostic")
 
@@ -76,7 +79,11 @@ class StartupConfigTests(unittest.TestCase):
                 new=AsyncMock(side_effect=build_checkpointer),
             ),
             patch(
-                "src.serving.composition.agent_factory",
+                "src.serving.composition.prepare_native_prompts_startup",
+                new=AsyncMock(side_effect=prefetch),
+            ),
+            patch(
+                "src.serving.composition.AgentRuntime",
                 side_effect=lambda **_: events.append("runtime construction") or object(),
             ),
             patch(
@@ -100,6 +107,7 @@ class StartupConfigTests(unittest.TestCase):
                 "schema guard",
                 "pool open",
                 "checkpointer setup",
+                "prompt prefetch",
                 "runtime construction",
                 "langfuse diagnostic",
                 "langfuse shutdown",

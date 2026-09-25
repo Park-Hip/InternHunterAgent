@@ -2,12 +2,14 @@ import asyncio
 from collections.abc import AsyncGenerator
 from typing import Any, cast
 
-from langchain.messages import HumanMessage
+from langchain.messages import HumanMessage, SystemMessage
 
 from src.agents.runtime.factory import agent_factory
+from src.agents.runtime.prompts import load_system_prompt_resolution
 from src.agents.tracing.langfuse import (
     build_langfuse_config,
     get_langfuse_client,
+    langfuse_prompt_attributes,
     langfuse_request_trace,
     record_agent_response_failure,
 )
@@ -16,8 +18,22 @@ from src.core.logger import logger
 
 
 class AgentRuntime:
-    def __init__(self, agent=None):
-        self.agent = agent or agent_factory()
+    def __init__(self, agent=None, checkpointer=None):
+        self._checkpointer = checkpointer
+        self._managed_agent = agent is None
+        self._system_prompt_version: str | None = None
+        self.agent = agent or agent_factory(checkpointer=checkpointer)
+
+    def _active_system_prompt(self):
+        """Refresh the served graph when a managed system-prompt label moves."""
+        prompt = load_system_prompt_resolution()
+        if self._managed_agent and prompt.version != self._system_prompt_version:
+            self.agent = agent_factory(
+                checkpointer=self._checkpointer,
+                system_prompt=SystemMessage(content=prompt.content),
+            )
+            self._system_prompt_version = prompt.version
+        return prompt
 
     async def ainvoke(
         self,
@@ -31,6 +47,7 @@ class AgentRuntime:
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
+        system_prompt = self._active_system_prompt()
 
         async with langfuse_request_trace(
             entry_point="api:chat",
@@ -38,7 +55,8 @@ class AgentRuntime:
             session_id=session_id,
             user_id=user_id,
         ) as trace_id:
-            response = await self.agent.ainvoke(messages, config=config or None)
+            with langfuse_prompt_attributes(system_prompt):
+                response = await self.agent.ainvoke(messages, config=config or None)
             answer, failure_category = self._extract_answer_with_failure_category(
                 response
             )
@@ -80,6 +98,7 @@ class AgentRuntime:
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
+        system_prompt = self._active_system_prompt()
 
         events: asyncio.Queue[dict[str, str | None] | Exception] = asyncio.Queue(
             maxsize=1
@@ -111,7 +130,8 @@ class AgentRuntime:
             user_id=user_id,
             on_span_started=observation.attach_trace if observation is not None else None,
         ) as trace_id:
-            producer = asyncio.create_task(_produce_stream())
+            with langfuse_prompt_attributes(system_prompt):
+                producer = asyncio.create_task(_produce_stream())
             stream_completed = False
             provider_failed = False
             try:

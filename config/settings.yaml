@@ -39,6 +39,11 @@ agent:
   # End-to-end serving deadline for one SSE turn. Invalid or omitted values fall
   # back to 120 seconds so one blocked stream cannot occupy the sole web worker.
   stream_turn_timeout_seconds: 120
+  prompts:
+    # Fetch one explicit deployment label, never mutable `latest`. The checked-in
+    # config/prompts.yaml text is a release-pinned fallback for an unavailable client.
+    deployment_label: production
+    cache_ttl_seconds: 60
 
   react:
     provider: deepseek

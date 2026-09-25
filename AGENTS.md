@@ -4,6 +4,9 @@ This is the canonical cross-agent policy. `CLAUDE.md` imports this file; do not 
 Active work lives in GitHub Issues: one issue per task, and every pull request closes its issue
 with `Closes #<n>`.
 
+Active module-layer refactor documentation lives in `docs/refactor/`.
+`docs/discovery/` is preserved historical evidence and does not set refactor implementation order.
+
 ## 1. Architecture boundaries
 
 - Keep the API layer, application service, agent runtime, and tracing layer isolated.

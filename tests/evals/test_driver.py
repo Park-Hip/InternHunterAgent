@@ -211,6 +211,20 @@ def _case(scenario_id: str = "HLP-TEST-1", probe: bool = False) -> dict:
     }
 
 
+def _prompt_bundle(system_version: str = "44") -> ResolvedPromptBundle:
+    return ResolvedPromptBundle(
+        system=ResolvedPrompt(
+            "system", "resumi-system", "candidate system", system_version, None, False
+        ),
+        schema_context=ResolvedPrompt(
+            "schema_context", "resumi-schema-context", "candidate schema", "31", None, False
+        ),
+        sql_generation=ResolvedPrompt(
+            "sql_generation", "resumi-sql-generation", "candidate SQL", "19", None, False
+        ),
+    )
+
+
 def test_manifest_records_reproducibility_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -359,6 +373,44 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
         json.loads(output.read_text(encoding="utf-8"))["manifest"]["run_id"]
         == first["manifest"]["run_id"]
     )
+
+
+def test_driver_refuses_to_resume_after_prompt_lineage_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    previous = _prompt_bundle("44")
+    current = _prompt_bundle("45")
+    output = tmp_path / "run.json"
+    output.write_text(
+        json.dumps(
+            driver._new_run(
+                {
+                    "run_id": "run-1",
+                    "prompt_versions": {
+                        surface: lineage["version"]
+                        for surface, lineage in driver._prompt_bundle_lineage(
+                            previous
+                        ).items()
+                    },
+                    "prompt_hashes": {
+                        surface: lineage["hash"]
+                        for surface, lineage in driver._prompt_bundle_lineage(
+                            previous
+                        ).items()
+                    },
+                }
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    async def resolve_prompts() -> ResolvedPromptBundle:
+        return current
+
+    monkeypatch.setattr(driver, "resolve_prompt_bundle_async", resolve_prompts)
+
+    with pytest.raises(ValueError, match="prompt lineage changes"):
+        asyncio.run(driver.run([], output, resume=True, pacing_seconds=0))
 
 
 def test_driver_links_each_capture_to_the_repeat_dataset_run(
@@ -1152,11 +1204,22 @@ def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
     one's trace and report the run as ingested.
     """
     output = tmp_path / "run.json"
+    prompts = _prompt_bundle()
+    lineage = driver._prompt_bundle_lineage(prompts)
     output.write_text(
         json.dumps(
             {
                 "status": "PARTIAL_QUOTA",
-                "manifest": {"run_id": "run-1"},
+                "manifest": {
+                    "run_id": "run-1",
+                    "prompt_versions": {
+                        surface: lineage[surface]["version"]
+                        for surface in lineage
+                    },
+                    "prompt_hashes": {
+                        surface: lineage[surface]["hash"] for surface in lineage
+                    },
+                },
                 "scenarios": {
                     "COUNT-1": {
                         "status": "COMPLETE",
@@ -1183,6 +1246,9 @@ def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
     async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
         return [SeamRun(question="q", answer="a", trace_id="trace-session-2")]
 
+    async def resolve_prompts() -> ResolvedPromptBundle:
+        return prompts
+
     asked: list[tuple] = []
 
     def fake_verify(trace_id, *, dataset_run_id=None):
@@ -1192,6 +1258,7 @@ def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
     monkeypatch.setattr(driver, "_capture_case", fake_capture)
     monkeypatch.setattr(driver, "_dataset_mirror", lambda: (None, None))
     monkeypatch.setattr(driver, "verify_ingestion", fake_verify)
+    monkeypatch.setattr(driver, "resolve_prompt_bundle_async", resolve_prompts)
     _stub_fingerprint(monkeypatch)
 
     result = asyncio.run(

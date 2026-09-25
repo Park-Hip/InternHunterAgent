@@ -25,19 +25,23 @@ class AgentRuntime:
     def __init__(self, agent=None, checkpointer=None):
         self._checkpointer = checkpointer
         self._managed_agent = agent is None
-        self._system_prompt_version: str | None = None
         self.agent = agent or agent_factory(checkpointer=checkpointer)
+        self._managed_agents: dict[tuple[str, str], Any] = {}
 
-    async def _active_system_prompt(self, prompts: ResolvedPromptBundle):
-        """Refresh the served graph when a managed system-prompt label moves."""
+    def _active_agent(self, prompts: ResolvedPromptBundle) -> tuple[Any, object]:
+        """Return the agent compiled for this request's immutable system prompt."""
         prompt = prompts.system
-        if self._managed_agent and prompt.version != self._system_prompt_version:
-            self.agent = agent_factory(
+        if not self._managed_agent:
+            return self.agent, prompt
+        key = (prompt.version, prompt.content)
+        agent = self._managed_agents.get(key)
+        if agent is None:
+            agent = agent_factory(
                 checkpointer=self._checkpointer,
                 system_prompt=SystemMessage(content=prompt.content),
             )
-            self._system_prompt_version = prompt.version
-        return prompt
+            self._managed_agents[key] = agent
+        return agent, prompt
 
     async def ainvoke(
         self,
@@ -52,7 +56,7 @@ class AgentRuntime:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
         prompts = await resolve_prompt_bundle_async()
-        system_prompt = await self._active_system_prompt(prompts)
+        agent, system_prompt = self._active_agent(prompts)
 
         with prompt_bundle_context(prompts):
             async with langfuse_request_trace(
@@ -63,7 +67,7 @@ class AgentRuntime:
                 prompts=prompts,
             ) as trace_id:
                 with langfuse_prompt_attributes(system_prompt):
-                    response = await self.agent.ainvoke(messages, config=config or None)
+                    response = await agent.ainvoke(messages, config=config or None)
                 answer, failure_category = self._extract_answer_with_failure_category(
                     response
                 )
@@ -106,7 +110,7 @@ class AgentRuntime:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
         prompts = await resolve_prompt_bundle_async()
-        system_prompt = await self._active_system_prompt(prompts)
+        agent, system_prompt = self._active_agent(prompts)
 
         events: asyncio.Queue[dict[str, str | None] | Exception] = asyncio.Queue(
             maxsize=1
@@ -114,7 +118,7 @@ class AgentRuntime:
 
         async def _produce_stream() -> None:
             try:
-                async for chunk, metadata in self.agent.astream(
+                async for chunk, metadata in agent.astream(
                     messages,
                     config=config or None,
                     stream_mode="messages",

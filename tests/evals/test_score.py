@@ -8,7 +8,9 @@ what a judge would say about an answer.
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -76,7 +78,9 @@ def stub_judge(monkeypatch: pytest.MonkeyPatch) -> list[tuple[dict, SeamRun]]:
     """Replace the judge with a recorder, so no test spends a judge call."""
     calls: list[tuple[dict, SeamRun]] = []
 
-    def fake_score_seams(case: dict, final_run: SeamRun) -> dict:
+    def fake_score_seams(
+        case: dict, final_run: SeamRun, *, schema_context: str | None = None
+    ) -> dict:
         calls.append((case, final_run))
         return {"seam1_routing": {"Tool Correctness": {"score": 1.0, "reason": "ok"}}}
 
@@ -127,6 +131,73 @@ def test_scores_a_completed_repeat_from_what_the_capture_recorded(
     assert repeat["scores"]["seam1_routing"]["Tool Correctness"]["score"] == 1.0
     assert repeat["scorer_version"] == SCORER_VERSION
     assert repeat["scored_at"]
+
+
+def test_scoring_uses_the_schema_prompt_recorded_by_the_capture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    schema_context = "captured schema context"
+    artifact = _artifact()
+    artifact["manifest"].update(
+        {
+            "prompt_versions": {"schema_context": "31"},
+            "prompt_hashes": {
+                "schema_context": hashlib.sha256(
+                    schema_context.encode("utf-8")
+                ).hexdigest()
+            },
+        }
+    )
+    path = _write(tmp_path, artifact)
+    observed: list[str | None] = []
+
+    monkeypatch.setattr(
+        score_module,
+        "load_schema_context_resolution",
+        lambda: SimpleNamespace(version="31", content=schema_context),
+    )
+    monkeypatch.setattr(
+        score_module.harness,
+        "score_seams",
+        lambda _case, _run, *, schema_context=None: observed.append(schema_context)
+        or {"seam1_routing": {}},
+    )
+
+    score_module.score_artifact(path, scenarios=[_case()])
+
+    assert observed == [schema_context]
+
+
+def test_scoring_refuses_a_capture_whose_schema_prompt_label_moved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact = _artifact()
+    artifact["manifest"].update(
+        {
+            "prompt_versions": {"schema_context": "31"},
+            "prompt_hashes": {
+                "schema_context": hashlib.sha256(b"captured schema context").hexdigest()
+            },
+        }
+    )
+    path = _write(tmp_path, artifact)
+    scored: list[object] = []
+
+    monkeypatch.setattr(
+        score_module,
+        "load_schema_context_resolution",
+        lambda: SimpleNamespace(version="32", content="promoted schema context"),
+    )
+    monkeypatch.setattr(
+        score_module.harness,
+        "score_seams",
+        lambda *args, **kwargs: scored.append(args),
+    )
+
+    with pytest.raises(ValueError, match="schema prompt lineage"):
+        score_module.score_artifact(path, scenarios=[_case()])
+
+    assert scored == []
 
 
 def test_semantic_score_receives_the_complete_conversation(
@@ -247,7 +318,9 @@ def test_an_interrupted_pass_keeps_the_repeats_it_already_scored(
 
     seen: list[str] = []
 
-    def judge_then_die(case: dict, final_run: SeamRun) -> dict:
+    def judge_then_die(
+        case: dict, final_run: SeamRun, *, schema_context: str | None = None
+    ) -> dict:
         if seen:
             raise KeyboardInterrupt("operator stopped the pass")
         seen.append(case["id"])
@@ -269,7 +342,9 @@ def test_an_interrupted_pass_keeps_the_repeats_it_already_scored(
     monkeypatch.setattr(
         score_module.harness,
         "score_seams",
-        lambda case, run: {"seam1_routing": {"Tool Correctness": {"score": 1.0}}},
+        lambda case, run, *, schema_context=None: {
+            "seam1_routing": {"Tool Correctness": {"score": 1.0}}
+        },
     )
     summary = score_module.score_artifact(path, scenarios=cases)
 
@@ -347,7 +422,9 @@ def test_a_repeat_whose_metrics_all_failed_is_judged_again(
     """
     attempts: list[str] = []
 
-    def judge(case: dict, final_run: SeamRun) -> dict:
+    def judge(
+        case: dict, final_run: SeamRun, *, schema_context: str | None = None
+    ) -> dict:
         attempts.append(case["id"])
         if len(attempts) == 1:
             return {

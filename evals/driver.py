@@ -381,6 +381,26 @@ def _named_prompt_lineage(manifest: dict[str, Any]) -> dict[str, dict[str, str]]
     }
 
 
+def _prompt_bundle_lineage(prompts: ResolvedPromptBundle) -> dict[str, dict[str, str]]:
+    return {
+        surface: {
+            "version": prompts.for_surface(surface).version,
+            "hash": _text_sha256(prompts.for_surface(surface).content),
+        }
+        for surface in PROMPT_SURFACES
+    }
+
+
+def _assert_resumable_prompt_lineage(
+    manifest: dict[str, Any], prompts: ResolvedPromptBundle
+) -> None:
+    captured = _named_prompt_lineage(manifest)
+    if captured is None:
+        raise ValueError("Cannot resume a capture without named prompt lineage")
+    if captured != _prompt_bundle_lineage(prompts):
+        raise ValueError("Cannot resume a capture after its prompt lineage changes")
+
+
 def _assert_comparable(left: dict[str, Any], right: dict[str, Any]) -> None:
     if (
         left["manifest"].get("worktree_state") != "clean"
@@ -796,6 +816,8 @@ async def run(
     manifest = artifact["manifest"]
     if not resume and output.exists():
         raise FileExistsError(f"Refusing to overwrite existing run: {output}")
+    if resume:
+        _assert_resumable_prompt_lineage(manifest, prompts)
 
     dataset_client, dataset_mirror = _dataset_mirror()
     pacing = load_turn_pacing_seconds() if pacing_seconds is None else pacing_seconds

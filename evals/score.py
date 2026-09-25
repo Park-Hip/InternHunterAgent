@@ -22,6 +22,7 @@ writeback cannot do.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -53,6 +54,7 @@ from evals.writeback import (  # noqa: E402
     verify_ingestion,
     write_scores,
 )
+from src.agents.runtime.prompts import load_schema_context_resolution  # noqa: E402
 
 
 def _utc_now() -> str:
@@ -105,6 +107,24 @@ def _scored_repeats(artifact: dict[str, Any]) -> int:
     )
 
 
+def _captured_schema_context(manifest: dict[str, Any]) -> str | None:
+    versions = manifest.get("prompt_versions")
+    hashes = manifest.get("prompt_hashes")
+    if versions is None and hashes is None:
+        return None
+    if not isinstance(versions, dict) or not isinstance(hashes, dict):
+        raise ValueError("Capture manifest has invalid prompt lineage")
+    version = versions.get("schema_context")
+    content_hash = hashes.get("schema_context")
+    if not isinstance(version, str) or not version or not isinstance(content_hash, str):
+        raise ValueError("Capture manifest has invalid schema prompt lineage")
+    prompt = load_schema_context_resolution()
+    resolved_hash = hashlib.sha256(prompt.content.encode("utf-8")).hexdigest()
+    if prompt.version != version or resolved_hash != content_hash:
+        raise ValueError("Capture schema prompt lineage no longer resolves")
+    return prompt.content
+
+
 def score_artifact(
     path: Path,
     *,
@@ -121,6 +141,7 @@ def score_artifact(
     """
     artifact = json.loads(path.read_text(encoding="utf-8"))
     cases = {case["id"]: case for case in (scenarios or load_scenarios())}
+    schema_context = _captured_schema_context(artifact.get("manifest", {}))
 
     summary: dict[str, Any] = {
         "run": str(path),
@@ -163,7 +184,9 @@ def score_artifact(
 
             final_run = _seam_run(repeat["turns"][-1])
             if rescore or not judged:
-                repeat["scores"] = harness.score_seams(case, final_run)
+                repeat["scores"] = harness.score_seams(
+                    case, final_run, schema_context=schema_context
+                )
                 repeat["scorer_version"] = SCORER_VERSION
                 repeat["scored_at"] = _utc_now()
                 repeat.pop("scoring_error", None)

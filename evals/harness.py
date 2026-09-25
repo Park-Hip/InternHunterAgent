@@ -456,13 +456,15 @@ def build_seam1_case(case: dict, run: SeamRun) -> LLMTestCase:
     )
 
 
-def build_seam2_case(run: SeamRun) -> LLMTestCase | None:
+def build_seam2_case(
+    run: SeamRun, *, schema_context: str | None = None
+) -> LLMTestCase | None:
     if run.sql_text is None:
         return None
     return LLMTestCase(
         input=run.question,
         actual_output=run.sql_text,
-        context=[load_schema_context_resolution().content],
+        context=[schema_context or load_schema_context_resolution().content],
         tools_called=[
             ToolCall(
                 name=GENERATE_SQL_SPAN_NAME, input_parameters={"sql": run.sql_text}
@@ -499,7 +501,9 @@ def score(
     return results
 
 
-def score_seams(case: dict, final_run: SeamRun) -> dict[str, dict]:
+def score_seams(
+    case: dict, final_run: SeamRun, *, schema_context: str | None = None
+) -> dict[str, dict]:
     """Judge every seam observable in one recorded turn.
 
     The single scoring implementation, per D-f. `evals/score.py` calls it over a
@@ -511,7 +515,7 @@ def score_seams(case: dict, final_run: SeamRun) -> dict[str, dict]:
 
     results["seam1_routing"] = score(seam1_metrics(), build_seam1_case(case, final_run))
 
-    seam2_case = build_seam2_case(final_run)
+    seam2_case = build_seam2_case(final_run, schema_context=schema_context)
     if seam2_case is not None:
         results["seam2_nl_to_sql"] = score(seam2_metrics(), seam2_case)
 
@@ -523,14 +527,17 @@ def score_seams(case: dict, final_run: SeamRun) -> dict[str, dict]:
 
 async def run_case(case: dict) -> dict:
     """Run one golden end-to-end and score every seam it produced."""
+    prompts = await resolve_prompt_bundle_async()
     if case["type"] == "conversational":
-        runs, conversation = await run_conversational_case(case)
+        runs, conversation = await run_conversational_case(case, prompts=prompts)
         final_run = runs[-1]
     else:
-        final_run = await run_single_turn_case(case)
+        final_run = await run_single_turn_case(case, prompts=prompts)
         conversation = None
 
-    results = score_seams(case, final_run)
+    results = score_seams(
+        case, final_run, schema_context=prompts.schema_context.content
+    )
 
     return {
         "case_id": case["id"],

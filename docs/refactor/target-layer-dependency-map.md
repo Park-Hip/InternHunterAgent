@@ -49,7 +49,7 @@ concrete tracing type.
 
 | Gap | Source-backed current evidence | Target correction |
 | --- | --- | --- |
-| API composition | `src/api/app.py` assembles the runtime, checkpointer, and Langfuse lifecycle. | Move assembly behind a composition boundary so API transport receives an already assembled application service. |
+| API composition | `src/serving/composition.py` now owns settings, schema-guard, checkpointer, runtime, and Langfuse lifecycle assembly; `src/api/app.py` accepts an injected lifespan. | **Resolved by [#443](https://github.com/Park-Hip/InternHunterAgent/pull/443):** keep `app.state.runtime` only as the temporary route compatibility seam until a later application-service boundary slice. |
 | Concrete tracing dependency | `src/agents/service.py` imports `StreamLatency` from `src/agents/tracing/langfuse.py`. | Define a tracing event or observation port that keeps application orchestration independent of Langfuse types. |
 | Global command configuration | `src/core/config.py` requires serving configuration for ingestion commands. | Define command-specific configuration inputs at the composition boundary. |
 | Model construction in two paths | `src/agents/runtime/factory.py` and `src/agents/tools/query_clean_jobs.py` each build a model. | Centralize provider selection behind a runtime or tool-facing model port. |

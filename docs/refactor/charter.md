@@ -18,6 +18,7 @@ select the next approved boundary without consulting the legacy discovery collec
 | --- | --- | --- |
 | This charter | Refactor scope, authority, and operating rules | Maintainers and implementers |
 | [Target layer and dependency map](target-layer-dependency-map.md) | Intended layers, dependency direction, and known gaps | Maintainers and implementers |
+| [Component index](component-index.md) | Current component groups, refactor state, and immediate next action | Maintainers and implementers |
 | [Active backlog](active-backlog.md) | Ordered next decisions and vertical slices | Maintainers and implementers |
 
 `docs/discovery/` is retained as historical, source-backed discovery evidence.
@@ -47,7 +48,7 @@ characterization evidence, verification, and rollback path.
 
 ## Operating rules
 
-- Keep these three records short and current.
+- Keep these four records short and current.
 - Record durable architecture decisions in `docs/decisions/` when they meet that bar.
 - Move completed, declined, or superseded backlog entries out of the active list rather than growing
   a second inventory.

@@ -26,45 +26,44 @@ observability:
       entry_points: ["api:chat", "api:chat-stream", "eval:driver", "eval:spike"]
 
 agent:
-  # Default provider for every profile. A profile may override it with its own
-  # `provider:` key, which is how one profile moves arms while the other stays put.
-  # Change `provider` and `model` together - a model name belongs to one provider.
-  # Native knobs below are read only by their own provider's branch:
-  #   groq     -> reasoning_format, reasoning_effort
-  #   deepseek -> thinking (disabled | enabled; enabled means the provider default, on)
-  # Serving moved to deepseek on measured throughput (D-045). The groq knobs stay so the
-  # other arm is one edit away: set both profiles back to `groq` / `qwen/qwen3.6-27b` and
-  # restore `eval.driver.turn_pacing_seconds: 75`.
-  provider: deepseek
+  # Named deployments are the serving allowlist. Model names must use LiteLLM's
+  # provider-qualified form, and each profile selects only one deployment.
+  # `api_key_env` names a deployment environment variable. It never contains a secret.
+  providers:
+    deepseek_flash:
+      provider: deepseek
+      model: deepseek/deepseek-v4-flash
+      api_key_env: DEEPSEEK_API_KEY
+    groq_qwen:
+      provider: groq
+      model: groq/qwen/qwen3.6-27b
+      api_key_env: GROQ_API_KEY
+
   # End-to-end serving deadline for one SSE turn. Invalid or omitted values fall
   # back to 120 seconds so one blocked stream cannot occupy the sole web worker.
   stream_turn_timeout_seconds: 120
 
   react:
-    provider: deepseek
-    model: deepseek-v4-flash
+    deployment: deepseek_flash
     temperature: 0.2
     max_tokens: 2048
     timeout: 30
     max_retries: 2
     streaming: true
-    stream_usage: true
-    reasoning_format: hidden
-    reasoning_effort: null
-    thinking: disabled  # deepseek ignores temperature while thinking is on (T0027.1)
+    provider_options:
+      # DeepSeek ignores temperature when thinking is enabled (T0027.1).
+      thinking: disabled
 
   sql_generation:
-    provider: deepseek
-    model: deepseek-v4-flash
+    deployment: deepseek_flash
     temperature: 0.0
     max_tokens: 1024
     timeout: 30
     max_retries: 2
     streaming: false
-    stream_usage: false
-    reasoning_format: hidden
-    reasoning_effort: none
-    thinking: disabled  # this profile's determinism depends on temperature: 0.0
+    provider_options:
+      # This profile's determinism depends on temperature: 0.0.
+      thinking: disabled
 
   memory:
     max_turns: 6

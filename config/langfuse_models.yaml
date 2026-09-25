@@ -10,8 +10,8 @@ evidence:
     from cache-miss input.
 
 models:
-  - model_name: deepseek-v4-flash
-    match_pattern: "(?i)^deepseek-v4-flash$"
+  - model_name: deepseek/deepseek-v4-flash
+    match_pattern: "(?i)^deepseek/deepseek-v4-flash$"
     start_date: "2026-08-21T00:00:00Z"
     unit: TOKENS
     pricing_tiers:

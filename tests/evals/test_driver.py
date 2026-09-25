@@ -203,8 +203,19 @@ def test_manifest_records_reproducibility_inputs(
     assert len(manifest["scenario_registry_hash"]) == 64
     assert manifest["worktree_state"] == "clean"
     assert manifest["baseline_eligible"] is True
-    assert manifest["models"]["react"]
-    assert manifest["sampling"]["sql_generation"]["temperature"] == 0.0
+    assert manifest["providers"] == {
+        "react": "deepseek",
+        "sql_generation": "deepseek",
+    }
+    assert manifest["models"] == {
+        "react": "deepseek/deepseek-v4-flash",
+        "sql_generation": "deepseek/deepseek-v4-flash",
+    }
+    assert manifest["sampling"]["sql_generation"] == {
+        "temperature": 0.0,
+        "max_tokens": 1024,
+        "provider_options": {"thinking": "disabled"},
+    }
     assert manifest["scorer_version"] == harness_module.SCORER_VERSION
     assert manifest["prompt_versions"] == load_prompt_versions()
 

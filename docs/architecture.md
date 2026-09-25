@@ -358,19 +358,14 @@ or tracing.
 Chat models are wrapped by the provider in `src/agents/runtime/provider.py`.
 This is the one place model construction lives; no other layer constructs a model.
 
-Configuration is read from `config/settings.yaml` under two explicit profiles with the same fields:
-`agent.react.*` for the outer conversational ReAct agent, and `agent.sql_generation.*` for the
-nested SQL-generation call inside the job-query tool.
-Each profile carries `model`, `temperature`, `max_tokens`, `timeout`, `max_retries`, `streaming`,
-and its provider's native reasoning knob.
-Each profile also carries a `provider` key defaulting to `agent.provider`, so one profile can move
-providers while the other stays put.
+Configuration is read from `config/settings.yaml` under a trusted `agent.providers` deployment allowlist and two explicit profiles: `agent.react.*` for the outer conversational ReAct agent and `agent.sql_generation.*` for the nested SQL-generation call inside the job-query tool.
+A deployment defines the LiteLLM provider-qualified model and the name of its API-key environment variable, while a profile selects a deployment and carries `temperature`, `max_tokens`, `timeout`, `max_retries`, `streaming`, and validated `provider_options`.
 
-The builder supports `deepseek` and `groq` and raises on anything else.
-The selected branch reads its own key and raises naming the profile when it is unset, so a checkout
-need not hold credentials for an unused provider.
-Both profiles select DeepSeek (D-045); the Groq branch stays selectable, because two working
-branches are what keep the provider seam honest.
+`src/agents/runtime/provider.py` uses the in-process `ChatLiteLLM` adapter, so model construction has no provider-specific constructor branch.
+The selected deployment reads its own key and raises naming the profile when it is unset, so a checkout need not hold credentials for an unused provider.
+Both profiles select the DeepSeek deployment (D-045), and a Groq deployment remains selectable.
+No API caller can select a deployment, model, endpoint, or credential.
+See ADR-0054 for the LiteLLM decision, exclusions, and rollback path.
 
 The two profiles are deliberately separate: the outer ReAct loop reasons, while SQL generation is
 pinned to deterministic sampling.

@@ -14,7 +14,7 @@ from langfuse.model import PromptClient
 from src.agents.runtime.prompts import load_prompt_versions
 from src.agents.tracing.prompt_registry import SQL_GENERATION_PROMPT_NAME
 from src.agents.tracing.stream import StreamLatency, StreamObservation, StreamOutcome
-from src.core.config import settings
+from src.core.config import ConfigLoadError, resolve_agent_deployment, settings
 from src.core.logger import logger
 
 # The handle handed to callers is still a Langfuse object at runtime. Exporting the
@@ -76,11 +76,10 @@ def create_langfuse_stream_observation() -> StreamObservation:
 
 
 def _react_model_name() -> str:
-    agent = settings.config_yaml.get("agent")
-    if not isinstance(agent, dict) or not isinstance(agent.get("react"), dict):
+    try:
+        return resolve_agent_deployment(settings.config_yaml, "react").model
+    except (ConfigLoadError, ValueError):
         return "unknown"
-    model = agent["react"].get("model")
-    return model if isinstance(model, str) else "unknown"
 
 
 def _langfuse_taxonomy() -> dict[str, Any]:
@@ -155,14 +154,9 @@ def build_langfuse_tags(
     if entry_point not in entry_points:
         raise ValueError(f"Unsupported Langfuse entry point: {entry_point}")
 
-    agent = settings.config_yaml.get("agent")
-    if not isinstance(agent, dict) or not isinstance(agent.get("react"), dict):
-        raise ValueError("Missing 'agent.react' configuration")
-    react = agent["react"]
-    provider = react.get("provider", agent.get("provider"))
-    model = react.get("model")
-    if not isinstance(provider, str) or not isinstance(model, str):
-        raise ValueError("Invalid 'agent.react' provider/model configuration")
+    deployment = resolve_agent_deployment(settings.config_yaml, "react")
+    provider = deployment.provider
+    model = deployment.model
 
     if (scenario_id is None) != (repeat is None):
         raise ValueError("Langfuse evaluation tags require both scenario_id and repeat")

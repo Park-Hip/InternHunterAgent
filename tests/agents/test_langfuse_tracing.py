@@ -55,7 +55,7 @@ def test_trace_attributes_propagate_request_metadata_and_closed_tags() -> None:
             "prompt:schema_context:v11",
             "prompt:sql_generation:v13",
             "provider:deepseek",
-            "model:deepseek-v4-flash",
+            "model:deepseek/deepseek-v4-flash",
         ],
         metadata={
             "prompt_versions": {
@@ -102,7 +102,7 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
             "prompt:schema_context:v11",
             "prompt:sql_generation:v13",
             "provider:deepseek",
-            "model:deepseek-v4-flash",
+            "model:deepseek/deepseek-v4-flash",
         ],
         metadata={
             "prompt_versions": {
@@ -211,7 +211,7 @@ def test_stream_observation_records_error_without_visible_ttft() -> None:
     assert metadata["outcome"] == "error"
     assert metadata["cold_start"] in {"process-first-agent-request", "warm"}
     assert metadata["environment"] in {"local", "production", "evaluation"}
-    assert metadata["model"] == "deepseek-v4-flash"
+    assert metadata["model"] == "deepseek/deepseek-v4-flash"
 
 
 def test_stream_latency_has_no_tracing_side_effects() -> None:
@@ -243,12 +243,16 @@ def test_build_langfuse_tags_use_the_configured_provider_and_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setitem(
-        langfuse.settings.config_yaml["agent"]["react"], "model", "deepseek-v4.1-flash"
+        langfuse.settings.config_yaml["agent"]["providers"]["deepseek_flash"],
+        "model",
+        "deepseek/deepseek-v4.1-flash",
     )
 
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "must-not-appear-in-traces")
     tags = langfuse.build_langfuse_tags(entry_point="api:chat")
 
-    assert tags[-1] == "model:deepseek-v4.1-flash"
+    assert tags[-1] == "model:deepseek/deepseek-v4.1-flash"
+    assert all("must-not-appear-in-traces" not in tag for tag in tags)
 
 
 def test_langfuse_environment_is_closed_and_defaults_to_local(

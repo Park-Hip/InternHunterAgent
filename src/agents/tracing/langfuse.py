@@ -9,7 +9,10 @@ from typing import Any, Callable, cast
 from langfuse import Langfuse, LangfuseSpan, propagate_attributes
 from langfuse.langchain import CallbackHandler
 
-from src.agents.runtime.prompts import load_resolved_prompt_versions
+from src.agents.runtime.prompts import (
+    load_resolved_prompt_versions,
+    load_resolved_prompt_versions_async,
+)
 from src.agents.tracing.prompt_registry import ResolvedPrompt, get_prompt_registry
 from src.agents.tracing.stream import StreamLatency, StreamObservation, StreamOutcome
 from src.core.config import settings
@@ -131,6 +134,25 @@ def build_langfuse_tags(
     repeat: int | None = None,
 ) -> list[str]:
     """Build the deliberately closed per-trace Langfuse tag vocabulary."""
+    tags = _base_langfuse_tags(
+        entry_point=entry_point,
+        scenario_id=scenario_id,
+        repeat=repeat,
+    )
+    tags[1:1] = [
+        f"prompt:{surface}:{version}"
+        for surface, version in load_resolved_prompt_versions().items()
+    ]
+    return tags
+
+
+def _base_langfuse_tags(
+    *,
+    entry_point: str,
+    scenario_id: str | None = None,
+    repeat: int | None = None,
+) -> list[str]:
+    """Build trace tags that do not require remote prompt resolution."""
     taxonomy = _langfuse_taxonomy().get("tag_taxonomy")
     if not isinstance(taxonomy, dict):
         raise ValueError("Missing 'observability.langfuse.tag_taxonomy' configuration")
@@ -157,19 +179,29 @@ def build_langfuse_tags(
     if repeat is not None and repeat < 1:
         raise ValueError("Langfuse evaluation repeat must be positive")
 
-    tags = [
-        entry_point,
-        *(
-            f"prompt:{surface}:{version}"
-            for surface, version in load_resolved_prompt_versions().items()
-        ),
-        f"provider:{provider}",
-        f"model:{model}",
-    ]
+    tags = [entry_point, f"provider:{provider}", f"model:{model}"]
     if scenario_id is not None:
         if not scenario_id.strip():
             raise ValueError("Langfuse evaluation scenario_id must not be empty")
         tags.extend((f"scenario:{scenario_id}", f"repeat:{repeat}"))
+    return tags
+
+
+async def _build_langfuse_tags_async(
+    *,
+    entry_point: str,
+    scenario_id: str | None = None,
+    repeat: int | None = None,
+) -> list[str]:
+    tags = _base_langfuse_tags(
+        entry_point=entry_point,
+        scenario_id=scenario_id,
+        repeat=repeat,
+    )
+    tags[1:1] = [
+        f"prompt:{surface}:{version}"
+        for surface, version in (await load_resolved_prompt_versions_async()).items()
+    ]
     return tags
 
 
@@ -180,7 +212,7 @@ def validate_langfuse_trace_context(
     repeat: int | None = None,
 ) -> None:
     """Validate the configured Langfuse vocabulary before invoking LangChain."""
-    build_langfuse_tags(
+    _base_langfuse_tags(
         entry_point=entry_point,
         scenario_id=scenario_id,
         repeat=repeat,
@@ -234,14 +266,22 @@ async def langfuse_request_trace(
         yield None
         return
 
-    with langfuse_trace_attributes(
+    tags = await _build_langfuse_tags_async(
         entry_point=entry_point,
-        trace_name=trace_name,
         scenario_id=scenario_id,
         repeat=repeat,
-        session_id=session_id,
-        user_id=user_id,
-    ):
+    )
+    attributes: dict[str, Any] = {
+        "tags": tags,
+        "metadata": {"prompt_versions": await load_resolved_prompt_versions_async()},
+        "trace_name": trace_name,
+    }
+    if session_id is not None:
+        attributes["session_id"] = session_id
+    if user_id is not None:
+        attributes["user_id"] = user_id
+
+    with propagate_attributes(**attributes):
         client = get_langfuse_client()
         if client is None:
             yield None
@@ -315,7 +355,7 @@ def langfuse_prompt_attributes(prompt: ResolvedPrompt) -> Iterator[None]:
 
 async def prepare_native_prompts_startup() -> None:
     """Warm every prompt before requests can use the managed prompt deployment."""
-    resolved = await asyncio.to_thread(get_prompt_registry().prefetch)
+    resolved = await get_prompt_registry().prefetch_async()
     logger.info(
         "langfuse.prompts_prefetched",
         prompts={surface: prompt.version for surface, prompt in resolved.items()},

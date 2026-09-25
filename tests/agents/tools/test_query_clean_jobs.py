@@ -251,8 +251,8 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
 class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
     @patch("src.agents.tools.query_clean_jobs.AgentProvider")
-    @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution")
-    @patch("src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution")
+    @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution_async")
+    @patch("src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async")
     async def test_generate_sql_uses_managed_text_and_links_the_real_generation(
         self, sql_prompt, schema_prompt, mock_provider
     ) -> None:
@@ -285,8 +285,8 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         mock_provider.return_value.build_model.assert_called_once_with("sql_generation")
 
     @patch("src.agents.tools.query_clean_jobs.AgentProvider")
-    @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution")
-    @patch("src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution")
+    @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution_async")
+    @patch("src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async")
     async def test_generate_sql_flattens_list_content(
         self, sql_prompt, schema_prompt, mock_provider
     ) -> None:

@@ -18,7 +18,7 @@ from time import perf_counter
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain.messages import HumanMessage
+from langchain.messages import HumanMessage, SystemMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from deepeval.integrations.langchain import CallbackHandler
@@ -32,7 +32,10 @@ from deepeval.tracing.trace_test_manager import trace_testing_manager
 
 from evals.judge import build_judge
 from src.agents.runtime.factory import agent_factory
-from src.agents.runtime.prompts import load_schema_context
+from src.agents.runtime.prompts import (
+    load_schema_context_resolution,
+    load_system_prompt_resolution_async,
+)
 from src.agents.tracing.langfuse import (
     get_langfuse_handler,
     langfuse_request_trace,
@@ -340,7 +343,8 @@ async def _run_turn(
 
 
 async def run_single_turn_case(case: dict, *, repeat: int = 1) -> SeamRun:
-    agent = agent_factory()
+    system_prompt = await load_system_prompt_resolution_async()
+    agent = agent_factory(system_prompt=SystemMessage(content=system_prompt.content))
     handler = CallbackHandler(name=case["id"])
     validate_langfuse_trace_context(
         entry_point="eval:driver",
@@ -374,7 +378,11 @@ async def run_conversational_case(
     would otherwise spend a second turn's token budget inside the per-minute
     window its first turn just filled.
     """
-    agent = agent_factory(checkpointer=InMemorySaver())
+    system_prompt = await load_system_prompt_resolution_async()
+    agent = agent_factory(
+        checkpointer=InMemorySaver(),
+        system_prompt=SystemMessage(content=system_prompt.content),
+    )
     thread_id = case["id"]
     validate_langfuse_trace_context(
         entry_point="eval:driver",
@@ -436,7 +444,7 @@ def build_seam2_case(run: SeamRun) -> LLMTestCase | None:
     return LLMTestCase(
         input=run.question,
         actual_output=run.sql_text,
-        context=[load_schema_context()],
+        context=[load_schema_context_resolution().content],
         tools_called=[
             ToolCall(
                 name=GENERATE_SQL_SPAN_NAME, input_parameters={"sql": run.sql_text}

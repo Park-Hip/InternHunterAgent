@@ -85,21 +85,8 @@ Run provisioning deliberately after confirming the pricing source and the target
 
 ## Langfuse prompt registry
 
-`config/prompts.yaml` is the reviewed source of truth for every model-visible prompt.
-After a reviewed prompt change is merged or deployed, run the registry command with the Langfuse
-credentials for the target project:
-
-```bash
-uv run python scripts/register_langfuse_prompts.py
-```
-
-The command assigns the `production` label and records the checked-out git commit on a changed
-prompt version.
-An exact rerun creates no new version.
-Use `--dry-run` to validate and list the YAML inputs without credentials or a Langfuse request.
-The running agent always uses the YAML text.
-It only fetches the matching registered prompt reference to link the SQL generation observation.
-If that optional lookup fails, SQL generation continues without a Langfuse prompt link.
+Follow the [Langfuse prompt management guide](manage-langfuse-prompts.md) to seed, evaluate,
+promote, and roll back immutable prompt versions.
 
 ## Database operations
 

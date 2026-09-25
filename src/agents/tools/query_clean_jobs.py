@@ -7,8 +7,8 @@ from langchain_core.runnables import RunnableConfig
 
 from src.agents.runtime.prompts import (
     load_behavior_glossary,
-    load_schema_context_resolution,
-    load_sql_generation_prompt_resolution,
+    load_schema_context_resolution_async,
+    load_sql_generation_prompt_resolution_async,
 )
 from src.agents.runtime.provider import AgentProvider
 from src.agents.tracing.langfuse import langfuse_prompt_attributes
@@ -63,8 +63,8 @@ def _content_to_text(content: str | list[Any]) -> str:
 
 
 async def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
-    schema_context = load_schema_context_resolution()
-    sql_generation_prompt = load_sql_generation_prompt_resolution()
+    schema_context = await load_schema_context_resolution_async()
+    sql_generation_prompt = await load_sql_generation_prompt_resolution_async()
     model = AgentProvider().build_model("sql_generation")
     messages = [
         HumanMessage(

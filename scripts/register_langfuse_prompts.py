@@ -27,7 +27,7 @@ def create_langfuse_client():
 
 PROMPTS_PATH = ROOT / "config" / "prompts.yaml"
 PROMPT_LABEL = "candidate"
-PERMITTED_SEED_LABELS = frozenset({"candidate", "staging"})
+PERMITTED_SEED_LABELS = frozenset({"candidate"})
 
 
 class PromptClient(Protocol):
@@ -111,7 +111,7 @@ def synchronize_prompts(
     commit_message: str | None,
 ) -> tuple[int, int]:
     if label not in PERMITTED_SEED_LABELS:
-        raise ValueError("Prompt seeding may target candidate or staging, never production")
+        raise ValueError("Prompt seeding may target candidate, never production")
     """Create versions only when the registered text differs from YAML."""
     created = 0
     unchanged = 0

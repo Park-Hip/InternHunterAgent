@@ -106,9 +106,9 @@ def _validate_prompt_config(config: dict[str, Any]) -> None:
     if not isinstance(prompts, dict):
         raise ConfigLoadError("Missing 'agent.prompts' configuration")
     label = prompts.get("deployment_label")
-    if label not in {"candidate", "staging", "production"}:
+    if label not in {"candidate", "production"}:
         raise ConfigLoadError(
-            "agent.prompts.deployment_label must be candidate, staging, or production"
+            "agent.prompts.deployment_label must be candidate or production"
         )
     cache_ttl_seconds = prompts.get("cache_ttl_seconds")
     if (

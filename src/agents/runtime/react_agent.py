@@ -5,7 +5,7 @@ from typing import Any, cast
 from langchain.messages import HumanMessage, SystemMessage
 
 from src.agents.runtime.factory import agent_factory
-from src.agents.runtime.prompts import load_system_prompt_resolution
+from src.agents.runtime.prompts import load_system_prompt_resolution_async
 from src.agents.tracing.langfuse import (
     build_langfuse_config,
     get_langfuse_client,
@@ -24,9 +24,9 @@ class AgentRuntime:
         self._system_prompt_version: str | None = None
         self.agent = agent or agent_factory(checkpointer=checkpointer)
 
-    def _active_system_prompt(self):
+    async def _active_system_prompt(self):
         """Refresh the served graph when a managed system-prompt label moves."""
-        prompt = load_system_prompt_resolution()
+        prompt = await load_system_prompt_resolution_async()
         if self._managed_agent and prompt.version != self._system_prompt_version:
             self.agent = agent_factory(
                 checkpointer=self._checkpointer,
@@ -47,7 +47,7 @@ class AgentRuntime:
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
-        system_prompt = self._active_system_prompt()
+        system_prompt = await self._active_system_prompt()
 
         async with langfuse_request_trace(
             entry_point="api:chat",
@@ -98,7 +98,7 @@ class AgentRuntime:
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
-        system_prompt = self._active_system_prompt()
+        system_prompt = await self._active_system_prompt()
 
         events: asyncio.Queue[dict[str, str | None] | Exception] = asyncio.Queue(
             maxsize=1

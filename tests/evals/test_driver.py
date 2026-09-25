@@ -15,6 +15,7 @@ from evals.harness import ProviderTelemetryCallback, SeamRun
 from evals.replay import REPLAY_SCHEMA_VERSION, load_replay, validate_replay
 from src.agents.runtime.prompts import load_prompt_versions
 from src.agents.tracing import langfuse
+from src.agents.tracing.prompt_registry import ResolvedPrompt
 
 
 @pytest.fixture(autouse=True)
@@ -124,7 +125,19 @@ def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
         return SeamRun(question=message, answer="a", trace_id=trace_id)
 
     agent = object()
-    monkeypatch.setattr(driver.harness, "agent_factory", lambda: agent)
+    factory_calls: list[dict[str, object]] = []
+
+    async def load_system_prompt() -> ResolvedPrompt:
+        return ResolvedPrompt(
+            "system", "resumi-system", "candidate system", "44", object(), False
+        )
+
+    def build_agent(**kwargs: object) -> object:
+        factory_calls.append(kwargs)
+        return agent
+
+    monkeypatch.setattr(driver.harness, "load_system_prompt_resolution_async", load_system_prompt)
+    monkeypatch.setattr(driver.harness, "agent_factory", build_agent)
     monkeypatch.setattr(driver.harness, "CallbackHandler", lambda **kwargs: object())
     monkeypatch.setattr(
         driver.harness,
@@ -139,6 +152,7 @@ def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
     assert result.trace_id == "trace-request-scoped"
     assert observed["agent"] is agent
     assert observed["trace_id"] == "trace-request-scoped"
+    assert factory_calls[0]["system_prompt"].content == "candidate system"
     assert validations == [
         {"entry_point": "eval:driver", "scenario_id": "HLP-TEST-1", "repeat": 2}
     ]

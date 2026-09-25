@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Callable, Final, Literal
 
@@ -38,7 +39,7 @@ LANGFUSE_PROMPT_NAMES: Final = {
     definition.yaml_key: definition.name for definition in PROMPT_DEFINITIONS
 }
 SQL_GENERATION_PROMPT_NAME: Final = LANGFUSE_PROMPT_NAMES["sql_generation"]
-ALLOWED_PROMPT_DEPLOYMENT_LABELS: Final = frozenset({"candidate", "staging", "production"})
+ALLOWED_PROMPT_DEPLOYMENT_LABELS: Final = frozenset({"candidate", "production"})
 
 
 @dataclass(frozen=True)
@@ -106,6 +107,17 @@ class PromptRegistry:
     def prefetch(self) -> dict[PromptSurface, ResolvedPrompt]:
         """Warm every prompt before serving so startup has managed text or its fallback."""
         return {surface: self.resolve(surface) for surface in PROMPT_SURFACES}
+
+    async def resolve_async(self, surface: PromptSurface) -> ResolvedPrompt:
+        """Resolve a prompt without blocking an asynchronous request loop."""
+        return await asyncio.to_thread(self.resolve, surface)
+
+    async def prefetch_async(self) -> dict[PromptSurface, ResolvedPrompt]:
+        """Warm every prompt without blocking application startup's event loop."""
+        resolved = await asyncio.gather(
+            *(self.resolve_async(surface) for surface in PROMPT_SURFACES)
+        )
+        return dict(zip(PROMPT_SURFACES, resolved, strict=True))
 
     @staticmethod
     def _configuration() -> dict[str, str | int]:

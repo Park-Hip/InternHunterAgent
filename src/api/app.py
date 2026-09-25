@@ -1,6 +1,4 @@
-import asyncio
 import time
-from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -12,14 +10,10 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.datastructures import MutableHeaders
+from starlette.types import Lifespan
 
-from src.api.routes import query, health
-from src.api.schema_guard import assert_serving_schema
-from src.agents.runtime.factory import agent_factory
-from src.agents.runtime.react_agent import AgentRuntime
-from src.agents.tracing.langfuse import diagnose_langfuse_startup, shutdown_langfuse
-from src.core.checkpointer import build_checkpointer, build_checkpointer_pool
-from src.core.config import load_settings, settings
+from src.api.routes import health, query
+from src.core.config import settings
 from src.core.errors import BUSY_MESSAGE
 
 
@@ -41,37 +35,6 @@ class FrameGuardMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_header)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    load_settings()
-    await asyncio.to_thread(assert_serving_schema)  # boot fails loudly on clean_jobs drift
-
-    pool = build_checkpointer_pool()
-    await pool.open()
-    diagnostic_task: asyncio.Task[None] | None = None
-    try:
-        checkpointer = await build_checkpointer(pool)
-        app.state.runtime = AgentRuntime(agent=agent_factory(checkpointer=checkpointer))
-        # Fire-and-track: diagnose_langfuse_startup() is a non-fatal diagnostic, so
-        # boot must not block on a network round-trip to Langfuse to complete it.
-        diagnostic_task = asyncio.create_task(diagnose_langfuse_startup())
-        yield
-    finally:
-        try:
-            if diagnostic_task is not None:
-                if not diagnostic_task.done():
-                    diagnostic_task.cancel()
-                try:
-                    await diagnostic_task
-                except asyncio.CancelledError:
-                    pass
-        finally:
-            try:
-                await shutdown_langfuse()
-            finally:
-                await pool.close()
 
 
 def _load_cors_config() -> dict[str, Any]:
@@ -131,6 +94,7 @@ def create_app(
     cors_config: dict[str, Any] | None = None,
     rate_limit: str | None = None,
     docs_enabled: bool | None = None,
+    lifespan: Lifespan[FastAPI] | None = None,
 ) -> FastAPI:
     resolved_docs_enabled = (
         _load_docs_enabled() if docs_enabled is None else docs_enabled
@@ -164,6 +128,3 @@ def create_app(
     app.include_router(health.router, prefix="/api/v1")
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
     return app
-
-
-app = create_app()

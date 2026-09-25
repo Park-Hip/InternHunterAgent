@@ -96,7 +96,7 @@ Load postings and start the app:
 
 ```bash
 uv run python -m src.services.ingestion.loader
-uv run uvicorn src.api.app:app --reload
+uv run uvicorn src.serving.composition:app --reload
 ```
 
 Open **http://localhost:8000**. Health is at `/api/v1/health`, readiness at `/api/v1/ready`,

@@ -7,7 +7,7 @@ from unittest.mock import ANY, AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from src.agents.service import FALLBACK_ANSWER, generate_agent_response
-from src.api.app import app
+from src.serving.composition import app
 from src.api.routes.query import _server_sent_event, _with_heartbeats
 from src.api.schemas import DEFAULT_MAX_QUERY_CHARS
 from src.core.errors import BUSY_MESSAGE, GENERIC_ERROR_MESSAGE, ProviderBusyError

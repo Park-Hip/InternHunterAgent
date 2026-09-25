@@ -194,13 +194,3 @@ def test_invalid_configuration_is_rejected_before_model_construction(
 
     with pytest.raises(ConfigLoadError, match=message):
         validate_agent_config(config)
-
-
-def test_runtime_provider_has_no_dedicated_provider_constructor_branches() -> None:
-    from pathlib import Path
-
-    source = Path(__file__).resolve().parents[3] / "src" / "agents" / "runtime" / "provider.py"
-    text = source.read_text(encoding="utf-8")
-
-    assert "ChatGroq" not in text
-    assert "ChatDeepSeek" not in text

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from pydantic import Field, ValidationError
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfigDict
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -218,7 +218,15 @@ def get_configured_secret(environment_variable: str) -> str | None:
     if ENVIRONMENT_VARIABLE_NAME.fullmatch(environment_variable) is None:
         raise ValueError("Invalid environment variable reference")
     value = os.getenv(environment_variable)
-    return value.strip() if value and value.strip() else None
+    if value is not None:
+        return value.strip() or None
+
+    dotenv_source = DotEnvSettingsSource(Settings)
+    dotenv_key = (
+        environment_variable if dotenv_source.case_sensitive else environment_variable.lower()
+    )
+    value = dotenv_source().get(dotenv_key)
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def get_stream_turn_timeout_seconds(config: dict[str, Any]) -> int:

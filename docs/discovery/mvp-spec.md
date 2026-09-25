@@ -31,12 +31,23 @@ The MVP does not automatically classify or broaden labels through embeddings, si
 The system must exclude records that lack the requested scope evidence or a retained technology-evidence link needed for the answer.
 It must state the exclusion or limitation when that affects the result.
 
+## Bounded single-agent contract
+
+The MVP is exactly one bounded, read-only model agent, not a fixed orchestration workflow that unconditionally executes a predetermined sequence.
+For each request, the agent decides whether to invoke registered tools and which tools are needed to answer it.
+It supplies arguments that conform to each tool's validated schema, then produces the final response from deterministic tool outputs and retained evidence only.
+The agent may decline an unsupported question or report that no matching evidence exists, but it must not invent tool results, broaden scope, retrieve unapproved data, mutate data, or make factual claims outside those outputs and evidence.
+
+Registered deterministic tools exclusively own supported-question and argument validation, corpus-version and filter checks, record filtering and de-duplication, normalized-label lookup, counting and percentage calculation, and retained-evidence retrieval.
+For identical valid inputs and corpus version, those tools return the same factual result.
+The agent is responsible for bounded request interpretation, tool selection, schema-valid arguments, and an evidence-grounded final response.
+
 ## One-turn workflow
 
 1. The user submits one technology-frequency question and supported scope filters.
-2. The system validates the supported question shape and the available corpus version and filters.
-3. A deterministic analysis selects the matching records, de-duplicates them by stable record identity, and counts the fixed normalized labels under a documented counting rule.
-4. The system returns the ranked counts and percentages with evidence and limits.
+2. The single agent interprets the request within this contract and decides whether and which registered tools to invoke.
+3. Deterministic tools validate the supported question shape, available corpus version, and filters, then select matching records, de-duplicate them by stable record identity, count fixed normalized labels under a documented counting rule, and retrieve retained evidence.
+4. The agent returns the deterministic ranked counts and percentages with the supplied evidence and limits, without adding unsupported factual claims.
 
 The calculation is deterministic for the same version, filters, label set, and counting rule.
 An answer must identify its version, scope, matching-record count, de-duplication rule, labels, calculation, and retained source evidence.
@@ -51,12 +62,15 @@ The MVP is complete when an early-career Vietnamese candidate can submit the sup
 A reviewer must be able to reproduce the ranking from the version, filters, counting rule, and evidence links.
 The result must remain bounded when evidence is missing, a filter is unsupported, or no records match.
 
+Its evaluation must verify that the one agent selects and invokes only registered read-only tools as needed, sends schema-valid arguments, and grounds final factual claims in deterministic tool outputs and retained evidence.
+Evaluation cases must also verify bounded handling of unsupported questions, invalid arguments, missing evidence, and zero-match results.
+
 ## Explicit non-goals
 
 This release does not provide semantic skill grouping, general career advice, skill-gap analysis, role or level comparisons, trend analysis, learning roadmaps, résumé analysis, or multi-turn memory.
 It does not decide the corpus source, collect data, call a live provider, or claim live or market-wide coverage.
-It does not select an agent framework, prompt design, model provider, model routing or fallback, tracing service, memory design, retrieval technology, or single-agent versus multi-agent topology.
-Those choices are deferred until this workflow has a concrete implementation and evaluation need.
+It does not select an agent framework, agent-loop or ReAct implementation pattern, prompt design, model provider, model routing or fallback, tracing service, memory design, retrieval technology, or any future multi-agent topology.
+The MVP's single-agent requirement is decided, while those implementation and future-topology choices are deferred until this workflow has a concrete implementation and evaluation need.
 
 ## Relationship to discovery records
 

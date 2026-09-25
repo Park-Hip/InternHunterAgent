@@ -11,6 +11,7 @@ from src.agents.tools.query_clean_jobs import query_clean_jobs
 from src.agents.tools.get_job_details import get_job_details
 from src.agents.runtime.prompts import load_system_prompt
 
+
 def agent_factory(checkpointer=None, system_prompt: SystemMessage | None = None):
     model = AgentProvider().build_model("react")
     trigger_messages, keep_messages = load_compaction_message_limits()

@@ -20,6 +20,8 @@ from src.core.logger import logger
 
 _langfuse_handler: CallbackHandler | None = None
 _langfuse: Langfuse | None = None
+
+
 class LangfuseStreamObservation:
     """Publish neutral stream lifecycle timings to the current Langfuse span."""
 
@@ -349,7 +351,7 @@ def langfuse_prompt_attributes(prompt: ResolvedPrompt) -> Iterator[None]:
     if prompt.prompt_client is None:
         yield
         return
-    with propagate_attributes(prompt=prompt.prompt_client):
+    with propagate_attributes(prompt=prompt.prompt_client):  # type: ignore[call-arg]
         yield
 
 

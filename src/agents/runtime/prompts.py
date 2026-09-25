@@ -44,7 +44,9 @@ def _load_release_fallback(yaml_key: str) -> str:
         raise ValueError("Missing 'prompts' section in config/prompts.yaml")
     content = prompts_root.get(yaml_key)
     if not isinstance(content, str) or not content.strip():
-        raise ValueError(f"Missing or empty 'prompts.{yaml_key}' in config/prompts.yaml")
+        raise ValueError(
+            f"Missing or empty 'prompts.{yaml_key}' in config/prompts.yaml"
+        )
     return content.strip()
 
 
@@ -82,7 +84,9 @@ def load_sql_generation_prompt() -> str:
 def load_prompt_versions() -> dict[str, str]:
     """Return release-pinned lineage for offline artifacts and fallback operation."""
     prompt_versions = settings.prompts_yaml.get("prompt_versions")
-    if not isinstance(prompt_versions, dict) or set(prompt_versions) != set(PROMPT_SURFACES):
+    if not isinstance(prompt_versions, dict) or set(prompt_versions) != set(
+        PROMPT_SURFACES
+    ):
         raise ValueError(
             "config/prompts.yaml must declare exactly these prompt_versions: "
             + ", ".join(PROMPT_SURFACES)
@@ -114,7 +118,9 @@ def load_behavior_glossary() -> dict[str, str]:
 
     for token, phrasing in glossary.items():
         if not isinstance(token, str) or not token.strip():
-            raise ValueError("Every 'behavior_glossary' token must be a non-empty string")
+            raise ValueError(
+                "Every 'behavior_glossary' token must be a non-empty string"
+            )
         if not isinstance(phrasing, str) or not phrasing.strip():
             raise ValueError(f"Empty 'behavior_glossary' phrasing for token: {token}")
 

@@ -25,6 +25,7 @@ def create_langfuse_client():
 
     return create_client()
 
+
 PROMPTS_PATH = ROOT / "config" / "prompts.yaml"
 PROMPT_LABEL = "candidate"
 PERMITTED_SEED_LABELS = frozenset({"candidate"})

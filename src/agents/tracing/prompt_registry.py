@@ -29,8 +29,12 @@ class PromptDefinition:
 
 PROMPT_DEFINITIONS: Final[tuple[PromptDefinition, ...]] = (
     PromptDefinition(SYSTEM_PROMPT_SURFACE, "system_prompt", "resumi-system"),
-    PromptDefinition(SCHEMA_CONTEXT_PROMPT_SURFACE, "schema_context", "resumi-schema-context"),
-    PromptDefinition(SQL_GENERATION_PROMPT_SURFACE, "sql_generation", "resumi-sql-generation"),
+    PromptDefinition(
+        SCHEMA_CONTEXT_PROMPT_SURFACE, "schema_context", "resumi-schema-context"
+    ),
+    PromptDefinition(
+        SQL_GENERATION_PROMPT_SURFACE, "sql_generation", "resumi-sql-generation"
+    ),
 )
 PROMPT_DEFINITIONS_BY_SURFACE: Final = {
     definition.surface: definition for definition in PROMPT_DEFINITIONS
@@ -138,7 +142,9 @@ class PromptRegistry:
             or not isinstance(cache_ttl_seconds, int)
             or cache_ttl_seconds < 0
         ):
-            raise ValueError("agent.prompts.cache_ttl_seconds must be a non-negative integer")
+            raise ValueError(
+                "agent.prompts.cache_ttl_seconds must be a non-negative integer"
+            )
         return {"deployment_label": label, "cache_ttl_seconds": cache_ttl_seconds}
 
     @staticmethod
@@ -153,7 +159,9 @@ class PromptRegistry:
             )
 
         versions = settings.prompts_yaml.get("prompt_versions")
-        version = versions.get(definition.surface) if isinstance(versions, dict) else None
+        version = (
+            versions.get(definition.surface) if isinstance(versions, dict) else None
+        )
         if not isinstance(version, str) or not version.strip():
             raise ValueError(
                 f"Missing release-pinned prompt_versions.{definition.surface} in config/prompts.yaml"

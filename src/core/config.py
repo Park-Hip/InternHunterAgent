@@ -61,7 +61,11 @@ def get_stream_turn_timeout_seconds(config: dict[str, Any]) -> int:
         return DEFAULT_STREAM_TURN_TIMEOUT_SECONDS
 
     timeout_seconds = agent_config.get("stream_turn_timeout_seconds")
-    if isinstance(timeout_seconds, int) and not isinstance(timeout_seconds, bool) and timeout_seconds > 0:
+    if (
+        isinstance(timeout_seconds, int)
+        and not isinstance(timeout_seconds, bool)
+        and timeout_seconds > 0
+    ):
         return timeout_seconds
     return DEFAULT_STREAM_TURN_TIMEOUT_SECONDS
 
@@ -91,8 +95,10 @@ def _load_yaml_file(path: Path) -> dict[str, Any]:
 
 
 def _validate_string_list(value: Any, *, name: str) -> list[str]:
-    if not isinstance(value, list) or not value or not all(
-        isinstance(item, str) and item for item in value
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(item, str) and item for item in value)
     ):
         raise ConfigLoadError(f"Invalid '{name}' configuration")
     if len(value) != len(set(value)):
@@ -146,13 +152,17 @@ def _validate_observability_config(config: dict[str, Any]) -> None:
         raise ConfigLoadError("Missing 'observability' section in config/settings.yaml")
     langfuse = observability.get("langfuse")
     if not isinstance(langfuse, dict):
-        raise ConfigLoadError("Missing 'observability.langfuse' section in config/settings.yaml")
+        raise ConfigLoadError(
+            "Missing 'observability.langfuse' section in config/settings.yaml"
+        )
 
     environments = langfuse.get("environments")
     if not isinstance(environments, dict) or not isinstance(
         environments.get("default"), str
     ):
-        raise ConfigLoadError("Invalid 'observability.langfuse.environments' configuration")
+        raise ConfigLoadError(
+            "Invalid 'observability.langfuse.environments' configuration"
+        )
     allowed_environments = _validate_string_list(
         environments.get("allowed"),
         name="observability.langfuse.environments.allowed",
@@ -164,7 +174,9 @@ def _validate_observability_config(config: dict[str, Any]) -> None:
 
     taxonomy = langfuse.get("tag_taxonomy")
     if not isinstance(taxonomy, dict):
-        raise ConfigLoadError("Missing 'observability.langfuse.tag_taxonomy' configuration")
+        raise ConfigLoadError(
+            "Missing 'observability.langfuse.tag_taxonomy' configuration"
+        )
     _validate_string_list(
         taxonomy.get("entry_points"),
         name="observability.langfuse.tag_taxonomy.entry_points",
@@ -188,8 +200,7 @@ def _format_validation_error(exc: ValidationError) -> str:
     if missing_fields:
         unique_fields = sorted(set(missing_fields))
         parts.append(
-            "Missing required environment variables: "
-            + ", ".join(unique_fields)
+            "Missing required environment variables: " + ", ".join(unique_fields)
         )
     if invalid_fields:
         parts.append("Invalid settings: " + "; ".join(invalid_fields))
@@ -217,7 +228,9 @@ def load_settings(*, force_reload: bool = False) -> Settings:
     _validate_observability_config(settings.config_yaml)
     settings.prompts_yaml = _load_yaml_file(_config_path("prompts.yaml"))
     settings.ingestion_yaml = _load_yaml_file(_config_path("ingestion.yaml"))
-    settings.tech_vocabulary_yaml = _load_yaml_file(_config_path("tech_vocabulary.yaml"))
+    settings.tech_vocabulary_yaml = _load_yaml_file(
+        _config_path("tech_vocabulary.yaml")
+    )
 
     _settings_cache = settings
     return settings

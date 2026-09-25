@@ -34,9 +34,9 @@ It never contains secret values.
 | `GOOGLE_API_KEY` | `.env` only | Deliberately undeclared | Not used | Active eval-judge key (`gemma-4-31b-it` via Google AI Studio); not declared for Render. |
 | `DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | GitHub `DATABASE_URL` secret | Cron and migrations use Neon's direct, non-pooled host. |
 | `AGENT_DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Agent-facing SQL reads use a dedicated least-privilege credential. Ingestion validates its presence but does not read it. Absence must fail closed. Do not fall back to `DATABASE_URL`. |
-| `LANGFUSE_SECRET_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |
-| `LANGFUSE_PUBLIC_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Required by app settings; not read by ingestion. |
-| `LANGFUSE_BASE_URL` | `.env`; Render dashboard | Dashboard value, `sync: false` | Not used | Local default targets a local Langfuse endpoint. |
+| `LANGFUSE_SECRET_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Optional. With the public key, enables managed prompts and tracing; not read by ingestion. |
+| `LANGFUSE_PUBLIC_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Optional. With the secret key, enables managed prompts and tracing; not read by ingestion. |
+| `LANGFUSE_BASE_URL` | `.env`; Render dashboard | Dashboard value, `sync: false` | Not used | Optional Langfuse endpoint. Without it, Langfuse is disabled rather than targeting a local default. |
 | `LANGFUSE_TRACING_ENVIRONMENT` | `.env`; `render.yaml` | Tracked `production` value | Not used | Defaults to `local`; allowed values are `local`, `production`, and `evaluation`. |
 | `LANGFUSE_RELEASE` | Optional `.env`; eval driver | Deliberately undeclared | Eval driver supplies its current git SHA | Optional local release override; Render's automatic `RENDER_GIT_COMMIT` takes precedence. |
 | `HEALTHCHECKS_URL` | Optional `.env` only | Deliberately undeclared | GitHub `HEALTHCHECKS_URL` secret | Dead-man ping URL; not declared for Render. |
@@ -46,10 +46,10 @@ It never contains secret values.
 `sync: false` in `render.yaml` means Render must supply the value in its dashboard.
 It does not synchronize or store the value in the repository.
 
-No provider key is required to boot. `src/core/config.py` requires only `DATABASE_URL` and the
-two `LANGFUSE_*` keys; each provider branch validates its own key and names the profile that
-selected it. A deploy therefore fails on the first agent call, not at startup, if the key for the
-provider named in `config/settings.yaml` is missing.
+No provider or Langfuse key is required to boot.
+`src/core/config.py` requires only the database URLs; each provider branch validates its own key and names the profile that selected it.
+A deploy therefore fails on the first agent call, not at startup, if the key for the provider named in `config/settings.yaml` is missing.
+Without Langfuse credentials, the service uses its reviewed prompt fallbacks and disables tracing.
 
 ## Deploy flow
 

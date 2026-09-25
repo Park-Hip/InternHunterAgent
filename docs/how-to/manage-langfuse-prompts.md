@@ -15,8 +15,9 @@ Run `uv run python scripts/register_langfuse_prompts.py --label candidate` to se
 The command cannot assign the `production` label.
 Use `--dry-run` to validate the source without contacting Langfuse.
 
-Run the existing scenario suite against the candidate prompt version and record the resulting dataset run and scores.
-Promotion requires every required case and score to pass the release gate in `docs/how-to/release-gate.md`.
+In an isolated evaluation environment, set `agent.prompts.deployment_label: candidate` before running the existing scenario suite.
+Record the resulting dataset run and scores as review evidence.
+The retired semantic release gate is not a promotion control; follow its current status in [the release certification guide](release-gate.md).
 After review, a Langfuse project administrator moves `production` to the evaluated immutable version in the Langfuse UI.
 Do not create a new production version merely to promote a candidate.
 

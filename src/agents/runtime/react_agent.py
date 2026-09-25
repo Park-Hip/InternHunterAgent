@@ -128,7 +128,9 @@ class AgentRuntime:
             trace_name="agent-chat-stream",
             session_id=session_id,
             user_id=user_id,
-            on_span_started=observation.attach_trace if observation is not None else None,
+            on_span_started=observation.attach_trace
+            if observation is not None
+            else None,
         ) as trace_id:
             with langfuse_prompt_attributes(system_prompt):
                 producer = asyncio.create_task(_produce_stream())

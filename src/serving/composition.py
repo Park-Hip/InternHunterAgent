@@ -23,7 +23,9 @@ from src.core.config import load_settings
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Assemble and tear down dependencies needed by the HTTP service."""
     load_settings()
-    await asyncio.to_thread(assert_serving_schema)  # boot fails loudly on clean_jobs drift
+    await asyncio.to_thread(
+        assert_serving_schema
+    )  # boot fails loudly on clean_jobs drift
 
     pool = build_checkpointer_pool()
     await pool.open()

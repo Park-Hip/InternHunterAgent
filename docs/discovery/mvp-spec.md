@@ -76,4 +76,5 @@ The MVP's single-agent requirement is decided, while those implementation and fu
 
 [mvp-discovery.md](mvp-discovery.md) records the rationale and evidence history for this narrower decision.
 [decisions.md](decisions.md) records the active product decisions and deferred source-research history.
+[registered-deterministic-tool-contract.md](registered-deterministic-tool-contract.md), [evidence-grounding-contract.md](evidence-grounding-contract.md), and [deterministic-tool-evaluation-contract.md](deterministic-tool-evaluation-contract.md) refine the proposed implementation-neutral tool, evidence, and evaluation boundaries.
 Neither document expands this specification's supported workflow or authorizes collection, architecture, API, schema, deployment, prompt, model, tracing, evaluation, or test-code changes.

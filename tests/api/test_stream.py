@@ -245,7 +245,7 @@ class _MultiTurnRuntime:
         query: str,
         session_id: str,
         user_id: str | None = None,
-        latency=None,
+        observation=None,
         completion_event: asyncio.Event | None = None,
     ):
         self.call_count += 1

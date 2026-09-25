@@ -8,7 +8,11 @@ from fastapi import FastAPI
 
 from src.agents.runtime.factory import agent_factory
 from src.agents.runtime.react_agent import AgentRuntime
-from src.agents.tracing.langfuse import diagnose_langfuse_startup, shutdown_langfuse
+from src.agents.tracing.langfuse import (
+    create_langfuse_stream_observation,
+    diagnose_langfuse_startup,
+    shutdown_langfuse,
+)
 from src.api.app import create_app
 from src.api.schema_guard import assert_serving_schema
 from src.core.checkpointer import build_checkpointer, build_checkpointer_pool
@@ -27,6 +31,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         checkpointer = await build_checkpointer(pool)
         app.state.runtime = AgentRuntime(agent=agent_factory(checkpointer=checkpointer))
+        app.state.stream_observation_factory = create_langfuse_stream_observation
         # Fire-and-track: this is a non-fatal diagnostic, so boot does not wait for
         # a network round trip to Langfuse.
         diagnostic_task = asyncio.create_task(diagnose_langfuse_startup())

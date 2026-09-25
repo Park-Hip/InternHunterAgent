@@ -4,10 +4,7 @@ import asyncio
 import os
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from dataclasses import dataclass, field
-from threading import Lock
-from time import perf_counter
-from typing import Any, Callable, Literal, cast
+from typing import Any, Callable, cast
 
 from langfuse import Langfuse, LangfuseSpan, propagate_attributes
 from langfuse.api import NotFoundError
@@ -16,6 +13,7 @@ from langfuse.model import PromptClient
 
 from src.agents.runtime.prompts import load_prompt_versions
 from src.agents.tracing.prompt_registry import SQL_GENERATION_PROMPT_NAME
+from src.agents.tracing.stream import StreamLatency, StreamObservation, StreamOutcome
 from src.core.config import settings
 from src.core.logger import logger
 
@@ -31,45 +29,23 @@ _langfuse: Langfuse | None = None
 # after this process has started will not be picked up until the process restarts;
 # that is acceptable because deploys restart the process.
 _sql_generation_prompt_missing = False
-_request_sequence_lock = Lock()
-_request_sequence = 0
+class LangfuseStreamObservation:
+    """Publish neutral stream lifecycle timings to the current Langfuse span."""
 
+    def __init__(self) -> None:
+        self._latency = StreamLatency()
+        self._span: LangfuseSpan | None = None
 
-@dataclass
-class StreamLatency:
-    """Server-side timings for one streamed agent request, always in milliseconds."""
-
-    started_at: float = field(default_factory=perf_counter)
-    cold_start: Literal["process-first-agent-request", "warm"] = field(init=False)
-    user_visible_ttft_ms: int | None = None
-    completion_ms: int | None = None
-    outcome: Literal["success", "error", "cancelled"] | None = None
-    _span: LangfuseSpan | None = field(default=None, init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        global _request_sequence
-        with _request_sequence_lock:
-            _request_sequence += 1
-            self.cold_start = (
-                "process-first-agent-request" if _request_sequence == 1 else "warm"
-            )
-
-    def attach_span(self, span: LangfuseSpan) -> None:
-        self._span = span
+    def attach_trace(self, trace: object) -> None:
+        self._span = cast(LangfuseSpan, trace)
 
     def mark_user_visible(self) -> None:
-        if self.user_visible_ttft_ms is None:
-            self.user_visible_ttft_ms = self._elapsed_ms()
-            self._update_span()
-
-    def complete(self, outcome: Literal["success", "error", "cancelled"]) -> None:
-        if self.completion_ms is None:
-            self.completion_ms = self._elapsed_ms()
-        self.outcome = outcome
+        self._latency.mark_user_visible()
         self._update_span()
 
-    def _elapsed_ms(self) -> int:
-        return round((perf_counter() - self.started_at) * 1000)
+    def complete(self, outcome: StreamOutcome) -> None:
+        self._latency.complete(outcome)
+        self._update_span()
 
     def _update_span(self) -> None:
         client = get_langfuse_client()
@@ -77,11 +53,11 @@ class StreamLatency:
             return
         metadata = {
             "latency_unit": "ms",
-            "server_e2e_ms": self.completion_ms,
-            "user_visible_ttft_ms": self.user_visible_ttft_ms,
-            "stream_completion_ms": self.completion_ms,
-            "outcome": self.outcome,
-            "cold_start": self.cold_start,
+            "server_e2e_ms": self._latency.completion_ms,
+            "user_visible_ttft_ms": self._latency.user_visible_ttft_ms,
+            "stream_completion_ms": self._latency.completion_ms,
+            "outcome": self._latency.outcome,
+            "cold_start": self._latency.cold_start,
             "environment": get_langfuse_environment(),
             "model": _react_model_name(),
         }
@@ -92,6 +68,11 @@ class StreamLatency:
                 client.update_current_span(metadata=metadata)
         except Exception:
             logger.warning("langfuse.stream_latency_diagnostic_failed")
+
+
+def create_langfuse_stream_observation() -> StreamObservation:
+    """Create a best-effort Langfuse adapter for one streamed response."""
+    return LangfuseStreamObservation()
 
 
 def _react_model_name() -> str:

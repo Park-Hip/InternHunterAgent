@@ -10,8 +10,8 @@ from src.agents.tracing.langfuse import (
     get_langfuse_client,
     langfuse_request_trace,
     record_agent_response_failure,
-    StreamLatency,
 )
+from src.agents.tracing.stream import StreamObservation
 from src.core.logger import logger
 
 
@@ -71,7 +71,7 @@ class AgentRuntime:
         query: str,
         user_id: str | None = None,
         session_id: str | None = None,
-        latency: StreamLatency | None = None,
+        observation: StreamObservation | None = None,
         completion_event: asyncio.Event | None = None,
     ) -> AsyncGenerator[dict[str, object], None]:
         config = build_langfuse_config(
@@ -109,7 +109,7 @@ class AgentRuntime:
             trace_name="agent-chat-stream",
             session_id=session_id,
             user_id=user_id,
-            on_span_started=latency.attach_span if latency is not None else None,
+            on_span_started=observation.attach_trace if observation is not None else None,
         ) as trace_id:
             producer = asyncio.create_task(_produce_stream())
             stream_completed = False
@@ -119,8 +119,8 @@ class AgentRuntime:
                     event = await events.get()
                     if isinstance(event, Exception):
                         if completion_event is None:
-                            if latency is not None:
-                                latency.complete("error")
+                            if observation is not None:
+                                observation.complete("error")
                             stream_completed = True
                             raise event
                         provider_failed = True
@@ -130,8 +130,8 @@ class AgentRuntime:
                         break
                     if event["type"] == "complete":
                         if completion_event is None:
-                            if latency is not None:
-                                latency.complete("success")
+                            if observation is not None:
+                                observation.complete("success")
                             stream_completed = True
                         break
                     yield cast(dict[str, object], event)
@@ -154,8 +154,8 @@ class AgentRuntime:
                 if not stream_completed:
                     if completion_event is not None:
                         await completion_event.wait()
-                    elif latency is not None:
-                        latency.complete("cancelled")
+                    elif observation is not None:
+                        observation.complete("cancelled")
                 if client is not None:
                     await asyncio.to_thread(client.flush)
 

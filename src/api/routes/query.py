@@ -21,6 +21,7 @@ from src.core.errors import (
 from src.core.config import settings
 from src.core.logger import logger
 from src.agents.service import generate_agent_response, stream_agent_response
+from src.agents.tracing.stream import create_noop_stream_observation
 
 
 _DISCONNECT_POLL_INTERVAL_SECONDS = 0.05
@@ -125,6 +126,11 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
             session_id=payload.session_id,
             user_id=payload.user_id,
             runtime=request.app.state.runtime,
+            stream_observation_factory=getattr(
+                request.app.state,
+                "stream_observation_factory",
+                create_noop_stream_observation,
+            ),
         )
         try:
             async for item in _with_heartbeats(

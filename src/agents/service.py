@@ -4,7 +4,10 @@ from collections.abc import AsyncGenerator
 from typing import Literal, Mapping, TypeVar, TypedDict, cast
 
 from src.agents.runtime.react_agent import AgentRuntime
-from src.agents.tracing.langfuse import StreamLatency
+from src.agents.tracing.stream import (
+    StreamObservationFactory,
+    create_noop_stream_observation,
+)
 from src.core.config import get_stream_turn_timeout_seconds, settings
 from src.core.errors import (
     BUSY_MESSAGE,
@@ -78,9 +81,10 @@ async def stream_agent_response(
     runtime: AgentRuntime,
     session_id: str | None = None,
     user_id: str | None = None,
+    stream_observation_factory: StreamObservationFactory = create_noop_stream_observation,
 ) -> AsyncGenerator[Mapping[str, str | bool | None], None]:
     session_id = session_id or str(uuid.uuid4())
-    latency = StreamLatency()
+    observation = stream_observation_factory()
     yield {"type": "session", "session_id": session_id}
 
     saw_token = False
@@ -98,7 +102,7 @@ async def stream_agent_response(
         query=query,
         session_id=session_id,
         user_id=user_id,
-        latency=latency,
+        observation=observation,
         completion_event=completion_event,
     )
     runtime_events: asyncio.Queue[dict[str, object] | Exception | None] = asyncio.Queue(
@@ -158,7 +162,7 @@ async def stream_agent_response(
                         "stream_agent_response.empty_answer_fallback",
                         session_id=session_id,
                     )
-                    latency.mark_user_visible()
+                    observation.mark_user_visible()
                     yield {"type": "token", "text": FALLBACK_ANSWER}
                     saw_token = True
                 yield metadata_event
@@ -166,7 +170,7 @@ async def stream_agent_response(
                 break
 
             if event["type"] == "token":
-                latency.mark_user_visible()
+                observation.mark_user_visible()
                 saw_token = True
 
             yield cast(Mapping[str, str | bool | None], event)
@@ -175,7 +179,7 @@ async def stream_agent_response(
                 "stream_agent_response.empty_answer_fallback",
                 session_id=session_id,
             )
-            latency.mark_user_visible()
+            observation.mark_user_visible()
             yield {"type": "token", "text": FALLBACK_ANSWER}
 
         if not metadata_emitted:
@@ -228,12 +232,12 @@ async def stream_agent_response(
         yield {"type": "done"}
     finally:
         if stream_outcome is not None and done_emitted:
-            latency.complete(stream_outcome)
+            observation.complete(stream_outcome)
             completion_event.set()
             if not detach_runtime_task:
                 await asyncio.gather(runtime_task, return_exceptions=True)
         else:
-            latency.complete("cancelled")
+            observation.complete("cancelled")
             completion_event.set()
             if not detach_runtime_task:
                 if not runtime_task.done():

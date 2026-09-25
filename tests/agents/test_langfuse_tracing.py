@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.agents.tracing import langfuse
+from src.agents.tracing.stream import StreamLatency
 
 
 def test_build_langfuse_config_validates_the_closed_api_tag_taxonomy() -> None:
@@ -118,17 +119,17 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
 
 
 @pytest.mark.asyncio
-async def test_stream_latency_updates_the_bound_request_span_across_tasks() -> None:
+async def test_stream_observation_updates_the_bound_request_span_across_tasks() -> None:
     client = MagicMock()
     span = MagicMock()
-    latency = langfuse.StreamLatency()
-    latency.attach_span(span)
+    observation = langfuse.LangfuseStreamObservation()
+    observation.attach_trace(span)
 
     async def mark_visible() -> None:
-        latency.mark_user_visible()
+        observation.mark_user_visible()
 
     async def mark_complete() -> None:
-        latency.complete("success")
+        observation.complete("success")
 
     with patch.object(langfuse, "get_langfuse_client", return_value=client):
         await asyncio.create_task(mark_visible())
@@ -195,12 +196,12 @@ def test_build_langfuse_config_rejects_unknown_entry_points() -> None:
         langfuse.build_langfuse_config(entry_point="api:debug")
 
 
-def test_stream_latency_records_error_without_visible_ttft() -> None:
+def test_stream_observation_records_error_without_visible_ttft() -> None:
     client = MagicMock()
-    latency = langfuse.StreamLatency()
+    observation = langfuse.LangfuseStreamObservation()
 
     with patch.object(langfuse, "get_langfuse_client", return_value=client):
-        latency.complete("error")
+        observation.complete("error")
 
     metadata = client.update_current_span.call_args.kwargs["metadata"]
     assert metadata["latency_unit"] == "ms"
@@ -211,6 +212,17 @@ def test_stream_latency_records_error_without_visible_ttft() -> None:
     assert metadata["cold_start"] in {"process-first-agent-request", "warm"}
     assert metadata["environment"] in {"local", "production", "evaluation"}
     assert metadata["model"] == "deepseek-v4-flash"
+
+
+def test_stream_latency_has_no_tracing_side_effects() -> None:
+    latency = StreamLatency()
+
+    latency.mark_user_visible()
+    latency.complete("success")
+
+    assert latency.user_visible_ttft_ms is not None
+    assert latency.completion_ms is not None
+    assert latency.outcome == "success"
 
 
 def test_record_agent_response_failure_updates_the_active_span_with_safe_metadata() -> (

@@ -124,7 +124,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 "list 3 data engineer jobs",
                 session_id="session-1",
                 user_id="user-1",
-                latency=latency,
+                observation=latency,
             )
         ]
 
@@ -148,7 +148,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             trace_name="agent-chat-stream",
             session_id="session-1",
             user_id="user-1",
-            on_span_started=latency.attach_span,
+            on_span_started=latency.attach_trace,
         )
         mock_client.flush.assert_called_once()
         mock_client.get_trace_url.assert_called_once_with(trace_id="trace-123")
@@ -166,7 +166,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         latency = MagicMock()
         runtime = AgentRuntime(agent=fake_agent)
 
-        events = [event async for event in runtime.astream("hello", latency=latency)]
+        events = [event async for event in runtime.astream("hello", observation=latency)]
 
         self.assertEqual(
             events, [{"type": "metadata", "trace_id": None, "trace_url": None}]
@@ -285,7 +285,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         latency = MagicMock()
 
         stream = runtime.astream(
-            "disconnect", session_id="session-disconnect", latency=latency
+            "disconnect", session_id="session-disconnect", observation=latency
         )
         self.assertEqual(await anext(stream), {"type": "token", "text": "first token"})
         await stream.aclose()

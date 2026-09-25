@@ -159,8 +159,9 @@ def test_scoring_uses_the_schema_prompt_recorded_by_the_capture(
     monkeypatch.setattr(
         score_module.harness,
         "score_seams",
-        lambda _case, _run, *, schema_context=None: observed.append(schema_context)
-        or {"seam1_routing": {}},
+        lambda _case, _run, *, schema_context=None: (
+            observed.append(schema_context) or {"seam1_routing": {}}
+        ),
     )
 
     score_module.score_artifact(path, scenarios=[_case()])

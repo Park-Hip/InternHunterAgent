@@ -6,6 +6,7 @@ from langchain.messages import HumanMessage, SystemMessage
 
 from src.agents.runtime.factory import agent_factory
 from src.agents.runtime.prompts import (
+    ResolvedPrompt,
     ResolvedPromptBundle,
     prompt_bundle_context,
     resolve_prompt_bundle_async,
@@ -28,7 +29,9 @@ class AgentRuntime:
         self.agent = agent or agent_factory(checkpointer=checkpointer)
         self._managed_agents: dict[tuple[str, str], Any] = {}
 
-    def _active_agent(self, prompts: ResolvedPromptBundle) -> tuple[Any, object]:
+    def _active_agent(
+        self, prompts: ResolvedPromptBundle
+    ) -> tuple[Any, ResolvedPrompt]:
         """Return the agent compiled for this request's immutable system prompt."""
         prompt = prompts.system
         if not self._managed_agent:

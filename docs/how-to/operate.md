@@ -266,8 +266,8 @@ external host, credential, or healthcheck from this document; provisioning is a 
 
 ## Operational gotchas
 
-- Runtime settings require `DATABASE_URL` and the required provider and tracing variables before the
-  API can start.
+- Runtime settings require `DATABASE_URL` and `AGENT_DATABASE_URL` before the API can start.
+  The selected provider key is validated on its first use, and absent Langfuse credentials leave serving on the reviewed prompt fallbacks with tracing disabled.
 - The ingestion workflow deliberately supplies literal unused `AGENT_DATABASE_URL`, provider, and
   tracing placeholders because ingestion needs configuration validation but makes no database,
   provider, or tracing call.

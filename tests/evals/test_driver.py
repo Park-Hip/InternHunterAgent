@@ -217,10 +217,20 @@ def _prompt_bundle(system_version: str = "44") -> ResolvedPromptBundle:
             "system", "resumi-system", "candidate system", system_version, None, False
         ),
         schema_context=ResolvedPrompt(
-            "schema_context", "resumi-schema-context", "candidate schema", "31", None, False
+            "schema_context",
+            "resumi-schema-context",
+            "candidate schema",
+            "31",
+            None,
+            False,
         ),
         sql_generation=ResolvedPrompt(
-            "sql_generation", "resumi-sql-generation", "candidate SQL", "19", None, False
+            "sql_generation",
+            "resumi-sql-generation",
+            "candidate SQL",
+            "19",
+            None,
+            False,
         ),
     )
 
@@ -1213,8 +1223,7 @@ def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
                 "manifest": {
                     "run_id": "run-1",
                     "prompt_versions": {
-                        surface: lineage[surface]["version"]
-                        for surface in lineage
+                        surface: lineage[surface]["version"] for surface in lineage
                     },
                     "prompt_hashes": {
                         surface: lineage[surface]["hash"] for surface in lineage

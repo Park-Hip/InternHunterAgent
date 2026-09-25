@@ -252,7 +252,9 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
     @patch("src.agents.tools.query_clean_jobs.AgentProvider")
     @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution_async")
-    @patch("src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async")
+    @patch(
+        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async"
+    )
     async def test_generate_sql_uses_managed_text_and_links_the_real_generation(
         self, sql_prompt, schema_prompt, mock_provider
     ) -> None:
@@ -261,18 +263,28 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
 
         prompt_client = object()
         sql_prompt.return_value = ResolvedPrompt(
-            surface="sql_generation", name="resumi-sql-generation", content="REMOTE SQL",
-            version="4", prompt_client=prompt_client, is_fallback=False,
+            surface="sql_generation",
+            name="resumi-sql-generation",
+            content="REMOTE SQL",
+            version="4",
+            prompt_client=prompt_client,
+            is_fallback=False,
         )
         schema_prompt.return_value = ResolvedPrompt(
-            surface="schema_context", name="resumi-schema-context", content="REMOTE SCHEMA",
-            version="7", prompt_client=object(), is_fallback=False,
+            surface="schema_context",
+            name="resumi-schema-context",
+            content="REMOTE SCHEMA",
+            version="7",
+            prompt_client=object(),
+            is_fallback=False,
         )
         fake_model = MagicMock()
         fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 1"))
         mock_provider.return_value.build_model.return_value = fake_model
 
-        with patch("src.agents.tools.query_clean_jobs.langfuse_prompt_attributes") as linked:
+        with patch(
+            "src.agents.tools.query_clean_jobs.langfuse_prompt_attributes"
+        ) as linked:
             linked.return_value.__enter__.return_value = None
             linked.return_value.__exit__.return_value = None
             self.assertEqual(await generate_sql("any question"), "SELECT 1")
@@ -286,7 +298,9 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
 
     @patch("src.agents.tools.query_clean_jobs.AgentProvider")
     @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution_async")
-    @patch("src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async")
+    @patch(
+        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async"
+    )
     async def test_generate_sql_flattens_list_content(
         self, sql_prompt, schema_prompt, mock_provider
     ) -> None:
@@ -295,9 +309,13 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
 
         fallback = ResolvedPrompt("sql_generation", "sql", "PROMPT", "v1", None, True)
         sql_prompt.return_value = fallback
-        schema_prompt.return_value = ResolvedPrompt("schema_context", "schema", "SCHEMA", "v1", None, True)
+        schema_prompt.return_value = ResolvedPrompt(
+            "schema_context", "schema", "SCHEMA", "v1", None, True
+        )
         fake_model = MagicMock()
-        fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content=[{"text": "SELECT "}, {"text": "1"}]))
+        fake_model.ainvoke = AsyncMock(
+            return_value=SimpleNamespace(content=[{"text": "SELECT "}, {"text": "1"}])
+        )
         mock_provider.return_value.build_model.return_value = fake_model
 
         self.assertEqual(await generate_sql("any question"), "SELECT 1")

@@ -84,7 +84,9 @@ class StartupConfigTests(unittest.TestCase):
             ),
             patch(
                 "src.serving.composition.AgentRuntime",
-                side_effect=lambda **_: events.append("runtime construction") or object(),
+                side_effect=lambda **_: (
+                    events.append("runtime construction") or object()
+                ),
             ),
             patch(
                 "src.serving.composition.diagnose_langfuse_startup",

@@ -107,7 +107,8 @@ It must not trigger an inferred scope, model-created result, fallback data sourc
 
 ## Registered deterministic-tool surface
 
-The exact Python functions, tool names, and schemas are deferred to implementation work.
+The exact Python functions, concrete tool names, and serialization are deferred to implementation work.
+[registered-deterministic-tool-contract.md](registered-deterministic-tool-contract.md) defines the logical operation schemas, deterministic outcomes, and test-double seam.
 The target requires the following logical capabilities, whether they are exposed as separate tools or as one narrowly composed registered tool with equivalent validation boundaries.
 
 | Logical capability | Deterministic responsibility | Required result content |
@@ -137,4 +138,5 @@ No implementation issue may alter, remove, replace, or expand one of those surfa
 ## Relationship to decision records
 
 The discovery ADRs in [target-architecture-adrs/README.md](target-architecture-adrs/README.md) record the decisions expressed by this target and the decisions that remain intentionally deferred.
+The [evidence-grounding contract](evidence-grounding-contract.md) and [deterministic-tool evaluation contract](deterministic-tool-evaluation-contract.md) define the inspectability and verification obligations for its factual boundary.
 They are scoped to this MVP architecture work and do not alter the historical ADRs under `docs/decisions/`.

@@ -49,6 +49,7 @@ The final presentation may use natural language, but it must not remove a requir
 
 A successful answer without retained evidence for a reported factual label is invalid.
 A result with missing required evidence is an exclusion or unavailable-evidence outcome, not a partially invented answer.
+[evidence-grounding-contract.md](evidence-grounding-contract.md) defines the evidence graph and completeness rules, while [registered-deterministic-tool-contract.md](registered-deterministic-tool-contract.md) defines the tool result shape that carries it.
 
 ## Validation and policy ownership
 
@@ -105,3 +106,4 @@ The following checks are the minimum architecture acceptance evidence.
 4. A response exposes no raw SQL, persistence handle, framework object, prompt, chain of thought, provider exception, or unapproved raw record payload.
 5. Disabling observability leaves validation, calculations, evidence selection, and the delivery result unchanged.
 6. A dependency-graph review shows no forbidden arrow in [target-architecture.md](target-architecture.md).
+7. The affected checks satisfy the deterministic oracles in [deterministic-tool-evaluation-contract.md](deterministic-tool-evaluation-contract.md).

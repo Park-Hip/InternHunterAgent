@@ -88,6 +88,16 @@ def test_synchronize_prompts_creates_a_version_only_for_changed_content() -> Non
     assert client.create_calls[-1]["commit_message"] == "commit-2"
 
 
+def test_synchronize_prompts_refuses_to_move_the_production_label() -> None:
+    with pytest.raises(ValueError, match="never production"):
+        register_langfuse_prompts.synchronize_prompts(
+            FakeLangfuse(),
+            register_langfuse_prompts.load_prompt_definitions(),
+            label="production",
+            commit_message="commit-1",
+        )
+
+
 def test_dry_run_validates_yaml_without_creating_a_langfuse_client(
     monkeypatch, capsys
 ) -> None:

@@ -18,7 +18,7 @@ from time import perf_counter
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain.messages import HumanMessage
+from langchain.messages import HumanMessage, SystemMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from deepeval.integrations.langchain import CallbackHandler
@@ -32,9 +32,16 @@ from deepeval.tracing.trace_test_manager import trace_testing_manager
 
 from evals.judge import build_judge
 from src.agents.runtime.factory import agent_factory
-from src.agents.runtime.prompts import load_schema_context
+from src.agents.runtime.prompts import (
+    ResolvedPromptBundle,
+    active_prompt_bundle,
+    load_schema_context_resolution,
+    prompt_bundle_context,
+    resolve_prompt_bundle_async,
+)
 from src.agents.tracing.langfuse import (
     get_langfuse_handler,
+    langfuse_prompt_attributes,
     langfuse_request_trace,
     validate_langfuse_trace_context,
 )
@@ -339,26 +346,36 @@ async def _run_turn(
     )
 
 
-async def run_single_turn_case(case: dict, *, repeat: int = 1) -> SeamRun:
-    agent = agent_factory()
+async def run_single_turn_case(
+    case: dict,
+    *,
+    repeat: int = 1,
+    prompts: ResolvedPromptBundle | None = None,
+) -> SeamRun:
+    prompts = prompts or active_prompt_bundle() or await resolve_prompt_bundle_async()
+    system_prompt = prompts.system
+    agent = agent_factory(system_prompt=SystemMessage(content=system_prompt.content))
     handler = CallbackHandler(name=case["id"])
     validate_langfuse_trace_context(
         entry_point="eval:driver",
         scenario_id=case["id"],
         repeat=repeat,
     )
-    async with langfuse_request_trace(
-        entry_point="eval:driver",
-        scenario_id=case["id"],
-        repeat=repeat,
-        trace_name=f"eval-{case['id']}",
-    ) as trace_id:
-        return await _run_turn(
-            agent,
-            case["input"],
-            {"callbacks": [handler]},
-            trace_id,
-        )
+    with prompt_bundle_context(prompts):
+        async with langfuse_request_trace(
+            entry_point="eval:driver",
+            scenario_id=case["id"],
+            repeat=repeat,
+            trace_name=f"eval-{case['id']}",
+            prompts=prompts,
+        ) as trace_id:
+            with langfuse_prompt_attributes(system_prompt):
+                return await _run_turn(
+                    agent,
+                    case["input"],
+                    {"callbacks": [handler]},
+                    trace_id,
+                )
 
 
 async def run_conversational_case(
@@ -366,6 +383,7 @@ async def run_conversational_case(
     *,
     repeat: int = 1,
     pause: Callable[[], Awaitable[None]] | None = None,
+    prompts: ResolvedPromptBundle | None = None,
 ) -> tuple[list[SeamRun], ConversationalTestCase]:
     """Run every turn against one persistent thread; return each turn's
     SeamRun plus a ConversationalTestCase transcript of the whole exchange.
@@ -374,7 +392,12 @@ async def run_conversational_case(
     would otherwise spend a second turn's token budget inside the per-minute
     window its first turn just filled.
     """
-    agent = agent_factory(checkpointer=InMemorySaver())
+    prompts = prompts or active_prompt_bundle() or await resolve_prompt_bundle_async()
+    system_prompt = prompts.system
+    agent = agent_factory(
+        checkpointer=InMemorySaver(),
+        system_prompt=SystemMessage(content=system_prompt.content),
+    )
     thread_id = case["id"]
     validate_langfuse_trace_context(
         entry_point="eval:driver",
@@ -391,18 +414,21 @@ async def run_conversational_case(
         if turn_index and pause is not None:
             await pause()
         handler = CallbackHandler(thread_id=thread_id)
-        async with langfuse_request_trace(
-            entry_point="eval:driver",
-            scenario_id=case["id"],
-            repeat=repeat,
-            trace_name=f"eval-{thread_id}-turn-{turn_index + 1}",
-        ) as trace_id:
-            seam_run = await _run_turn(
-                agent,
-                message,
-                {**config, "callbacks": [handler]},
-                trace_id,
-            )
+        with prompt_bundle_context(prompts):
+            async with langfuse_request_trace(
+                entry_point="eval:driver",
+                scenario_id=case["id"],
+                repeat=repeat,
+                trace_name=f"eval-{thread_id}-turn-{turn_index + 1}",
+                prompts=prompts,
+            ) as trace_id:
+                with langfuse_prompt_attributes(system_prompt):
+                    seam_run = await _run_turn(
+                        agent,
+                        message,
+                        {**config, "callbacks": [handler]},
+                        trace_id,
+                    )
         runs.append(seam_run)
         turns.append(Turn(role="user", content=message))
         turns.append(
@@ -430,13 +456,15 @@ def build_seam1_case(case: dict, run: SeamRun) -> LLMTestCase:
     )
 
 
-def build_seam2_case(run: SeamRun) -> LLMTestCase | None:
+def build_seam2_case(
+    run: SeamRun, *, schema_context: str | None = None
+) -> LLMTestCase | None:
     if run.sql_text is None:
         return None
     return LLMTestCase(
         input=run.question,
         actual_output=run.sql_text,
-        context=[load_schema_context()],
+        context=[schema_context or load_schema_context_resolution().content],
         tools_called=[
             ToolCall(
                 name=GENERATE_SQL_SPAN_NAME, input_parameters={"sql": run.sql_text}
@@ -473,7 +501,9 @@ def score(
     return results
 
 
-def score_seams(case: dict, final_run: SeamRun) -> dict[str, dict]:
+def score_seams(
+    case: dict, final_run: SeamRun, *, schema_context: str | None = None
+) -> dict[str, dict]:
     """Judge every seam observable in one recorded turn.
 
     The single scoring implementation, per D-f. `evals/score.py` calls it over a
@@ -485,7 +515,7 @@ def score_seams(case: dict, final_run: SeamRun) -> dict[str, dict]:
 
     results["seam1_routing"] = score(seam1_metrics(), build_seam1_case(case, final_run))
 
-    seam2_case = build_seam2_case(final_run)
+    seam2_case = build_seam2_case(final_run, schema_context=schema_context)
     if seam2_case is not None:
         results["seam2_nl_to_sql"] = score(seam2_metrics(), seam2_case)
 
@@ -497,14 +527,17 @@ def score_seams(case: dict, final_run: SeamRun) -> dict[str, dict]:
 
 async def run_case(case: dict) -> dict:
     """Run one golden end-to-end and score every seam it produced."""
+    prompts = await resolve_prompt_bundle_async()
     if case["type"] == "conversational":
-        runs, conversation = await run_conversational_case(case)
+        runs, conversation = await run_conversational_case(case, prompts=prompts)
         final_run = runs[-1]
     else:
-        final_run = await run_single_turn_case(case)
+        final_run = await run_single_turn_case(case, prompts=prompts)
         conversation = None
 
-    results = score_seams(case, final_run)
+    results = score_seams(
+        case, final_run, schema_context=prompts.schema_context.content
+    )
 
     return {
         "case_id": case["id"],

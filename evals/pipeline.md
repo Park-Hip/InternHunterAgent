@@ -33,9 +33,12 @@ uv run python -m evals.driver --output evals/runs/<run>.json
 
 Key manifest fields:
 - `baseline_eligible: true` (requires clean worktree)
-- `prompt_versions` (named surfaces with hashes)
+- `prompt_versions` and `prompt_hashes` (the exact resolved system, schema-context, and SQL-generation prompt lineage)
 - `fixture_hash`, `scenario_registry_hash` (comparability keys)
 - `providers`, `models`, `sampling` (lineage)
+
+The capture resolves one prompt bundle before its first turn and uses it for every turn.
+`--resume` refuses a capture when the current resolved prompt lineage differs from its manifest.
 
 ### Step 2: Execution accuracy
 
@@ -59,6 +62,7 @@ uv run python -m evals.score --run evals/runs/<run>.json
 **Input:** Raw capture artifact
 **Output:** Judge scores written into capture + Langfuse writeback
 **Authority:** Separate pass over recorded evidence; resumable and re-runnable
+**Invariant:** Scoring verifies that the captured schema prompt version and content hash still resolve before it judges generated SQL.
 **Cost:** ~120 judge calls, ~40 minutes at 10 RPM throttle
 
 ### Step 4: Grade

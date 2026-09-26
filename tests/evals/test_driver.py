@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import ANY
 
 import pytest
 
@@ -13,8 +14,9 @@ from evals import driver
 from evals import harness as harness_module
 from evals.harness import ProviderTelemetryCallback, SeamRun
 from evals.replay import REPLAY_SCHEMA_VERSION, load_replay, validate_replay
-from src.agents.runtime.prompts import load_prompt_versions
+from src.agents.runtime.prompts import ResolvedPromptBundle, load_prompt_versions
 from src.agents.tracing import langfuse
+from src.agents.tracing.prompt_registry import ResolvedPrompt
 
 
 @pytest.fixture(autouse=True)
@@ -124,14 +126,45 @@ def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
         return SeamRun(question=message, answer="a", trace_id=trace_id)
 
     agent = object()
-    monkeypatch.setattr(driver.harness, "agent_factory", lambda: agent)
+    factory_calls: list[dict[str, object]] = []
+
+    async def resolve_prompts() -> ResolvedPromptBundle:
+        return ResolvedPromptBundle(
+            system=ResolvedPrompt(
+                "system", "resumi-system", "candidate system", "44", object(), False
+            ),
+            schema_context=ResolvedPrompt(
+                "schema_context",
+                "resumi-schema-context",
+                "schema",
+                "31",
+                object(),
+                False,
+            ),
+            sql_generation=ResolvedPrompt(
+                "sql_generation", "resumi-sql-generation", "SQL", "19", object(), False
+            ),
+        )
+
+    def build_agent(**kwargs: object) -> object:
+        factory_calls.append(kwargs)
+        return agent
+
+    monkeypatch.setattr(driver.harness, "resolve_prompt_bundle_async", resolve_prompts)
+    monkeypatch.setattr(driver.harness, "agent_factory", build_agent)
     monkeypatch.setattr(driver.harness, "CallbackHandler", lambda **kwargs: object())
     monkeypatch.setattr(
         driver.harness,
         "validate_langfuse_trace_context",
         lambda **kwargs: validations.append(kwargs),
     )
+
+    @contextmanager
+    def prompt_attributes(_prompt):
+        yield
+
     monkeypatch.setattr(driver.harness, "langfuse_request_trace", request_trace)
+    monkeypatch.setattr(driver.harness, "langfuse_prompt_attributes", prompt_attributes)
     monkeypatch.setattr(driver.harness, "_run_turn", fake_run_turn)
 
     result = asyncio.run(driver.harness.run_single_turn_case(_case(), repeat=2))
@@ -139,6 +172,7 @@ def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
     assert result.trace_id == "trace-request-scoped"
     assert observed["agent"] is agent
     assert observed["trace_id"] == "trace-request-scoped"
+    assert factory_calls[0]["system_prompt"].content == "candidate system"
     assert validations == [
         {"entry_point": "eval:driver", "scenario_id": "HLP-TEST-1", "repeat": 2}
     ]
@@ -148,6 +182,7 @@ def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
             "scenario_id": "HLP-TEST-1",
             "repeat": 2,
             "trace_name": "eval-HLP-TEST-1",
+            "prompts": ANY,
         }
     ]
 
@@ -174,6 +209,30 @@ def _case(scenario_id: str = "HLP-TEST-1", probe: bool = False) -> dict:
         "expected": "a count",
         "probe": probe,
     }
+
+
+def _prompt_bundle(system_version: str = "44") -> ResolvedPromptBundle:
+    return ResolvedPromptBundle(
+        system=ResolvedPrompt(
+            "system", "resumi-system", "candidate system", system_version, None, False
+        ),
+        schema_context=ResolvedPrompt(
+            "schema_context",
+            "resumi-schema-context",
+            "candidate schema",
+            "31",
+            None,
+            False,
+        ),
+        sql_generation=ResolvedPrompt(
+            "sql_generation",
+            "resumi-sql-generation",
+            "candidate SQL",
+            "19",
+            None,
+            False,
+        ),
+    )
 
 
 def test_manifest_records_reproducibility_inputs(
@@ -249,6 +308,45 @@ def test_manifest_names_each_prompt_surface_it_ran(
     }
 
 
+def test_manifest_records_the_resolved_managed_prompt_lineage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(driver, "_worktree_state", lambda: "clean")
+    _stub_fingerprint(monkeypatch)
+    prompts = ResolvedPromptBundle(
+        system=ResolvedPrompt(
+            "system", "resumi-system", "candidate system", "44", object(), False
+        ),
+        schema_context=ResolvedPrompt(
+            "schema_context",
+            "resumi-schema-context",
+            "candidate schema",
+            "31",
+            object(),
+            False,
+        ),
+        sql_generation=ResolvedPrompt(
+            "sql_generation",
+            "resumi-sql-generation",
+            "candidate sql",
+            "19",
+            object(),
+            False,
+        ),
+    )
+
+    manifest = driver.build_manifest(prompts)
+
+    assert manifest["prompt_versions"] == {
+        "system": "44",
+        "schema_context": "31",
+        "sql_generation": "19",
+    }
+    assert manifest["prompt_hashes"]["system"] == driver._text_sha256(
+        "candidate system"
+    )
+
+
 def test_driver_persists_all_seams_and_resumes_completed_scenario(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -296,6 +394,44 @@ def test_driver_persists_all_seams_and_resumes_completed_scenario(
         json.loads(output.read_text(encoding="utf-8"))["manifest"]["run_id"]
         == first["manifest"]["run_id"]
     )
+
+
+def test_driver_refuses_to_resume_after_prompt_lineage_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    previous = _prompt_bundle("44")
+    current = _prompt_bundle("45")
+    output = tmp_path / "run.json"
+    output.write_text(
+        json.dumps(
+            driver._new_run(
+                {
+                    "run_id": "run-1",
+                    "prompt_versions": {
+                        surface: lineage["version"]
+                        for surface, lineage in driver._prompt_bundle_lineage(
+                            previous
+                        ).items()
+                    },
+                    "prompt_hashes": {
+                        surface: lineage["hash"]
+                        for surface, lineage in driver._prompt_bundle_lineage(
+                            previous
+                        ).items()
+                    },
+                }
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    async def resolve_prompts() -> ResolvedPromptBundle:
+        return current
+
+    monkeypatch.setattr(driver, "resolve_prompt_bundle_async", resolve_prompts)
+
+    with pytest.raises(ValueError, match="prompt lineage changes"):
+        asyncio.run(driver.run([], output, resume=True, pacing_seconds=0))
 
 
 def test_driver_links_each_capture_to_the_repeat_dataset_run(
@@ -1089,11 +1225,21 @@ def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
     one's trace and report the run as ingested.
     """
     output = tmp_path / "run.json"
+    prompts = _prompt_bundle()
+    lineage = driver._prompt_bundle_lineage(prompts)
     output.write_text(
         json.dumps(
             {
                 "status": "PARTIAL_QUOTA",
-                "manifest": {"run_id": "run-1"},
+                "manifest": {
+                    "run_id": "run-1",
+                    "prompt_versions": {
+                        surface: lineage[surface]["version"] for surface in lineage
+                    },
+                    "prompt_hashes": {
+                        surface: lineage[surface]["hash"] for surface in lineage
+                    },
+                },
                 "scenarios": {
                     "COUNT-1": {
                         "status": "COMPLETE",
@@ -1120,6 +1266,9 @@ def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
     async def fake_capture(case: dict, repeat_index: int, pause=None) -> list[SeamRun]:
         return [SeamRun(question="q", answer="a", trace_id="trace-session-2")]
 
+    async def resolve_prompts() -> ResolvedPromptBundle:
+        return prompts
+
     asked: list[tuple] = []
 
     def fake_verify(trace_id, *, dataset_run_id=None):
@@ -1129,6 +1278,7 @@ def test_a_resumed_capture_verifies_its_own_traces_not_the_previous_sessions(
     monkeypatch.setattr(driver, "_capture_case", fake_capture)
     monkeypatch.setattr(driver, "_dataset_mirror", lambda: (None, None))
     monkeypatch.setattr(driver, "verify_ingestion", fake_verify)
+    monkeypatch.setattr(driver, "resolve_prompt_bundle_async", resolve_prompts)
     _stub_fingerprint(monkeypatch)
 
     result = asyncio.run(

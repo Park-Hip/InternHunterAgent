@@ -5,16 +5,18 @@ from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from langchain.messages import AIMessage, HumanMessage
 
+from src.agents.runtime.prompts import ResolvedPromptBundle
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.service import (
     FALLBACK_ANSWER,
     generate_agent_response,
     stream_agent_response,
 )
+from src.agents.tracing.prompt_registry import ResolvedPrompt
 
 
 class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
@@ -29,6 +31,86 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         tool_call_chunks: list[dict[str, str]] | None = None,
     ) -> SimpleNamespace:
         return SimpleNamespace(content=content, tool_call_chunks=tool_call_chunks or [])
+
+    @staticmethod
+    def _prompts(system_version: str) -> ResolvedPromptBundle:
+        return ResolvedPromptBundle(
+            system=ResolvedPrompt(
+                "system",
+                "resumi-system",
+                system_version,
+                system_version,
+                None,
+                False,
+            ),
+            schema_context=ResolvedPrompt(
+                "schema_context", "resumi-schema-context", "schema", "31", None, False
+            ),
+            sql_generation=ResolvedPrompt(
+                "sql_generation", "resumi-sql-generation", "SQL", "19", None, False
+            ),
+        )
+
+    @patch("src.agents.runtime.react_agent.get_langfuse_client", return_value=None)
+    @patch("src.agents.runtime.react_agent.langfuse_request_trace")
+    @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
+    async def test_concurrent_streams_keep_their_resolved_system_agents(
+        self,
+        _mock_build_langfuse_config,
+        mock_langfuse_request_trace,
+        _mock_get_langfuse_client,
+    ) -> None:
+        first_prompts = self._prompts("system-44")
+        second_prompts = self._prompts("system-45")
+        first_resolved = asyncio.Event()
+        second_resolved = asyncio.Event()
+        resolution_count = 0
+
+        async def resolve_prompts() -> ResolvedPromptBundle:
+            nonlocal resolution_count
+            resolution_count += 1
+            if resolution_count == 1:
+                first_resolved.set()
+                await second_resolved.wait()
+                return first_prompts
+            await first_resolved.wait()
+            second_resolved.set()
+            return second_prompts
+
+        def build_agent(**kwargs):
+            system_prompt = kwargs.get("system_prompt")
+            content = system_prompt.content if system_prompt is not None else "release"
+            agent = MagicMock()
+
+            async def stream(*_args, **_kwargs):
+                yield self._chunk(content), {"langgraph_node": "model"}
+
+            agent.astream = stream
+            return agent
+
+        mock_langfuse_request_trace.side_effect = lambda **_kwargs: self._trace_context(
+            None
+        )
+        with (
+            patch(
+                "src.agents.runtime.react_agent.resolve_prompt_bundle_async",
+                resolve_prompts,
+            ),
+            patch("src.agents.runtime.react_agent.agent_factory", build_agent),
+        ):
+            runtime = AgentRuntime()
+
+            async def collect() -> list[str]:
+                return [
+                    event["text"]
+                    async for event in runtime.astream("question")
+                    if event["type"] == "token"
+                ]
+
+            first, second = await asyncio.gather(collect(), collect())
+
+        self.assertEqual(first, ["system-44"])
+        self.assertEqual(second, ["system-45"])
 
     @patch("src.agents.runtime.react_agent.get_langfuse_client")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
@@ -72,6 +154,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             trace_name="agent-chat",
             session_id="session-1",
             user_id="user-1",
+            prompts=ANY,
         )
         fake_agent.ainvoke.assert_awaited_once_with(
             {"messages": [HumanMessage(content="what time is it?")]},
@@ -149,6 +232,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             session_id="session-1",
             user_id="user-1",
             on_span_started=latency.attach_trace,
+            prompts=ANY,
         )
         mock_client.flush.assert_called_once()
         mock_client.get_trace_url.assert_called_once_with(trace_id="trace-123")
@@ -166,7 +250,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         latency = MagicMock()
         runtime = AgentRuntime(agent=fake_agent)
 
-        events = [event async for event in runtime.astream("hello", observation=latency)]
+        events = [
+            event async for event in runtime.astream("hello", observation=latency)
+        ]
 
         self.assertEqual(
             events, [{"type": "metadata", "trace_id": None, "trace_url": None}]

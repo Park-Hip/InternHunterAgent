@@ -27,9 +27,10 @@ traces and project metadata.
 Those stores have separate owners, lifecycles, and schemas, and no overlap.
 
 **Required environment.**
-The database URL, the agent-read database URL, and the Langfuse keys, where tracing degrades gracefully if the Langfuse keys are absent.
-Provider keys are optional at boot and validated by the branch that needs them, so a checkout runs
-with only the selected provider's key.
+The database URL and the agent-read database URL are required at boot.
+The Langfuse keys are optional and enable tracing plus managed prompt resolution when present.
+Without them, the service uses its reviewed release-pinned prompt fallbacks and disables tracing.
+Provider keys are optional at boot and validated by the branch that needs them, so a checkout runs with only the selected provider's key.
 
 The agent-facing SQL-read path uses `AGENT_DATABASE_URL`, a dedicated least-privilege credential
 backed by a separate PostgreSQL role with `SELECT` only on `clean_jobs`. The writer paths
@@ -40,8 +41,9 @@ to `DATABASE_URL`.
 **Tunable parameters** live in `config/settings.yaml`, read through `src/core/config.py`.
 `agent.providers.*` is the trusted serving-deployment allowlist, with a provider-qualified LiteLLM model and an API-key environment-variable name only.
 `agent.react.*` and `agent.sql_generation.*` select a deployment and configure portable generation settings plus explicit validated provider options.
+`agent.prompts.*` configures the managed-prompt deployment label and cache lifetime (see the [Langfuse prompt management guide](../how-to/manage-langfuse-prompts.md)).
 `agent.stream_turn_timeout_seconds` is the end-to-end SSE serving deadline and falls back to 120 seconds when omitted or invalid.
-`agent.memory.*` controls the memory window, `agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence.
+`agent.memory.*` controls the memory window, `agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence (validated during settings load and application startup).
 `ingestion.*` configures the pipeline.
 Per project convention, parameters are configured here rather than hard-coded.
 
@@ -89,7 +91,7 @@ Other documents link here rather than restating.
 | Language | Python | 3.12 | `.python-version`, `pyproject.toml` |
 | Package manager | uv | lockfile `uv.lock` | `pyproject.toml` |
 | API | FastAPI and uvicorn | >=0.136.3 / >=0.48.0 | `src/api/app.py` |
-| Agent | LangChain ReAct | >=1.3.1 | `src/agents/`, `config/prompts.yaml` |
+| Agent | LangChain ReAct | >=1.3.1 | `src/agents/`, `config/settings.yaml`, `config/prompts.yaml` |
 | Model, serving | LiteLLM with a configured DeepSeek deployment | - | `config/settings.yaml`, `agent` |
 | Model, alternate deployment | Groq, selectable | - | `config/settings.yaml`, `agent` |
 | Database | PostgreSQL | 17 on Neon | `DATABASE_URL` |

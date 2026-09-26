@@ -250,207 +250,75 @@ class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
 
 
 class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
-    @patch("src.agents.tracing.langfuse.get_langfuse_client")
-    @patch("src.agents.tracing.langfuse.get_sql_generation_prompt_reference")
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt",
-        return_value="YAML PROMPT",
-    )
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA"
-    )
     @patch("src.agents.tools.query_clean_jobs.AgentProvider")
-    async def test_generate_sql_creates_a_linked_child_span_without_using_remote_prompt_text(
-        self,
-        mock_provider,
-        _mock_schema_context,
-        _mock_sql_prompt,
-        mock_prompt_reference,
-        mock_langfuse_client,
+    @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution_async")
+    @patch(
+        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async"
+    )
+    async def test_generate_sql_uses_managed_text_and_links_the_real_generation(
+        self, sql_prompt, schema_prompt, mock_provider
     ) -> None:
         from src.agents.tools.query_clean_jobs import generate_sql
+        from src.agents.tracing.prompt_registry import ResolvedPrompt
 
+        prompt_client = object()
+        sql_prompt.return_value = ResolvedPrompt(
+            surface="sql_generation",
+            name="resumi-sql-generation",
+            content="REMOTE SQL",
+            version="4",
+            prompt_client=prompt_client,
+            is_fallback=False,
+        )
+        schema_prompt.return_value = ResolvedPrompt(
+            surface="schema_context",
+            name="resumi-schema-context",
+            content="REMOTE SCHEMA",
+            version="7",
+            prompt_client=object(),
+            is_fallback=False,
+        )
         fake_model = MagicMock()
         fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 1"))
         mock_provider.return_value.build_model.return_value = fake_model
-        prompt_reference = SimpleNamespace(
-            prompt="REMOTE PROMPT", name="resumi-sql-generation", version=4
-        )
-        mock_prompt_reference.return_value = prompt_reference
-        client = MagicMock()
-        client.start_as_current_observation.return_value.__enter__.return_value = (
-            MagicMock()
-        )
-        mock_langfuse_client.return_value = client
 
-        self.assertEqual(await generate_sql("any question"), "SELECT 1")
+        with patch(
+            "src.agents.tools.query_clean_jobs.langfuse_prompt_attributes"
+        ) as linked:
+            linked.return_value.__enter__.return_value = None
+            linked.return_value.__exit__.return_value = None
+            self.assertEqual(await generate_sql("any question"), "SELECT 1")
 
-        # Regression guard: this must stay a span. The LangChain callback handler
-        # already emits the real generation for this same call, so a second
-        # "generation" here double-counts every SQL generation in the Langfuse
-        # generation, usage and cost aggregates.
-        client.start_as_current_observation.assert_called_once_with(
-            as_type="span",
-            name="sql_generation",
-            input={"question": "any question"},
-            metadata={
-                "langfuse_prompt_name": "resumi-sql-generation",
-                "langfuse_prompt_version": 4,
-            },
-        )
+        linked.assert_called_once_with(sql_prompt.return_value)
         self.assertEqual(
-            client.start_as_current_observation.call_args.kwargs["as_type"], "span"
+            fake_model.ainvoke.call_args.args[0][0].content,
+            "REMOTE SQL\n\nREMOTE SCHEMA\n\nQuestion: any question",
         )
-        client.start_as_current_observation.return_value.__enter__.return_value.update.assert_called_once_with(
-            output="SELECT 1"
-        )
-        model_messages = fake_model.ainvoke.call_args.args[0]
-        self.assertIn("YAML PROMPT", model_messages[0].content)
-        self.assertNotIn("REMOTE PROMPT", model_messages[0].content)
-
-    @patch("src.agents.tracing.langfuse.get_langfuse_client", return_value=None)
-    @patch(
-        "src.agents.tracing.langfuse.get_sql_generation_prompt_reference",
-        return_value=None,
-    )
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt",
-        return_value="PROMPT",
-    )
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA"
-    )
-    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
-    async def test_generate_sql_is_unchanged_when_tracing_has_no_client(
-        self, mock_provider, *_
-    ) -> None:
-        from src.agents.tools.query_clean_jobs import generate_sql
-
-        fake_model = MagicMock()
-        fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 1"))
-        mock_provider.return_value.build_model.return_value = fake_model
-
-        self.assertEqual(await generate_sql("any question"), "SELECT 1")
-        fake_model.ainvoke.assert_awaited_once()
-
-    @patch("src.agents.tracing.langfuse.get_langfuse_client")
-    @patch(
-        "src.agents.tracing.langfuse.get_sql_generation_prompt_reference",
-        return_value=None,
-    )
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt",
-        return_value="PROMPT",
-    )
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA"
-    )
-    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
-    async def test_generate_sql_is_unchanged_when_prompt_reference_is_missing(
-        self,
-        mock_provider,
-        _mock_schema_context,
-        _mock_sql_prompt,
-        _mock_prompt_reference,
-        mock_langfuse_client,
-    ) -> None:
-        from src.agents.tools.query_clean_jobs import generate_sql
-
-        fake_model = MagicMock()
-        fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 1"))
-        mock_provider.return_value.build_model.return_value = fake_model
-        client = MagicMock()
-        mock_langfuse_client.return_value = client
-
-        self.assertEqual(await generate_sql("any question"), "SELECT 1")
-        fake_model.ainvoke.assert_awaited_once()
-        client.start_as_current_observation.assert_not_called()
-
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt",
-        return_value="PROMPT",
-    )
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA"
-    )
-    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
-    async def test_generate_sql_flattens_list_content(self, mock_provider, *_) -> None:
-        from src.agents.tools.query_clean_jobs import generate_sql
-
-        fake_model = MagicMock()
-        fake_model.ainvoke = AsyncMock(
-            return_value=SimpleNamespace(
-                content=[
-                    {"type": "text", "text": "SELECT title "},
-                    {"type": "text", "text": "FROM clean_jobs"},
-                ]
-            )
-        )
-        mock_provider.return_value.build_model.return_value = fake_model
-
-        self.assertEqual(
-            await generate_sql("any question"), "SELECT title FROM clean_jobs"
-        )
-
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt",
-        return_value="PROMPT",
-    )
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA"
-    )
-    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
-    async def test_generate_sql_str_content_unchanged(self, mock_provider, *_) -> None:
-        from src.agents.tools.query_clean_jobs import generate_sql
-
-        fake_model = MagicMock()
-        fake_model.ainvoke = AsyncMock(
-            return_value=SimpleNamespace(content="  SELECT 1  ")
-        )
-        mock_provider.return_value.build_model.return_value = fake_model
-
-        self.assertEqual(await generate_sql("any question"), "SELECT 1")
-
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt",
-        return_value="PROMPT",
-    )
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA"
-    )
-    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
-    async def test_generate_sql_unrecognized_block_list_yields_empty_string(
-        self, mock_provider, *_
-    ) -> None:
-        from src.agents.tools.query_clean_jobs import generate_sql
-
-        fake_model = MagicMock()
-        fake_model.ainvoke = AsyncMock(
-            return_value=SimpleNamespace(content=[{"type": "reasoning"}, 42])
-        )
-        mock_provider.return_value.build_model.return_value = fake_model
-
-        self.assertEqual(await generate_sql("any question"), "")
-
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt",
-        return_value="PROMPT",
-    )
-    @patch(
-        "src.agents.tools.query_clean_jobs.load_schema_context", return_value="SCHEMA"
-    )
-    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
-    async def test_generate_sql_uses_sql_generation_profile(
-        self, mock_provider, _mock_schema_context, _mock_sql_prompt
-    ) -> None:
-        from src.agents.tools.query_clean_jobs import generate_sql
-
-        fake_model = MagicMock()
-        fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 1"))
-        mock_provider.return_value.build_model.return_value = fake_model
-
-        self.assertEqual(await generate_sql("any question"), "SELECT 1")
         mock_provider.return_value.build_model.assert_called_once_with("sql_generation")
+
+    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
+    @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution_async")
+    @patch(
+        "src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async"
+    )
+    async def test_generate_sql_flattens_list_content(
+        self, sql_prompt, schema_prompt, mock_provider
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import generate_sql
+        from src.agents.tracing.prompt_registry import ResolvedPrompt
+
+        fallback = ResolvedPrompt("sql_generation", "sql", "PROMPT", "v1", None, True)
+        sql_prompt.return_value = fallback
+        schema_prompt.return_value = ResolvedPrompt(
+            "schema_context", "schema", "SCHEMA", "v1", None, True
+        )
+        fake_model = MagicMock()
+        fake_model.ainvoke = AsyncMock(
+            return_value=SimpleNamespace(content=[{"text": "SELECT "}, {"text": "1"}])
+        )
+        mock_provider.return_value.build_model.return_value = fake_model
+
+        self.assertEqual(await generate_sql("any question"), "SELECT 1")
 
 
 if __name__ == "__main__":

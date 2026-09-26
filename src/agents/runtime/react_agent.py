@@ -2,12 +2,19 @@ import asyncio
 from collections.abc import AsyncGenerator
 from typing import Any, cast
 
-from langchain.messages import HumanMessage
+from langchain.messages import HumanMessage, SystemMessage
 
 from src.agents.runtime.factory import agent_factory
+from src.agents.runtime.prompts import (
+    ResolvedPrompt,
+    ResolvedPromptBundle,
+    prompt_bundle_context,
+    resolve_prompt_bundle_async,
+)
 from src.agents.tracing.langfuse import (
     build_langfuse_config,
     get_langfuse_client,
+    langfuse_prompt_attributes,
     langfuse_request_trace,
     record_agent_response_failure,
 )
@@ -16,8 +23,28 @@ from src.core.logger import logger
 
 
 class AgentRuntime:
-    def __init__(self, agent=None):
-        self.agent = agent or agent_factory()
+    def __init__(self, agent=None, checkpointer=None):
+        self._checkpointer = checkpointer
+        self._managed_agent = agent is None
+        self.agent = agent or agent_factory(checkpointer=checkpointer)
+        self._managed_agents: dict[tuple[str, str], Any] = {}
+
+    def _active_agent(
+        self, prompts: ResolvedPromptBundle
+    ) -> tuple[Any, ResolvedPrompt]:
+        """Return the agent compiled for this request's immutable system prompt."""
+        prompt = prompts.system
+        if not self._managed_agent:
+            return self.agent, prompt
+        key = (prompt.version, prompt.content)
+        agent = self._managed_agents.get(key)
+        if agent is None:
+            agent = agent_factory(
+                checkpointer=self._checkpointer,
+                system_prompt=SystemMessage(content=prompt.content),
+            )
+            self._managed_agents[key] = agent
+        return agent, prompt
 
     async def ainvoke(
         self,
@@ -31,23 +58,28 @@ class AgentRuntime:
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
+        prompts = await resolve_prompt_bundle_async()
+        agent, system_prompt = self._active_agent(prompts)
 
-        async with langfuse_request_trace(
-            entry_point="api:chat",
-            trace_name="agent-chat",
-            session_id=session_id,
-            user_id=user_id,
-        ) as trace_id:
-            response = await self.agent.ainvoke(messages, config=config or None)
-            answer, failure_category = self._extract_answer_with_failure_category(
-                response
-            )
-            if failure_category is not None:
-                logger.warning(
-                    "agent_runtime.response_extraction_failed",
-                    failure_category=failure_category,
+        with prompt_bundle_context(prompts):
+            async with langfuse_request_trace(
+                entry_point="api:chat",
+                trace_name="agent-chat",
+                session_id=session_id,
+                user_id=user_id,
+                prompts=prompts,
+            ) as trace_id:
+                with langfuse_prompt_attributes(system_prompt):
+                    response = await agent.ainvoke(messages, config=config or None)
+                answer, failure_category = self._extract_answer_with_failure_category(
+                    response
                 )
-                record_agent_response_failure(category=failure_category)
+                if failure_category is not None:
+                    logger.warning(
+                        "agent_runtime.response_extraction_failed",
+                        failure_category=failure_category,
+                    )
+                    record_agent_response_failure(category=failure_category)
 
         client = get_langfuse_client()
         if client is not None:
@@ -80,6 +112,8 @@ class AgentRuntime:
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
+        prompts = await resolve_prompt_bundle_async()
+        agent, system_prompt = self._active_agent(prompts)
 
         events: asyncio.Queue[dict[str, str | None] | Exception] = asyncio.Queue(
             maxsize=1
@@ -87,7 +121,7 @@ class AgentRuntime:
 
         async def _produce_stream() -> None:
             try:
-                async for chunk, metadata in self.agent.astream(
+                async for chunk, metadata in agent.astream(
                     messages,
                     config=config or None,
                     stream_mode="messages",
@@ -109,9 +143,14 @@ class AgentRuntime:
             trace_name="agent-chat-stream",
             session_id=session_id,
             user_id=user_id,
-            on_span_started=observation.attach_trace if observation is not None else None,
+            on_span_started=observation.attach_trace
+            if observation is not None
+            else None,
+            prompts=prompts,
         ) as trace_id:
-            producer = asyncio.create_task(_produce_stream())
+            with prompt_bundle_context(prompts):
+                with langfuse_prompt_attributes(system_prompt):
+                    producer = asyncio.create_task(_produce_stream())
             stream_completed = False
             provider_failed = False
             try:

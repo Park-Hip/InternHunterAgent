@@ -8,6 +8,30 @@ import pytest
 
 from src.agents.tracing import langfuse
 from src.agents.tracing.stream import StreamLatency
+from src.agents.tracing.prompt_registry import ResolvedPrompt
+
+
+def test_native_prompt_attributes_links_the_callback_created_generation() -> None:
+    native = object()
+    prompt = ResolvedPrompt("system", "resumi-system", "REMOTE", "12", native, False)
+
+    with patch.object(langfuse, "propagate_attributes") as propagate:
+        propagate.return_value.__enter__.return_value = None
+        propagate.return_value.__exit__.return_value = None
+        with langfuse.langfuse_prompt_attributes(prompt):
+            pass
+
+    propagate.assert_called_once_with(prompt=native)
+
+
+def test_fallback_prompt_is_not_linked_as_a_native_version() -> None:
+    prompt = ResolvedPrompt("system", "resumi-system", "FALLBACK", "v13", None, True)
+
+    with patch.object(langfuse, "propagate_attributes") as propagate:
+        with langfuse.langfuse_prompt_attributes(prompt):
+            pass
+
+    propagate.assert_not_called()
 
 
 def test_build_langfuse_config_validates_the_closed_api_tag_taxonomy() -> None:

@@ -160,10 +160,13 @@ from evals.writeback import sample_verification_target, verify_ingestion  # noqa
 # must not be frozen before the fixture environment is in place.
 from src.agents.runtime.prompts import (  # noqa: E402
     PROMPT_SURFACES,
+    ResolvedPromptBundle,
+    prompt_bundle_context,
     load_prompt_versions,
     load_schema_context,
     load_sql_generation_prompt,
     load_system_prompt,
+    resolve_prompt_bundle_async,
 )
 from src.agents.tracing.langfuse import get_langfuse_client, get_langfuse_handler  # noqa: E402
 
@@ -180,8 +183,13 @@ def _text_sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _prompt_hashes() -> dict[str, str]:
-    """Fingerprint each prompt surface without coupling it to the others."""
+def _prompt_hashes(prompts: ResolvedPromptBundle | None = None) -> dict[str, str]:
+    """Fingerprint the exact prompt text used by this evaluation capture."""
+    if prompts is not None:
+        return {
+            surface: _text_sha256(prompts.for_surface(surface).content)
+            for surface in PROMPT_SURFACES
+        }
     return {
         "system": _text_sha256(str(load_system_prompt().content)),
         "schema_context": _text_sha256(load_schema_context()),
@@ -255,7 +263,7 @@ def _database_fingerprint(database_url: str) -> tuple[str, str, int]:
     return hashlib.sha256(payload).hexdigest(), actual_name, len(rows)
 
 
-def build_manifest() -> dict[str, Any]:
+def build_manifest(prompts: ResolvedPromptBundle | None = None) -> dict[str, Any]:
     settings_path = ROOT / "config" / "settings.yaml"
     fixture_path = ROOT / "evals" / "fixtures" / "seed_eval_db.sql"
     scenarios_path = ROOT / "evals" / "scenarios_v1.yaml"
@@ -279,8 +287,10 @@ def build_manifest() -> dict[str, Any]:
         "database_row_count": database_row_count,
         # Each named version and hash belongs to one prompt surface. A change to one
         # surface is visible without invalidating lineage for the other two.
-        "prompt_versions": load_prompt_versions(),
-        "prompt_hashes": _prompt_hashes(),
+        "prompt_versions": prompts.versions()
+        if prompts is not None
+        else load_prompt_versions(),
+        "prompt_hashes": _prompt_hashes(prompts),
         "config_hash": _sha256(settings_path),
         # Provider is recorded per profile because a profile may override agent.provider,
         # and a capture that cannot say which provider produced it is not evidence. The
@@ -369,6 +379,26 @@ def _named_prompt_lineage(manifest: dict[str, Any]) -> dict[str, dict[str, str]]
         surface: {"version": versions[surface], "hash": hashes[surface]}
         for surface in PROMPT_SURFACES
     }
+
+
+def _prompt_bundle_lineage(prompts: ResolvedPromptBundle) -> dict[str, dict[str, str]]:
+    return {
+        surface: {
+            "version": prompts.for_surface(surface).version,
+            "hash": _text_sha256(prompts.for_surface(surface).content),
+        }
+        for surface in PROMPT_SURFACES
+    }
+
+
+def _assert_resumable_prompt_lineage(
+    manifest: dict[str, Any], prompts: ResolvedPromptBundle
+) -> None:
+    captured = _named_prompt_lineage(manifest)
+    if captured is None:
+        raise ValueError("Cannot resume a capture without named prompt lineage")
+    if captured != _prompt_bundle_lineage(prompts):
+        raise ValueError("Cannot resume a capture after its prompt lineage changes")
 
 
 def _assert_comparable(left: dict[str, Any], right: dict[str, Any]) -> None:
@@ -777,12 +807,17 @@ async def run(
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     pacing_seconds: float | None = None,
 ) -> dict[str, Any]:
+    prompts = await resolve_prompt_bundle_async()
     artifact = (
-        load_run(output) if resume and output.exists() else _new_run(build_manifest())
+        load_run(output)
+        if resume and output.exists()
+        else _new_run(build_manifest(prompts))
     )
     manifest = artifact["manifest"]
     if not resume and output.exists():
         raise FileExistsError(f"Refusing to overwrite existing run: {output}")
+    if resume:
+        _assert_resumable_prompt_lineage(manifest, prompts)
 
     dataset_client, dataset_mirror = _dataset_mirror()
     pacing = load_turn_pacing_seconds() if pacing_seconds is None else pacing_seconds
@@ -822,9 +857,14 @@ async def run(
                 if spent_a_window:
                     await pause()
                 spent_a_window = True
-                runs = await _capture_with_retry(
-                    case, manifest, repeat_index + 1, sleep=sleep, pause=pause
-                )
+                with prompt_bundle_context(prompts):
+                    runs = await _capture_with_retry(
+                        case,
+                        manifest,
+                        repeat_index + 1,
+                        sleep=sleep,
+                        pause=pause,
+                    )
                 dataset_run_id: str | None = None
                 for turn_index, seam in enumerate(runs):
                     repeat_record["turns"].append(

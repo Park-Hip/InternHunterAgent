@@ -27,9 +27,10 @@ traces and project metadata.
 Those stores have separate owners, lifecycles, and schemas, and no overlap.
 
 **Required environment.**
-The database URL, the agent-read database URL, and the Langfuse keys, where tracing degrades gracefully if the Langfuse keys are absent.
-Provider keys are optional at boot and validated by the branch that needs them, so a checkout runs
-with only the selected provider's key.
+The database URL and the agent-read database URL are required at boot.
+The Langfuse keys are optional and enable tracing plus managed prompt resolution when present.
+Without them, the service uses its reviewed release-pinned prompt fallbacks and disables tracing.
+Provider keys are optional at boot and validated by the branch that needs them, so a checkout runs with only the selected provider's key.
 
 The agent-facing SQL-read path uses `AGENT_DATABASE_URL`, a dedicated least-privilege credential
 backed by a separate PostgreSQL role with `SELECT` only on `clean_jobs`. The writer paths
@@ -39,6 +40,7 @@ to `DATABASE_URL`.
 
 **Tunable parameters** live in `config/settings.yaml`, read through `src/core/config.py`:
 `agent.react.*` for the outer model, `agent.sql_generation.*` for the nested SQL-generation model,
+`agent.prompts.*` for the managed-prompt deployment label and cache lifetime (see the [Langfuse prompt management guide](../how-to/manage-langfuse-prompts.md)),
 `agent.stream_turn_timeout_seconds` for the end-to-end SSE serving deadline (120 seconds when
 omitted or invalid), `agent.memory.*` for the memory window, `agent.query.*` for the retrieval
 bounds, `api.*` for the hardening controls and the positive finite `stream_heartbeat_seconds` SSE comment cadence
@@ -64,7 +66,7 @@ Other documents link here rather than restating.
 | Language | Python | 3.12 | `.python-version`, `pyproject.toml` |
 | Package manager | uv | lockfile `uv.lock` | `pyproject.toml` |
 | API | FastAPI and uvicorn | >=0.136.3 / >=0.48.0 | `src/api/app.py` |
-| Agent | LangChain ReAct | >=1.3.1 | `src/agents/`, `config/prompts.yaml` |
+| Agent | LangChain ReAct | >=1.3.1 | `src/agents/`, `config/settings.yaml`, `config/prompts.yaml` |
 | Model, serving | DeepSeek | - | `config/settings.yaml`, `agent` |
 | Model, second arm | Groq, selectable | - | `config/settings.yaml`, `agent` |
 | Database | PostgreSQL | 17 on Neon | `DATABASE_URL` |

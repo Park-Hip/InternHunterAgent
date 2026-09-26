@@ -1,4 +1,4 @@
-"""Register the git-authoritative prompts.yaml content in Langfuse."""
+"""Seed candidate Langfuse prompt versions from release-pinned YAML fallbacks."""
 
 from __future__ import annotations
 
@@ -16,11 +16,19 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.agents.tracing.langfuse import create_langfuse_client
 from src.agents.tracing.prompt_registry import LANGFUSE_PROMPT_NAMES
 
+
+def create_langfuse_client():
+    """Create the client lazily so --dry-run remains network and settings free."""
+    from src.agents.tracing.langfuse import create_langfuse_client as create_client
+
+    return create_client()
+
+
 PROMPTS_PATH = ROOT / "config" / "prompts.yaml"
-PROMPT_LABEL = "production"
+PROMPT_LABEL = "candidate"
+PERMITTED_SEED_LABELS = frozenset({"candidate"})
 
 
 class PromptClient(Protocol):
@@ -100,8 +108,11 @@ def synchronize_prompts(
     client: LangfusePromptClient,
     definitions: list[PromptDefinition],
     *,
+    label: str = PROMPT_LABEL,
     commit_message: str | None,
 ) -> tuple[int, int]:
+    if label not in PERMITTED_SEED_LABELS:
+        raise ValueError("Prompt seeding may target candidate, never production")
     """Create versions only when the registered text differs from YAML."""
     created = 0
     unchanged = 0
@@ -109,7 +120,7 @@ def synchronize_prompts(
         try:
             existing = client.get_prompt(
                 definition.name,
-                label=PROMPT_LABEL,
+                label=label,
                 type="text",
                 cache_ttl_seconds=0,
                 max_retries=0,
@@ -125,7 +136,7 @@ def synchronize_prompts(
         client.create_prompt(
             name=definition.name,
             prompt=definition.content,
-            labels=[PROMPT_LABEL],
+            labels=[label],
             type="text",
             commit_message=commit_message,
         )
@@ -145,6 +156,12 @@ def main(argv: list[str] | None = None) -> int:
         "--commit-message",
         help="Override the default checked-out git commit provenance.",
     )
+    parser.add_argument(
+        "--label",
+        default=PROMPT_LABEL,
+        choices=sorted(PERMITTED_SEED_LABELS),
+        help="Deployment label for seeded candidate versions. Production promotion is manual.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -156,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         for definition in definitions:
             print(
-                f"would register {definition.name} from prompts.{definition.yaml_key}"
+                f"would register {definition.name} from prompts.{definition.yaml_key} with {args.label}"
             )
         return 0
 
@@ -168,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
 
     commit_message = args.commit_message or git_commit()
     created, unchanged = synchronize_prompts(
-        client, definitions, commit_message=commit_message
+        client, definitions, label=args.label, commit_message=commit_message
     )
     print(f"prompt registration complete: {created} created, {unchanged} unchanged")
     return 0

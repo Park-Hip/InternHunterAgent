@@ -38,14 +38,39 @@ backed by a separate PostgreSQL role with `SELECT` only on `clean_jobs`. The wri
 `AGENT_DATABASE_URL` is required at boot; absence fails closed and must never silently fall back
 to `DATABASE_URL`.
 
-**Tunable parameters** live in `config/settings.yaml`, read through `src/core/config.py`:
-`agent.react.*` for the outer model, `agent.sql_generation.*` for the nested SQL-generation model,
-`agent.prompts.*` for the managed-prompt deployment label and cache lifetime (see the [Langfuse prompt management guide](../how-to/manage-langfuse-prompts.md)),
-`agent.stream_turn_timeout_seconds` for the end-to-end SSE serving deadline (120 seconds when
-omitted or invalid), `agent.memory.*` for the memory window, `agent.query.*` for the retrieval
-bounds, `api.*` for the hardening controls and the positive finite `stream_heartbeat_seconds` SSE comment cadence
-(validated during settings load and application startup), and `ingestion.*` for the pipeline.
+**Tunable parameters** live in `config/settings.yaml`, read through `src/core/config.py`.
+`agent.providers.*` is the trusted serving-deployment allowlist, with a provider-qualified LiteLLM model and an API-key environment-variable name only.
+`agent.react.*` and `agent.sql_generation.*` select a deployment and configure portable generation settings plus explicit validated provider options.
+`agent.prompts.*` configures the managed-prompt deployment label and cache lifetime (see the [Langfuse prompt management guide](../how-to/manage-langfuse-prompts.md)).
+`agent.stream_turn_timeout_seconds` is the end-to-end SSE serving deadline and falls back to 120 seconds when omitted or invalid.
+`agent.memory.*` controls the memory window, `agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence (validated during settings load and application startup).
+`ingestion.*` configures the pipeline.
 Per project convention, parameters are configured here rather than hard-coded.
+
+### Serving deployment migration
+
+The prior `agent.provider` and per-profile `provider` plus `model` fields are replaced by named `agent.providers` deployments.
+Each deployment must contain a LiteLLM provider-qualified model and an `api_key_env` name, and each profile must select it through `deployment`.
+Existing `DEEPSEEK_API_KEY` and `GROQ_API_KEY` values remain valid because the bundled deployment definitions reference those same names.
+Do not place an API key value in YAML, documentation, a Langfuse tag, or a log message.
+
+```yaml
+agent:
+  providers:
+    approved_deployment:
+      provider: deepseek
+      model: deepseek/deepseek-v4-flash
+      api_key_env: DEEPSEEK_API_KEY
+  react:
+    deployment: approved_deployment
+    provider_options:
+      thinking: disabled
+```
+
+DeepSeek accepts only the explicit `thinking` option in the serving contract.
+Groq accepts only explicit `reasoning_format` and `reasoning_effort` options in the serving contract.
+All other provider options, unqualified models, unknown deployments, and unavailable selected credentials fail before model construction.
+To roll back, revert the deployment contract and LiteLLM runtime together with the dependency change, then restore the native adapter configuration while retaining the existing environment variables through the rollback window.
 
 
 ## Technology stack
@@ -67,8 +92,8 @@ Other documents link here rather than restating.
 | Package manager | uv | lockfile `uv.lock` | `pyproject.toml` |
 | API | FastAPI and uvicorn | >=0.136.3 / >=0.48.0 | `src/api/app.py` |
 | Agent | LangChain ReAct | >=1.3.1 | `src/agents/`, `config/settings.yaml`, `config/prompts.yaml` |
-| Model, serving | DeepSeek | - | `config/settings.yaml`, `agent` |
-| Model, second arm | Groq, selectable | - | `config/settings.yaml`, `agent` |
+| Model, serving | LiteLLM with a configured DeepSeek deployment | - | `config/settings.yaml`, `agent` |
+| Model, alternate deployment | Groq, selectable | - | `config/settings.yaml`, `agent` |
 | Database | PostgreSQL | 17 on Neon | `DATABASE_URL` |
 | ORM and driver | SQLAlchemy and psycopg | >=2.0 / >=3.2 | `src/services/query/` |
 | Migrations | Alembic | >=1.14 | `alembic/`, `alembic.ini` |
@@ -94,8 +119,8 @@ Other documents link here rather than restating.
 | Package | Compatible range | Role |
 |---|---|---|
 | `langchain` | `>=1.3.1,<1.4.0` | ReAct agent runtime and tool binding. |
-| `langchain-deepseek` | `>=1.1.0,<1.2.0` | Serving provider, and the default for both profiles since D-045. Thinking is disabled so temperature applies. |
-| `langchain-groq` | `>=1.1.2,<1.2.0` | Second selectable serving provider, and the judge's alternate branch. Reached only when a profile names it. |
+| `langchain-litellm` | `>=0.8.0,<0.9.0` | In-process provider-neutral serving adapter. It brings LiteLLM for provider-qualified models and supports the configured DeepSeek and Groq deployments. |
+| `langchain-groq` | `>=1.1.2,<1.2.0` | Evaluation judge's Groq alternate branch. It is not on the serving path. |
 | `langchain-openai` | `>=1.5.0,<1.6.0` | Evaluation-judge fallback via OpenRouter's OpenAI-compatible endpoint, never on the serving path. |
 | `langchain-google-genai` | `>=4.3.5,<4.4.0` | Evaluation judge (`gemma-4-31b-it`) via Google AI Studio, never on the serving path. Restored after the OpenRouter detour; the retired arm was Gemini 2.5 Flash. |
 | `langgraph-checkpoint-postgres` | `>=3.1.0,<3.2.0` | Short-term conversation memory, session id to thread id. |

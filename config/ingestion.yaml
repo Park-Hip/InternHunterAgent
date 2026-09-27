@@ -22,12 +22,14 @@ api:
 
 # Current robots policy for the exact host used by the job API. The source adapter
 # fails closed before an API request if this document is unavailable, malformed, or
-# disallows target_path for api.user_agent. A successful policy is cached only for
-# one source instance, never persisted across runs.
+# disallows target_path for api.user_agent. The reviewed allow_404 exception applies
+# only when this exact host has no policy. A successful policy is cached only for one
+# source instance, never persisted across runs, and a 404 is never cached.
 robots:
   url: "https://ms.vietnamworks.com/robots.txt"
   target_path: "/job-search/v1.0/search"
   cache_ttl_seconds: 300
+  allow_404: true
 
 queries:
   - "data scientist"

@@ -216,17 +216,21 @@ upsert semantics.
 
 Before a VietnamWorks job API request, ingestion retrieves
 `https://ms.vietnamworks.com/robots.txt` using the configured honest user agent and evaluates
-`/job-search/v1.0/search`. A parsed policy is cached only in that source instance for five minutes.
-A timeout, non-2xx response, malformed policy, or matching disallow rule fails closed: no job API
-request or data write occurs, `ingestion.compliance_gate_blocked` logs the safe reason, and the
-normal `ingestion.aborted` path exits non-zero. The dead-man healthcheck is not pinged on this
-failed run, consistent with existing failed-ingestion behavior.
+`/job-search/v1.0/search`.
+A parsed policy is cached only in that source instance for five minutes.
+
+The approved VietnamWorks configuration permits only an exact HTTP 404 from that exact host.
+It logs `ingestion.robots_policy_absent_permitted` with the source, policy URL, target path, and status code, then proceeds to the API request.
+A 404 is not cached, so the next run observes any subsequently published policy.
+
+A timeout, HTTP 403, HTTP 429, every 5xx response, every other unsuccessful response, malformed policy, or matching disallow rule fails closed.
+No job API request or data write occurs, `ingestion.compliance_gate_blocked` logs the safe reason, and the normal `ingestion.aborted` path exits non-zero.
+The dead-man healthcheck is not pinged on this failed run, consistent with existing failed-ingestion behavior.
 
 The archived `www.vietnamworks.com` robots capture does not authorize the `ms.vietnamworks.com`
-API host. If the preflight reports `robots_unavailable`, `robots_malformed`, or
-`robots_disallowed`, do not retry around it. Inspect the current policy, obtain maintainer review
-for any material source-policy change, and retain the fail-closed configuration until permission is
-clear.
+API host.
+If the preflight reports `robots_unavailable`, `robots_malformed`, or `robots_disallowed`, do not retry around it.
+Inspect the current policy and obtain maintainer review for any material source-policy change.
 
 ### Unattended inactivity recovery
 

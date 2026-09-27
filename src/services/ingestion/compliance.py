@@ -54,7 +54,9 @@ class _RobotsPolicy:
     groups: tuple[_RobotsGroup, ...]
 
     def allows(self, user_agent: str, target_url: str) -> bool:
-        product_token = user_agent.split("/", maxsplit=1)[0].split(maxsplit=1)[0].lower()
+        product_token = (
+            user_agent.split("/", maxsplit=1)[0].split(maxsplit=1)[0].lower()
+        )
         candidates = [
             (len(agent), group)
             for group in self.groups
@@ -77,7 +79,9 @@ class _RobotsPolicy:
 
         longest_rule = max(rule.match_length for rule in matches)
         # RFC 9309 resolves equal-length rules in favor of Allow.
-        return any(rule.allowed for rule in matches if rule.match_length == longest_rule)
+        return any(
+            rule.allowed for rule in matches if rule.match_length == longest_rule
+        )
 
 
 @dataclass(frozen=True)
@@ -91,7 +95,8 @@ class RobotsPolicyGate:
 
     A successful parse is held only in this gate instance for ``cache_ttl_seconds``.
     Fetch and parse failures are never cached, so a later source run can retry the
-    policy endpoint. Every failure is denied rather than treated as permission.
+    policy endpoint. Failures are denied unless the caller explicitly permits an
+    exact HTTP 404 for its reviewed source policy.
     """
 
     def __init__(
@@ -103,6 +108,7 @@ class RobotsPolicyGate:
         user_agent: str,
         timeout_seconds: float,
         cache_ttl_seconds: float,
+        allow_404: bool = False,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._source = source
@@ -111,17 +117,21 @@ class RobotsPolicyGate:
         self._user_agent = user_agent
         self._timeout_seconds = timeout_seconds
         self._cache_ttl_seconds = cache_ttl_seconds
+        self._allow_404 = allow_404
         self._clock = clock
         self._cached_policy: _CachedRobotsPolicy | None = None
 
     def assert_allowed(self, client: httpx.Client) -> None:
         """Raise ``RobotsPolicyError`` unless the current policy permits the target."""
         policy = self._cached_or_fetch(client)
-        if not policy.allows(self._user_agent, self._target_url):
+        if policy is not None and not policy.allows(self._user_agent, self._target_url):
             self._block("robots_disallowed")
 
-    def _cached_or_fetch(self, client: httpx.Client) -> _RobotsPolicy:
-        if self._cached_policy is not None and self._clock() < self._cached_policy.expires_at:
+    def _cached_or_fetch(self, client: httpx.Client) -> _RobotsPolicy | None:
+        if (
+            self._cached_policy is not None
+            and self._clock() < self._cached_policy.expires_at
+        ):
             return self._cached_policy.policy
 
         try:
@@ -130,6 +140,14 @@ class RobotsPolicyGate:
                 headers={"User-Agent": self._user_agent},
                 timeout=self._timeout_seconds,
             )
+        except httpx.HTTPError:
+            self._block("robots_unavailable")
+
+        if response.status_code == 404 and self._allow_404:
+            self._permit_absent_policy()
+            return None
+
+        try:
             response.raise_for_status()
         except httpx.HTTPError:
             self._block("robots_unavailable")
@@ -181,6 +199,15 @@ class RobotsPolicyGate:
         if not groups or not has_rule:
             self._block("robots_malformed")
         return _RobotsPolicy(tuple(groups))
+
+    def _permit_absent_policy(self) -> None:
+        logger.info(
+            "ingestion.robots_policy_absent_permitted",
+            source=self._source,
+            robots_url=self._robots_url,
+            target_path=urlsplit(self._target_url).path,
+            status_code=404,
+        )
 
     def _block(self, reason: str) -> NoReturn:
         target_path = urlsplit(self._target_url).path

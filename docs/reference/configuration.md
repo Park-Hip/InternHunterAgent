@@ -47,6 +47,22 @@ to `DATABASE_URL`.
 `ingestion.*` configures the pipeline.
 Per project convention, parameters are configured here rather than hard-coded.
 
+### MCP tool endpoint
+
+The two read-only job-query tools (`query_clean_jobs` and `get_job_details`) are exposed as a
+discoverable Model Context Protocol (MCP) surface through `langchain.mcp.MCPAdapter`, served in
+process from the same FastMCP server the agent uses (`src/agents/mcp/job_server.py`).
+
+- **URL and transport:** a Streamable HTTP endpoint mounts at `/mcp` when enabled; clients use POST.
+- **Tools and schemas:** `query_clean_jobs(question: string)` and `get_job_details(ids: array[integer])`.
+- **Access policy:** internal and development-only (issue #465 access decision, option A).
+  It is not an Internet-facing supported integration.
+- **Enablement:** disabled by default. Set `MCP_ENABLED=1` to mount `/mcp` for local manual tests only.
+  The public Render deployment never sets it.
+  No authentication, rate limiting, or audit controls are added for this endpoint.
+- **Local manual test:** run `MCP_ENABLED=1 uv run uvicorn src.serving.composition:app --reload` and point an MCP inspector at `http://localhost:8000/mcp`.
+  `tools/list` returns exactly the two tools above, and `/`, `/api/v1/health`, and `/api/v1/agent/chat` keep working.
+
 ### Serving deployment migration
 
 The prior `agent.provider` and per-profile `provider` plus `model` fields are replaced by named `agent.providers` deployments.
@@ -91,7 +107,7 @@ Other documents link here rather than restating.
 | Language | Python | 3.12 | `.python-version`, `pyproject.toml` |
 | Package manager | uv | lockfile `uv.lock` | `pyproject.toml` |
 | API | FastAPI and uvicorn | >=0.136.3 / >=0.48.0 | `src/api/app.py` |
-| Agent | LangChain ReAct | >=1.3.1 | `src/agents/`, `config/settings.yaml`, `config/prompts.yaml` |
+| Agent | LangChain ReAct | >=1.4.2 | `src/agents/`, `config/settings.yaml`, `config/prompts.yaml` |
 | Model, serving | LiteLLM with a configured DeepSeek deployment | - | `config/settings.yaml`, `agent` |
 | Model, alternate deployment | Groq, selectable | - | `config/settings.yaml`, `agent` |
 | Database | PostgreSQL | 17 on Neon | `DATABASE_URL` |
@@ -118,7 +134,7 @@ Other documents link here rather than restating.
 
 | Package | Compatible range | Role |
 |---|---|---|
-| `langchain` | `>=1.3.1,<1.4.0` | ReAct agent runtime and tool binding. |
+| `langchain` | `>=1.4.2,<1.5.0` with the `mcp` extra | ReAct agent runtime and tool binding. The `mcp` extra pulls in FastMCP and provides `langchain.mcp.MCPAdapter`, which discovers the read-only job-query tools in process (see `src/agents/mcp/`). |
 | `langchain-litellm` | `>=0.8.0,<0.9.0` | In-process provider-neutral serving adapter. It brings LiteLLM for provider-qualified models and supports the configured DeepSeek and Groq deployments. |
 | `langchain-groq` | `>=1.1.2,<1.2.0` | Evaluation judge's Groq alternate branch. It is not on the serving path. |
 | `langchain-openai` | `>=1.5.0,<1.6.0` | Evaluation-judge fallback via OpenRouter's OpenAI-compatible endpoint, never on the serving path. |

@@ -95,6 +95,8 @@ def create_app(
     rate_limit: str | None = None,
     docs_enabled: bool | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
+    mcp_app: Any | None = None,
+    mcp_path: str = "/mcp",
 ) -> FastAPI:
     resolved_docs_enabled = (
         _load_docs_enabled() if docs_enabled is None else docs_enabled
@@ -126,5 +128,28 @@ def create_app(
         prefix="/api/v1",
     )
     app.include_router(health.router, prefix="/api/v1")
+    # The MCP subapplication is registered before the root static catch-all so a
+    # request to /mcp is never swallowed by StaticFiles. The transport layer
+    # treats it as a generic ASGI app and does not import LangChain or know how
+    # MCP tools are built.
+    if mcp_app is not None:
+        _register_mcp_before_static(app, mcp_app, mcp_path)
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
     return app
+
+
+def _register_mcp_before_static(
+    app: FastAPI, mcp_app: Any, mcp_path: str
+) -> None:
+    """Add the MCP ASGI subapplication ahead of the static catch-all.
+
+    FastMCP's Streamable HTTP app exposes its endpoint route at the path it was
+    built with, so its routes are added directly. Wrapping them in a Starlette
+    ``Mount`` would require a trailing slash and let the static ``/`` mount
+    swallow a bare ``/mcp`` request.
+    """
+    routes = getattr(mcp_app, "routes", None)
+    if routes is not None:
+        app.router.routes.extend(routes)
+        return
+    app.mount(mcp_path, mcp_app)

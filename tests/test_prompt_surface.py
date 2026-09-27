@@ -47,29 +47,25 @@ INVENTORY = frozenset(
         ),
         PromptSurface(
             path="src/agents/tools/get_job_details.py",
-            symbol="get_job_details.__doc__",
-            text=(
-                "Fetch the full description and details for specific job postings by their id. "
-                "Use this only when the user asks to know more about, describe, or compare "
-                "specific jobs already shown by query_clean_jobs (which lists jobs with their "
-                "id). Pass the id values from that list."
-            ),
+            symbol="run_get_job_details.__doc__",
+            text="Return safe Vietnamese job details for the given posting ids.",
             visibility="model-visible",
         ),
         PromptSurface(
             path="src/agents/tools/query_clean_jobs.py",
-            symbol="query_clean_jobs.__doc__",
-            text=(
-                "Search AI and data job and internship postings in the clean_jobs table.\n\n"
-                "Use this tool for discovery questions before get_job_details, which retrieves "
-                "details for\npostings already shown. Pass the user's question with any role, "
-                "skill, location, or other\nsearch criteria."
-            ),
+            symbol="run_query_clean_jobs.__doc__",
+            text="Return safe Vietnamese clean_jobs search results for one question.",
+            visibility="model-visible",
+        ),
+        PromptSurface(
+            path="src/agents/tools/query_clean_jobs.py",
+            symbol="generate_sql.__doc__",
+            text="Generate SQL for one question with an explicit traceable generation.",
             visibility="model-visible",
         ),
         PromptSurface(
             path="src/agents/tools/get_job_details.py",
-            symbol="get_job_details",
+            symbol="run_get_job_details",
             text=(
                 "Vui lòng chỉ định mã tin tuyển dụng bạn muốn xem chi tiết hoặc tìm kiếm "
                 "trước bằng query_clean_jobs."
@@ -78,19 +74,19 @@ INVENTORY = frozenset(
         ),
         PromptSurface(
             path="src/agents/tools/get_job_details.py",
-            symbol="get_job_details",
+            symbol="run_get_job_details",
             text="Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau.",
             visibility="model-visible",
         ),
         PromptSurface(
             path="src/agents/tools/query_clean_jobs.py",
-            symbol="query_clean_jobs",
+            symbol="run_query_clean_jobs",
             text='f"Tôi không thể chạy truy vấn đó: {validation.reason}"',
             visibility="model-visible",
         ),
         PromptSurface(
             path="src/agents/tools/query_clean_jobs.py",
-            symbol="query_clean_jobs",
+            symbol="run_query_clean_jobs",
             text="Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau.",
             visibility="model-visible",
         ),

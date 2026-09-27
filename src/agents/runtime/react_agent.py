@@ -23,13 +23,14 @@ from src.core.logger import logger
 
 
 class AgentRuntime:
-    def __init__(self, agent=None, checkpointer=None):
+    def __init__(self, agent=None, checkpointer=None, tools=None):
         self._checkpointer = checkpointer
+        self._tools = tools
         self._managed_agent = agent is None
-        self.agent = agent or agent_factory(checkpointer=checkpointer)
+        self.agent = agent
         self._managed_agents: dict[tuple[str, str], Any] = {}
 
-    def _active_agent(
+    async def _active_agent(
         self, prompts: ResolvedPromptBundle
     ) -> tuple[Any, ResolvedPrompt]:
         """Return the agent compiled for this request's immutable system prompt."""
@@ -39,9 +40,10 @@ class AgentRuntime:
         key = (prompt.version, prompt.content)
         agent = self._managed_agents.get(key)
         if agent is None:
-            agent = agent_factory(
+            agent = await agent_factory(
                 checkpointer=self._checkpointer,
                 system_prompt=SystemMessage(content=prompt.content),
+                tools=self._tools,
             )
             self._managed_agents[key] = agent
         return agent, prompt
@@ -59,7 +61,7 @@ class AgentRuntime:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
         prompts = await resolve_prompt_bundle_async()
-        agent, system_prompt = self._active_agent(prompts)
+        agent, system_prompt = await self._active_agent(prompts)
 
         with prompt_bundle_context(prompts):
             async with langfuse_request_trace(
@@ -113,7 +115,7 @@ class AgentRuntime:
             config = {**config, "configurable": {"thread_id": session_id}}
         messages = self._build_messages(query)
         prompts = await resolve_prompt_bundle_async()
-        agent, system_prompt = self._active_agent(prompts)
+        agent, system_prompt = await self._active_agent(prompts)
 
         events: asyncio.Queue[dict[str, str | None] | Exception] = asyncio.Queue(
             maxsize=1

@@ -55,6 +55,10 @@ class StartupConfigTests(unittest.TestCase):
         async def prefetch() -> None:
             events.append("prompt prefetch")
 
+        async def discover_tools(_mcp_server: object) -> list:
+            events.append("tool discovery")
+            return []
+
         async def diagnose() -> None:
             events.append("langfuse diagnostic")
 
@@ -81,6 +85,10 @@ class StartupConfigTests(unittest.TestCase):
             patch(
                 "src.serving.composition.prepare_native_prompts_startup",
                 new=AsyncMock(side_effect=prefetch),
+            ),
+            patch(
+                "src.serving.composition.list_job_tools",
+                new=AsyncMock(side_effect=discover_tools),
             ),
             patch(
                 "src.serving.composition.AgentRuntime",
@@ -110,6 +118,7 @@ class StartupConfigTests(unittest.TestCase):
                 "pool open",
                 "checkpointer setup",
                 "prompt prefetch",
+                "tool discovery",
                 "runtime construction",
                 "langfuse diagnostic",
                 "langfuse shutdown",

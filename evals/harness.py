@@ -1,10 +1,11 @@
 """Run the agent against a golden and score its three decision seams.
 
 Seam 1 (routing) and seam 3 (synthesis) are visible on the top-level agent
-run; seam 2 (the nested NL->SQL call inside `query_clean_jobs`) is only
-observable because the tool forwards its injected `RunnableConfig` into the
-nested `model.invoke(...)` (see `src/agents/tools/query_clean_jobs.py`), which
-lets DeepEval's `CallbackHandler` see it as a distinct child span.
+run. Seam 2 (the nested NL->SQL call inside `query_clean_jobs`) stays visible
+because `generate_sql` reads LangChain's ambient config (see
+`src/agents/tools/query_clean_jobs.py`) and forwards it to the nested model
+call, which lets DeepEval's `CallbackHandler` see it as a distinct child span
+even though the MCP transport does not carry `RunnableConfig` into the tool.
 
 Kept out of `src/` entirely per the tracing-boundary rule (CLAUDE.md §2):
 this module is the only place that knows about DeepEval metrics/spans.
@@ -31,6 +32,8 @@ from deepeval.test_case.conversational_test_case import ConversationalTestCase
 from deepeval.tracing.trace_test_manager import trace_testing_manager
 
 from evals.judge import build_judge
+from src.agents.mcp.adapter import list_job_tools
+from src.agents.mcp.job_server import create_job_mcp_server
 from src.agents.runtime.factory import agent_factory
 from src.agents.runtime.prompts import (
     ResolvedPromptBundle,
@@ -45,6 +48,7 @@ from src.agents.tracing.langfuse import (
     langfuse_request_trace,
     validate_langfuse_trace_context,
 )
+from src.core.logger import logger
 
 # Owned here because `score_seams` below is what it versions. The driver stamps it
 # into a capture manifest and `evals/score.py` reads it to decide what is already
@@ -53,6 +57,8 @@ SCORER_VERSION = "harness-score-v1"
 
 QUERY_TOOL_NAME = "query_clean_jobs"
 GENERATE_SQL_SPAN_NAME = "generate_sql"
+
+_EVAL_MCP_SERVER = create_job_mcp_server()
 
 _judge = None
 
@@ -246,17 +252,17 @@ def _find_span(spans: list[dict], **matches) -> dict | None:
 def _extract_sql_span(trace_dict: dict) -> tuple[dict | None, dict | None]:
     """Locate the tool span for query_clean_jobs and its nested LLM span.
 
-    The nested `generate_sql` model.invoke only produces its own span
-    because the tool forwards the injected RunnableConfig into it; without
-    that forwarding this LLM call would be invisible to the trace.
+    The nested `generate_sql` model call only produces its own span because
+    `generate_sql` reads LangChain's ambient config and forwards it to the
+    nested model call (see `src/agents/tools/query_clean_jobs.py`); without that
+    forwarding this LLM call would be invisible to DeepEval. The MCP transport
+    does not carry `RunnableConfig` into the tool, so the ambient config is
+    read from `var_child_runnable_config` instead.
 
     That forwarded config is the *tool node's* config, not one re-scoped to
-    the tool's own run (LangChain's `@tool` machinery injects the parent
-    `config` into the function's `RunnableConfig` param verbatim, rather
-    than the `child_config` it uses internally — see
-    `langchain_core.tools.base._get_runnable_config_param` callers). So the
-    generate_sql LLM span lands as a *sibling* of the tool span, both
-    children of the same tool-node run, not nested under the tool span.
+    the tool's own run, so the generate_sql LLM span lands as a *sibling* of
+    the tool span, both children of the same tool-node run, not nested under
+    the tool span.
     """
     tool_spans = trace_dict.get("toolSpans") or []
     llm_spans = trace_dict.get("llmSpans") or []
@@ -330,6 +336,11 @@ async def _run_turn(
     ]
 
     tool_span, sql_span = _extract_sql_span(trace_dict)
+    if tool_span is not None and sql_span is None:
+        logger.warning(
+            "eval.scoring.sql_span_missing",
+            tool=QUERY_TOOL_NAME,
+        )
     tool_output = tool_span.get("output") if tool_span else None
     if isinstance(tool_output, dict):
         tool_output = tool_output.get("content") or str(tool_output)
@@ -354,7 +365,10 @@ async def run_single_turn_case(
 ) -> SeamRun:
     prompts = prompts or active_prompt_bundle() or await resolve_prompt_bundle_async()
     system_prompt = prompts.system
-    agent = agent_factory(system_prompt=SystemMessage(content=system_prompt.content))
+    tools = await list_job_tools(_EVAL_MCP_SERVER)
+    agent = await agent_factory(
+        system_prompt=SystemMessage(content=system_prompt.content), tools=tools
+    )
     handler = CallbackHandler(name=case["id"])
     validate_langfuse_trace_context(
         entry_point="eval:driver",
@@ -394,9 +408,11 @@ async def run_conversational_case(
     """
     prompts = prompts or active_prompt_bundle() or await resolve_prompt_bundle_async()
     system_prompt = prompts.system
-    agent = agent_factory(
+    tools = await list_job_tools(_EVAL_MCP_SERVER)
+    agent = await agent_factory(
         checkpointer=InMemorySaver(),
         system_prompt=SystemMessage(content=system_prompt.content),
+        tools=tools,
     )
     thread_id = case["id"]
     validate_langfuse_trace_context(

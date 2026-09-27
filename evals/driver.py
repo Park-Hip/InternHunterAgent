@@ -23,11 +23,12 @@ from typing import Any, Awaitable, Callable
 
 import yaml
 
-# Safe to import above the environment bind below: the loader reads the YAML
-# directly and never touches src.core.config, so it cannot freeze Settings().
+# Safe to import above the environment bind below: resolving a supplied mapping never
+# loads Settings(), so it cannot freeze environment values for the evaluation process.
 from evals.fixtures.loader import fixture_database_url
 
 from evals._paths import ROOT
+from src.core.config import resolve_agent_deployment
 
 DEFAULT_OUTPUT = ROOT / "evals" / "runs"
 MAX_RETRIES = 2
@@ -268,7 +269,10 @@ def build_manifest(prompts: ResolvedPromptBundle | None = None) -> dict[str, Any
     fixture_path = ROOT / "evals" / "fixtures" / "seed_eval_db.sql"
     scenarios_path = ROOT / "evals" / "scenarios_v1.yaml"
     settings = yaml.safe_load(settings_path.read_text(encoding="utf-8"))
-    agent = settings["agent"]
+    deployments = {
+        profile: resolve_agent_deployment(settings, profile)
+        for profile in ("react", "sql_generation")
+    }
     worktree_state = _worktree_state()
     database_hash, database_name, database_row_count = _database_fingerprint(
         fixture_database_url()
@@ -292,30 +296,22 @@ def build_manifest(prompts: ResolvedPromptBundle | None = None) -> dict[str, Any
         else load_prompt_versions(),
         "prompt_hashes": _prompt_hashes(prompts),
         "config_hash": _sha256(settings_path),
-        # Provider is recorded per profile because a profile may override agent.provider,
-        # and a capture that cannot say which provider produced it is not evidence. The
-        # native knobs travel with it: `thinking` decides whether DeepSeek honored
-        # `temperature` at all, so omitting it would hide the run's biggest variable.
+        # Each resolved deployment is recorded per profile, so a capture identifies the
+        # exact LiteLLM provider and model that produced it. Provider options travel with
+        # sampling because they can change effective generation behavior.
         "providers": {
-            profile: agent[profile].get("provider", agent["provider"])
-            for profile in ("react", "sql_generation")
+            profile: deployment.provider for profile, deployment in deployments.items()
         },
         "models": {
-            "react": agent["react"]["model"],
-            "sql_generation": agent["sql_generation"]["model"],
+            profile: deployment.model for profile, deployment in deployments.items()
         },
         "sampling": {
             profile: {
-                key: agent[profile].get(key)
-                for key in (
-                    "temperature",
-                    "max_tokens",
-                    "reasoning_effort",
-                    "reasoning_format",
-                    "thinking",
-                )
+                "temperature": deployment.profile["temperature"],
+                "max_tokens": deployment.profile["max_tokens"],
+                "provider_options": deployment.provider_options,
             }
-            for profile in ("react", "sql_generation")
+            for profile, deployment in deployments.items()
         },
         "retry_policy": {
             "max_retries_per_turn": MAX_RETRIES,

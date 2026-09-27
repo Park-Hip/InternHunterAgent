@@ -85,15 +85,17 @@ def existing_model(definition: object) -> FakeModel:
 def test_committed_definition_is_dated_and_cannot_price_another_model() -> None:
     definition = provision.load_definitions()[0]
 
-    assert definition.model_name == "deepseek-v4-flash"
+    assert definition.model_name == "deepseek/deepseek-v4-flash"
     assert definition.start_date == datetime(2026, 8, 21, tzinfo=timezone.utc)
     assert definition.pricing_tiers[0].prices == {
         "input": 0.00000014,
         "input_cached_tokens": 0.0000000028,
         "output": 0.00000028,
     }
-    assert provision.re.fullmatch(definition.match_pattern, "deepseek-v4-flash")
-    assert not provision.re.fullmatch(definition.match_pattern, "deepseek-v4-pro")
+    assert provision.re.fullmatch(
+        definition.match_pattern, "deepseek/deepseek-v4-flash"
+    )
+    assert not provision.re.fullmatch(definition.match_pattern, "deepseek/deepseek-v4-pro")
     assert not provision.re.fullmatch(definition.match_pattern, "qwen/qwen3.6-27b")
 
 
@@ -125,7 +127,7 @@ def test_provision_creates_missing_definition_with_exact_pricing_tier() -> None:
 
     result = provision.provision_definitions(api, [definition])
 
-    assert result == {"created": ["deepseek-v4-flash"], "unchanged": []}
+    assert result == {"created": ["deepseek/deepseek-v4-flash"], "unchanged": []}
     assert len(api.creates) == 1
     created_tier = api.creates[0]["pricing_tiers"][0]
     assert created_tier.prices == definition.pricing_tiers[0].prices
@@ -137,7 +139,7 @@ def test_provision_is_idempotent_when_definition_already_matches() -> None:
 
     result = provision.provision_definitions(api, [definition])
 
-    assert result == {"created": [], "unchanged": ["deepseek-v4-flash"]}
+    assert result == {"created": [], "unchanged": ["deepseek/deepseek-v4-flash"]}
     assert api.creates == []
 
 
@@ -159,5 +161,5 @@ def test_dry_run_does_not_create_models() -> None:
 
     result = provision.provision_definitions(api, [definition], dry_run=True)
 
-    assert result == {"created": ["deepseek-v4-flash"], "unchanged": []}
+    assert result == {"created": ["deepseek/deepseek-v4-flash"], "unchanged": []}
     assert api.creates == []

@@ -1,9 +1,12 @@
 import math
+import os
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict
 
 from pydantic import Field, ValidationError
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfigDict
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -51,6 +54,179 @@ class Settings(BaseSettings):
 
 _settings_cache: Settings | None = None
 DEFAULT_STREAM_TURN_TIMEOUT_SECONDS = 120
+AGENT_PROFILES = frozenset({"react", "sql_generation"})
+ENVIRONMENT_VARIABLE_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+
+@dataclass(frozen=True)
+class AgentDeployment:
+    """One trusted LiteLLM deployment resolved for an agent profile."""
+
+    name: str
+    provider: str
+    model: str
+    api_key_env: str
+    provider_options: dict[str, Any]
+    profile: dict[str, Any]
+
+
+def _config_error(message: str) -> ConfigLoadError:
+    return ConfigLoadError(f"Invalid agent configuration: {message}")
+
+
+def _required_nonempty_string(value: Any, *, name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise _config_error(f"'{name}' must be a nonempty string")
+    return value.strip()
+
+
+def _validate_positive_number(value: Any, *, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise _config_error(f"'{name}' must be a positive finite number")
+    if not math.isfinite(value) or value <= 0:
+        raise _config_error(f"'{name}' must be a positive finite number")
+
+
+def _validate_nonnegative_number(value: Any, *, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise _config_error(f"'{name}' must be a nonnegative finite number")
+    if not math.isfinite(value) or value < 0:
+        raise _config_error(f"'{name}' must be a nonnegative finite number")
+
+
+def _validate_nonnegative_int(value: Any, *, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise _config_error(f"'{name}' must be a nonnegative integer")
+
+
+def _validate_provider_options(provider: str, options: dict[str, Any], *, name: str) -> None:
+    if provider == "deepseek":
+        unknown = set(options) - {"thinking"}
+        if unknown:
+            raise _config_error(f"'{name}' has unsupported DeepSeek options: {sorted(unknown)}")
+        thinking = options.get("thinking", "disabled")
+        if thinking not in {"disabled", "enabled"}:
+            raise _config_error(f"'{name}.thinking' must be 'disabled' or 'enabled'")
+        return
+
+    if provider == "groq":
+        unknown = set(options) - {"reasoning_format", "reasoning_effort"}
+        if unknown:
+            raise _config_error(f"'{name}' has unsupported Groq options: {sorted(unknown)}")
+        for option in ("reasoning_format", "reasoning_effort"):
+            if option in options:
+                _required_nonempty_string(options[option], name=f"{name}.{option}")
+        return
+
+    if options:
+        raise _config_error(
+            f"'{name}' is not supported for provider '{provider}'. Add an explicit contract first"
+        )
+
+
+def validate_agent_config(config: dict[str, Any]) -> None:
+    """Validate the trusted, configuration-driven serving deployment contract."""
+
+    agent = config.get("agent")
+    if not isinstance(agent, dict):
+        raise _config_error("missing 'agent' section")
+
+    providers = agent.get("providers")
+    if not isinstance(providers, dict) or not providers:
+        raise _config_error("'agent.providers' must be a nonempty mapping")
+
+    for deployment_name, deployment in providers.items():
+        if not isinstance(deployment_name, str) or not deployment_name.strip():
+            raise _config_error("'agent.providers' names must be nonempty strings")
+        if not isinstance(deployment, dict):
+            raise _config_error(f"'agent.providers.{deployment_name}' must be a mapping")
+        provider = _required_nonempty_string(
+            deployment.get("provider"), name=f"agent.providers.{deployment_name}.provider"
+        ).lower()
+        model = _required_nonempty_string(
+            deployment.get("model"), name=f"agent.providers.{deployment_name}.model"
+        )
+        if not model.startswith(f"{provider}/"):
+            raise _config_error(
+                f"'agent.providers.{deployment_name}.model' must start with '{provider}/'"
+            )
+        api_key_env = _required_nonempty_string(
+            deployment.get("api_key_env"), name=f"agent.providers.{deployment_name}.api_key_env"
+        )
+        if ENVIRONMENT_VARIABLE_NAME.fullmatch(api_key_env) is None:
+            raise _config_error(
+                f"'agent.providers.{deployment_name}.api_key_env' must name an environment variable"
+            )
+
+    for profile in AGENT_PROFILES:
+        profile_config = agent.get(profile)
+        if not isinstance(profile_config, dict):
+            raise _config_error(f"missing 'agent.{profile}' section")
+        deployment = _required_nonempty_string(
+            profile_config.get("deployment"), name=f"agent.{profile}.deployment"
+        )
+        if deployment not in providers:
+            raise _config_error(
+                f"'agent.{profile}.deployment' references unknown deployment '{deployment}'"
+            )
+        _validate_nonnegative_number(
+            profile_config.get("temperature"), name=f"agent.{profile}.temperature"
+        )
+        _validate_nonnegative_int(profile_config.get("max_tokens"), name=f"agent.{profile}.max_tokens")
+        if profile_config["max_tokens"] == 0:
+            raise _config_error(f"'agent.{profile}.max_tokens' must be positive")
+        _validate_positive_number(profile_config.get("timeout"), name=f"agent.{profile}.timeout")
+        _validate_nonnegative_int(profile_config.get("max_retries"), name=f"agent.{profile}.max_retries")
+        if not isinstance(profile_config.get("streaming"), bool):
+            raise _config_error(f"'agent.{profile}.streaming' must be a boolean")
+
+        options = profile_config.get("provider_options", {})
+        if not isinstance(options, dict):
+            raise _config_error(f"'agent.{profile}.provider_options' must be a mapping")
+        provider = providers[deployment]["provider"].strip().lower()
+        _validate_provider_options(
+            provider,
+            options,
+            name=f"agent.{profile}.provider_options",
+        )
+
+
+def resolve_agent_deployment(config: dict[str, Any], profile: str) -> AgentDeployment:
+    """Resolve one profile without exposing raw configuration to runtime callers."""
+
+    if profile not in AGENT_PROFILES:
+        raise ValueError(f"Unsupported agent model profile: {profile}")
+    validate_agent_config(config)
+
+    agent = config["agent"]
+    profile_config = agent[profile]
+    deployment_name = profile_config["deployment"].strip()
+    deployment = agent["providers"][deployment_name]
+    return AgentDeployment(
+        name=deployment_name,
+        provider=deployment["provider"].strip().lower(),
+        model=deployment["model"].strip(),
+        api_key_env=deployment["api_key_env"].strip(),
+        provider_options=dict(profile_config.get("provider_options", {})),
+        profile=profile_config,
+    )
+
+
+def get_configured_secret(environment_variable: str) -> str | None:
+    """Read one validated secret reference without recording its value."""
+
+    if ENVIRONMENT_VARIABLE_NAME.fullmatch(environment_variable) is None:
+        raise ValueError("Invalid environment variable reference")
+    value = os.getenv(environment_variable)
+    if value is not None:
+        return value.strip() or None
+
+    dotenv_source = DotEnvSettingsSource(Settings)
+    dotenv_key = (
+        environment_variable if dotenv_source.case_sensitive else environment_variable.lower()
+    )
+    value = dotenv_source().get(dotenv_key)
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def get_stream_turn_timeout_seconds(config: dict[str, Any]) -> int:
@@ -226,6 +402,7 @@ def load_settings(*, force_reload: bool = False) -> Settings:
     _validate_api_config(settings.config_yaml)
     _validate_prompt_config(settings.config_yaml)
     _validate_observability_config(settings.config_yaml)
+    validate_agent_config(settings.config_yaml)
     settings.prompts_yaml = _load_yaml_file(_config_path("prompts.yaml"))
     settings.ingestion_yaml = _load_yaml_file(_config_path("ingestion.yaml"))
     settings.tech_vocabulary_yaml = _load_yaml_file(

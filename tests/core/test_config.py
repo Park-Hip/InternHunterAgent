@@ -111,6 +111,32 @@ class ConfigLoadTests(unittest.TestCase):
         self.assertIsNone(settings.LANGFUSE_SECRET_KEY)
         self.assertIsNone(settings.LANGFUSE_PUBLIC_KEY)
 
+    def test_configured_secret_prefers_environment_over_dotenv(self) -> None:
+        environment_variable = "TEST_CONFIGURED_PROVIDER_KEY"
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            dotenv_path = Path(tmp_dir) / ".env"
+            dotenv_path.write_text(
+                f"{environment_variable}=dotenv-key\n", encoding="utf-8"
+            )
+            config_module.Settings.model_config = SettingsConfigDict(
+                env_file=str(dotenv_path),
+                env_file_encoding="utf-8",
+                extra="ignore",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                self.assertEqual(
+                    config_module.get_configured_secret(environment_variable),
+                    "dotenv-key",
+                )
+                with patch.dict(
+                    os.environ, {environment_variable: "process-key"}, clear=False
+                ):
+                    self.assertEqual(
+                        config_module.get_configured_secret(environment_variable),
+                        "process-key",
+                    )
+
     def test_importing_config_module_does_not_validate_env_at_import_time(self) -> None:
         with patch.dict(
             os.environ,

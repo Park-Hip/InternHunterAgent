@@ -37,6 +37,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0050](adr-0050-sse-comments-keep-silent-streams-alive.md) | SSE comments keep silent streams alive | Operations |
 | [ADR-0052](adr-0052-per-class-release-thresholds-real-sweep.md) | Per-class release thresholds from the real corpus re-sweep | Evaluation |
 | [ADR-0053](adr-0053-frozen-data-portfolio-release.md) | The public release is a frozen-data portfolio, not a self-refreshing MVP claim | Product scope |
+| [ADR-0054](adr-0054-litellm-configured-serving-deployments.md) | LiteLLM serves trusted configured deployments | Agent runtime |
 
 Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
 superseded by ADR-0052 and keep their files with a `Superseded by` status.

@@ -97,7 +97,7 @@ Other documents link here rather than restating.
 | Database | PostgreSQL | 17 on Neon | `DATABASE_URL` |
 | ORM and driver | SQLAlchemy and psycopg | >=2.0 / >=3.2 | `src/services/query/` |
 | Migrations | Alembic | >=1.14 | `alembic/`, `alembic.ini` |
-| Tracing | Langfuse Cloud | >=4.6.1 | `src/agents/tracing/` |
+| Tracing | Langfuse Cloud | >=4.15.6,<5.0.0 | `src/agents/tracing/` |
 | Evaluation | DeepEval with a Gemini judge | >=4.0.7 | `evals/`, `config/settings.yaml` |
 | Hosting | Render Docker web service | Free tier | `render.yaml`, `docker/Dockerfile` |
 

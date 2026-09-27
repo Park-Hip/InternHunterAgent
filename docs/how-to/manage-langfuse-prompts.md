@@ -9,6 +9,16 @@ On startup, the service prefetches every required prompt before it creates the r
 If Langfuse is unavailable or credentials are intentionally absent, the service serves that fallback instead of failing a healthy request.
 Fallback generations are intentionally not linked as native Langfuse prompt versions.
 
+A managed prompt is linked to its generations by propagating the resolved Langfuse
+prompt client around the model call.
+The Langfuse Python SDK therefore carries a serving requirement, not a preference:
+`propagate_attributes(prompt=...)` exists from SDK 4.14.0, and `pyproject.toml` and
+`uv.lock` pin the floor.
+`tests/agents/test_langfuse_tracing.py` and `tests/api/test_native_prompt_chat.py`
+assert the installed SDK against the real propagation function, so a lockfile that
+cannot link prompts fails the suite instead of answering a live request with an
+in-band `error` event.
+
 ## Create a candidate
 
 Run `uv run python scripts/register_langfuse_prompts.py --label candidate` to seed only candidate versions from the checked-in fallback text.

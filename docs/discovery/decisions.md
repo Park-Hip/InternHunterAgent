@@ -66,3 +66,12 @@
 - **Current effect:** It does not select Bright Data, authorize collection, establish source rights, or affect the fixed-corpus MVP.
 - **Revisit trigger:** A later source decision supplies applicable authority, retention, cost, field-quality, and reliability evidence.
 - **Evidence:** [Issue #423 capped-test result](https://github.com/Park-Hip/InternHunterAgent/issues/423#issuecomment-5797556656).
+
+### D-012 - Evidence-first ingestion contract
+
+- **Status:** Decided, design only
+- **Choice:** Future ingestion preserves immutable source authority, collection, artifact, observation, and normalization evidence before deriving a backward-compatible serving projection.
+- **Semantic boundary:** A source-specific result is a normalized listing, `source_level` remains a source fact, and unsupported technical seniority and leadership scope are `unknown`.
+- **Current effect:** The approved [ADR-0055](../decisions/adr-0055-evidence-first-ingestion-contract.md) and [blueprint](../decisions/evidence-first-ingestion-blueprint.md) define a future contract without authorizing collection, provider selection, data migration, or a runtime change.
+- **Remaining gate:** [Issue #423](https://github.com/Park-Hip/InternHunterAgent/issues/423) must establish provider-specific authority, field quality, coverage, cost, and reliability evidence before mapping or production activation.
+- **Evidence:** [Issue #461 semantic decision](research/source-level-semantics-decision.md), [issue #455 blueprint](https://github.com/Park-Hip/InternHunterAgent/issues/455), and the read-only legacy compatibility baseline in the blueprint.

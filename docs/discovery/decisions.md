@@ -62,10 +62,10 @@
 ### D-011 - Bright Data technical pilot
 
 - **Status:** Deferred
-- **Historical record:** A capped Bright Data test demonstrated request/response viability only.
-- **Current effect:** It does not select Bright Data, authorize collection, establish source rights, or affect the fixed-corpus MVP.
-- **Revisit trigger:** A later source decision supplies applicable authority, retention, cost, field-quality, and reliability evidence.
-- **Evidence:** [Issue #423 capped-test result](https://github.com/Park-Hip/InternHunterAgent/issues/423#issuecomment-5797556656).
+- **Historical record:** A capped Bright Data test demonstrated one restricted-field request/response path only.
+- **Current effect:** The [provider profile](research/bright-data-linkedin-jobs-provider-profile.md) documents that path, its account-activation failure, documented state boundaries, and unknowns. It does not select Bright Data, authorize collection, establish source rights, or affect the fixed-corpus MVP.
+- **Revisit trigger:** A later source decision supplies applicable authority, endpoint-specific retention, cost, field-quality, coverage, lifecycle, and reliability evidence.
+- **Evidence:** [Bright Data provider profile](research/bright-data-linkedin-jobs-provider-profile.md) and [issue #423 capped-test result](https://github.com/Park-Hip/InternHunterAgent/issues/423#issuecomment-5797556656).
 
 ### D-012 - Evidence-first ingestion contract
 

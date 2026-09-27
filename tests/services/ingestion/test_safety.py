@@ -164,6 +164,14 @@ class AssertNormalizedRowQualityTests(unittest.TestCase):
 
         self.assertIn("salary_bounds=1", str(ctx.exception))
 
+    def test_positive_min_smaller_nonzero_max_still_raises(self) -> None:
+        # The source normalizer only collapses salaryMax==0; a nonzero smaller
+        # maximum remains a genuine inversion and must still fail the gate.
+        with self.assertRaises(IngestionSafetyError) as ctx:
+            assert_normalized_row_quality([_make_job(salary_min=1500.0, salary_max=1.0)])
+
+        self.assertIn("salary_bounds=1", str(ctx.exception))
+
     def test_equal_salary_bounds_pass(self) -> None:
         assert_normalized_row_quality([_make_job(salary_min=2000.0, salary_max=2000.0)])
 

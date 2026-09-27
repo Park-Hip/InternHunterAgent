@@ -264,7 +264,7 @@ No destructive migration, in-place evidence rewrite, or legacy-row reclassificat
 | Gate | Required evidence |
 | --- | --- |
 | Authorization | A reviewed `source_authorizations` revision specifies acquisition, fields, retention, and revocation behavior. |
-| Provider evidence | Issue #423 or its approved successor establishes authorized provider-specific field and coverage evidence. |
+| Provider evidence | The [Bright Data provider profile](../discovery/research/bright-data-linkedin-jobs-provider-profile.md) characterizes documented and observed provider boundaries. A separately authorized provider-specific evidence record must establish field quality, coverage, retention, lifecycle, and retry behavior before implementation. |
 | Identity | Golden records prove that source listing keys stay stable within a source and never cause cross-source merging. |
 | Raw integrity | Every retained artifact has an authorized representation, digest, media type, retrieval time, and observation link. |
 | Field provenance | Every agent-visible candidate field traces to an observation, source field, transform, and rule version. |
@@ -279,8 +279,10 @@ No destructive migration, in-place evidence rewrite, or legacy-row reclassificat
 
 ## Remaining evidence and decisions
 
-Issue #423 remains the gate for provider selection, provider-specific mapping, collection authority,
-field-quality measurement, cost, and production activation.
+The [Bright Data provider profile](../discovery/research/bright-data-linkedin-jobs-provider-profile.md)
+records the historical capped-spike evidence and the documentation-only provider boundary.
+It does not establish provider selection, provider-specific mapping, collection authority,
+field-quality measurement, cost, or production activation.
 A future cross-source vacancy entity requires a separate decision with identity rules, false-merge
 and false-split measurement, source authority, and rollback criteria.
 A future agent-visible lifecycle or semantic field requires a coordinated schema, prompt, fixture,

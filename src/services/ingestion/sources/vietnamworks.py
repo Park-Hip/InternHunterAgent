@@ -49,6 +49,7 @@ class VietnamWorksSource(JobSource):
             user_agent=self._user_agent,
             timeout_seconds=self._timeout,
             cache_ttl_seconds=robots_cfg["cache_ttl_seconds"],
+            allow_404=robots_cfg["allow_404"],
         )
         self._queries: list[str] = cfg["queries"]
         self._parent_id: int = cfg["job_function"]["parent_id"]

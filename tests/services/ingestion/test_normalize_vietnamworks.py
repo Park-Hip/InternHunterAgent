@@ -114,6 +114,45 @@ class ToNormalizedJobTests(unittest.TestCase):
         self.assertTrue(result.is_salary_negotiable)
 
     # ------------------------------------------------------------------
+    # Salary — zero upper-bound sentinel (positive salaryMin, salaryMax == 0)
+    # ------------------------------------------------------------------
+
+    def test_positive_min_zero_max_sentinel_nulls_max(self) -> None:
+        # VietnamWorks uses salaryMax=0 for a visible lower-bound-only salary.
+        payload = dict(self.jobs[1001])
+        payload["salaryMin"] = 1500
+        payload["salaryMax"] = 0
+
+        result = to_normalized_job(payload)
+
+        self.assertEqual(result.salary_min, 1500)
+        self.assertIsNone(result.salary_max)
+        self.assertEqual(result.salary_currency, "USD")
+        self.assertFalse(result.is_salary_negotiable)
+
+    def test_zero_max_with_zero_min_is_preserved(self) -> None:
+        # A zero minimum is not the lower-bound-only sentinel shape; leave it verbatim.
+        payload = dict(self.jobs[1001])
+        payload["salaryMin"] = 0
+        payload["salaryMax"] = 0
+
+        result = to_normalized_job(payload)
+
+        self.assertEqual(result.salary_min, 0)
+        self.assertEqual(result.salary_max, 0)
+
+    def test_nonzero_smaller_max_is_not_treated_as_sentinel(self) -> None:
+        # The normalizer must not swap or null a genuinely inverted finite range.
+        payload = dict(self.jobs[1001])
+        payload["salaryMin"] = 2500
+        payload["salaryMax"] = 2000
+
+        result = to_normalized_job(payload)
+
+        self.assertEqual(result.salary_min, 2500)
+        self.assertEqual(result.salary_max, 2000)
+
+    # ------------------------------------------------------------------
     # Description — merged blob
     # ------------------------------------------------------------------
 

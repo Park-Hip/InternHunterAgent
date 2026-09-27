@@ -38,6 +38,27 @@ def _extract_benefits(payload: dict) -> list[str]:
     return texts
 
 
+def _collapse_zero_max_sentinel(
+    salary_min: float | None, salary_max: float | None
+) -> float | None:
+    """Map VietnamWorks' zero upper-bound sentinel to an unbounded salary.
+
+    A visible posting that advertises only a lower bound arrives as a positive
+    ``salaryMin`` with ``salaryMax == 0``. That zero is the source's
+    "unbounded upper salary" sentinel, not a finite upper bound, so copying it
+    verbatim turns the row into inverted finite bounds and fails the
+    row-quality gate. Collapse only that exact shape to ``None``.
+
+    Every other zero is left verbatim: a zero maximum with an absent or
+    non-positive minimum, a zero minimum, and hidden-salary payloads are never
+    touched. This is a source-specific normalization, not a global treatment of
+    zero salaries, and it never fabricates or swaps a bound.
+    """
+    if salary_max == 0 and salary_min is not None and salary_min > 0:
+        return None
+    return salary_max
+
+
 def to_normalized_job(payload: dict) -> NormalizedJob:
     """Map a raw VietnamWorks job dict to a canonical NormalizedJob.
 
@@ -63,6 +84,7 @@ def to_normalized_job(payload: dict) -> NormalizedJob:
         salary_min: float | None = payload.get("salaryMin")
         salary_max: float | None = payload.get("salaryMax")
         salary_currency: str | None = payload.get("salaryCurrency")
+        salary_max = _collapse_zero_max_sentinel(salary_min, salary_max)
     else:
         salary_min = None
         salary_max = None

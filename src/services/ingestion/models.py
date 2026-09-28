@@ -8,8 +8,10 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Date,
+    ForeignKey,
     Identity,
     Index,
+    Integer,
     Numeric,
     Text,
     UniqueConstraint,
@@ -163,6 +165,204 @@ class IngestionRun(Base):
     skipped: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     expired_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     pages_failed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
+class CollectionPlan(Base):
+    __tablename__ = "collection_plans"
+    __table_args__ = (UniqueConstraint("source_id", "plan_version"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    source_id: Mapped[str] = mapped_column(Text, nullable=False)
+    plan_version: Mapped[str] = mapped_column(Text, nullable=False)
+    declared_scope: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    declared_caps: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    requested_fields: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    declared_completion_rule: Mapped[str] = mapped_column(Text, nullable=False)
+    declared_endpoint_set: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    retrieval_precision: Mapped[str] = mapped_column(Text, nullable=False)
+    authorization_revision: Mapped[str] = mapped_column(Text, nullable=False)
+    configuration_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class CollectionRun(Base):
+    __tablename__ = "collection_runs"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key"),
+        CheckConstraint("run_kind IN ('scheduled', 'manual', 'replay')", name="ck_collection_runs_kind"),
+        CheckConstraint(
+            "outcome IN ('complete', 'incomplete', 'failed', 'authorization_blocked', 'aborted')",
+            name="ck_collection_runs_outcome",
+        ),
+        CheckConstraint(
+            "coverage_result IN ('complete', 'partial', 'unknown') AND "
+            "(coverage_result <> 'complete' OR outcome = 'complete')",
+            name="ck_collection_runs_coverage",
+        ),
+        CheckConstraint(
+            "(outcome <> 'complete' OR (finished_at IS NOT NULL AND failure_category IS NULL)) "
+            "AND (outcome = 'complete' OR failure_category IS NOT NULL) "
+            "AND (run_kind <> 'replay' OR (replay_of_run_id IS NOT NULL AND replay_reason IS NOT NULL))",
+            name="ck_collection_runs_result",
+        ),
+        CheckConstraint(
+            "observed_record_count >= 0 AND request_count >= 0 AND "
+            "(declared_record_cap IS NULL OR declared_record_cap >= 0)",
+            name="ck_collection_runs_counts",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    plan_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_plans.id"), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    run_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    outcome: Mapped[str] = mapped_column(Text, nullable=False)
+    coverage_result: Mapped[str] = mapped_column(Text, nullable=False)
+    declared_record_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    observed_record_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    declared_scope_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    request_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    failure_category: Mapped[str | None] = mapped_column(Text, nullable=True)
+    configuration_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    input_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    replay_of_run_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=True)
+    replay_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class RawArtifact(Base):
+    __tablename__ = "raw_artifacts"
+    __table_args__ = (
+        CheckConstraint(
+            "retention_disposition IN ('retained_full', 'retained_redacted', "
+            "'retained_derived', 'discarded')",
+            name="ck_raw_artifacts_disposition",
+        ),
+        CheckConstraint(
+            "(retention_disposition = 'discarded' OR "
+            "(retention_until IS NOT NULL AND representation IS NOT NULL)) AND "
+            "(retention_disposition <> 'retained_redacted' OR redaction_rules IS NOT NULL)",
+            name="ck_raw_artifacts_retention",
+        ),
+        CheckConstraint("byte_length >= 0", name="ck_raw_artifacts_length"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
+    content_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    representation_version: Mapped[str] = mapped_column(Text, nullable=False)
+    media_type: Mapped[str] = mapped_column(Text, nullable=False)
+    byte_length: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    storage_locator: Mapped[str] = mapped_column(Text, nullable=False)
+    representation: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    acquired_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    retention_disposition: Mapped[str] = mapped_column(Text, nullable=False)
+    retention_until: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    authorization_revision: Mapped[str] = mapped_column(Text, nullable=False)
+    redaction_rules: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class RawObservation(Base):
+    __tablename__ = "raw_observations"
+    __table_args__ = (
+        UniqueConstraint("source_id", "delivery_id"),
+        UniqueConstraint("idempotency_key"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
+    raw_artifact_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("raw_artifacts.id"), nullable=False)
+    source_id: Mapped[str] = mapped_column(Text, nullable=False)
+    source_listing_key: Mapped[str] = mapped_column(Text, nullable=False)
+    provider_listing_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    delivery_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retrieved_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    source_urls: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    field_presence: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class DuplicateDelivery(Base):
+    """Append-only duplicate outcome, pointing to the original observation."""
+
+    __tablename__ = "duplicate_deliveries"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
+    existing_observation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("raw_observations.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class NormalizationResult(Base):
+    __tablename__ = "normalization_results"
+    __table_args__ = (
+        UniqueConstraint("observation_id", "normalization_version", "attempt_number"),
+        CheckConstraint(
+            "outcome IN ('succeeded', 'quarantined', 'rejected', 'superseded')",
+            name="ck_normalization_results_outcome",
+        ),
+        CheckConstraint(
+            "(outcome <> 'quarantined' OR (quarantine_reason_code IS NOT NULL AND quarantine_reason_code IN "
+            "('identity_absent', 'listing_key_absent', 'artifact_integrity_failed', "
+            "'adapter_contract_violated', 'shape_unparseable', "
+            "'display_field_invalid', 'unauthorized_field'))) AND "
+            "(outcome = 'quarantined' OR quarantine_reason_code IS NULL) AND "
+            "(outcome <> 'succeeded' OR (output_digest IS NOT NULL AND output_values IS NOT NULL))",
+            name="ck_normalization_results_values",
+        ),
+        CheckConstraint("attempt_number > 0", name="ck_normalization_results_attempt"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    observation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("raw_observations.id"), nullable=False)
+    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
+    normalization_version: Mapped[str] = mapped_column(Text, nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    outcome: Mapped[str] = mapped_column(Text, nullable=False)
+    quarantine_reason_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rule_version: Mapped[str] = mapped_column(Text, nullable=False)
+    output_digest: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output_values: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    warnings: Mapped[list] = mapped_column(JSONB, nullable=False)
+    evaluator_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class FieldProvenance(Base):
+    __tablename__ = "field_provenance"
+    __table_args__ = (
+        UniqueConstraint("normalization_result_id", "output_field"),
+        CheckConstraint(
+            "transform IN ('copy', 'parse', 'normalize', 'derive', 'unavailable')",
+            name="ck_field_provenance_transform",
+        ),
+        CheckConstraint(
+            "value_state IN ('present', 'source_empty', 'source_missing', 'invalid', "
+            "'unavailable', 'unknown')",
+            name="ck_field_provenance_state",
+        ),
+        CheckConstraint(
+            "review_status IN ('automatic', 'reviewed', 'quarantined', 'superseded')",
+            name="ck_field_provenance_review",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    normalization_result_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("normalization_results.id"), nullable=False)
+    output_field: Mapped[str] = mapped_column(Text, nullable=False)
+    source_field: Mapped[str] = mapped_column(Text, nullable=False)
+    locale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    observation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("raw_observations.id"), nullable=False)
+    artifact_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    rule_version: Mapped[str] = mapped_column(Text, nullable=False)
+    transform: Mapped[str] = mapped_column(Text, nullable=False)
+    value_state: Mapped[str] = mapped_column(Text, nullable=False)
+    review_status: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
 
 class CleanJob(Base):

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import DBAPIError
 
 from alembic import command
 from alembic.config import Config
@@ -36,9 +37,12 @@ def test_baseline_upgrade_matches_metadata():
     engine = create_engine(SCRATCH_DSN, pool_pre_ping=True)
     with engine.begin() as conn:
         conn.execute(
-            text("DROP TABLE IF EXISTS ingestion_runs, clean_jobs, raw_jobs CASCADE")
+            text("DROP TABLE IF EXISTS field_provenance, normalization_results, "
+                 "duplicate_deliveries, raw_observations, raw_artifacts, "
+                 "collection_runs, collection_plans, ingestion_runs, clean_jobs, raw_jobs CASCADE")
         )
         conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+        conn.execute(text("DROP FUNCTION IF EXISTS reject_ingestion_evidence_mutation()"))
 
     os.environ["ALEMBIC_DATABASE_URL"] = SCRATCH_DSN
     alembic_cfg = Config(str(REPO_ROOT / "alembic.ini"))
@@ -71,12 +75,39 @@ def test_baseline_upgrade_matches_metadata():
         rows = conn.execute(text("SELECT version_num FROM alembic_version")).fetchall()
 
     assert len(rows) == 1
-    assert rows[0][0] == "c9d3e6f7a2b1"
+    assert rows[0][0] == "e51a8c07d942"
     assert {index["name"] for index in inspector.get_indexes("ingestion_runs")} == {
         "ix_ingestion_runs_finished_at",
         "ix_ingestion_runs_source_started_at",
     }
+    with engine.begin() as conn:
+        triggers = conn.execute(text(
+            "SELECT COUNT(*) FROM pg_trigger "
+            "WHERE tgname = 'immutable_evidence' AND NOT tgisinternal"
+        )).scalar_one()
+        assert triggers == 7
+        plan_id = conn.execute(text(
+            "INSERT INTO collection_plans "
+            "(source_id, plan_version, declared_scope, declared_caps, requested_fields, "
+            "declared_completion_rule, declared_endpoint_set, retrieval_precision, "
+            "authorization_revision, configuration_digest, created_at) VALUES "
+            "('fixture', 'v1', '{}', '{}', '{}', 'terminal', '{}', 'second', "
+            "'synthetic:fixture', 'digest', now()) RETURNING id"
+        )).scalar_one()
+    for statement in (
+        "UPDATE collection_plans SET plan_version = 'v2' WHERE id = :id",
+        "DELETE FROM collection_plans WHERE id = :id",
+    ):
+        with pytest.raises(DBAPIError, match="append-only"):
+            with engine.begin() as conn:
+                conn.execute(text(statement), {"id": plan_id})
 
+    command.downgrade(alembic_cfg, "c9d3e6f7a2b1")
+    for evidence_table in (
+        "field_provenance", "normalization_results", "duplicate_deliveries",
+        "raw_observations", "raw_artifacts", "collection_runs", "collection_plans",
+    ):
+        assert not inspect(engine).has_table(evidence_table)
     command.downgrade(alembic_cfg, "b7e2f4a91c3d")
     downgraded_inspector = inspect(engine)
     assert not downgraded_inspector.has_table("ingestion_runs")

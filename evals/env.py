@@ -9,11 +9,9 @@ from __future__ import annotations
 
 import os
 import subprocess
-from pathlib import Path
 
+from evals._paths import ROOT
 from evals.fixtures.loader import fixture_database_url
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def _git_sha() -> str:

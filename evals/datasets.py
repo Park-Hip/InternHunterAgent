@@ -1,7 +1,7 @@
-"""Swappable dataset registry for the restructured evaluation harness.
+"""Dataset registry and the validation the evaluation harness relies on.
 
-Each dataset is keyed by a short name and points at one YAML file plus an
-optional metric override. The default dataset is ``default``.
+Each dataset is keyed by a short name and points at one YAML file of
+scenarios. The default dataset is ``default``.
 """
 
 from __future__ import annotations
@@ -16,16 +16,33 @@ DATASETS_DIR = EVALS_ROOT / "datasets"
 
 _DEFAULT_DATASET = "default"
 
+_TOOL_KEYS = frozenset({"expected_tools", "tool_expectation", "turn_tool_expectations", "tool_order"})
+_TOOL_FIELDS = frozenset({"required", "allowed"})
+
+
+def _validate_tool_expectations(sid: str, scenario: dict[str, Any]) -> None:
+    """Reject tool keys and expectations the harness would silently ignore."""
+    for key in scenario:
+        if "tool" in key and key not in _TOOL_KEYS:
+            raise ValueError(f"Scenario {sid} declares unread tool key {key!r}; expected one of {sorted(_TOOL_KEYS)}")
+    expectations = [scenario["tool_expectation"]] if scenario.get("tool_expectation") else []
+    expectations.extend(scenario.get("turn_tool_expectations") or [])
+    for expectation in expectations:
+        if not isinstance(expectation, dict) or set(expectation) - _TOOL_FIELDS:
+            raise ValueError(f"Scenario {sid} has an invalid tool expectation: {expectation}")
+        for field in _TOOL_FIELDS & set(expectation):
+            if not isinstance(expectation[field], list):
+                raise ValueError(f"Scenario {sid} must list {field} tools, got {expectation[field]!r}")
+    turns = len(scenario.get("turns") or [scenario.get("input")])
+    if scenario.get("turn_tool_expectations") and len(scenario["turn_tool_expectations"]) != turns:
+        raise ValueError(f"Scenario {sid} declares tool expectations for {len(scenario['turn_tool_expectations'])} of {turns} turns")
+
 
 class DatasetSpec:
-    """A single dataset reference — path plus optional per-metric overrides."""
+    """A single dataset reference: one scenario file and its grammar."""
 
-    def __init__(self, path: Path, overrides: dict[str, Any] | None = None) -> None:
+    def __init__(self, path: Path) -> None:
         self.path = path
-        self.overrides = overrides or {}
-
-    def scenario(self, index: int) -> dict[str, Any]:
-        return self.scenarios()[index]
 
     def scenarios(self) -> list[dict[str, Any]]:
         payload = yaml.safe_load(self.path.read_text(encoding="utf-8"))
@@ -52,6 +69,7 @@ class DatasetSpec:
                 raise ValueError(f"Scenario {sid} has no reference SQL")
             if "rubric" in names and not scenario.get("rubric"):
                 raise ValueError(f"Scenario {sid} has no rubric")
+            _validate_tool_expectations(sid, scenario)
         return payload
 
 
@@ -62,10 +80,6 @@ class DatasetSpec:
 _REGISTRY: dict[str, DatasetSpec] = {
     "default": DatasetSpec(DATASETS_DIR / "scenarios.yaml"),
 }
-
-
-def register(name: str, path: Path, overrides: dict[str, Any] | None = None) -> None:
-    _REGISTRY[name] = DatasetSpec(path, overrides or {})
 
 
 def dataset(name: str) -> DatasetSpec:

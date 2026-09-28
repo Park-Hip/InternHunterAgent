@@ -90,7 +90,3 @@ def compare_result_sets(
         "missing_ids": [json.loads(key) for key in (expected_ids - actual).elements()],
         "unexpected_ids": [json.loads(key) for key in (actual - expected_ids).elements()],
     }
-
-
-def grade_sql(generated_sql: str, reference_sql: str, mode: str = "ids_only", database_url: str | None = None, expected_count: int | None = None, display_limit: int | None = None) -> dict[str, Any]:
-    return compare_result_sets(generated_sql, reference_sql, database_url, mode, expected_count, display_limit)

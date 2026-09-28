@@ -65,6 +65,27 @@ class TestToTableRows:
         rows = to_table_rows(grouped)
         assert rows == []
 
+    def test_status_ignores_metrics_the_scenario_never_declared(self) -> None:
+        grouped = {
+            "sql_accuracy": [
+                {"scenario_id": "X", "metric": "sql_accuracy", "score": 1.0},
+                {"scenario_id": "Y", "metric": "sql_accuracy", "score": 1.0},
+            ],
+            "tool_correctness": [{"scenario_id": "X", "metric": "tool_correctness", "score": 1.0}],
+        }
+        rows = {row["scenario_id"]: row for row in to_table_rows(grouped)}
+        assert rows["X"]["status"] == "PASS"
+        assert rows["Y"]["sql_accuracy"] == 1.0
+        assert rows["Y"]["tool_correctness"] is None
+        assert rows["Y"]["status"] == "PASS"
+
+    def test_status_unrun_when_a_scored_metric_has_no_score(self) -> None:
+        grouped = {
+            "sql_accuracy": [{"scenario_id": "X", "metric": "sql_accuracy", "score": None, "reason": "UNRUN"}],
+            "tool_correctness": [{"scenario_id": "X", "metric": "tool_correctness", "score": 1.0}],
+        }
+        assert to_table_rows(grouped)[0]["status"] == "UNRUN"
+
     def test_missing_metric_columns(self) -> None:
         grouped = {
             "a": [{"scenario_id": "X", "metric": "a", "score": 1.0}],

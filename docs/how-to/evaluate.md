@@ -1,7 +1,7 @@
 # Evaluate agent behavior
 
 The active evaluation harness reads scenarios from [`evals/datasets/scenarios.yaml`](../../evals/datasets/scenarios.yaml).
-It reports scores grouped by metric in one JSON artifact.
+It persists one JSON artifact whose `by_metric` key groups every scored row under its metric name, and prints the same grouping as a table.
 Historical v1 replay, calibration, and instrument documents remain on disk as evidence, not as current operating instructions.
 
 ## Live evaluation
@@ -31,7 +31,9 @@ uv run python -m evals --only tool_correctness,sql_accuracy --capture evals/repl
 Only scenarios actually present in the retained capture are scored.
 The fixture database is required whenever the captured scenario has reference SQL.
 This CI smoke check is not a new capture and does not cover all 50 scenarios.
-Scores of 0.0 are findings rather than infrastructure failures; errors and unrun cases exit nonzero.
+Scores of 0.0 are findings rather than infrastructure failures; errors, unrun cases, and infrastructure failures exit nonzero.
+A metric that cannot be scored for a captured turn is reported as a row with a null score and a `NOT_APPLICABLE` reason rather than being dropped: that happens today for `grounded` whenever a turn captured no tool output.
+`--require-pass` additionally exits nonzero for any metric that is not exactly 1.0, including those null scores.
 The fixture loader still exports `fixture_database_url()` for other research scripts.
 
 To compare the 12 preserved v8 human labels with the current judge once credentials are available, run `uv run pytest -o addopts='' -m eval -s tests/evals/test_holdout_judge.py`.

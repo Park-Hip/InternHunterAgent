@@ -13,7 +13,7 @@ import yaml
 
 from evals.datasets import dataset
 from evals.env import bind_fixture_environment
-from evals.metrics import METRIC_BY_NAME, judge_case
+from evals.metrics import judge_case, metric as metric_spec
 
 
 CASES = yaml.safe_load(Path("evals/calibration_v8.yaml").read_text(encoding="utf-8"))["cases"]
@@ -29,7 +29,7 @@ def test_judge_agreement_finding(item: dict) -> None:
     scenario = SCENARIOS[item["scenario_id"]]
     turn = item["trajectory"][-1]
     capture = {"question": turn["question"], "answer": turn["answer"]}
-    test_case, params, criteria = judge_case(capture, scenario, METRIC_BY_NAME["rubric"])
+    test_case, params, criteria = judge_case(capture, scenario, metric_spec("rubric"))
     metric = GEval(name="rubric", criteria=criteria, evaluation_params=params, model=get_judge(), async_mode=False)
     metric.measure(test_case, _show_indicator=False)
     predicted = "PASS" if metric.score >= 0.5 else "FAIL"

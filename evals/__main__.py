@@ -8,7 +8,7 @@ from pathlib import Path
 
 from evals.datasets import dataset, default_dataset_name, list_datasets
 from evals.metrics import METRIC_BY_NAME
-from evals.report import group_by_metric, print_table, to_table_rows
+from evals.report import print_table, to_table_rows
 from evals.run import run_dataset, write_report
 
 
@@ -28,9 +28,10 @@ def main(argv: list[str] | None = None) -> int:
     except (ValueError, KeyError, OSError) as exc:
         parser.error(str(exc))
     write_report(report, args.out)
-    print_table(to_table_rows(group_by_metric(report["results"])))
+    print_table(to_table_rows(report["by_metric"]))
     print(f"Report written to {args.out}")
-    return 1 if any(row.get("error") or row.get("reason") == "UNRUN" or (args.require_pass and row.get("score") != 1.0) for row in report["results"]) else 0
+    rows = [row for metric_rows in report["by_metric"].values() for row in metric_rows]
+    return 1 if any(row.get("error") or row.get("reason") == "UNRUN" or (args.require_pass and row.get("score") != 1.0) for row in rows) else 0
 
 
 if __name__ == "__main__":

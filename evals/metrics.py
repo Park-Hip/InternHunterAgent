@@ -22,6 +22,14 @@ class MetricSpec:
     required_fields: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class ToolExpectation:
+    """The tools a turn must call, and the tools it is allowed to call."""
+
+    required: tuple[str, ...]
+    allowed: tuple[str, ...]
+
+
 METRICS = (
     MetricSpec("tool_correctness", MetricKind.DETERMINISTIC, "Required tools were called, with no unexpected tools.", ("tools_called", "expected_tools")),
     MetricSpec("sql_accuracy", MetricKind.DETERMINISTIC, "SQL returns the reference result on the fixture.", ("sql_text", "reference_sql")),
@@ -68,6 +76,13 @@ PARAMETERS = {
 }
 
 
+def not_applicable_reason(capture: dict, spec: MetricSpec) -> str | None:
+    """Why the captured turn cannot be scored for this metric, or None."""
+    if "retrieval_context" in spec.required_fields and not capture.get("tool_output"):
+        return "no tool output was captured, so there is no retrieval context to ground the answer in"
+    return None
+
+
 def judge_case(capture: dict, scenario: dict, spec: MetricSpec) -> tuple[LLMTestCase, list[SingleTurnParams], str]:
     """Adapt a captured turn to precisely the inputs declared by the metric."""
     fields = set(spec.required_fields)
@@ -76,7 +91,7 @@ def judge_case(capture: dict, scenario: dict, spec: MetricSpec) -> tuple[LLMTest
         question = f"Conversation so far: {capture.get('conversation_history', [])}\nCurrent question: {question}"
     kwargs = {"input": question, "actual_output": capture["answer"]}
     if "retrieval_context" in fields:
-        kwargs["retrieval_context"] = [capture["tool_output"]] if capture.get("tool_output") else ["No tool result was captured."]
+        kwargs["retrieval_context"] = [capture["tool_output"]]
     criteria = spec.criteria
     if "rubric" in fields:
         criteria += f" Scenario rubric: {scenario['rubric']}"
@@ -85,9 +100,22 @@ def judge_case(capture: dict, scenario: dict, spec: MetricSpec) -> tuple[LLMTest
     return LLMTestCase(**kwargs), params, criteria
 
 
+def tool_expectation(scenario: dict, turn_index: int) -> ToolExpectation:
+    """Resolve a turn's tool contract: the per-turn declaration wins, then the
+    scenario-level override, then the scenario's expected tools."""
+    per_turn = scenario.get("turn_tool_expectations")
+    if per_turn:
+        declared: dict = per_turn[turn_index]
+    elif scenario.get("tool_expectation"):
+        declared = scenario["tool_expectation"]
+    else:
+        declared = {"required": scenario.get("expected_tools", [])}
+    required = tuple(declared.get("required", ()))
+    return ToolExpectation(required, tuple(declared["allowed"]) if "allowed" in declared else required)
+
+
 def tool_case(capture: dict, scenario: dict, turn_index: int) -> LLMTestCase:
-    expectation = scenario.get("turn_tool_expectations")
-    required = expectation[turn_index]["required"] if expectation else scenario.get("expected_tools", [])
+    required = tool_expectation(scenario, turn_index).required
     return LLMTestCase(
         input=capture["question"], actual_output=capture["answer"],
         tools_called=[ToolCall(name=name) for name in capture["tools_called"]],

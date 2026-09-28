@@ -222,6 +222,9 @@ The observation ran against a live paid provider credential supplied for this pu
 It was never written to disk, never logged, and never appears in this repository, in the retained evidence, or in any issue or pull request.
 A credential pasted into a chat transcript is exposed and must be rotated once this observation is accepted.
 The key reported as exposed in the [#423](https://github.com/Park-Hip/InternHunterAgent/issues/423#issuecomment-5797431647) spike comment must still be revoked and must never be reused.
+It is tracked as a required maintainer action in the
+[ingestion gate register](../../refactor/ingestion-gate-register.md), where it blocks the Bright
+Data authorization gate from reading met.
 
 The retained working copies of the runner and the aggregate reports live outside this repository and contain only digests, counts, and value states.
 They can be deleted once this record is accepted, and should be deleted if that is preferable.

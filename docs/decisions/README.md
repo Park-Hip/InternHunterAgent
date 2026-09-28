@@ -39,6 +39,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0053](adr-0053-frozen-data-portfolio-release.md) | The public release is a frozen-data portfolio, not a self-refreshing MVP claim | Product scope |
 | [ADR-0054](adr-0054-litellm-configured-serving-deployments.md) | LiteLLM serves trusted configured deployments | Agent runtime |
 | [ADR-0055](adr-0055-evidence-first-ingestion-contract.md) | Evidence-first ingestion preserves source evidence before serving projections | Data governance |
+| [ADR-0056](adr-0056-ingestion-gate.md) | Collection from a source is authorized by a named gate with named evidence | Data governance |
 
 Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
 superseded by ADR-0052 and keep their files with a `Superseded by` status.

@@ -185,7 +185,8 @@ retained export can test it.
 
 This audit does not authorize a provider, collection, retention, source selection, data-contract
 implementation, or cross-source deduplication decision.
-The provider eligibility, commercial, and authorization gates remain owned by
-[issue #423](https://github.com/Park-Hip/InternHunterAgent/issues/423).
-The future migration and data-contract blueprint remains owned by
-[issue #455](https://github.com/Park-Hip/InternHunterAgent/issues/455).
+The provider eligibility, commercial, and authorization gates are now recorded per source in the
+[ingestion gate register](../../refactor/ingestion-gate-register.md).
+The issue #423 rows above are dated measurements, and the
+[issue #455](https://github.com/Park-Hip/InternHunterAgent/issues/455) blueprint remains the
+governing data contract.

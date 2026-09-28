@@ -57,7 +57,8 @@
 - **Historical record:** No source model, authority policy, provider or scraper posture, date or lifecycle policy, or initial-cohort threshold was selected.
 - **Current effect:** Source selection and collection are not MVP blockers because the active workflow uses a fixed permitted corpus.
 - **Revisit trigger:** A later release needs a new or refreshed corpus and has a separately approved source-authority, retention, and provenance decision.
-- **Evidence:** [Issue #423 eligibility review](https://github.com/Park-Hip/InternHunterAgent/issues/423#issuecomment-5797200204).
+- **Live gate:** The [ingestion gate register](../refactor/ingestion-gate-register.md), not this record, states whether any source may currently be collected from.
+- **Historical evidence:** The eligibility review recorded in [issue #423](https://github.com/Park-Hip/InternHunterAgent/issues/423#issuecomment-5797200204) is a dated measurement. It is cited for what it found, and it is not a current gate.
 
 ### D-011 - Bright Data technical pilot
 
@@ -65,13 +66,14 @@
 - **Historical record:** A capped Bright Data test demonstrated one restricted-field request/response path only.
 - **Current effect:** The [provider profile](research/bright-data-linkedin-jobs-provider-profile.md) documents that path, its account-activation failure, documented state boundaries, and unknowns. It does not select Bright Data, authorize collection, establish source rights, or affect the fixed-corpus MVP.
 - **Revisit trigger:** A later source decision supplies applicable authority, endpoint-specific retention, cost, field-quality, coverage, lifecycle, and reliability evidence.
-- **Evidence:** [Bright Data provider profile](research/bright-data-linkedin-jobs-provider-profile.md) and [issue #423 capped-test result](https://github.com/Park-Hip/InternHunterAgent/issues/423#issuecomment-5797556656).
+- **Live gate:** The Bright Data rows of the [ingestion gate register](../refactor/ingestion-gate-register.md) are the current authorization state. All five read not met.
+- **Historical evidence:** The [Bright Data provider profile](research/bright-data-linkedin-jobs-provider-profile.md) and the capped-test result in [issue #423](https://github.com/Park-Hip/InternHunterAgent/issues/423#issuecomment-5797556656) are dated measurements. They characterize what was observed, and they are not a current gate.
 
 ### D-012 - Evidence-first ingestion contract
 
 - **Status:** Decided, design only
 - **Choice:** Future ingestion preserves immutable source authority, collection, artifact, observation, and normalization evidence before deriving a backward-compatible serving projection.
 - **Semantic boundary:** A source-specific result is a normalized listing, `source_level` remains a source fact, and unsupported technical seniority and leadership scope are `unknown`.
-- **Current effect:** The approved [ADR-0055](../decisions/adr-0055-evidence-first-ingestion-contract.md) and [blueprint](../decisions/evidence-first-ingestion-blueprint.md) define a future contract without authorizing collection, provider selection, data migration, or a runtime change.
-- **Remaining gate:** [Issue #423](https://github.com/Park-Hip/InternHunterAgent/issues/423) must establish provider-specific authority, field quality, coverage, cost, and reliability evidence before mapping or production activation.
+- **Current effect:** The approved [ADR-0055](../decisions/adr-0055-evidence-first-ingestion-contract.md) and [blueprint](../decisions/evidence-first-ingestion-blueprint.md) define a future contract without authorizing collection, provider selection, data migration, or a runtime change. The blueprint's [minimum executable evidence contract](../decisions/evidence-first-ingestion-blueprint.md#minimum-executable-evidence-contract) states that contract at column level, and [ADR-0056](../decisions/adr-0056-ingestion-gate.md) names the gate it is held behind.
+- **Remaining gate:** The [ingestion gate register](../refactor/ingestion-gate-register.md) records, per source, whether authorization, retention and spend, identity, raw integrity, and field provenance are met. A gate that is not met there is not met for mapping or production activation.
 - **Evidence:** [Issue #461 semantic decision](research/source-level-semantics-decision.md), [issue #455 blueprint](https://github.com/Park-Hip/InternHunterAgent/issues/455), and the read-only legacy compatibility baseline in the blueprint.

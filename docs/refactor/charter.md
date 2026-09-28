@@ -20,6 +20,7 @@ select the next approved boundary without consulting the legacy discovery collec
 | [Target layer and dependency map](target-layer-dependency-map.md) | Intended layers, dependency direction, and known gaps | Maintainers and implementers |
 | [Component index](component-index.md) | Current component groups, refactor state, and immediate next action | Maintainers and implementers |
 | [Active backlog](active-backlog.md) | Ordered next decisions and vertical slices | Maintainers and implementers |
+| [Ingestion gate register](ingestion-gate-register.md) | Live per-source gate state, required maintainer actions, and the deferral register | Maintainers and implementers |
 
 `docs/discovery/` is retained as historical, source-backed discovery evidence.
 It does not set implementation order or create an architecture decision unless an approved record in
@@ -42,13 +43,20 @@ This reset authorizes documentation only.
 It does not authorize a replacement application, a parallel product, a `src/` rewrite, data
 collection, schema work, provider changes, deployment changes, or deletion of legacy material.
 
+That list bounds this workspace, not the project.
+Data collection and schema work are authorized only by an approved record in `docs/decisions/`
+together with a met row in the
+[ingestion gate register](ingestion-gate-register.md), and never by this workspace.
+The register authorizes no collection today beyond the VietnamWorks automated-access row, which is
+itself bounded by [ADR-0034](../decisions/adr-0034-vietnamworks-robots-and-terms-gate.md).
+
 A technical slice requires its own approved issue before implementation.
 That issue must name the affected boundary, source-backed current behavior, compatibility decision,
 characterization evidence, verification, and rollback path.
 
 ## Operating rules
 
-- Keep these four records short and current.
+- Keep these five records short and current.
 - Record durable architecture decisions in `docs/decisions/` when they meet that bar.
 - Move completed, declined, or superseded backlog entries out of the active list rather than growing
   a second inventory.
@@ -60,3 +68,5 @@ A maintainer should be able to explain the dependency direction and choose the n
 minutes using this workspace alone.
 The expected explanation is: API transport invokes an application service, which depends on
 agent/runtime and domain ports, while infrastructure and tracing remain replaceable adapters.
+A second question is now answerable from the same place: whether a given source may be
+collected from, and against which named gates.

@@ -24,6 +24,12 @@ It also produced three findings that a future adapter must carry rather than res
 The handoff did not occur at its documented trigger, the observed count reached the declared cap and therefore carries no coverage information, and the provider echo of acquisition context cannot distinguish an omitted filter from an empty one.
 The [decision note](bright-data-observation-470-decision.md) recommends opening the provider-neutral evidence-schema and shadow-migration proposal on that basis and records what must still be measured first.
 
+The live authorization gate for this provider is the Bright Data rows of the
+[ingestion gate register](../../refactor/ingestion-gate-register.md), where all five named gates
+read not met.
+The issue #423 citations in this profile are dated capped-spike measurements.
+They are not a current gate.
+
 ## Evidence classes and sources
 
 | Class | Evidence | What it supports | What it cannot support |

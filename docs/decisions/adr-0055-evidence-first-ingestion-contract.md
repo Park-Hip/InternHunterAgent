@@ -59,11 +59,18 @@ behavior until a separately approved serving-contract change updates them togeth
 A future source must have a recorded authorization and retention boundary before evidence is kept.
 Provider capability, target-site visibility, robots.txt, terms availability, and a successful API
 response do not by themselves establish reuse authority.
+[ADR-0056](adr-0056-ingestion-gate.md) names the gate that requires that boundary, and the
+[ingestion gate register](../refactor/ingestion-gate-register.md) records which gates are currently
+met for which source.
 
 The design does not authorize Bright Data activation, account use, credential use, provider
 selection, collection, data migration, workflow scheduling, or production deployment.
-The gated evidence work in [issue #423](https://github.com/Park-Hip/InternHunterAgent/issues/423)
-remains required before provider-specific mapping or production activation.
+The gate that must read met before provider-specific mapping or production activation is the
+authorization gate in [ADR-0056](adr-0056-ingestion-gate.md), tracked per source in the
+[ingestion gate register](../refactor/ingestion-gate-register.md).
+The
+[minimum executable evidence contract](evidence-first-ingestion-blueprint.md#minimum-executable-evidence-contract)
+in the blueprint states that contract at column level.
 
 The read-only legacy compatibility baseline measured on 2026-09-27 is part of the blueprint.
 It establishes an inventory for later migration rehearsal, not a freshness claim or a replacement

@@ -108,7 +108,10 @@ the fields and provenance above, the evidence can characterize that provider's l
 cannot justify a provider-neutral mapping.
 
 The sample must remain subject to the eligibility, authorization, budget, field, and retention
-conditions in [issue #423](https://github.com/Park-Hip/InternHunterAgent/issues/423).
+conditions recorded per source in the
+[ingestion gate register](../../refactor/ingestion-gate-register.md), which supersedes the closed
+[#423](https://github.com/Park-Hip/InternHunterAgent/issues/423) eligibility review as the live
+gate.
 This memo does not reopen those gates or authorize account activation, paid collection, credential
 use, live ingestion, or production retention.
 

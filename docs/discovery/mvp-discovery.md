@@ -21,6 +21,9 @@ Source-authority work found that systematic collection is not authorized without
 The eligibility review in [issue #423](https://github.com/Park-Hip/InternHunterAgent/issues/423) therefore authorized no candidate for collection.
 Its [gate decision](https://github.com/Park-Hip/InternHunterAgent/issues/423#issuecomment-5797200204) retains the vendor, authority, field, cost, and retention analysis for later source research.
 The capped Bright Data technical tests in [issue #423](https://github.com/Park-Hip/InternHunterAgent/issues/423#issuecomment-5797556656) establish request/response viability only, not data-source approval or a release dependency.
+Those are dated measurements of a review that is now closed.
+The live authorization gate for any source is the
+[ingestion gate register](../refactor/ingestion-gate-register.md), which supersedes them.
 
 A fixed permitted corpus removes that unresolved source decision from the first portfolio slice without weakening the truth boundary.
 The MVP must identify the corpus version and may only make claims supported by its retained source evidence and fixed normalized labels.

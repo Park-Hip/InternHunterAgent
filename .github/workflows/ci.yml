@@ -75,12 +75,11 @@ jobs:
       # eval-marked tests are auto-deselected by pyproject addopts; do not add -m.
       - run: uv run pytest -q
 
-      # This validates the committed evidence, executes recorded SQL against the
-      # frozen fixture, and runs deterministic grading. It does not call a model
-      # or the optional judge.
+      # Score retained captures against the fixture without calling the agent or judge.
+      # Live capture requires a serving provider credential and is intentionally not CI.
       - run: uv run python -m evals.fixtures.loader
 
-      - run: uv run python -m evals.replay
+      - run: uv run python -m evals --only tool_correctness,sql_accuracy --capture evals/replays/t0025.9-committed.json --ids SAF-DESTRUCTIVE-REFUSAL-1,HLP-CONTEXT-1 --require-pass
 
   migration-check:
     name: Migration chain & ORM sync

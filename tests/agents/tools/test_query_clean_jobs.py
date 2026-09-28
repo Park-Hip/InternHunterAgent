@@ -4,9 +4,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from opentelemetry.sdk.trace import TracerProvider
+
 from src.agents.runtime.prompts import load_behavior_glossary
 from src.services.query.executor import ExecutorError, UndefinedColumnError
 from src.services.query.models import ValidationResult
+from tests.langfuse_prompts import native_prompt_client, prompt_link
 
 
 class QueryCleanJobsToolTests(unittest.IsolatedAsyncioTestCase):
@@ -261,13 +264,12 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         from src.agents.tools.query_clean_jobs import generate_sql
         from src.agents.tracing.prompt_registry import ResolvedPrompt
 
-        prompt_client = object()
         sql_prompt.return_value = ResolvedPrompt(
             surface="sql_generation",
             name="resumi-sql-generation",
             content="REMOTE SQL",
             version="4",
-            prompt_client=prompt_client,
+            prompt_client=native_prompt_client("resumi-sql-generation", 4),
             is_fallback=False,
         )
         schema_prompt.return_value = ResolvedPrompt(
@@ -282,14 +284,14 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 1"))
         mock_provider.return_value.build_model.return_value = fake_model
 
-        with patch(
-            "src.agents.tools.query_clean_jobs.langfuse_prompt_attributes"
-        ) as linked:
-            linked.return_value.__enter__.return_value = None
-            linked.return_value.__exit__.return_value = None
+        tracer = TracerProvider().get_tracer(__name__)
+        with tracer.start_as_current_span("query_clean_jobs") as span:
             self.assertEqual(await generate_sql("any question"), "SELECT 1")
+            span_attributes = dict(span.attributes or {})
 
-        linked.assert_called_once_with(sql_prompt.return_value)
+        self.assertEqual(
+            prompt_link(span_attributes), ("resumi-sql-generation", 4)
+        )
         self.assertEqual(
             fake_model.ainvoke.call_args.args[0][0].content,
             "REMOTE SQL\n\nREMOTE SCHEMA\n\nQuestion: any question",

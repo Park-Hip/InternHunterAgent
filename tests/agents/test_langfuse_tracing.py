@@ -1,18 +1,31 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
 
 from src.agents.tracing import langfuse
 from src.agents.tracing.stream import StreamLatency
 from src.agents.tracing.prompt_registry import ResolvedPrompt
+from tests.langfuse_prompts import native_prompt_client, prompt_link
 
 
-def test_native_prompt_attributes_links_the_callback_created_generation() -> None:
-    native = object()
+def test_installed_sdk_propagates_native_prompts() -> None:
+    """A managed prompt only links when the locked SDK accepts `prompt`.
+
+    Langfuse added prompt propagation in Python SDK 4.14.0. Older clients raised
+    `TypeError` inside the request path, which surfaced to users as an
+    in-band streaming `error` event with no model invocation.
+    """
+    assert "prompt" in inspect.signature(langfuse.propagate_attributes).parameters
+
+
+def test_native_prompt_attributes_pass_the_resolved_prompt_client_through() -> None:
+    native = native_prompt_client("resumi-system", 12)
     prompt = ResolvedPrompt("system", "resumi-system", "REMOTE", "12", native, False)
 
     with patch.object(langfuse, "propagate_attributes") as propagate:
@@ -32,6 +45,30 @@ def test_fallback_prompt_is_not_linked_as_a_native_version() -> None:
             pass
 
     propagate.assert_not_called()
+
+
+def test_native_prompt_attributes_link_a_recording_span_with_the_real_sdk() -> None:
+    """The real `propagate_attributes` carries the prompt version onto a span."""
+    tracer = TracerProvider().get_tracer(__name__)
+    native = native_prompt_client("resumi-system", 12)
+    prompt = ResolvedPrompt("system", "resumi-system", "REMOTE", "12", native, False)
+
+    with tracer.start_as_current_span("agent-chat") as span:
+        with langfuse.langfuse_prompt_attributes(prompt):
+            pass
+
+    assert prompt_link(span.attributes) == ("resumi-system", 12)
+
+
+def test_fallback_prompt_leaves_a_span_unlinked_with_the_real_sdk() -> None:
+    tracer = TracerProvider().get_tracer(__name__)
+    prompt = ResolvedPrompt("system", "resumi-system", "FALLBACK", "v13", None, True)
+
+    with tracer.start_as_current_span("agent-chat") as span:
+        with langfuse.langfuse_prompt_attributes(prompt):
+            pass
+
+    assert prompt_link(span.attributes) == (None, None)
 
 
 def test_build_langfuse_config_validates_the_closed_api_tag_taxonomy() -> None:

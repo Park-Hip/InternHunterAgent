@@ -355,11 +355,15 @@ def record_agent_response_failure(*, category: str) -> None:
 
 @contextmanager
 def langfuse_prompt_attributes(prompt: ResolvedPrompt) -> Iterator[None]:
-    """Attach a native PromptClient to generations made by the LangChain callback."""
+    """Attach a native PromptClient to generations made by the LangChain callback.
+
+    A prompt is only linkable when the installed SDK can propagate it, so the
+    locked Langfuse version is a serving requirement, not a preference.
+    """
     if prompt.prompt_client is None:
         yield
         return
-    with propagate_attributes(prompt=prompt.prompt_client):  # type: ignore[call-arg]
+    with propagate_attributes(prompt=prompt.prompt_client):
         yield
 
 

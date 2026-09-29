@@ -35,13 +35,40 @@ Parallel work is managed through standard issue tracking and PR workflows;
 - Run focused checks first: the tests covering the changed paths, for example
   `uv run pytest tests/<area>`.
 - For documentation changes: `uv run python scripts/docs_lint.py`.
+- For any change to `src/api/static/tokens.css`: `uv run python scripts/check_contrast.py`.
+- For any change to the UI under `src/api/static/`: `uv run python scripts/ui_screenshots.py`
+  and read the captured PNGs back. A UI change without a screenshot review is unfinished.
 - Before requesting review, run the full gate: `uv run pytest` plus available lint gates.
 - After a nontrivial change, invoke the `.agents/skills/verify-change/SKILL.md` skill to select
   checks from the diff.
 - Every pull request includes a manual check with an expected result when an end-user or
   maintainer validation applies.
 
-## 4. Safety invariants
+## 4. Frontend
+
+- The UI is static: `src/api/static/`, served by FastAPI `StaticFiles`. No SPA, no client
+  framework, no build step. Do not introduce one without a Change proposal.
+- Before writing any HTML or CSS, load the `frontend-design` skill
+  (`/skill:frontend-design`) and read its `references/tokens.md`.
+- `src/api/static/tokens.css` is the single source of truth. Never hardcode a colour,
+  radius, font size, spacing value, or duration in `styles.css` or in markup; add a token
+  instead, and add its contrast pair to `scripts/check_contrast.py` in the same change.
+- Colour is OKLCH with semantic role names and a paired foreground per surface. Dark mode
+  is a token swap under `prefers-color-scheme`, never a second stylesheet.
+- Type is Be Vietnam Pro, self-hosted, because Vietnamese is a first-class language here.
+  Body text is 16px or larger, `line-height` is never 1.0 near Vietnamese text, and no
+  typeface is merged without verifying the glyphs `ệ ữ ỗ ặ ằ ế` render with no fallback.
+- Visual defaults we do not want, enforced by the skill: Times/Georgia or Inter as an
+  unconsidered default, indigo or violet gradients, one hue used for everything, three
+  identical cards, everything centred, emoji as icons, glassmorphism, and shadow on
+  non-floating elements.
+- Accessibility floor: full keyboard operation, a visible focus ring, 4.5:1 text contrast,
+  `prefers-reduced-motion` honoured, interactive targets at least 24x24px, and streaming
+  text announced exactly once. Never send on Enter during an IME composition session.
+- Do not redesign layout, shrink the masthead, or restructure the conversation as part of
+  token or typography work. One coherent change per pull request.
+
+## 5. Safety invariants
 
 - Never commit secrets; production secrets are Render runtime environment variables.
 - Documentation is UTF-8 without BOM; never round-trip Markdown through PowerShell

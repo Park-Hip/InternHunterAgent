@@ -1,0 +1,238 @@
+/* ===========================================================================
+   InternHunter design tokens — the single source of truth for the UI.
+
+   Rules that govern this file:
+   1. No component hardcodes a colour, radius, font size, or spacing value.
+   2. Every text colour has a declared minimum contrast against the surfaces it
+      may sit on. Those pairs are enforced by scripts/check_contrast.py, so edit
+      the pairs there in the same commit when you add or retune a token.
+   3. Dark mode is a token swap, never a second stylesheet.
+   4. Colours are OKLCH: HSL lightness is not perceptual, so ramps cannot be
+      derived from it. Hue is held at 85 for neutrals (warm, near-neutral rather
+      than pure grey) and 34.5 for the single vermilion accent.
+
+   Derived from the previous hex palette so the art direction is continuous:
+   #FBFAF7 -> paper, #1B1A17 -> ink, #CB4322 -> accent. The one deliberate
+   change is --faint, which measured 3.16:1 on paper and now clears 4.5:1.
+   =========================================================================== */
+
+/* ---- typeface ---------------------------------------------------------
+   Be Vietnam Pro, self-hosted. Chosen because Vietnamese is a first-class
+   language here, not a localisation afterthought: the family draws the stacked
+   diacritics (ệ ữ ỗ ặ ằ) natively rather than bolting accents onto Latin.
+   Three weights, three subsets. The browser only downloads the subsets a page
+   actually uses, so a Vietnamese page pays for latin + vietnamese and skips
+   latin-ext entirely.
+   Static weights, not variable: @fontsource-variable/be-vietnam-pro does not
+   exist, and the three measured weights cost less than a comparable variable
+   file for this page (Noto Sans variable latin-ext weight-only is 164 KB).
+   Measured transfer cost for a Vietnamese page: latin + vietnamese at 400, 600,
+   and 700 is 99 KB, plus 33 KB if the italic is used.
+   ------------------------------------------------------------------------ */
+
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-vietnamese-400-normal.woff2") format("woff2");
+  unicode-range: U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB;
+}
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-latin-ext-400-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-vietnamese-600-normal.woff2") format("woff2");
+  unicode-range: U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB;
+}
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-latin-ext-600-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-latin-600-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-vietnamese-700-normal.woff2") format("woff2");
+  unicode-range: U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB;
+}
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-latin-ext-700-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-latin-700-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+/* Real italics, not synthesised ones. The standfirst and the answer pull-quotes
+   are set in italic, and a slanted roman is a typographic tell no reviewer
+   should have to catch. Only 400 is vendored because nothing sets italic bold. */
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-vietnamese-400-italic.woff2") format("woff2");
+  unicode-range: U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB;
+}
+@font-face {
+  font-family: "Be Vietnam Pro";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/be-vietnam-pro-latin-400-italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+/* ---- light theme ------------------------------------------------------ */
+:root {
+  color-scheme: light dark;
+
+  /* surfaces, light to raised. Elevation is expressed as a lighter surface. */
+  --paper: oklch(98.5% 0.004 85);
+  --surface: oklch(100% 0 0);
+  --surface-2: oklch(96.3% 0.008 85);
+  --user-fill: oklch(95.3% 0.013 85);
+  --hairline: oklch(90.5% 0.015 85);
+  --hairline-2: oklch(94.1% 0.013 85);
+
+  /* text. Four steps, each clearing its declared contrast floor. */
+  --ink: oklch(22% 0.01 85);
+  --ink-soft: oklch(38.2% 0.012 85);
+  --muted: oklch(46.1% 0.013 85);
+  --faint: oklch(51.5% 0.014 85);
+
+  /* the single accent. Three jobs only: primary action, focus ring, data. */
+  --accent: oklch(57.2% 0.178 34.5);
+  --accent-ink: oklch(48.9% 0.153 34.5);
+  --on-ink: oklch(98.5% 0.004 85);
+
+  /* status, which shadcn does not ship and a dataset agent needs. */
+  --ok: oklch(52% 0.11 155);
+  --warn: oklch(55% 0.13 70);
+  --bad: oklch(52% 0.19 27);
+
+  /* type */
+  --font: "Be Vietnam Pro", "Noto Sans", system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", SFMono-Regular, Consolas, monospace;
+  /* 1.25 modular scale: 12 / 14 / 16 / 20 / 25 / 31 / 39 / 49 */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.563rem;
+  --text-2xl: 1.953rem;
+  /* Vietnamese stacks a circumflex and a tone mark above the base letter, so
+     body text needs more leading than Latin at the same size. Never 1.0. */
+  --leading-body: 1.65;
+  --leading-tight: 1.2;
+  --tracking-tight: -0.02em;
+
+  /* spacing, one scale, 4px base. Off-scale gaps mean wrong layout. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* one base radius, derived. Never mix radius families on a surface. */
+  --radius: 0.5rem;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+
+  /* motion. 100-150ms micro, 150-250ms standard, 300-400ms large surfaces.
+     Anything past 400ms feels broken. Transform and opacity only. */
+  --dur-micro: 120ms;
+  --dur-standard: 200ms;
+  --dur-large: 320ms;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* shadow only for genuinely floating things. */
+  --shadow-pop: 0 1px 2px oklch(0% 0 0 / 0.06), 0 8px 24px oklch(0% 0 0 / 0.08);
+
+  --measure: 34rem;
+}
+
+/* ---- dark theme: a token swap, not a second stylesheet ----------------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Shadows are near-invisible on dark, so elevation is a lighter surface. */
+    --paper: oklch(16% 0.008 85);
+    --surface: oklch(21.5% 0.008 85);
+    --surface-2: oklch(25.5% 0.009 85);
+    --user-fill: oklch(24.5% 0.008 85);
+    /* Alpha borders composite correctly on any surface. */
+    --hairline: oklch(100% 0 0 / 11%);
+    --hairline-2: oklch(100% 0 0 / 6%);
+
+    --ink: oklch(94% 0.005 85);
+    --ink-soft: oklch(82% 0.007 85);
+    --muted: oklch(69% 0.01 85);
+    --faint: oklch(65% 0.011 85);
+
+    --accent: oklch(70% 0.165 34.5);
+    --accent-ink: oklch(80% 0.135 34.5);
+    --on-ink: oklch(16% 0.008 85);
+
+    --ok: oklch(78% 0.12 155);
+    --warn: oklch(80% 0.12 70);
+    --bad: oklch(72% 0.16 27);
+
+    --shadow-pop: 0 1px 2px oklch(0% 0 0 / 0.5), 0 8px 24px oklch(0% 0 0 / 0.45);
+  }
+}
+
+/* No motion is the default; enhancement is opt-in. */
+@media (prefers-reduced-motion: no-preference) {
+  :root {
+    --motion-ok: 1;
+  }
+}

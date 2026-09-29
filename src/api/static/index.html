@@ -4,7 +4,27 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>InternHunter - tác nhân tìm việc trung thực</title>
+    <!-- Design tokens load first: tokens.css then styles.css, so the cascade
+         order matches the dependency order. -->
+    <link rel="stylesheet" href="./tokens.css" />
     <link rel="stylesheet" href="./styles.css" />
+    <!-- Preload only the two 400-weight subsets a Vietnamese page needs (32 KB).
+         latin-ext is deliberately not preloaded: Vietnamese needs its own
+         subset, and the 600/700 weights arrive only if they are used. -->
+    <link
+      rel="preload"
+      href="./fonts/be-vietnam-pro-vietnamese-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="./fonts/be-vietnam-pro-latin-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
   </head>
   <body>
     <a class="skip-link" href="#composer">Đến ô đặt câu hỏi</a>

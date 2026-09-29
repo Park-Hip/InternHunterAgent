@@ -21,6 +21,7 @@ select the next approved boundary without consulting the legacy discovery collec
 | [Component index](component-index.md) | Current component groups, refactor state, and immediate next action | Maintainers and implementers |
 | [Active backlog](active-backlog.md) | Ordered next decisions and vertical slices | Maintainers and implementers |
 | [Ingestion gate register](ingestion-gate-register.md) | Live per-source gate state, required maintainer actions, and the deferral register | Maintainers and implementers |
+| [Agent v0 evaluation baseline](agent-v0-baseline.md) | Measured agent and evaluation baseline, v1 retention, and open decisions for the agent-v0 track | Maintainers and implementers |
 
 `docs/discovery/` is retained as historical, source-backed discovery evidence.
 It does not set implementation order or create an architecture decision unless an approved record in
@@ -56,7 +57,7 @@ characterization evidence, verification, and rollback path.
 
 ## Operating rules
 
-- Keep these five records short and current.
+- Keep these records short and current.
 - Record durable architecture decisions in `docs/decisions/` when they meet that bar.
 - Move completed, declined, or superseded backlog entries out of the active list rather than growing
   a second inventory.

@@ -11,6 +11,15 @@
 //   metadata { trace_id, trace_url }   -> show a "view trace" link if trace_url
 //   error    { message }               -> friendly error bubble; stop
 //   done     {}                        -> terminal; stop reading, no reconnect
+//
+// Screen-reader contract, because mutating a live region token by token makes it
+// unusable: the conversation is a role="log" in the initial markup; aria-busy is
+// set before the first token; tokens land in an aria-hidden visual node; and on
+// completion the full answer is written ONCE to a visually-hidden node before
+// aria-busy is cleared. That yields exactly one announcement per answer, and the
+// answer stays navigable afterwards. There is no W3C normative technique for
+// streaming into a live region, so this is verified by hand with NVDA and
+// VoiceOver rather than assumed correct.
 // ===========================================================================
 
 // --- element handles -------------------------------------------------------
@@ -20,16 +29,34 @@ const chipRow = document.getElementById("chips");
 const form = document.getElementById("composer");
 const input = document.getElementById("query");
 const sendBtn = document.getElementById("send");
+const stopBtn = document.getElementById("stop");
 const dateline = document.getElementById("dateline");
 const toast = document.getElementById("toast");
 
 const markdownRenderer = new window.marked.Renderer();
 markdownRenderer.html = () => "";
 
+// The server's own "I have nothing for you" constant, from
+// src/agents/service.py. Matching it is a documented contract rather than a
+// guess at phrasing; tests/api/test_static_serving.py pins the two together so
+// they cannot drift. Telling "no answer" apart from a real answer needs a
+// richer signal - a tool event carrying the row count - which is deliberately
+// out of scope here.
+const NO_ANSWER_TEXT =
+  "I couldn't produce an answer for that — please try rephrasing.";
+
+// Re-render at most this often while tokens arrive. Rewriting the whole answer
+// node per token is quadratic and thrashes layout; the stream itself is
+// untouched, only the paint is coalesced.
+const PAINT_INTERVAL_MS = 50;
+
 // --- conversation state ----------------------------------------------------
-let sessionId = null;   // pinned from the first `session` event; reused after
-let inFlight = false;   // one stream at a time; lock the inputs while it runs
+let sessionId = null;     // pinned from the first `session` event; reused after
+let state = "ready";      // ready | submitted | streaming | error
 let toastTimer = null;
+let inFlight = false;     // derived from state, kept for the chip guard
+let controller = null;    // AbortController for the turn in flight
+let snapshotDate = "";    // measured corpus date, for the no-answer card
 
 // ===========================================================================
 // Frozen-snapshot notice / dateline - read the snapshot date from /api/v1/ready.
@@ -45,6 +72,7 @@ async function loadDateline() {
     const date = data && data.data_snapshot_date;
     const isMeasured = data && data.data_snapshot_date_provenance === "measured";
     if (date && isMeasured) {
+      snapshotDate = date;
       dateline.textContent =
         `Kho dữ liệu lịch sử · ảnh chụp ${date} · kết quả không xác nhận vị trí đang tuyển.`;
     } else {
@@ -79,17 +107,65 @@ function startTurn(query) {
   const agent = document.createElement("div");
   agent.className = "turn__agent is-streaming";
   agent.innerHTML = '<span class="turn__label">InternHunter</span>';
+
+  // Tokens are painted here while they arrive. aria-hidden keeps a screen
+  // reader out of a node that changes many times per second; the finished
+  // answer is published to `spoken` instead, once.
   const answer = document.createElement("div");
   answer.className = "turn__answer turn__answer--pending";
+  answer.setAttribute("aria-hidden", "true");
   answer.textContent = "Đang đọc các tin tuyển dụng…";
   agent.appendChild(answer);
+
+  // The single published copy. Visually hidden, but fully navigable, so the
+  // answer is readable on demand after it has been announced once.
+  const spoken = document.createElement("div");
+  spoken.className = "turn__spoken";
+  agent.appendChild(spoken);
 
   turn.appendChild(you);
   turn.appendChild(agent);
   conversation.appendChild(turn);
 
+  // Mute the log before the first token, so nothing that follows is announced
+  // piecemeal.
+  conversation.setAttribute("aria-busy", "true");
+
   scrollToEnd();
-  return { turn, agent, answer, gotToken: false, rawAnswer: "" };
+  return {
+    turn,
+    agent,
+    answer,
+    spoken,
+    gotToken: false,
+    rawAnswer: "",
+    pendingPaint: null,
+  };
+}
+
+// Coalesce token paints onto a timer. The first token paints immediately so the
+// placeholder clears at once.
+function schedulePaint(ctx) {
+  if (ctx.pendingPaint !== null) return;
+  ctx.pendingPaint = window.setTimeout(() => {
+    ctx.pendingPaint = null;
+    paintAnswer(ctx);
+  }, PAINT_INTERVAL_MS);
+}
+
+function flushPaint(ctx) {
+  if (ctx.pendingPaint !== null) {
+    window.clearTimeout(ctx.pendingPaint);
+    ctx.pendingPaint = null;
+  }
+  paintAnswer(ctx);
+}
+
+// Write the accumulated answer to the visual node.
+function paintAnswer(ctx) {
+  if (!ctx.gotToken) return;
+  ctx.answer.textContent = ctx.rawAnswer;
+  scrollToEnd();
 }
 
 // Append one token, clearing the pending placeholder on the first one.
@@ -97,11 +173,11 @@ function appendToken(ctx, text) {
   if (!ctx.gotToken) {
     ctx.gotToken = true;
     ctx.answer.classList.remove("turn__answer--pending");
-    ctx.answer.textContent = "";
+    ctx.rawAnswer = "";
+    paintAnswer(ctx);
   }
   ctx.rawAnswer += text;
-  ctx.answer.textContent = ctx.rawAnswer;
-  scrollToEnd();
+  schedulePaint(ctx);
 }
 
 // Render only the complete response so unfinished Markdown never causes the
@@ -145,6 +221,57 @@ function showTraceLink(ctx, traceUrl) {
   ctx.agent.appendChild(p);
 }
 
+// True when the server answered with its own "nothing to say" constant, which
+// is the only no-answer signal the current stream contract carries.
+function isNoAnswer(ctx) {
+  return ctx.rawAnswer.trim() === NO_ANSWER_TEXT;
+}
+
+// A "no answer" outcome is a designed state, not an apology paragraph. It says
+// what was searched and when the corpus was captured, and offers reformulations.
+// It deliberately does not claim a row count or a date range: the stream does
+// not carry either, and a dataset-bounded agent must not invent one.
+function showNoAnswerCard(ctx, query) {
+  ctx.agent.classList.add("is-nodata");
+  ctx.answer.classList.remove("turn__answer--pending");
+  ctx.answer.textContent = "";
+
+  const card = document.createElement("div");
+  card.className = "turn__nodata";
+
+  const title = document.createElement("p");
+  title.className = "turn__nodata-title";
+  title.textContent = "Không có câu trả lời cho câu hỏi này";
+  card.appendChild(title);
+
+  const detail = document.createElement("p");
+  detail.className = "turn__nodata-detail";
+  detail.textContent = snapshotDate
+    ? `Đã tìm trong kho dữ liệu lịch sử chụp ngày ${snapshotDate}. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.`
+    : "Đã tìm trong kho dữ liệu lịch sử đã thu thập. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.";
+  card.appendChild(detail);
+
+  const asked = document.createElement("p");
+  asked.className = "turn__nodata-asked";
+  asked.textContent = `Câu hỏi: ${query}`;
+  card.appendChild(asked);
+
+  const hints = document.createElement("div");
+  hints.className = "turn__nodata-chips";
+  for (const label of ["Bỏ điều kiện lương", "Thử địa điểm khác", "Hỏi về kỹ năng thay vì chức danh"]) {
+    const chip = document.createElement("button");
+    chip.className = "chip";
+    chip.type = "button";
+    chip.textContent = label;
+    chip.dataset.query = label;
+    hints.appendChild(chip);
+  }
+  card.appendChild(hints);
+
+  ctx.agent.appendChild(card);
+  scrollToEnd();
+}
+
 // Replace the answer with a friendly error bubble (mid-stream `error` event).
 function showErrorBubble(ctx, message) {
   ctx.agent.classList.remove("is-streaming");
@@ -152,11 +279,37 @@ function showErrorBubble(ctx, message) {
   ctx.answer.classList.remove("turn__answer--pending");
   ctx.answer.textContent =
     message || "Hiện chưa thể hoàn tất yêu cầu này. Vui lòng thử lại sau.";
+  // The error text is published through the same single-announcement path, so a
+  // failed turn is announced once and stays navigable like a successful one.
+  ctx.spoken.textContent = ctx.answer.textContent;
 }
 
-// Finish a turn: drop the streaming cursor.
-function endTurn(ctx) {
+// Publish the finished answer to the accessible copy exactly once, then unmute
+// the log. Order matters: the text is written while aria-busy is still true, so
+// the announcement fires as a single utterance when aria-busy clears, rather
+// than once per token.
+function publishAnswer(ctx, finalText) {
+  ctx.spoken.textContent = finalText;
+  conversation.setAttribute("aria-busy", "false");
+}
+
+// Finish a turn: drop the streaming cursor, publish, and hand the composer back.
+function endTurn(ctx, { stopped = false } = {}) {
+  flushPaint(ctx);
   ctx.agent.classList.remove("is-streaming");
+
+  if (isNoAnswer(ctx)) {
+    showNoAnswerCard(ctx, ctx.query || "");
+    publishAnswer(
+      ctx,
+      "Không có câu trả lời cho câu hỏi này trong kho dữ liệu đã thu thập.",
+    );
+    return;
+  }
+
+  renderMarkdown(ctx);
+  const published = stopped ? `Đã dừng. ${ctx.rawAnswer.trim()}` : ctx.rawAnswer.trim();
+  publishAnswer(ctx, published || "Câu trả lời rỗng.");
 }
 
 function scrollToEnd() {
@@ -183,14 +336,24 @@ function showToast(message) {
 }
 
 // ===========================================================================
-// Input locking — one stream at a time.
+// State — four explicit states, and the control says which one is active.
+//   ready      -> send enabled, Stop hidden
+//   submitted  -> Stop shown, no token yet
+//   streaming  -> Stop shown
+//   error      -> the turn is styled as failed; the composer is usable again
 // ===========================================================================
-function setBusy(busy) {
-  inFlight = busy;
-  input.disabled = busy;
-  sendBtn.disabled = busy;
-  sendBtn.textContent = busy ? "Đang hỏi…" : "Hỏi";
-  for (const chip of chipRow.querySelectorAll(".chip")) chip.disabled = busy;
+function setState(next) {
+  state = next;
+  inFlight = next === "submitted" || next === "streaming";
+
+  input.disabled = inFlight;
+  // Swap the control rather than relabel it, so the accessible name of the
+  // control the reader can activate always matches what it will do.
+  sendBtn.hidden = inFlight;
+  stopBtn.hidden = !inFlight;
+  document.body.dataset.streamState = next;
+
+  for (const chip of chipRow.querySelectorAll(".chip")) chip.disabled = inFlight;
 }
 
 // ===========================================================================
@@ -201,8 +364,15 @@ async function ask(query) {
   const text = query.trim();
   if (!text) return;
 
-  setBusy(true);
+  setState("submitted");
   const ctx = startTurn(text);
+  ctx.query = text;
+  // One controller per turn, so Stop abandons exactly this request. The server
+  // already detects client disconnect and closes the agent stream, so no
+  // cancel endpoint is needed.
+  controller = new AbortController();
+  const signal = controller.signal;
+  let stopped = false;
 
   try {
     const body = { query: text };
@@ -212,6 +382,7 @@ async function ask(query) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
     });
 
     // Pre-stream failure: a real HTTP status before the stream body opens.
@@ -244,29 +415,56 @@ async function ask(query) {
         if (ev === "session") {
           sessionId = data.session_id;
         } else if (ev === "token") {
+          if (state === "submitted") setState("streaming");
           appendToken(ctx, data.text);
         } else if (ev === "metadata") {
           if (data.trace_url) showTraceLink(ctx, data.trace_url);
         } else if (ev === "error") {
+          setState("error");
           showErrorBubble(ctx, data.message);
           endTurn(ctx);
           return;                                 // stop; no reconnect
         } else if (ev === "done") {
-          renderMarkdown(ctx);
           endTurn(ctx);
           return;                                 // terminal
         }
       }
     }
     // Stream closed without an explicit `done` (unexpected) — tidy up.
-    endTurn(ctx);
+    endTurn(ctx, { stopped });
   } catch (err) {
+    // A deliberate Stop is not a failure: keep whatever arrived on screen and
+    // hand the composer back.
+    if (err && err.name === "AbortError") {
+      stopped = true;
+      ctx.agent.classList.remove("is-streaming");
+      if (ctx.gotToken) {
+        // Keep the partial answer exactly as painted, in plain text: a
+        // half-streamed answer is not valid Markdown yet.
+        flushPaint(ctx);
+        publishAnswer(ctx, `Đã dừng. ${ctx.rawAnswer.trim()}`);
+      } else {
+        endTurn(ctx, { stopped });
+      }
+      return;
+    }
     // Network drop mid-stream: degrade to a friendly bubble, never a crash.
+    setState("error");
     showErrorBubble(ctx, "Kết nối bị gián đoạn - vui lòng thử lại.");
     endTurn(ctx);
   } finally {
-    setBusy(false);
+    if (controller && controller.signal === signal) controller = null;
+    // Ready on every path, including Stop and error: the composer is never left
+    // locked. A failed turn still carries its own styling on the turn itself,
+    // which is where the reader is looking.
+    setState("ready");
   }
+}
+
+// Stop abandons the turn in flight. The partial answer stays on screen.
+function stopCurrentTurn() {
+  if (!controller) return;
+  controller.abort();
 }
 
 // ===========================================================================
@@ -279,9 +477,26 @@ form.addEventListener("submit", (e) => {
   ask(text);
 });
 
+// Never submit while a Vietnamese or Japanese IME composition session is
+// active: Enter is choosing a candidate at that moment, and submitting here
+// would drop the composed text and fire the agent mid-word.
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.isComposing) e.preventDefault();
+});
+
+stopBtn.addEventListener("click", () => stopCurrentTurn());
+
 // Canned honesty chips: clicking submits the chip's exact text immediately.
 chipRow.addEventListener("click", (e) => {
   const chip = e.target.closest(".chip");
+  if (!chip || inFlight) return;
+  ask(chip.dataset.query);
+});
+
+// Reformulation chips inside a no-answer card live in the conversation, not in
+// the canned row, so they are wired through the same delegation.
+conversation.addEventListener("click", (e) => {
+  const chip = e.target.closest(".turn__nodata .chip");
   if (!chip || inFlight) return;
   ask(chip.dataset.query);
 });

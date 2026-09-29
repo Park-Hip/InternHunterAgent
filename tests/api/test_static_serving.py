@@ -69,6 +69,47 @@ class StaticServingTests(unittest.TestCase):
         self.assertIn("DOMPurify.sanitize", app.text)
         self.assertIn("renderMarkdown(ctx)", app.text)
 
+    def test_conversation_is_a_live_region_in_the_served_markup(self) -> None:
+        index = self.client.get("/").text
+
+        self.assertIn('role="log"', index)
+        self.assertIn('aria-live="polite"', index)
+        self.assertIn('aria-relevant="additions text"', index)
+        self.assertIn('aria-busy="false"', index)
+
+    def test_composer_offers_a_stop_control(self) -> None:
+        index = self.client.get("/").text
+        app = self.client.get("/app.js").text
+
+        self.assertIn('id="stop"', index)
+        self.assertIn("Dừng", index)
+        # Cancellation must be a real abort, not a cosmetic state change.
+        self.assertIn("AbortController", app)
+        self.assertIn("controller.abort()", app)
+
+    def test_stream_is_coalesced_before_it_is_painted(self) -> None:
+        app = self.client.get("/app.js").text
+
+        self.assertIn("PAINT_INTERVAL_MS", app)
+        self.assertIn("schedulePaint(ctx)", app)
+
+    def test_client_does_not_submit_during_ime_composition(self) -> None:
+        app = self.client.get("/app.js").text
+
+        self.assertIn("e.isComposing", app)
+
+    def test_client_no_answer_constant_matches_the_server_constant(self) -> None:
+        """The no-answer card is triggered by matching the server's own constant.
+
+        If the two drift, the card silently stops appearing. Pin them together.
+        """
+        from src.agents.service import FALLBACK_ANSWER
+
+        app = self.client.get("/app.js").text
+
+        self.assertIn("NO_ANSWER_TEXT", app)
+        self.assertIn(FALLBACK_ANSWER, app)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -166,6 +166,60 @@ textarea { font: inherit; color: inherit; }
   color: var(--ink-soft);
 }
 
+/* The single accessible copy of a finished answer. Visually hidden, but fully
+   present in the accessibility tree and navigable, so the answer can be re-read
+   on demand after it has been announced once. */
+.turn__spoken {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- "no answer" is a designed state, not an apology ------------------- */
+.turn__agent.is-nodata .turn__answer { display: none; }
+.turn__nodata {
+  margin-top: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.turn__nodata-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--ink);
+}
+.turn__nodata-detail,
+.turn__nodata-asked {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.turn__nodata-asked { color: var(--muted); font-style: italic; }
+.turn__nodata-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.turn__nodata-chips .chip {
+  width: auto;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--text-sm);
+}
+.turn__nodata-chips .chip:hover { padding-left: 0.75rem; }
+
 /* the agent's answer — marked by the vermilion editor's rule (signature) */
 .turn__agent {
   padding-left: var(--space-4);
@@ -389,6 +443,31 @@ textarea { font: inherit; color: inherit; }
   transition: background var(--dur-micro) var(--ease-out);
 }
 .composer__send:hover { background: var(--accent); color: var(--on-ink); }
+
+/* Stop replaces Send while an answer is in flight. It acts on work already done,
+   so it is outlined rather than a second filled control: one filled primary
+   action per surface. */
+.composer__stop {
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.5rem 1.4rem;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--dur-micro) var(--ease-out),
+    color var(--dur-micro) var(--ease-out);
+}
+.composer__stop:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.composer__stop[hidden],
+.composer__send[hidden] { display: none; }
 
 /* disabled (in-flight) state for the whole input surface */
 .chip:disabled,

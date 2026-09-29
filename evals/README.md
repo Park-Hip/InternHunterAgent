@@ -93,6 +93,7 @@ auditor's decision tree does not require leaving `evals/` to find it.
 | `test_viewer.py` (~23247 lines) | `evals/viewer.py` | HTML report generation, evidence rendering, comparison views |
 | `test_writeback.py` (~9935 lines) | `evals/writeback.py` | Score posting, ingestion verification, trace linking |
 | `test_holdout.py` (~1314 lines) | `evals/holdout.py` | Independent holdout view, compatibility checks |
+| `test_harness.py` (~113 lines) | `evals/harness.py` | SQL span extraction (child span first, sibling fallback), output trimming, missing-span warning |
 | `test_caveats.py` (~6636 lines) | — | Edge-case regression guards across modules |
 | `test_fixture_counts.py` (~3209 lines) | `evals/fixtures/loader.py` | Row counts, schema matches, role distribution (requires Postgres) |
 

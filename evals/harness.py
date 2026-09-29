@@ -250,19 +250,20 @@ def _find_span(spans: list[dict], **matches) -> dict | None:
 
 
 def _extract_sql_span(trace_dict: dict) -> tuple[dict | None, dict | None]:
-    """Locate the tool span for query_clean_jobs and its nested LLM span.
+    """Locate the query_clean_jobs tool span and its generate_sql LLM span.
 
-    The nested `generate_sql` model call only produces its own span because
     `generate_sql` reads LangChain's ambient config and forwards it to the
-    nested model call (see `src/agents/tools/query_clean_jobs.py`); without that
-    forwarding this LLM call would be invisible to DeepEval. The MCP transport
-    does not carry `RunnableConfig` into the tool, so the ambient config is
-    read from `var_child_runnable_config` instead.
+    nested model call (see `src/agents/tools/query_clean_jobs.py`); without
+    that forwarding this LLM call would be invisible to DeepEval. The MCP
+    transport does not carry `RunnableConfig` into the tool, so the ambient
+    config is read from `var_child_runnable_config` instead.
 
-    That forwarded config is the *tool node's* config, not one re-scoped to
-    the tool's own run, so the generate_sql LLM span lands as a *sibling* of
-    the tool span, both children of the same tool-node run, not nested under
-    the tool span.
+    Under MCP, `BaseTool._arun` re-scopes that config to the tool's own run
+    with `run_manager.get_child()` (`langchain_core/tools/base.py:1217-1218`).
+    The child callback manager uses the tool run id as its `parent_run_id`
+    (`langchain_core/callbacks/manager.py:696`), so the nested `generate_sql`
+    LLM span is a child of the tool span. The sibling position is retained as
+    a fallback for the pre-MCP hierarchy, where both spans share a parent.
     """
     tool_spans = trace_dict.get("toolSpans") or []
     llm_spans = trace_dict.get("llmSpans") or []
@@ -271,7 +272,14 @@ def _extract_sql_span(trace_dict: dict) -> tuple[dict | None, dict | None]:
     if tool_span is None:
         return None, None
 
-    sql_span = _find_span(llm_spans, parentUuid=tool_span.get("parentUuid"))
+    tool_uuid = tool_span.get("uuid")
+    sql_span = (
+        _find_span(llm_spans, parentUuid=tool_uuid)
+        if tool_uuid
+        else None
+    )
+    if sql_span is None:
+        sql_span = _find_span(llm_spans, parentUuid=tool_span.get("parentUuid"))
     return tool_span, sql_span
 
 

@@ -1,6 +1,6 @@
-import asyncio
+"""Framework-neutral implementation of the bounded job-details lookup ability."""
 
-from langchain.tools import tool
+import asyncio
 
 from src.agents.runtime.prompts import load_behavior_glossary
 from src.core.config import settings
@@ -8,7 +8,10 @@ from src.core.logger import logger
 from src.services.query.executor import ExecutorError
 from src.services.query.job_details import fetch_job_details
 from src.services.query.models import TableArtifact
-from src.services.query.obligations import detect_row_obligations, filter_enabled_obligations
+from src.services.query.obligations import (
+    detect_row_obligations,
+    filter_enabled_obligations,
+)
 from src.services.query.table_formatter import render_obligations
 
 
@@ -64,9 +67,8 @@ def _table_from_detail_rows(rows: list[dict]) -> TableArtifact:
     )
 
 
-@tool
-async def get_job_details(ids: list[int]) -> str:
-    """Fetch the full description and details for specific job postings by their id. Use this only when the user asks to know more about, describe, or compare specific jobs already shown by query_clean_jobs (which lists jobs with their id). Pass the id values from that list."""
+async def run_get_job_details(ids: list[int]) -> str:
+    """Return safe Vietnamese job details for the given posting ids."""
     if not ids:
         return (
             "Vui lòng chỉ định mã tin tuyển dụng bạn muốn xem chi tiết hoặc tìm kiếm "
@@ -82,7 +84,9 @@ async def get_job_details(ids: list[int]) -> str:
         logger.error("get_job_details.db_error", error=str(exc))
         return "Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau."
 
-    obligations = filter_enabled_obligations(detect_row_obligations(_table_from_detail_rows(rows)))
+    obligations = filter_enabled_obligations(
+        detect_row_obligations(_table_from_detail_rows(rows))
+    )
     return render_obligations(
         _build_answer(ids, capped_ids, rows),
         [obligation.glossary_token for obligation in obligations],

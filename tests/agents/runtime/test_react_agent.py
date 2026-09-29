@@ -77,7 +77,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             second_resolved.set()
             return second_prompts
 
-        def build_agent(**kwargs):
+        async def build_agent(**kwargs):
             system_prompt = kwargs.get("system_prompt")
             content = system_prompt.content if system_prompt is not None else "release"
             agent = MagicMock()

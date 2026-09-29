@@ -1,0 +1,1 @@
+"""MCP surface for the read-only job-query capabilities."""

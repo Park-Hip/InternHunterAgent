@@ -5,7 +5,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastmcp.utilities.lifespan import combine_lifespans
 
+from src.agents.mcp.adapter import list_job_tools
+from src.agents.mcp.job_server import (
+    MCP_ENDPOINT_PATH,
+    create_job_mcp_server,
+    mcp_endpoint_enabled,
+)
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing.langfuse import (
     create_langfuse_stream_observation,
@@ -17,6 +24,15 @@ from src.api.app import create_app
 from src.api.schema_guard import assert_serving_schema
 from src.core.checkpointer import build_checkpointer, build_checkpointer_pool
 from src.core.config import load_settings
+
+# The shared FastMCP server backs both the in-process agent adapter and, when
+# explicitly enabled, the Streamable HTTP endpoint. It is created once at import
+# so both surfaces always see the same tools.
+_mcp_server = create_job_mcp_server()
+# The Streamable HTTP route is registered at the final endpoint path (`/mcp`),
+# which app.py adds directly ahead of the static catch-all (a Starlette Mount
+# would require a trailing slash).
+_mcp_asgi = _mcp_server.http_app(path=MCP_ENDPOINT_PATH)
 
 
 @asynccontextmanager
@@ -33,7 +49,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         checkpointer = await build_checkpointer(pool)
         await prepare_native_prompts_startup()
-        app.state.runtime = AgentRuntime(checkpointer=checkpointer)
+        # Tool discovery is awaited exactly once at startup. A failure here
+        # raises before app.state.runtime is set, so the service never publishes
+        # an agent with a partial tool surface.
+        tools = await list_job_tools(_mcp_server)
+        app.state.runtime = AgentRuntime(checkpointer=checkpointer, tools=tools)
         app.state.stream_observation_factory = create_langfuse_stream_observation
         # Fire-and-track: this is a non-fatal diagnostic, so boot does not wait for
         # a network round trip to Langfuse.
@@ -55,4 +75,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await pool.close()
 
 
-app = create_app(lifespan=lifespan)
+if mcp_endpoint_enabled():
+    # The access decision is internal/development-only (issue #465, option A).
+    # The combined lifespan enters the MCP session-manager lifespan after the
+    # service lifespan and exits it first on shutdown.
+    app = create_app(
+        lifespan=combine_lifespans(lifespan, _mcp_asgi.lifespan),
+        mcp_app=_mcp_asgi,
+        mcp_path=MCP_ENDPOINT_PATH,
+    )
+else:
+    app = create_app(lifespan=lifespan)

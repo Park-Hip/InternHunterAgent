@@ -1,9 +1,24 @@
+"""Framework-neutral implementation of the read-only clean-jobs search ability.
+
+This module owns the single source of truth for natural-language-to-SQL
+generation, validation, execution, formatting, and the safe Vietnamese error
+policy. The MCP tool wrapper (see src/agents/mcp/job_server.py) calls
+``run_query_clean_jobs`` directly; the LangChain agent reaches the same
+implementation through the in-process MCP adapter.
+
+Nothing here depends on LangChain tool decoration or a transportable
+``RunnableConfig``. The SQL generation reads LangChain's ambient config when
+one is present (so nested callbacks keep observing it within an agent), and
+falls back to an explicit Langfuse generation otherwise, so the function works
+identically for a plain MCP client with no LangChain context.
+"""
+
 import asyncio
 from typing import Any
 
 from langchain.messages import HumanMessage
-from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables.config import var_child_runnable_config
 
 from src.agents.runtime.prompts import (
     load_behavior_glossary,
@@ -11,7 +26,7 @@ from src.agents.runtime.prompts import (
     load_sql_generation_prompt_resolution_async,
 )
 from src.agents.runtime.provider import AgentProvider
-from src.agents.tracing.langfuse import langfuse_prompt_attributes
+from src.agents.tracing.langfuse import get_langfuse_client, langfuse_prompt_attributes
 from src.core.config import settings
 from src.core.logger import logger
 from src.services.query.executor import (
@@ -19,7 +34,7 @@ from src.services.query.executor import (
     UndefinedColumnError,
     execute_validated_sql,
 )
-from src.services.query.models import QueryRefusal, QueryToolResult, TableArtifact
+from src.services.query.models import QueryRefusal, QueryToolResult
 from src.services.query.obligations import (
     detect_obligations,
     filter_enabled_obligations,
@@ -27,6 +42,8 @@ from src.services.query.obligations import (
 from src.services.query.row_bound import resolve_bounds
 from src.services.query.sql_validator import validate_sql
 from src.services.query.table_formatter import format_rows, render_tool_result
+
+SQL_GENERATION_OBSERVATION_NAME = "sql_generation"
 
 
 def load_max_rows() -> int:
@@ -62,10 +79,12 @@ def _content_to_text(content: str | list[Any]) -> str:
     return "".join(parts)
 
 
-async def generate_sql(question: str, config: RunnableConfig | None = None) -> str:
+async def generate_sql(question: str) -> str:
+    """Generate SQL for one question with an explicit traceable generation."""
+    provider = AgentProvider()
     schema_context = await load_schema_context_resolution_async()
     sql_generation_prompt = await load_sql_generation_prompt_resolution_async()
-    model = AgentProvider().build_model("sql_generation")
+    model = provider.build_model("sql_generation")
     messages = [
         HumanMessage(
             content=(
@@ -74,43 +93,52 @@ async def generate_sql(question: str, config: RunnableConfig | None = None) -> s
             )
         )
     ]
-    # The Langfuse callback creates the generation.  Propagation links that real
-    # generation to the exact SQL prompt version without double-counting it.
-    with langfuse_prompt_attributes(sql_generation_prompt):
-        response = await model.ainvoke(messages, config=config)
+
+    # Inside a LangChain agent, MCP does not transport RunnableConfig into the
+    # tool, so reading the ambient config here preserves the nested SQL
+    # generation for Langfuse and DeepEval callbacks exactly as the previous
+    # decorated tool did by forwarding its injected config.
+    ambient_config = _ambient_langchain_config()
+    if ambient_config is not None:
+        with langfuse_prompt_attributes(sql_generation_prompt):
+            response = await model.ainvoke(messages, config=ambient_config)
+        return _content_to_text(response.content).strip()
+
+    # No ambient LangChain config (a plain MCP client over Streamable HTTP).
+    # Emit an explicit Langfuse generation so the SQL call stays observable.
+    client = get_langfuse_client()
+    if client is None:
+        response = await model.ainvoke(messages)
+        return _content_to_text(response.content).strip()
+
+    with client.start_as_current_observation(
+        as_type="generation",
+        name=SQL_GENERATION_OBSERVATION_NAME,
+        model=provider.deployment_for("sql_generation").model,
+        input={"question": question},
+        prompt=sql_generation_prompt.prompt_client,
+    ) as generation:
+        response = await model.ainvoke(messages)
+        generation.update(output=_content_to_text(response.content).strip())
+
     return _content_to_text(response.content).strip()
 
 
-def _build_answer(table: TableArtifact) -> str:
-    if table.row_count == 0:
-        return load_behavior_glossary()["ZERO_RESULTS"]
-
-    if table.truncated:
-        header = (
-            f"Đang hiển thị {table.row_count} kết quả đầu tiên - vẫn còn kết quả phù hợp. "
-            f"Thu hẹp phạm vi tìm kiếm để xem phần còn lại. Các cột: {', '.join(table.columns)}."
-        )
-    else:
-        header = f"Tìm thấy {table.row_count} kết quả với các cột: {', '.join(table.columns)}."
-
-    lines = [header]
-    for row in table.rows:
-        pairs = ", ".join(
-            f"{column}={value}" for column, value in zip(table.columns, row)
-        )
-        lines.append(f"- {pairs}")
-    return "\n".join(lines)
+def _ambient_langchain_config() -> RunnableConfig | None:
+    # A tool running inside a LangChain agent exposes the ambient config here
+    # even though MCP does not transport RunnableConfig into the tool.
+    config = var_child_runnable_config.get()
+    if config is None:
+        return None
+    callbacks = config.get("callbacks")
+    if not callbacks:
+        return None
+    return {"callbacks": callbacks}
 
 
-@tool
-async def query_clean_jobs(question: str, config: RunnableConfig) -> str:
-    """Search AI and data job and internship postings in the clean_jobs table.
-
-    Use this tool for discovery questions before get_job_details, which retrieves details for
-    postings already shown. Pass the user's question with any role, skill, location, or other
-    search criteria.
-    """
-    sql = await generate_sql(question, config)
+async def run_query_clean_jobs(question: str) -> str:
+    """Return safe Vietnamese clean_jobs search results for one question."""
+    sql = await generate_sql(question)
     validation = validate_sql(sql)
 
     if not validation.valid:

@@ -31,7 +31,7 @@ _FIXED_SAMPLING = _fixed_sampling_keys()
 
 # `query_clean_jobs` returns prose, not a Python literal: a header naming the
 # columns, then one `- col=value, col=value` line per row (see
-# `src/agents/tools/query_clean_jobs.py::_build_answer`). Both the "Found N
+# `src/services/query/table_formatter.py::render_tool_result`). Both the "Found N
 # result(s) with columns: ..." header and the truncated "... Columns: ..."
 # header end the same way, so one pattern covers both.
 _COLUMNS_PATTERN = re.compile(r"columns:\s*(.+?)\.\s*$", re.IGNORECASE)

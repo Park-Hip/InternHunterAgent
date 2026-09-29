@@ -146,11 +146,15 @@ def test_harness_uses_the_request_scoped_trace_context_for_evaluation_turns(
             ),
         )
 
-    def build_agent(**kwargs: object) -> object:
+    async def build_agent(**kwargs: object) -> object:
         factory_calls.append(kwargs)
         return agent
 
+    async def stub_list_job_tools(_server: object) -> list:
+        return []
+
     monkeypatch.setattr(driver.harness, "resolve_prompt_bundle_async", resolve_prompts)
+    monkeypatch.setattr(driver.harness, "list_job_tools", stub_list_job_tools)
     monkeypatch.setattr(driver.harness, "agent_factory", build_agent)
     monkeypatch.setattr(driver.harness, "CallbackHandler", lambda **kwargs: object())
     monkeypatch.setattr(

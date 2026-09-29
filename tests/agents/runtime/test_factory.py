@@ -1,36 +1,38 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.agents.runtime.factory import agent_factory
-from src.agents.tools.query_clean_jobs import query_clean_jobs
-from src.agents.tools.get_job_details import get_job_details
 
 
-class AgentFactoryTests(unittest.TestCase):
+class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
     @patch("src.agents.runtime.factory.create_agent")
     @patch("src.agents.runtime.factory.load_system_prompt")
     @patch("src.agents.runtime.factory.AgentProvider")
-    def test_agent_factory_registers_job_search_tools(
+    async def test_agent_factory_registers_discovered_tools(
         self, mock_agent_provider, mock_load_system_prompt, mock_create_agent
     ) -> None:
-        agent_factory()
+        tools = [MagicMock(name="query_clean_jobs"), MagicMock(name="get_job_details")]
+
+        await agent_factory(tools=tools)
 
         _, kwargs = mock_create_agent.call_args
-        self.assertEqual(kwargs["tools"], [query_clean_jobs, get_job_details])
+        self.assertEqual(kwargs["tools"], tools)
 
     @patch("src.agents.runtime.factory.create_agent")
     @patch("src.agents.runtime.factory.load_system_prompt")
     @patch("src.agents.runtime.factory.AgentProvider")
-    def test_agent_factory_accepts_optional_checkpointer(
+    async def test_agent_factory_accepts_optional_checkpointer(
         self, mock_agent_provider, mock_load_system_prompt, mock_create_agent
     ) -> None:
         fake_checkpointer = object()
 
-        agent_factory(checkpointer=fake_checkpointer)
+        await agent_factory(checkpointer=fake_checkpointer)
 
-        mock_create_agent.assert_called_once()
+        _, kwargs = mock_create_agent.call_args
+        self.assertIs(kwargs["checkpointer"], fake_checkpointer)
+        self.assertEqual(kwargs["tools"], [])
 
     @patch("src.agents.runtime.factory.build_trim_middleware")
     @patch("src.agents.runtime.factory.load_max_turns", return_value=6)
@@ -42,7 +44,7 @@ class AgentFactoryTests(unittest.TestCase):
     @patch("src.agents.runtime.factory.create_agent")
     @patch("src.agents.runtime.factory.load_system_prompt")
     @patch("src.agents.runtime.factory.AgentProvider")
-    def test_agent_factory_compacts_persisted_history_with_the_serving_model(
+    async def test_agent_factory_compacts_persisted_history_with_the_serving_model(
         self,
         mock_agent_provider,
         mock_load_system_prompt,
@@ -54,7 +56,7 @@ class AgentFactoryTests(unittest.TestCase):
     ) -> None:
         model = mock_agent_provider.return_value.build_model.return_value
 
-        agent_factory()
+        await agent_factory(tools=[])
 
         mock_build_compaction_middleware.assert_called_once_with(model, 24, 12)
         mock_load_max_turns.assert_called_once()
@@ -67,6 +69,19 @@ class AgentFactoryTests(unittest.TestCase):
                 mock_build_trim_middleware.return_value,
             ],
         )
+
+    @patch("src.agents.runtime.factory.create_agent")
+    @patch("src.agents.runtime.factory.load_system_prompt")
+    @patch("src.agents.runtime.factory.AgentProvider")
+    async def test_agent_factory_uses_release_system_prompt_when_none_given(
+        self, mock_agent_provider, mock_load_system_prompt, mock_create_agent
+    ) -> None:
+        mock_load_system_prompt.return_value = "release-system-prompt"
+
+        await agent_factory(tools=[])
+
+        _, kwargs = mock_create_agent.call_args
+        self.assertEqual(kwargs["system_prompt"], "release-system-prompt")
 
 
 if __name__ == "__main__":

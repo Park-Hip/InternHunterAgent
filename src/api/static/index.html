@@ -43,7 +43,15 @@
         </p>
       </header>
 
-      <main class="column" id="conversation" aria-label="Cuộc trò chuyện">
+      <main
+        class="column"
+        id="conversation"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-busy="false"
+        aria-label="Cuộc trò chuyện"
+      >
         <!-- Opening editorial note; replaced by turns as they arrive. -->
         <section class="lede" id="lede">
           <p class="lede__kicker">Bắt đầu từ đây</p>
@@ -66,6 +74,11 @@
             placeholder="Hỏi về vị trí, mức lương hoặc kỹ năng…"
           />
           <button class="composer__send" id="send" type="submit">Hỏi</button>
+          <!-- One stream at a time: while an answer is in flight the send control
+               is replaced by this, and it cancels the request immediately. The
+               server already handles client disconnect, so abandoning a turn
+               costs no round trip. -->
+          <button class="composer__stop" id="stop" type="button" hidden>Dừng</button>
         </div>
       </form>
 

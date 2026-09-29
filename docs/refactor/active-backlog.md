@@ -1,6 +1,6 @@
 # Active refactor backlog
 
-> **Last verified:** 2026-09-25
+> **Last verified:** 2026-09-29
 >
 > **Eviction:** An item leaves this list when its focused issue is completed, declined, or superseded
 > by an approved decision.
@@ -18,3 +18,23 @@ Each item requires its own approved implementation issue before code changes beg
 The evidence identifiers refer to the preserved
 [debt register](../discovery/current-state-debt-register.md).
 Unknown production behavior remains unknown and must not be inferred from static source evidence.
+
+## Approved parallel exception: the agent-v0 track
+
+Approved by the maintainer on 2026-09-29, against
+[#472](https://github.com/Park-Hip/InternHunterAgent/issues/472).
+
+The agent-v0 track may run in parallel with this list for documentation, dataset, and additive tool
+work.
+It does not inherit this list's items and it does not reorder them.
+
+The exception does not cover the serving path.
+No agent-v0 change may alter serving composition, tool registration, or prompt wiring while the
+command and serving configuration separation (#447, item 2) is outstanding.
+Any interaction between the agent-v0 work and the tracing replacement (item 1) is resolved by the
+maintainer before item 1 starts, because both reach the same serving composition.
+
+The agent-v0 track's own ordering, its stage exits, and its measured baseline live in
+[#472](https://github.com/Park-Hip/InternHunterAgent/issues/472),
+[the v0 behavior and metric contract](agent-v0-contract.md), and
+[the baseline record](agent-v0-baseline.md).

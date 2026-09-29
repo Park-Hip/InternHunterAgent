@@ -15,6 +15,11 @@ Every claim below is either a file path in this repository, a command output cap
 2026-09-29, or an issue reference.
 Anything not evidenced by one of those three is written here as unknown, not as a finding.
 
+The successor specification built on this baseline is
+[the v0 behavior and metric contract](agent-v0-contract.md).
+This record is the "before" that a later stage is measured against, so it is kept as measured rather
+than rewritten when behavior changes.
+
 ## Reference commits
 
 | Role | Commit | Note |
@@ -135,8 +140,8 @@ Later stages must state their own environment limits rather than inherit this se
 | --- | --- | --- |
 | #489 | The SQL span lookup matches a sibling of the tool span. Under MCP the nested SQL generation is a child of the tool span, so the lookup finds nothing and `sql_accuracy` is silently excluded from the gate denominator while the gate still reports green. The same lookup and the same reasoning are now in [`evals/run.py`](../../evals/run.py) after the rebuild. | Open. A fix is in progress on branch `Park-Hip/fix-evals-seam-2-sql-span-lookup-is-sibling-base`. |
 | #175 | `HLP-ABSTRACTION-1` and `HLP-LOCATION-SYNONYM-1` have been failing since 2026-08-13. Both IDs are in the registry. | Open, unowned. |
-| New | The evaluation manuals under `evals/` still describe the deleted v1 modules and the deleted registry. `evals/README.md`, `evals/pipeline.md`, `evals/authoring/index.md`, `evals/deterministic/index.md`, `evals/calibration/index.md`, `evals/semantic/index.md`, and `evals/replay/index.md` all cite paths that no longer exist. `docs/how-to/evaluate.md` was updated by the rebuild and is correct. | Needs a new issue. A docs-only cleanup, tracked separately from this baseline. |
-| New | `docs/Docs_Conventions.md` documents both lint markers on the same line. `check_link_path` opens a block on the `begin` marker and never sees the `end` marker on that line, so the link-path check is silently disabled for the rest of that file. The `scenario-id`, encoding, and stack checks are unaffected. | Needs a new issue. |
+| New | The evaluation manuals under `evals/` still describe the deleted v1 modules and the deleted registry. `evals/README.md`, `evals/pipeline.md`, `evals/authoring/index.md`, `evals/deterministic/index.md`, `evals/calibration/index.md`, `evals/semantic/index.md`, and `evals/replay/index.md` all cite paths that no longer exist. `docs/how-to/evaluate.md` was updated by the rebuild and is correct. | [#497](https://github.com/Park-Hip/InternHunterAgent/issues/497) |
+| New | `docs/Docs_Conventions.md` documents both lint markers on the same line. `check_link_path` opens a block on the `begin` marker and never sees the `end` marker on that line, so the link-path check is silently disabled for the rest of that file. The `scenario-id`, encoding, and stack checks are unaffected. | [#498](https://github.com/Park-Hip/InternHunterAgent/issues/498) |
 
 The #489 row is the most consequential.
 Until it is fixed, a green `sql_accuracy` gate on the current harness is not evidence that the SQL
@@ -177,19 +182,18 @@ Both were run on 2026-09-29 from this worktree and both produced the v1 tree.
 The restored file must stay outside the active `evals/` package so that no loader, test, or
 documentation index can pick it up as a live registry.
 
-## Open maintainer decisions
+## Decisions taken since this record
 
-These are not this record's to make.
-They are listed here so that no later stage mistakes silence for approval.
+Resolved on 2026-09-29, after this baseline was merged.
+They are recorded here because a reader of the baseline needs to know that the record is not still
+waiting on them.
 
-1. **Track ordering.** The agent-v0 track is a candidate for a recorded parallel exception in
-   [`active-backlog.md`](active-backlog.md), which still lists command/serving configuration
-   separation as ordered item 2. The maintainer has to choose between recording the exception and
-   completing that item first. No `src/` change in this track may assume the exception.
-2. **v1 registry placement.** Whether the restored v1 registry becomes a committed archive file or
-   stays reachable only through the two commands above.
-3. **Stale evaluation manuals.** Whether the manual cleanup becomes one issue or is folded into a
-   later stage that rewrites the same files.
+| Decision | Resolution | Where it lives |
+| --- | --- | --- |
+| Track ordering against this backlog | Approved parallel exception, bounded to documentation, dataset, and additive tool work, with no serving-path change while #447 is outstanding | [active-backlog.md](active-backlog.md) |
+| v1 registry placement | History only. The restored file is not committed back into the active tree. | [the v0 contract](agent-v0-contract.md) |
+| Stale evaluation manuals | Tracked as [#497](https://github.com/Park-Hip/InternHunterAgent/issues/497), separate from this track | That issue |
+| v0 product scope | Search plus the defined analyses, comparisons limited to one metric over two filter sets, and no open-ended novel analysis for ordinary users | [the v0 contract](agent-v0-contract.md) |
 
 ## Verification of this record
 

@@ -43,6 +43,15 @@ def test_extract_sql_span_finds_child_of_mcp_tool_span() -> None:
     )
 
 
+def test_extract_sql_span_prefers_child_over_sibling() -> None:
+    child_span = {"parentUuid": "tool-uuid", "output": "SELECT child"}
+    sibling_span = {"parentUuid": "node-uuid", "output": "SELECT sibling"}
+
+    assert _extract_sql_span(
+        _trace(llm_spans=[sibling_span, child_span])
+    ) == (_trace(llm_spans=[])["toolSpans"][0], child_span)
+
+
 def test_extract_sql_span_falls_back_to_sibling_hierarchy() -> None:
     sql_span = {"parentUuid": "node-uuid", "output": "SELECT 1"}
 

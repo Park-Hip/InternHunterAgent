@@ -258,12 +258,14 @@ def _extract_sql_span(trace_dict: dict) -> tuple[dict | None, dict | None]:
     transport does not carry `RunnableConfig` into the tool, so the ambient
     config is read from `var_child_runnable_config` instead.
 
-    Under MCP, `BaseTool._arun` re-scopes that config to the tool's own run
-    with `run_manager.get_child()` (`langchain_core/tools/base.py:1217-1218`).
-    The child callback manager uses the tool run id as its `parent_run_id`
-    (`langchain_core/callbacks/manager.py:696`), so the nested `generate_sql`
-    LLM span is a child of the tool span. The sibling position is retained as
-    a fallback for the pre-MCP hierarchy, where both spans share a parent.
+    Under MCP, `BaseTool.arun` re-scopes that config to the tool's own run
+    with `run_manager.get_child()` before invoking the tool's `_arun`
+    (`langchain_core/tools/base.py:1217-1218`; the sync `BaseTool.run` path does
+    the same at 1089-1090). The child callback manager uses the tool run id as
+    its `parent_run_id` (`langchain_core/callbacks/manager.py:696`), so the
+    nested `generate_sql` LLM span is a child of the tool span. The sibling
+    position is retained as a fallback for the pre-MCP hierarchy, where both
+    spans share a parent.
     """
     tool_spans = trace_dict.get("toolSpans") or []
     llm_spans = trace_dict.get("llmSpans") or []

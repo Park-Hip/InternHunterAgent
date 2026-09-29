@@ -22,7 +22,7 @@ LINK_PATH_MARKER = "<!-- lint-allow-link-path -->"
 LINK_PATH_BLOCK_BEGIN = "<!-- lint-allow-link-path:begin -->"
 LINK_PATH_BLOCK_END = "<!-- lint-allow-link-path:end -->"
 SCENARIO_ID_MARKER = "<!-- lint-allow-scenario-id -->"
-SCENARIOS = ROOT / "evals" / "scenarios_v1.yaml"
+SCENARIOS = ROOT / "evals" / "datasets" / "scenarios.yaml"
 SCENARIO_ID = re.compile(r"\b(?:HLP|HON|SAF)-[A-Z0-9]+(?:-[A-Z0-9]+)*\b")
 REGISTRY_ID = re.compile(r"^- id: (\S+)", re.M)
 TECH_STACK = ROOT / "docs" / "reference" / "configuration.md"
@@ -62,10 +62,15 @@ def markdown_files(root: Path = ROOT) -> list[Path]:
 
 
 def is_archive(path: Path) -> bool:
-    """True for historical records that intentionally retain stale references."""
+    """True for historical records that intentionally retain stale references.
+
+    The v1 evaluation manuals, discovery notes, and decision records retain
+    references to deleted v1 modules under the approved #476 migration.
+    Encoding is still checked for every Markdown file.
+    """
     return any(
         path.is_relative_to(directory)
-        for directory in (ROOT / "docs" / "archive", ROOT / "research" / "archive", ROOT / "evals" / "archive")
+        for directory in (ROOT / "docs" / "archive", ROOT / "docs" / "discovery", ROOT / "docs" / "decisions", ROOT / "research" / "archive")
     )
 
 
@@ -93,12 +98,16 @@ def is_repo_path(value: str) -> bool:
 
 
 def check_link_path(files: list[Path]) -> list[Finding]:
-    """Report live repository paths referenced by Markdown that no longer exist."""
+    """Report live repository paths referenced by Markdown that no longer exist.
+
+    The retained v1 evals records cite modules the #476 rebuild deleted, so
+    every Markdown file under ``evals/`` is exempt from this check alone.
+    """
     findings: list[Finding] = []
     link_pattern = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
     code_pattern = re.compile(r"`([^`]+)`")
     for path in files:
-        if is_archive(path):
+        if is_archive(path) or path.is_relative_to(ROOT / "evals"):
             continue
         in_fence = False
         link_path_allowed = False

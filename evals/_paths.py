@@ -11,13 +11,3 @@ from pathlib import Path
 
 EVALS_ROOT = Path(__file__).resolve().parent
 ROOT = EVALS_ROOT.parent
-
-# Versioned calibration corpora. Extend this dict when a new calibration version
-# is produced; callers in evals.calibration read the keys they need.
-CALIBRATION_VERSIONS: dict[str, Path] = {
-    "v7": EVALS_ROOT / "calibration_v7.yaml",
-    "v8": EVALS_ROOT / "calibration_v8.yaml",
-}
-
-# Legacy 6-case bootstrap corpus path, superseded by the versioned v7+v8 corpora.
-RELEASE_GATE_PATH = EVALS_ROOT / "calibration_release_gate.yaml"

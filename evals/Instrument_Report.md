@@ -1,5 +1,9 @@
 # Evaluation Instrument Report
 
+> **Historical evidence, superseded by issue #476.**
+> These v1 scores and grading procedures are not the current evaluation gate.
+> See `docs/how-to/evaluate.md` for current commands.
+
 > **Last verified:** 2026-09-04.
 
 > **Eviction:** This report is superseded when a later baseline changes the measured prompt, registry, fixture, provider, or calibration evidence.

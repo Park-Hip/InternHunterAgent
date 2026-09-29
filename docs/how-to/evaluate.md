@@ -1,31 +1,42 @@
 # Evaluate agent behavior
 
-> **Eviction:** This pointer leaves when the evaluation instrument is retired or replaced.
+The active evaluation harness reads scenarios from [`evals/datasets/scenarios.yaml`](../../evals/datasets/scenarios.yaml).
+It persists one JSON artifact whose `by_metric` key groups every scored row under its metric name, and prints the same grouping as a table.
+Historical v1 replay, calibration, and instrument documents remain on disk as evidence, not as current operating instructions.
 
-How to run, inspect, calibrate, and publish evidence from the evaluation harness.
+## Live evaluation
 
-The evaluation harness measures the agent against a frozen fixture and a behavior contract.
-Layout, commands, and operating limits are documented in the evaluation instrument itself:
+Start the fixture database and rebuild it before capturing agent behavior:
 
-- [`evals/README.md`](../../evals/README.md) — navigation hub: role routing, decision tree, quick commands, full file map.
-- [`evals/pipeline.md`](../../evals/pipeline.md) — the five-step pipeline (capture → execution accuracy → deterministic grade → freeze → replay), the result-term table, and the step-by-step run commands.
-- [`evals/Operating_Manual.md`](../../evals/Operating_Manual.md) — maintainer review rules, authority boundary, and outcome interpretation.
+```sh
+docker compose up -d
+uv run python -m evals.fixtures.loader
+uv run python -m evals --dataset default --out evals/runs/local-report.json
+```
 
-## What it is for
+Live capture requires a configured serving-model credential.
+The `grounded`, `on_topic`, `memory`, and `rubric` metrics additionally require the configured judge credential.
+Each selected scenario is captured once and scored on its applicable metrics.
+Use `--ids HLP-LIST-1,SAF-INDIRECT-INJECTION-1` to narrow a run, or `--only tool_correctness,sql_accuracy` to omit the judge.
+Omitting the judge does **not** remove the serving-model credential requirement for a live capture.
 
-The harness establishes a measurable baseline of task correctness and the honesty bar **before**
-any work whose design depends on measured model behavior is built. Evaluation measures behavior;
-it does not fix it. Remediation is separate work.
+## Credential-free deterministic check
 
-## Where the details live
+Use `--capture` to score retained, previously captured evidence without calling a provider:
 
-| Question | Document |
-|---|---|
-| What are the three seams (routing / NL→SQL / synthesis)? | [`evals/deterministic/index.md`](../../evals/deterministic/index.md) |
-| What does the semantic judge measure, and on what provider? | [`evals/semantic/index.md`](../../evals/semantic/index.md) |
-| How are thresholds calibrated, and what bars does the gate enforce? | [`evals/calibration/thresholds.md`](../../evals/calibration/thresholds.md) |
-| How do I author a new scenario? | [`evals/authoring/index.md`](../../evals/authoring/index.md) |
-| How does the no-model replay gate work? | [`evals/replay/index.md`](../../evals/replay/index.md) |
-| How are grader/judge/human disagreements resolved? | [`evals/disagreements/index.md`](../../evals/disagreements/index.md) |
-| Which test pins which behavior? | [`tests/evals/`](../../tests/evals/) — test-to-module mapping |
-| What is the current baseline and open cases? | [`evals/Instrument_Report.md`](../../evals/Instrument_Report.md) |
+```sh
+uv run python -m evals --only tool_correctness,sql_accuracy --capture evals/replays/t0025.9-committed.json --ids SAF-DESTRUCTIVE-REFUSAL-1,HLP-CONTEXT-1
+```
+
+Only scenarios actually present in the retained capture are scored.
+The fixture database is required whenever the captured scenario has reference SQL.
+This CI smoke check is not a new capture and does not cover all 50 scenarios.
+Scores of 0.0 are findings rather than infrastructure failures; errors, unrun cases, and infrastructure failures exit nonzero.
+A metric that cannot be scored for a captured turn is reported as a row with a null score and a `NOT_APPLICABLE` reason rather than being dropped: that happens today for `grounded` whenever a turn captured no tool output.
+`--require-pass` additionally exits nonzero for any metric that is not exactly 1.0, including those null scores.
+The fixture loader still exports `fixture_database_url()` for other research scripts.
+
+To compare the 12 preserved v8 human labels with the current judge once credentials are available, run `uv run pytest -o addopts='' -m eval -s tests/evals/test_holdout_judge.py`.
+Disagreements are printed as findings for the dataset redesign, not hidden or treated as calibrated thresholds.
+
+See [`evals/Instrument_Report.md`](../../evals/Instrument_Report.md) for historical baseline context, not current scores.

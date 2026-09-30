@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import time
+
 from langchain.agents.middleware import (
     AgentMiddleware,
     ModelRequest,
@@ -6,6 +10,7 @@ from langchain.agents.middleware import (
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 
+from src.agents.runtime.tool_events import elapsed_ms, emit_tool_event, format_arguments
 from src.core.config import settings
 
 
@@ -122,3 +127,49 @@ def build_compaction_middleware(
         trigger=("messages", trigger_messages),
         keep=("messages", keep_messages),
     )
+
+
+class ToolObservationMiddleware(AgentMiddleware):
+    """Announce tool calls so the interface can show what the agent did.
+
+    This observes and reports. It never alters the call, the arguments, the
+    result, or the control flow: a failure here degrades to no telemetry rather
+    than to a failed turn, because an interface that reports on the agent must
+    not be able to break it.
+    """
+
+    async def awrap_tool_call(self, request, handler):
+        call = getattr(request, "tool_call", None) or {}
+        name = str(call.get("name") or "tool")
+        call_id = call.get("id")
+        arguments = format_arguments(call.get("args"))
+
+        await emit_tool_event(
+            name=name, status="running", call_id=call_id, arguments=arguments
+        )
+        started = time.perf_counter()
+        try:
+            result = await handler(request)
+        except Exception as error:
+            # Report the failure, then let it propagate unchanged.
+            await emit_tool_event(
+                name=name,
+                status="error",
+                call_id=call_id,
+                arguments=arguments,
+                duration_ms=elapsed_ms(started),
+                error=str(error)[:200],
+            )
+            raise
+        await emit_tool_event(
+            name=name,
+            status="ok",
+            call_id=call_id,
+            arguments=arguments,
+            duration_ms=elapsed_ms(started),
+        )
+        return result
+
+
+def build_tool_observation_middleware() -> AgentMiddleware:
+    return ToolObservationMiddleware()

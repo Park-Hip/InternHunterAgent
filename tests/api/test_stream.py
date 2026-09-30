@@ -208,9 +208,9 @@ class StreamOpenAPITests(unittest.TestCase):
         self.assertEqual(discriminator["propertyName"], "type")
         self.assertEqual(
             set(discriminator["mapping"]),
-            {"session", "token", "metadata", "error", "done"},
+            {"session", "token", "metadata", "error", "tool", "done"},
         )
-        self.assertEqual(len(event_schema["oneOf"]), 5)
+        self.assertEqual(len(event_schema["oneOf"]), 6)
 
         error_ref = discriminator["mapping"]["error"]
         error_schema = event_schema["$defs"][error_ref.rsplit("/", maxsplit=1)[-1]]

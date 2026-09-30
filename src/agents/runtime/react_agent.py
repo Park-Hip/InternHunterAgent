@@ -19,6 +19,10 @@ from src.agents.tracing.langfuse import (
     record_agent_response_failure,
 )
 from src.agents.tracing.stream import StreamObservation
+from src.agents.runtime.tool_events import (
+    bind_tool_event_emitter,
+    reset_tool_event_emitter,
+)
 from src.core.logger import logger
 
 
@@ -117,9 +121,16 @@ class AgentRuntime:
         prompts = await resolve_prompt_bundle_async()
         agent, system_prompt = await self._active_agent(prompts)
 
-        events: asyncio.Queue[dict[str, str | None] | Exception] = asyncio.Queue(
+        events: asyncio.Queue[dict[str, object] | Exception] = asyncio.Queue(
             maxsize=1
         )
+
+        # Tool events are published straight into this turn's queue by the
+        # observation middleware, so they interleave with tokens in real time
+        # rather than arriving after the answer. The binding is per turn: the
+        # context is copied into the producer task, so a concurrent turn cannot
+        # receive this turn's tool events.
+        emitter_token = bind_tool_event_emitter(events.put)
 
         async def _produce_stream() -> None:
             try:
@@ -189,6 +200,7 @@ class AgentRuntime:
                     await completion_event.wait()
                     stream_completed = True
             finally:
+                reset_tool_event_emitter(emitter_token)
                 if not producer.done():
                     producer.cancel()
                 await asyncio.gather(producer, return_exceptions=True)

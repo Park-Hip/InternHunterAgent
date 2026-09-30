@@ -34,6 +34,7 @@ class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(kwargs["checkpointer"], fake_checkpointer)
         self.assertEqual(kwargs["tools"], [])
 
+    @patch("src.agents.runtime.factory.build_tool_observation_middleware")
     @patch("src.agents.runtime.factory.build_trim_middleware")
     @patch("src.agents.runtime.factory.load_max_turns", return_value=6)
     @patch("src.agents.runtime.factory.build_compaction_middleware")
@@ -53,6 +54,7 @@ class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
         mock_build_compaction_middleware,
         mock_load_max_turns,
         mock_build_trim_middleware,
+        mock_build_tool_observation_middleware,
     ) -> None:
         model = mock_agent_provider.return_value.build_model.return_value
 
@@ -67,6 +69,7 @@ class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
             [
                 mock_build_compaction_middleware.return_value,
                 mock_build_trim_middleware.return_value,
+                mock_build_tool_observation_middleware.return_value,
             ],
         )
 

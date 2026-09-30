@@ -52,6 +52,24 @@ class StreamErrorEvent(StreamErrorResponse):
     type: Literal["error"]
 
 
+class StreamToolEvent(BaseModel):
+    """Public payload for an in-band SSE ``tool`` event.
+
+    Tool arguments reach the browser. They are restricted here to short strings,
+    because the tools receive reader-derived filters and this event is shown to
+    the reader. Anything longer or structured belongs in a future, separate
+    contract rather than in this one.
+    """
+
+    type: Literal["tool"]
+    name: str
+    status: Literal["running", "ok", "error"]
+    call_id: str | None = None
+    arguments: dict[str, str] = Field(default_factory=dict)
+    duration_ms: int | None = None
+    error: str | None = None
+
+
 class StreamDoneEvent(BaseModel):
     type: Literal["done"]
 
@@ -61,6 +79,7 @@ StreamEvent = Annotated[
     | StreamTokenEvent
     | StreamMetadataEvent
     | StreamErrorEvent
+    | StreamToolEvent
     | StreamDoneEvent,
     Field(discriminator="type"),
 ]

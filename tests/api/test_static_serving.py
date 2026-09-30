@@ -110,6 +110,32 @@ class StaticServingTests(unittest.TestCase):
         self.assertIn("NO_ANSWER_TEXT", app)
         self.assertIn(FALLBACK_ANSWER, app)
 
+    def test_client_handles_the_tool_event(self) -> None:
+        """A `tool` event must reach a card. An unhandled event type would be
+        silently dropped, which is how tool work would stay invisible."""
+        app = self.client.get("/app.js").text
+        styles = self.client.get("/styles.css").text
+
+        self.assertIn('ev === "tool"', app)
+        self.assertIn("upsertToolCard", app)
+        self.assertIn(".toolcard", styles)
+
+    def test_tool_event_is_part_of_the_published_stream_contract(self) -> None:
+        """The union in schemas.py is what the OpenAPI document publishes, so a
+        new event type must appear in the schema, not only in the code."""
+        from src.api.schemas import STREAM_EVENT_SCHEMA
+
+        schema = str(STREAM_EVENT_SCHEMA)
+        self.assertIn("StreamToolEvent", schema)
+
+    def test_tool_event_rejects_statuses_outside_the_contract(self) -> None:
+        import pydantic
+
+        from src.api.schemas import StreamToolEvent
+
+        with self.assertRaises(pydantic.ValidationError):
+            StreamToolEvent(type="tool", name="x", status="exploded")
+
 
 if __name__ == "__main__":
     unittest.main()

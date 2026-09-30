@@ -238,9 +238,21 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         mock_client.get_trace_url.assert_called_once_with(trace_id="trace-123")
         latency.complete.assert_called_once_with("success")
 
+    @patch("src.agents.runtime.react_agent.get_langfuse_client", return_value=None)
+    @patch("src.agents.runtime.react_agent.langfuse_request_trace")
+    @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
     async def test_astream_leaves_empty_stream_ttft_for_the_visible_fallback(
         self,
+        _mock_build_langfuse_config,
+        mock_langfuse_request_trace,
+        _mock_get_langfuse_client,
     ) -> None:
+        # The tracing seam is stubbed exactly as its sibling tests stub it. Without
+        # this the runtime opens a real Langfuse trace, so the assertion about a
+        # None trace id only holds when credentials happen to be absent, and the
+        # test reaches the network to find out.
+        mock_langfuse_request_trace.return_value = self._trace_context(None)
+
         async def _fake_stream(*_args, **_kwargs):
             if False:
                 yield None

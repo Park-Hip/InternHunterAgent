@@ -1,0 +1,110 @@
+{
+  "record": "Recorded provider evidence for the Bright Data adapter tests",
+  "observation": "docs/discovery/research/bright-data-bounded-observation-470.md",
+  "retention": "Aggregate and field-presence evidence only. No row-level job data, no credential, and no response payload were retained by the observation, so no file in this directory contains provider bytes.",
+  "reconstruction": "The snapshot records below are a deterministic reconstruction constrained by the recorded facts in this file. They are not captured provider output. Nothing in them is a real listing, a real employer, or a real person, and no digest in this directory reproduces the digests the observation recorded.",
+  "observation_window_utc": {
+    "opened": "2026-09-27T08:43:35Z",
+    "closed": "2026-09-27T08:44:34Z"
+  },
+  "request_of_record": {
+    "method": "POST",
+    "path": "/datasets/v3/scrape",
+    "dataset_id": "gd_lpfll7v5hcqtkxl6l",
+    "type": "discover_new",
+    "discover_by": "keyword",
+    "format": "json",
+    "notify": "false",
+    "include_errors": "true",
+    "limit_per_input": 10,
+    "custom_output_fields": "13 issue fields, pipe separated, sent on the query string and in the body",
+    "submitted_discovery_inputs": {
+      "keyword": "AI Engineer",
+      "location": "Hanoi",
+      "country": "VN",
+      "time_range": "Past month",
+      "selective_search": "true"
+    },
+    "omitted_discovery_inputs": [
+      "job_type",
+      "experience_level",
+      "remote",
+      "company",
+      "jobs_to_not_include",
+      "location_radius"
+    ],
+    "digests_sha256": {
+      "request_query_plus_canonical_body": "037c17c56e3ec8eea0eacd103e2cf18552676aabb2ac5c60bf1d07c2f97d8880",
+      "canonical_body": "90f4ec4be5d33056c4d6017c4ca460f3b311fbeb13a6125bba3aa6451df3b6f2"
+    }
+  },
+  "observed_states": {
+    "submission": {
+      "client_elapsed_seconds": 37.22,
+      "note": "The handoff happened inside the documented one-minute synchronous limit, so elapsed time does not predict the response shape. Only the status code does."
+    },
+    "handoff": {
+      "http_status": 202,
+      "content_type": "application/json; charset=utf-8",
+      "content_length": 114,
+      "retry_after_seconds": 30,
+      "body_keys": ["message", "snapshot_id", "status"],
+      "message": "Snapshot is not ready yet, try again in 30s",
+      "snapshot_id": "sd_mujknayt1rvg0aadjq",
+      "status_value": "not recorded",
+      "digest_sha256": "e6a91c904c6917a40f7f5ca1476c18642358a90d781510d1bf5c75e5fd8736d8"
+    },
+    "progress": {
+      "http_status": 200,
+      "polls_needed": 1,
+      "status": "ready",
+      "records": 10,
+      "errors": 0,
+      "collection_duration_ms": 36326,
+      "avg_duration_per_input_ms": 36326,
+      "body_keys": [
+        "avg_duration_per_input",
+        "collection_duration",
+        "dataset_id",
+        "errors",
+        "records",
+        "snapshot_id",
+        "status"
+      ],
+      "states_never_observed": ["starting", "running", "failed", "canceled"]
+    },
+    "download": {
+      "http_status": 200,
+      "content_type": "application/json; charset=utf-8",
+      "content_length": 8703,
+      "records": 10,
+      "digest_sha256": "7531df8384cda8c4389c3993167cca728247ca81141d8aeae48254fa2530826e"
+    }
+  },
+  "field_presence_matrix": {
+    "note": "Transcribed from the observation. Ten records, all thirteen requested fields inspected in every record. No requested field was absent as a key, and no field was dropped by the selector.",
+    "unrequested_fields_returned": "none",
+    "fields": {
+      "url": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "non-empty string", "extra": "every value is on the www.linkedin.com host"},
+      "job_posting_id": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "non-empty string", "extra": "10 distinct within this single snapshot"},
+      "job_title": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "non-empty string"},
+      "company_name": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "non-empty string"},
+      "job_location": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "non-empty string", "extra": "mentions the requested city in 10 of 10"},
+      "job_posted_date": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "non-empty string", "extra": "ISO 8601 with a Z suffix"},
+      "apply_link": {"present": 10, "explicit_null": 10, "empty_string": 0, "value_state": "explicit null in every record", "extra": "a provider assertion that no value exists, not a closed or expired listing"},
+      "country_code": {"present": 10, "explicit_null": 10, "empty_string": 0, "value_state": "explicit null in every record", "extra": "null despite an exactly echoed country filter, so it carries no country evidence and must never be back-filled from the request"},
+      "discovery_input": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "object with 10 members", "extra": "the five submitted filters round-tripped exactly and the five omitted filters came back as empty strings; jobs_to_not_include has no echo member at all"},
+      "job_seniority_level": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "non-empty string", "extra": "3 distinct values"},
+      "job_employment_type": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "non-empty string", "extra": "1 distinct value"},
+      "application_availability": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "boolean", "extra": "true in all 10 records, beside an explicitly null apply_link"},
+      "job_posted_time": {"present": 10, "explicit_null": 0, "empty_string": 0, "value_state": "non-empty string", "extra": "the relative ago pattern in all 10 records"}
+    }
+  },
+  "terminal_completeness": {
+    "cursor_page_token_next_link": "none observed",
+    "total_or_estimated_count": "none observed",
+    "scope_complete_flag": "none",
+    "observed_count_equals_declared_cap": true,
+    "consequence": "Nothing in the observed state separates a provider that found exactly ten from one that found more and stopped at the cap, so no coverage or completeness claim is representable."
+  }
+}

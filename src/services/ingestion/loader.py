@@ -15,7 +15,6 @@ from src.services.ingestion.models import (
     IngestionRunSummary,
     NormalizedJob,
 )
-from src.services.ingestion.normalize.vietnamworks import to_normalized_job
 from src.services.ingestion.raw_store import upsert_raw_postings
 from src.services.ingestion.run_store import persist_ingestion_run
 from src.services.ingestion.safety import (
@@ -25,17 +24,30 @@ from src.services.ingestion.safety import (
     assert_normalized_row_quality,
     send_dead_man_ping,
 )
+from src.services.ingestion.source_registry import (
+    DEFAULT_SERVING_SOURCE,
+    resolve_binding,
+    resolve_source,
+)
 from src.services.ingestion.sources.base import JobSource
 
 # Rollback runbook: if clean_jobs needs to be rebuilt (e.g. a bad load), it can
 # always be reconstructed from raw_jobs - raw_jobs accumulates natural-key rows
 # and is never truncated. Replay: fetch every raw_jobs row, run its raw_payload back through
-# to_normalized_job, and re-run upsert_clean_jobs over the results. This is the
+# the source's normalizer, and re-run upsert_clean_jobs over the results. This is the
 # same recovery performed live on 2026-07-15.
 
 
-def run_ingestion(source: JobSource | None = None) -> dict:
-    """Run ingestion and append a best-effort non-PII operational summary."""
+def run_ingestion(source: JobSource | None = None, *, declared_source: str | None = None) -> dict:
+    """Run ingestion and append a best-effort non-PII operational summary.
+
+    `declared_source` names the source to collect from. Leaving it undeclared
+    keeps the historical path exactly as it was, because that path resolves the
+    one source whose authorization gate reads met. Naming a source resolves both
+    the adapter and its normalizer through the source registry, and a source this
+    build does not know fails before it fetches, rather than after it has
+    written.
+    """
     source_name = getattr(source, "source", "vietnamworks")
     summary = IngestionRunSummary(
         source=source_name,
@@ -48,11 +60,12 @@ def run_ingestion(source: JobSource | None = None) -> dict:
     try:
         assert_clean_jobs_schema()
 
+        phase = "source_initialization"
         if source is None:
-            phase = "source_initialization"
-            from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
-
-            source = VietnamWorksSource()
+            source = resolve_source(declared_source)
+        # The rule is resolved before anything is fetched or written, so a source
+        # this build does not know is refused before it can reach raw_jobs.
+        binding = resolve_binding(getattr(source, "source", DEFAULT_SERVING_SOURCE))
 
         phase = "fetch"
         postings = list(source.fetch())
@@ -80,7 +93,7 @@ def run_ingestion(source: JobSource | None = None) -> dict:
         skipped = 0
         for p in postings:
             try:
-                normalized.append(to_normalized_job(p.raw_payload))
+                normalized.append(binding.normalize(p.raw_payload))
             except Exception:
                 skipped += 1
                 logger.warning(

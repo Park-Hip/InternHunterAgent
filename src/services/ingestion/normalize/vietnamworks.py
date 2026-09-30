@@ -1,10 +1,12 @@
 """VietnamWorks-specific normalizer: maps a raw payload dict → NormalizedJob.
 
-All source-specific field name knowledge lives here. The reusable transforms
-(html_to_text, classify_role, etc.) are imported from transform.py.
+All source-specific field name knowledge lives here, including the lineage each
+populated output field declares. The reusable transforms (html_to_text,
+classify_role, etc.) are imported from transform.py.
 """
 from __future__ import annotations
 
+from src.services.ingestion.evidence_store import ProvenancePaths
 from src.services.ingestion.models import NormalizedJob
 from src.services.ingestion.transform import (
     classify_role,
@@ -14,6 +16,40 @@ from src.services.ingestion.transform import (
     normalize_location,
     to_date,
 )
+
+# The declared source namespace this rule set belongs to.
+SOURCE_ID = "vietnamworks"
+
+# The version of this rule set. Every populated field it produces is recorded
+# against it, so changing a mapping means a new version, never an edit.
+NORMALIZATION_VERSION = "vietnamworks-normalize-v1"
+
+# Candidate field lineage for every output field, resolved by declared source
+# through the source registry rather than imported at a call site. Each entry is
+# (source field path, transform); a comma-separated path means a value derived
+# from several source fields. `unavailable` marks a field the source cannot
+# supply, so its lineage names no field at all.
+PROVENANCE_PATHS: ProvenancePaths = {
+    "source": ("@plan.source_id", "copy"),
+    "external_id": ("jobId", "copy"),
+    "source_url": ("jobUrl", "copy"),
+    "title": ("jobTitle", "copy"),
+    "company": ("companyName", "copy"),
+    "role": ("jobTitle,jobFunction", "derive"),
+    "description": ("jobDescription,jobRequirement,benefits", "normalize"),
+    "tech_stack": ("skills,jobDescription,jobRequirement", "derive"),
+    "job_level": ("jobLevel,jobLevelVI", "copy"),
+    "location": ("address,workingLocations", "normalize"),
+    "listing_expires_on": ("expiredOn", "parse"),
+    "created_on": ("createdOn", "parse"),
+    "is_internship": ("jobLevel,jobLevelVI", "derive"),
+    "salary_min": ("salaryMin,isSalaryVisible", "normalize"),
+    "salary_max": ("salaryMax,isSalaryVisible", "normalize"),
+    "salary_currency": ("salaryCurrency,isSalaryVisible", "normalize"),
+    "is_salary_negotiable": ("isSalaryVisible", "derive"),
+    "technical_seniority": ("unavailable", "unavailable"),
+    "leadership_scope": ("unavailable", "unavailable"),
+}
 
 
 def _extract_benefits(payload: dict) -> list[str]:
@@ -133,7 +169,7 @@ def to_normalized_job(payload: dict) -> NormalizedJob:
     # The column is nullable so this is safe to leave until that work lands.
 
     return NormalizedJob(
-        source="vietnamworks",
+        source=SOURCE_ID,
         external_id=str(payload["jobId"]),
         source_url=payload.get("jobUrl"),
         title=title,

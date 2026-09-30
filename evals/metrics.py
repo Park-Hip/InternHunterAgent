@@ -30,6 +30,31 @@ class ToolExpectation:
     allowed: tuple[str, ...]
 
 
+# Metrics for the governed v0 path. Both are credential-free and are the CI gate.
+# `plan_correctness` grades the criteria the core applied against the case's reviewed
+# plan; `result_equivalence` grades the rows, aggregates, total, answer state, and
+# evidence labels against the case's golden. Neither asks a model anything, because
+# the governed path compiles a typed plan rather than a SQL string.
+V0_METRICS = (
+    MetricSpec(
+        "plan_correctness",
+        MetricKind.DETERMINISTIC,
+        "The core applied the reviewed filters, resolved the same way.",
+        ("applied", "expected_filters"),
+    ),
+    MetricSpec(
+        "result_equivalence",
+        MetricKind.DETERMINISTIC,
+        "The rows, aggregates, total, state, and evidence labels are the reviewed ones.",
+        ("result", "golden"),
+    ),
+)
+
+# Retired for the governed path by the Stage 4 decision (#487): there is no SQL path
+# to score, and a typed plan is never compared to a SQL string. They stay for the v1
+# replays, and a v0 case may not declare them.
+LEGACY_METRICS = frozenset({"sql_accuracy", "memory"})
+
 METRICS = (
     MetricSpec("tool_correctness", MetricKind.DETERMINISTIC, "Required tools were called, with no unexpected tools.", ("tools_called", "expected_tools")),
     MetricSpec("sql_accuracy", MetricKind.DETERMINISTIC, "SQL returns the reference result on the fixture.", ("sql_text", "reference_sql")),
@@ -38,6 +63,7 @@ METRICS = (
     MetricSpec("memory", MetricKind.JUDGE, "Judge whether the answer correctly uses the previous conversation turns and their constraints.", ("question", "answer", "conversation_history")),
     MetricSpec("rubric", MetricKind.JUDGE, "Judge the answer against this scenario's rubric.", ("question", "answer", "rubric")),
 )
+METRICS = METRICS + V0_METRICS
 METRIC_BY_NAME = {spec.name: spec for spec in METRICS}
 
 

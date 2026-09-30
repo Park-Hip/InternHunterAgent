@@ -20,6 +20,8 @@ from src.services.query.compiler import CompiledQuery, compile_plan
 from src.services.query.execution import BoundedExecutor, QueryExecutionError
 from src.services.query.plan import (
     AmbiguousQueryError,
+    FilterField,
+    GroupField,
     JobQueryRequest,
     Metric,
     NormalizedFilter,
@@ -45,6 +47,8 @@ CAVEAT_CURRENCY_SCOPED = "CURRENCY_SCOPED"
 CAVEAT_PERIOD_UNKNOWN = "PERIOD_UNKNOWN"
 CAVEAT_DENOMINATOR = "DENOMINATOR_STATED"
 CAVEAT_MATCH_BASIS = "MATCH_BASIS"
+CAVEAT_TRUNCATION = "TRUNCATION"
+CAVEAT_COVERAGE_STATED = "COVERAGE_STATED"
 
 
 class JobQueryService:
@@ -89,12 +93,22 @@ class JobQueryService:
     ) -> QueryResult:
         applied = _applied(plan)
         caveats = list(plan.caveats)
+        # The contract attaches MATCH_BASIS whenever a filter was applied, not only
+        # for a technology token match, so each of these three checks was narrower
+        # than the contract until the v0 gate found it. Every one is a fact about
+        # the shape, and every one is appended at most once.
+        if applied:
+            _add(caveats, CAVEAT_MATCH_BASIS)
         if any(criterion.basis == "free_text" for criterion in applied):
-            caveats.append(CAVEAT_FREE_TEXT)
-        if any(criterion.basis == "technology_token" for criterion in applied):
-            caveats.append(CAVEAT_MATCH_BASIS)
+            _add(caveats, CAVEAT_FREE_TEXT)
         if any(criterion.basis == "fallback" for criterion in applied):
-            caveats.append(CAVEAT_ROLE_FALLBACK)
+            _add(caveats, CAVEAT_ROLE_FALLBACK)
+        if any(criterion.field is FilterField.SALARY_CURRENCY for criterion in applied):
+            _add(caveats, CAVEAT_CURRENCY_SCOPED)
+        # A grouping over a nullable recorded field states its coverage, because a
+        # group missing a value is a group the answer has to name.
+        if plan.group_by in (GroupField.JOB_LEVEL, GroupField.SALARY_CURRENCY):
+            _add(caveats, CAVEAT_COVERAGE_STATED)
 
         if plan.shape is QueryShape.DETAIL:
             return self._detail(applied, caveats, rows)
@@ -137,7 +151,7 @@ class JobQueryService:
         shown = _strip_total(fetched)[:display_cap]
         truncated = match_total is not None and match_total > len(shown)
         if truncated:
-            caveats.append("TRUNCATION")
+            _add(caveats, CAVEAT_TRUNCATION)
         return QueryResult(
             state=QueryState.ANSWERED if shown else QueryState.EMPTY,
             shape=QueryShape.LIST,
@@ -191,7 +205,7 @@ class JobQueryService:
         shown = _strip_total(fetched)[:display_cap]
         skipped = int(rows.get("skipped", [{}])[0].get("skipped", 0)) if rows.get("skipped") else 0
         if skipped:
-            caveats.append("COVERAGE_STATED")
+            _add(caveats, CAVEAT_COVERAGE_STATED)
         return QueryResult(
             state=QueryState.ANSWERED if shown else QueryState.EMPTY,
             shape=QueryShape.TOP_N,
@@ -240,7 +254,7 @@ class JobQueryService:
         numerator = int(row.get("numerator", 0))
         excluded = int(row.get("excluded_null_field", 0))
         percent = round(numerator * 100.0 / denominator, 1) if denominator else None
-        caveats.append(CAVEAT_DENOMINATOR)
+        _add(caveats, CAVEAT_DENOMINATOR)
         return QueryResult(
             state=QueryState.ANSWERED if denominator else QueryState.EMPTY,
             shape=QueryShape.AGGREGATE,
@@ -274,7 +288,8 @@ class JobQueryService:
             )
             for row in rows.get("aggregate", [])
         ]
-        caveats.extend([CAVEAT_CURRENCY_SCOPED, CAVEAT_PERIOD_UNKNOWN, CAVEAT_DENOMINATOR])
+        for label in (CAVEAT_CURRENCY_SCOPED, CAVEAT_PERIOD_UNKNOWN, CAVEAT_DENOMINATOR):
+            _add(caveats, label)
         measured = [item for item in aggregates if item.value is not None]
         return QueryResult(
             state=QueryState.ANSWERED if measured else QueryState.EMPTY,
@@ -285,6 +300,12 @@ class JobQueryService:
             displayed_count=len(aggregates),
             aggregate=aggregates,
         )
+
+
+def _add(caveats: list[str], label: str) -> None:
+    """Append a caveat once, so two rules for the same label cannot duplicate it."""
+    if label not in caveats:
+        caveats.append(label)
 
 
 def _applied(plan: QueryPlan) -> list[AppliedCriterion]:

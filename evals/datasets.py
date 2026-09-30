@@ -47,11 +47,16 @@ class DatasetSpec:
     def __init__(self, path: Path) -> None:
         self.path = path
 
+    @property
+    def is_v0(self) -> bool:
+        """Whether this dataset describes the governed v0 path rather than a replay."""
+        return self.path.name.startswith("v0_")
+
     def scenarios(self) -> list[dict[str, Any]]:
         payload = yaml.safe_load(self.path.read_text(encoding="utf-8"))
         if not isinstance(payload, list):
             raise ValueError(f"Dataset {self.path} must be a YAML list of scenarios")
-        from evals.metrics import METRIC_BY_NAME
+        from evals.metrics import LEGACY_METRICS, METRIC_BY_NAME
 
         seen: set[str] = set()
         for scenario in payload:
@@ -68,6 +73,13 @@ class DatasetSpec:
             names = scenario.get("metrics")
             if not isinstance(names, list) or not names or set(names) - METRIC_BY_NAME.keys():
                 raise ValueError(f"Scenario {sid} has invalid metrics: {names}")
+            if self.is_v0 and set(names) & LEGACY_METRICS:
+                # #487 decided a no-go on the SQL path, and v0 is single-turn, so a
+                # governed case may not ask for a metric that scores either one.
+                raise ValueError(
+                    f"Scenario {sid} declares retired metrics {sorted(set(names) & LEGACY_METRICS)}; "
+                    "the v0 dataset may not score the SQL path or multi-turn memory"
+                )
             if "sql_accuracy" in names and not scenario.get("reference_sql"):
                 raise ValueError(f"Scenario {sid} has no reference SQL")
             if "rubric" in names and not scenario.get("rubric"):

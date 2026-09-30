@@ -84,8 +84,8 @@ def build_plan(request: JobQueryRequest) -> QueryPlan:
             )
 
     filters = _normalize_filters(request.filters, limits)
-    if any(f.basis == "fallback" for f in filters):
-        caveats.append("ROLE_FALLBACK")
+    # The role fallback caveat is added by the service from the criterion's basis,
+    # so there is one owner and the answer cannot print it twice.
 
     if request.shape is QueryShape.COMPARE:
         sides = tuple(
@@ -210,6 +210,18 @@ def _normalize_exact(item: Filter, label: str) -> NormalizedFilter:
 
 
 def _normalize_numeric(item: Filter, label: str) -> NormalizedFilter:
+    """A threshold carries one bound.
+
+    A threshold is not a set membership test, so several values cannot be honoured:
+    `>= 1000 OR >= 2000` collapses to the weaker `>= 1000`, which is almost never
+    what was meant. Compiling the first value and reporting the rest as applied
+    criteria would tell the model about a filter that never ran, so a second value
+    is a question instead, exactly as a boolean filter carrying both values is.
+    """
+    if len(item.values) > 1:
+        raise AmbiguousQueryError(
+            f"Bạn muốn lọc theo ngưỡng nào cho '{item.field.value}'? Hãy nêu một con số."
+        )
     values: list[float] = []
     for value in item.values:
         if isinstance(value, bool) or not isinstance(value, (int, float)):

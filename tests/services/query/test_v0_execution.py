@@ -68,13 +68,21 @@ def engine():
 
 @pytest.fixture
 def service(engine):
-    """A service bound to the fixture through the agent session factory."""
+    """A service bound to the fixture through the agent session factory.
+
+    The engine is disposed at the end of each test. Leaking a pool per test is
+    how an order-dependent failure appears as a golden that moved rather than as
+    the connection leak that caused it.
+    """
     fixture_engine = create_engine(fixture_database_url())
 
     def factory():
         return fixture_engine.connect()
 
-    return JobQueryService(executor=BoundedExecutor(session_factory=factory))
+    try:
+        yield JobQueryService(executor=BoundedExecutor(session_factory=factory))
+    finally:
+        fixture_engine.dispose()
 
 
 def answer(service, **kwargs):
@@ -101,6 +109,19 @@ class _Borrowed:
 
 def service_on(connection) -> JobQueryService:
     return JobQueryService(executor=BoundedExecutor(session_factory=lambda: _Borrowed(connection)))
+
+
+def assert_pinned_fixture_rows(engine, expected: int = 24) -> None:
+    """The fixture is only meaningful when it holds exactly the pinned rows.
+
+    An edge row that survived a rollback would shift a later test's golden, and
+    the failure would land on whichever test happened to read the affected
+    number. This says so directly instead.
+    """
+    with engine.connect() as conn:
+        assert conn.execute(text("select count(*) from clean_jobs")).scalar() == expected, (
+            "the pinned fixture is not intact; an edge row survived a rollback"
+        )
 
 
 def insert_edge_row(
@@ -137,6 +158,11 @@ def insert_edge_row(
 
 
 class TestDatasetGoldens:
+    """Every golden here is computed against the pinned 24-row fixture."""
+
+    def test_the_pinned_fixture_is_intact(self, engine) -> None:
+        assert_pinned_fixture_rows(engine)
+
     def test_list_role_and_city(self, service) -> None:
         result = answer(
             service,

@@ -5,11 +5,11 @@ the model through different code paths or with different definitions of the same
 number. The tool takes a typed request, hands it to the domain service, and
 renders the result as facts plus the evidence the answer must carry.
 
-This module is deliberately not registered on the serving MCP surface and not
-wired into the ReAct runtime. The cutover in
-[#486](https://github.com/Park-Hip/InternHunterAgent/issues/486) decides that, and
-registering the tool early would change what the served agent can do, which is
-exactly what this track's compatibility boundary forbids.
+This module is the served tool of the governed v0 bundle. The cutover in
+[#486](https://github.com/Park-Hip/InternHunterAgent/issues/486) registered it:
+`job_server.py` exposes it when `agent.agent_v0` is on, and the ReAct agent is
+compiled against it. The v1 tools stay in the tree and are registered when that
+same key is off, which is also the rollback.
 
 The rendering is Vietnamese with the canonical values verbatim, because the model
 is instructed to answer in Vietnamese and to reproduce stored values exactly.
@@ -51,7 +51,7 @@ CAVEAT_TEXT = {
     "TRUNCATION": "Có nhiều kết quả hơn số dòng hiển thị; tổng số khớp đã nêu ở trên.",
     "FREE_TEXT_HEDGE": "Kết quả dựa trên cách diễn đạt trong nội dung tin đăng, có thể chưa chính xác.",
     "MATCH_BASIS": "Điều kiện lọc được áp dụng trên trường đã nêu, không phải suy đoán.",
-    "ROLE_FALLBACK": "Không có vai trò chuẩn cho từ khóa này, nên đã tìm trong tiêu đề và nội dung tin đăng.",
+    "ROLE_FALLBACK": "Không có vai trò chuẩn cho từ khóa này, nên đã tìm trong tiêu đề và nội dung tin đăng. Kết quả dựa trên cách diễn đạt, có thể chưa chính xác.",
     "CURRENCY_SCOPED": "Mỗi con số chỉ áp dụng cho một loại tiền tệ đã nêu; không so sánh chéo tiền tệ.",
     "PERIOD_UNKNOWN": "Dữ liệu không ghi kỳ hạn thanh toán, nên các mức lương không gắn nhãn theo tháng hay năm.",
     "DENOMINATOR_STATED": "Mẫu số và số tin bị loại đã được nêu.",

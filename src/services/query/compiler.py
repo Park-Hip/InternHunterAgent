@@ -165,7 +165,10 @@ def compile_predicate(predicate: NormalizedFilter, index: int) -> CompiledPredic
     values = predicate.values
 
     if field is FilterField.FREE_TEXT:
-        return _free_text_predicate(values, index)
+        # The role fallback promises the title as well as the description.
+        return _free_text_predicate(
+            values, index, include_title=predicate.basis == "fallback"
+        )
     if field is FilterField.TECHNOLOGY:
         return _technology_predicate(values, predicate.mode, index)
     if field is FilterField.HAS_LINK:
@@ -246,14 +249,31 @@ def _technology_predicate(values: tuple[Any, ...], mode: MatchMode, index: int) 
     return CompiledPredicate(sql="(" + joiner.join(fragments) + ")", params=params)
 
 
-def _free_text_predicate(values: tuple[Any, ...], index: int) -> CompiledPredicate:
-    fragments: list[str] = []
+def _free_text_predicate(
+    values: tuple[Any, ...], index: int, *, include_title: bool = False
+) -> CompiledPredicate:
+    """Search posting prose, and the title too when the contract promises it.
+
+    A free-text filter is a search of the description, because that is where the
+    posting writes its prose. The role fallback is different: the contract says a
+    role with no canonical category falls back onto the title *and* the
+    description, so it searches both. Telling the model it searched a column it
+    did not search would be a reporting lie, which is the one class of error the
+    evidence labels exist to prevent.
+    """
+    terms: list[str] = []
     params: dict[str, Any] = {}
     for position, value in enumerate(values):
         name = f"f{index}_{position}"
         params[name] = _like_value(str(value))
-        fragments.append(f"description ILIKE :{name}")
-    return CompiledPredicate(sql="(" + " AND ".join(fragments) + ")", params=params)
+        legs = [f"description ILIKE :{name}"]
+        if include_title:
+            title_name = f"ft{index}_{position}"
+            params[title_name] = params[name]
+            legs.append(f"title ILIKE :{title_name}")
+        # One term is satisfied by either column; separate terms are all required.
+        terms.append("(" + " OR ".join(legs) + ")")
+    return CompiledPredicate(sql="(" + " AND ".join(terms) + ")", params=params)
 
 
 def _where(predicates: tuple[CompiledPredicate, ...]) -> str:
@@ -418,7 +438,14 @@ def _compile_salary_aggregate(plan: QueryPlan, limits: dict[str, int]) -> Compil
             f"count(salary_min) AS with_salary_min, {measure} AS value "
             f"FROM {TABLE}{where} GROUP BY 1 ORDER BY currency ASC LIMIT :group_cap"
         )
-    excluded = f"SELECT count(*) AS excluded FROM {TABLE}{_with(where, 'salary_min IS NULL')}"
+    # The excluded count has to describe the same set as the figure beside it. When
+    # the request pinned one currency, the figure is that currency's, so the count
+    # has to be scoped the same way or the answer reads a per-currency number that
+    # is actually global.
+    excluded_scope = "salary_min IS NULL"
+    if currency is not None:
+        excluded_scope = _with("salary_currency = :currency", excluded_scope)
+    excluded = f"SELECT count(*) AS excluded FROM {TABLE}{_with(where, excluded_scope)}"
     statements = [
         Statement(
             sql=grouped,

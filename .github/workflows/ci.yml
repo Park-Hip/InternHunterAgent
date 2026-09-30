@@ -140,3 +140,46 @@ jobs:
       - name: Run migration round-trip test
         run: uv run pytest tests/migrations/test_baseline_roundtrip.py -q
 
+  v0-gate:
+    name: Governed v0 acceptance gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The governed v0 gate calls the query core directly, so it needs the fixture
+    # database and nothing else: no serving model, no judge, no secret. It lives
+    # in its own job because an unreachable database must fail it loudly, which is
+    # different from how the credential-free unit suite treats the same database.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: internhunter
+          POSTGRES_PASSWORD: internhunter
+          POSTGRES_DB: internhunter_eval
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U internhunter -d internhunter_eval"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GROQ_API_KEY: "unused-in-ci"
+      DEEPEVAL_TELEMETRY_OPT_OUT: "1"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.8.15"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install
+        run: uv sync --frozen
+
+      - name: Load the pinned fixture
+        run: uv run python -m evals.fixtures.loader
+
+      - name: Gate the v0 dataset
+        run: uv run python -m evals --deterministic --dataset v0
+

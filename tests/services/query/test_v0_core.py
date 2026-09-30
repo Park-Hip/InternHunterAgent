@@ -543,6 +543,56 @@ class TestServiceAssembly:
         assert result.state is QueryState.UNSUPPORTED
         assert executor.calls == []
 
+    def test_any_applied_filter_attaches_the_match_basis(self) -> None:
+        service = service_with({"rows": [{"id": 1, "match_total": 1}]})
+        result = service.answer(
+            JobQueryRequest(shape="list", filters=[{"field": "location", "values": ["Hanoi"]}])
+        )
+        assert "MATCH_BASIS" in result.caveats
+
+    def test_no_filter_means_no_match_basis(self) -> None:
+        service = service_with({"rows": [{"id": 1, "match_total": 1}]})
+        result = service.answer(JobQueryRequest(shape="list"))
+        assert "MATCH_BASIS" not in result.caveats
+
+    def test_a_currency_filter_attaches_the_currency_scope(self) -> None:
+        service = service_with(
+            {
+                "rows": [{"id": 1, "match_total": 1}],
+                "skipped": [{"skipped": 0}],
+            }
+        )
+        result = service.answer(
+            JobQueryRequest(
+                shape="top_n",
+                top={"n": 1, "order_by": "salary_min"},
+                filters=[{"field": "salary_currency", "values": ["USD"]}],
+            )
+        )
+        assert "CURRENCY_SCOPED" in result.caveats
+
+    def test_a_grouping_over_a_nullable_field_states_its_coverage(self) -> None:
+        service = service_with({"groups": [{"value": "Manager", "n": 1}], "total": [{"count": 1}]})
+        result = service.answer(JobQueryRequest(shape="group_count", group_by="job_level"))
+        assert "COVERAGE_STATED" in result.caveats
+
+    def test_a_caveat_is_never_repeated(self) -> None:
+        service = service_with(
+            {
+                "aggregate": [{"currency": "USD", "rows": 1, "with_salary_min": 1, "value": 2500.0}],
+                "excluded": [{"excluded": 0}],
+            }
+        )
+        result = service.answer(
+            JobQueryRequest(
+                shape="aggregate",
+                metric="average_salary",
+                filters=[{"field": "salary_currency", "values": ["USD"]}],
+            )
+        )
+        assert len(result.caveats) == len(set(result.caveats))
+        assert result.caveats.count("CURRENCY_SCOPED") == 1
+
     def test_every_result_state_is_reachable_through_answer(self) -> None:
         states = {
             QueryState.ANSWERED,

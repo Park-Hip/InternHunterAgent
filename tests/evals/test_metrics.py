@@ -2,12 +2,21 @@
 
 from deepeval.metrics import ToolCorrectnessMetric
 
-from evals.metrics import METRICS, NO_JUDGE, ToolExpectation, MetricKind, judge_case, metric, not_applicable_reason, tool_case, tool_expectation
+from evals.metrics import LEGACY_METRICS, METRICS, NO_JUDGE, ToolExpectation, MetricKind, judge_case, metric, not_applicable_reason, tool_case, tool_expectation
 
 
 def test_registry() -> None:
-    assert len(METRICS) == 6
-    assert {m.name for m in METRICS if m.kind == MetricKind.DETERMINISTIC} == {"tool_correctness", "sql_accuracy"}
+    # Four capture-time metrics and two v0-gate metrics, plus the pair retired for
+    # the governed path by the Stage 4 decision.
+    assert len(METRICS) == 8
+    assert {m.name for m in METRICS if m.kind == MetricKind.DETERMINISTIC} == {
+        "tool_correctness",
+        "sql_accuracy",
+        "plan_correctness",
+        "result_equivalence",
+    }
+    assert LEGACY_METRICS == {"sql_accuracy", "memory"}
+    assert LEGACY_METRICS <= {m.name for m in METRICS}
 
 
 def test_tool_metric_never_calls_provider() -> None:

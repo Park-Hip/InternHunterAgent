@@ -24,6 +24,7 @@ select the next approved boundary without consulting the legacy discovery collec
 | [Agent v0 evaluation baseline](agent-v0-baseline.md) | Measured agent and evaluation baseline, v1 retention, and open decisions for the agent-v0 track | Maintainers and implementers |
 | [Agent v0 behavior and metric contract](agent-v0-contract.md) | The active v0 specification of what the agent may claim, and how each number is computed | Maintainers and implementers |
 | [Agent v0 legacy rule disposition](agent-v0-legacy-rules.md) | The auditable map from the legacy `G01` to `G47` expectations to the v0 contract | Maintainers and implementers |
+| [Agent v0 scenario disposition](agent-v0-scenario-disposition.md) | The audit trail from the 50 v1 evaluation scenarios to the 16 v0 acceptance cases, and the behaviors nothing covers yet | Maintainers and implementers |
 
 `docs/discovery/` is retained as historical, source-backed discovery evidence.
 It does not set implementation order or create an architecture decision unless an approved record in

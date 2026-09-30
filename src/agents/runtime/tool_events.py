@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from typing import Any
 
 #: Arguments reach the browser. Keep them short, flat, and stringly typed.
@@ -29,20 +29,19 @@ MAX_ARGUMENT_LENGTH = 120
 MAX_ARGUMENTS = 6
 
 ToolEventEmitter = Callable[[dict[str, Any]], Awaitable[None]]
+ToolEventToken = Token["ToolEventEmitter | None"]
 
 _current_emitter: ContextVar[ToolEventEmitter | None] = ContextVar(
     "current_tool_event_emitter", default=None
 )
 
 
-def bind_tool_event_emitter(
-    emitter: ToolEventEmitter,
-) -> "Token[None]":  # noqa: F821 - Token is only used for readability
+def bind_tool_event_emitter(emitter: ToolEventEmitter) -> ToolEventToken:
     """Bind an emitter for the current context. Returns a reset token."""
     return _current_emitter.set(emitter)
 
 
-def reset_tool_event_emitter(token: Any) -> None:
+def reset_tool_event_emitter(token: ToolEventToken) -> None:
     _current_emitter.reset(token)
 
 

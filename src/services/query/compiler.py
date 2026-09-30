@@ -80,6 +80,7 @@ DETAIL_PROJECTION: Final = (
     "title",
     "company",
     "role",
+    "description",
     "location",
     "job_level",
     "tech_stack",

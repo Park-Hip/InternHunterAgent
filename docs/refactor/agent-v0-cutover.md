@@ -105,7 +105,7 @@ work before this cutover can be called observed.
 | Risk | Why it matters here |
 | --- | --- |
 | The prompt is reviewed, not observed | A rule the model quietly ignores is indistinguishable from a rule it follows. The first real traffic is when this is tested. |
-| The v0 tool cannot return posting text | #507 is open, and the cutover makes it a user-visible gap: the v1 path described a posting, the v0 one does not. |
-| A share over a two-value field is refused | #508 is open, and the same cutover makes it user-visible. |
+| The v0 tool cannot return posting text | Closed in #507: the detail projection carries the text, the tool labels it as posting text, and the retrieval is gated. |
+| A share over a two-value field is refused | Closed in #508. |
 | The trace lineage is correct in tests only | The v1 and v0 lineages are asserted against a mocked SDK, not against a live trace. |
 | The v1 bundle is unregisterable but still shipped | Two prompt surfaces and two tool paths are in the tree. That is deliberate, and it is debt with a date on it: Stage 7. |

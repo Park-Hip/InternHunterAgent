@@ -109,6 +109,15 @@ class TestTheGateFailsWhenItShould:
         failures = failed_cases(run_v0_gate(spec_for(cases, tmp_path)))
         assert any(scenario == "V0-COUNT-CORPUS" and metric == RESULT_METRIC for scenario, metric, _ in failures)
 
+    def test_a_description_the_golden_requires_must_be_returned(self, tmp_path, fixture_available) -> None:
+        if not fixture_available:
+            pytest.skip("the gate needs the evaluation fixture")
+        cases = v0_cases()
+        target = next(case for case in cases if case["id"] == "V0-DETAIL-DESCRIPTION")
+        target["expected_description_contains"] = ["a phrase the posting does not contain"]
+        failures = failed_cases(run_v0_gate(spec_for(cases, tmp_path)))
+        assert any(scenario == "V0-DETAIL-DESCRIPTION" and metric == RESULT_METRIC for scenario, metric, _ in failures)
+
     def test_an_absent_capability_claim_that_is_false_fails(self, tmp_path, fixture_available) -> None:
         if not fixture_available:
             pytest.skip("the gate needs the evaluation fixture")
@@ -147,7 +156,10 @@ class TestTheGatePasses:
         report = run_v0_gate(dataset("v0"))
         assert failed_cases(report) == []
         assert set(report["metrics"]) == {PLAN_METRIC, RESULT_METRIC}
-        assert len(report["cases"]) == 16
+        # Coverage is a pass/fail condition, so the gate runs every case the
+        # dataset declares and the count is read rather than hard-coded.
+        assert len(report["cases"]) == len(v0_cases())
+        assert len(report["cases"]) >= 16
 
     def test_a_subset_can_be_selected(self, fixture_available) -> None:
         if not fixture_available:

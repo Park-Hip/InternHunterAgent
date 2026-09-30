@@ -110,19 +110,20 @@ Seven probes, none of which is in the reviewed v0 contract:
 | `N04` | Postings per month of the source-record date | No date truncation as a grouping |
 | `N06` | Share of postings that have a source link | A share is measured only over a recorded value field, so a two-value field is out |
 | `N07` | Share that are internships, per city | Both a share and a grouping |
-| `I01` | Summarize posting 23 | See the gap below: the typed core returns no posting text at all |
+| `I01` | Summarize posting 23 | **Closed.** The detail projection now returns the posting text, and `V0-DETAIL-DESCRIPTION` grades the retrieval |
 
-Two of these are not "advanced SQL". `N06` and `I01` are ordinary user questions, and both expose
-real gaps in what #485 shipped:
+Two of these were not "advanced SQL". `N06` and `I01` were ordinary user questions, and both
+exposed real gaps in what #485 shipped. Both have since been closed on the typed core, and the
+lesson stands: neither was a reason to let a model write SQL.
 
-1. **The typed core cannot return a posting's description.** Neither the list nor the detail
-   projection carries `description`, so "tell me about job 23" is not expressible, while the legacy
-   `get_job_details` serves it today. For a job-search product this is the most important question
-   in the class, and it is a Stage 3 gap, not an argument for SQL.
-2. **A share cannot be measured over a two-value field.** "What share of postings have a source
-   link?" is a natural question about data quality, and the planner refuses it.
-
-Both are follow-up work on the typed core. Neither is a reason to let a model write SQL.
+1. **The typed core could not return a posting's description.** Neither projection carried
+   `description`, so "tell me about job 23" was not expressible while the legacy
+   `get_job_details` served it. Closed: the detail projection carries the text, the tool renders it
+   as a labelled block rather than as one more value, and `V0-DETAIL-DESCRIPTION` grades that a
+   posting whose text carries an injected instruction is returned whole and treated as data.
+2. **A share could not be measured over a two-value field.** "What share of postings have a source
+   link?" is a natural question about data quality and the planner refused it. Closed: a share may
+   now be measured over `is_internship` and `has_link`.
 
 ## Coincidental matches
 
@@ -200,8 +201,8 @@ next proposal is measured against something.
 
 | Risk or gap | State |
 | --- | --- |
-| The typed core cannot return posting text | Real gap in #485, tracked as [#507](https://github.com/Park-Hip/InternHunterAgent/issues/507). The legacy path serves it today, so the cutover would lose it unless this lands first. |
-| A share cannot be measured over a two-value field | Real gap in #485, tracked as [#508](https://github.com/Park-Hip/InternHunterAgent/issues/508). |
+| The typed core cannot return posting text | Closed. The detail projection returns the text, the tool labels it as posting text, and the retrieval is gated by `V0-DETAIL-DESCRIPTION`. |
+| A share cannot be measured over a two-value field | Closed. A share may be measured over `is_internship` and `has_link`. |
 | Cost attacks on production-shaped data | Unmeasured. Deciding a guarded path needs it; option (A) does not. |
 | Model token cost and end-to-end latency | Unmeasured, no credential. Does not change this decision: the deciding class is correctness, and both paths are single-digit milliseconds. |
 | Coverage on real user phrasing | The seven novel probes are the reviewer's, not sampled from users. Real phrasing may be expressible less often than 7 of 27, and that is an argument for extending the typed plan, not for SQL. |

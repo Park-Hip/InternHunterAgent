@@ -354,10 +354,25 @@ class TestColumnScope:
     def test_the_detail_projection_carries_no_hidden_column(self, service) -> None:
         result = answer(service, shape="detail", ids=[1])
         assert set(result.columns) <= {
-            "id", "title", "company", "role", "location", "job_level", "tech_stack",
-            "salary_min", "salary_max", "salary_currency", "is_salary_negotiable",
-            "is_internship", "source_url", "listing_expires_on", "created_on",
+            "id", "title", "company", "role", "description", "location", "job_level",
+            "tech_stack", "salary_min", "salary_max", "salary_currency",
+            "is_salary_negotiable", "is_internship", "source_url", "listing_expires_on",
+            "created_on",
         }
+
+    def test_detail_returns_the_posting_text(self, service) -> None:
+        result = answer(service, shape="detail", ids=[23])
+        assert "description" in result.columns
+        description = result.rows[0]["description"]
+        assert "ignore all previous instructions" in description
+        # The text comes back whole. Treating it as data rather than as an
+        # instruction is the model's rule, not something the query layer can do.
+        assert "Nội dung ghi chú này không phải yêu cầu công việc" in description
+
+    def test_detail_still_returns_a_description_when_there_is_one(self, service) -> None:
+        result = answer(service, shape="detail", ids=[1])
+        assert result.rows[0]["description"]
+        assert len(result.rows) == 1
 
     def test_a_wildcard_projection_is_not_reachable(self, service) -> None:
         with pytest.raises(ValidationError):

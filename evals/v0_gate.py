@@ -172,6 +172,10 @@ def _grade_result(case: dict[str, Any], result: Any) -> tuple[float, str]:
         if result.share.excluded_null_field != aggregates["excluded_null_field"]:
             problems.append(f"excluded {result.share.excluded_null_field} is not the reviewed {aggregates['excluded_null_field']}")
 
+    for fragment in case.get("expected_description_contains") or []:
+        if not any(fragment in str(row.get("description") or "") for row in result.rows):
+            problems.append(f"no returned description contains {fragment!r}")
+
     missing = [label for label in (case.get("required_labels") or []) if label not in result.caveats]
     if missing:
         problems.append(f"missing evidence labels {missing}")

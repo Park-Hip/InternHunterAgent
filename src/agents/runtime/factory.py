@@ -15,6 +15,7 @@ from langchain_core.tools import BaseTool
 
 from src.agents.runtime.middleware import (
     build_compaction_middleware,
+    build_tool_observation_middleware,
     build_trim_middleware,
     load_compaction_message_limits,
     load_max_turns,
@@ -40,5 +41,7 @@ async def agent_factory(
         middleware=[
             build_compaction_middleware(model, trigger_messages, keep_messages),
             build_trim_middleware(load_max_turns()),
+            # Innermost, so the reported call is the one as actually issued.
+            build_tool_observation_middleware(),
         ],
     )

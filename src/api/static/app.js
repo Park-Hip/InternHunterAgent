@@ -8,6 +8,8 @@
 // Event vocabulary (from the backend):
 //   session  { session_id }            -> pin it; send on every later turn
 //   token    { text }         (0+)     -> append word-by-word to the answer
+//   tool     { name, status, arguments, duration_ms }
+//                                       -> a card showing what the agent ran
 //   metadata { trace_id, trace_url }   -> show a "view trace" link if trace_url
 //   error    { message }               -> friendly error bubble; stop
 //   done     {}                        -> terminal; stop reading, no reconnect
@@ -123,6 +125,13 @@ function startTurn(query) {
   spoken.className = "turn__spoken";
   agent.appendChild(spoken);
 
+  // The agent's work is shown here as cards, before the answer. Evidence
+  // rather than narration: a card names a tool and its arguments, never "I
+  // searched and found".
+  const work = document.createElement("div");
+  work.className = "turn__work";
+  agent.appendChild(work);
+
   turn.appendChild(you);
   turn.appendChild(agent);
   conversation.appendChild(turn);
@@ -137,10 +146,56 @@ function startTurn(query) {
     agent,
     answer,
     spoken,
+    work,
     gotToken: false,
     rawAnswer: "",
     pendingPaint: null,
+    toolCards: new Map(),
   };
+}
+
+// A tool card is evidence, not narration. It appears when the call starts and
+// resolves when it finishes, so the reader can see the agent is working and what
+// it chose to look at.
+function upsertToolCard(ctx, event) {
+  const key = event.call_id || event.name;
+  let card = ctx.toolCards.get(key);
+
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "toolcard";
+    ctx.work.appendChild(card);
+    ctx.toolCards.set(key, card);
+  }
+
+  card.dataset.status = event.status;
+  card.textContent = "";
+
+  const name = document.createElement("span");
+  name.className = "toolcard__name";
+  name.textContent = event.name;
+  card.appendChild(name);
+
+  for (const [argKey, value] of Object.entries(event.arguments || {})) {
+    const arg = document.createElement("span");
+    arg.className = "toolcard__arg";
+    arg.textContent = `${argKey}: ${value}`;
+    card.appendChild(arg);
+  }
+
+  const status = document.createElement("span");
+  status.className = "toolcard__status";
+  if (event.status === "running") {
+    status.textContent = "đang chạy…";
+  } else if (event.status === "ok") {
+    status.textContent =
+      typeof event.duration_ms === "number" ? `${event.duration_ms} ms` : "xong";
+  } else {
+    status.textContent = event.error ? `lỗi: ${event.error}` : "lỗi";
+  }
+  card.appendChild(status);
+
+  scrollToEnd();
 }
 
 // Coalesce token paints onto a timer. The first token paints immediately so the
@@ -417,6 +472,8 @@ async function ask(query) {
         } else if (ev === "token") {
           if (state === "submitted") setState("streaming");
           appendToken(ctx, data.text);
+        } else if (ev === "tool") {
+          upsertToolCard(ctx, data);
         } else if (ev === "metadata") {
           if (data.trace_url) showTraceLink(ctx, data.trace_url);
         } else if (ev === "error") {

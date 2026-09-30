@@ -220,6 +220,48 @@ textarea { font: inherit; color: inherit; }
 }
 .turn__nodata-chips .chip:hover { padding-left: 0.75rem; }
 
+/* ---- tool cards: what the agent actually ran ------------------------- */
+/* Evidence, not narration. The card names a tool, its arguments, and a
+   duration, so a claim in the answer can be traced to a retrieval. */
+.turn__work {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.turn__work:empty { display: none; }
+.toolcard {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: 0.45rem var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+.toolcard__name {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--ink);
+}
+.toolcard__arg {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.toolcard__status {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.toolcard[data-status="running"] { border-color: var(--accent); }
+.toolcard[data-status="running"] .toolcard__status { color: var(--accent-ink); }
+.toolcard[data-status="error"] { border-color: var(--bad); }
+.toolcard[data-status="error"] .toolcard__status { color: var(--bad); }
+
 /* the agent's answer — marked by the vermilion editor's rule (signature) */
 .turn__agent {
   padding-left: var(--space-4);

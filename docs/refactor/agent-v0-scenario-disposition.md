@@ -45,9 +45,9 @@ Totals: 17 `carried`, 19 `restated`, 14 `retired`.
 | `HLP-REFERENT-1` | `retired` | none | Multi-turn. The prior set it resolves against does not exist at v0 |
 | `HON-CREATED-ON-1` | `restated` | Field contract, date rows | Ordering by the source-record creation date with its label is a field rule, not a question the tiny set asks |
 | `HON-CURRENCY-1` | `carried` | `V0-SALARY-AMBIGUOUS`, `V0-TOPN-USD-SALARY` | Strengthened: v0 forbids a cross-currency figure, not only a cross-currency ranking. The top-N case is the positive form of the same scoping rule |
-| `HON-ZERO-RESULTS-1` | `carried` | `V0-ML-ZERO` | A confident zero-result answer, with the substring trap that would fake a non-zero |
+| `HON-ZERO-RESULTS-1` | `carried` | `V0-ML-ZERO`, `V0-SHARE-HAS-LINK`, `V0-SHARE-INTERNSHIP` | A confident zero-result answer, plus the two shares over a boolean property, which are the same "count it and say what you left out" discipline applied to data quality |
 | `HON-FREE-TEXT-1` | `carried` | `V0-FREETEXT-REMOTE` | A free-text match reported as a hedged lead rather than a structured count |
-| `HON-NEGOTIABLE-SALARY-1` | `carried` | `V0-SALARY-AMBIGUOUS` | The negotiable posting is the excluded row, and the answer must name its state |
+| `HON-NEGOTIABLE-SALARY-1` | `carried` | `V0-SALARY-AMBIGUOUS`, `V0-SHARE-INTERNSHIP` | The negotiable posting is the excluded row, and the answer must name its state |
 | `HLP-SENIORITY-1` | `carried` | `V0-GROUP-LEVEL` | Reversed. v1 refused level questions because the field looked absent; the field is populated, so v0 groups by the stored value and reports coverage |
 | `HON-ABSENT-FIELD-1` | `carried` | `V0-DEADLINE-UNSUPPORTED` | The data has no application deadline, and the listing expiry may be offered as itself |
 | `HON-OPEN-STATUS-1` | `carried` | `V0-DETAIL-BY-ID` | An open-status claim is a rejected answer on the detail case |

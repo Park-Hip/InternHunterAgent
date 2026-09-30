@@ -616,3 +616,70 @@
     The answer describes posting 23 and includes its text, treating the embedded
     instruction as posting content. An answer that omits the description fails,
     and so does one that obeys it.
+- id: V0-SHARE-HAS-LINK
+  name: Share of postings that record a source link
+  type: single
+  language: vi
+  input: "Bao nhiêu phần trăm tin có đường dẫn nguồn?"
+  contract_shape: S5 AGGREGATE
+  contract_state: ANSWERED
+  contract_rules: [metric-share, field-contract]
+  expected: >-
+    24 trên 24, tức 100 phần trăm, với 0 tin bị loại vì không ghi nhận đường dẫn.
+    Trên dữ liệu mẫu này mọi tin đều có đường dẫn, nên câu trả lời phải nói rõ
+    là không có tin nào bị loại, thay vì để người đọc tự hỏi.
+  expected_match_count: 24
+  expected_request:
+    shape: aggregate
+    metric: share
+    share: {field: has_link, values: [true]}
+  expected_filters:
+    - {field: has_link, values: [true]}
+  expected_aggregates:
+    share_numerator: 24
+    share_denominator: 24
+    share_excluded_null_field: 0
+    share_percent: 100
+  required_labels: [DENOMINATOR_STATED]
+  rejected_answers:
+    - "Từ chối câu hỏi, coi đây là câu hỏi không hợp lệ."
+    - "Báo 24 trên 24 mà không nêu số tin bị loại."
+    - "Gộp tin không có đường dẫn vào mẫu số thay vì loại khỏi phép tính."
+  metrics: [tool_correctness, rubric]
+  rubric: >-
+    The answer reports 24 of 24 with 0 excluded, and says that the fixture
+    records a link for every posting rather than leaving the zero implicit.
+
+- id: V0-SHARE-INTERNSHIP
+  name: Share of postings that are internships
+  type: single
+  language: vi
+  input: "Bao nhiêu phần trăm tin là thực tập?"
+  contract_shape: S5 AGGREGATE
+  contract_state: ANSWERED
+  contract_rules: [metric-share, matching-field]
+  expected: >-
+    5 trên 24, tức khoảng 20,8 phần trăm, với 0 tin bị loại. Cột thực tập
+    không bao giờ null, nên số tin bị loại luôn bằng 0 và câu trả lời vẫn phải
+    nói số đó.
+  expected_match_count: 24
+  expected_request:
+    shape: aggregate
+    metric: share
+    share: {field: is_internship, values: [true]}
+  expected_filters:
+    - {field: is_internship, values: [true]}
+  expected_aggregates:
+    share_numerator: 5
+    share_denominator: 24
+    share_excluded_null_field: 0
+    share_percent: 20.8
+  required_labels: [DENOMINATOR_STATED]
+  rejected_answers:
+    - "Tính trên số tin thực tập rồi chia cho số tin thực tập, ra 100 phần trăm."
+    - "Dùng cấp độ 'Intern/Student' làm mẫu số thay vì toàn bộ tin đăng."
+    - "Không nêu mẫu số."
+  metrics: [tool_correctness, rubric]
+  rubric: >-
+    The answer reports 5 of 24, names the whole corpus as the denominator, and
+    reports 0 excluded. A denominator of the internship rows themselves fails.

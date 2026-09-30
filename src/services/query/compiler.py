@@ -212,10 +212,16 @@ def _threshold_predicate(field: FilterField, value: float, index: int) -> Compil
 
 
 def _presence_predicate(column: str, present: bool, index: int) -> CompiledPredicate:
+    """Match whether a nullable column records a value.
+
+    ``present=True`` means "has a value", which is `IS NOT NULL`. The two are not
+    interchangeable, and a filter that asked the opposite question would look
+    like it worked: it would return the rows the user did not ask about.
+    """
     if column not in VISIBLE_COLUMNS:
         raise QueryRequestError(f"'{column}' is not an agent-visible column")
     return CompiledPredicate(
-        sql=f"{column} IS {'NOT ' if not present else ''}NULL",
+        sql=f"{column} IS {'NOT ' if present else ''}NULL",
         params={},
     )
 
@@ -469,11 +475,19 @@ def _pinned_currency(filters: tuple[NormalizedFilter, ...]) -> str | None:
 
 
 def _null_test(field: FilterField) -> str:
-    """The test for "this row does not record the tested field"."""
+    """The test for "this row does not record the tested field".
+
+    ``has_link`` is derived from a nullable column rather than stored, so a row
+    that records no link is the row whose link cannot be decided, and the
+    excluded count is exactly that. ``is_internship`` is not null by schema, so
+    its excluded count is always zero, which the answer still reports.
+    """
     if field is FilterField.TECHNOLOGY:
         return "NOT (tech_stack IS NOT NULL AND btrim(tech_stack) <> '')"
     if field is FilterField.FREE_TEXT:
         return "description IS NULL"
+    if field is FilterField.HAS_LINK:
+        return "source_url IS NULL"
     return f"{field.value} IS NULL"
 
 

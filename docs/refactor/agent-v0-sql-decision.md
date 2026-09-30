@@ -123,7 +123,9 @@ lesson stands: neither was a reason to let a model write SQL.
    posting whose text carries an injected instruction is returned whole and treated as data.
 2. **A share could not be measured over a two-value field.** "What share of postings have a source
    link?" is a natural question about data quality and the planner refused it. Closed: a share may
-   now be measured over `is_internship` and `has_link`.
+   now be measured over `is_internship` and `has_link`, with the excluded count reporting the rows
+   the property cannot decide. Closing it also found an inverted `IS NULL` test in the
+   link-presence predicate, which had never been exercised because nothing could reach it.
 
 ## Coincidental matches
 
@@ -202,7 +204,7 @@ next proposal is measured against something.
 | Risk or gap | State |
 | --- | --- |
 | The typed core cannot return posting text | Closed. The detail projection returns the text, the tool labels it as posting text, and the retrieval is gated by `V0-DETAIL-DESCRIPTION`. |
-| A share cannot be measured over a two-value field | Closed. A share may be measured over `is_internship` and `has_link`. |
+| A share cannot be measured over a two-value field | Closed, and closing it found an inverted presence predicate that nothing had been able to reach. |
 | Cost attacks on production-shaped data | Unmeasured. Deciding a guarded path needs it; option (A) does not. |
 | Model token cost and end-to-end latency | Unmeasured, no credential. Does not change this decision: the deciding class is correctness, and both paths are single-digit milliseconds. |
 | Coverage on real user phrasing | The seven novel probes are the reviewer's, not sampled from users. Real phrasing may be expressible less often than 7 of 27, and that is an argument for extending the typed plan, not for SQL. |

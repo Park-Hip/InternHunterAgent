@@ -49,8 +49,19 @@ _NUMERIC_FIELDS = frozenset({FilterField.SALARY_MIN, FilterField.SALARY_MAX})
 _BOOLEAN_FIELDS = frozenset({FilterField.IS_INTERNSHIP, FilterField.HAS_LINK})
 _TEXT_FIELDS = frozenset({FilterField.COMPANY, FilterField.TITLE})
 # A share is measured on a recorded value, so it needs a field that stores one.
+# The two boolean properties count too: "what share of postings have a source
+# link" and "what share are internships" are ordinary questions about this
+# corpus, and refusing them was a gap the v0 gate found rather than a decision.
 _SHAREABLE_FIELDS = frozenset(
-    {FilterField.ROLE, FilterField.LOCATION, FilterField.JOB_LEVEL, FilterField.TECHNOLOGY, FilterField.COMPANY}
+    {
+        FilterField.ROLE,
+        FilterField.LOCATION,
+        FilterField.JOB_LEVEL,
+        FilterField.TECHNOLOGY,
+        FilterField.COMPANY,
+        FilterField.IS_INTERNSHIP,
+        FilterField.HAS_LINK,
+    }
 )
 
 

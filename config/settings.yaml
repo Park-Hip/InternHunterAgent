@@ -78,6 +78,30 @@ agent:
   query:
     max_rows: 20
     max_detail_ids: 3
+    # Governed query core, shared by search and analytics. The limits live here
+    # rather than in the query package so the display cap above stays the one
+    # cap: the core never invents a second number for how many rows may show.
+    # The behavior these limits serve is docs/refactor/agent-v0-contract.md.
+    max_filters: 4
+    max_values_per_filter: 4
+    max_group_values: 20
+    max_top_n: 20
+    max_free_text_terms: 3
+    # Every compiled statement runs inside a read-only transaction on the
+    # least-privilege agent role, with a server-side statement timeout and a
+    # byte budget on the returned rows. Neither replaces the other.
+    statement_timeout_ms: 2000
+    max_result_bytes: 262144
+    # User-side city synonyms that the ingestion alias map does not carry. The
+    # canonical city names, the role aliases, and the technology aliases are
+    # NOT repeated here: config/ingestion.yaml and config/tech_vocabulary.yaml
+    # are the single source for those, so a change to them reaches the query
+    # core without a second edit.
+    user_city_synonyms:
+      saigon: Ho Chi Minh City
+      "sai gon": Ho Chi Minh City
+      "sài gòn": Ho Chi Minh City
+      sg: Ho Chi Minh City
     obligations:
       enabled: true
       zero_results: true

@@ -109,7 +109,20 @@ class LoadSchemaContextTests(unittest.TestCase):
 
 
 class SystemPromptScopeTests(unittest.TestCase):
-    """Settled behavior decision #10: the persona describes the corpus it actually has."""
+    """Settled behavior decision #10: the persona describes the corpus it actually has.
+
+    These assert the v1 system prompt, so each one pins the bundle it describes. The
+    v0 system prompt has its own scope tests in tests/agents/test_v0_cutover.py.
+    """
+
+    def setUp(self) -> None:
+        from tests.agents.v0_switch import agent_v0
+
+        self._bundle = agent_v0(False)
+        self._bundle.__enter__()
+
+    def tearDown(self) -> None:
+        self._bundle.__exit__(None, None, None)
 
     def test_persona_line_states_the_corrected_scope(self) -> None:
         system_prompt = str(load_system_prompt().content)

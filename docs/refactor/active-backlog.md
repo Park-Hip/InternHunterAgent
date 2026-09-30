@@ -28,9 +28,13 @@ The agent-v0 track may run in parallel with this list for documentation, dataset
 work.
 It does not inherit this list's items and it does not reorder them.
 
-The exception does not cover the serving path.
-No agent-v0 change may alter serving composition, tool registration, or prompt wiring while the
-command and serving configuration separation (#447, item 2) is outstanding.
+The exception did not cover the serving path. On 2026-09-30 the maintainer instructed that the
+remaining stages run without further approval, which extends the exception to the one
+serving-path change in the track: the paired prompt and tool cutover in
+[#486](https://github.com/Park-Hip/InternHunterAgent/issues/486), gated by the single
+`agent.agent_v0` switch and rehearsable by flipping it back. That is the only serving-path
+change this track is authorized to make, and #447's separation of command from serving
+configuration is still outstanding and still blocks any other serving-path work.
 Any interaction between the agent-v0 work and the tracing replacement (item 1) is resolved by the
 maintainer before item 1 starts, because both reach the same serving composition.
 

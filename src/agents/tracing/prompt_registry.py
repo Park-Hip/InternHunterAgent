@@ -9,14 +9,23 @@ from typing import Any, Callable, Final, Literal
 from src.core.config import settings
 from src.core.logger import logger
 
-PromptSurface = Literal["system", "schema_context", "sql_generation"]
+PromptSurface = Literal["system", "schema_context", "sql_generation", "system_v0"]
 SYSTEM_PROMPT_SURFACE: Final = "system"
 SCHEMA_CONTEXT_PROMPT_SURFACE: Final = "schema_context"
 SQL_GENERATION_PROMPT_SURFACE: Final = "sql_generation"
+V0_SYSTEM_PROMPT_SURFACE: Final = "system_v0"
+# The v1 bundle, kept whole so the legacy tool and its traces are untouched. The v0
+# system prompt is a separate surface rather than a fourth member of this tuple: a
+# request resolves one of the two, never a mix, and the resolved surface name is
+# what a trace records.
 PROMPT_SURFACES: Final[tuple[PromptSurface, ...]] = (
     SYSTEM_PROMPT_SURFACE,
     SCHEMA_CONTEXT_PROMPT_SURFACE,
     SQL_GENERATION_PROMPT_SURFACE,
+)
+ALL_PROMPT_SURFACES: Final[tuple[PromptSurface, ...]] = (
+    *PROMPT_SURFACES,
+    V0_SYSTEM_PROMPT_SURFACE,
 )
 
 
@@ -35,6 +44,7 @@ PROMPT_DEFINITIONS: Final[tuple[PromptDefinition, ...]] = (
     PromptDefinition(
         SQL_GENERATION_PROMPT_SURFACE, "sql_generation", "resumi-sql-generation"
     ),
+    PromptDefinition(V0_SYSTEM_PROMPT_SURFACE, "system_prompt_v0", "resumi-system-v0"),
 )
 PROMPT_DEFINITIONS_BY_SURFACE: Final = {
     definition.surface: definition for definition in PROMPT_DEFINITIONS

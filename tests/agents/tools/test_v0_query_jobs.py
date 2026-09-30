@@ -263,18 +263,40 @@ class TestEvidenceRendering:
             assert column not in output, column
 
 
-class TestToolDoesNotRegisterItself:
-    def test_the_tool_is_not_on_the_serving_mcp_surface_yet(self) -> None:
-        # The cutover in #486 decides registration. Until then the served agent
-        # must not be able to reach the new core, or this PR would be a
-        # production change it is not approved to be.
-        from src.agents.mcp import job_server
+class TestTheToolIsPairedWithThePrompt:
+    """The v0 tool and the v0 system prompt are one bundle, never two.
 
-        assert TOOL_NAME not in (job_server.QUERY_CLEAN_JOBS_TOOL, job_server.GET_JOB_DETAILS_TOOL)
-        source = (job_server.__file__ or "")
-        assert source
-        with open(source, encoding="utf-8") as handle:
-            assert TOOL_NAME not in handle.read()
+    Stage 3 asserted the tool was not registered anywhere yet. The cutover
+    registers it, and what still has to hold is that the served surface and the
+    prompt move together, so a new prompt never runs against the old tools.
+    """
+
+    def test_the_v0_bundle_registers_the_governed_tool_and_no_legacy_tool(self) -> None:
+        import asyncio
+
+        from src.agents.mcp.job_server import (
+            GET_JOB_DETAILS_TOOL,
+            QUERY_CLEAN_JOBS_TOOL,
+            V0_QUERY_TOOL,
+            create_job_mcp_server,
+        )
+        from tests.agents.v0_switch import agent_v0
+
+        with agent_v0(True):
+            tools = {tool.name for tool in asyncio.run(create_job_mcp_server()._list_tools())}
+        assert V0_QUERY_TOOL in tools
+        assert QUERY_CLEAN_JOBS_TOOL not in tools
+        assert GET_JOB_DETAILS_TOOL not in tools
+
+    def test_the_v1_bundle_registers_only_the_legacy_tools(self) -> None:
+        import asyncio
+
+        from src.agents.mcp.job_server import V0_QUERY_TOOL, create_job_mcp_server
+        from tests.agents.v0_switch import agent_v0
+
+        with agent_v0(False):
+            tools = {tool.name for tool in asyncio.run(create_job_mcp_server()._list_tools())}
+        assert V0_QUERY_TOOL not in tools
 
     def test_the_v0_core_imports_no_framework(self) -> None:
         # A domain service that reaches for FastAPI, LangChain, or tracing has

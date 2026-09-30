@@ -64,8 +64,39 @@ async def capture_turn(agent: Any, question: str, config: dict[str, Any]) -> dic
     return {"question": question, "answer": str(response["messages"][-1].content).strip(), **extract_trace(trace)}
 
 
+def sql_span_of(tool_span: dict[str, Any] | None, trace: dict[str, Any]) -> dict[str, Any] | None:
+    """The SQL-generation span belonging to a tool span, child position first.
+
+    `generate_sql` forwards LangChain's ambient config to the nested model call
+    (see `src/agents/tools/query_clean_jobs.py`); without that forwarding the
+    LLM call would be invisible to DeepEval. The MCP transport does not carry
+    `RunnableConfig` into the tool, so the ambient config is read from
+    `var_child_runnable_config` instead.
+
+    Under MCP, `BaseTool.arun` re-scopes that config to the tool's own run with
+    `run_manager.get_child()` before invoking the tool's `_arun`
+    (`langchain_core/tools/base.py:1217-1218`; the sync `BaseTool.run` path does
+    the same at 1089-1090). The child callback manager takes the tool run id as
+    its `parent_run_id` (`langchain_core/callbacks/manager.py:696`), so the
+    nested `generate_sql` span is a child of the tool span. The shared-parent
+    sibling position stays as the fallback for the pre-MCP hierarchy.
+    """
+    if tool_span is None:
+        return None
+    llm_spans = [span for span in (trace.get("llmSpans") or []) if isinstance(span, dict)]
+    tool_uuid = tool_span.get("uuid")
+    if tool_uuid:
+        child = next((span for span in llm_spans if span.get("parentUuid") == tool_uuid), None)
+        if child is not None:
+            return child
+    tool_parent = tool_span.get("parentUuid")
+    if not tool_parent:
+        return None
+    return next((span for span in llm_spans if span.get("parentUuid") == tool_parent), None)
+
+
 def extract_trace(trace: dict[str, Any]) -> dict[str, Any]:
-    """Nested SQL generation is a sibling of the tool span, not its child.
+    """Capture the tool, its nested SQL span, and the tool output.
 
     An absent trace is a failed capture, never a turn that called nothing.
     """
@@ -75,14 +106,14 @@ def extract_trace(trace: dict[str, Any]) -> dict[str, Any]:
     tools = [tc["name"] for tc in calls if isinstance(tc.get("name"), str)]
     spans = [span for span in (trace.get("toolSpans") or []) if isinstance(span, dict)]
     tool_span = next((span for span in spans if span.get("name") == "query_clean_jobs"), None) or next(iter(spans), None)
-    sql_span = next((span for span in (trace.get("llmSpans") or []) if tool_span and span.get("parentUuid") == tool_span.get("parentUuid")), None)
+    sql_span = sql_span_of(tool_span, trace)
     sql = sql_span.get("output") if sql_span else None
     if isinstance(sql, dict):
         sql = sql.get("content")
     output = tool_span.get("output") if tool_span else None
     if isinstance(output, dict):
         output = output.get("content") or str(output)
-    return {"tools_called": tools, "sql_text": sql if isinstance(sql, str) else None, "tool_output": str(output) if output is not None else None}
+    return {"tools_called": tools, "sql_text": sql.strip() if isinstance(sql, str) else None, "tool_output": str(output) if output is not None else None}
 
 
 async def capture_with_retry(agent: Any, question: str, config: dict[str, Any], sleep=asyncio.sleep) -> dict[str, Any]:

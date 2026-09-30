@@ -111,6 +111,66 @@ def test_nested_sql_trace_is_not_dropped() -> None:
     assert parsed == {"tools_called": ["query_clean_jobs"], "sql_text": "SELECT id FROM clean_jobs", "tool_output": "five jobs"}
 
 
+def test_child_sql_span_wins_over_sibling_in_the_same_trace() -> None:
+    parsed = run.extract_trace({
+        "toolsCalled": [{"name": "query_clean_jobs"}],
+        "toolSpans": [{"name": "query_clean_jobs", "uuid": "tool", "parentUuid": "node", "output": {"content": "five jobs"}}],
+        "llmSpans": [
+            {"parentUuid": "node", "output": {"content": "SELECT sibling"}},
+            {"parentUuid": "tool", "output": {"content": "SELECT id FROM clean_jobs"}},
+        ],
+    })
+    assert parsed["sql_text"] == "SELECT id FROM clean_jobs"
+
+
+def test_tool_span_without_uuid_does_not_match_unrelated_llm_spans() -> None:
+    parsed = run.extract_trace({
+        "toolsCalled": [{"name": "query_clean_jobs"}],
+        "toolSpans": [{"name": "query_clean_jobs", "parentUuid": "node", "output": {"content": "five jobs"}}],
+        "llmSpans": [
+            {"parentUuid": None, "output": {"content": "SELECT unrelated"}},
+            {"parentUuid": "other-node", "output": {"content": "SELECT also unrelated"}},
+        ],
+    })
+    assert parsed["sql_text"] is None
+
+
+def test_malformed_trace_entries_never_become_sql_text() -> None:
+    parsed = run.extract_trace({
+        "toolsCalled": [{"name": "query_clean_jobs"}],
+        "toolSpans": ["not-a-span", {"name": "query_clean_jobs", "parentUuid": "node", "output": {"content": "five jobs"}}],
+        "llmSpans": ["not-a-span", {"parentUuid": "node"}, {"parentUuid": "node", "output": {"reasoning": "no content"}}],
+    })
+    assert parsed == {"tools_called": ["query_clean_jobs"], "sql_text": None, "tool_output": "five jobs"}
+
+
+def test_tool_span_without_any_id_matches_no_root_llm_span() -> None:
+    parsed = run.extract_trace({
+        "toolsCalled": [{"name": "query_clean_jobs"}],
+        "toolSpans": [{"name": "query_clean_jobs", "output": {"content": "five jobs"}}],
+        "llmSpans": [{"parentUuid": None, "output": {"content": "SELECT unrelated"}}],
+    })
+    assert parsed["sql_text"] is None
+
+
+def test_captured_sql_is_trimmed() -> None:
+    parsed = run.extract_trace({
+        "toolsCalled": [{"name": "query_clean_jobs"}],
+        "toolSpans": [{"name": "query_clean_jobs", "uuid": "tool", "parentUuid": "node", "output": {"content": "five jobs"}}],
+        "llmSpans": [{"parentUuid": "tool", "output": {"content": "  SELECT id FROM clean_jobs\n"}}],
+    })
+    assert parsed["sql_text"] == "SELECT id FROM clean_jobs"
+
+
+def test_absent_sql_scores_zero_with_a_reason_rather_than_an_error() -> None:
+    case = scenario("HLP-LIST-1")
+    capture = {"question": case["input"], "answer": "Unknown.", "tools_called": ["query_clean_jobs"], "sql_text": None}
+    row = run.score_turn(capture, case, ["sql_accuracy"], 0)[0]
+    assert row["score"] == 0.0
+    assert row["reason"] == "No generated SQL captured"
+    assert "error" not in row
+
+
 def test_tool_output_is_captured_whichever_tool_ran() -> None:
     parsed = run.extract_trace({
         "toolsCalled": [{"name": "get_job_details"}],

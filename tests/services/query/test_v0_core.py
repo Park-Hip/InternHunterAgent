@@ -228,6 +228,17 @@ class TestPlanner:
                 )
             )
 
+    def test_a_share_may_be_measured_over_a_two_value_field(self) -> None:
+        for field, value in (("has_link", True), ("is_internship", True)):
+            plan = build_plan(
+                JobQueryRequest(
+                    shape="aggregate", metric="share", share={"field": field, "values": [value]}
+                )
+            )
+            assert plan.share is not None
+            assert plan.share.field.value == field
+            assert plan.share.values == (value,)
+
     def test_share_on_a_threshold_is_refused(self) -> None:
         with pytest.raises(QueryRequestError, match="cannot carry a share"):
             build_plan(

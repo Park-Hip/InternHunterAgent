@@ -103,17 +103,31 @@ def service_on(connection) -> JobQueryService:
     return JobQueryService(executor=BoundedExecutor(session_factory=lambda: _Borrowed(connection)))
 
 
-def insert_edge_row(conn, external_id: str, role: str, location: str, tech_stack: str) -> None:
+def insert_edge_row(
+    conn,
+    external_id: str,
+    role: str,
+    location: str,
+    tech_stack: str,
+    url: str | None = "https://example.invalid/x",
+) -> None:
+    """Insert one engineered row, with or without a source link."""
     conn.execute(
         text(
             "INSERT INTO clean_jobs (source, external_id, source_url, title, company, role, "
             "description, tech_stack, job_level, location, posted_date, listing_expires_on, "
             "created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable) "
-            "VALUES ('vietnamworks', :external_id, 'https://example.invalid/x', 'Edge row', 'Edge Co', "
+            "VALUES ('vietnamworks', :external_id, :url, 'Edge row', 'Edge Co', "
             ":role, 'Work.', :tech_stack, 'Experienced (non-manager)', :location, NULL, NULL, "
             "DATE '2026-06-01', false, NULL, NULL, NULL, false)"
         ),
-        {"external_id": external_id, "role": role, "location": location, "tech_stack": tech_stack},
+        {
+            "external_id": external_id,
+            "role": role,
+            "location": location,
+            "tech_stack": tech_stack,
+            "url": url,
+        },
     )
 
 
@@ -180,6 +194,47 @@ class TestDatasetGoldens:
         assert result.share.denominator == 5
         assert result.share.excluded_null_field == 0
         assert result.share.percent == 100.0
+
+    def test_link_share_counts_every_fixture_row(self, service) -> None:
+        result = answer(
+            service, shape="aggregate", metric="share", share={"field": "has_link", "values": [True]}
+        )
+        assert result.share is not None
+        assert result.share.numerator == 24
+        assert result.share.denominator == 24
+        assert result.share.excluded_null_field == 0
+
+    def test_link_share_excludes_a_row_with_no_link(self, service, engine) -> None:
+        with engine.connect() as conn:
+            transaction = conn.begin()
+            try:
+                insert_edge_row(conn, "v0-probe-no-link", "Other", "Hanoi", "SQL", url=None)
+                result = answer(
+                    service_on(conn),
+                    shape="aggregate",
+                    metric="share",
+                    share={"field": "has_link", "values": [True]},
+                )
+            finally:
+                transaction.rollback()
+        assert result.share is not None
+        assert result.share.denominator == 25
+        assert result.share.numerator == 24
+        # The row with no link is excluded from the computation and counted,
+        # not counted as a posting without one.
+        assert result.share.excluded_null_field == 1
+
+    def test_internship_share_uses_the_whole_corpus(self, service) -> None:
+        result = answer(
+            service,
+            shape="aggregate",
+            metric="share",
+            share={"field": "is_internship", "values": [True]},
+        )
+        assert result.share is not None
+        assert result.share.numerator == 5
+        assert result.share.denominator == 24
+        assert result.share.excluded_null_field == 0
 
     def test_salary_is_reported_per_currency_with_the_excluded_row(self, service) -> None:
         result = answer(

@@ -90,6 +90,60 @@ INVENTORY = frozenset(
             text="Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau.",
             visibility="model-visible",
         ),
+        PromptSurface(
+            path="src/agents/tools/v0_query_jobs.py",
+            symbol="_repair_message",
+            text='"INVALID REQUEST\\n"\n        f"{details}\\n"\n        f"Allowed shapes: {\', \'.join(shape.value for shape in QueryShape)}\\n"\n        f"Allowed metrics: {\', \'.join(metric.value for metric in Metric)}\\n"\n        f"Allowed filter fields: {\', \'.join(field.value for field in FilterField)}"',
+            visibility="model-visible",
+        ),
+        PromptSurface(
+            path="src/agents/tools/v0_query_jobs.py",
+            symbol="_repair_message.__doc__",
+            text="A repairable rejection, so the model can re-ask instead of failing.",
+            visibility="model-visible",
+        ),
+        PromptSurface(
+            path="src/agents/tools/v0_query_jobs.py",
+            symbol="_row_lines.__doc__",
+            text="Render rows as key=value pairs.\n\nA list drops a null field rather than printing it 20 times, and a detail\nrow keeps it, because the contract requires an absent field on a specific\nposting to be named rather than left as a gap.",
+            visibility="model-visible",
+        ),
+        PromptSurface(
+            path="src/agents/tools/v0_query_jobs.py",
+            symbol="_value_text",
+            text="(không có)",
+            visibility="model-visible",
+        ),
+        PromptSurface(
+            path="src/agents/tools/v0_query_jobs.py",
+            symbol="render_result",
+            text='f"AMBIGUOUS\\n{result.message}"',
+            visibility="model-visible",
+        ),
+        PromptSurface(
+            path="src/agents/tools/v0_query_jobs.py",
+            symbol="render_result",
+            text='f"ERROR\\n{result.message}"',
+            visibility="model-visible",
+        ),
+        PromptSurface(
+            path="src/agents/tools/v0_query_jobs.py",
+            symbol="render_result",
+            text='f"UNSUPPORTED\\n{result.message}"',
+            visibility="model-visible",
+        ),
+        PromptSurface(
+            path="src/agents/tools/v0_query_jobs.py",
+            symbol="render_result.__doc__",
+            text="Render a result as the facts an answer must be built from.",
+            visibility="model-visible",
+        ),
+        PromptSurface(
+            path="src/agents/tools/v0_query_jobs.py",
+            symbol="run_query_jobs.__doc__",
+            text="Answer one typed request and return the evidence as text.",
+            visibility="model-visible",
+        ),
     }
 )
 

@@ -265,6 +265,17 @@ async def run_dataset(spec: DatasetSpec, *, metric_names: list[str] | None = Non
         captures[scenario["id"]] = turns
         for index, turn in enumerate(turns):
             results.extend(score_turn(turn, scenario, selected, index, database_url))
+    # A requested metric that no selected scenario declares is silently dropped
+    # above. An empty report is vacuously free of failures, so a gate built on it
+    # would pass without asserting anything. Refuse the request instead.
+    scored = {row["metric"] for row in results}
+    unexercised = [name for name in names if name not in scored]
+    if unexercised:
+        selected_ids = sorted({s["id"] for s in scenarios})
+        raise ValueError(
+            f"Requested metrics were never scored: {sorted(unexercised)}. "
+            f"Selected scenarios {selected_ids} declare none of them."
+        )
     return {"dataset": str(spec.path), "capture_source": str(capture_path) if capture_path else "live", "generated_at": datetime.now(timezone.utc).isoformat(), "metrics": names, "captures": captures, "by_metric": group_by_metric(results)}
 
 

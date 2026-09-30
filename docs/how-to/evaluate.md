@@ -82,7 +82,10 @@ The fixture database is required whenever the captured scenario has reference SQ
 This CI smoke check is not a new capture and does not cover all 50 scenarios.
 Scores of 0.0 are findings rather than infrastructure failures; errors, unrun cases, and infrastructure failures exit nonzero.
 A metric that cannot be scored for a captured turn is reported as a row with a null score and a `NOT_APPLICABLE` reason rather than being dropped: that happens today for `grounded` whenever a turn captured no tool output.
-`--require-pass` additionally exits nonzero for any metric that is not exactly 1.0, including those null scores.
+A deterministic metric that is not exactly 1.0 exits nonzero. That is the default, not an opt-in: the table above you and the shell exit code must not disagree.
+Asking for a metric that the selected scenarios do not declare is an error, not an empty report. `uv run python -m evals --only sql_accuracy --ids SAF-DESTRUCTIVE-REFUSAL-1` names the metric and exits nonzero rather than printing nothing and passing.
+`--allow-fail` turns a below-threshold deterministic score back into a printed finding for exploratory runs. It does not excuse a metric that could not be evaluated: errors, unrun cases, and infrastructure failures exit nonzero in every mode.
+Judge metrics stay reported-only. A judge score is continuous in `[0, 1]`, so requiring 1.0 of it would fail every run and prove nothing; no judge threshold is configured yet.
 The fixture loader still exports `fixture_database_url()` for other research scripts.
 
 To compare the 12 preserved v8 human labels with the current judge once credentials are available, run `uv run pytest -o addopts='' -m eval -s tests/evals/test_holdout_judge.py`.

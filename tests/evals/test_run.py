@@ -8,7 +8,7 @@ import pytest
 
 from evals.datasets import dataset
 from evals import run
-from evals.__main__ import main
+from evals.__main__ import _exit_code, main
 
 
 CAPTURE = Path("evals/replays/t0025.9-committed.json")
@@ -54,6 +54,58 @@ def test_persisted_artifact_is_grouped_by_metric(tmp_path: Path) -> None:
     artifact = json.loads(out.read_text(encoding="utf-8"))
     assert set(artifact["by_metric"]) == {"tool_correctness"}
     assert artifact["by_metric"]["tool_correctness"][0]["score"] == 1.0
+
+
+def test_requested_metric_no_scenario_declares_is_refused() -> None:
+    """A gate must not pass by scoring nothing.
+
+    SAF-DESTRUCTIVE-REFUSAL-1 declares no sql_accuracy, so requesting it used to
+    filter every scenario to nothing and report an empty, vacuously passing run.
+    """
+    with pytest.raises(ValueError, match="never scored"):
+        asyncio.run(run.run_dataset(dataset("default"), metric_names=["sql_accuracy"], ids=["SAF-DESTRUCTIVE-REFUSAL-1"], capture_path=CAPTURE))
+
+
+def test_refused_metric_names_the_metric_and_the_scenarios() -> None:
+    with pytest.raises(ValueError) as excinfo:
+        asyncio.run(run.run_dataset(dataset("default"), metric_names=["sql_accuracy"], ids=["SAF-DESTRUCTIVE-REFUSAL-1"], capture_path=CAPTURE))
+    assert "sql_accuracy" in str(excinfo.value)
+    assert "SAF-DESTRUCTIVE-REFUSAL-1" in str(excinfo.value)
+
+
+def test_refused_metric_exits_nonzero_from_the_cli(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--only", "sql_accuracy", "--capture", str(CAPTURE), "--ids", "SAF-DESTRUCTIVE-REFUSAL-1", "--out", str(tmp_path / "report.json")])
+    assert excinfo.value.code != 0
+
+
+def test_below_threshold_deterministic_metric_exits_nonzero_without_a_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The documented command and its exit code must not disagree."""
+    monkeypatch.setattr(run, "compare_result_sets", lambda *_args, **_kw: {"status": "FAIL", "unexpected_ids": [13]})
+    code = main(["--only", "sql_accuracy", "--capture", str(CAPTURE), "--ids", "HLP-CONTEXT-1", "--out", str(tmp_path / "report.json")])
+    assert code == 1
+
+
+def test_allow_fail_reports_a_below_threshold_finding_without_failing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(run, "compare_result_sets", lambda *_args, **_kw: {"status": "FAIL", "unexpected_ids": [13]})
+    code = main(["--allow-fail", "--only", "sql_accuracy", "--capture", str(CAPTURE), "--ids", "HLP-CONTEXT-1", "--out", str(tmp_path / "report.json")])
+    assert code == 0
+
+
+def test_allow_fail_does_not_excuse_a_metric_that_could_not_be_evaluated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(run, "compare_result_sets", lambda *_args, **_kw: {"status": "INFRA", "error": "connection refused"})
+    code = main(["--allow-fail", "--only", "sql_accuracy", "--capture", str(CAPTURE), "--ids", "HLP-CONTEXT-1", "--out", str(tmp_path / "report.json")])
+    assert code == 1
+
+
+def test_judge_score_is_reported_but_does_not_gate() -> None:
+    """A judge score is continuous; requiring 1.0 of it would fail every run."""
+    assert _exit_code({"grounded": [{"scenario_id": "HLP-CONTEXT-1", "score": 0.42, "reason": "partially grounded"}]}, allow_fail=False) == 0
+
+
+def test_error_and_unrun_rows_fail_the_exit_code() -> None:
+    assert _exit_code({"sql_accuracy": [{"scenario_id": "A", "error": "boom"}]}, allow_fail=True) == 1
+    assert _exit_code({"sql_accuracy": [{"scenario_id": "A", "reason": "UNRUN"}]}, allow_fail=True) == 1
 
 
 def test_explicit_id_missing_from_capture_fails() -> None:

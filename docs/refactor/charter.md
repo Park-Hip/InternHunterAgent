@@ -26,6 +26,7 @@ select the next approved boundary without consulting the legacy discovery collec
 | [Agent v0 legacy rule disposition](agent-v0-legacy-rules.md) | The auditable map from the legacy `G01` to `G47` expectations to the v0 contract | Maintainers and implementers |
 | [Agent v0 scenario disposition](agent-v0-scenario-disposition.md) | The audit trail from the 50 v1 evaluation scenarios to the 16 v0 acceptance cases, and the behaviors nothing covers yet | Maintainers and implementers |
 | [Agent v0 SQL decision](agent-v0-sql-decision.md) | The Stage 4 go/no-go on exploratory SQL, its measurement, and the admission policy a future path would need | Maintainers and implementers |
+| [Agent v0 cutover](agent-v0-cutover.md) | Which prompt and tool set are serving, the one-key rollback, and what the cutover has and has not been observed doing | Maintainers and implementers |
 
 `docs/discovery/` is retained as historical, source-backed discovery evidence.
 It does not set implementation order or create an architecture decision unless an approved record in

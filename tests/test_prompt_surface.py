@@ -144,6 +144,13 @@ INVENTORY = frozenset(
             text="Answer one typed request and return the evidence as text.",
             visibility="model-visible",
         ),
+        # The governed v0 system prompt is model-facing from the cutover onwards.
+        PromptSurface(
+            path="config/prompts.yaml",
+            symbol="prompts.system_prompt_v0",
+            text="",
+            visibility="model-visible",
+        ),
     }
 )
 
@@ -198,7 +205,12 @@ def config_surfaces() -> set[PromptSurface]:
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     prompts = config["prompts"]
 
-    assert set(prompts) == {"system_prompt", "schema_context", "sql_generation"}
+    assert set(prompts) == {
+        "system_prompt",
+        "system_prompt_v0",
+        "schema_context",
+        "sql_generation",
+    }
     assert all(isinstance(prompts[name], str) for name in prompts)
     assert isinstance(config["behavior_glossary"], dict)
 
@@ -207,6 +219,7 @@ def config_surfaces() -> set[PromptSurface]:
         PromptSurface("config/prompts.yaml", "prompts.schema_context", "", "model-visible"),
         PromptSurface("config/prompts.yaml", "prompts.sql_generation", "", "model-visible"),
         PromptSurface("config/prompts.yaml", "behavior_glossary", "", "model-visible"),
+        PromptSurface("config/prompts.yaml", "prompts.system_prompt_v0", "", "model-visible"),
     }
 
 

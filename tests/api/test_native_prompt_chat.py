@@ -43,12 +43,26 @@ ANSWER = "There are 3 roles."
 CHAT_QUERY = "list 3 data engineer jobs"
 GENERATION_TYPE = "generation"
 
-# The managed deployment the test project serves, keyed by surface.
-NATIVE_VERSIONS = {"system": 12, "schema_context": 31, "sql_generation": 13}
+# The managed deployment the test project serves, keyed by surface. The v0 system
+# surface has its own version, so a test can tell the two bundles apart.
+NATIVE_VERSIONS = {"system": 12, "system_v0": 14, "schema_context": 31, "sql_generation": 13}
 NATIVE_VERSIONS_BY_NAME = {
     definition.name: NATIVE_VERSIONS[definition.surface]
     for definition in PROMPT_DEFINITIONS
 }
+
+
+def _expected_system_link() -> set[tuple[str | None, int | None]]:
+    """The managed prompt the served bundle must link a generation to.
+
+    A generation that links to the wrong prompt is worse than one that links to
+    none, so the expectation follows the bundle rather than a fixed surface.
+    """
+    from src.agents.runtime.prompts import v0_agent_enabled
+
+    if v0_agent_enabled():
+        return {("resumi-system-v0", NATIVE_VERSIONS["system_v0"])}
+    return {("resumi-system", NATIVE_VERSIONS["system"])}
 
 
 def _parse_sse_events(body: str) -> list[tuple[str, dict[str, Any]]]:
@@ -196,7 +210,7 @@ def test_streaming_chat_links_the_generation_to_the_managed_prompt(
     )
     assert metadata["trace_id"]
 
-    assert set(chat.generations()) == {("resumi-system", NATIVE_VERSIONS["system"])}
+    assert set(chat.generations()) == _expected_system_link()
 
 
 def test_one_shot_chat_links_the_generation_to_the_managed_prompt(
@@ -209,6 +223,19 @@ def test_one_shot_chat_links_the_generation_to_the_managed_prompt(
     assert body["answer"] == ANSWER
     assert body["trace_id"]
 
+    assert set(chat.generations()) == _expected_system_link()
+
+
+def test_v1_bundle_links_the_generation_to_the_v1_managed_prompt(
+    chat: _ChatHarness,
+) -> None:
+    """The v1 bundle still links to its own managed prompt, not to the v0 one."""
+    from tests.agents.v0_switch import agent_v0
+
+    with agent_v0(False):
+        response = chat.one_shot("session-471")
+
+    assert response.status_code == 200
     assert set(chat.generations()) == {("resumi-system", NATIVE_VERSIONS["system"])}
 
 

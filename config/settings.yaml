@@ -26,6 +26,12 @@ observability:
       entry_points: ["api:chat", "api:chat-stream", "eval:driver", "eval:spike"]
 
 agent:
+  # The governed v0 bundle. This one switch moves the system prompt and the tool
+  # registration together, so a new prompt can never run against the old tools.
+  # The rollback is this key set back to false, which restores the v1 prompt and
+  # the v1 tool pair. See docs/refactor/agent-v0-cutover.md.
+  agent_v0: true
+
   # Named deployments are the serving allowlist. Model names must use LiteLLM's
   # provider-qualified form, and each profile selects only one deployment.
   # `api_key_env` names a deployment environment variable. It never contains a secret.

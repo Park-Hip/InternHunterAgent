@@ -13,6 +13,7 @@ from src.agents.mcp.job_server import (
     QUERY_CLEAN_JOBS_TOOL,
     create_job_mcp_server,
 )
+from tests.agents.v0_switch import agent_v0
 
 
 def _text_of(result) -> str:
@@ -20,6 +21,7 @@ def _text_of(result) -> str:
 
 
 class JobMcpServerContractTests(unittest.IsolatedAsyncioTestCase):
+    """The v1 tool pair, which the cutover unregisters but does not delete."""
     def test_tool_descriptions_are_pinned_compatibility_surface(self) -> None:
         self.assertEqual(
             QUERY_CLEAN_JOBS_DESCRIPTION,
@@ -37,6 +39,10 @@ class JobMcpServerContractTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_server_name_and_tool_surface(self) -> None:
+        with agent_v0(False):
+            await self._test_server_name_and_tool_surface()
+
+    async def _test_server_name_and_tool_surface(self) -> None:
         mcp = create_job_mcp_server()
         self.assertEqual(mcp.name, MCP_SERVER_NAME)
 
@@ -56,6 +62,10 @@ class JobMcpServerContractTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_input_schemas_mark_required_arguments(self) -> None:
+        with agent_v0(False):
+            await self._test_input_schemas_mark_required_arguments()
+
+    async def _test_input_schemas_mark_required_arguments(self) -> None:
         async with Client(create_job_mcp_server()) as client:
             tools = await client.list_tools()
 
@@ -74,6 +84,10 @@ class JobMcpServerContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ids_schema["required"], ["ids"])
 
     async def test_query_clean_jobs_invokes_behavior_with_question(self) -> None:
+        with agent_v0(False):
+            await self._test_query_clean_jobs_invokes_behavior_with_question()
+
+    async def _test_query_clean_jobs_invokes_behavior_with_question(self) -> None:
         mcp = create_job_mcp_server()
         behavior = AsyncMock(return_value="Tìm thấy 2 kết quả")
         with patch("src.agents.mcp.job_server.run_query_clean_jobs", behavior):
@@ -86,6 +100,10 @@ class JobMcpServerContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(_text_of(result), "Tìm thấy 2 kết quả")
 
     async def test_get_job_details_invokes_behavior_with_ids(self) -> None:
+        with agent_v0(False):
+            await self._test_get_job_details_invokes_behavior_with_ids()
+
+    async def _test_get_job_details_invokes_behavior_with_ids(self) -> None:
         mcp = create_job_mcp_server()
         behavior = AsyncMock(return_value="Chi tiết tin tuyển dụng")
         with patch("src.agents.mcp.job_server.run_get_job_details", behavior):

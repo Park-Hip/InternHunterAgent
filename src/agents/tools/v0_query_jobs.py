@@ -36,7 +36,6 @@ from src.services.query.results import QueryResult, QueryState
 from src.services.query.service import JobQueryService
 
 TOOL_NAME = "query_jobs"
-
 TOOL_DESCRIPTION = (
     "Answer a question about the job postings in the database. Send one typed request and "
     "no SQL. Use shape 'list' to show matching postings, 'count' for a number, 'group_count' "

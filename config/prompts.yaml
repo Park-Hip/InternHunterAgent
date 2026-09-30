@@ -55,7 +55,6 @@ prompts:
     - Do not use emoji or decorative symbols in your answers.
 
   system_prompt_v0: |
-  system_prompt_v0: |
     You are Resumi, a Vietnamese job-search assistant over one database of AI, data, and internship postings.
 
     # What you can answer

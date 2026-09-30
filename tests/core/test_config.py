@@ -180,3 +180,37 @@ class ConfigLoadTests(unittest.TestCase):
 
         with self.assertRaisesRegex(config_module.ConfigLoadError, "Duplicate values"):
             config_module._validate_observability_config(config)
+
+
+class DuplicateKeyTests(unittest.TestCase):
+    """A repeated YAML key is a contradiction, not a merge."""
+
+    def _write(self, body: str) -> Path:
+        path = Path(tempfile.mkdtemp()) / "prompts.yaml"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def test_duplicate_key_in_the_same_mapping_is_refused(self) -> None:
+        path = self._write("prompts:\n  system_prompt_v0: |\n  system_prompt_v0: |\n    first\n    second\n")
+        with self.assertRaisesRegex(config_module.ConfigLoadError, "duplicate key 'system_prompt_v0'"):
+            config_module._load_yaml_file(path)
+
+    def test_duplicate_key_names_the_line_it_appears_on(self) -> None:
+        path = self._write("a: 1\nb: 2\na: 3\n")
+        with self.assertRaisesRegex(config_module.ConfigLoadError, "line 3"):
+            config_module._load_yaml_file(path)
+
+    def test_nested_duplicate_key_is_refused(self) -> None:
+        path = self._write("prompts:\n  system: |\n    text\n  system: |\n    text\n")
+        with self.assertRaisesRegex(config_module.ConfigLoadError, "duplicate key 'system'"):
+            config_module._load_yaml_file(path)
+
+    def test_repeated_value_under_distinct_keys_is_fine(self) -> None:
+        path = self._write("prompts:\n  system: |\n    same text\n  system_prompt_v0: |\n    same text\n")
+        self.assertEqual(config_module._load_yaml_file(path)["prompts"]["system"], "same text\n")
+
+    def test_shipped_config_files_have_no_duplicate_keys(self) -> None:
+        """The file that carried the defect must not be able to acquire another."""
+        for path in sorted((config_module.CONFIG_DIR).rglob("*.yaml")):
+            with self.subTest(config=path.name):
+                self.assertIsInstance(config_module._load_yaml_file(path), dict)

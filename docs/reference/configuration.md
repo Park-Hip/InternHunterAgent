@@ -188,7 +188,8 @@ Record the resolved versions and check results in the pull request before mergin
 
 On Windows, invoke live DeepEval checks with `PYTHONUTF8=1` and the eval marker.
 The fixture count tests skip when the evaluation database is unavailable, and the trace extractor
-expects the nested SQL-generation span to be a sibling of its tool span.
+expects the nested SQL-generation span to be a child of its tool span, falling back to the
+pre-MCP hierarchy where that span is a sibling sharing the tool span's parent.
 
 ### 3 Hosted services
 

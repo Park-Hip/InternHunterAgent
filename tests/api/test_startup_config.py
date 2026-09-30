@@ -77,6 +77,10 @@ class StartupConfigTests(unittest.TestCase):
                 "src.serving.composition.assert_serving_schema",
                 side_effect=lambda: events.append("schema guard"),
             ),
+            patch(
+                "src.serving.composition.assert_agent_privileges",
+                side_effect=lambda: events.append("privilege guard"),
+            ),
             patch("src.serving.composition.build_checkpointer_pool", return_value=pool),
             patch(
                 "src.serving.composition.build_checkpointer",
@@ -115,6 +119,7 @@ class StartupConfigTests(unittest.TestCase):
             [
                 "settings load",
                 "schema guard",
+                "privilege guard",
                 "pool open",
                 "checkpointer setup",
                 "prompt prefetch",

@@ -144,6 +144,16 @@ dashboard (key: `AGENT_DATABASE_URL`, sync: false). The connection string format
 postgresql+psycopg://internhunter_agent:<password>@<host>:5432/internhunter
 ```
 
+**A rebuilt table drops the grant.** A `GRANT` belongs to the table object, so anything that
+recreates `clean_jobs` — the evaluation fixture loader, or a migration that recreates the table —
+drops the reader role's `SELECT` while leaving the role able to authenticate and connect. The
+service refuses to start in that state: `src/api/privilege_guard.py` runs at boot, checks that the
+role can read the 16 visible columns and is refused a write, and raises rather than serving. The
+error names this section. Re-apply steps 1 to 4 above.
+
+The check is skipped, with a warning, when `AGENT_DATABASE_URL` names a different database from
+`DATABASE_URL`, because that arrangement has nothing for the check to inspect.
+
 **Rotation.** When rotating the reader credential, generate a new password, update the Render
 secret, and revoke the old role after confirming the new one works:
 

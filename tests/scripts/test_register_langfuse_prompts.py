@@ -36,12 +36,20 @@ class FakeLangfuse:
 
 
 def test_load_prompt_definitions_registers_each_model_visible_prompt() -> None:
+    """Every managed prompt surface is registered, including the v0 system prompt.
+
+    The list comes from the prompt registry rather than a local copy, so a new
+    surface cannot be added without a published version of its own.
+    """
+    from src.agents.tracing.prompt_registry import PROMPT_DEFINITIONS
+
     definitions = register_langfuse_prompts.load_prompt_definitions()
 
     assert [(item.yaml_key, item.name) for item in definitions] == [
-        ("system_prompt", "resumi-system"),
-        ("schema_context", "resumi-schema-context"),
-        ("sql_generation", "resumi-sql-generation"),
+        (definition.yaml_key, definition.name) for definition in PROMPT_DEFINITIONS
+    ]
+    assert ("system_prompt_v0", "resumi-system-v0") in [
+        (item.yaml_key, item.name) for item in definitions
     ]
     assert all(item.content for item in definitions)
 
@@ -50,13 +58,14 @@ def test_synchronize_prompts_is_a_noop_when_yaml_content_is_unchanged() -> None:
     client = FakeLangfuse()
     definitions = register_langfuse_prompts.load_prompt_definitions()
 
+    created = len(definitions)
     assert register_langfuse_prompts.synchronize_prompts(
         client, definitions, commit_message="commit-1"
-    ) == (3, 0)
+    ) == (created, 0)
     assert register_langfuse_prompts.synchronize_prompts(
         client, definitions, commit_message="commit-1"
-    ) == (0, 3)
-    assert len(client.create_calls) == 3
+    ) == (0, created)
+    assert len(client.create_calls) == created
 
 
 def test_synchronize_prompts_creates_a_version_only_for_changed_content() -> None:
@@ -78,11 +87,9 @@ def test_synchronize_prompts_creates_a_version_only_for_changed_content() -> Non
 
     assert register_langfuse_prompts.synchronize_prompts(
         client, changed, commit_message="commit-2"
-    ) == (1, 2)
+    ) == (1, len(definitions) - 1)
     assert [call["name"] for call in client.create_calls] == [
-        "resumi-system",
-        "resumi-schema-context",
-        "resumi-sql-generation",
+        *(item.name for item in definitions),
         "resumi-sql-generation",
     ]
     assert client.create_calls[-1]["commit_message"] == "commit-2"

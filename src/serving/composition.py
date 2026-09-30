@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastmcp.utilities.lifespan import combine_lifespans
 
 from src.agents.mcp.adapter import list_job_tools
+from src.api.privilege_guard import assert_agent_privileges
 from src.agents.mcp.job_server import (
     MCP_ENDPOINT_PATH,
     create_job_mcp_server,
@@ -42,6 +43,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await asyncio.to_thread(
         assert_serving_schema
     )  # boot fails loudly on clean_jobs drift
+    # Boot also fails loudly when the agent read role cannot read the table, or can
+    # write it. A rebuilt table drops the grant, and without this the first user
+    # request discovers it instead of the process refusing to start.
+    await asyncio.to_thread(assert_agent_privileges)
 
     pool = build_checkpointer_pool()
     await pool.open()

@@ -1,7 +1,10 @@
 """Dataset registry and the validation the evaluation harness relies on.
 
 Each dataset is keyed by a short name and points at one YAML file of
-scenarios. The default dataset is ``default``.
+scenarios. ``default`` is the v1 registry; ``v0`` is the v0 acceptance set
+derived from docs/refactor/agent-v0-contract.md. The two never mix: a new
+version is a new entry, never an edit to the registry that is already
+selectable.
 """
 
 from __future__ import annotations
@@ -79,6 +82,7 @@ class DatasetSpec:
 
 _REGISTRY: dict[str, DatasetSpec] = {
     "default": DatasetSpec(DATASETS_DIR / "scenarios.yaml"),
+    "v0": DatasetSpec(DATASETS_DIR / "v0_acceptance.yaml"),
 }
 
 

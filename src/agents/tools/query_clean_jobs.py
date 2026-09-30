@@ -26,6 +26,7 @@ from src.agents.runtime.prompts import (
     load_sql_generation_prompt_resolution_async,
 )
 from src.agents.runtime.provider import AgentProvider
+from src.agents.runtime.tool_events import publish_tool_result
 from src.agents.tracing.langfuse import get_langfuse_client, langfuse_prompt_attributes
 from src.core.config import settings
 from src.core.logger import logger
@@ -143,6 +144,10 @@ async def run_query_clean_jobs(question: str) -> str:
 
     if not validation.valid:
         logger.warning("query_clean_jobs.sql_rejected", reason=validation.reason)
+        # A rejected query is not a search that matched nothing. Publishing zero
+        # here would show the reader "no results" for a question never asked of
+        # the database.
+        publish_tool_result(row_count=None)
         return f"Tôi không thể chạy truy vấn đó: {validation.reason}"
 
     max_rows = load_max_rows()
@@ -152,6 +157,9 @@ async def run_query_clean_jobs(question: str) -> str:
         rows = await asyncio.to_thread(execute_validated_sql, bounds.sql)
     except UndefinedColumnError as exc:
         logger.warning("query_clean_jobs.unknown_column", error=str(exc))
+        # A refused query matched nothing, but it is a refusal rather than an
+        # empty result, so publish no count rather than a misleading zero.
+        publish_tool_result(row_count=None)
         return render_tool_result(
             QueryToolResult(
                 refusal=QueryRefusal(reason="", glossary_token="ABSENT_FIELD")
@@ -160,9 +168,14 @@ async def run_query_clean_jobs(question: str) -> str:
         )
     except ExecutorError as exc:
         logger.error("query_clean_jobs.db_error", error=str(exc))
+        publish_tool_result(row_count=None)
         return "Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau."
 
     table = format_rows(rows, bounds.display_cap)
+    # The row count survives only inside a sentence once the table is rendered for
+    # the model. Publish it as a fact too, so the interface can show the real number
+    # instead of leaving the reader to infer it from prose.
+    publish_tool_result(row_count=table.row_count, truncated=table.truncated)
     obligations = filter_enabled_obligations(detect_obligations(validation.sql, table))
     return render_tool_result(
         QueryToolResult(table=table, obligations=obligations),

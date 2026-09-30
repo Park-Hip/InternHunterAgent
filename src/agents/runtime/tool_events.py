@@ -22,6 +22,7 @@ from __future__ import annotations
 import time
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar, Token
+from dataclasses import dataclass
 from typing import Any
 
 #: Arguments reach the browser. Keep them short, flat, and stringly typed.
@@ -30,6 +31,7 @@ MAX_ARGUMENTS = 6
 
 ToolEventEmitter = Callable[[dict[str, Any]], Awaitable[None]]
 ToolEventToken = Token["ToolEventEmitter | None"]
+ResultFactsToken = Token["ToolResultFacts | None"]
 
 _current_emitter: ContextVar[ToolEventEmitter | None] = ContextVar(
     "current_tool_event_emitter", default=None
@@ -65,6 +67,59 @@ def format_arguments(args: Any) -> dict[str, str]:
     return formatted
 
 
+@dataclass
+class ToolResultFacts:
+    """Mutable facts about the result of the tool call in progress.
+
+    Deliberately mutable and shared by reference rather than published through a
+    `ContextVar`. LangChain may run a tool in a copied context, and a rebinding in
+    that copy is invisible to the observer that started the call - which silently
+    loses the count. Mutating a shared holder survives context copying, and a fresh
+    holder per call keeps consecutive calls isolated without an explicit reset.
+    """
+
+    row_count: int | None = None
+    truncated: bool = False
+    published: bool = False
+
+
+_last_holder: ContextVar[ToolResultFacts | None] = ContextVar(
+    "last_tool_result_holder", default=None
+)
+
+
+def new_result_facts() -> ToolResultFacts:
+    return ToolResultFacts()
+
+
+def set_result_holder(holder: ToolResultFacts) -> ResultFactsToken:
+    return _last_holder.set(holder)
+
+
+def reset_result_holder(token: ResultFactsToken) -> None:
+    _last_holder.reset(token)
+
+
+def publish_tool_result(*, row_count: int | None, truncated: bool = False) -> None:
+    """Record result facts for the tool call in progress, if one is observed.
+
+    A tool running outside the observed agent simply publishes nothing, which is
+    the correct no-op rather than an error.
+    """
+    holder = _last_holder.get()
+    if holder is None:
+        return
+    holder.row_count = row_count
+    holder.truncated = truncated
+    holder.published = True
+
+
+def published_facts() -> ToolResultFacts | None:
+    """The facts a tool published for the call in progress, if any."""
+    holder = _last_holder.get()
+    return holder if holder is not None and holder.published else None
+
+
 async def emit_tool_event(
     *,
     name: str,
@@ -73,6 +128,7 @@ async def emit_tool_event(
     arguments: dict[str, str] | None = None,
     duration_ms: int | None = None,
     error: str | None = None,
+    facts: "ToolResultFacts | None" = None,
 ) -> None:
     """Emit one tool lifecycle event, if this context has an emitter bound."""
     emitter = _current_emitter.get()
@@ -87,6 +143,8 @@ async def emit_tool_event(
             "arguments": arguments or {},
             "duration_ms": duration_ms,
             "error": error,
+            "row_count": facts.row_count if facts else None,
+            "truncated": bool(facts.truncated) if facts else False,
         }
     )
 

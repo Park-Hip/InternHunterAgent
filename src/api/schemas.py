@@ -68,6 +68,12 @@ class StreamToolEvent(BaseModel):
     arguments: dict[str, str] = Field(default_factory=dict)
     duration_ms: int | None = None
     error: str | None = None
+    #: How many rows the tool actually matched. Present when the tool can say, and
+    #: None when it cannot - which is different from zero.
+    row_count: int | None = None
+    #: True when the returned rows were capped. A count without this would imply
+    #: the answer shows every match, which is exactly the impression to avoid.
+    truncated: bool = False
 
 
 class StreamDoneEvent(BaseModel):

@@ -31,9 +31,15 @@ def query_clean_jobs(question: str) -> str:
 
 
 class _ScriptedToolCallingModel(GenericFakeChatModel):
-    """Calls the tool once, then answers using the result."""
+    """Calls a tool once, then answers using the result.
+
+    Parameterised so a test can point it at its own tool without redefining the
+    scripted sequence.
+    """
 
     messages: list = []
+    tool_name: str = "query_clean_jobs"
+    tool_arg: str = "question"
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
         already_called = any(getattr(m, "type", None) == "tool" for m in messages)
@@ -42,8 +48,8 @@ class _ScriptedToolCallingModel(GenericFakeChatModel):
                 content="",
                 tool_calls=[
                     {
-                        "name": "query_clean_jobs",
-                        "args": {"question": "AI Engineer ở Đà Nẵng"},
+                        "name": self.tool_name,
+                        "args": {self.tool_arg: "AI Engineer ở Đà Nẵng"},
                         "id": "call_1",
                     }
                 ],

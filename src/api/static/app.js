@@ -151,6 +151,7 @@ function startTurn(query) {
     rawAnswer: "",
     pendingPaint: null,
     toolCards: new Map(),
+    zeroResult: false,
   };
 }
 
@@ -188,14 +189,36 @@ function upsertToolCard(ctx, event) {
   if (event.status === "running") {
     status.textContent = "đang chạy…";
   } else if (event.status === "ok") {
-    status.textContent =
-      typeof event.duration_ms === "number" ? `${event.duration_ms} ms` : "xong";
+    status.textContent = describeResult(event);
   } else {
     status.textContent = event.error ? `lỗi: ${event.error}` : "lỗi";
   }
   card.appendChild(status);
 
+  // A real zero-match is the signal the interface should key its no-answer state
+  // to, not the agent falling silent. Absent and zero are different facts.
+  if (event.status === "ok" && event.row_count === 0) {
+    ctx.zeroResult = true;
+  }
+
   scrollToEnd();
+}
+
+// The count, stated honestly. `truncated` matters: a bare number would imply the
+// answer shows every match, which is the impression to avoid.
+function describeResult(event) {
+  const parts = [];
+  if (typeof event.row_count === "number") {
+    parts.push(
+      event.truncated
+        ? `hiển thị một phần · ${event.row_count} kết quả`
+        : `${event.row_count} kết quả`,
+    );
+  }
+  if (typeof event.duration_ms === "number") {
+    parts.push(`${event.duration_ms} ms`);
+  }
+  return parts.length ? parts.join(" · ") : "xong";
 }
 
 // Coalesce token paints onto a timer. The first token paints immediately so the
@@ -276,10 +299,11 @@ function showTraceLink(ctx, traceUrl) {
   ctx.agent.appendChild(p);
 }
 
-// True when the server answered with its own "nothing to say" constant, which
-// is the only no-answer signal the current stream contract carries.
+// True when the agent answered, but the search genuinely matched nothing. The
+// FALLBACK_ANSWER case is different: that is the agent producing no output at
+// all, and it is handled separately as a fallback.
 function isNoAnswer(ctx) {
-  return ctx.rawAnswer.trim() === NO_ANSWER_TEXT;
+  return ctx.zeroResult === true || ctx.rawAnswer.trim() === NO_ANSWER_TEXT;
 }
 
 // A "no answer" outcome is a designed state, not an apology paragraph. It says
@@ -301,9 +325,11 @@ function showNoAnswerCard(ctx, query) {
 
   const detail = document.createElement("p");
   detail.className = "turn__nodata-detail";
-  detail.textContent = snapshotDate
-    ? `Đã tìm trong kho dữ liệu lịch sử chụp ngày ${snapshotDate}. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.`
-    : "Đã tìm trong kho dữ liệu lịch sử đã thu thập. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.";
+  detail.textContent = ctx.zeroResult
+    ? `Truy vấn đã chạy và không tìm thấy tin nào phù hợp${snapshotDate ? ` trong kho chụp ngày ${snapshotDate}` : " trong kho dữ liệu đã thu thập"}. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.`
+    : snapshotDate
+      ? `Đã tìm trong kho dữ liệu lịch sử chụp ngày ${snapshotDate}. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.`
+      : "Đã tìm trong kho dữ liệu lịch sử đã thu thập. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.";
   card.appendChild(detail);
 
   const asked = document.createElement("p");

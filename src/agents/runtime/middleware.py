@@ -10,7 +10,15 @@ from langchain.agents.middleware import (
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 
-from src.agents.runtime.tool_events import elapsed_ms, emit_tool_event, format_arguments
+from src.agents.runtime.tool_events import (
+    elapsed_ms,
+    emit_tool_event,
+    format_arguments,
+    new_result_facts,
+    published_facts,
+    reset_result_holder,
+    set_result_holder,
+)
 from src.core.config import settings
 
 
@@ -148,6 +156,10 @@ class ToolObservationMiddleware(AgentMiddleware):
             name=name, status="running", call_id=call_id, arguments=arguments
         )
         started = time.perf_counter()
+        # A fresh holder per call, shared by reference so the count survives
+        # however LangChain chooses to schedule the tool.
+        holder = new_result_facts()
+        holder_token = set_result_holder(holder)
         try:
             result = await handler(request)
         except Exception as error:
@@ -161,13 +173,18 @@ class ToolObservationMiddleware(AgentMiddleware):
                 error=str(error)[:200],
             )
             raise
+        # Fold in whatever the tool published about its own result, so one event
+        # carries both the call and the count.
+        facts = published_facts()
         await emit_tool_event(
             name=name,
             status="ok",
             call_id=call_id,
             arguments=arguments,
             duration_ms=elapsed_ms(started),
+            facts=facts,
         )
+        reset_result_holder(holder_token)
         return result
 
 

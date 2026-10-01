@@ -215,10 +215,16 @@ def _normalize_numeric(item: Filter, label: str) -> NormalizedFilter:
     A threshold is not a set membership test, so several values cannot be honoured:
     `>= 1000 OR >= 2000` collapses to the weaker `>= 1000`, which is almost never
     what was meant. Compiling the first value and reporting the rest as applied
-    criteria would tell the model about a filter that never ran, so a second value
-    is a question instead, exactly as a boolean filter carrying both values is.
+    criteria would tell the model about a filter that never ran, so a second
+    *distinct* value is a question instead, exactly as a boolean filter carrying both
+    values is.
+
+    Repeating the same bound is not a second bound. A query that says `>= 1000` twice
+    names one threshold, so it is normalised rather than questioned - and the
+    question would be unanswerable, because there is nothing to choose between.
     """
-    if len(item.values) > 1:
+    distinct = tuple(dict.fromkeys(item.values))
+    if len(distinct) > 1:
         raise AmbiguousQueryError(
             f"Bạn muốn lọc theo ngưỡng nào cho '{item.field.value}'? Hãy nêu một con số."
         )

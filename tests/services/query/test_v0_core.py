@@ -673,3 +673,54 @@ class TestSalaryThresholdIsNotASetMembership:
             if key.startswith("n")
         }
         assert bound == set(plan.filters[0].values)
+
+
+class TestGroupTruncationIsDisclosed:
+    """A total over a bounded group list must say the list was bounded.
+
+    `match_total` counts matching postings, not groups, so it cannot detect a
+    dropped group the way LIST and TOP_N detect a dropped row. Before this, a
+    saturated group list rendered `TOTAL: 5000` above twenty groups with no
+    caveat at all.
+    """
+
+    @staticmethod
+    def group_rows(count: int, n: int = 3) -> list[dict]:
+        return [{"value": f"g{index}", "n": n} for index in range(count)]
+
+    def test_a_saturated_group_list_is_marked_truncated(self) -> None:
+        result = service_with({"groups": self.group_rows(20), "total": [{"count": 5000}]}).answer(
+            JobQueryRequest.model_validate({"shape": "group_count", "group_by": "location"})
+        )
+        assert result.truncated is True
+        assert result.displayed_count == 20
+
+    def test_a_saturated_group_list_states_the_caveat(self) -> None:
+        result = service_with({"groups": self.group_rows(20), "total": [{"count": 5000}]}).answer(
+            JobQueryRequest.model_validate({"shape": "group_count", "group_by": "location"})
+        )
+        assert "TRUNCATION" in result.caveats
+        assert result.caveats.count("TRUNCATION") == 1
+
+    def test_the_total_still_reports_the_full_matching_set(self) -> None:
+        """Truncating the disclosure must not shrink the stated total."""
+        result = service_with({"groups": self.group_rows(20), "total": [{"count": 5000}]}).answer(
+            JobQueryRequest.model_validate({"shape": "group_count", "group_by": "location"})
+        )
+        assert result.match_total == 5000
+        assert sum(g.count for g in result.groups) != result.match_total
+
+    def test_an_unbounded_group_list_is_not_marked_truncated(self) -> None:
+        result = service_with({"groups": self.group_rows(4), "total": [{"count": 12}]}).answer(
+            JobQueryRequest.model_validate({"shape": "group_count", "group_by": "location"})
+        )
+        assert result.truncated is False
+        assert "TRUNCATION" not in result.caveats
+
+    def test_list_and_top_n_agree_on_the_caveat_name(self) -> None:
+        """One disclosure vocabulary across shapes, or the model has to guess."""
+        from src.agents.tools.v0_query_jobs import CAVEAT_TEXT
+        from src.services.query.service import CAVEAT_TRUNCATION
+
+        assert CAVEAT_TRUNCATION == "TRUNCATION"
+        assert "TRUNCATION" in CAVEAT_TEXT

@@ -108,4 +108,5 @@ work before this cutover can be called observed.
 | The v0 tool cannot return posting text | Closed in #507: the detail projection carries the text, the tool labels it as posting text, and the retrieval is gated. |
 | A share over a two-value field is refused | Closed in #508, which also found an inverted `IS NULL` test in the link-presence predicate. |
 | The trace lineage is correct in tests only | The v1 and v0 lineages are asserted against a mocked SDK, not against a live trace. |
+| The served prompt surface is warmed at boot | Closed in #539: boot warms the surface the bundle resolves and logs it. The resolved version is still only observable in a trace, not in a health endpoint. |
 | The v1 bundle is unregisterable but still shipped | Two prompt surfaces and two tool paths are in the tree. That is deliberate, and it is debt with a date on it: Stage 7. |

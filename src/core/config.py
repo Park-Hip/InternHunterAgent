@@ -250,13 +250,42 @@ def _config_path(filename: str) -> Path:
     return CONFIG_DIR / filename
 
 
+def _no_duplicate_keys(loader: yaml.SafeLoader, node: yaml.Node, deep: bool = False) -> dict:
+    """Build a mapping, refusing a key that is already present.
+
+    ``yaml.safe_load`` is last-wins on a repeated key, so a duplicated entry in
+    a config file is silently discarded and the file still loads. That is how
+    ``system_prompt_v0`` was declared twice in ``prompts.yaml`` and served
+    correctly by accident. A config file is a declaration, and a declaration
+    that contradicts itself should stop the process rather than pick a winner.
+    """
+    mapping: dict = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise yaml.constructor.ConstructorError(
+                None, None,
+                f"duplicate key {key!r} at line {key_node.start_mark.line + 1}",
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+class _StrictLoader(yaml.SafeLoader):
+    """SafeLoader that refuses duplicate mapping keys."""
+
+
+_StrictLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_duplicate_keys)
+
+
 def _load_yaml_file(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise ConfigLoadError(f"Missing config file: {path}")
 
     try:
         with path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+            data = yaml.load(f, Loader=_StrictLoader) or {}
     except yaml.YAMLError as exc:
         raise ConfigLoadError(f"Invalid YAML in {path}: {exc}") from exc
     except OSError as exc:

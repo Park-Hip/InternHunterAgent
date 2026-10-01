@@ -6,9 +6,10 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
+from typing import Any
 
 from evals.datasets import dataset, default_dataset_name, list_datasets
-from evals.metrics import METRIC_BY_NAME
+from evals.metrics import METRIC_BY_NAME, MetricKind, metric
 from evals.report import print_table, to_table_rows
 from evals.run import run_dataset, write_report
 from evals.v0_gate import GateUnavailable, failed_cases, run_v0_gate
@@ -21,7 +22,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ids", help="Comma-separated dataset IDs")
     parser.add_argument("--capture", type=Path, help="Retained replay JSON for credential-free deterministic scoring")
     parser.add_argument("--out", type=Path, default=Path("evals/runs/report-latest.json"))
-    parser.add_argument("--require-pass", action="store_true", help="Fail if any selected metric scores below 1")
+    parser.add_argument(
+        "--allow-fail",
+        action="store_true",
+        help="Report scores without turning them into an exit code, for exploratory runs. "
+        "A metric that could not be evaluated still fails in every mode: an unevaluated "
+        "run must never read as a pass.",
+    )
     parser.add_argument(
         "--deterministic",
         action="store_true",
@@ -41,8 +48,35 @@ def main(argv: list[str] | None = None) -> int:
     write_report(report, args.out)
     print_table(to_table_rows(report["by_metric"]))
     print(f"Report written to {args.out}")
-    rows = [row for metric_rows in report["by_metric"].values() for row in metric_rows]
-    return 1 if any(row.get("error") or row.get("reason") == "UNRUN" or (args.require_pass and row.get("score") != 1.0) for row in rows) else 0
+    return _exit_code(report["by_metric"], args.allow_fail)
+
+
+def _exit_code(by_metric: dict[str, list[dict[str, Any]]], allow_fail: bool) -> int:
+    """Turn the report into an exit code. Unavailable evidence always fails.
+
+    Only deterministic metrics carry a threshold. A judge score is continuous in
+    [0, 1], so requiring 1.0 of it would fail every run and prove nothing; judge
+    metrics stay reported-only until a threshold is configured.
+    """
+    unevaluated: list[str] = []
+    below_threshold: list[str] = []
+    for name, rows in by_metric.items():
+        gated = metric(name).kind == MetricKind.DETERMINISTIC
+        for row in rows:
+            label = f"{name}[{row.get('scenario_id')}]"
+            if row.get("error") or row.get("reason") == "UNRUN":
+                unevaluated.append(label)
+            elif gated and row.get("score") != 1.0:
+                below_threshold.append(label)
+    for label in unevaluated:
+        print(f"FAILED {label}: the metric could not be evaluated", file=sys.stderr)
+    if unevaluated:
+        return 1
+    if below_threshold and not allow_fail:
+        for label in below_threshold:
+            print(f"FAILED {label}: scored below the deterministic threshold", file=sys.stderr)
+        return 1
+    return 0
 
 
 def _run_gate(args: argparse.Namespace) -> int:

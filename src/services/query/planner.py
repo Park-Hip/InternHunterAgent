@@ -227,9 +227,16 @@ def _normalize_numeric(item: Filter, label: str) -> NormalizedFilter:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise QueryRequestError(f"{label} takes a number for '{item.field.value}', got {value!r}")
         values.append(float(value))
+    if len(set(values)) > 1:
+        # A threshold is not a set membership test. Two bounds cannot both be the
+        # minimum, and the compiler binds one, so keeping both here would report
+        # criteria that never ran. Ask which one is meant.
+        raise AmbiguousQueryError(
+            f"Bạn muốn lọc '{item.field.value}' từ mức nào? Hãy nói rõ một mức."
+        )
     return NormalizedFilter(
         field=item.field,
-        values=tuple(values),
+        values=(values[0],),
         mode=MatchMode.ANY,
         basis="column",
         requested=tuple(item.values),

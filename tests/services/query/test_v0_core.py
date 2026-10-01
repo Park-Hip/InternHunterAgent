@@ -622,3 +622,54 @@ class TestServiceAssembly:
         assert states == set(QueryState)
         assert QueryResult(state=QueryState.ANSWERED, shape=QueryShape.LIST).is_data_answer
         assert not QueryResult(state=QueryState.ERROR, shape=QueryShape.LIST).is_data_answer
+
+
+class TestSalaryThresholdIsNotASetMembership:
+    """A `>=` bound is one number. Two bounds cannot both be the minimum.
+
+    The compiler binds a single threshold parameter, so a plan carrying two values
+    reported two applied criteria while one predicate ran, and the model was told
+    about a filter that did not exist.
+    """
+
+    @staticmethod
+    def plan_with(field: str, values: list):
+        return JobQueryRequest.model_validate({"shape": "list", "filters": [{"field": field, "values": values}]})
+
+    def test_two_salary_minimums_are_ambiguous_rather_than_silently_collapsed(self) -> None:
+        from src.services.query.plan import AmbiguousQueryError
+
+        with pytest.raises(AmbiguousQueryError) as caught:
+            build_plan(self.plan_with("salary_min", [1000, 2000]))
+        assert "salary_min" in caught.value.question
+
+    def test_two_salary_maximums_are_ambiguous(self) -> None:
+        from src.services.query.plan import AmbiguousQueryError
+
+        with pytest.raises(AmbiguousQueryError):
+            build_plan(self.plan_with("salary_max", [2000, 1000]))
+
+    def test_a_single_bound_is_unchanged(self) -> None:
+        assert build_plan(self.plan_with("salary_min", [1000])).filters[0].values == (1000.0,)
+
+    def test_repeating_the_same_bound_is_not_ambiguity(self) -> None:
+        """A model restating one number is not a second, conflicting number."""
+        assert build_plan(self.plan_with("salary_min", [1000, 1000])).filters[0].values == (1000.0,)
+
+    def test_ambiguity_surfaces_as_a_question_not_an_error_state(self) -> None:
+        result = service_with({}).answer(self.plan_with("salary_min", [1000, 2000]))
+        assert result.state is QueryState.AMBIGUOUS
+        assert "salary_min" in result.message
+
+    def test_the_applied_criterion_matches_the_bound_that_ran(self) -> None:
+        """The reported criterion and the executed predicate must agree."""
+        plan = build_plan(self.plan_with("salary_min", [1000]))
+        compiled = compile_plan(plan, {"max_rows": 50, "group_cap": 20, "max_detail_ids": 10, "max_top_n": 5})
+        statements = getattr(compiled, "statements", None) or [compiled]
+        bound = {
+            value
+            for statement in statements
+            for key, value in (getattr(statement, "params", None) or {}).items()
+            if key.startswith("n")
+        }
+        assert bound == set(plan.filters[0].values)

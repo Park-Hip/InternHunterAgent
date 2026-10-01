@@ -1,193 +1,125 @@
 # Authoring Scenarios
 
-> **Source:** `evals/scenarios.py`, `evals/scenarios_v1.yaml`
+> **Last verified:** 2026-10-01.
 
-## Authoring grammar
+> **Eviction:** This document leaves when the scenario grammar, metric contract, or authoring commands change.
 
-Every scenario in `scenarios_v1.yaml` must conform to this grammar, enforced by `load_scenarios()`.
+> **Source:** `evals/datasets.py`, `evals/datasets/scenarios.yaml`, `evals/metrics.py`
 
-## Seven required keys
+Scenarios are declarative YAML, validated by [`datasets.py`](../datasets.py) when the harness loads them.
+There is no separate registry loader: `DatasetSpec.scenarios()` is the single validator, and it rejects a scenario the harness would otherwise silently misread.
 
-| Key | Type | Constraint |
+## Where scenarios live
+
+| Dataset | File | Select with |
 |---|---|---|
-| `id` | string | Matches `(SAF|HON|HLP)-[A-Z]+(?:-[A-Z]+)*-[1-9][0-9]*` |
-| `name` | string | Non-empty |
-| `requirements` | list of strings | Each matches `G[0-9]{2}` |
-| `decision` | int or null | Requirement decision index |
-| `type` | string | `"single"` or `"conversational"` |
-| `expected` | string | Non-empty expected behavior description |
-| `probe` | boolean | Whether this is a probe scenario |
-| `expected_tools` | list of strings | Must be from `{"query_clean_jobs", "get_job_details"}` |
+| v1 scenarios | [`../datasets/scenarios.yaml`](../datasets/scenarios.yaml) | `--dataset default` |
+| v0 acceptance cases | [`../datasets/v0_acceptance.yaml`](../datasets/v0_acceptance.yaml) | `--dataset v0` |
 
-## Id pattern
+A new version is a new dataset entry, never an edit to an existing registry.
+The same id must be unique within its dataset.
 
-```python
-_SCENARIO_ID_PATTERN = re.compile(r"(SAF|HON|HLP)-[A-Z]+(?:-[A-Z]+)*-[1-9][0-9]*")
-```
+## Enforced grammar
 
-- Class prefix: `SAF`, `HON`, or `HLP`
-- Behavior descriptor: one or more UPPERCASE words
-- Sequence number: `[1-9][0-9]*` (no leading zero)
+`DatasetSpec.scenarios()` rejects, in this order:
 
-Examples: `HLP-LIST-1`, `SAF-INJECTION-REFUSAL-1`, `HON-NEGOTIABLE-SALARY-1`
+1. A registry that is not a YAML list of mappings.
+2. A scenario without a string `id`, or a duplicate `id`.
+3. A scenario with neither `input` nor `turns`.
+4. A scenario without a string `expected`.
+5. A `metrics` list that is empty, missing, or names an unknown metric.
+6. A v0 case that declares `sql_accuracy` or `memory` (retired for the governed path by #487).
+7. A scenario declaring `sql_accuracy` without `reference_sql`.
+8. A scenario declaring `rubric` without a `rubric`.
+9. A tool key the harness does not read, or a malformed tool expectation.
 
-## Type and turns
+The loader reads only four tool keys: `expected_tools`, `tool_expectation`, `turn_tool_expectations`, and `tool_order`.
+Any other key containing `tool` is an explicit error.
 
-Exactly one of `input` (single-turn) or `turns` (multi-turn) is required:
+## Scenario fields
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `id` | string | yes | Unique within its dataset |
+| `input` | string | single-turn | The user question |
+| `turns` | list of strings | conversational | The ordered turn questions |
+| `expected` | string | yes | The reviewed expected behavior |
+| `metrics` | list of metrics | yes | The metrics to score for this scenario |
+| `expected_tools` | list of strings | for tool scenarios | Required tools when no finer declaration exists |
+| `tool_expectation` | `{required, allowed}` | optional | Scenario-level tool contract |
+| `turn_tool_expectations` | list of `{required, allowed}` | optional | Per-turn tool contract (conversational) |
+| `tool_order` | bool | optional | Demand an exact tool-sequence match |
+| `reference_sql` | string or list | if `sql_accuracy` | Reference SQL; a list is per-turn |
+| `sql_mode` | `ids_only` / `aggregate_count` / `zero_results` | if `sql_accuracy` | Comparison mode |
+| `expected_count` | int | for `aggregate_count` | The reviewed count |
+| `display_limit` | int | for capped `ids_only` | Display cap to compare within |
+| `rubric` | string | if `rubric` | The scenario's own judge rubric |
+| `type` | `single` / `conversational` | conventional | Declared, not enforced by the loader |
+| `name`, `requirements`, `decision`, `language`, `input_variants` | — | conventional | Annotation carried through the dataset |
+
+The loader enforces the `required` column.
+The read-but-not-enforced fields must still be correct: the harness keys on `type` for conversation handling and on `sql_mode` for SQL comparison even though the validator does not check every one of them.
+
+## Metric contract
+
+A metric only makes sense if the scenario declares the fields it reads.
+
+| Metric | Requires |
+|---|---|
+| `tool_correctness` | `expected_tools`, `tool_expectation`, or `turn_tool_expectations` |
+| `sql_accuracy` | `reference_sql`, plus `sql_mode` (and `expected_count` for `aggregate_count`) |
+| `grounded` | Nothing extra; reads the captured tool output |
+| `on_topic` | Nothing extra |
+| `memory` | Multiple turns; reads `conversation_history` |
+| `rubric` | `rubric` |
+
+## Example
 
 ```yaml
-# Single-turn
-- id: HLP-COUNT-1
+- id: HLP-LIST-1
+  name: List AI Engineer jobs
   type: single
-  input: "Có bao nhiêu việc làm Python?"
-
-# Conversational
-- id: HLP-CONTEXT-1
-  type: conversational
-  turns:
-    - "Tìm việc Python ở Hà Nội"
-    - "Chỉ giữ lại Python thôi"
+  input: Liệt kê các việc làm AI Engineer.
+  language: vi
+  expected: List 5 rows with labelled original source links.
+  expected_tools:
+    - query_clean_jobs
+  reference_sql: SELECT id, title, company, location, source_url FROM clean_jobs WHERE title ILIKE '%AI Engineer%' ORDER BY id
+  metrics:
+    - tool_correctness
+    - sql_accuracy
+    - grounded
+    - on_topic
+    - rubric
+  rubric: 'Expected behavior: List 5 rows with labelled original source links; additional obligations: [{require_source_links: true, type: structural}]'
+  sql_mode: ids_only
 ```
-
-Conversational scenarios require a non-empty list of string turns.
-
-## Repeat counts
-
-```python
-def repeat_count(scenario: dict[str, Any]) -> int:
-    return 3 if scenario["probe"] else 2
-```
-
-| `probe` | Repeats | Purpose |
-|---|---|---|
-| `true` | 3 | Probe scenarios — extra determinism check |
-| `false` | 2 | Standard scenarios |
-
-## Three assertion types
-
-Assertions live under `grading.assertions`:
-
-```yaml
-grading:
-  assertions:
-    - type: literal
-      required_patterns: [...]
-      forbidden_patterns: [...]
-      expected_answer_count: 5
-      count_only: true
-    - type: structural
-      require_vietnamese: true
-      require_source_links: true
-      reject_salary_period: true
-      preserve_returned_job_levels: true
-      reject_title_to_level_inference: true
-      reject_lifecycle_substitution: true
-      required_any: [[...], [...]]
-      forbidden_any: [...]
-    - type: semantic
-      required_any: [[...]]
-      forbidden_any: [...]
-      forbid_single_salary_winner: true
-```
-
-### Literal assertion fields
-
-| Field | Type | Description |
-|---|---|---|
-| `expected_answer_count` | int | Expected number in the answer |
-| `count_only` | bool | Answer must be one declarative sentence |
-| `forbidden_patterns` | list of regex strings | Patterns that must NOT appear |
-| `required_patterns` | list of regex strings | At least one pattern per group must match |
-
-Terms can be:
-- Exact strings: `"not available"`
-- Glossary references: `{glossary: CREATED_ON_NOT_POSTED_WORDING}`
-- Lexicon lists: `{lexicon: ["không có trong", "database"]}`
-
-### Structural assertion fields
-
-| Field | Type | Description |
-|---|---|---|
-| `require_vietnamese` | bool | Check prose purity (no English words) |
-| `require_source_links` | bool | Check source URLs are labelled |
-| `reject_salary_period` | bool | Reject salary+period pairing |
-| `preserve_returned_job_levels` | bool | Reported levels must match canonical values |
-| `reject_title_to_level_inference` | bool | "Senior" title cannot map to structured level |
-| `reject_lifecycle_substitution` | bool | Absent deadline cannot be replaced by lifecycle dates |
-| `required_any` | list of list of terms | OR within group, AND across groups |
-| `forbidden_any` | list of terms | Any match = FAIL |
-
-### Semantic assertion fields
-
-| Field | Type | Description |
-|---|---|---|
-| `required_any` | list of list of terms | Behavioral requirements |
-| `forbidden_any` | list of terms | Forbidden behaviors |
-| `forbid_single_salary_winner` | bool | Must not declare a single global salary winner |
-
-## Seven execution comparison kinds
-
-```python
-_EXECUTION_COMPARISONS = {
-    "exact",              # Multiset equality of rows
-    "contains_reference", # Generated rows must include all reference rows
-    "ids_only",           # Generated IDs must match reference IDs
-    "limited_ids",        # Same as ids_only but respects 20-row display cap
-    "aggregate_count",    # COUNT must match
-    "zero_results",       # Generated query must return zero rows
-    "cross_currency",     # Grouped by currency, ID sets must match per group
-}
-```
-
-Declared per-scenario under `grading.execution_comparison`. Validation rejects incompatible combinations (e.g., `ids_only` without `id` in reference SQL).
-
-## Execution accuracy exemption
-
-Scenarios without a SQL contract declare:
-
-```yaml
-execution_accuracy_exempt:
-  reason: "Pure refusal — no tool call expected"
-```
-
-Or provide `reference_sql` instead. Exactly one of `reference_sql` or `execution_accuracy_exempt` is required.
 
 ## Tool expectations
 
-### Top-level tool expectation
+The harness resolves a turn's tools in this order:
 
-```yaml
-expected_tools: [query_clean_jobs]
-```
+1. `turn_tool_expectations` for the turn, when present.
+2. `tool_expectation` for the scenario, when present.
+3. `expected_tools` otherwise.
 
-### Per-turn tool expectation (conversational only)
-
-```yaml
-turn_tool_expectations:
-  - required: [query_clean_jobs]
-    allowed: [query_clean_jobs, get_job_details]
-  - required: []
-    allowed: []
-```
-
-Required tools must be a subset of allowed tools.
+Each expectation declares `required` tools and optionally `allowed` tools; when `allowed` is omitted it equals `required`.
+For a conversational scenario that changes its tool contract between turns, declare a `turn_tool_expectations` list with one entry per turn; its length must equal the turn count.
 
 ## Step-by-step runbooks
 
 ### Add a new scenario
 
-1. Add to `evals/scenarios_v1.yaml` with all seven required keys.
-2. Validate: `uv run python -m evals.scenarios --scenario NEW-ID`
-3. Add calibration cases to `calibration_v8.yaml` if semantic assertion exists.
-4. Re-run baseline: `uv run python -m evals.driver --output evals/runs/new.json`
-5. Grade: `uv run python -m evals.grader --run evals/runs/new.json --execution-accuracy evals/runs/new-execution.json --output evals/runs/new-grade.json`
-6. Score: `uv run python -m evals.score --run evals/runs/new.json`
-7. Freeze: `uv run python -m evals.driver freeze evals/runs/new.json --grade evals/runs/new-grade.json -o evals/replays/new.json`
+1. Add the scenario to [`../datasets/scenarios.yaml`](../datasets/scenarios.yaml) with the fields above.
+2. Validate the grammar by loading it: `uv run python -c "from evals.datasets import dataset; dataset('default').scenarios()"`.
+3. Choose the metrics the scenario declares and add their required fields.
+4. Re-run the offline suite: `uv run pytest tests/evals -q`.
 
-### Modify an existing scenario
+### Edit an existing scenario
 
-1. Edit `evals/scenarios_v1.yaml`.
-2. Bump prompt version if behavioral requirements changed.
-3. Re-run validation and full baseline.
-4. Update calibration cases if the semantic assertion changed.
-5. Re-freeze any affected replays.
+1. Edit the scenario in [`../datasets/scenarios.yaml`](../datasets/scenarios.yaml).
+2. Re-run the grammar load and the offline suite.
+3. If you changed the tools, SQL contract, or rubric, re-check the affected metric.
+
+The disconnected v1 commands (`evals.driver`, `evals.score`, `evals.grader`, `freeze`, and `replay`) no longer exist.
+Run everything through `python -m evals` as shown in [pipeline.md](../pipeline.md).

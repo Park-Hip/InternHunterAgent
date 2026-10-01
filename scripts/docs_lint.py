@@ -62,10 +62,10 @@ def markdown_files(root: Path = ROOT) -> list[Path]:
 
 
 def is_archive(path: Path) -> bool:
-    """True for historical records that intentionally retain stale references.
+    """True for historical records outside ``evals/`` that retain stale references.
 
-    The v1 evaluation manuals, discovery notes, and decision records retain
-    references to deleted v1 modules under the approved #476 migration.
+    Decision records, discovery notes, and archived documentation retain
+    references to files that were intentionally deleted or superseded.
     Encoding is still checked for every Markdown file.
     """
     return any(
@@ -100,14 +100,15 @@ def is_repo_path(value: str) -> bool:
 def check_link_path(files: list[Path]) -> list[Finding]:
     """Report live repository paths referenced by Markdown that no longer exist.
 
-    The retained v1 evals records cite modules the #476 rebuild deleted, so
-    every Markdown file under ``evals/`` is exempt from this check alone.
+    The retained v1 evals records under ``evals/archive/`` cite modules the #476
+    rebuild deleted, so they stay exempt from this check. Every other Markdown
+    file under ``evals/`` is a live manual and is checked.
     """
     findings: list[Finding] = []
     link_pattern = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
     code_pattern = re.compile(r"`([^`]+)`")
     for path in files:
-        if is_archive(path) or path.is_relative_to(ROOT / "evals"):
+        if is_archive(path) or path.is_relative_to(ROOT / "evals" / "archive"):
             continue
         in_fence = False
         link_path_allowed = False

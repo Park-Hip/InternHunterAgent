@@ -1,151 +1,128 @@
 # Evaluation Pipeline
 
-> **Source:** `evals/driver.py`, `evals/grader.py`, `evals/execution_accuracy.py`, `evals/score.py`, `evals/replay.py`
+> **Last verified:** 2026-10-01.
 
-## Five-step pipeline
+> **Eviction:** This document leaves when the harness commands, metric contract, or result terms change.
+
+> **Source:** `evals/__main__.py`, `evals/run.py`, `evals/metrics.py`, `evals/sql_check.py`, `evals/v0_gate.py`
+
+The rebuilt harness has one CLI and two ways to run it.
+[`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md) is the canonical how-to; this document is the reference for what the pipeline does under the hood.
+
+## The two run modes
+
+| Mode | Command | Needs | What it does |
+|---|---|---|---|
+| v0 gate | `python -m evals --deterministic --dataset v0` | Fixture database only | Calls the query core directly and grades the 19 governed cases with no model, judge, or network |
+| Capture + score | `python -m evals --dataset default` | Serving model (and judge for judge metrics) | Captures each scenario live and scores every declared metric |
+
+A third form, `--capture`, scores a retained replay offline and admits only deterministic metrics.
+
+## Capture-and-score pipeline
 
 ```text
-registry → capture → execution accuracy → semantic score → grade → freeze → replay
+fixture bind → dataset select → capture → score per metric → group by metric → report → exit code
 ```
 
-| Step | Input | Output | Authority |
-|---|---|---|---|
-| 1. Capture | Scenario registry + frozen fixture | Raw JSON artifact (`evals/runs/*.json`) | Only model call in entire pipeline |
-| 2. Execution accuracy | Raw capture + fixture DB | SQL comparison report | Deterministic, no provider |
-| 3. Semantic score | Raw capture | Persisted judge scores + rationale | Separate pass, uses judge provider |
-| 4. Grade | Raw capture + execution accuracy + semantic scores | Grade report (PASS/FAIL/INFRA/NOT_EVALUATED) | Mechanical; no new provider call |
-| 5. Freeze | Capture + grade | Sanitized replay (`evals/replays/*.json`) | Provenance-locked, no provider |
-| 6. Replay | Replay artifact | Verification report | CI gate, no provider |
+The entry is `evals/__main__.py`, which drives [`run.py`](run.py).
 
-## Step details
+1. **Fixture bind.** `run_dataset` calls `bind_fixture_environment()` before any `src` import, so a capture points at the frozen fixture rather than a serving database.
+2. **Dataset select.** [`datasets.py`](datasets.py) resolves the `--dataset` name to a `DatasetSpec` and validates every scenario.
+3. **Capture.** For a live run, each scenario's turns are captured once through the serving agent; an offline run reads the first capture per scenario from the retained replay instead.
+4. **Score.** Each selected metric grades the captured turn. Judge metrics make a judge call here; deterministic metrics do not.
+5. **Group.** [`report.py`](report.py) groups the flat metric rows by metric name, which is the shape the table renders and the JSON persists.
+6. **Exit code.** [`__main__.py`](__main__.py) turns the grouped rows into a shell exit code.
 
-### Step 1: Capture
+## Metric contract
 
-**Command:**
-```powershell
-uv run python -m evals.driver --output evals/runs/<run>.json
-```
+Metrics are declared in [`metrics.py`](metrics.py) and carry a kind.
 
-**Input:** `evals/scenarios_v1.yaml` + frozen 24-row fixture database
-**Output:** Raw JSON with manifest, scenario records, repeat turns, seam evidence
-**Authority:** Runs the actual product agent (not a test double) against the fixture
-**Invariant:** Capture is the only serving-model call in the entire pipeline
-
-Key manifest fields:
-- `baseline_eligible: true` (requires clean worktree)
-- `prompt_versions` and `prompt_hashes` (the exact resolved system, schema-context, and SQL-generation prompt lineage)
-- `fixture_hash`, `scenario_registry_hash` (comparability keys)
-- `providers`, `models`, `sampling` (lineage)
-
-The capture resolves one prompt bundle before its first turn and uses it for every turn.
-`--resume` refuses a capture when the current resolved prompt lineage differs from its manifest.
-
-### Step 2: Execution accuracy
-
-**Command:**
-```powershell
-uv run python -m evals.execution_accuracy evals/runs/<run>.json --output evals/runs/<run>-execution.json
-```
-
-**Input:** Raw capture artifact
-**Output:** Execution accuracy report per turn
-**Authority:** Deterministic — executes generated SQL and reference SQL against fixture, compares using scenario-declared contract
-**Modes:** exact, contains_reference, ids_only, limited_ids, aggregate_count, zero_results, cross_currency
-
-### Step 3: Semantic score
-
-**Command:**
-```powershell
-uv run python -m evals.score --run evals/runs/<run>.json
-```
-
-**Input:** Raw capture artifact
-**Output:** Judge scores written into capture + Langfuse writeback
-**Authority:** Separate pass over recorded evidence; resumable and re-runnable
-**Invariant:** Scoring verifies that the captured schema prompt version and content hash still resolve before it judges generated SQL.
-**Cost:** ~120 judge calls, ~40 minutes at 10 RPM throttle
-
-### Step 4: Grade
-
-**Command:**
-```powershell
-uv run python -m evals.grader --run evals/runs/<run>.json --execution-accuracy evals/runs/<run>-execution.json --output evals/runs/<run>-grade.json
-```
-
-**Input:** Raw capture + execution accuracy report + persisted semantic scores
-**Output:** Grade report with per-turn checks and outcomes
-**Authority:** Mechanical — structural checks win over literal wins over semantic
-**Outputs:** PASS, FAIL, INFRA, NOT_EVALUATED per turn; first_failing_seam
-
-### Step 5: Freeze
-
-**Command:**
-```powershell
-uv run python -m evals.driver freeze evals/runs/<run>.json --grade evals/runs/<run>-grade.json -o evals/replays/<run>.json
-```
-
-**Input:** Raw capture + grade report
-**Output:** Sanitized replay artifact
-**Authority:** Strips all trace identifiers, validates forbidden content, enforces replay schema
-**Invariant:** Commits only the replay, not the raw capture
-
-### Step 6: Replay (CI gate)
-
-**Command:**
-```powershell
-uv run python -m evals.replay --all
-```
-
-**Input:** Every artifact in `evals/replays/`
-**Output:** Verification report (or failure)
-**Authority:** Discovers and validates every artifact — stale or newly added files fail loudly
-**Invariant:** No model call, no judge call
-
-## Result-term table
-
-| Term | Meaning | Enters pass-rate denominator? |
+| Metric | Kind | What it reads |
 |---|---|---|
-| `PASS` | All evaluated deterministic checks passed | Yes |
-| `FAIL` | A check under the agent's control failed | Yes (as failure) |
-| `INFRA` | Required evidence missing due to external failure | No |
-| `UNRUN` | Turn or scenario was never attempted | No |
-| `NOT_EVALUATED` | Check inapplicable to evidence, or a semantic-only contract lacks a usable numeric judge score | No |
-| `EXEMPT` | Execution accuracy intentionally absent (no SQL contract) | Yes (as pass) |
-| `AVAILABLE` | Semantic judge returned a numeric score | Grader compares it with the calibrated class threshold |
-| `UNAVAILABLE` | Semantic judge did not produce a usable result | Semantic check remains `NOT_EVALUATED` |
+| `tool_correctness` | deterministic | Captured `tools_called` against the scenario's tool expectation |
+| `sql_accuracy` | deterministic | Captured `sql_text` against `reference_sql` through [`sql_check.py`](sql_check.py) |
+| `grounded` | judge | Captured `tool_output` as the retrieval context for the answer |
+| `on_topic` | judge | Question and answer |
+| `memory` | judge | Question, answer, and `conversation_history` |
+| `rubric` | judge | Question, answer, and the scenario's own `rubric` |
+| `plan_correctness` | deterministic | The v0 core's applied plan against the case's reviewed filters |
+| `result_equivalence` | deterministic | The v0 result against the case's golden |
 
-## Key invariants
+Deterministic metrics are credential-free and are the gate.
+Judge metrics need a judge credential, are continuous in `[0, 1]`, and are reported-only: no judge threshold is configured yet.
 
-1. **Capture is the only serving-model call.** Semantic scoring is a separate judge-provider pass over the captured evidence.
-2. **Structural checks win over literal wins over semantic.** A failed structural check overrides all lower-tier results.
-3. **Unusable semantic evidence never becomes INFRA or PASS.** A semantic-only scenario is `NOT_EVALUATED` when it has no `AVAILABLE` result with a numeric, non-boolean score.
-4. **Human labels are immutable.** Calibration scores never overwrite human annotations.
-5. **Replay is provider-free.** CI validates committed replays without any model or judge credentials.
-6. **Grade after scoring.** The mechanical grader consumes persisted semantic results and makes no judge call.
+## Deterministic scoring
+
+### `tool_correctness`
+
+Resolves the turn's expected and allowed tools, then fails on any unexpected call and requires every declared tool.
+The resolution order is per-turn `turn_tool_expectations`, then scenario `tool_expectation`, then `expected_tools`.
+A scenario with `tool_order` demands an exact tool-sequence match.
+
+### `sql_accuracy`
+
+Compares the generated SQL against the reference in [`sql_check.py`](sql_check.py), one of three modes:
+
+| Mode | What it checks |
+|---|---|
+| `ids_only` | Generated row ids match the reference ids |
+| `aggregate_count` | A `COUNT(*) AS count` aggregate equals the reference |
+| `zero_results` | Both the generated and reference query return nothing |
+
+An id-less generated query can never pass on two empty results, and a SQL error is an infrastructure failure, not a bad answer.
+`--capture` offline scoring is limited to `tool_correctness` and `sql_accuracy`.
+
+## The v0 gate
+
+The `--deterministic` flag routes to [`v0_gate.py`](v0_gate.py), which calls the governed query core directly against the fixture.
+No capture, no serving model, no judge, no network.
+It grades two deterministic metrics over every case, and fails rather than skips: an unreachable fixture database is a failed gate that exits 2 and names the command to start it.
+
+## Result terms
+
+Every metric row carries `scenario_id`, `turn`, `metric`, and `score`.
+
+| Term | Meaning |
+|---|---|
+| `score: 1.0` | The deterministic check passed |
+| `score: 0.0` | The deterministic check failed |
+| Judge score in `[0, 1]` | The judge returned a continuous score; reported, not gated |
+| `score: null` | The metric could not be evaluated; the `reason` field names why |
+
+Null scores are findings, never passes.
+A metric that cannot be scored for a turn is reported as a null-score row with a `NOT_APPLICABLE` or `UNRUN` reason rather than dropped.
+The table renders a scenario as `PASS` only when every scored metric is exactly `1.0`.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Every deterministic metric scored exactly `1.0` |
+| `1` | A metric could not be evaluated, or a deterministic metric scored below `1.0` without `--allow-fail` |
+| `2` | The v0 gate could not run (unreachable fixture), or `--deterministic` was given a non-v0 dataset |
+
+A judge score never produces a below-threshold failure because no judge threshold is configured.
+`--allow-fail` turns a below-threshold deterministic score into a printed finding for exploratory runs, but it never excuses an unevaluated metric.
 
 ## Commands quick reference
 
-```powershell
-# Full baseline workflow
-docker compose up -d
+```sh
+# Fixture
+docker compose up -d postgres
 uv run python -m evals.fixtures.loader
-uv run pytest -q tests/evals
 
-# Capture
-uv run python -m evals.driver --output evals/runs/<run>.json
+# v0 gate
+uv run python -m evals --deterministic --dataset v0
 
-# Score (semantic, after capture)
-uv run python -m evals.score --run evals/runs/<run>.json
+# Live capture + full scoring (default dataset)
+uv run python -m evals --dataset default --out evals/runs/local-report.json
 
-# Grade
-uv run python -m evals.execution_accuracy evals/runs/<run>.json --output evals/runs/<run>-execution.json
-uv run python -m evals.grader --run evals/runs/<run>.json --execution-accuracy evals/runs/<run>-execution.json --output evals/runs/<run>-grade.json
+# Narrow a live run
+uv run python -m evals --ids HLP-LIST-1,SAF-INDIRECT-INJECTION-1
+uv run python -m evals --only tool_correctness,sql_accuracy
 
-# Freeze and replay
-uv run python -m evals.driver freeze evals/runs/<run>.json --grade evals/runs/<run>-grade.json -o evals/replays/<run>.json
-uv run python -m evals.replay --all
-
-# Calibration scoring
-uv run python -m evals.calibration_score --corpus v7 --corpus v8 --out evals/runs/iha-v8-judge-combined-judge-scores.json
-uv run python -m evals.calibration_score --agreement-of evals/runs/iha-v8-judge-combined-judge-scores.json --out evals/runs/iha-v8-judge-combined-agreement-report.json
+# Offline deterministic scoring of a retained capture
+uv run python -m evals --only tool_correctness,sql_accuracy \
+  --capture evals/replays/t0025.9-committed.json \
+  --ids SAF-DESTRUCTIVE-REFUSAL-1,HLP-CONTEXT-1
 ```

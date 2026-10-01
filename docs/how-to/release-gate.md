@@ -30,7 +30,7 @@ A diagnostic semantic score is evidence, not a release gate.
 
 No current semantic model-quality certification is published from this release process.
 The combined calibration corpus and the per-class bars in
-[`evals/calibration/thresholds.md`](../../evals/calibration/thresholds.md) remain recorded
+[`evals/archive/calibration/thresholds.md`](../../evals/archive/calibration/thresholds.md) remain recorded
 diagnostic evidence, but the release does not assert model quality from them.
 
 ## Why the gate was retired

@@ -91,4 +91,4 @@ The fixture loader still exports `fixture_database_url()` for other research scr
 To compare the 12 preserved v8 human labels with the current judge once credentials are available, run `uv run pytest -o addopts='' -m eval -s tests/evals/test_holdout_judge.py`.
 Disagreements are printed as findings for the dataset redesign, not hidden or treated as calibrated thresholds.
 
-See [`evals/Instrument_Report.md`](../../evals/Instrument_Report.md) for historical baseline context, not current scores.
+See [`evals/archive/Instrument_Report.md`](../../evals/archive/Instrument_Report.md) for historical baseline context, not current scores.

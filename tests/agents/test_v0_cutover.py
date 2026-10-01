@@ -138,6 +138,87 @@ class TestThePairCannotDiverge:
         assert "run_query_clean_jobs" in source
 
 
+class TestTheProductionResolutionPath:
+    """The prompt half of the cutover, asserted where production resolves it.
+
+    `load_system_prompt()` reads the checked-in file, which is why both bundles
+    look identical offline and why a prompt-side regression could hide behind a
+    green suite. Production goes through `resolve_prompt_bundle_async`, so this
+    asserts that path with a stubbed registry and no credential.
+    """
+
+    def test_the_v0_bundle_resolves_the_v0_surface_and_its_pinned_version(self, switch) -> None:
+        import asyncio
+
+        from src.agents.runtime.prompts import resolve_prompt_bundle_async
+        from src.agents.tracing.prompt_registry import V0_SYSTEM_PROMPT_SURFACE
+
+        switch(True)
+        bundle = asyncio.run(resolve_prompt_bundle_async())
+        assert bundle.system.surface == V0_SYSTEM_PROMPT_SURFACE
+        assert bundle.system.version == prompt_module.load_v0_system_prompt_version()
+        assert bundle.system.name == "resumi-system-v0"
+
+    def test_the_v1_bundle_resolves_the_v1_surface(self, switch) -> None:
+        import asyncio
+
+        from src.agents.runtime.prompts import resolve_prompt_bundle_async
+        from src.agents.tracing.prompt_registry import SYSTEM_PROMPT_SURFACE
+
+        switch(False)
+        bundle = asyncio.run(resolve_prompt_bundle_async())
+        assert bundle.system.surface == SYSTEM_PROMPT_SURFACE
+        assert bundle.system.name == "resumi-system"
+
+    def test_the_two_bundles_resolve_different_surfaces_and_names(self, switch) -> None:
+        import asyncio
+
+        from src.agents.runtime.prompts import resolve_prompt_bundle_async
+
+        switch(True)
+        v0 = asyncio.run(resolve_prompt_bundle_async()).system
+        switch(False)
+        v1 = asyncio.run(resolve_prompt_bundle_async()).system
+        assert v0.surface != v1.surface
+        assert v0.name != v1.name
+        assert v0.content != v1.content
+
+
+class TestBootWarmsTheServedSurface:
+    """#539: a prompt the served bundle resolves must be warmed at boot."""
+
+    def _event(self, switch, value: bool) -> dict:
+        import asyncio
+
+        from src.agents.tracing import langfuse
+
+        events: list[dict] = []
+        original = langfuse.logger.info
+
+        def record(event, **fields):
+            events.append({"event": event, **fields})
+
+        switch(value)
+        langfuse.logger.info = record
+        try:
+            asyncio.run(langfuse.prepare_native_prompts_startup())
+        finally:
+            langfuse.logger.info = original
+        return next(event for event in events if event["event"] == "langfuse.prompts_prefetched")
+
+    def test_the_v0_surface_is_warmed_and_named(self, switch) -> None:
+        event = self._event(switch, True)
+        assert "system_v0" in event["prompts"]
+        assert event["served_system_surface"] == "system_v0"
+        assert "system_v0" in event["warmed"]
+
+    def test_the_v1_bundle_does_not_warm_the_v0_surface(self, switch) -> None:
+        event = self._event(switch, False)
+        assert "system_v0" not in event["prompts"]
+        assert event["served_system_surface"] == "system"
+        assert "system_v0" not in event["warmed"]
+
+
 class TestRollbackRehearsal:
     def test_the_rollback_is_one_key_and_restores_the_known_request(self, switch) -> None:
         # Forward: the v0 pair answers a known request through the governed core.

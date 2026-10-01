@@ -27,6 +27,20 @@ def test_measured_link_path_block_is_allowed(tmp_path: Path) -> None:
     assert docs_lint.check_link_path([document]) == []
 
 
+def test_link_path_block_markers_on_one_line_do_not_disable_later_checks(tmp_path: Path) -> None:
+    document = tmp_path / "audit.md"
+    document.write_text(
+        "<!-- lint-allow-link-path:begin --><!-- lint-allow-link-path:end -->\n"
+        "See `src/missing.py`.\n",
+        encoding="utf-8",
+    )
+
+    findings = docs_lint.check_link_path([document])
+
+    assert len(findings) == 1
+    assert findings[0].check == "link-path"
+
+
 def test_markdown_link_in_fenced_example_is_not_checked(tmp_path: Path) -> None:
     document = tmp_path / "guide.md"
     document.write_text("```markdown\n[example](not-a-real-file.md)\n```\n", encoding="utf-8")

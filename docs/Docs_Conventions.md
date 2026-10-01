@@ -26,15 +26,19 @@ Use these conventions for every Markdown document in this repository.
 - Retain references to files intentionally preserved only on a release tag by adding
   `<!-- archived-on-tag -->` to that same line.
 - A historical audit may list paths that were intentionally missing when it was measured.
-  Keep that evidence intact and wrap the measured region in
-  `<!-- lint-allow-link-path:begin -->` and `<!-- lint-allow-link-path:end -->`.
+  Keep that evidence intact and wrap the measured region with markers on separate lines:
+
+  <!-- lint-allow-link-path:begin -->
+  `evals/scenarios_v1.yaml`
+  <!-- lint-allow-link-path:end -->
 
 ## Evaluation scenario IDs
 
-`evals/scenarios_v1.yaml` owns every scenario definition, so a scenario ID written in documentation
-is a reference to that registry rather than a fact of its own. The `scenario-id` check reads every
-`HLP-`, `HON-`, and `SAF-` identifier in tracked Markdown and fails on any the registry does not
-define, which catches a renamed or deleted scenario that left a stale name behind.
+`evals/datasets/scenarios.yaml` owns every scenario definition, so a scenario ID written in
+documentation is a reference to that registry rather than a fact of its own.
+The `scenario-id` check reads every `HLP-`, `HON-`, and `SAF-` identifier in tracked Markdown and
+fails on any the registry does not define, which catches a renamed or deleted scenario that left a
+stale name behind.
 
 Add `<!-- lint-allow-scenario-id -->` to a line that must name an ID on purpose, such as an example
 of what the check rejects.

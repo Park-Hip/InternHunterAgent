@@ -117,7 +117,7 @@ class JobQueryService:
         if plan.shape is QueryShape.COUNT:
             return self._count(applied, caveats, rows)
         if plan.shape is QueryShape.GROUP_COUNT:
-            return self._groups(applied, caveats, rows)
+            return self._groups(applied, caveats, rows, compiled.display_cap)
         if plan.shape is QueryShape.TOP_N:
             return self._top_n(applied, caveats, rows, compiled.display_cap)
         if plan.shape is QueryShape.COMPARE:
@@ -179,10 +179,24 @@ class JobQueryService:
         )
 
     def _groups(
-        self, applied: list[AppliedCriterion], caveats: list[str], rows: dict[str, list[dict[str, Any]]]
+        self,
+        applied: list[AppliedCriterion],
+        caveats: list[str],
+        rows: dict[str, list[dict[str, Any]]],
+        display_cap: int,
     ) -> QueryResult:
+        """Groups, and the disclosure when the group list was bounded.
+
+        The bound cannot be detected by comparing counts: `match_total` is the
+        number of matching postings while the bounded list is the number of
+        distinct groups, and 20 groups routinely cover hundreds of postings. It is
+        detected from the cap, which is why the cap is a parameter here.
+        """
         groups = [GroupRow(value=str(row["value"]), count=int(row["n"])) for row in rows.get("groups", [])]
         total = int(rows.get("total", [{}])[0].get("count", 0)) if rows.get("total") else sum(g.count for g in groups)
+        saturated = bool(display_cap) and len(groups) >= display_cap
+        if saturated:
+            _add(caveats, CAVEAT_TRUNCATION)
         return QueryResult(
             state=QueryState.ANSWERED if groups else QueryState.EMPTY,
             shape=QueryShape.GROUP_COUNT,
@@ -190,6 +204,7 @@ class JobQueryService:
             caveats=caveats,
             match_total=total,
             displayed_count=len(groups),
+            truncated=saturated,
             groups=groups,
         )
 

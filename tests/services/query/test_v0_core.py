@@ -210,7 +210,14 @@ class TestPlanner:
         )
         assert plan.filters[0].basis == "fallback"
         assert plan.filters[0].field.value == "free_text"
-        assert "ROLE_FALLBACK" in plan.caveats
+        # The caveat has one owner, the service, so the plan carries none. Two
+        # owners would print the same line twice.
+        assert "ROLE_FALLBACK" not in plan.caveats
+        service = service_with({"rows": []})
+        result = service.answer(
+            JobQueryRequest(shape="list", filters=[{"field": "role", "values": ["Rustacean"]}])
+        )
+        assert result.caveats.count("ROLE_FALLBACK") == 1
 
     def test_technology_is_expanded_before_matching(self) -> None:
         plan = build_plan(JobQueryRequest(shape="count", filters=[{"field": "technology", "values": ["ML"]}]))

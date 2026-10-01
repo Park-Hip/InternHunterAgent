@@ -112,11 +112,11 @@ def check_link_path(files: list[Path]) -> list[Finding]:
         in_fence = False
         link_path_allowed = False
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if LINK_PATH_BLOCK_BEGIN in line:
-                link_path_allowed = True
-                continue
-            if LINK_PATH_BLOCK_END in line:
-                link_path_allowed = False
+            if LINK_PATH_BLOCK_BEGIN in line or LINK_PATH_BLOCK_END in line:
+                if LINK_PATH_BLOCK_BEGIN in line:
+                    link_path_allowed = True
+                if LINK_PATH_BLOCK_END in line:
+                    link_path_allowed = False
                 continue
             if line.lstrip().startswith("```"):
                 in_fence = not in_fence

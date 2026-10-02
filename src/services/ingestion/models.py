@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Literal
+from typing import Final, Literal
 
 from pydantic import BaseModel
 from sqlalchemy import (
@@ -75,6 +75,81 @@ class NormalizedJob(BaseModel):
 
 class Base(DeclarativeBase):
     pass
+
+
+# ---------------------------------------------------------------------------
+# Canonical table lists
+# ---------------------------------------------------------------------------
+# Every site that tears the ingestion schema down used to spell these names out
+# by hand: the fixture loader, and the migration round-trip test, and twice more
+# inside the shadow-evidence migration itself. Four copies of one value, with
+# nothing that fails when they disagree, is how a stale table survives a
+# teardown and then wedges the next one.
+#
+# The migration keeps its own literal. A migration is the historical record of
+# one revision and must not silently follow the models. That one deliberate
+# duplicate is the whole allowance; the two callers below import instead.
+
+#: Tables carrying the append-only ``immutable_evidence`` trigger, in creation
+#: order. Asserted by the migration round-trip test, so a table added here that
+#: the migration does not attach a trigger to fails there rather than silently
+#: losing append-only protection.
+APPEND_ONLY_EVIDENCE_TABLES: Final = (
+    "collection_plans",
+    "collection_runs",
+    "raw_artifacts",
+    "raw_observations",
+    "duplicate_deliveries",
+    "normalization_results",
+    "field_provenance",
+)
+
+#: The trigger function guarding :data:`APPEND_ONLY_EVIDENCE_TABLES`.
+APPEND_ONLY_EVIDENCE_FUNCTION: Final = "reject_ingestion_evidence_mutation"
+
+#: Every table the ingestion layer owns, in a drop-safe order: children first,
+#: then the append-only evidence block in reverse dependency order, then the
+#: projection and landing tables. Teardown sites drop these with ``CASCADE``.
+INGESTION_TABLES: Final = (
+    "field_provenance",
+    "normalization_results",
+    "duplicate_deliveries",
+    "raw_observations",
+    "raw_artifacts",
+    "collection_runs",
+    "collection_plans",
+    "ingestion_runs",
+    "clean_jobs",
+    "raw_jobs",
+)
+
+
+def ingestion_teardown_statements(*, version_table: str | None = None) -> tuple[str, ...]:
+    """SQL statements that clear the ingestion layer, in an order that always runs.
+
+    Derived from the canonical lists above rather than spelled out, so a new
+    model is covered by every teardown the day it is declared instead of the day
+    someone remembers three other files.
+
+    The function drop carries ``CASCADE`` on purpose. Dropping the named tables
+    in dependency order removes every trigger this repository installs, but a
+    database is a thing that outlives the code that built it: a table left by an
+    abandoned experiment, or by a revision this branch has not merged, can hold a
+    trigger that depends on the function, and a teardown that wedges on that
+    stops every caller behind it from resetting their own schema. ``CASCADE``
+    cannot drift, and here it only ever drops a trigger on a database that is
+    about to be rebuilt from scratch.
+
+    ``version_table`` is dropped last and is Alembic's own bookkeeping rather
+    than a model, so callers that track the revision pass it in explicitly.
+    """
+    tables = [*INGESTION_TABLES]
+    if version_table is not None:
+        tables.append(version_table)
+    return (
+        f"DROP TABLE IF EXISTS {', '.join(tables)} CASCADE",
+        f"DROP FUNCTION IF EXISTS {APPEND_ONLY_EVIDENCE_FUNCTION}() CASCADE",
+    )
 
 
 IngestionRunOutcome = Literal["completed", "safety_aborted", "failed"]

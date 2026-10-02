@@ -12,7 +12,7 @@ Two failure modes this guards, both of which would be invisible:
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.agents.runtime.tool_events import (
     bind_tool_event_emitter,
@@ -23,6 +23,9 @@ from src.agents.runtime.tool_events import (
     set_result_holder,
 )
 from src.agents.tools import query_clean_jobs as qcj
+from src.agents.tools import v0_query_jobs as v0q
+from src.services.query.plan import QueryShape
+from src.services.query.results import QueryResult, QueryState
 
 
 class _Collector:
@@ -119,6 +122,123 @@ class NoFakeZeroTests(unittest.IsolatedAsyncioTestCase):
         facts = self.holder
         self.assertTrue(facts.published)
         self.assertIsNone(facts.row_count)
+
+
+class ServedPathPublishesTests(unittest.IsolatedAsyncioTestCase):
+    """`query_jobs` is the only tool bound when `agent.agent_v0` is on.
+
+    Without a publish call here the `tool` event carries no count, and the
+    interface cannot tell a real zero-match from a turn that found nothing.
+    """
+
+    def setUp(self) -> None:
+        self.holder = new_result_facts()
+        token = set_result_holder(self.holder)
+        self.addCleanup(reset_result_holder, token)
+
+    def _result(self, **overrides) -> QueryResult:
+        base = {"state": QueryState.ANSWERED, "shape": QueryShape.LIST}
+        base.update(overrides)
+        return QueryResult(**base)
+
+    def _run(self, result: QueryResult | None = None, request: dict | None = None) -> None:
+        service = None if result is None else MagicMock()
+        if service is not None:
+            service.answer.return_value = result
+        v0q.run_query_jobs(
+            request if request is not None else {"shape": "count"}, service=service
+        )
+
+    def test_a_zero_match_publishes_zero(self) -> None:
+        """Zero is the signal the interface keys its no-answer state to."""
+        self._run(self._result(state=QueryState.EMPTY, match_total=0))
+        self.assertTrue(self.holder.published)
+        self.assertEqual(self.holder.row_count, 0)
+
+    def test_the_published_count_is_the_match_total_not_the_displayed_rows(self) -> None:
+        """A bare number would imply the answer shows every match."""
+        self._run(
+            self._result(match_total=214, displayed_count=20, truncated=True, rows=[{}] * 20)
+        )
+        self.assertEqual(self.holder.row_count, 214)
+        self.assertTrue(self.holder.truncated)
+
+    def test_a_result_under_the_cap_is_not_truncated(self) -> None:
+        self._run(self._result(match_total=7, displayed_count=7, rows=[{}] * 7))
+        self.assertEqual(self.holder.row_count, 7)
+        self.assertFalse(self.holder.truncated)
+
+    def test_a_refusal_publishes_no_count(self) -> None:
+        """A question never asked of the database must not read as a zero."""
+        self._run(
+            QueryResult(
+                state=QueryState.UNSUPPORTED,
+                shape=QueryShape.COUNT,
+                message="'Đà Lạt' is not a city this data holds.",
+            )
+        )
+        self.assertTrue(self.holder.published)
+        self.assertIsNone(self.holder.row_count)
+
+    def test_a_rejected_request_publishes_no_count(self) -> None:
+        """The request never reached the service, so there is nothing to count."""
+        self._run(request={"shape": "sql"})
+        self.assertTrue(self.holder.published)
+        self.assertIsNone(self.holder.row_count)
+
+
+class ServedPathReachesTheStreamTests(unittest.IsolatedAsyncioTestCase):
+    async def test_the_served_tool_facts_reach_the_stream(self) -> None:
+        """The whole wiring: the governed tool, the real middleware, the real event."""
+        from langchain.agents import create_agent
+        from langchain_core.tools import tool
+
+        from src.agents.runtime.middleware import build_tool_observation_middleware
+        from src.agents.runtime.react_agent import AgentRuntime
+        from tests.agents.runtime.test_tool_event_stream import _ScriptedToolCallingModel
+
+        @tool
+        def query_jobs(request: dict) -> str:
+            """The governed query core, as served."""
+            service = MagicMock()
+            service.answer.return_value = QueryResult(
+                state=QueryState.EMPTY, shape=QueryShape.LIST, match_total=0
+            )
+            return v0q.run_query_jobs(request, service=service)
+
+        agent = create_agent(
+            model=_ScriptedToolCallingModel(
+                tool_name="query_jobs",
+                tool_args={"request": {"shape": "count"}},
+            ),
+            tools=[query_jobs],
+            middleware=[build_tool_observation_middleware()],
+        )
+        runtime = AgentRuntime(agent=agent)
+
+        collector = _Collector()
+        token = bind_tool_event_emitter(collector)
+        try:
+            with patch(
+                "src.agents.runtime.react_agent.get_langfuse_client", return_value=None
+            ), patch("src.agents.runtime.react_agent.langfuse_request_trace") as trace, patch(
+                "src.agents.runtime.react_agent.build_langfuse_config", return_value={}
+            ):
+                from contextlib import asynccontextmanager
+
+                @asynccontextmanager
+                async def _null_trace(*args, **kwargs):
+                    yield None
+
+                trace.side_effect = _null_trace
+                events = [e async for e in runtime.astream("xin chào")]
+        finally:
+            reset_tool_event_emitter(token)
+
+        ok = [e for e in events if e.get("type") == "tool" and e.get("status") == "ok"]
+        self.assertTrue(ok, f"no ok tool event: {events}")
+        self.assertEqual(ok[0]["row_count"], 0)
+        self.assertFalse(ok[0]["truncated"])
 
 
 class ResultFactsTests(unittest.IsolatedAsyncioTestCase):

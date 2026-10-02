@@ -144,6 +144,26 @@ INVENTORY = frozenset(
             text="Answer one typed request and return the evidence as text.",
             visibility="model-visible",
         ),
+        PromptSurface(
+            path="src/agents/tools/v0_query_jobs.py",
+            symbol="_publish_result_facts.__doc__",
+            text=(
+                "Publish what the result was, so the interface can show a count or a refusal."
+                "\n\n"
+                "A data answer publishes the full match total, not the count after the display"
+                "\n"
+                "cap: the reader is owed the size of the matching set, and ``truncated`` is"
+                "\n"
+                "what says the answer is showing only part of it. A refusal publishes no count"
+                "\n"
+                "at all, because a question that was never asked of the database must not read"
+                "\n"
+                "as a question that was asked and matched nothing. Absent and zero are"
+                "\n"
+                "different facts, and only the result knows which it has."
+            ),
+            visibility="model-visible",
+        ),
         # The governed v0 system prompt is model-facing from the cutover onwards.
         PromptSurface(
             path="config/prompts.yaml",

@@ -7,7 +7,11 @@ from sqlalchemy.exc import DBAPIError
 
 from alembic import command
 from alembic.config import Config
-from src.services.ingestion.models import Base
+from src.services.ingestion.models import (
+    APPEND_ONLY_EVIDENCE_TABLES,
+    Base,
+    ingestion_teardown_statements,
+)
 
 SCRATCH_DSN = os.environ.get("SCRATCH_DATABASE_URL")
 
@@ -36,13 +40,8 @@ def _normalized_type(column) -> str:
 def test_baseline_upgrade_matches_metadata():
     engine = create_engine(SCRATCH_DSN, pool_pre_ping=True)
     with engine.begin() as conn:
-        conn.execute(
-            text("DROP TABLE IF EXISTS field_provenance, normalization_results, "
-                 "duplicate_deliveries, raw_observations, raw_artifacts, "
-                 "collection_runs, collection_plans, ingestion_runs, clean_jobs, raw_jobs CASCADE")
-        )
-        conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
-        conn.execute(text("DROP FUNCTION IF EXISTS reject_ingestion_evidence_mutation()"))
+        for statement in ingestion_teardown_statements(version_table="alembic_version"):
+            conn.execute(text(statement))
 
     os.environ["ALEMBIC_DATABASE_URL"] = SCRATCH_DSN
     alembic_cfg = Config(str(REPO_ROOT / "alembic.ini"))
@@ -85,7 +84,7 @@ def test_baseline_upgrade_matches_metadata():
             "SELECT COUNT(*) FROM pg_trigger "
             "WHERE tgname = 'immutable_evidence' AND NOT tgisinternal"
         )).scalar_one()
-        assert triggers == 7
+        assert triggers == len(APPEND_ONLY_EVIDENCE_TABLES)
         plan_id = conn.execute(text(
             "INSERT INTO collection_plans "
             "(source_id, plan_version, declared_scope, declared_caps, requested_fields, "
@@ -103,10 +102,7 @@ def test_baseline_upgrade_matches_metadata():
                 conn.execute(text(statement), {"id": plan_id})
 
     command.downgrade(alembic_cfg, "c9d3e6f7a2b1")
-    for evidence_table in (
-        "field_provenance", "normalization_results", "duplicate_deliveries",
-        "raw_observations", "raw_artifacts", "collection_runs", "collection_plans",
-    ):
+    for evidence_table in reversed(APPEND_ONLY_EVIDENCE_TABLES):
         assert not inspect(engine).has_table(evidence_table)
     command.downgrade(alembic_cfg, "b7e2f4a91c3d")
     downgraded_inspector = inspect(engine)

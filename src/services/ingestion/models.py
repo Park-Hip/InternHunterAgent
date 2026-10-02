@@ -15,9 +15,10 @@ from sqlalchemy import (
     Numeric,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy import TIMESTAMP
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, NUMERIC
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -102,6 +103,8 @@ APPEND_ONLY_EVIDENCE_TABLES: Final = (
     "duplicate_deliveries",
     "normalization_results",
     "field_provenance",
+    "collection_request_bodies",
+    "collection_request_executions",
 )
 
 #: The trigger function guarding :data:`APPEND_ONLY_EVIDENCE_TABLES`.
@@ -111,6 +114,8 @@ APPEND_ONLY_EVIDENCE_FUNCTION: Final = "reject_ingestion_evidence_mutation"
 #: then the append-only evidence block in reverse dependency order, then the
 #: projection and landing tables. Teardown sites drop these with ``CASCADE``.
 INGESTION_TABLES: Final = (
+    "collection_request_executions",
+    "collection_request_bodies",
     "field_provenance",
     "normalization_results",
     "duplicate_deliveries",
@@ -304,6 +309,122 @@ class CollectionRun(Base):
     input_digest: Mapped[str] = mapped_column(Text, nullable=False)
     replay_of_run_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=True)
     replay_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class CollectionRequestBody(Base):
+    """One request attempt, exactly as it was submitted.
+
+    A retry is a second row rather than an edit of the first, because these
+    tables are append-only: the second attempt is its own fact, and rewriting the
+    first would leave a run claiming one request where two were made.
+
+    `body` is absent only for a method that carries no body by definition. An
+    omitted parameter inside a body that was sent is absent from that body, never
+    stored as an empty string, a null, or a default, so the record keeps an
+    omission distinguishable from an empty value.
+
+    `query_parameters` and `credential_env` are the rest of what makes the stored
+    endpoint a request rather than a URL: without them a reader could see where the
+    request went and not what it asked for, and could not tell which named secret
+    location its credential would have come from. The location is a name, never a
+    value, and the column is checked against that shape in the database.
+    """
+
+    __tablename__ = "collection_request_bodies"
+    __table_args__ = (
+        UniqueConstraint("collection_run_id", "request_ordinal", "attempt_number"),
+        CheckConstraint(
+            "request_ordinal > 0 AND attempt_number > 0",
+            name="ck_collection_request_bodies_position",
+        ),
+        CheckConstraint(
+            "body IS NOT NULL OR method IN ('GET', 'HEAD', 'DELETE')",
+            name="ck_collection_request_bodies_body",
+        ),
+        CheckConstraint(
+            "credential_env IS NULL OR credential_env ~ '^[A-Z][A-Z0-9_]*$'",
+            name="ck_collection_request_bodies_credential",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
+    request_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    adapter_id: Mapped[str] = mapped_column(Text, nullable=False)
+    method: Mapped[str] = mapped_column(Text, nullable=False)
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False)
+    query_parameters: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    body: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    credential_env: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    declared_caps: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    requested_fields: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class CollectionRequestExecution(Base):
+    """The provider's account of one submitted request attempt.
+
+    It never restates the request. The echo of a submitted request is not the
+    submitted request, so the two are separate records: one holds what was sent
+    and digests it, the other holds what came back and digests that, and neither
+    can be read as the other.
+
+    `http_status` is absent exactly when a transport error is recorded, because
+    "no status arrived" and "status 0 arrived" are different claims and only one
+    of them is true of a request that never reached the provider.
+    """
+
+    __tablename__ = "collection_request_executions"
+    __table_args__ = (
+        UniqueConstraint("request_body_id"),
+        CheckConstraint(
+            "http_status IS NULL OR http_status >= 0",
+            name="ck_collection_request_executions_status",
+        ),
+        CheckConstraint(
+            "(http_status IS NULL) = (transport_error IS NOT NULL)",
+            name="ck_collection_request_executions_delivery",
+        ),
+        CheckConstraint(
+            "waited_before_seconds >= 0",
+            name="ck_collection_request_executions_wait",
+        ),
+        Index(
+            "ix_collection_request_executions_run",
+            "collection_run_id",
+            "request_ordinal",
+            "attempt_number",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
+    request_body_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_request_bodies.id"), nullable=False)
+    request_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The phase is the adapter's own vocabulary for where it was when it sent
+    # this request: a submit, a poll, a download. It is not a shared state
+    # machine, so no closed vocabulary is imposed on providers that never asked
+    # for one.
+    phase: Mapped[str] = mapped_column(Text, nullable=False)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    transport_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    execution_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    observed_facts: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    # The adapter's own accounting, not the provider's: how long it waited before
+    # sending this attempt. It is per attempt so that the run's total is a sum of
+    # recorded facts rather than a number nothing else supports.
+    waited_before_seconds: Mapped[float] = mapped_column(
+        NUMERIC(asdecimal=False), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
 

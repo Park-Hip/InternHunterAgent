@@ -10,6 +10,7 @@ cannot be made to submit anything other than the request the plan declares.
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
@@ -110,7 +111,7 @@ def test_inline_200_delivers_records_without_polling(plan):
     assert collection.request_count == 1
     assert collection.failure_category is None
     assert collection.outcome == "incomplete"
-    assert "progress" not in collection.execution and "download" not in collection.execution
+    assert [attempt.phase for attempt in collection.attempts] == ["submit"]
     assert recorder.endpoints == [SUBMIT_URL]
 
 
@@ -123,27 +124,35 @@ def test_202_handoff_polls_then_downloads_and_records_every_transition(plan):
     assert collection.delivery == "snapshot"
     assert collection.snapshot_id == recorded.SNAPSHOT_ID
     assert collection.request_count == 5
-    transitions = collection.execution["progress"]
+    transitions = [attempt.observed_facts for attempt in collection.attempts
+                   if attempt.phase == "progress"]
     # Every declared state the provider reported is retained, in order, including the
     # two that are not terminal. Running is not readiness.
     assert [step["status"] for step in transitions] == ["starting", "running", "ready"]
     assert [step["poll"] for step in transitions] == [1, 2, 3]
     assert transitions[-1]["records"] == 10 and transitions[-1]["errors"] == 0
-    assert collection.execution["submit"]["http_status"] == 202
-    assert collection.execution["submit"]["retry_after_seconds"] == recorded.HANDOFF_RETRY_AFTER_SECONDS
-    assert collection.execution["download"]["http_status"] == 200
+    submit = collection.attempts[0]
+    assert submit.http_status == 202
+    assert submit.observed_facts["retry_after_seconds"] == recorded.HANDOFF_RETRY_AFTER_SECONDS
+    assert collection.attempts[-1].http_status == 200
+    # One row per request attempt, not one document per run: a poll is the next
+    # request, so it is its own attempt with its own status and its own digest.
+    assert [attempt.ordinal for attempt in collection.attempts] == [1, 2, 3, 4, 5]
+    assert [attempt.phase for attempt in collection.attempts] == [
+        "submit", "progress", "progress", "progress", "download"]
+    assert len({attempt.response_digest for attempt in collection.attempts}) == 5
     # The provider's own retry-after is honored, once before the first poll and once
-    # before each further poll, and the waits add up to what the record says.
+    # before each further poll, and the waits add up to what the records say.
     assert sleeps == [30.0, 30.0, 30.0]
-    assert collection.execution["waited_seconds"] == 90.0
+    assert sum(attempt.waited_before_seconds for attempt in collection.attempts) == 90.0
     assert recorder.endpoints == [SUBMIT_URL, PROGRESS_URL, PROGRESS_URL, PROGRESS_URL, SNAPSHOT_URL]
 
 
 def test_handoff_is_not_announced_by_elapsed_time(plan):
     """A 202 below the documented one-minute limit is still a handoff."""
     collection, _ = collect(plan, recorded.handoff_run())
-    assert collection.execution["submit"]["http_status"] == 202
-    assert collection.execution["submitted_at"] == recorded.OBSERVED_AT.isoformat()
+    assert collection.attempts[0].http_status == 202
+    assert collection.attempts[0].sent_at == recorded.OBSERVED_AT
     assert collection.delivery == "snapshot"
 
 
@@ -198,14 +207,14 @@ def test_submitted_body_is_the_declared_body_not_the_provider_echo(plan):
 
 def test_retained_request_names_the_secret_location_and_no_secret(plan):
     collection, _ = collect(plan, recorded.inline_run())
-    record = collection.submitted_request
+    request = collection.attempts[0].request
 
-    assert record["credential_env"] == "BRIGHTDATA_API_KEY"
-    assert record["method"] == "POST" and record["url"] == SUBMIT_URL
-    assert record["query"]["dataset_id"] == recorded.DATASET_ID
-    serialized = json.dumps(record, sort_keys=True)
+    assert request.credential_env == "BRIGHTDATA_API_KEY"
+    assert request.method == "POST" and request.endpoint == SUBMIT_URL
+    assert request.query["dataset_id"] == recorded.DATASET_ID
+    serialized = json.dumps(request.record(), sort_keys=True)
     assert "Authorization" not in serialized and "Bearer" not in serialized
-    assert content_digest(record) == content_digest(collection.request.record())
+    assert content_digest(request.body) == content_digest(plan.scope["request_body"])
 
 
 def test_declared_cap_must_travel_with_the_request():
@@ -327,12 +336,13 @@ def test_a_plan_with_no_declared_cap_runs_without_one(plan):
     collection, _ = collect(uncapped, recorded.handoff_run())
 
     assert uncapped.caps == {}
-    assert collection.records and "cap_reached" not in collection.execution
+    assert collection.records
+    assert declared_record_cap(uncapped) is None
 
 
 def test_country_is_never_taken_from_the_echoed_request(plan):
     collection, _ = collect(plan, recorded.handoff_run())
-    submitted_country = collection.submitted_request["body"]["input"][0]["country"]
+    submitted_country = collection.attempts[0].request.body["input"][0]["country"]
     assert submitted_country == "VN"
 
     for record in collection.records:
@@ -371,21 +381,23 @@ def test_the_declared_cap_is_reported_beside_the_observed_count(plan):
 
     assert plan.caps == {"limit_per_input": 10}
     # Two values the run keeps apart: the count that came back, and the declaration
-    # that bounds it. Neither is readable on its own.
-    assert collection.execution["records"] == 10
-    assert collection.execution["cap_reached"] is True
-    assert declared_record_cap(plan) == 10 != collection.execution["records"] - 10
+    # that bounds it. Neither is readable on its own, and saturation is their
+    # comparison rather than a flag an adapter could assert on its own.
+    assert len(collection.records) == declared_record_cap(plan)
     evidence = shadow_run_evidence(collection)
     assert evidence.coverage_result == "unknown"
     assert evidence.outcome == "incomplete"
-    assert not _claims(collection.execution)
-    assert not _claims(evidence.provider_execution)
+    assert not _claims(asdict(collection))
+    # The run-level claim is checked apart from the attempt records, because the
+    # wrapper names the coverage it deliberately declines to claim.
+    assert not _claims([asdict(attempt) for attempt in evidence.attempts])
+    assert evidence.coverage_result == "unknown" and evidence.outcome == "incomplete"
 
 
-def test_an_unsaturated_delivery_reports_no_cap_reached(plan):
+def test_an_unsaturated_delivery_does_not_reach_the_cap(plan):
     collection, _ = collect(plan, recorded.handoff_run(body=recorded.snapshot_records()[:4]))
-    assert "cap_reached" not in collection.execution
-    assert collection.execution["records"] == 4
+
+    assert len(collection.records) == 4
     assert declared_record_cap(plan) == 10
 
 
@@ -400,7 +412,7 @@ def test_an_empty_delivery_records_nothing_and_claims_nothing(plan):
     assert collection.records == ()
     assert collection.failure_category is None
     assert collection.outcome == "incomplete"
-    assert collection.execution["download"]["records"] == 0
+    assert collection.attempts[-1].observed_facts["delivered_records"] == 0
     assert recorder.endpoints == [SUBMIT_URL, PROGRESS_URL, SNAPSHOT_URL]
     assert deliveries(collection) == []
 
@@ -411,8 +423,14 @@ def test_a_partial_delivery_keeps_its_records_and_fails_the_run(plan):
     assert len(collection.records) == 10
     assert collection.failure_category == "page_failed"
     assert collection.outcome == "failed"
-    assert collection.execution["progress"][-1]["errors"] == 1
+    assert _progress(collection)[-1]["errors"] == 1
     assert shadow_run_evidence(collection).outcome == "failed"
+
+
+def _progress(collection) -> list[dict]:
+    """The observed facts of every progress poll, in the order the adapter made them."""
+    return [attempt.observed_facts for attempt in collection.attempts
+            if attempt.phase == "progress"]
 
 
 def test_a_failed_progress_state_never_downloads(plan):
@@ -421,7 +439,7 @@ def test_a_failed_progress_state_never_downloads(plan):
     assert collection.records == ()
     assert collection.failure_category == "page_failed"
     assert collection.outcome == "failed"
-    assert collection.execution["progress"][-1]["status"] == "failed"
+    assert _progress(collection)[-1]["status"] == "failed"
     assert recorder.endpoints == [SUBMIT_URL, PROGRESS_URL]
 
 
@@ -432,9 +450,10 @@ def test_an_undocumented_progress_state_is_recorded_not_interpreted(plan):
         recorded.response(200, recorded.progress("paused")),
     ])
 
-    drift = collection.execution["progress"][-1]
+    drift = _progress(collection)[-1]
     assert drift["status"] == "paused" and drift["schema_drift"] is True
-    assert drift["http_status"] == 200 and drift["response_digest"]
+    assert collection.attempts[-1].http_status == 200
+    assert collection.attempts[-1].response_digest
     assert collection.outcome == "failed" and collection.failure_category == "page_failed"
     assert collection.records == ()
     # The undocumented state is never treated as terminal and never followed.
@@ -467,7 +486,8 @@ def test_an_account_failure_is_recorded_as_an_authorization_block(plan):
 
     assert collection.outcome == "authorization_blocked"
     assert collection.failure_category == "page_failed"
-    assert collection.execution["submit"]["http_status"] == 400
+    assert collection.attempts[0].http_status == 400
+    assert collection.attempts[0].observed_facts["provider_message"] == "Customer is not active"
     assert len(recorder.requests) == 1
 
 
@@ -484,8 +504,11 @@ def test_a_transport_failure_is_recorded_rather_than_raised(plan):
     assert collection.failure_category == "transport_error"
     assert collection.outcome == "failed"
     assert collection.records == ()
-    assert collection.execution["submit"]["transport_error"] == "ConnectError"
-    assert collection.execution["submit"]["http_status"] == 0
+    # A request that never reached the provider has no status, and recording a zero
+    # for it would claim the provider answered with one.
+    assert collection.attempts[0].transport_error == "ConnectError"
+    assert collection.attempts[0].http_status is None
+    assert collection.attempts[0].response_digest
 
 
 def test_a_bounded_poll_budget_ends_the_run_without_claiming_anything(plan):
@@ -496,7 +519,8 @@ def test_a_bounded_poll_budget_ends_the_run_without_claiming_anything(plan):
     assert collection.failure_category == "budget_exhausted"
     assert collection.outcome == "incomplete"
     assert collection.records == ()
-    assert len(collection.execution["progress"]) == plan.scope["max_progress_polls"]
+    assert len(_progress(collection)) == plan.scope["max_progress_polls"]
+    assert len(collection.attempts) == plan.scope["max_progress_polls"] + 1
     assert recorder.endpoints.count(PROGRESS_URL) == plan.scope["max_progress_polls"]
     assert SNAPSHOT_URL not in recorder.endpoints
 
@@ -506,8 +530,35 @@ def test_a_body_that_is_not_an_array_of_objects_is_refused(plan):
 
     assert collection.records == ()
     assert collection.failure_category == "page_failed"
-    assert collection.execution["submit"]["shape"] == "not_an_array"
-    assert collection.execution["submit"]["response_digest"]
+    assert collection.attempts[0].observed_facts["shape"] == "not_an_array"
+    assert collection.attempts[0].response_digest
+
+
+def test_an_unrecordable_request_is_refused_before_it_leaves(plan):
+    """The gate runs before the transport, not after the response.
+
+    A request that could never have been stored is refused here rather than at the
+    write, because a request that fails at the write has already been spent and would
+    take its own evidence down with it. A body that is not encodable is refused by
+    the same gate, but it cannot be reached through a declared plan at all: building
+    one digests the plan first, so the failure arrives one step earlier and closer to
+    its cause.
+    """
+    document = _document_with(body={"BRIGHTDATA_API_KEY": "synthetic"})
+    unrecordable = build_shadow_plan(SOURCE_ID, config=document)
+    sent: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json=[])
+
+    source = BrightDataSource(
+        unrecordable, client=httpx.Client(transport=httpx.MockTransport(handle)),
+        clock=lambda: recorded.OBSERVED_AT,
+    )
+    with pytest.raises(BrightDataBoundaryError, match="named location only"):
+        source.collect()
+    assert sent == []
 
 
 # ---------------------------------------------------------------------------
@@ -572,12 +623,16 @@ def test_the_evidence_a_run_records_keeps_request_and_echo_apart(plan):
     collection, _ = collect(plan, recorded.handoff_run())
     evidence = shadow_run_evidence(collection)
 
-    assert set(evidence.provider_execution) >= {"submit", "progress", "download", "observed_at"}
-    assert evidence.provider_execution["observed_at"] == recorded.OBSERVED_AT.isoformat()
-    # The submitted request is a separate value, not a slice of any response.
-    assert evidence.submitted_request["body"] is not evidence.provider_execution
-    assert content_digest(evidence.submitted_request) == content_digest(
-        collection.submitted_request)
+    assert [attempt.phase for attempt in evidence.attempts] == [
+        "submit", "progress", "download"]
+    assert all(attempt.observed_at == recorded.OBSERVED_AT for attempt in evidence.attempts)
+    # The submitted request is a separate value, not a slice of any response, and
+    # the provider's own echo of the discovery context never becomes the request.
+    submit = evidence.attempts[0]
+    assert submit.request.body is not submit.observed_facts
+    assert content_digest(submit.request.body) == content_digest(plan.scope["request_body"])
+    echo = collection.records[0]["discovery_input"]
+    assert echo not in [attempt.observed_facts for attempt in evidence.attempts]
 
 
 def test_a_delivery_without_a_listing_key_is_retained_not_dropped(plan):

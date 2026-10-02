@@ -6,7 +6,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.services.ingestion.evidence_store import (
-    ShadowPlan, _normalize, _retrieved_at, classify_field_presence, content_digest,
+    RequestAttempt,
+    RunEvidence,
+    ShadowPlan,
+    SubmittedRequest,
+    _normalize,
+    _recorded_at,
+    classify_field_presence,
+    content_digest,
+    validate_request_attempt,
     write_shadow_run,
 )
 from src.services.ingestion.models import RawArtifact, RawObservation
@@ -32,12 +40,13 @@ def test_no_real_retention_without_g2():
         db.assert_not_called()
 
 
-def test_retrieval_time_is_floored_never_rounded_up():
+def test_a_recorded_instant_is_floored_never_rounded_up():
     at = datetime(2026, 1, 1, 0, 0, 0, 999999, tzinfo=UTC)
-    assert _retrieved_at(at, "second").microsecond == 0
-    assert _retrieved_at(at, "millisecond").microsecond == 999000
-    with pytest.raises(ValueError):
-        _retrieved_at(at.replace(tzinfo=None), "second")
+    assert _recorded_at(at, "second", "sent_at").microsecond == 0
+    assert _recorded_at(at, "millisecond", "sent_at").microsecond == 999000
+    assert _recorded_at(at, "microsecond", "sent_at") == at
+    with pytest.raises(ValueError, match="sent_at"):
+        _recorded_at(at.replace(tzinfo=None), "second", "sent_at")
 
 
 def test_invalid_payload_quarantines_without_fabricating_values():
@@ -99,3 +108,96 @@ def test_field_presence_keeps_four_value_states_distinct():
     assert classify_field_presence(declared, {"carried": "x", "dropped": "y"}) == {
         "carried": "present", "dropped": "present",
     }
+
+
+# ---------------------------------------------------------------------------
+# What may be sent, and what a run may record about it
+# ---------------------------------------------------------------------------
+
+
+def _request(**overrides) -> SubmittedRequest:
+    return SubmittedRequest(**{
+        "method": "GET", "endpoint": "https://provider.test/v3/progress/abc123",
+        "endpoint_name": "progress", "query": {"format": "json"}, "body": None, **overrides})
+
+
+def _attempt(ordinal: int, attempt_number: int = 1, **overrides) -> RequestAttempt:
+    at = datetime(2026, 1, 1, tzinfo=UTC)
+    return RequestAttempt(**{
+        "ordinal": ordinal, "attempt_number": attempt_number, "phase": "progress",
+        "request": _request(), "sent_at": at, "observed_at": at,
+        "response_digest": content_digest({"poll": ordinal}), "http_status": 200, **overrides})
+
+
+def test_an_undeclared_endpoint_is_refused_before_it_is_sent_or_stored():
+    plan = ShadowPlan(
+        "synthetic", "v1", {}, {}, {}, "never",
+        {"progress": "https://provider.test/v3/progress/{snapshot_id}"},
+        "second", "synthetic:local",
+    )
+    validate_request_attempt(plan, _request())
+
+    # A name the plan never declared.
+    with pytest.raises(ValueError, match="declared endpoint set"):
+        validate_request_attempt(plan, _request(endpoint_name="download"))
+    # A name it declared, reached by a URL the template does not authorise.
+    for endpoint in (
+        "https://provider.test/v3/snapshot/abc123",
+        "https://other.test/v3/progress/abc123",
+        "https://provider.test/v3/progress/abc123/extra",
+        "https://provider.test/v3/progress/abc123?format=json",
+    ):
+        with pytest.raises(ValueError):
+            validate_request_attempt(plan, _request(endpoint=endpoint))
+
+
+def test_a_request_whose_body_cannot_be_stored_is_not_sent():
+    plan = ShadowPlan(
+        "synthetic", "v1", {}, {}, {}, "never", {"submit": "https://provider.test/v3/scrape"},
+        "second", "synthetic:local",
+    )
+    # A value the evidence could not be written as, and a credential travelling in
+    # the body rather than being named by its location, both stop the attempt.
+    for body, message in (
+        ({"limit": float("nan")}, "cannot be stored"),
+        ({"BRIGHTDATA_API_KEY": "secret"}, "named location only"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            validate_request_attempt(plan, _request(
+                method="POST", endpoint="https://provider.test/v3/scrape",
+                endpoint_name="submit", query={}, body=body, credential_env="BRIGHTDATA_API_KEY",
+            ))
+    # A method that carries a body cannot record an absent one, which is the same
+    # rule the stored record is checked against.
+    with pytest.raises(ValueError, match="carries a body by definition"):
+        validate_request_attempt(plan, _request(
+            method="POST", endpoint="https://provider.test/v3/scrape", endpoint_name="submit",
+            query={}, body=None,
+        ))
+    with pytest.raises(ValueError, match="uppercase"):
+        _request(method="get")
+
+
+def test_a_retry_is_a_second_attempt_not_an_edit_of_the_first():
+    attempts = (_attempt(1), _attempt(1, attempt_number=2), _attempt(2))
+    evidence = RunEvidence(attempts=attempts, adapter_id="fixture-adapter-v1")
+
+    # The key is (ordinal, attempt), so a retry keeps its own row and the positions
+    # of the requests stay gapless.
+    assert [(item.ordinal, item.attempt_number) for item in evidence.attempts] == [
+        (1, 1), (1, 2), (2, 1)]
+    with pytest.raises(ValueError, match="position and a retry number"):
+        RunEvidence(attempts=(_attempt(1), _attempt(1)), adapter_id="fixture-adapter-v1")
+    with pytest.raises(ValueError, match="no gap"):
+        RunEvidence(attempts=(_attempt(1), _attempt(3)), adapter_id="fixture-adapter-v1")
+
+
+def test_an_attempt_records_a_status_or_the_reason_none_arrived():
+    with pytest.raises(ValueError, match="observed a status"):
+        _attempt(1, http_status=None)
+    with pytest.raises(ValueError, match="nonnegative integer"):
+        _attempt(1, http_status=-1)
+    # A transport failure is evidence too: it has a reason and a digest, and no
+    # status, because the provider never answered.
+    failed = _attempt(1, http_status=None, transport_error="ConnectError")
+    assert failed.transport_error == "ConnectError" and failed.response_digest

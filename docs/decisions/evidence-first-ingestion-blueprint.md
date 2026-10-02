@@ -334,12 +334,98 @@ submitted as empty and looked authoritative while destroying the distinction.
 | `adapter_id` | `text` | yes | The adapter that issued it. |
 | `method` | `text` | yes | The HTTP method. |
 | `endpoint` | `text` | yes | Must resolve to a value in the executed plan's `declared_endpoint_set`. A request to an undeclared endpoint aborts the run. |
-| `body` | `jsonb` | yes | The body as submitted, with omitted parameters absent. |
+| `query_parameters` | `jsonb` | yes | The query the request carried, empty when it carried none. |
+| `body` | `jsonb` | no | The body as submitted, with omitted parameters absent. Absent, as a SQL null, only for a method that carries no body by definition. |
+| `credential_env` | `text` | no | The named secret location the credential comes from, never a value. Checked against the shape of a secret name. |
 | `body_digest` | `text` | yes | Digest of the submitted body. |
-| `declared_caps` | `jsonb` | yes | The caps this request carried, copied from the plan. |
-| `requested_fields` | `jsonb` | yes | The field selector this request carried, copied from the plan. |
+| `declared_caps` | `jsonb` | yes | The caps the executed plan declared, repeated on every request row so one row reads without the join. |
+| `requested_fields` | `jsonb` | yes | The requested field map the executed plan declared, repeated for the same reason. |
 | `sent_at` | `timestamptz` | yes | When the request was sent. |
 | `created_at` | `timestamptz` | yes | Creation time. |
+
+`query_parameters` and `credential_env` are additions to the column list this blueprint first
+wrote.
+Without them, `endpoint` would be a URL rather than a request: a reader could see where the request
+went and not what it asked for, and could not tell which named secret location its credential would
+have come from, which is the fact rule 5 is about.
+Neither column can hold a credential value: the query and the body are checked for one before
+anything is sent, and `credential_env` is checked against the shape of a secret name in the database
+itself.
+
+Point 6 is enforced by one function, `validate_request_attempt`, which the adapter calls before a
+request leaves and the writer calls again before a row is stored.
+A request is refused when its endpoint name is outside the declared endpoint set, when its URL
+does not resolve to that declared endpoint, when its body is absent from a method that carries one,
+when its body or query cannot be encoded as the evidence it is meant to be, or when it carries the
+credential it names.
+Calling it from both sides is what stops the rule from being two rules.
+
+The stored `endpoint` is the URL alone.
+Query parameters travel in `query_parameters` rather than inside it, so a stored endpoint stays
+comparable to a declared endpoint template, and a request that put parameters inside its endpoint
+is refused rather than normalised.
+
+### Standalone request-execution record
+
+The request and the provider's account of that request are two records, not one.
+Before this record existed, the whole trace was one `raw_artifacts` row per run, which merged a
+retry and a poll and a repeated submit into list entries inside a single document, and left the
+submitted request represented only as a digest.
+A run now carries one row per request attempt on each side of the exchange, and neither side
+restates the other.
+
+1. The execution record is keyed by the request it answers, so a request with no stored body has
+   no execution record either.
+2. It records what the provider answered, never the request that provoked it.
+   The echo of a submitted request is not the submitted request.
+3. `http_status` is absent exactly when a transport error is recorded.
+   A request that never reached the provider has no status, and a stored zero would claim the
+   provider answered with one.
+4. `execution_digest` digests the execution record itself, and `response_digest` digests the
+   response, so each record carries its own digest and neither repeats the other.
+5. A fact this project concluded is never stored as something the provider said.
+   A count of delivered records, a classification of a response shape, and a judgement that a
+   state is undeclared are all kept, and all named as this project's own.
+6. A delay the provider did not announce is not recorded as one.
+   When the declared default was used, the wait is on `waited_before_seconds` of the request it
+   preceded and no announced delay exists to record.
+7. `phase` is the adapter's own vocabulary for where it was when it sent the request, and no
+   closed set of phases is imposed on a provider that never asked for one.
+8. `waited_before_seconds` is this project's own accounting rather than the provider's, recorded
+   per attempt so that a run's total wait is a sum of recorded facts.
+
+| Column | Type | Required | Definition |
+| --- | --- | --- | --- |
+| `id` | `bigint` | yes | Immutable surrogate identifier. |
+| `collection_run_id` | `bigint` | yes | The run the attempt belongs to. |
+| `request_body_id` | `bigint` | yes | The request record this answers. Unique, so one request has one answer. |
+| `request_ordinal` | `integer` | yes | Position of the request within the run, repeated for reading without the join. |
+| `attempt_number` | `integer` | yes | Retry attempt, counting from 1. |
+| `phase` | `text` | yes | The adapter-defined phase the request was sent in, for example submit, progress, or download. |
+| `http_status` | `integer` | no | The status the provider returned. Absent exactly when `transport_error` is recorded. |
+| `transport_error` | `text` | no | The transport failure by name, when no response arrived. |
+| `response_digest` | `text` | yes | Digest of the response body. |
+| `execution_digest` | `text` | yes | Digest of this execution record. |
+| `observed_facts` | `jsonb` | yes | What was learned about this attempt, from the provider's own statements and from this project's conclusions about them. The two are distinguishable by key: `delivery`, `delivered_records`, `shape`, `schema_drift`, and `terminal` are this project's reading, and every other key is what the provider said. |
+| `observed_at` | `timestamptz` | yes | When the answer was observed. |
+| `waited_before_seconds` | `numeric` | yes | What the adapter waited before sending this attempt. |
+| `created_at` | `timestamptz` | yes | Creation time. |
+
+Every instant on both records, including `sent_at` and `observed_at`, is rounded to the precision
+the executed plan declared, so one rule governs every time the run keeps.
+
+### The retired run-level execution representation
+
+`raw_artifacts.representation_version = 'provider-execution-v1'` is retired and is not written
+again.
+It is not deleted, and could not be: the evidence tables are append-only, so an existing row can
+neither be updated nor removed.
+A run recorded before the request-attempt records existed therefore keeps its execution trace in
+that one artifact, and a reader has to treat the legacy representation as one way a run's
+execution history can be stored rather than as the only one.
+Saturation is not carried forward as a flag.
+The declared cap and the observed count are two columns on the run, and their comparison is a
+fact a reader can make without trusting an adapter to report it.
 
 ### Lifecycle attribution
 
@@ -368,7 +454,8 @@ would expose.
 | --- | --- | --- |
 | `collection_plans`, `collection_runs`, `raw_artifacts`, `raw_observations`, `normalization_results` | Added | Reused unchanged |
 | Field-level provenance | Added | Reused unchanged |
-| `collection_request_bodies` | Not added | Added |
+| `collection_request_bodies` | Not added | Added, [#501](https://github.com/Park-Hip/InternHunterAgent/issues/501) |
+| `collection_request_executions` | Not added | Added, [#501](https://github.com/Park-Hip/InternHunterAgent/issues/501), replacing the run-level `provider-execution-v1` artifact |
 | `raw_jobs`, `clean_jobs` | Unchanged | Unchanged |
 
 The request-body record lands with the adapter because it answers a provider-specific question: what

@@ -54,11 +54,14 @@ import httpx
 
 from src.core.logger import logger
 from src.services.ingestion.evidence_store import (
+    RequestAttempt,
     RunEvidence,
     ShadowDelivery,
     ShadowPlan,
+    SubmittedRequest,
     content_digest,
     declared_record_cap,
+    validate_request_attempt,
     write_shadow_run,
 )
 from src.services.ingestion.models import RawPosting
@@ -104,15 +107,6 @@ class BrightDataRequest:
     # credential comes from; no credential is ever part of this record.
     credential_env: str | None = None
 
-    def record(self) -> dict:
-        return {
-            "method": self.method,
-            "url": self.url,
-            "query": deepcopy(self.query),
-            "body": deepcopy(self.body),
-            "credential_env": self.credential_env,
-        }
-
 
 @dataclass(frozen=True)
 class ProviderResponse:
@@ -133,19 +127,14 @@ class ProviderResponse:
 class BrightDataCollection:
     """The result of one collection attempt, with nothing inferred about coverage."""
 
-    request: BrightDataRequest
     records: tuple[dict, ...]
-    execution: dict
+    attempts: tuple[RequestAttempt, ...]
     retrieved_at: datetime
     request_count: int
     delivery: str
     failure_category: str | None = None
     outcome: str = "incomplete"
     snapshot_id: str | None = None
-
-    @property
-    def submitted_request(self) -> dict:
-        return self.request.record()
 
 
 @dataclass
@@ -161,6 +150,25 @@ class _Waits:
 
 
 @dataclass
+class _Send:
+    """One request in flight, and every fact learned from its answer.
+
+    The record is built before the request leaves, and its facts are filled in as the
+    adapter learns them, because a provider's answer cannot be known before the
+    question is asked and a question that cannot be recorded must not be asked.
+    """
+
+    ordinal: int
+    phase: str
+    request: SubmittedRequest
+    sent_at: datetime
+    response: ProviderResponse
+    observed_at: datetime
+    waited_before: float = 0.0
+    facts: dict = field(default_factory=dict)
+
+
+@dataclass
 class _Attempt:
     """Accumulator for one collection attempt.
 
@@ -170,7 +178,6 @@ class _Attempt:
     """
 
     source: BrightDataSource
-    execution: dict
     retrieved_at: datetime
     request_count: int = 0
     waited: float = 0.0
@@ -179,16 +186,38 @@ class _Attempt:
     records: tuple[dict, ...] = ()
     delivery: str = "none"
     snapshot_id: str | None = None
+    sends: list[_Send] = field(default_factory=list)
 
-    def send(self, request: BrightDataRequest) -> ProviderResponse:
+    def send(
+        self, request: BrightDataRequest, *, phase: str, endpoint_name: str,
+        waited_before: float = 0.0,
+    ) -> _Send:
+        """Refuse to send a request the run could not record, then send it.
+
+        The record is validated here rather than after the response, so an endpoint
+        the plan never declared or a body the run could not store stops the attempt
+        before it costs a request.
+        """
+        submitted = _submitted(request, endpoint_name)
+        self.source._require_storable(submitted)
         self.request_count += 1
-        return self.source._send(request)
+        # Read in order, around the send, so sent_at can never be recorded after the
+        # answer it precedes.
+        sent_at = self.source._clock()
+        response = self.source._send(request)
+        observed_at = self.source._clock()
+        send = _Send(
+            ordinal=len(self.sends) + 1, phase=phase, request=submitted,
+            sent_at=sent_at, response=response, observed_at=observed_at,
+            waited_before=waited_before,
+        )
+        self.sends.append(send)
+        return send
 
-    def record(self, key: str, response: ProviderResponse, **extra: Any) -> dict:
-        """Retain one response's observable facts under the run's execution record."""
-        entry = {**self.source._observed(response), **extra}
-        self.execution.setdefault(key, []).append(entry)
-        return entry
+    def record(self, send: _Send, **facts: Any) -> dict:
+        """Retain what one response stated, as it is learned."""
+        send.facts.update(facts)
+        return send.facts
 
     def fail(self, category: str, outcome: str) -> None:
         self.failure, self.outcome = category, outcome
@@ -300,6 +329,19 @@ class BrightDataSource:
             raise BrightDataBoundaryError(f"the {name} endpoint resolves outside its declaration")
         return url
 
+    def _require_storable(self, request: SubmittedRequest) -> None:
+        """Refuse a request the run could not record as evidence.
+
+        The rule itself lives in the evidence writer, because it is the writer that
+        decides what may be stored; this is the adapter refusing to send anything the
+        writer would later have to reject, so no request is ever spent on evidence
+        that could not have been written.
+        """
+        try:
+            validate_request_attempt(self._plan, request)
+        except ValueError as error:
+            raise BrightDataBoundaryError(str(error)) from error
+
     # ------------------------------------------------------------------
     # Transport
     # ------------------------------------------------------------------
@@ -328,14 +370,6 @@ class BrightDataSource:
             ),
         )
 
-    def _observed(self, response: ProviderResponse) -> dict:
-        """The recorded facts of one response, carrying no echoed request content."""
-        return {
-            "http_status": response.status_code,
-            "response_digest": response.digest,
-            "transport_error": response.transport_error,
-        }
-
     # ------------------------------------------------------------------
     # The provider state machine
     # ------------------------------------------------------------------
@@ -349,41 +383,37 @@ class BrightDataSource:
         one-minute synchronous limit.
         """
         states, terminal, max_polls, default_wait = self._state_machine()
-        started = self._clock()
-        attempt = _Attempt(
-            self, execution={"adapter_id": ADAPTER_ID, "submitted_at": started.isoformat()},
-            retrieved_at=self._clock(),
-        )
-        submit = attempt.send(self._request)
-        entry = self._record_once(attempt, "submit", submit)
+        attempt = _Attempt(self, retrieved_at=self._clock())
+        send = attempt.send(self._request, phase="submit", endpoint_name="submit")
+        submit = send.response
         if not submit.delivered:
             attempt.fail("transport_error", "failed")
         elif submit.status_code in _BLOCKING_STATUSES:
             attempt.fail("page_failed", "authorization_blocked")
-            entry["provider_message"] = _message(submit.payload)
+            attempt.record(send, provider_message=_message(submit.payload))
         elif submit.status_code == 200:
-            self._accept_inline(attempt, submit, entry)
+            self._accept_inline(attempt, send)
         elif submit.status_code == 202:
             self._follow_handoff(
-                attempt, submit, entry, states, terminal, max_polls, default_wait,
+                attempt, send, states, terminal, max_polls, default_wait,
             )
         else:
             attempt.fail("page_failed", "failed")
-            entry["provider_message"] = _message(submit.payload)
+            attempt.record(send, provider_message=_message(submit.payload))
         return self._settle(attempt)
 
-    def _accept_inline(
-        self, attempt: _Attempt, submit: ProviderResponse, entry: dict,
-    ) -> None:
+    def _accept_inline(self, attempt: _Attempt, send: _Send) -> None:
         """Take the records the provider returned in its immediate response."""
         attempt.delivery = "inline"
-        records, shape = _records(submit.payload)
+        records, shape = _records(send.response.payload)
         attempt.records = records
-        entry.update({"delivery": "inline", "records": len(records), "shape": shape})
+        # `delivered_records` and `shape` are this project's count and classification
+        # of what arrived, not a number the provider stated.
+        attempt.record(send, delivery="inline", delivered_records=len(records), shape=shape)
         attempt.failure, attempt.outcome = _shape_failure(shape)
 
     def _follow_handoff(
-        self, attempt: _Attempt, handoff: ProviderResponse, entry: dict, states: list[str],
+        self, attempt: _Attempt, handoff: _Send, states: list[str],
         terminal: set[str], max_polls: int, default_wait: float,
     ) -> None:
         """Poll the declared progress endpoint, then read the declared snapshot.
@@ -393,21 +423,30 @@ class BrightDataSource:
         reports `running` never advances the run.
         """
         attempt.delivery = "snapshot"
-        attempt.snapshot_id = _snapshot_id(handoff.payload)
-        wait = self._retry_after(handoff, default_wait)
-        entry.update({"delivery": "snapshot", "snapshot_id": attempt.snapshot_id,
-                      "retry_after_seconds": wait})
+        attempt.snapshot_id = _snapshot_id(handoff.response.payload)
+        wait = self._retry_after(handoff.response, default_wait)
+        # Only a delay the provider announced is recorded as one. The plan's default
+        # is this project's own choice, and recording it as the provider's answer
+        # would put a decision in the provider's mouth.
+        announced = handoff.response.headers.get("retry-after")
+        attempt.record(handoff, delivery="snapshot", snapshot_id=attempt.snapshot_id,
+                       **({"retry_after_seconds": wait} if announced is not None else {}))
         self._wait(attempt, wait)
         for poll in range(1, max_polls + 1):
-            progress = attempt.send(BrightDataRequest(
-                "GET", self._declared_url("progress", attempt.snapshot_id), {"format": "json"},
-            ))
-            if not progress.delivered:
-                attempt.record("progress", progress, poll=poll)
+            progress = attempt.send(
+                BrightDataRequest(
+                    "GET", self._declared_url("progress", attempt.snapshot_id),
+                    {"format": "json"},
+                ),
+                phase="progress", endpoint_name="progress", waited_before=wait,
+            )
+            if not progress.response.delivered:
+                attempt.record(progress, poll=poll)
                 attempt.fail("transport_error", "failed")
                 return
-            if progress.status_code != 200 or not isinstance(progress.payload, Mapping):
-                attempt.record("progress", progress, poll=poll)
+            if (progress.response.status_code != 200
+                    or not isinstance(progress.response.payload, Mapping)):
+                attempt.record(progress, poll=poll)
                 attempt.fail("page_failed", "failed")
                 return
             transition = self._record_progress(attempt, progress, poll, states, terminal)
@@ -426,7 +465,12 @@ class BrightDataSource:
                 return
             if transition["status"] in terminal:
                 break
-            wait = self._retry_after(progress, wait)
+            wait = self._retry_after(progress.response, wait)
+            # The delay the provider announced belongs to the response that
+            # announced it, and the wait it causes belongs to the request that
+            # follows, so neither answer is recorded twice.
+            if progress.response.headers.get("retry-after") is not None:
+                attempt.record(progress, retry_after_seconds=wait)
             self._wait(attempt, wait)
         else:
             # The declared poll budget ran out with no terminal state observed.
@@ -438,13 +482,14 @@ class BrightDataSource:
         self._download(attempt, transition)
 
     def _record_progress(
-        self, attempt: _Attempt, progress: ProviderResponse, poll: int,
+        self, attempt: _Attempt, send: _Send, poll: int,
         states: list[str], terminal: set[str],
     ) -> dict:
         """Retain one progress transition, flagging any state the plan does not declare."""
+        progress = send.response
         state = progress.payload.get("status")
         entry = attempt.record(
-            "progress", progress, poll=poll, status=state,
+            send, poll=poll, status=state,
             records=progress.payload.get("records"), errors=progress.payload.get("errors"),
         )
         if state not in states:
@@ -455,19 +500,23 @@ class BrightDataSource:
 
     def _download(self, attempt: _Attempt, transition: Mapping) -> None:
         """Read the terminal snapshot, and record a partial delivery as a failure."""
-        download = attempt.send(BrightDataRequest(
-            "GET", self._declared_url("snapshot", attempt.snapshot_id), {"format": "json"},
-        ))
-        entry = self._record_once(attempt, "download", download)
-        if not download.delivered:
+        download = attempt.send(
+            BrightDataRequest(
+                "GET", self._declared_url("snapshot", attempt.snapshot_id),
+                {"format": "json"},
+            ),
+            phase="download", endpoint_name="snapshot",
+        )
+        response = download.response
+        if not response.delivered:
             attempt.fail("transport_error", "failed")
             return
-        if download.status_code != 200:
+        if response.status_code != 200:
             attempt.fail("page_failed", "failed")
             return
-        records, shape = _records(download.payload)
+        records, shape = _records(response.payload)
         attempt.records = records
-        entry.update({"records": len(records), "shape": shape})
+        attempt.record(download, delivered_records=len(records), shape=shape)
         if shape != "array_of_objects" or (transition.get("errors") or 0) > 0:
             # A partial delivery is a failed run that still carries the records
             # which did arrive. Dropping the error-bearing inputs, or presenting
@@ -476,31 +525,23 @@ class BrightDataSource:
             return
         attempt.failure, attempt.outcome = None, "incomplete"
 
-    def _record_once(
-        self, attempt: _Attempt, key: str, response: ProviderResponse, **extra: Any
-    ) -> dict:
-        entry = self._observed(response)
-        entry.update(extra)
-        attempt.execution[key] = entry
-        return entry
-
     def _wait(self, attempt: _Attempt, seconds: float) -> None:
         self._waits.wait(seconds)
         attempt.waited += seconds
 
     def _settle(self, attempt: _Attempt) -> BrightDataCollection:
-        """Freeze the attempt into the collection the run is written from."""
-        cap = declared_record_cap(self._plan)
-        if cap is not None and attempt.records and len(attempt.records) >= cap:
-            # A saturated cap is recorded as saturation, never as coverage: the
-            # response cannot separate an exhausted scope from a truncated one.
-            attempt.execution["cap_reached"] = True
-        attempt.execution.update({
-            "observed_at": attempt.retrieved_at.isoformat(), "delivery": attempt.delivery,
-            "snapshot_id": attempt.snapshot_id, "records": len(attempt.records),
-            "requests": attempt.request_count, "waited_seconds": attempt.waited,
-            "failure_category": attempt.failure, "outcome": attempt.outcome,
-        })
+        """Freeze the attempt into the collection the run is written from.
+
+        Each send becomes one immutable request attempt, so a retry, a second poll, or
+        a repeated submit is its own record rather than another entry inside one
+        document. The run's execution trace is then read one request at a time, and
+        nothing is ever merged into a record that already means something else.
+
+        Saturation is deliberately not recorded here. The declared cap and the
+        observed count are two columns on the run, and a count that reached its cap
+        cannot separate an exhausted scope from a truncated one, so a flag copied
+        from the adapter would only restate that comparison.
+        """
         logger.info(
             "ingestion.brightdata_attempt", source=self.source, plan_version=self._plan.version,
             delivery=attempt.delivery, snapshot_id=attempt.snapshot_id,
@@ -508,10 +549,11 @@ class BrightDataSource:
             # a count that reached its cap says nothing about how many exist.
             declared_record_cap=declared_record_cap(self._plan),
             observed_record_count=len(attempt.records), requests=attempt.request_count,
-            failure_category=attempt.failure,
+            waited_seconds=attempt.waited, failure_category=attempt.failure,
         )
         return BrightDataCollection(
-            request=self._request, records=attempt.records, execution=attempt.execution,
+            records=attempt.records,
+            attempts=tuple(_attempt_record(send) for send in attempt.sends),
             retrieved_at=attempt.retrieved_at, request_count=attempt.request_count,
             delivery=attempt.delivery, failure_category=attempt.failure,
             outcome=attempt.outcome, snapshot_id=attempt.snapshot_id,
@@ -543,6 +585,35 @@ class BrightDataSource:
         if not 0 <= seconds <= 3600:
             raise BrightDataBoundaryError(f"the provider sent an out-of-range retry-after: {raw!r}")
         return seconds
+
+
+def _submitted(request: BrightDataRequest, endpoint_name: str) -> SubmittedRequest:
+    """The evidence-contract view of one request, as it is about to be sent."""
+    return SubmittedRequest(
+        method=request.method, endpoint=request.url, endpoint_name=endpoint_name,
+        query=deepcopy(dict(request.query)),
+        body=deepcopy(request.body) if request.body is not None else None,
+        credential_env=request.credential_env,
+    )
+
+
+def _attempt_record(send: _Send) -> RequestAttempt:
+    """Freeze one sent request into the attempt the run records.
+
+    This adapter never retries: each poll is the next request, not a second try at
+    the first one, so every attempt number is 1. A provider that does retry states
+    the retry in its own attempt number, and the key `(ordinal, attempt)` keeps the
+    two facts apart.
+    """
+    response = send.response
+    return RequestAttempt(
+        ordinal=send.ordinal, attempt_number=1, phase=send.phase, request=send.request,
+        sent_at=send.sent_at, observed_at=send.observed_at, response_digest=response.digest,
+        http_status=response.status_code if response.delivered else None,
+        transport_error=response.transport_error,
+        observed_facts=deepcopy(send.facts),
+        waited_before_seconds=send.waited_before,
+    )
 
 
 def _selector(fields: Any) -> set[str]:
@@ -634,8 +705,8 @@ def shadow_run_evidence(collection: BrightDataCollection) -> RunEvidence:
     partial coverage would be a claim the provider never supported.
     """
     return RunEvidence(
-        submitted_request=collection.submitted_request,
-        provider_execution=collection.execution,
+        attempts=collection.attempts,
+        adapter_id=ADAPTER_ID,
         coverage_result="unknown",
         outcome=collection.outcome,
     )

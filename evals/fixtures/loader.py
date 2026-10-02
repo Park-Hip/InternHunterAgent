@@ -15,8 +15,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 import yaml
 
-from src.services.ingestion.models import ingestion_teardown_statements
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEED_SQL_PATH = Path(__file__).resolve().parent / "seed_eval_db.sql"
 SETTINGS_PATH = REPO_ROOT / "config" / "settings.yaml"
@@ -165,8 +163,20 @@ def _drop_fixture_schema(dsn: str) -> None:
     engine = create_engine(dsn)
     try:
         with engine.begin() as conn:
-            for statement in ingestion_teardown_statements(version_table="alembic_version"):
-                conn.execute(text(statement))
+            conn.execute(
+                text(
+                    "DROP TABLE IF EXISTS collection_request_executions, "
+                    "collection_request_bodies, field_provenance, normalization_results, "
+                    "duplicate_deliveries, raw_observations, raw_artifacts, "
+                    "collection_runs, collection_plans, ingestion_runs, "
+                    "clean_jobs, raw_jobs, alembic_version CASCADE"
+                )
+            )
+            # The triggers that call this function live on the tables dropped above,
+            # so the function goes with them.
+            conn.execute(
+                text("DROP FUNCTION IF EXISTS reject_ingestion_evidence_mutation() CASCADE")
+            )
     finally:
         engine.dispose()
 

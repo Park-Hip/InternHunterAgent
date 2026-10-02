@@ -14,9 +14,15 @@ from sqlalchemy.orm import sessionmaker
 
 from src.services.ingestion import evidence_store
 from src.services.ingestion.models import (
-    Base, CleanJob, CollectionPlan, CollectionRun, DuplicateDelivery, FieldProvenance,
-    NormalizationResult, NormalizedJob, RawArtifact, RawObservation, RawPosting,
+    Base, CleanJob, CollectionPlan, CollectionRequestBody, CollectionRequestExecution,
+    CollectionRun, DuplicateDelivery, FieldProvenance, NormalizationResult, NormalizedJob,
+    RawArtifact, RawObservation, RawPosting,
 )
+
+# The declared Bright Data endpoints, repeated here so the database assertions read
+# against the same constants the adapter test uses.
+SUBMIT_URL = "https://api.brightdata.com/datasets/v3/scrape"
+PROGRESS_URL = "https://api.brightdata.com/datasets/v3/progress/sd_mujknayt1rvg0aadjq"
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("SCRATCH_DATABASE_URL"), reason="requires disposable SCRATCH_DATABASE_URL"
@@ -94,6 +100,79 @@ def write(plan, deliveries, **options):
 
 def count(session, model):
     return session.scalar(select(func.count()).select_from(model))
+
+
+def _submitted(endpoint="synthetic://vietnamworks/search", endpoint_name="search", **overrides):
+    return evidence_store.SubmittedRequest(**{
+        "method": "GET", "endpoint": endpoint, "endpoint_name": endpoint_name,
+        "query": {"page": 0}, "body": None, **overrides})
+
+
+def _attempt(ordinal: int, attempt_number: int = 1, *, request=None, **overrides):
+    return evidence_store.RequestAttempt(**{
+        "ordinal": ordinal, "attempt_number": attempt_number, "phase": "search",
+        "request": request or _submitted(), "sent_at": datetime.now(UTC),
+        "observed_at": datetime.now(UTC),
+        "response_digest": evidence_store.content_digest({"page": ordinal}),
+        "http_status": 200, **overrides})
+
+
+def test_a_retry_is_its_own_request_and_execution_row(db, plan):
+    run_id = write(plan, [posting()], request_count=3, run_evidence=evidence_store.RunEvidence(
+        attempts=(_attempt(1), _attempt(1, attempt_number=2, http_status=503,
+                                       response_digest=evidence_store.content_digest({"page": 1,
+                                                                                     "again": True})),
+                 _attempt(2, request=_submitted(query={"page": 1}))),
+        adapter_id="fixture-adapter-v1",
+    ))
+
+    with db() as session:
+        requests = session.scalars(select(CollectionRequestBody).order_by(
+            CollectionRequestBody.request_ordinal, CollectionRequestBody.attempt_number,
+        )).all()
+        executions = session.scalars(select(CollectionRequestExecution).order_by(
+            CollectionRequestExecution.request_ordinal, CollectionRequestExecution.attempt_number,
+        )).all()
+        assert [(row.request_ordinal, row.attempt_number) for row in requests] == [
+            (1, 1), (1, 2), (2, 1)]
+        assert [(row.request_ordinal, row.attempt_number) for row in executions] == [
+            (1, 1), (1, 2), (2, 1)]
+        assert [row.http_status for row in executions] == [200, 503, 200]
+        # The first attempt is retained beside the retry rather than replaced by it.
+        assert executions[0].response_digest != executions[1].response_digest
+        assert all(row.collection_run_id == run_id for row in requests + executions)
+        assert all(row.adapter_id == "fixture-adapter-v1" for row in requests)
+        # The query and the credential location travel with the request, so the
+        # stored endpoint is a request rather than a URL.
+        assert [row.query_parameters for row in requests] == [{"page": 0}, {"page": 0},
+                                                              {"page": 1}]
+
+
+def test_a_request_count_its_own_records_contradict_is_refused(db, plan):
+    """The run states how many requests it made twice, so the two must agree."""
+    with pytest.raises(ValueError, match="own evidence records"):
+        write(plan, [posting()], request_count=7, run_evidence=evidence_store.RunEvidence(
+            attempts=(_attempt(1),), adapter_id="fixture-adapter-v1"))
+    with db() as session:
+        assert count(session, CollectionRun) == 0
+        assert count(session, CollectionRequestBody) == 0
+
+
+def test_a_request_outside_the_declared_endpoint_set_is_refused_before_storage(db, plan):
+    for request, message in (
+        (_submitted(endpoint_name="download"), "declared endpoint set"),
+        (_submitted(endpoint="https://elsewhere.test/search"), "resolves outside"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            write(plan, [posting()], run_key="undeclared-endpoint",
+                  run_evidence=evidence_store.RunEvidence(
+                      attempts=(_attempt(1, request=request),), adapter_id="fixture-adapter-v1"))
+    with db() as session:
+        # Nothing was stored: not the request, not its execution, and not a run that
+        # would point at them.
+        assert count(session, CollectionRequestBody) == 0
+        assert count(session, CollectionRequestExecution) == 0
+        assert count(session, CollectionRun) == 0
 
 
 def _recorded_client(responses: list[dict]) -> httpx.Client:
@@ -281,7 +360,7 @@ def _brightdata_run(plan, responses: list[dict]):
     ).collect()
 
 
-def test_brightdata_handoff_records_the_provider_execution_and_no_coverage(db):
+def test_brightdata_handoff_records_every_request_attempt_and_no_coverage(db):
     from src.services.ingestion.plans import build_shadow_plan
     from src.services.ingestion.sources.brightdata import (
         SOURCE_ID, deliveries, record_shadow_collection,
@@ -304,10 +383,10 @@ def test_brightdata_handoff_records_the_provider_execution_and_no_coverage(db):
         assert run.outcome == "incomplete" and run.failure_category == "terminal_not_observed"
         assert run.request_count == 3
         assert run.declared_scope_digest == evidence_store.content_digest(plan.scope)
-        # The run's input digest covers the request this adapter submitted, not the
-        # provider's echo of it.
+        # The run's input digest covers the requests this adapter sent, not the
+        # provider's echo of them.
         assert run.input_digest == evidence_store.content_digest({
-            "submitted_request": collection.submitted_request,
+            "requests": [attempt.request.record() for attempt in collection.attempts],
             "deliveries": [
                 [delivery.posting.external_id,
                  evidence_store.content_digest(delivery.posting.raw_payload),
@@ -325,20 +404,71 @@ def test_brightdata_handoff_records_the_provider_execution_and_no_coverage(db):
         assert stored_plan.requested_fields == plan.requested_fields
         assert stored_plan.declared_caps == {"limit_per_input": 10}
 
-        execution = session.scalars(select(RawArtifact).where(
-            RawArtifact.representation_version == "provider-execution-v1",
-        )).one()
-        recorded_execution = execution.representation["execution"]
-        assert execution.collection_run_id == run_id
-        assert execution.representation["request_digest"] == evidence_store.content_digest(
-            collection.submitted_request)
-        assert recorded_execution["submit"]["http_status"] == 202
-        assert recorded_execution["submit"]["retry_after_seconds"] == 30
-        assert recorded_execution["submit"]["snapshot_id"] == recorded.SNAPSHOT_ID
-        assert recorded_execution["progress"][0]["status"] == "ready"
-        assert recorded_execution["download"]["http_status"] == 200
-        assert recorded_execution["cap_reached"] is True
-        assert execution.retention_until is not None
+        # One request row and one execution row per attempt, not one document per
+        # run, so the handoff, the poll, and the download are separately readable.
+        requests = session.scalars(select(CollectionRequestBody).order_by(
+            CollectionRequestBody.request_ordinal, CollectionRequestBody.attempt_number,
+        )).all()
+        executions = session.scalars(select(CollectionRequestExecution).order_by(
+            CollectionRequestExecution.request_ordinal,
+        )).all()
+        assert [row.request_ordinal for row in requests] == [1, 2, 3]
+        assert [row.attempt_number for row in requests] == [1, 1, 1]
+        assert [row.phase for row in executions] == ["submit", "progress", "download"]
+        assert all(row.collection_run_id == run_id for row in requests + executions)
+
+        submit, progress, download = requests
+        assert submit.method == "POST" and submit.endpoint == SUBMIT_URL
+        assert submit.adapter_id == "brightdata-linkedin-jobs-v1"
+        assert submit.body == plan.scope["request_body"]
+        assert submit.body_digest == evidence_store.content_digest(plan.scope["request_body"])
+        assert submit.declared_caps == plan.caps
+        assert submit.requested_fields == plan.requested_fields
+        assert submit.sent_at == recorded.OBSERVED_AT
+        # The query and the named secret location are stored beside the endpoint, so
+        # a reader can see what was asked for and never reads a credential value.
+        assert submit.query_parameters == plan.scope["query_parameters"]
+        assert submit.credential_env == "BRIGHTDATA_API_KEY"
+        # A request that carried no body says so instead of storing an empty one,
+        # which would read as a submitted `{}`, and it is a SQL NULL rather than a
+        # stored JSON null, which would read as a body that was sent null.
+        assert progress.method == "GET" and progress.body is None
+        assert progress.query_parameters == {"format": "json"}
+        assert progress.endpoint == PROGRESS_URL
+        absent = session.scalars(select(CollectionRequestBody.id).where(
+            CollectionRequestBody.collection_run_id == run_id,
+            CollectionRequestBody.body.is_(None),
+        )).all()
+        assert len(absent) == 2
+
+        # The request and the provider's account of it are separate records, each
+        # with its own digest, and neither restates the other.
+        assert [row.request_body_id for row in executions] == [row.id for row in requests]
+        # Each request digests its own body: the submit's body, and the digest of
+        # "no body was sent" for the two that carried none. Neither execution
+        # digest is the other's, and neither restates a request.
+        assert submit.body_digest != progress.body_digest == download.body_digest
+        assert len({row.execution_digest for row in executions}) == 3
+        assert all("execution" not in (row.observed_facts or {}) for row in executions)
+        assert executions[0].http_status == 202
+        assert executions[0].observed_facts == {
+            "delivery": "snapshot", "snapshot_id": recorded.SNAPSHOT_ID,
+            "retry_after_seconds": float(recorded.HANDOFF_RETRY_AFTER_SECONDS),
+        }
+        assert executions[0].waited_before_seconds == 0
+        assert executions[1].observed_facts == {"poll": 1, "status": "ready", "records": 10,
+                                                "errors": 0}
+        assert executions[1].waited_before_seconds == recorded.HANDOFF_RETRY_AFTER_SECONDS
+        assert executions[2].http_status == 200
+        assert executions[2].observed_facts == {"delivered_records": 10,
+                                                "shape": "array_of_objects"}
+        assert executions[2].response_digest != executions[0].response_digest
+
+        # The retired representation is not written any more, and the trace it
+        # used to hold is now read one request at a time.
+        assert count(session, RawArtifact) == 10
+        assert session.scalar(select(RawArtifact).where(
+            RawArtifact.representation_version == "provider-execution-v1")) is None
         assert count(session, CleanJob) == 0
         assert count(session, RawObservation) == 10
         assert count(session, NormalizationResult) == 10
@@ -454,7 +584,11 @@ def test_brightdata_evidence_is_idempotent_per_run_key(db):
     with db() as session:
         assert count(session, CollectionRun) == 1
         assert count(session, RawObservation) == 10
-        assert count(session, RawArtifact) == 11  # ten records plus the execution record
+        assert count(session, RawArtifact) == 10
+        # A replayed run key is the same run, so the same three request attempts,
+        # never a second set beside them.
+        assert count(session, CollectionRequestBody) == 3
+        assert count(session, CollectionRequestExecution) == 3
 
 
 def test_brightdata_empty_and_failed_runs_record_no_completion(db):

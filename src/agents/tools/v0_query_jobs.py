@@ -15,6 +15,11 @@ The rendering is Vietnamese with the canonical values verbatim, because the mode
 is instructed to answer in Vietnamese and to reproduce stored values exactly.
 It is evidence for the model, not the final answer: the model still writes the
 sentence, and every caveat below is one it may not drop.
+
+The tool also publishes what the result was to the stream, so the interface can
+show a real count or a real refusal. That reaches the reader, not the model:
+`publish_tool_result` writes to the turn's event emitter, and nothing here
+changes what the tool returns.
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from src.agents.runtime.tool_events import publish_tool_result
 from src.services.query.plan import (
     FilterField,
     GroupField,
@@ -97,10 +103,29 @@ def run_query_jobs(request: dict[str, Any], service: JobQueryService | None = No
     try:
         parsed = JobQueryRequest(**(request or {}))
     except (ValidationError, TypeError) as exc:
+        # The request never reached the database, so there is no count to report.
+        publish_tool_result(row_count=None)
         return _repair_message(exc)
 
     result = resolver.answer(parsed)
+    _publish_result_facts(result)
     return render_result(result, request)
+
+
+def _publish_result_facts(result: QueryResult) -> None:
+    """Publish what the result was, so the interface can show a count or a refusal.
+
+    A data answer publishes the full match total, not the count after the display
+    cap: the reader is owed the size of the matching set, and ``truncated`` is
+    what says the answer is showing only part of it. A refusal publishes no count
+    at all, because a question that was never asked of the database must not read
+    as a question that was asked and matched nothing. Absent and zero are
+    different facts, and only the result knows which it has.
+    """
+    if not result.is_data_answer:
+        publish_tool_result(row_count=None)
+        return
+    publish_tool_result(row_count=result.match_total, truncated=result.truncated)
 
 
 def render_result(result: QueryResult, request: dict[str, Any] | None = None) -> str:

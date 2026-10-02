@@ -40,16 +40,23 @@ class _ScriptedToolCallingModel(GenericFakeChatModel):
     messages: list = []
     tool_name: str = "query_clean_jobs"
     tool_arg: str = "question"
+    # A tool whose arguments are not a single string needs the call written out.
+    tool_args: dict | None = None
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
         already_called = any(getattr(m, "type", None) == "tool" for m in messages)
         if not already_called:
+            args = (
+                dict(self.tool_args)
+                if self.tool_args is not None
+                else {self.tool_arg: "AI Engineer ở Đà Nẵng"}
+            )
             message = AIMessage(
                 content="",
                 tool_calls=[
                     {
                         "name": self.tool_name,
-                        "args": {self.tool_arg: "AI Engineer ở Đà Nẵng"},
+                        "args": args,
                         "id": "call_1",
                     }
                 ],

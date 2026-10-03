@@ -1,8 +1,19 @@
-"""End-to-end offline harness tests with the database boundary stubbed."""
+"""End-to-end harness tests with the database boundary stubbed.
+
+The offline layers (capture replay, scoring, reporting, exit codes) are covered
+against the retained capture. The live capture path - `capture_scenario` building
+a real agent over the real discovered tool list - is covered too, with only the
+provider round trip stubbed, because that path is what issue #570 broke and a
+harness that only ever replays cannot see it.
+"""
+
+from __future__ import annotations
 
 import asyncio
+import copy
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -12,10 +23,16 @@ from evals.__main__ import _exit_code, main
 
 
 CAPTURE = Path("evals/replays/t0025.9-committed.json")
+LIVE_SCENARIO_ID = "V0-LIST-ROLE-CITY"
 
 
 def scenario(scenario_id: str) -> dict:
     return next(item for item in dataset("default").scenarios() if item["id"] == scenario_id)
+
+
+def live_scenario() -> dict:
+    """A governed v0 case, so the live path runs against the bundle under test."""
+    return next(item for item in dataset("v0").scenarios() if item["id"] == LIVE_SCENARIO_ID)
 
 
 def test_offline_only_scores_captured_scenarios(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -277,3 +294,116 @@ def test_quota_halts_and_marks_remaining_unrun(monkeypatch: pytest.MonkeyPatch) 
     rows = report["by_metric"]["tool_correctness"]
     assert len(rows) == 4
     assert rows[-1]["reason"] == "UNRUN"
+
+
+# --- The live capture path (issue #570) ---
+#
+# Everything below drives `capture_scenario` itself rather than replaying a
+# capture around it. Tool discovery, the awaited factory call, and the resolved
+# prompt bundle are the real ones; only the provider round trip and the DeepEval
+# trace wait are stubbed, so the tests need no credential and no network.
+
+
+def set_agent_v0(monkeypatch: pytest.MonkeyPatch, value: bool) -> None:
+    """Flip `agent.agent_v0` in the cached settings, without touching the file.
+
+    `v0_agent_enabled` and `create_job_mcp_server` read this one key, so the
+    discovered surface follows the switch exactly as it does in serving. The
+    checked-in file is left alone and the original mapping is restored by
+    monkeypatch, so the rest of the suite is unaffected.
+    """
+    from src.core.config import settings
+
+    config = copy.deepcopy(settings.config_yaml)
+    config["agent"]["agent_v0"] = value
+    monkeypatch.setattr(settings, "config_yaml", config)
+
+
+def drive_live_capture(monkeypatch: pytest.MonkeyPatch, scenario_case: dict) -> dict[str, Any]:
+    """Run the live capture path and record what it actually bound.
+
+    `create_agent` is the composition seam the tool list passes through, so
+    recording its keyword arguments observes the real binding without reaching
+    into LangGraph internals for the compiled graph's shape.
+    """
+    from src.agents.runtime.prompts import resolve_prompt_bundle_async
+
+    record: dict[str, Any] = {}
+    built_agent = object()
+
+    def fake_create_agent(**kwargs: Any) -> Any:
+        record["factory_kwargs"] = kwargs
+        return built_agent
+
+    async def fake_capture_turn(agent: Any, question: str, _config: dict[str, Any]) -> dict[str, Any]:
+        record["agent"] = agent
+        record["bound_tool_names"] = sorted(tool.name for tool in record["factory_kwargs"]["tools"])
+        return {"question": question, "answer": "stubbed answer", "tools_called": [], "sql_text": None, "tool_output": None}
+
+    monkeypatch.setattr("src.agents.runtime.factory.create_agent", fake_create_agent)
+    monkeypatch.setattr(run, "capture_turn", fake_capture_turn)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-not-a-real-key")  # never dispatched: no model call is made
+
+    async def drive() -> list[dict[str, Any]]:
+        return await run.capture_scenario(scenario_case, await resolve_prompt_bundle_async())
+
+    record["turns"] = asyncio.run(drive())
+    record["built_agent"] = built_agent
+    return record
+
+
+def test_live_capture_path_awaits_the_factory_and_binds_the_discovered_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`agent_factory` is a coroutine function; an un-awaited call binds a coroutine.
+
+    The capture path used to bind one where a graph is expected, so every live
+    scenario died on `'coroutine' object has no attribute 'ainvoke'` before a
+    model was ever built. The bound tool list is asserted too, because fixing
+    only the await turns the crash into a run whose model can never call the one
+    tool the v0 prompt names.
+    """
+    record = drive_live_capture(monkeypatch, live_scenario())
+
+    assert record["agent"] is record["built_agent"]
+    assert not asyncio.iscoroutine(record["agent"])
+    assert record["bound_tool_names"] == ["query_jobs"]
+    assert len(record["turns"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("agent_v0", "expected"),
+    [
+        (True, ["query_jobs"]),
+        (False, ["get_job_details", "query_clean_jobs"]),
+    ],
+)
+def test_live_capture_path_tool_surface_follows_the_bundle_switch(monkeypatch: pytest.MonkeyPatch, agent_v0: bool, expected: list[str]) -> None:
+    """The same fix serves both bundle positions, so the rollback is rehearsed here too.
+
+    Discovery is the only source of the tool list, so asserting it under both
+    switch positions is what keeps the eval agent and its system prompt from
+    diverging the way the served agent is prevented from diverging.
+    """
+    set_agent_v0(monkeypatch, agent_v0)
+
+    record = drive_live_capture(monkeypatch, live_scenario())
+
+    assert record["bound_tool_names"] == expected
+
+
+def test_live_capture_path_without_a_credential_fails_on_the_secret_not_the_graph(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The missing credential must surface as a config error naming the variable.
+
+    This is the credential-free way to reach the real factory. Before the fix the
+    same command failed with `'coroutine' object has no attribute 'ainvoke'`,
+    which is a type error rather than the missing secret it actually was.
+    """
+    from src.agents.runtime.prompts import resolve_prompt_bundle_async
+
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr("src.agents.runtime.provider.get_configured_secret", lambda _name: None)
+
+    async def drive() -> None:
+        await run.capture_scenario(live_scenario(), await resolve_prompt_bundle_async())
+
+    with pytest.raises(ValueError, match="DEEPSEEK_API_KEY is unset"):
+        asyncio.run(drive())

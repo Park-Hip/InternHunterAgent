@@ -753,6 +753,56 @@ def test_brightdata_empty_and_failed_runs_record_no_completion(db):
         assert count(session, CleanJob) == 0
 
 
+def test_a_declared_content_hash_that_disagrees_is_quarantined(db, plan):
+    """A payload that does not hash to what the adapter declared never projects.
+
+    The declared hash is the adapter's claim about the bytes it captured, and the
+    writer is the boundary that can check it. A claim that disagrees with the
+    payload means the record is not the record the adapter thinks it captured, so
+    the payload is retained as evidence and its values are refused.
+    """
+    payload = {"jobId": "9", "jobTitle": "Data Engineer", "companyName": "Example"}
+    overstated = evidence_store.ShadowDelivery(
+        RawPosting(source="vietnamworks", external_id="9", source_url=None,
+                   raw_payload=payload, content_hash="a-digest-of-something-else"),
+        retrieved_at=datetime.now(UTC),
+    )
+    run_id = write(plan, [overstated])
+    with db() as session:
+        # Nothing is dropped: the bytes that arrived are still retained, under the
+        # digest the writer recomputed from them rather than the one declared.
+        observation = session.scalar(select(RawObservation))
+        artifact = session.get(RawArtifact, observation.raw_artifact_id)
+        assert artifact.representation == payload
+        assert artifact.content_digest == evidence_store.content_digest(payload)
+        assert artifact.content_digest != "a-digest-of-something-else"
+
+        result = session.scalar(select(NormalizationResult))
+        assert result.outcome == "quarantined"
+        assert result.quarantine_reason_code == "declared_digest_mismatch"
+        assert result.output_values is None and result.output_digest is None
+        # The claim is recorded, because otherwise the failure says what was wrong
+        # without recording what the adapter actually asserted.
+        assert result.warnings == ["declared_content_hash:a-digest-of-something-else"]
+        assert count(session, FieldProvenance) == 0
+        # The delivery was observed. Quarantining a record is not a claim that the
+        # run saw fewer records than it saw.
+        assert session.get(CollectionRun, run_id).observed_record_count == 1
+        assert count(session, CleanJob) == 0
+
+
+def test_a_correct_declared_content_hash_is_the_only_thing_that_projects(db, plan):
+    """The control: the same payload under the digest it actually has."""
+    run_id = write(plan, [posting("10")])
+    with db() as session:
+        result = session.scalar(select(NormalizationResult))
+        assert result.outcome == "succeeded"
+        assert result.quarantine_reason_code is None
+        assert result.warnings == []
+        assert count(session, FieldProvenance) == len(PATHS)
+        assert session.get(CollectionRun, run_id).observed_record_count == 1
+
+
 def test_field_presence_and_changed_digest_are_new_evidence(db, plan):
     first = posting("4")
     newer = posting("4", "New title")

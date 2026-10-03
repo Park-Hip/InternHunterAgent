@@ -51,7 +51,7 @@ def test_invalid_payload_quarantines_without_fabricating_values():
         raise KeyError("jobTitle")
 
     result = _normalize(session, observation, artifact, payload, _plan(), broken, {}, "v1", 1,
-                        datetime.now(UTC), 2)
+                        datetime.now(UTC), 2, declared_digest=artifact.content_digest)
     assert result.outcome == "quarantined"
     assert result.quarantine_reason_code == "shape_unparseable"
     assert result.output_values is None
@@ -61,9 +61,40 @@ def test_invalid_payload_quarantines_without_fabricating_values():
         raise ValueError("invalid value")
 
     invalid = _normalize(session, observation, artifact, payload, _plan(), invalid_value, {},
-                         "v2", 1, datetime.now(UTC), 2)
+                         "v2", 1, datetime.now(UTC), 2,
+                         declared_digest=artifact.content_digest)
     assert invalid.outcome == "quarantined"
     assert invalid.quarantine_reason_code == "shape_unparseable"
+
+
+def test_a_declared_digest_that_disagrees_is_refused_before_the_normalizer_runs():
+    """The claim is checked at the boundary, so no value can be invented from it."""
+    payload = {"jobId": "1", "jobTitle": "Data Engineer", "companyName": "Example"}
+    artifact = RawArtifact(id=1, content_digest=content_digest(payload))
+    observation = RawObservation(id=1, source_listing_key="1", field_presence={})
+    session = MagicMock()
+    normalizer = MagicMock()
+
+    result = _normalize(session, observation, artifact, payload, _plan(), normalizer, {}, "v1", 1,
+                        datetime.now(UTC), 2, declared_digest="not-the-payloads-digest")
+    assert result.outcome == "quarantined"
+    assert result.quarantine_reason_code == "declared_digest_mismatch"
+    assert result.output_values is None and result.output_digest is None
+    # The declared claim is kept, because the recomputed digest is already on the
+    # artifact and only the two together explain the failure.
+    assert result.warnings == ["declared_content_hash:not-the-payloads-digest"]
+    normalizer.assert_not_called()
+
+    # A payload that no longer hashes to the digest stored beside it is a
+    # different failure, and the stored one is reported first because a caller
+    # cannot be blamed for a row that changed after it wrote it.
+    corrupted = RawArtifact(id=1, content_digest=content_digest({"other": "payload"}))
+    stored = _normalize(session, observation, corrupted, payload, _plan(), normalizer, {}, "v1",
+                        1, datetime.now(UTC), 2,
+                        declared_digest=content_digest(payload))
+    assert stored.quarantine_reason_code == "artifact_integrity_failed"
+    assert stored.warnings == []
+    normalizer.assert_not_called()
 
 
 def test_field_presence_keeps_four_value_states_distinct():

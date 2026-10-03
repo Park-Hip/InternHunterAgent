@@ -479,13 +479,48 @@ def _structural_defaults(values: dict | None, paths: ProvenancePaths) -> list[st
     )
 
 
+def _integrity_failure(
+    payload: dict, artifact: RawArtifact, declared_digest: str | None,
+) -> tuple[str | None, list[str]]:
+    """Why the retained artifact's digest is not what every claim says it is.
+
+    Two claims can disagree with the bytes that were retained, and they are
+    answered apart because they are repaired apart.
+
+    `artifact_integrity_failed`
+        The stored representation no longer hashes to the digest stored beside
+        it. That says what happened to the row, and it is reachable only when the
+        payload being normalized is not the object the artifact was written from:
+        today, a replay, which reads the representation back.
+    `declared_digest_mismatch`
+        The payload does not hash to the digest the adapter declared when it
+        captured it. That says what happened on the way in, and it means the
+        retained record is not the record the adapter believes it captured, so
+        nothing it would produce can enter the projection.
+
+    The declared value is kept in the warnings because the recomputed one is
+    already on the artifact row: an operator comparing the two is comparing the
+    adapter's claim against the bytes, which is the only question worth asking.
+
+    `declared_digest` is None only on a replay, where the artifact's declaration
+    was checked when the artifact was written and no adapter speaks again.
+    """
+    if content_digest(payload) != artifact.content_digest:
+        return "artifact_integrity_failed", []
+    if declared_digest is not None and declared_digest != artifact.content_digest:
+        return "declared_digest_mismatch", [f"declared_content_hash:{declared_digest}"]
+    return None, []
+
+
 def _normalize(
     session, observation: RawObservation, artifact: RawArtifact,
     payload: dict, plan: ShadowPlan, normalizer: Normalizer, paths: ProvenancePaths,
     version: str, attempt: int, now: datetime, processing_run_id: int,
+    *, declared_digest: str | None,
 ) -> NormalizationResult:
-    if content_digest(payload) != artifact.content_digest:
-        outcome, reason, values = "quarantined", "artifact_integrity_failed", None
+    integrity_reason, integrity_warnings = _integrity_failure(payload, artifact, declared_digest)
+    if integrity_reason is not None:
+        outcome, reason, values = "quarantined", integrity_reason, None
     elif not observation.source_listing_key:
         outcome, reason, values = "quarantined", "listing_key_absent", None
     else:
@@ -518,7 +553,7 @@ def _normalize(
         normalization_version=version,
         attempt_number=attempt, outcome=outcome, quarantine_reason_code=reason,
         rule_version=version, output_digest=content_digest(values) if values is not None else None,
-        output_values=values, warnings=_structural_defaults(values, paths),
+        output_values=values, warnings=_structural_defaults(values, paths) + integrity_warnings,
         evaluator_metadata=None, created_at=now,
     )
     session.add(result)
@@ -560,6 +595,12 @@ def write_shadow_run(
     the run may record.
     Omitting it records a run that issued no request and offers no account of any,
     which is the shape a source with nothing to declare would take.
+
+    Every delivery's `content_hash` is the adapter's claim about the payload it
+    captured, and the writer checks it rather than accepting it: a payload that
+    does not hash to the claim it arrived with is retained and quarantined as
+    `declared_digest_mismatch`, because a record that disagrees with its own
+    integrity claim cannot be normalized into anything.
     """
     if not plan.authorization_revision.startswith("synthetic:"):
         raise ValueError("shadow evidence is restricted to synthetic fixtures until G2 approval")
@@ -719,7 +760,8 @@ def write_shadow_run(
             session.flush()
             local_keys[key] = observation.id
             _normalize(session, observation, artifact, payload, plan, normalizer,
-                       provenance_paths, normalization_version, 1, now, run.id)
+                       provenance_paths, normalization_version, 1, now, run.id,
+                       declared_digest=delivery.posting.content_hash)
         session.commit()
         return run.id
 
@@ -811,6 +853,7 @@ def replay_shadow_run(
             )).all()
             _normalize(session, observation, artifact, artifact.representation, plan,
                        normalizer, provenance_paths, normalization_version,
-                       max((item.attempt_number for item in attempts), default=0) + 1, now, run.id)
+                       max((item.attempt_number for item in attempts), default=0) + 1, now, run.id,
+                       declared_digest=None)
         session.commit()
         return run.id

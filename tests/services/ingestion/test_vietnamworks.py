@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
+from src.services.ingestion.evidence_store import content_digest
 from src.services.ingestion.models import RawPosting
 from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
 
@@ -193,6 +194,14 @@ class VietnamWorksSourceTests(unittest.TestCase):
         results = list(self._source().fetch())
         for r in results:
             self.assertTrue(r.content_hash)
+
+    def test_content_hash_is_the_canonical_digest_of_the_payload(self) -> None:
+        # The shadow writer compares this claim against the payload it received,
+        # so it has to be the ingestion layer's one digest rather than a second
+        # canonicalisation that hashes the same facts differently.
+        results = list(self._source().fetch())
+        for r in results:
+            self.assertEqual(r.content_hash, content_digest(r.raw_payload))
 
     # ------------------------------------------------------------------
     # content_hash stability

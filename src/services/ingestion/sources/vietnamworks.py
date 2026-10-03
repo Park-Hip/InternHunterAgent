@@ -1,5 +1,3 @@
-import hashlib
-import json
 import time
 from collections.abc import Iterator
 
@@ -8,6 +6,7 @@ import httpx
 from src.core.config import settings
 from src.core.logger import logger
 from src.services.ingestion.compliance import RobotsPolicyGate, target_url_for_robots
+from src.services.ingestion.evidence_store import content_digest
 from src.services.ingestion.models import RawPosting
 from src.services.ingestion.sources.base import JobSource
 
@@ -165,11 +164,6 @@ class VietnamWorksSource(JobSource):
         }
         return fn.get("parentId") == self._parent_id and bool(self._child_ids & child_ids)
 
-    @staticmethod
-    def _content_hash(job: dict) -> str:
-        canonical = json.dumps(job, sort_keys=True, ensure_ascii=False)
-        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
     def _collect(self, client: httpx.Client) -> Iterator[RawPosting]:
         """Inner generator: iterate pages × queries round-robin, filter, dedup, cap.
 
@@ -205,7 +199,9 @@ class VietnamWorksSource(JobSource):
                             external_id=str(job_id),
                             source_url=job.get("jobUrl"),
                             raw_payload=job,
-                            content_hash=self._content_hash(job),
+                            # The ingestion layer's one canonical digest, so the
+                            # writer can check the claim instead of restating it.
+                            content_hash=content_digest(job),
                         )
                         kept += 1
                 finally:

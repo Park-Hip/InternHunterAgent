@@ -97,6 +97,8 @@ class Base(DeclarativeBase):
 APPEND_ONLY_EVIDENCE_TABLES: Final = (
     "collection_plans",
     "collection_runs",
+    "collection_request_bodies",
+    "collection_request_executions",
     "raw_artifacts",
     "raw_observations",
     "duplicate_deliveries",
@@ -116,6 +118,8 @@ INGESTION_TABLES: Final = (
     "duplicate_deliveries",
     "raw_observations",
     "raw_artifacts",
+    "collection_request_executions",
+    "collection_request_bodies",
     "collection_runs",
     "collection_plans",
     "ingestion_runs",
@@ -304,6 +308,103 @@ class CollectionRun(Base):
     input_digest: Mapped[str] = mapped_column(Text, nullable=False)
     replay_of_run_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=True)
     replay_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class CollectionRequestBody(Base):
+    """One request attempt exactly as this project issued it, before it was sent.
+
+    The row is this project's own assertion, not a provider return value. It is
+    captured before the send rather than reconstructed afterwards, so it is never
+    built from a provider echo, a redirect, or a retry log, and an omitted
+    parameter stays absent instead of arriving back as an empty string.
+
+    One row per attempt, keyed by `(collection_run_id, request_ordinal,
+    attempt_number)`. A retry or a second discovery input inside one run is
+    therefore its own row with its own ordinal rather than an entry inside a
+    single document, which is what makes a multi-request run walkable.
+
+    `endpoint_name` names the entry in the executed plan's
+    `declared_endpoint_set` that `endpoint` was rendered from, and
+    `path_parameters` is what renders it. Storing both makes "this request only
+    addressed a declared endpoint" a fact a reader can check against the plan row
+    rather than a property of the adapter that made it.
+
+    `credential_env` is a named secret location and never a credential value. The
+    check constraint is what makes that a database guarantee and not a
+    convention, because a lowercase token is a value and no location has that
+    shape.
+    """
+
+    __tablename__ = "collection_request_bodies"
+    __table_args__ = (
+        UniqueConstraint("collection_run_id", "request_ordinal", "attempt_number"),
+        CheckConstraint(
+            "request_ordinal > 0 AND attempt_number > 0",
+            name="ck_collection_request_bodies_count",
+        ),
+        CheckConstraint(
+            "credential_env IS NULL OR credential_env ~ '^[A-Z][A-Z0-9_]*$'",
+            name="ck_collection_request_bodies_credential",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
+    request_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    adapter_id: Mapped[str] = mapped_column(Text, nullable=False)
+    method: Mapped[str] = mapped_column(Text, nullable=False)
+    endpoint_name: Mapped[str] = mapped_column(Text, nullable=False)
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False)
+    path_parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    query_parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    body: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    body_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    credential_env: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The plan's declarations, restated so one row is self-describing. What this
+    # particular request carried is in `body` and `query_parameters`; these two are
+    # the caps and the field meanings the request was issued under.
+    declared_caps: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    requested_fields: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class CollectionRequestExecution(Base):
+    """What the provider observably returned for one stored request.
+
+    A separate record from the request body because the echo of a submitted
+    request is not the submitted request. Reading this row tells a reviewer the
+    status, the digest, and the declared progress facts; it never tells them what
+    was asked for, which is what the referenced request body is for.
+
+    Exactly one row per stored request, enforced by the unique reference. A
+    transport failure still has one, because an attempt that produced nothing is
+    evidence of an attempt and must not be indistinguishable from an attempt that
+    never happened.
+    """
+
+    __tablename__ = "collection_request_executions"
+    __table_args__ = (
+        UniqueConstraint("request_body_id"),
+        Index("ix_collection_request_executions_run", "collection_run_id"),
+        CheckConstraint(
+            "(http_status IS NULL) <> (transport_error IS NULL)",
+            name="ck_collection_request_executions_response",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
+    request_body_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("collection_request_bodies.id"), nullable=False
+    )
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    transport_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    provider_facts: Mapped[dict] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
 

@@ -3,19 +3,23 @@
 Set SCRATCH_DATABASE_URL to a disposable database. Never point it at production.
 """
 
+import json
 import os
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import httpx
 import pytest
 from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import sessionmaker
 
 from src.services.ingestion import evidence_store
 from src.services.ingestion.models import (
-    Base, CleanJob, CollectionPlan, CollectionRun, DuplicateDelivery, FieldProvenance,
-    NormalizationResult, NormalizedJob, RawArtifact, RawObservation, RawPosting,
+    Base, CleanJob, CollectionPlan, CollectionRequestBody, CollectionRequestExecution,
+    CollectionRun, DuplicateDelivery, FieldProvenance, NormalizationResult, NormalizedJob,
+    RawArtifact, RawObservation, RawPosting,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -94,6 +98,19 @@ def write(plan, deliveries, **options):
 
 def count(session, model):
     return session.scalar(select(func.count()).select_from(model))
+
+
+def _attempt(plan, **overrides) -> evidence_store.RequestAttempt:
+    """One well-formed request attempt, for the writer-level boundary checks."""
+    return evidence_store.RequestAttempt(**{
+        "request_ordinal": 1, "attempt_number": 1, "adapter_id": "fixture-adapter",
+        "endpoint_name": "search", "endpoint": plan.endpoints["search"], "method": "GET",
+        "path_parameters": {}, "query_parameters": {}, "body": {}, "credential_env": None,
+        "sent_at": datetime.now(UTC), "observed_at": datetime.now(UTC),
+        "http_status": 200, "transport_error": None,
+        "response_digest": evidence_store.content_digest({"ok": True}), "provider_facts": {},
+        **overrides,
+    })
 
 
 def _recorded_client(responses: list[dict]) -> httpx.Client:
@@ -281,7 +298,7 @@ def _brightdata_run(plan, responses: list[dict]):
     ).collect()
 
 
-def test_brightdata_handoff_records_the_provider_execution_and_no_coverage(db):
+def test_brightdata_handoff_records_every_request_and_no_coverage(db):
     from src.services.ingestion.plans import build_shadow_plan
     from src.services.ingestion.sources.brightdata import (
         SOURCE_ID, deliveries, record_shadow_collection,
@@ -304,10 +321,15 @@ def test_brightdata_handoff_records_the_provider_execution_and_no_coverage(db):
         assert run.outcome == "incomplete" and run.failure_category == "terminal_not_observed"
         assert run.request_count == 3
         assert run.declared_scope_digest == evidence_store.content_digest(plan.scope)
-        # The run's input digest covers the request this adapter submitted, not the
-        # provider's echo of it.
+        # The run's input digest covers the requests this adapter submitted, not the
+        # provider's echo of any of them.
         assert run.input_digest == evidence_store.content_digest({
-            "submitted_request": collection.submitted_request,
+            "requests": [
+                [attempt.request_ordinal, attempt.attempt_number, attempt.adapter_id,
+                 attempt.endpoint_name, attempt.endpoint, attempt.method,
+                 dict(attempt.query_parameters), dict(attempt.body)]
+                for attempt in collection.attempts
+            ],
             "deliveries": [
                 [delivery.posting.external_id,
                  evidence_store.content_digest(delivery.posting.raw_payload),
@@ -325,23 +347,260 @@ def test_brightdata_handoff_records_the_provider_execution_and_no_coverage(db):
         assert stored_plan.requested_fields == plan.requested_fields
         assert stored_plan.declared_caps == {"limit_per_input": 10}
 
-        execution = session.scalars(select(RawArtifact).where(
-            RawArtifact.representation_version == "provider-execution-v1",
-        )).one()
-        recorded_execution = execution.representation["execution"]
-        assert execution.collection_run_id == run_id
-        assert execution.representation["request_digest"] == evidence_store.content_digest(
-            collection.submitted_request)
-        assert recorded_execution["submit"]["http_status"] == 202
-        assert recorded_execution["submit"]["retry_after_seconds"] == 30
-        assert recorded_execution["submit"]["snapshot_id"] == recorded.SNAPSHOT_ID
-        assert recorded_execution["progress"][0]["status"] == "ready"
-        assert recorded_execution["download"]["http_status"] == 200
-        assert recorded_execution["cap_reached"] is True
-        assert execution.retention_until is not None
         assert count(session, CleanJob) == 0
         assert count(session, RawObservation) == 10
         assert count(session, NormalizationResult) == 10
+
+
+def test_every_request_attempt_is_a_first_class_record(db):
+    """The submitted request and the provider's account of it are two records a row."""
+    from src.services.ingestion.plans import build_shadow_plan
+    from src.services.ingestion.sources.brightdata import (
+        SOURCE_ID, record_shadow_collection,
+    )
+    from tests.services.ingestion import brightdata_fixtures as recorded
+
+    plan = build_shadow_plan(SOURCE_ID)
+    run_id = record_shadow_collection(
+        plan, _brightdata_run(plan, recorded.handoff_run()), run_key="brightdata-requests",
+        retention_until=datetime.now(UTC) + timedelta(days=1),
+    )
+
+    with db() as session:
+        # One row per request attempt, keyed and ordered, rather than one document
+        # per run: the submit, the single progress poll, and the download.
+        requests = session.scalars(select(CollectionRequestBody).where(
+            CollectionRequestBody.collection_run_id == run_id,
+        ).order_by(CollectionRequestBody.request_ordinal)).all()
+        assert [row.request_ordinal for row in requests] == [1, 2, 3]
+        assert [row.endpoint_name for row in requests] == ["submit", "progress", "snapshot"]
+        assert all(row.adapter_id == "brightdata-linkedin-jobs-v1" for row in requests)
+        assert [row.method for row in requests] == ["POST", "GET", "GET"]
+        assert all(row.attempt_number == 1 for row in requests)
+
+        submit, progress, download = requests
+        # Every endpoint resolves from the executed plan's declared set, which the
+        # writer re-renders rather than trusting.
+        assert submit.endpoint == plan.endpoints["submit"]
+        assert progress.endpoint == plan.endpoints["progress"].format(
+            snapshot_id=recorded.SNAPSHOT_ID)
+        assert progress.path_parameters == {"snapshot_id": recorded.SNAPSHOT_ID}
+        assert download.endpoint == plan.endpoints["snapshot"].format(
+            snapshot_id=recorded.SNAPSHOT_ID)
+
+        # The body is stored exactly as it was submitted, with omitted parameters
+        # absent rather than rendered back as empty strings by a provider echo.
+        assert submit.body == plan.scope["request_body"]
+        assert "job_type" not in submit.body["input"][0]
+        assert submit.body_digest == evidence_store.content_digest(submit.body)
+        assert submit.query_parameters["dataset_id"] == recorded.DATASET_ID
+        # A follow-up GET carries no body, and the stored row says so rather than
+        # leaving it absent.
+        assert progress.body == {} and download.body == {}
+        assert progress.body_digest == evidence_store.content_digest({})
+
+        # The plan's declarations travel on the row, so one row is self-describing,
+        # and a credential is referenced by name and never by value.
+        for row in requests:
+            assert row.declared_caps == plan.caps
+            assert row.requested_fields == plan.requested_fields
+            assert row.sent_at.tzinfo is not None
+        assert submit.credential_env == "BRIGHTDATA_API_KEY"
+        assert progress.credential_env is None
+
+        executions = session.scalars(select(CollectionRequestExecution).where(
+            CollectionRequestExecution.collection_run_id == run_id,
+        ).order_by(CollectionRequestExecution.request_body_id)).all()
+        assert len(executions) == len(requests)
+        # The handoff, the progress envelope, and the terminal delivery are readable
+        # per attempt, and each is the provider's account of running one request.
+        handoff, poll, delivered = executions
+        assert handoff.http_status == 202 and handoff.transport_error is None
+        assert handoff.response_digest
+        assert handoff.provider_facts["snapshot_id"] == recorded.SNAPSHOT_ID
+        assert handoff.provider_facts["delivery"] == "snapshot"
+        assert handoff.provider_facts["retry_after_seconds"] == 30
+        assert handoff.provider_facts["retry_after_source"] == "provider"
+        assert handoff.provider_facts["waited_seconds"] == 30
+        assert poll.http_status == 200
+        assert poll.provider_facts == {
+            "poll": 1, "status": "ready", "terminal": True, "records": 10, "errors": 0,
+            "schema_drift": False,
+        }
+        assert delivered.http_status == 200
+        assert delivered.provider_facts == {"records": 10, "shape": "array_of_objects"}
+        assert all(row.observed_at.tzinfo is not None for row in executions)
+
+        # No execution row echoes the request: the account of a response is never
+        # the request that produced it.
+        assert "discovery_input" not in json.dumps(
+            [row.provider_facts for row in executions], ensure_ascii=False)
+
+
+def test_the_retired_execution_representation_stays_readable_and_is_not_written_again(db):
+    """`provider-execution-v1` rows already written survive; no run adds another."""
+    from src.services.ingestion.plans import build_shadow_plan
+    from src.services.ingestion.sources.brightdata import (
+        SOURCE_ID, record_shadow_collection,
+    )
+    from tests.services.ingestion import brightdata_fixtures as recorded
+
+    plan = build_shadow_plan(SOURCE_ID)
+    run_id = record_shadow_collection(
+        plan, _brightdata_run(plan, recorded.handoff_run()), run_key="brightdata-retired",
+        retention_until=datetime.now(UTC) + timedelta(days=1),
+    )
+    with db() as session:
+        representations = {row.representation_version for row in session.scalars(
+            select(RawArtifact).where(RawArtifact.collection_run_id == run_id)
+        ).all()}
+        # The provider's execution trace is no longer a retained representation of a
+        # retrieval, so it no longer lands in `raw_artifacts` at all.
+        assert representations == {"synthetic-json-v1"}
+        assert count(session, RawArtifact) == 10
+
+        # A row written under the retired representation is left exactly as it is.
+        # `raw_artifacts` is append-only, so it could not have been rewritten anyway,
+        # and that is the reason the retirement stops at "stops being written".
+        legacy = {
+            "record": "provider-execution",
+            "request_digest": evidence_store.content_digest({"method": "POST"}),
+            "execution": {"submit": {"http_status": 202},
+                          "observed_at": recorded.OBSERVED_AT.isoformat()},
+        }
+        now = datetime.now(UTC)
+        session.add(RawArtifact(
+            collection_run_id=run_id, content_digest=evidence_store.content_digest(legacy),
+            representation_version="provider-execution-v1", media_type="application/json",
+            byte_length=1, storage_locator="in-row", representation=legacy, acquired_at=now,
+            retention_disposition="retained_full", retention_until=now + timedelta(days=1),
+            authorization_revision="synthetic:legacy", redaction_rules=None, created_at=now,
+        ))
+        session.commit()
+
+    with db() as session:
+        readable = session.scalars(select(RawArtifact).where(
+            RawArtifact.representation_version == "provider-execution-v1",
+        )).all()
+        assert len(readable) == 1
+        assert readable[0].representation == legacy
+        # And a fresh run of the same shape still adds none.
+        record_shadow_collection(
+            plan, _brightdata_run(plan, recorded.handoff_run()), run_key="brightdata-retired-2",
+            retention_until=datetime.now(UTC) + timedelta(days=1),
+        )
+    with db() as session:
+        assert count(session, CollectionRequestBody) == 6
+
+
+def test_a_transport_failure_still_records_an_attempt_and_its_execution(db):
+    from src.services.ingestion.plans import build_shadow_plan
+    from src.services.ingestion.sources.brightdata import (
+        SOURCE_ID, BrightDataSource, record_shadow_collection,
+    )
+    from tests.services.ingestion import brightdata_fixtures as recorded
+
+    plan = build_shadow_plan(SOURCE_ID)
+
+    def fail(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("synthetic transport failure", request=_request)
+
+    collection = BrightDataSource(
+        plan, client=httpx.Client(transport=httpx.MockTransport(fail)),
+        sleep=lambda _seconds: None, clock=lambda: recorded.OBSERVED_AT,
+    ).collect()
+    run_id = record_shadow_collection(
+        plan, collection, run_key="brightdata-transport",
+        retention_until=datetime.now(UTC) + timedelta(days=1),
+    )
+
+    with db() as session:
+        run = session.get(CollectionRun, run_id)
+        assert run.outcome == "failed" and run.failure_category == "transport_error"
+        assert run.observed_record_count == 0 and run.request_count == 1
+        # The attempt happened, so both its records exist even though nothing came
+        # back, and the response account names the failure instead of a status.
+        request = session.scalar(select(CollectionRequestBody))
+        execution = session.scalar(select(CollectionRequestExecution))
+        assert request.collection_run_id == run_id and request.request_ordinal == 1
+        assert execution.request_body_id == request.id
+        assert execution.http_status is None
+        assert execution.transport_error == "ConnectError"
+        assert execution.response_digest
+
+
+def test_a_run_whose_request_counter_disagrees_with_its_records_is_refused(db, plan):
+    """The counter and the rows that record those requests are one count, stated twice."""
+    attempts = (_attempt(plan), _attempt(plan, request_ordinal=2))
+    with pytest.raises(ValueError, match="the counter and the request records have to be"):
+        write(plan, [], run_key="miscounted", request_count=5,
+              run_evidence=evidence_store.RunEvidence(requests=attempts))
+    write(plan, [], run_key="counted", request_count=2,
+          run_evidence=evidence_store.RunEvidence(requests=attempts))
+    with db() as session:
+        assert count(session, CollectionRequestBody) == 2
+        assert session.get(CollectionRun, 1).request_count == 2
+def test_a_request_naming_an_undeclared_endpoint_is_refused(db, plan):
+    """The blueprint's endpoint rule, enforced by the writer rather than the adapter."""
+    attempt = _attempt(plan, endpoint_name="not-declared")
+    with pytest.raises(ValueError, match="which the executed plan does not declare"):
+        write(plan, [], run_key="undeclared-endpoint",
+              run_evidence=evidence_store.RunEvidence(requests=(attempt,)))
+    with db() as session:
+        assert count(session, CollectionRun) == 0
+        assert count(session, CollectionRequestBody) == 0
+
+
+def test_an_address_the_plan_does_not_render_to_is_refused(db):
+    plan = evidence_store.ShadowPlan(
+        source_id="vietnamworks", version="synthetic-v1",
+        scope={"queries": ["data engineer"], "pages": [0]}, caps={"max_jobs": 150},
+        requested_fields={"jobId": "listing key"}, completion_rule="terminal_page_observed",
+        endpoints={"search": "https://api.example.test/scrape/{job_id}"},
+        retrieval_precision="second", authorization_revision="synthetic:fixture-only",
+    )
+    rendered = "https://api.example.test/scrape/7"
+
+    # A provider redirect, a cursor, or a hand-edited row could all name an address the
+    # plan's own template does not render to. Retaining one would be evidence nobody
+    # could check against the plan, so the run is refused instead.
+    with pytest.raises(ValueError, match="which is not the declared"):
+        write(plan, [], run_key="mismatched-endpoint", run_evidence=evidence_store.RunEvidence(
+            requests=(_attempt(plan, endpoint=f"{rendered}?page=2",
+                               path_parameters={"job_id": "7"}),)))
+    with pytest.raises(ValueError, match="cannot render the declared"):
+        write(plan, [], run_key="unrenderable-endpoint", run_evidence=evidence_store.RunEvidence(
+            requests=(_attempt(plan, endpoint=rendered),)))
+    # The address the declared template does render to is the one that gets stored.
+    write(plan, [], run_key="rendered-endpoint", run_evidence=evidence_store.RunEvidence(
+        requests=(_attempt(plan, endpoint=rendered, path_parameters={"job_id": "7"}),)))
+    with db() as session:
+        stored = session.scalars(select(CollectionRequestBody)).all()
+        assert [row.endpoint for row in stored] == [rendered]
+
+
+def test_a_credential_is_stored_only_as_a_named_location(db, plan):
+    """The retained request says where a credential comes from and never carries it.
+
+    Two separate guarantees, and only the second is the database's. A retained
+    request has no header column at all, so there is nowhere for a credential to
+    land; what the database enforces is the other half, that the credential is
+    referenced by a location and not by a value.
+    """
+    attempt = _attempt(plan, credential_env="FIXTURE_API_KEY")
+    assert attempt.credential_env == "FIXTURE_API_KEY"
+    assert not hasattr(CollectionRequestBody, "headers")
+    with pytest.raises(ValueError, match="must name a secret location, never a value"):
+        replace(attempt, credential_env="Bearer sk-not-a-location")
+
+    write(plan, [], run_key="credential-location",
+          run_evidence=evidence_store.RunEvidence(requests=(attempt,)))
+    with pytest.raises(DBAPIError, match="ck_collection_request_bodies_credential"):
+        with db() as session:
+            stored = session.scalar(select(CollectionRequestBody))
+            assert stored.credential_env == "FIXTURE_API_KEY"
+            stored.credential_env = "Bearer sk-not-a-location"
+            session.commit()
 
 
 def test_brightdata_country_stays_null_and_is_never_filled_from_the_request(db):
@@ -454,7 +713,10 @@ def test_brightdata_evidence_is_idempotent_per_run_key(db):
     with db() as session:
         assert count(session, CollectionRun) == 1
         assert count(session, RawObservation) == 10
-        assert count(session, RawArtifact) == 11  # ten records plus the execution record
+        # Ten retained records, and no run-level execution document any more.
+        assert count(session, RawArtifact) == 10
+        assert count(session, CollectionRequestBody) == 3
+        assert count(session, CollectionRequestExecution) == 3
 
 
 def test_brightdata_empty_and_failed_runs_record_no_completion(db):

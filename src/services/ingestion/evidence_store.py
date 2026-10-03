@@ -4,16 +4,17 @@ The public entry point is deliberately not wired into the production loader. A
 real source requires a reviewed G2 retention boundary before this path can be
 activated; fixtures can exercise the contract against a disposable database.
 
-An adapter may attach `RunEvidence` to a run: the request it actually submitted,
-the provider's account of running it, and the weakest outcome and coverage the run
-may record. Everything else in a run is derived here, so an adapter cannot widen
-what a run claims.
+An adapter may attach `RunEvidence` to a run: every request attempt it issued,
+the provider's account of running each one, and the weakest outcome and coverage
+the run may record. Everything else in a run is derived here, so an adapter cannot
+widen what a run claims.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
@@ -24,6 +25,8 @@ from sqlalchemy import select
 from src.core.db import session_factory
 from src.services.ingestion.models import (
     CollectionPlan,
+    CollectionRequestBody,
+    CollectionRequestExecution,
     CollectionRun,
     DuplicateDelivery,
     FieldProvenance,
@@ -46,6 +49,38 @@ RECORD_CAP_RULE = (
     "the source returned; a request parameter that merely travels in the body belongs in the body"
 )
 
+# A named secret location, never a value. No credential is ever part of a retained
+# request, so the location is the only thing that may be stored and it has a shape a
+# credential does not. Declared once because the plan boundary and the stored record
+# both have to refuse the same thing the same way.
+SECRET_LOCATION = re.compile(r"\A[A-Z][A-Z0-9_]*\Z")
+
+
+class UnstorableRequestError(ValueError):
+    """Raised when a request body cannot be retained, and so must not be sent."""
+
+
+def stored_request_digest(body: Mapping) -> str:
+    """Digest a request body, refusing one that could never be stored.
+
+    Digesting is how a request row is written, so it is also how a body is proved
+    storable: a value that cannot be canonically encoded as JSON cannot be
+    retained. An adapter calls this before sending, because a request whose body
+    cannot be stored is not sent at all; the writer calls it again while writing,
+    so a run that somehow reached the store without the pre-send check still
+    refuses to retain it.
+    """
+    if not isinstance(body, Mapping):
+        raise UnstorableRequestError(
+            f"a request body must be a mapping, not {type(body).__name__}"
+        )
+    try:
+        return content_digest(dict(body))
+    except (TypeError, ValueError) as error:
+        raise UnstorableRequestError(
+            f"a request body cannot be stored as JSON: {error}"
+        ) from error
+
 
 @dataclass(frozen=True)
 class ShadowPlan:
@@ -61,15 +96,105 @@ class ShadowPlan:
 
 
 @dataclass(frozen=True)
+class RequestAttempt:
+    """One request attempt: what this project issued, and what came back.
+
+    The two halves are separate facts and are written to separate records.
+
+    The request half is captured before the send. It is never reconstructed from a
+    provider echo, a redirect, or a retry log, and an omitted parameter stays
+    absent rather than arriving back as the empty string a provider echo would
+    render it as. The execution half is what the provider observably returned for
+    that one request.
+
+    They travel in one value because the adapter knows both at the moment it
+    sends, and they are stored apart because the echo of a submitted request is not
+    the submitted request. One attempt per row means a retry, a second discovery
+    input, or a second submit inside one run is its own record with its own
+    ordinal, not a list entry inside a single run-level document.
+
+    `endpoint_name` names the entry in the executed plan's `declared_endpoint_set`
+    that `endpoint` was rendered from, and `path_parameters` is what renders it.
+    Carrying both is what lets the writer check the endpoint against the plan
+    rather than taking the adapter's word for it.
+
+    Exactly one of `http_status` and `transport_error` is set. A transport failure
+    produced no response at all, so recording a status for it would invent one,
+    and recording neither would make it indistinguishable from an attempt that
+    never happened.
+    """
+
+    request_ordinal: int
+    attempt_number: int
+    adapter_id: str
+    endpoint_name: str
+    endpoint: str
+    method: str
+    path_parameters: dict
+    query_parameters: dict
+    body: dict
+    sent_at: datetime
+    observed_at: datetime
+    response_digest: str
+    provider_facts: dict
+    credential_env: str | None = None
+    http_status: int | None = None
+    transport_error: str | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("request_ordinal", "attempt_number"):
+            value = getattr(self, name)
+            if type(value) is not int or value < 1:
+                raise ValueError(f"{name} counts from 1, got {value!r}")
+        for name in ("adapter_id", "endpoint_name", "endpoint", "method", "response_digest"):
+            if not isinstance(getattr(self, name), str) or not getattr(self, name).strip():
+                raise ValueError(f"a request attempt must record a {name}")
+        for name in ("path_parameters", "query_parameters", "body", "provider_facts"):
+            if not isinstance(getattr(self, name), Mapping):
+                raise ValueError(f"a request attempt needs a {name} mapping")
+        for name in ("sent_at", "observed_at"):
+            value = getattr(self, name)
+            if not isinstance(value, datetime) or value.tzinfo is None:
+                raise ValueError(f"{name} must be a timezone-aware instant")
+        if not isinstance(self.http_status, int) and self.http_status is not None:
+            raise ValueError("an http_status is an integer or absent")
+        if (self.http_status is None) == (self.transport_error is None):
+            raise ValueError(
+                "exactly one of http_status and transport_error must be set: a response "
+                "carries a status and no transport failure, and a transport failure "
+                "carries neither"
+            )
+        if self.credential_env is not None and not SECRET_LOCATION.match(self.credential_env):
+            # A named secret location has the shape of an environment variable
+            # name. Anything else is a credential value, and a retained request is
+            # not a place to keep one.
+            raise ValueError("credential_env must name a secret location, never a value")
+
+    def note(self, **facts: object) -> None:
+        """Record what one response carried, after that response was read.
+
+        A fact is added once and never replaced. A provider cannot say two
+        different things about a single response, so a second write that disagreed
+        would mean the first was wrong, and that is a run failure to be surfaced
+        rather than a value to overwrite in place.
+
+        Nothing here may reconstruct the request from the response. The request
+        half is already fixed, and letting a response write into it is exactly how
+        an echo would stop being an echo.
+        """
+        for key, value in facts.items():
+            if key in self.provider_facts:
+                raise ValueError(f"request attempt already recorded {key!r}")
+            self.provider_facts[key] = value
+
+
+@dataclass(frozen=True)
 class RunEvidence:
     """Run-level facts that only the adapter can supply.
 
-    `submitted_request` is the request exactly as submitted, before it was sent.
-    It is never reconstructed from a provider echo, a redirect, or a retry log.
-    `provider_execution` is what the provider reported while running it: the
-    immediate response, every declared progress transition, and the terminal
-    delivery. The two are kept apart on purpose, because the echo of a submitted
-    request is not the submitted request.
+    `requests` is every request attempt the run issued, numbered from one without
+    gaps so a reader can walk the run in the order it happened. It is the only
+    place a submitted request lives.
 
     `coverage_result` and `outcome` are the weakest claim an adapter may record.
     Neither may read "complete": only the declared terminal condition may do
@@ -77,16 +202,23 @@ class RunEvidence:
     one.
     """
 
-    submitted_request: dict
-    provider_execution: dict
+    requests: tuple[RequestAttempt, ...]
     coverage_result: str = "unknown"
     outcome: str = "incomplete"
 
     def __post_init__(self) -> None:
-        if not isinstance(self.submitted_request, Mapping) or not self.submitted_request:
-            raise ValueError("a run must record the request it actually submitted")
-        if not isinstance(self.provider_execution, Mapping) or not self.provider_execution:
-            raise ValueError("a run must record the provider execution it observed")
+        if not isinstance(self.requests, tuple) or not self.requests:
+            raise ValueError("a run must record the requests it actually issued")
+        for request in self.requests:
+            if not isinstance(request, RequestAttempt):
+                raise ValueError("run evidence carries request attempts and nothing else")
+        ordinals = [request.request_ordinal for request in self.requests]
+        if ordinals != list(range(1, len(ordinals) + 1)):
+            # A gap or a repeat makes two requests indistinguishable in the record,
+            # and a run nobody can read in order is not evidence of what it sent.
+            raise ValueError(
+                f"request attempts are numbered {ordinals}, which is not a run from 1 without gaps"
+            )
         if self.coverage_result not in ("partial", "unknown"):
             raise ValueError("an adapter may only weaken the coverage a run records")
         if self.outcome not in ("incomplete", "failed", "authorization_blocked", "aborted"):
@@ -241,49 +373,90 @@ def _undeclared_sources(
     return undeclared
 
 
-def _observed_at(execution: Mapping) -> datetime:
-    value = execution.get("observed_at")
-    if isinstance(value, str):
-        try:
-            value = datetime.fromisoformat(value)
-        except ValueError as error:
-            raise ValueError("provider execution observed_at is not an ISO timestamp") from error
-    if not isinstance(value, datetime) or value.tzinfo is None:
-        raise ValueError("the provider execution record needs a timezone-aware observed_at")
-    return value
+def _declared_endpoint(plan: ShadowPlan, request: RequestAttempt) -> str:
+    """The declared endpoint a request resolves from, or a refusal to store the run.
 
+    The rule the request-body record exists for is that a request may only address
+    an endpoint in the executed plan's declared set, so this is a re-render of the
+    named template using the parameters the attempt recorded. A request naming an
+    endpoint the plan does not declare, or one whose address is not what that
+    template renders to, aborts the run here rather than becoming evidence that
+    cannot be checked against the plan.
 
-def _record_provider_execution(
-    session, run: CollectionRun, plan: ShadowPlan, evidence: RunEvidence,
-    retention_until: datetime, now: datetime,
-) -> RawArtifact:
-    """Retain the provider's execution envelopes as one run-level artifact.
-
-    The handoff, the progress transitions, and the terminal delivery are the
-    provider's account of how it ran the request, not a listing, so the
-    artifact gets no observation row. The submitted request is not restated
-    here: it is digested in the run's `input_digest` and referenced by digest,
-    which keeps the echo and the request from ever merging into one record.
+    Deriving it in the writer rather than trusting the adapter is the point: the
+    adapter that built the URL is exactly the component whose construction of it
+    would be in question.
     """
-    observed_at = _observed_at(evidence.provider_execution)
-    representation = {
-        "record": "provider-execution",
-        "request_digest": content_digest(dict(evidence.submitted_request)),
-        "execution": deepcopy(dict(evidence.provider_execution)),
-    }
-    artifact = RawArtifact(
-        collection_run_id=run.id, content_digest=content_digest(representation),
-        representation_version="provider-execution-v1", media_type="application/json",
-        byte_length=len(_bytes(representation)), storage_locator="in-row",
-        representation=representation,
-        acquired_at=_retrieved_at(observed_at, plan.retrieval_precision),
-        retention_disposition="retained_full", retention_until=retention_until,
-        authorization_revision=plan.authorization_revision, redaction_rules=None,
-        created_at=now,
-    )
-    session.add(artifact)
-    session.flush()
-    return artifact
+    template = plan.endpoints.get(request.endpoint_name)
+    if not isinstance(template, str) or not template:
+        raise ValueError(
+            f"request {request.request_ordinal} addresses {request.endpoint_name!r}, which the "
+            f"executed plan does not declare; declared endpoints are {sorted(plan.endpoints)}"
+        )
+    try:
+        rendered = template.format(**dict(request.path_parameters))
+    except (IndexError, KeyError) as error:
+        raise ValueError(
+            f"request {request.request_ordinal} cannot render the declared "
+            f"{request.endpoint_name!r} endpoint {template!r} from "
+            f"{sorted(request.path_parameters)}"
+        ) from error
+    if rendered != request.endpoint:
+        raise ValueError(
+            f"request {request.request_ordinal} addressed {request.endpoint!r}, which is not the "
+            f"declared {request.endpoint_name!r} endpoint {template!r} rendered to {rendered!r}"
+        )
+    return request.endpoint
+
+
+def _record_request_attempts(
+    session, run: CollectionRun, plan: ShadowPlan, requests: tuple[RequestAttempt, ...], now: datetime,
+) -> None:
+    """Store every request attempt and the provider's account of it, as two records.
+
+    The submitted request and the response it produced are separate rows, so a
+    reader can answer "what did this project ask for" without reading provider
+    output, and each attempt in a multi-request run is its own walkable row rather
+    than a list entry inside one document.
+
+    Neither row carries a `raw_observations` sibling: the handoff, the progress
+    envelopes, and the terminal delivery observe no listing, and the provider's
+    accounts of running a request are not retained representations of a retrieval.
+    """
+    for request in requests:
+        endpoint = _declared_endpoint(plan, request)
+        body = deepcopy(dict(request.body))
+        row = CollectionRequestBody(
+            collection_run_id=run.id,
+            request_ordinal=request.request_ordinal,
+            attempt_number=request.attempt_number,
+            adapter_id=request.adapter_id,
+            method=request.method,
+            endpoint_name=request.endpoint_name,
+            endpoint=endpoint,
+            path_parameters=deepcopy(dict(request.path_parameters)),
+            query_parameters=deepcopy(dict(request.query_parameters)),
+            body=body,
+            body_digest=stored_request_digest(body),
+            credential_env=request.credential_env,
+            declared_caps=deepcopy(dict(plan.caps)),
+            requested_fields=deepcopy(dict(plan.requested_fields)),
+            sent_at=_retrieved_at(request.sent_at, plan.retrieval_precision),
+            created_at=now,
+        )
+        session.add(row)
+        session.flush()
+        session.add(CollectionRequestExecution(
+            collection_run_id=run.id,
+            request_body_id=row.id,
+            http_status=request.http_status,
+            transport_error=request.transport_error,
+            response_digest=request.response_digest,
+            observed_at=_retrieved_at(request.observed_at, plan.retrieval_precision),
+            provider_facts=deepcopy(dict(request.provider_facts)),
+            created_at=now,
+        ))
+        session.flush()
 
 
 def _structural_defaults(values: dict | None, paths: ProvenancePaths) -> list[str]:
@@ -382,9 +555,11 @@ def write_shadow_run(
     adapter must attest its declared terminal condition explicitly. Real
     collection is prohibited here until a separate G2-approved activation.
 
-    `run_evidence` carries what only the adapter knows: the request it actually
-    submitted, the provider's execution of it, and the weakest outcome and
-    coverage the run may record. Omitting it leaves today's behavior untouched.
+    `run_evidence` carries what only the adapter knows: every request it issued
+    with the provider's account of each one, and the weakest outcome and coverage
+    the run may record.
+    Omitting it records a run that issued no request and offers no account of any,
+    which is the shape a source with nothing to declare would take.
     """
     if not plan.authorization_revision.startswith("synthetic:"):
         raise ValueError("shadow evidence is restricted to synthetic fixtures until G2 approval")
@@ -407,11 +582,28 @@ def write_shadow_run(
     for delivery in deliveries:
         if delivery.posting.source != plan.source_id:
             raise ValueError("delivery source does not match declared plan")
-    # The run's input is what was asked for and what came back. The submitted
-    # request is part of it, so the digest covers the body this adapter sent
-    # rather than any echo of it.
+    # The run's input is what was asked for and what came back. Every request the
+    # run issued is part of it, so the digest covers each request as it was
+    # submitted rather than an echo of one of them. The send times are deliberately
+    # excluded: they are wall clock, so including them would make two runs of the
+    # same plan with the same deliveries look like different evidence.
+    requests = run_evidence.requests if run_evidence else ()
+    if run_evidence is not None and request_count != len(requests):
+        # The run's own request counter and the rows that record those requests are
+        # two statements of the same count. A run that claims five requests and can
+        # show three is a run whose counter cannot be checked against its own
+        # evidence, and nothing else here would catch it.
+        raise ValueError(
+            f"a run records {request_count} requests but supplied {len(requests)} request "
+            "attempts: the counter and the request records have to be the same count"
+        )
     input_digest = content_digest({
-        "submitted_request": dict(run_evidence.submitted_request) if run_evidence else None,
+        "requests": [
+            [request.request_ordinal, request.attempt_number, request.adapter_id,
+             request.endpoint_name, request.endpoint, request.method,
+             dict(request.query_parameters), dict(request.body)]
+            for request in requests
+        ],
         "deliveries": [
             [delivery.posting.external_id, content_digest(delivery.posting.raw_payload),
              _retrieved_at(delivery.retrieved_at, plan.retrieval_precision).isoformat(),
@@ -470,7 +662,7 @@ def write_shadow_run(
         session.add(run)
         session.flush()
         if run_evidence is not None:
-            _record_provider_execution(session, run, plan, run_evidence, retention_until, now)
+            _record_request_attempts(session, run, plan, run_evidence.requests, now)
         local_keys: dict[str, int] = {}
         for delivery in deliveries:
             payload = delivery.posting.raw_payload

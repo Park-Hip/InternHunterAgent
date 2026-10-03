@@ -74,7 +74,7 @@ def test_baseline_upgrade_matches_metadata():
         rows = conn.execute(text("SELECT version_num FROM alembic_version")).fetchall()
 
     assert len(rows) == 1
-    assert rows[0][0] == "e51a8c07d942"
+    assert rows[0][0] == "a41d7c93be05"
     assert {index["name"] for index in inspector.get_indexes("ingestion_runs")} == {
         "ix_ingestion_runs_finished_at",
         "ix_ingestion_runs_source_started_at",
@@ -93,13 +93,45 @@ def test_baseline_upgrade_matches_metadata():
             "('fixture', 'v1', '{}', '{}', '{}', 'terminal', '{}', 'second', "
             "'synthetic:fixture', 'digest', now()) RETURNING id"
         )).scalar_one()
-    for statement in (
-        "UPDATE collection_plans SET plan_version = 'v2' WHERE id = :id",
-        "DELETE FROM collection_plans WHERE id = :id",
+        run_id = conn.execute(text(
+            "INSERT INTO collection_runs "
+            "(plan_id, idempotency_key, run_kind, started_at, finished_at, outcome, "
+            "coverage_result, observed_record_count, declared_scope_digest, request_count, "
+            "failure_category, configuration_digest, input_digest, created_at) VALUES "
+            "(:plan_id, 'fixture-run', 'manual', now(), now(), 'failed', 'unknown', 0, "
+            "'scope', 1, 'page_failed', 'config', 'input', now()) RETURNING id"
+        ), {"plan_id": plan_id}).scalar_one()
+        request_id = conn.execute(text(
+            "INSERT INTO collection_request_bodies "
+            "(collection_run_id, request_ordinal, attempt_number, adapter_id, method, "
+            "endpoint_name, endpoint, path_parameters, query_parameters, body, body_digest, "
+            "credential_env, declared_caps, requested_fields, sent_at, created_at) VALUES "
+            "(:run_id, 1, 1, 'fixture', 'POST', 'search', 'https://api.example.test/scrape', "
+            "'{}', '{}', '{}', 'digest', 'FIXTURE_KEY', '{}', '{}', now(), now()) "
+            "RETURNING id"
+        ), {"run_id": run_id}).scalar_one()
+        execution_id = conn.execute(text(
+            "INSERT INTO collection_request_executions "
+            "(collection_run_id, request_body_id, http_status, transport_error, "
+            "response_digest, observed_at, provider_facts, created_at) VALUES "
+            "(:run_id, :request_id, 202, NULL, 'digest', now(), '{}', now()) RETURNING id"
+        ), {"run_id": run_id, "request_id": request_id}).scalar_one()
+
+    # Every evidence table refuses to be rewritten, not only the plans table: a
+    # submitted request or a provider execution that can be edited after the fact is
+    # not evidence of anything.
+    for table, key in (
+        ("collection_plans", plan_id),
+        ("collection_request_bodies", request_id),
+        ("collection_request_executions", execution_id),
     ):
-        with pytest.raises(DBAPIError, match="append-only"):
-            with engine.begin() as conn:
-                conn.execute(text(statement), {"id": plan_id})
+        for statement in (
+            f"UPDATE {table} SET created_at = created_at WHERE id = :id",
+            f"DELETE FROM {table} WHERE id = :id",
+        ):
+            with pytest.raises(DBAPIError, match="append-only"):
+                with engine.begin() as conn:
+                    conn.execute(text(statement), {"id": key})
 
     command.downgrade(alembic_cfg, "c9d3e6f7a2b1")
     for evidence_table in reversed(APPEND_ONLY_EVIDENCE_TABLES):

@@ -105,6 +105,7 @@ Where this section and the prose below both state something, this section wins.
 | `normalization_results` | Yes | G5 and the quarantine outcome live here. |
 | Field-level provenance | Yes | G5 is required per populated field, not per result. |
 | Request bodies | Yes, with the adapter | Without it there is no statement of what was actually asked for. |
+| Provider execution traces | Yes, with the adapter | A run issues several requests, and one document per run cannot say what happened to each of them. It observes no listing, so it is not a `raw_artifact`. |
 | `sources` | No | The source identifier is carried on the plan and the run in the minimum. |
 | `source_authorizations` | No | The register answers G1 in prose until this record exists. Deferral D1. |
 | `collection_run_scopes` | No | The declared scope is carried as digestable fields on the plan and the run in the minimum. Deferral D1. |
@@ -336,10 +337,77 @@ submitted as empty and looked authoritative while destroying the distinction.
 | `endpoint` | `text` | yes | Must resolve to a value in the executed plan's `declared_endpoint_set`. A request to an undeclared endpoint aborts the run. |
 | `body` | `jsonb` | yes | The body as submitted, with omitted parameters absent. |
 | `body_digest` | `text` | yes | Digest of the submitted body. |
-| `declared_caps` | `jsonb` | yes | The caps this request carried, copied from the plan. |
-| `requested_fields` | `jsonb` | yes | The field selector this request carried, copied from the plan. |
+| `declared_caps` | `jsonb` | yes | The plan's declared caps, copied from the executed plan. |
+| `requested_fields` | `jsonb` | yes | The plan's requested field map, copied from the executed plan. |
 | `sent_at` | `timestamptz` | yes | When the request was sent. |
 | `created_at` | `timestamptz` | yes | Creation time. |
+
+The three columns added by [slice 2](https://github.com/Park-Hip/InternHunterAgent/issues/501) are
+`endpoint_name`, `path_parameters`, and `query_parameters`.
+Each exists because a real Bright Data run issues more than one request, which the table above was
+written before anyone measured.
+
+| Column | Type | Required | Definition |
+| --- | --- | --- | --- |
+| `endpoint_name` | `text` | yes | The key in the executed plan's `declared_endpoint_set` that `endpoint` was rendered from. |
+| `path_parameters` | `jsonb` | yes | The values that render `endpoint` from that template. |
+| `query_parameters` | `jsonb` | yes | The query string as submitted. The plan declares filters there as well as in the body. |
+
+Storing `endpoint_name` together with `path_parameters` is what makes the endpoint rule checkable
+by a reader rather than a property of the adapter that built the URL: the writer re-renders the
+named template and refuses the run if the address does not match.
+`query_parameters` exists because a filter the plan declares on the query string is part of what
+was asked for, and a body column cannot hold it.
+
+`declared_caps` and `requested_fields` restate the executed plan's declarations on every request
+row, so a single row is self-describing.
+What one particular request carried is in that row's own `body` and `query_parameters`; a follow-up
+poll carries neither and its body is an empty object rather than an absent fact.
+
+### Provider execution trace
+
+The handoff, the progress envelopes, and the terminal delivery are the provider's account of
+*running* a request, not a retained representation of a retrieval, so they do not belong in
+`raw_artifacts` and they carry no `raw_observations` row.
+They get their own record, one row per stored request, referenced by key.
+
+| Column | Type | Required | Definition |
+| --- | --- | --- | --- |
+| `id` | `bigint` | yes | Immutable surrogate identifier. |
+| `collection_run_id` | `bigint` | yes | The run the request belonged to. |
+| `request_body_id` | `bigint` | yes | The request this answers. Exactly one execution per request. |
+| `http_status` | `integer` | no | The status the provider returned. Absent when no response arrived. |
+| `transport_error` | `text` | no | The failure that replaced a response. Absent when one arrived. |
+| `response_digest` | `text` | yes | Digest of the response as read. |
+| `observed_at` | `timestamptz` | yes | When the response was read, floored to the plan's retrieval precision. |
+| `provider_facts` | `jsonb` | yes | The declared facts that one envelope carried. |
+| `created_at` | `timestamptz` | yes | Creation time. |
+
+`http_status` and `transport_error` are mutually exclusive and one of them is always present.
+A transport failure produced no response at all, so recording a status for it would invent one,
+and recording neither would make an attempt that failed indistinguishable from an attempt that
+never happened.
+
+`provider_facts` states only what the envelope carried.
+A key the provider omitted is absent rather than null or zero, because a provider that omits a
+count is asserting nothing about it and recording an absence as a claim of zero is the one thing
+an omitted key must never become.
+The two facts that are statements about this project's own reading of the envelope, rather than
+about the envelope, are always stated so a reader can see they were checked: `terminal` against the
+plan's declared states, and `schema_drift` against the same vocabulary.
+A delay is recorded with where it came from, because a `retry-after` the provider sent and a delay
+the plan guessed are the same number and not the same fact.
+
+The two records are separate because the echo of a submitted request is not the submitted request.
+A reader who wants to know what this project asked for reads `collection_request_bodies` and reads
+no provider output at all.
+
+The run-level facts that used to sit in a single execution document are not lost, and none of them
+is stored twice: the observed count and the declared cap are columns on `collection_runs` and
+saturation is derived from the two; the outcome and the failure category are columns on
+`collection_runs`; the instant the run submitted its first request is that request's `sent_at`; the
+snapshot identifier, the retry delay, and each wait belong to the response that produced them and
+are stated on that response's row.
 
 ### Lifecycle attribution
 
@@ -369,12 +437,18 @@ would expose.
 | `collection_plans`, `collection_runs`, `raw_artifacts`, `raw_observations`, `normalization_results` | Added | Reused unchanged |
 | Field-level provenance | Added | Reused unchanged |
 | `collection_request_bodies` | Not added | Added |
+| `collection_request_executions` | Not added | Added |
 | `raw_jobs`, `clean_jobs` | Unchanged | Unchanged |
 
 The request-body record lands with the adapter because it answers a provider-specific question: what
 did this adapter actually ask for.
 The VietnamWorks plan is fully described by its plan version, so the first slice has nothing to
 record that the plan does not already carry.
+
+The execution record lands with it for the same reason and because it cannot live anywhere else.
+A run that issues several requests needs one row per request, and one document per run cannot
+express that: a retry, a second discovery input, or a second submit would become a list entry inside
+one representation rather than a record with its own `request_ordinal` and `attempt_number`.
 
 ### What the minimum does not change
 

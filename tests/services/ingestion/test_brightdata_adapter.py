@@ -16,7 +16,7 @@ from typing import Any
 import httpx
 import pytest
 
-from src.services.ingestion.evidence_store import content_digest, declared_record_cap
+from src.services.ingestion.evidence_store import ShadowPlan, declared_record_cap
 from src.services.ingestion.normalize.brightdata import to_normalized_job
 from src.services.ingestion.plans import build_shadow_plan
 from src.services.ingestion.sources.brightdata import (
@@ -110,7 +110,9 @@ def test_inline_200_delivers_records_without_polling(plan):
     assert collection.request_count == 1
     assert collection.failure_category is None
     assert collection.outcome == "incomplete"
-    assert "progress" not in collection.execution and "download" not in collection.execution
+    # The inline branch issued exactly one request, so the run has exactly one
+    # attempt and no progress or download record could exist.
+    assert [attempt.endpoint_name for attempt in collection.attempts] == ["submit"]
     assert recorder.endpoints == [SUBMIT_URL]
 
 
@@ -123,27 +125,54 @@ def test_202_handoff_polls_then_downloads_and_records_every_transition(plan):
     assert collection.delivery == "snapshot"
     assert collection.snapshot_id == recorded.SNAPSHOT_ID
     assert collection.request_count == 5
-    transitions = collection.execution["progress"]
+    # Five requests, five attempts: the submit, one per declared progress state, and
+    # the download. None of them is an entry inside a run-level document.
+    assert [attempt.request_ordinal for attempt in collection.attempts] == [1, 2, 3, 4, 5]
+    assert [attempt.endpoint_name for attempt in collection.attempts] == [
+        "submit", "progress", "progress", "progress", "snapshot"]
+    submit, *polls, download = collection.attempts
     # Every declared state the provider reported is retained, in order, including the
     # two that are not terminal. Running is not readiness.
-    assert [step["status"] for step in transitions] == ["starting", "running", "ready"]
-    assert [step["poll"] for step in transitions] == [1, 2, 3]
-    assert transitions[-1]["records"] == 10 and transitions[-1]["errors"] == 0
-    assert collection.execution["submit"]["http_status"] == 202
-    assert collection.execution["submit"]["retry_after_seconds"] == recorded.HANDOFF_RETRY_AFTER_SECONDS
-    assert collection.execution["download"]["http_status"] == 200
+    assert [step.provider_facts["status"] for step in polls] == ["starting", "running", "ready"]
+    assert [step.provider_facts["poll"] for step in polls] == [1, 2, 3]
+    assert [step.provider_facts["schema_drift"] for step in polls] == [False] * 3
+    # Two of the three declared transitions are not terminal, and the row says so
+    # rather than leaving a reader to join the plan to find out.
+    assert [step.provider_facts["terminal"] for step in polls] == [False, False, True]
+    assert polls[-1].provider_facts["records"] == 10 and polls[-1].provider_facts["errors"] == 0
+    assert submit.http_status == 202
+    assert submit.provider_facts["retry_after_seconds"] == recorded.HANDOFF_RETRY_AFTER_SECONDS
+    # The delay was the provider's own, so the row says that rather than leaving it
+    # indistinguishable from a delay the plan guessed.
+    assert submit.provider_facts["retry_after_source"] == "provider"
+    assert download.http_status == 200
     # The provider's own retry-after is honored, once before the first poll and once
-    # before each further poll, and the waits add up to what the record says.
+    # before each further poll. Each wait is charged to the response that asked for
+    # it, so "this response cost thirty seconds" is readable without adding anything
+    # up, and the run's own total still adds up to what was actually paid.
     assert sleeps == [30.0, 30.0, 30.0]
-    assert collection.execution["waited_seconds"] == 90.0
+    assert [a.provider_facts["waited_seconds"] for a in (submit, *polls[:2])] == [30.0] * 3
     assert recorder.endpoints == [SUBMIT_URL, PROGRESS_URL, PROGRESS_URL, PROGRESS_URL, SNAPSHOT_URL]
+
+
+def test_a_delay_the_provider_never_announced_is_stated_as_the_plans(plan):
+    """A plan default must not be recorded as something the provider said."""
+    collection, _ = collect(plan, [
+        recorded.response(202, recorded.handoff_202()),
+        recorded.response(200, recorded.progress()),
+        recorded.response(200, recorded.snapshot_records()),
+    ])
+    submitted, progress, _ = collection.attempts
+    assert submitted.provider_facts["retry_after_seconds"] == plan.scope["default_retry_after_seconds"]
+    assert submitted.provider_facts["retry_after_source"] == "plan_default"
+    assert progress.provider_facts["terminal"] is True
 
 
 def test_handoff_is_not_announced_by_elapsed_time(plan):
     """A 202 below the documented one-minute limit is still a handoff."""
     collection, _ = collect(plan, recorded.handoff_run())
-    assert collection.execution["submit"]["http_status"] == 202
-    assert collection.execution["submitted_at"] == recorded.OBSERVED_AT.isoformat()
+    assert collection.attempts[0].http_status == 202
+    assert collection.attempts[0].sent_at == recorded.OBSERVED_AT
     assert collection.delivery == "snapshot"
 
 
@@ -198,14 +227,17 @@ def test_submitted_body_is_the_declared_body_not_the_provider_echo(plan):
 
 def test_retained_request_names_the_secret_location_and_no_secret(plan):
     collection, _ = collect(plan, recorded.inline_run())
-    record = collection.submitted_request
+    submitted = collection.attempts[0]
 
-    assert record["credential_env"] == "BRIGHTDATA_API_KEY"
-    assert record["method"] == "POST" and record["url"] == SUBMIT_URL
-    assert record["query"]["dataset_id"] == recorded.DATASET_ID
-    serialized = json.dumps(record, sort_keys=True)
+    assert submitted.credential_env == "BRIGHTDATA_API_KEY"
+    assert submitted.method == "POST" and submitted.endpoint == SUBMIT_URL
+    assert submitted.query_parameters["dataset_id"] == recorded.DATASET_ID
+    assert submitted.body == plan.scope["request_body"]
+    serialized = json.dumps({
+        "endpoint": submitted.endpoint, "query": submitted.query_parameters,
+        "body": submitted.body, "credential_env": submitted.credential_env,
+    }, sort_keys=True)
     assert "Authorization" not in serialized and "Bearer" not in serialized
-    assert content_digest(record) == content_digest(collection.request.record())
 
 
 def test_declared_cap_must_travel_with_the_request():
@@ -252,9 +284,14 @@ def _claims(payload: Any) -> bool:
             "coverage" in str(key) or value in ("complete", "covered", "exhausted")
             for key, value in payload.items()
         ) or any(_claims(value) for value in payload.values())
-    if isinstance(payload, list):
+    if isinstance(payload, (list, tuple)):
         return any(_claims(item) for item in payload)
     return payload in ("complete", "covered", "exhausted")
+
+
+def _steps(collection: Any) -> list[Any]:
+    """The run's progress-poll attempts, in the order the provider reported them."""
+    return [attempt for attempt in collection.attempts if attempt.endpoint_name == "progress"]
 
 
 def _document_with(*, body: dict | None = None) -> dict:
@@ -327,12 +364,13 @@ def test_a_plan_with_no_declared_cap_runs_without_one(plan):
     collection, _ = collect(uncapped, recorded.handoff_run())
 
     assert uncapped.caps == {}
-    assert collection.records and "cap_reached" not in collection.execution
+    assert collection.records
+    assert declared_record_cap(uncapped) is None
 
 
 def test_country_is_never_taken_from_the_echoed_request(plan):
     collection, _ = collect(plan, recorded.handoff_run())
-    submitted_country = collection.submitted_request["body"]["input"][0]["country"]
+    submitted_country = collection.attempts[0].body["input"][0]["country"]
     assert submitted_country == "VN"
 
     for record in collection.records:
@@ -372,21 +410,28 @@ def test_the_declared_cap_is_reported_beside_the_observed_count(plan):
     assert plan.caps == {"limit_per_input": 10}
     # Two values the run keeps apart: the count that came back, and the declaration
     # that bounds it. Neither is readable on its own.
-    assert collection.execution["records"] == 10
-    assert collection.execution["cap_reached"] is True
-    assert declared_record_cap(plan) == 10 != collection.execution["records"] - 10
+    assert len(collection.records) == 10
+    assert declared_record_cap(plan) == 10
+    # Saturation is derived from those two values rather than recorded as a third.
+    # Nothing in the run states a verdict, and the count alone says nothing: the ten
+    # records and the cap of ten could equally be an exhausted scope or a truncated
+    # one, which is why neither is ever reported without the other.
+    stored = [attempt.provider_facts for attempt in collection.attempts]
+    assert not any("cap_reached" in facts or "complete" in json.dumps(facts) for facts in stored)
     evidence = shadow_run_evidence(collection)
     assert evidence.coverage_result == "unknown"
     assert evidence.outcome == "incomplete"
-    assert not _claims(collection.execution)
-    assert not _claims(evidence.provider_execution)
+    assert not _claims([attempt.provider_facts for attempt in evidence.requests])
 
 
-def test_an_unsaturated_delivery_reports_no_cap_reached(plan):
+def test_an_unsaturated_delivery_is_distinguishable_from_a_saturated_one(plan):
     collection, _ = collect(plan, recorded.handoff_run(body=recorded.snapshot_records()[:4]))
-    assert "cap_reached" not in collection.execution
-    assert collection.execution["records"] == 4
+    # Read the same way as the saturated case: four observed against a declared cap of
+    # ten is not saturation. There is no flag to disagree, because there is no flag.
+    assert len(collection.records) == 4
     assert declared_record_cap(plan) == 10
+    assert len(collection.records) < declared_record_cap(plan)
+    assert not _claims([attempt.provider_facts for attempt in collection.attempts])
 
 
 # ---------------------------------------------------------------------------
@@ -400,7 +445,7 @@ def test_an_empty_delivery_records_nothing_and_claims_nothing(plan):
     assert collection.records == ()
     assert collection.failure_category is None
     assert collection.outcome == "incomplete"
-    assert collection.execution["download"]["records"] == 0
+    assert collection.attempts[-1].provider_facts["records"] == 0
     assert recorder.endpoints == [SUBMIT_URL, PROGRESS_URL, SNAPSHOT_URL]
     assert deliveries(collection) == []
 
@@ -411,7 +456,7 @@ def test_a_partial_delivery_keeps_its_records_and_fails_the_run(plan):
     assert len(collection.records) == 10
     assert collection.failure_category == "page_failed"
     assert collection.outcome == "failed"
-    assert collection.execution["progress"][-1]["errors"] == 1
+    assert _steps(collection)[-1].provider_facts["errors"] == 1
     assert shadow_run_evidence(collection).outcome == "failed"
 
 
@@ -421,7 +466,7 @@ def test_a_failed_progress_state_never_downloads(plan):
     assert collection.records == ()
     assert collection.failure_category == "page_failed"
     assert collection.outcome == "failed"
-    assert collection.execution["progress"][-1]["status"] == "failed"
+    assert _steps(collection)[-1].provider_facts["status"] == "failed"
     assert recorder.endpoints == [SUBMIT_URL, PROGRESS_URL]
 
 
@@ -432,9 +477,10 @@ def test_an_undocumented_progress_state_is_recorded_not_interpreted(plan):
         recorded.response(200, recorded.progress("paused")),
     ])
 
-    drift = collection.execution["progress"][-1]
-    assert drift["status"] == "paused" and drift["schema_drift"] is True
-    assert drift["http_status"] == 200 and drift["response_digest"]
+    drift = _steps(collection)[-1]
+    assert drift.provider_facts["status"] == "paused"
+    assert drift.provider_facts["schema_drift"] is True
+    assert drift.http_status == 200 and drift.response_digest
     assert collection.outcome == "failed" and collection.failure_category == "page_failed"
     assert collection.records == ()
     # The undocumented state is never treated as terminal and never followed.
@@ -467,7 +513,9 @@ def test_an_account_failure_is_recorded_as_an_authorization_block(plan):
 
     assert collection.outcome == "authorization_blocked"
     assert collection.failure_category == "page_failed"
-    assert collection.execution["submit"]["http_status"] == 400
+    assert collection.attempts[0].http_status == 400
+    # The provider's own account of why it refused is retained next to the status.
+    assert collection.attempts[0].provider_facts["provider_message"] == "Customer is not active"
     assert len(recorder.requests) == 1
 
 
@@ -484,21 +532,52 @@ def test_a_transport_failure_is_recorded_rather_than_raised(plan):
     assert collection.failure_category == "transport_error"
     assert collection.outcome == "failed"
     assert collection.records == ()
-    assert collection.execution["submit"]["transport_error"] == "ConnectError"
-    assert collection.execution["submit"]["http_status"] == 0
+    # An attempt that produced no response is still an attempt. The record says so by
+    # naming the transport failure and stating no status at all, rather than inventing
+    # a status code for a response that never arrived.
+    assert collection.attempts[0].transport_error == "ConnectError"
+    assert collection.attempts[0].http_status is None
+
+
+def test_an_envelope_key_the_provider_omitted_is_not_recorded_as_zero(plan):
+    """Silence is not a claim, so an absent key must not become a null or a zero."""
+    # Progress envelopes the provider sent without `records` or `errors`.
+    bare = {"snapshot_id": recorded.SNAPSHOT_ID}
+    collection, _ = collect(plan, [
+        recorded.response(202, recorded.handoff_202(), {"retry-after": "30"}),
+        recorded.response(200, {**bare, "status": "running"}),
+        recorded.response(200, {**bare, "status": "ready"}),
+        recorded.response(200, recorded.snapshot_records()),
+    ])
+
+    polls = _steps(collection)
+    assert polls[0].provider_facts == {
+        "poll": 1, "status": "running", "terminal": False, "schema_drift": False,
+        "waited_seconds": 30.0}
+    # The run still reaches its terminal condition on what was actually sent, and an
+    # absent error count is not read as a partial delivery.
+    assert collection.failure_category is None
+    assert len(collection.records) == 10
 
 
 def test_a_bounded_poll_budget_ends_the_run_without_claiming_anything(plan):
+    sleeps: list[float] = []
     collection, recorder = collect(
         plan, recorded.handoff_run(statuses=("running", "running", "running", "running")),
+        sleeps=sleeps,
     )
 
     assert collection.failure_category == "budget_exhausted"
     assert collection.outcome == "incomplete"
     assert collection.records == ()
-    assert len(collection.execution["progress"]) == plan.scope["max_progress_polls"]
+    assert len(_steps(collection)) == plan.scope["max_progress_polls"]
     assert recorder.endpoints.count(PROGRESS_URL) == plan.scope["max_progress_polls"]
     assert SNAPSHOT_URL not in recorder.endpoints
+    # The last poll is the last request, so nothing waits after it. A wait charged to
+    # a response that no further request follows would be a response fact that never
+    # happened.
+    assert sleeps == [30.0] * plan.scope["max_progress_polls"]
+    assert not _steps(collection)[-1].provider_facts.get("waited_seconds")
 
 
 def test_a_body_that_is_not_an_array_of_objects_is_refused(plan):
@@ -506,13 +585,35 @@ def test_a_body_that_is_not_an_array_of_objects_is_refused(plan):
 
     assert collection.records == ()
     assert collection.failure_category == "page_failed"
-    assert collection.execution["submit"]["shape"] == "not_an_array"
-    assert collection.execution["submit"]["response_digest"]
+    assert collection.attempts[0].provider_facts["shape"] == "not_an_array"
+    assert collection.attempts[0].response_digest
 
 
 # ---------------------------------------------------------------------------
 # The authorization boundary
 # ---------------------------------------------------------------------------
+
+
+def test_a_body_that_cannot_be_stored_is_not_sent(plan):
+    """A request the evidence store could never retain must never leave this process.
+
+    `float("nan")` has no JSON encoding, so a body carrying one could not be written
+    to a request row. The rule is that such a request is not sent at all, rather
+    than sent and then found unstorable after the fact.
+    """
+    unstorable = ShadowPlan(**{
+        **plan.__dict__,
+        "scope": {**plan.scope, "request_body": {**plan.scope["request_body"],
+                                                 "submitted_at": float("nan")}},
+    })
+    recorder = Recorder(recorded.inline_run())
+    source = BrightDataSource(
+        unstorable, client=recorder.client(), sleep=lambda _seconds: None,
+        clock=lambda: recorded.OBSERVED_AT,
+    )
+    with pytest.raises(BrightDataBoundaryError, match="body cannot be stored is not sent"):
+        source.collect()
+    assert recorder.requests == []
 
 
 def test_the_adapter_refuses_a_plan_that_is_not_its_own(plan):
@@ -572,12 +673,35 @@ def test_the_evidence_a_run_records_keeps_request_and_echo_apart(plan):
     collection, _ = collect(plan, recorded.handoff_run())
     evidence = shadow_run_evidence(collection)
 
-    assert set(evidence.provider_execution) >= {"submit", "progress", "download", "observed_at"}
-    assert evidence.provider_execution["observed_at"] == recorded.OBSERVED_AT.isoformat()
-    # The submitted request is a separate value, not a slice of any response.
-    assert evidence.submitted_request["body"] is not evidence.provider_execution
-    assert content_digest(evidence.submitted_request) == content_digest(
-        collection.submitted_request)
+    assert [attempt.endpoint_name for attempt in evidence.requests] == [
+        "submit", "progress", "snapshot"]
+    assert all(attempt.observed_at == recorded.OBSERVED_AT for attempt in evidence.requests)
+    # The submitted request is a separate fact from every response's account of
+    # running it. No response's facts were ever written into a request body, which
+    # is what keeps the provider echo from reading as the request.
+    submitted = evidence.requests[0]
+    assert submitted.body == plan.scope["request_body"]
+    assert submitted.body is not collection.records[0]["discovery_input"]
+    assert all(
+        "discovery_input" not in json.dumps(attempt.provider_facts, sort_keys=True)
+        for attempt in evidence.requests
+    )
+
+
+def test_every_request_the_run_issues_is_its_own_attempt(plan):
+    collection, _ = collect(plan, recorded.handoff_run(statuses=("starting", "running", "ready")))
+
+    # A retry, a second submit, or a second discovery input inside one run is its own
+    # attempt with its own ordinal, not a list entry inside a single run-level
+    # document, so the run stays walkable in the order it actually happened.
+    assert [attempt.request_ordinal for attempt in collection.attempts] == [1, 2, 3, 4, 5]
+    assert all(attempt.attempt_number == 1 for attempt in collection.attempts)
+    assert collection.request_count == len(collection.attempts)
+    # Each attempt names the declared endpoint it resolved from and the parameters
+    # that render it, which is what makes the endpoint checkable against the plan.
+    for attempt in collection.attempts:
+        assert attempt.endpoint_name in plan.endpoints
+        assert plan.endpoints[attempt.endpoint_name].format(**attempt.path_parameters) == attempt.endpoint
 
 
 def test_a_delivery_without_a_listing_key_is_retained_not_dropped(plan):

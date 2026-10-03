@@ -264,8 +264,15 @@ The latest observation does not erase an earlier one.
 | `created_at` | `timestamptz` | yes | Creation time. |
 
 **Closed quarantine reason vocabulary.** `identity_absent`, `listing_key_absent`,
-`artifact_integrity_failed`, `adapter_contract_violated`, `shape_unparseable`,
-`display_field_invalid`, `unauthorized_field`.
+`artifact_integrity_failed`, `declared_digest_mismatch`, `adapter_contract_violated`,
+`shape_unparseable`, `display_field_invalid`, `unauthorized_field`.
+
+`artifact_integrity_failed` is the retained representation no longer hashing to the digest stored
+beside it.
+`declared_digest_mismatch` is the captured payload not hashing to the digest the adapter declared when it
+captured it.
+Both retain the evidence and neither enters the projection, and they stay distinct codes because the
+first points at a row and the second at a capture.
 
 An internal error is a run `failure_category`, not a quarantine reason.
 Quarantine is a decision about the evidence, and it retains the evidence.

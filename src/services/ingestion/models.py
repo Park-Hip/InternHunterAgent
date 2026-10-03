@@ -31,6 +31,14 @@ class RawPosting(BaseModel):
 
     Fields mirror the raw_jobs insert shape; surrogate id and fetched_at are
     assigned by the database, not the adapter.
+
+    `content_hash` is the adapter's claim about `raw_payload`, not a label: it is
+    `evidence_store.content_digest(raw_payload)`, computed by the adapter at the
+    moment it captured the payload. The shadow writer checks the claim against the
+    payload it received, and `raw_store` treats a change in it as a changed
+    record, so a hash from any other encoding of the payload is wrong here. There
+    is one canonical digest in the ingestion layer, and a second one is a
+    disagreement waiting to be reported as a broken capture.
     """
 
     source: str
@@ -484,7 +492,7 @@ class NormalizationResult(Base):
         CheckConstraint(
             "(outcome <> 'quarantined' OR (quarantine_reason_code IS NOT NULL AND quarantine_reason_code IN "
             "('identity_absent', 'listing_key_absent', 'artifact_integrity_failed', "
-            "'adapter_contract_violated', 'shape_unparseable', "
+            "'declared_digest_mismatch', 'adapter_contract_violated', 'shape_unparseable', "
             "'display_field_invalid', 'unauthorized_field'))) AND "
             "(outcome = 'quarantined' OR quarantine_reason_code IS NULL) AND "
             "(outcome <> 'succeeded' OR (output_digest IS NOT NULL AND output_values IS NOT NULL))",

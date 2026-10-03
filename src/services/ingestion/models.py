@@ -9,13 +9,13 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
     Integer,
     Numeric,
     Text,
     UniqueConstraint,
-    text,
 )
 from sqlalchemy import TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB, NUMERIC
@@ -329,17 +329,29 @@ class CollectionRequestBody(Base):
     request went and not what it asked for, and could not tell which named secret
     location its credential would have come from. The location is a name, never a
     value, and the column is checked against that shape in the database.
+
+    `endpoint_name` is the key the request was checked against in the plan's
+    declared endpoint set, stored so that the check stays answerable later, against
+    the plan the run recorded rather than against whatever a plan says today.
     """
 
     __tablename__ = "collection_request_bodies"
     __table_args__ = (
         UniqueConstraint("collection_run_id", "request_ordinal", "attempt_number"),
+        # The execution record repeats the run, position and attempt beside its
+        # foreign key, so a reader need not join. This constraint is what keeps that
+        # repetition true: the child cannot name a position its request never had.
+        UniqueConstraint("id", "collection_run_id", "request_ordinal", "attempt_number"),
         CheckConstraint(
             "request_ordinal > 0 AND attempt_number > 0",
             name="ck_collection_request_bodies_position",
         ),
+        # A stored JSON null would read as a body that was sent null, which is the
+        # claim the SQL NULL above exists to make impossible, so the check refuses
+        # both spellings of an absent body.
         CheckConstraint(
-            "body IS NOT NULL OR method IN ('GET', 'HEAD', 'DELETE')",
+            "(body IS NOT NULL AND jsonb_typeof(body) = 'object') OR "
+            "(body IS NULL AND method IN ('GET', 'HEAD', 'DELETE'))",
             name="ck_collection_request_bodies_body",
         ),
         CheckConstraint(
@@ -355,9 +367,11 @@ class CollectionRequestBody(Base):
     adapter_id: Mapped[str] = mapped_column(Text, nullable=False)
     method: Mapped[str] = mapped_column(Text, nullable=False)
     endpoint: Mapped[str] = mapped_column(Text, nullable=False)
-    query_parameters: Mapped[dict] = mapped_column(
-        JSONB, nullable=False, server_default=text("'{}'::jsonb")
-    )
+    endpoint_name: Mapped[str] = mapped_column(Text, nullable=False)
+    # No server default: an empty object is already the honest encoding of a request
+    # that carried no query, and a default would make a writer that forgot the column
+    # indistinguishable from one that had nothing to send.
+    query_parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
     body: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
     credential_env: Mapped[str | None] = mapped_column(Text, nullable=True)
     body_digest: Mapped[str] = mapped_column(Text, nullable=False)
@@ -378,13 +392,28 @@ class CollectionRequestExecution(Base):
     `http_status` is absent exactly when a transport error is recorded, because
     "no status arrived" and "status 0 arrived" are different claims and only one
     of them is true of a request that never reached the provider.
+
+    `retention_until` and `authorization_revision` are the retention boundary of the
+    provider's account of the request, carried on every row. The run-level
+    representation this record replaced held them too, and without them a run that
+    delivered no records at all, a blocked or failed one, would persist a provider
+    statement with no stated right to keep it.
     """
 
     __tablename__ = "collection_request_executions"
     __table_args__ = (
         UniqueConstraint("request_body_id"),
+        ForeignKeyConstraint(
+            ["request_body_id", "collection_run_id", "request_ordinal", "attempt_number"],
+            [
+                "collection_request_bodies.id",
+                "collection_request_bodies.collection_run_id",
+                "collection_request_bodies.request_ordinal",
+                "collection_request_bodies.attempt_number",
+            ],
+        ),
         CheckConstraint(
-            "http_status IS NULL OR http_status >= 0",
+            "http_status IS NULL OR http_status >= 100",
             name="ck_collection_request_executions_status",
         ),
         CheckConstraint(
@@ -394,6 +423,10 @@ class CollectionRequestExecution(Base):
         CheckConstraint(
             "waited_before_seconds >= 0",
             name="ck_collection_request_executions_wait",
+        ),
+        CheckConstraint(
+            "retention_until IS NOT NULL AND authorization_revision <> ''",
+            name="ck_collection_request_executions_retention",
         ),
         Index(
             "ix_collection_request_executions_run",
@@ -405,7 +438,9 @@ class CollectionRequestExecution(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
-    request_body_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_request_bodies.id"), nullable=False)
+    # The request this answers. The composite foreign key below carries the reference,
+    # so this column is named rather than constrained twice.
+    request_body_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     request_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
     # The phase is the adapter's own vocabulary for where it was when it sent
@@ -425,6 +460,8 @@ class CollectionRequestExecution(Base):
     waited_before_seconds: Mapped[float] = mapped_column(
         NUMERIC(asdecimal=False), nullable=False
     )
+    retention_until: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    authorization_revision: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
 

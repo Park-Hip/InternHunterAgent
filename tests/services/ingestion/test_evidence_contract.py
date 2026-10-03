@@ -414,6 +414,9 @@ def test_brightdata_handoff_records_every_request_attempt_and_no_coverage(db):
         )).all()
         assert [row.request_ordinal for row in requests] == [1, 2, 3]
         assert [row.attempt_number for row in requests] == [1, 1, 1]
+        assert [row.endpoint_name for row in requests] == ["submit", "progress", "snapshot"]
+        assert all(row.endpoint_name in stored_plan.declared_endpoint_set
+                   for row in requests)
         assert [row.phase for row in executions] == ["submit", "progress", "download"]
         assert all(row.collection_run_id == run_id for row in requests + executions)
 
@@ -449,20 +452,33 @@ def test_brightdata_handoff_records_every_request_attempt_and_no_coverage(db):
         # digest is the other's, and neither restates a request.
         assert submit.body_digest != progress.body_digest == download.body_digest
         assert len({row.execution_digest for row in executions}) == 3
-        assert all("execution" not in (row.observed_facts or {}) for row in executions)
         assert executions[0].http_status == 202
+        # The provider's own words, plus the two conclusions this project draws, and
+        # nothing else: the record never restates the request and never invents a
+        # claim the provider did not make.
         assert executions[0].observed_facts == {
             "delivery": "snapshot", "snapshot_id": recorded.SNAPSHOT_ID,
+            "message": "Snapshot is not ready yet, try again in 30s",
             "retry_after_seconds": float(recorded.HANDOFF_RETRY_AFTER_SECONDS),
         }
         assert executions[0].waited_before_seconds == 0
-        assert executions[1].observed_facts == {"poll": 1, "status": "ready", "records": 10,
-                                                "errors": 0}
+        assert executions[1].observed_facts == {
+            "poll": 1, "terminal": True, "schema_drift": False, "status": "ready",
+            "records": 10, "errors": 0, "snapshot_id": recorded.SNAPSHOT_ID,
+            "dataset_id": recorded.DATASET_ID, "collection_duration": 36326,
+            "avg_duration_per_input": 36326,
+        }
         assert executions[1].waited_before_seconds == recorded.HANDOFF_RETRY_AFTER_SECONDS
         assert executions[2].http_status == 200
         assert executions[2].observed_facts == {"delivered_records": 10,
                                                 "shape": "array_of_objects"}
         assert executions[2].response_digest != executions[0].response_digest
+        # The retention boundary of the provider's own account travels with it, so a
+        # run that delivered no records at all still states how long its evidence may
+        # be kept and under which authorization it was gathered.
+        assert all(row.retention_until is not None for row in executions)
+        assert all(row.authorization_revision == plan.authorization_revision
+                   for row in executions)
 
         # The retired representation is not written any more, and the trace it
         # used to hold is now read one request at a time.
@@ -623,6 +639,59 @@ def test_brightdata_empty_and_failed_runs_record_no_completion(db):
             select(CollectionRun).where(CollectionRun.id.in_((empty, failed, blocked)))
         ).all()} == {"unknown"}
         assert count(session, CleanJob) == 0
+        # Not one of these runs delivered a record, so not one of them has a retained
+        # artifact, and every one of them still states how long its request evidence
+        # may be kept and under which authorization it was gathered. That is the
+        # boundary the retired run-level artifact used to carry for exactly these runs.
+        assert count(session, RawArtifact) == 0
+        for run_id in (empty, failed, blocked):
+            executions = session.scalars(select(CollectionRequestExecution).where(
+                CollectionRequestExecution.collection_run_id == run_id,
+            )).all()
+            assert executions, run_id
+            assert all(row.retention_until == retention for row in executions)
+            assert all(row.authorization_revision == "synthetic:recorded-provider-responses"
+                       for row in executions)
+        blocked_status = session.scalar(select(CollectionRequestExecution.http_status).where(
+            CollectionRequestExecution.collection_run_id == blocked))
+        assert blocked_status == 400
+
+
+def test_a_transport_failure_is_stored_as_a_request_and_an_execution(db):
+    """A request that never arrived still leaves two records, and one has no status."""
+    import src.services.ingestion.sources.brightdata as brightdata
+    from src.services.ingestion.plans import build_shadow_plan
+    from src.services.ingestion.sources.brightdata import (
+        SOURCE_ID, record_shadow_collection,
+    )
+    from tests.services.ingestion import brightdata_fixtures as recorded
+
+    plan = build_shadow_plan(SOURCE_ID)
+
+    def refuse(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("synthetic transport failure", request=_request)
+
+    source = brightdata.BrightDataSource(
+        plan, client=httpx.Client(transport=httpx.MockTransport(refuse)),
+        clock=lambda: recorded.OBSERVED_AT,
+    )
+    run_id = record_shadow_collection(
+        plan, source.collect(), run_key="brightdata-transport",
+        retention_until=datetime.now(UTC) + timedelta(days=1),
+    )
+
+    with db() as session:
+        request = session.scalar(select(CollectionRequestBody))
+        execution = session.scalar(select(CollectionRequestExecution))
+        assert request.collection_run_id == run_id and request.method == "POST"
+        assert request.body == plan.scope["request_body"]
+        # The attempt happened, so the body was recorded, and nothing answered, so
+        # there is no status to record and a reason instead.
+        assert execution.request_body_id == request.id
+        assert execution.http_status is None
+        assert execution.transport_error == "ConnectError"
+        assert execution.response_digest
+        assert session.get(CollectionRun, run_id).failure_category == "transport_error"
 
 
 def test_field_presence_and_changed_digest_are_new_evidence(db, plan):

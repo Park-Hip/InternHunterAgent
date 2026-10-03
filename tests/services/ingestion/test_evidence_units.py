@@ -156,11 +156,14 @@ def test_a_request_whose_body_cannot_be_stored_is_not_sent():
         "synthetic", "v1", {}, {}, {}, "never", {"submit": "https://provider.test/v3/scrape"},
         "second", "synthetic:local",
     )
-    # A value the evidence could not be written as, and a credential travelling in
-    # the body rather than being named by its location, both stop the attempt.
+    # A value the evidence could not be written as, a credential travelling in the
+    # body rather than being named by its location, and a credential named under its
+    # own conventional key all stop the attempt.
     for body, message in (
         ({"limit": float("nan")}, "cannot be stored"),
-        ({"BRIGHTDATA_API_KEY": "secret"}, "named location only"),
+        ({"BRIGHTDATA_API_KEY": "secret"}, "retained by its named location"),
+        ({"headers": {"Authorization": "Bearer secret"}}, "retained by its named location"),
+        ({"api_key": "secret"}, "retained by its named location"),
     ):
         with pytest.raises(ValueError, match=message):
             validate_request_attempt(plan, _request(
@@ -178,6 +181,20 @@ def test_a_request_whose_body_cannot_be_stored_is_not_sent():
         _request(method="get")
 
 
+def test_a_credential_key_is_refused_even_when_no_location_is_named():
+    """A plan that travels a credential without saying so is the worse case."""
+    plan = ShadowPlan(
+        "synthetic", "v1", {}, {}, {}, "never", {"submit": "https://provider.test/v3/scrape"},
+        "second", "synthetic:local",
+    )
+    for key in ("Authorization", "x-api-key", "password"):
+        with pytest.raises(ValueError, match="retained by its named location"):
+            validate_request_attempt(plan, _request(
+                method="POST", endpoint="https://provider.test/v3/scrape",
+                endpoint_name="submit", query={}, body={key: "secret"},
+            ))
+
+
 def test_a_retry_is_a_second_attempt_not_an_edit_of_the_first():
     attempts = (_attempt(1), _attempt(1, attempt_number=2), _attempt(2))
     evidence = RunEvidence(attempts=attempts, adapter_id="fixture-adapter-v1")
@@ -190,12 +207,18 @@ def test_a_retry_is_a_second_attempt_not_an_edit_of_the_first():
         RunEvidence(attempts=(_attempt(1), _attempt(1)), adapter_id="fixture-adapter-v1")
     with pytest.raises(ValueError, match="no gap"):
         RunEvidence(attempts=(_attempt(1), _attempt(3)), adapter_id="fixture-adapter-v1")
+    # A third attempt with no first or second would be a retry history the run never
+    # had, and the key alone cannot show that.
+    with pytest.raises(ValueError, match="retry count starts at 1"):
+        RunEvidence(attempts=(_attempt(1, attempt_number=3),), adapter_id="fixture-adapter-v1")
 
 
 def test_an_attempt_records_a_status_or_the_reason_none_arrived():
     with pytest.raises(ValueError, match="observed a status"):
         _attempt(1, http_status=None)
-    with pytest.raises(ValueError, match="nonnegative integer"):
+    with pytest.raises(ValueError, match="at least 100"):
+        _attempt(1, http_status=0)
+    with pytest.raises(ValueError, match="at least 100"):
         _attempt(1, http_status=-1)
     # A transport failure is evidence too: it has a reason and a digest, and no
     # status, because the provider never answered.

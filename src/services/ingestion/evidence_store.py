@@ -55,16 +55,26 @@ Normalizer = Callable[[dict], NormalizedJob]
 # may name several paths, separated by commas, but never an invented source field.
 ProvenancePaths = Mapping[str, tuple[str, str]]
 
-# Stated once, because the plan factory and the writer both enforce it and a
-# declaration with two caps must read the same way wherever it is refused.
 # The methods that carry no body by definition. Stated once because the request record
 # is checked against this list in the database as well as here, and an absent body on
 # any other method is a fact no record could store.
 BODYLESS_METHODS = ("GET", "HEAD", "DELETE")
 
-# A credential is retained by the name of the location it comes from, so a value can
-# never be stored in the request record even by accident.
-SECRET_LOCATION_PATTERN = r"^[A-Z][A-Z0-9_]*$"
+# A credential is retained by the name of the location it comes from, so the name
+# travels and the value never does. This is the canonical shape, reused by every
+# adapter; the stored record is checked against the same one in SQL.
+SECRET_LOCATION = re.compile(r"\A[A-Z][A-Z0-9_]*\Z")
+
+# The names a credential is carried under. The check is on names, and only on names:
+# recognising a value would mean reading the secret this project has no authorization
+# to read, which would be a worse failure than the one it prevents. A body or query
+# carrying any of these names is refused whether or not the plan named a location,
+# because a plan that travels a credential without saying so is the worse case.
+CREDENTIAL_KEY_NAMES = frozenset({
+    "authorization", "proxy-authorization", "bearer", "token", "access_token",
+    "refresh_token", "api_key", "apikey", "api-token", "x-api-key", "password",
+    "secret", "client_secret",
+})
 
 RECORD_CAP_RULE = (
     "a plan declares at most one record cap, because a run records exactly one beside the count "
@@ -172,8 +182,10 @@ class RequestAttempt:
         if self.http_status is None and self.transport_error is None:
             raise ValueError("an attempt either observed a status or recorded why none arrived")
         if self.http_status is not None and (type(self.http_status) is not int or
-                                             self.http_status < 0):
-            raise ValueError("a provider status is a nonnegative integer")
+                                             self.http_status < 100):
+            # No provider answers with a status below 100, and a zero here would
+            # claim one answered a request that never left.
+            raise ValueError("a provider status is an HTTP status, at least 100")
         if self.transport_error is not None and not (
                 isinstance(self.transport_error, str) and self.transport_error):
             raise ValueError("a transport failure is recorded by name")
@@ -215,10 +227,20 @@ class RunEvidence:
         if positions != sorted(positions) or len(set(positions)) != len(positions):
             raise ValueError("request attempts are recorded in order, and a position and a "
                              "retry number together name exactly one attempt")
-        if sorted({attempt.ordinal for attempt in attempts}) != list(
-                range(1, len({attempt.ordinal for attempt in attempts}) + 1)):
+        ordinals = sorted({attempt.ordinal for attempt in attempts})
+        if ordinals != list(range(1, len(ordinals) + 1)):
             raise ValueError("request ordinals are the requests' positions in the run, "
                              "from 1 with no gap")
+        for ordinal in ordinals:
+            # A third attempt with no first or second would be a run claiming a retry
+            # history it never had, and the key alone cannot show that.
+            retries = [attempt.attempt_number for attempt in attempts
+                       if attempt.ordinal == ordinal]
+            if retries != list(range(1, len(retries) + 1)):
+                raise ValueError(
+                    f"request {ordinal} records attempts {retries}, and a retry count starts "
+                    "at 1 with no gap"
+                )
         if not isinstance(self.adapter_id, str) or not self.adapter_id.strip():
             raise ValueError("a run records the adapter that issued its requests")
         if self.coverage_result not in ("partial", "unknown"):
@@ -451,16 +473,28 @@ def validate_request_attempt(plan: ShadowPlan, request: SubmittedRequest) -> Non
             raise ValueError(
                 f"the request {location} cannot be stored as the evidence it is meant to be: {error}"
             ) from error
-    if request.credential_env is not None and request.credential_env in {
-            *_names_of(request.body), *_names_of(request.query)}:
+    names = {*_names_of(request.body), *_names_of(request.query)}
+    # Header names travel in any case, so the comparison is on the case-folded name:
+    # `Authorization` and `authorization` are the same credential key.
+    carried = sorted(name for name in names
+                     if name.casefold() in CREDENTIAL_KEY_NAMES)
+    if request.credential_env is not None and request.credential_env in names:
+        carried = sorted({*carried, request.credential_env})
+    if carried:
         raise ValueError(
-            f"the request carries {request.credential_env!r} inside its own body or query, and a "
-            "credential is retained by its named location only"
+            f"the request carries {carried} in its own body or query, and a credential is "
+            "retained by its named location only"
+        )
+    if request.credential_env is not None and not SECRET_LOCATION.match(request.credential_env):
+        raise ValueError(
+            f"{request.credential_env!r} is not the name of a secret location, and a value is "
+            "never a location"
         )
 
 
 def _record_request_attempts(
     session, run: CollectionRun, plan: ShadowPlan, evidence: RunEvidence, now: datetime,
+    retention_until: datetime,
 ) -> None:
     """Store one request record and one execution record per attempt.
 
@@ -474,10 +508,12 @@ def _record_request_attempts(
         validate_request_attempt(plan, attempt.request)
         request = attempt.request
         sent_at = _recorded_at(attempt.sent_at, plan.retrieval_precision, "sent_at")
+        observed_at = _recorded_at(attempt.observed_at, plan.retrieval_precision, "observed_at")
         body_row = CollectionRequestBody(
             collection_run_id=run.id, request_ordinal=attempt.ordinal,
             attempt_number=attempt.attempt_number, adapter_id=evidence.adapter_id,
             method=request.method, endpoint=request.endpoint,
+            endpoint_name=request.endpoint_name,
             query_parameters=deepcopy(dict(request.query)),
             body=deepcopy(dict(request.body)) if request.body is not None else None,
             credential_env=request.credential_env,
@@ -488,10 +524,15 @@ def _record_request_attempts(
         session.add(body_row)
         session.flush()
         observed_facts = deepcopy(dict(attempt.observed_facts))
+        # The digest covers the execution row as it is stored, including the two
+        # columns this project computes rather than the provider states, so a reader
+        # can tell that those were not rewritten.
         execution_digest = content_digest({
             "phase": attempt.phase, "http_status": attempt.http_status,
             "transport_error": attempt.transport_error,
             "response_digest": attempt.response_digest, "observed_facts": observed_facts,
+            "observed_at": observed_at.isoformat(),
+            "waited_before_seconds": float(attempt.waited_before_seconds),
         })
         session.add(CollectionRequestExecution(
             collection_run_id=run.id, request_body_id=body_row.id,
@@ -499,10 +540,12 @@ def _record_request_attempts(
             phase=attempt.phase, http_status=attempt.http_status,
             transport_error=attempt.transport_error,
             response_digest=attempt.response_digest, execution_digest=execution_digest,
-            observed_facts=observed_facts,
-            observed_at=_recorded_at(attempt.observed_at, plan.retrieval_precision,
-                                     "observed_at"),
-            waited_before_seconds=attempt.waited_before_seconds, created_at=now,
+            observed_facts=observed_facts, observed_at=observed_at,
+            waited_before_seconds=attempt.waited_before_seconds,
+            # The provider's account of a request is retained evidence in its own
+            # right, and a run that delivered nothing still has one to keep.
+            retention_until=retention_until,
+            authorization_revision=plan.authorization_revision, created_at=now,
         ))
     session.flush()
 
@@ -700,7 +743,7 @@ def write_shadow_run(
         session.add(run)
         session.flush()
         if run_evidence is not None:
-            _record_request_attempts(session, run, plan, run_evidence, now)
+            _record_request_attempts(session, run, plan, run_evidence, now, retention_until)
         local_keys: dict[str, int] = {}
         for delivery in deliveries:
             payload = delivery.posting.raw_payload

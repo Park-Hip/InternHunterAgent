@@ -334,8 +334,9 @@ submitted as empty and looked authoritative while destroying the distinction.
 | `adapter_id` | `text` | yes | The adapter that issued it. |
 | `method` | `text` | yes | The HTTP method. |
 | `endpoint` | `text` | yes | Must resolve to a value in the executed plan's `declared_endpoint_set`. A request to an undeclared endpoint aborts the run. |
-| `query_parameters` | `jsonb` | yes | The query the request carried, empty when it carried none. |
-| `body` | `jsonb` | no | The body as submitted, with omitted parameters absent. Absent, as a SQL null, only for a method that carries no body by definition. |
+| `endpoint_name` | `text` | yes | The key in the declared endpoint set this request was checked against, stored so the check stays answerable against the plan the run recorded. |
+| `query_parameters` | `jsonb` | yes | The query the request carried, empty when it carried none. Never defaulted: an empty object is already the honest encoding of a request that carried no query. |
+| `body` | `jsonb` | no | The body as submitted, with omitted parameters absent. A SQL null, only for a method that carries no body by definition. A stored JSON null is refused, because it would read as a body that was sent null. |
 | `credential_env` | `text` | no | The named secret location the credential comes from, never a value. Checked against the shape of a secret name. |
 | `body_digest` | `text` | yes | Digest of the submitted body. |
 | `declared_caps` | `jsonb` | yes | The caps the executed plan declared, repeated on every request row so one row reads without the join. |
@@ -343,13 +344,18 @@ submitted as empty and looked authoritative while destroying the distinction.
 | `sent_at` | `timestamptz` | yes | When the request was sent. |
 | `created_at` | `timestamptz` | yes | Creation time. |
 
-`query_parameters` and `credential_env` are additions to the column list this blueprint first
-wrote.
-Without them, `endpoint` would be a URL rather than a request: a reader could see where the request
-went and not what it asked for, and could not tell which named secret location its credential would
-have come from, which is the fact rule 5 is about.
-Neither column can hold a credential value: the query and the body are checked for one before
-anything is sent, and `credential_env` is checked against the shape of a secret name in the database
+`query_parameters`, `credential_env`, and `endpoint_name` are additions to the column list this
+blueprint first wrote.
+Without the first, `endpoint` would be a URL rather than a request: a reader could see where the
+request went and not what it asked for.
+Without the second, rule 5, a credential referenced by named location, has nothing to point at.
+Without the third, invariant (a) is checkable only against a live plan rather than against the plan
+the run recorded.
+Neither of the first two can hold a credential value.
+The check is on names, and only on names, because recognising a value would mean reading the secret
+this project has no authorization to read.
+A body or query carrying a name a credential travels under is refused whether or not the plan named
+a location, and `credential_env` is checked against the shape of a secret name in the database
 itself.
 
 Point 6 is enforced by one function, `validate_request_attempt`, which the adapter calls before a
@@ -375,17 +381,21 @@ A run now carries one row per request attempt on each side of the exchange, and 
 restates the other.
 
 1. The execution record is keyed by the request it answers, so a request with no stored body has
-   no execution record either.
+   no execution record either, and a composite foreign key refuses an execution that names a
+   position its request never had.
 2. It records what the provider answered, never the request that provoked it.
    The echo of a submitted request is not the submitted request.
 3. `http_status` is absent exactly when a transport error is recorded.
-   A request that never reached the provider has no status, and a stored zero would claim the
-   provider answered with one.
+   A request that never reached the provider has no status, and a stored zero or a number below
+   100 would claim the provider answered with one.
 4. `execution_digest` digests the execution record itself, and `response_digest` digests the
    response, so each record carries its own digest and neither repeats the other.
-5. A fact this project concluded is never stored as something the provider said.
-   A count of delivered records, a classification of a response shape, and a judgement that a
-   state is undeclared are all kept, and all named as this project's own.
+   The digest covers the two columns this project computes rather than the provider states, so
+   those cannot be rewritten unnoticed.
+5. A fact this project concluded is never stored as something the provider said, and a fact the
+   provider did not state is never stored as a null.
+   The two-way namespace is a closed list, the adapter refuses to write a conclusion that is not
+   named in it, and a verdict is recorded whether it came out true or false.
 6. A delay the provider did not announce is not recorded as one.
    When the declared default was used, the wait is on `waited_before_seconds` of the request it
    preceded and no announced delay exists to record.
@@ -393,26 +403,38 @@ restates the other.
    closed set of phases is imposed on a provider that never asked for one.
 8. `waited_before_seconds` is this project's own accounting rather than the provider's, recorded
    per attempt so that a run's total wait is a sum of recorded facts.
+   A wait no request follows is never performed, so nothing is waited for outside the record.
+9. `retention_until` and `authorization_revision` state how long the provider's account of the
+   request may be kept and under which authorization it was gathered.
+   The retired run-level artifact carried them, and a run that delivered no records at all is
+   exactly the run whose provider statements still need a stated right to be kept.
 
 | Column | Type | Required | Definition |
 | --- | --- | --- | --- |
 | `id` | `bigint` | yes | Immutable surrogate identifier. |
 | `collection_run_id` | `bigint` | yes | The run the attempt belongs to. |
-| `request_body_id` | `bigint` | yes | The request record this answers. Unique, so one request has one answer. |
-| `request_ordinal` | `integer` | yes | Position of the request within the run, repeated for reading without the join. |
-| `attempt_number` | `integer` | yes | Retry attempt, counting from 1. |
+| `request_body_id` | `bigint` | yes | The request record this answers. Unique, so one request has one answer, and part of a composite foreign key with the three columns below. |
+| `request_ordinal` | `integer` | yes | Position of the request within the run, repeated for reading without the join and bound to the request by that key. |
+| `attempt_number` | `integer` | yes | Retry attempt, counting from 1, bound to the request by that key. |
 | `phase` | `text` | yes | The adapter-defined phase the request was sent in, for example submit, progress, or download. |
-| `http_status` | `integer` | no | The status the provider returned. Absent exactly when `transport_error` is recorded. |
+| `http_status` | `integer` | no | The status the provider returned. Absent exactly when `transport_error` is recorded, and never below 100. |
 | `transport_error` | `text` | no | The transport failure by name, when no response arrived. |
 | `response_digest` | `text` | yes | Digest of the response body. |
 | `execution_digest` | `text` | yes | Digest of this execution record. |
-| `observed_facts` | `jsonb` | yes | What was learned about this attempt, from the provider's own statements and from this project's conclusions about them. The two are distinguishable by key: `delivery`, `delivered_records`, `shape`, `schema_drift`, and `terminal` are this project's reading, and every other key is what the provider said. |
+| `observed_facts` | `jsonb` | yes | What was learned about this attempt, from the provider's own statements and from this project's conclusions about them. The two are distinguishable by key: a key outside the closed list below is what the provider said, and a key in it is this project's reading. |
 | `observed_at` | `timestamptz` | yes | When the answer was observed. |
 | `waited_before_seconds` | `numeric` | yes | What the adapter waited before sending this attempt. |
+| `retention_until` | `timestamptz` | yes | When this evidence may no longer be kept. |
+| `authorization_revision` | `text` | yes | The gate register revision that permitted gathering and keeping it. |
 | `created_at` | `timestamptz` | yes | Creation time. |
 
-Every instant on both records, including `sent_at` and `observed_at`, is rounded to the precision
+The closed list of this project's own readings, which an adapter may not extend without naming it
+here and in its own module: `delivery`, `delivered_records`, `shape`, `schema_drift`, `terminal`,
+and `poll`.
+
+Every instant the run observes, including `sent_at` and `observed_at`, is rounded to the precision
 the executed plan declared, so one rule governs every time the run keeps.
+`created_at` is the writer's own clock rather than an observation and is not rounded.
 
 ### The retired run-level execution representation
 
@@ -420,12 +442,19 @@ the executed plan declared, so one rule governs every time the run keeps.
 again.
 It is not deleted, and could not be: the evidence tables are append-only, so an existing row can
 neither be updated nor removed.
+The retirement is a database rule rather than a convention, stated as a `NOT VALID` check so it
+applies to every row written from here on while leaving the rows that already carry the
+representation exactly as they are.
 A run recorded before the request-attempt records existed therefore keeps its execution trace in
 that one artifact, and a reader has to treat the legacy representation as one way a run's
 execution history can be stored rather than as the only one.
 Saturation is not carried forward as a flag.
 The declared cap and the observed count are two columns on the run, and their comparison is a
 fact a reader can make without trusting an adapter to report it.
+
+Downgrading is the other side of that honesty and is lossy.
+A run recorded since this migration keeps its `request_count` and its `input_digest` and loses both
+of its request records and both execution records, because no other representation of them exists.
 
 ### Lifecycle attribution
 

@@ -21,6 +21,7 @@ from src.services.ingestion.evidence_store import content_digest, declared_recor
 from src.services.ingestion.normalize.brightdata import to_normalized_job
 from src.services.ingestion.plans import build_shadow_plan
 from src.services.ingestion.sources.brightdata import (
+    PROJECT_READING_FACTS,
     SOURCE_ID,
     BrightDataBoundaryError,
     BrightDataSource,
@@ -131,9 +132,18 @@ def test_202_handoff_polls_then_downloads_and_records_every_transition(plan):
     assert [step["status"] for step in transitions] == ["starting", "running", "ready"]
     assert [step["poll"] for step in transitions] == [1, 2, 3]
     assert transitions[-1]["records"] == 10 and transitions[-1]["errors"] == 0
+    # Every key the provider stated is kept under the name the provider used, and the
+    # timings it published are the only duration evidence this run has.
+    assert transitions[0]["collection_duration"] == 36326
+    assert transitions[0]["dataset_id"] == recorded.DATASET_ID
+    # A delay the provider never announced is not recorded as one.
+    assert "retry_after_seconds" not in transitions[1]
     submit = collection.attempts[0]
     assert submit.http_status == 202
     assert submit.observed_facts["retry_after_seconds"] == recorded.HANDOFF_RETRY_AFTER_SECONDS
+    # The handoff message is the provider saying why it handed off, and it is one of
+    # the three keys the bounded observation retained.
+    assert submit.observed_facts["message"] == "Snapshot is not ready yet, try again in 30s"
     assert collection.attempts[-1].http_status == 200
     # One row per request attempt, not one document per run: a poll is the next
     # request, so it is its own attempt with its own status and its own digest.
@@ -487,7 +497,8 @@ def test_an_account_failure_is_recorded_as_an_authorization_block(plan):
     assert collection.outcome == "authorization_blocked"
     assert collection.failure_category == "page_failed"
     assert collection.attempts[0].http_status == 400
-    assert collection.attempts[0].observed_facts["provider_message"] == "Customer is not active"
+    # The provider's own key, kept under the name the provider used.
+    assert collection.attempts[0].observed_facts == {"message": "Customer is not active"}
     assert len(recorder.requests) == 1
 
 
@@ -512,8 +523,10 @@ def test_a_transport_failure_is_recorded_rather_than_raised(plan):
 
 
 def test_a_bounded_poll_budget_ends_the_run_without_claiming_anything(plan):
+    sleeps: list[float] = []
     collection, recorder = collect(
         plan, recorded.handoff_run(statuses=("running", "running", "running", "running")),
+        sleeps=sleeps,
     )
 
     assert collection.failure_category == "budget_exhausted"
@@ -521,6 +534,11 @@ def test_a_bounded_poll_budget_ends_the_run_without_claiming_anything(plan):
     assert collection.records == ()
     assert len(_progress(collection)) == plan.scope["max_progress_polls"]
     assert len(collection.attempts) == plan.scope["max_progress_polls"] + 1
+    # A wait no request follows is never performed, and every wait that was performed
+    # sits on the request it preceded, so the recorded total is the whole total.
+    assert sleeps == [30.0] * plan.scope["max_progress_polls"]
+    assert sum(attempt.waited_before_seconds for attempt in collection.attempts) == sum(sleeps)
+    assert collection.waited_seconds == sum(sleeps)
     assert recorder.endpoints.count(PROGRESS_URL) == plan.scope["max_progress_polls"]
     assert SNAPSHOT_URL not in recorder.endpoints
 
@@ -629,10 +647,44 @@ def test_the_evidence_a_run_records_keeps_request_and_echo_apart(plan):
     # The submitted request is a separate value, not a slice of any response, and
     # the provider's own echo of the discovery context never becomes the request.
     submit = evidence.attempts[0]
-    assert submit.request.body is not submit.observed_facts
-    assert content_digest(submit.request.body) == content_digest(plan.scope["request_body"])
+    assert submit.request.body == plan.scope["request_body"]
+    assert submit.observed_facts != submit.request.body
     echo = collection.records[0]["discovery_input"]
     assert echo not in [attempt.observed_facts for attempt in evidence.attempts]
+    assert plan.scope["request_body"] not in [attempt.observed_facts
+                                             for attempt in evidence.attempts]
+
+
+def test_every_project_reading_fact_is_named_as_one(plan):
+    """The record's two-way namespace is checkable rather than a convention.
+
+    Every key outside the reserved set must be one the provider actually used, or a
+    reader following the blueprint would take a conclusion of this project's for
+    something the provider said.
+    """
+    collection, _ = collect(plan, recorded.handoff_run(statuses=("starting", "running",
+                                                                  "ready")))
+    keys = {key for attempt in collection.attempts for key in attempt.observed_facts}
+    assert keys & PROJECT_READING_FACTS == {"delivery", "delivered_records", "shape",
+                                            "poll", "terminal", "schema_drift"}
+    assert keys - PROJECT_READING_FACTS == {
+        "message", "snapshot_id", "retry_after_seconds", "status", "records", "errors",
+        "dataset_id", "collection_duration", "avg_duration_per_input",
+    }
+    # The same split holds for a run that delivered nothing: only the provider's own
+    # words and the one conclusion this project draws from them.
+    blocked, _ = collect(plan, recorded.blocked_run())
+    assert blocked.attempts[0].observed_facts == {"message": "Customer is not active"}
+
+
+def test_a_project_reading_fact_must_be_declared_as_one(plan):
+    """Adding a conclusion without naming it as one is refused at the call site."""
+    from src.services.ingestion.sources import brightdata as adapter
+
+    attempt = adapter._Attempt.__new__(adapter._Attempt)
+    attempt.sends = []
+    with pytest.raises(BrightDataBoundaryError, match="PROJECT_READING_FACTS"):
+        attempt.reading(None, exhaustion_estimate=42)
 
 
 def test_a_delivery_without_a_listing_key_is_retained_not_dropped(plan):

@@ -5,6 +5,7 @@ Each document has one owner and one intended reader.
 | Doc | Owns | Reader |
 |---|---|---|
 | [Architecture](architecture.md) | Product scope, architecture, layer laws, serving design | Product and engineering |
+| [Desktop UI foundation](ui/desktop-foundation.md) | Approved employer overview and Vietnamese demo design intent, with implementation gates | UI maintainers and implementers |
 | [Operate how-to](how-to/operate.md) | Deploy topology, configuration, database procedures, ingestion pipeline and cron, incidents | Operators |
 | [Latency observability how-to](how-to/latency-observability.md) | Stream latency metric definitions, dimensions, and percentile publication gate | Operators and engineering |
 | [Langfuse prompt management how-to](how-to/manage-langfuse-prompts.md) | Candidate seeding, label promotion, native trace linkage, and rollback | Operators and evaluation work |

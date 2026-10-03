@@ -13,6 +13,21 @@ down_revision = "c9d3e6f7a2b1"
 branch_labels = None
 depends_on = None
 
+# The append-only tables this revision creates, in foreign-key dependency order.
+#
+# Deliberately a local literal rather than an import from
+# src.services.ingestion.models: this file is the historical record of one
+# revision and must keep reproducing that revision even after the models move,
+# which is the single allowed duplicate of the roster. What must not survive is
+# two copies of it *inside this file*: the trigger loop and the downgrade loop
+# used to spell it out separately, in opposite orders, with nothing failing when
+# they disagreed. They share this definition, and downgrade() derives its order
+# with reversed().
+_SHADOW_EVIDENCE_TABLES = (
+    "collection_plans", "collection_runs", "raw_artifacts", "raw_observations",
+    "duplicate_deliveries", "normalization_results", "field_provenance",
+)
+
 
 def _id():
     return sa.Column("id", sa.BigInteger(), sa.Identity(always=True), primary_key=True)
@@ -120,10 +135,7 @@ def upgrade() -> None:
         END;
         $$
     """)
-    for table in (
-        "collection_plans", "collection_runs", "raw_artifacts", "raw_observations",
-        "duplicate_deliveries", "normalization_results", "field_provenance",
-    ):
+    for table in _SHADOW_EVIDENCE_TABLES:
         op.execute(
             f"CREATE TRIGGER immutable_evidence BEFORE UPDATE OR DELETE ON {table} "
             "FOR EACH ROW EXECUTE FUNCTION reject_ingestion_evidence_mutation()"
@@ -131,9 +143,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for table in (
-        "field_provenance", "normalization_results", "duplicate_deliveries", "raw_observations",
-        "raw_artifacts", "collection_runs", "collection_plans",
-    ):
+    # Reverse dependency order: every table is dropped before the one it points
+    # at, so no drop has to rely on CASCADE. The function goes last because the
+    # triggers still depend on it.
+    for table in reversed(_SHADOW_EVIDENCE_TABLES):
         op.drop_table(table)
     op.execute("DROP FUNCTION reject_ingestion_evidence_mutation()")

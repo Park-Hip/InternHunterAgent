@@ -130,6 +130,24 @@ async def capture_with_retry(agent: Any, question: str, config: dict[str, Any], 
     raise AssertionError("unreachable")
 
 
+async def discover_job_tools() -> list[Any]:
+    """Discover the job-query MCP tools the way composition does before it builds.
+
+    Discovery belongs to composition, and `agent_factory` defaults `tools` to an
+    empty list rather than discovering anything. A caller that omits it therefore
+    publishes an agent that can never call the tool its own system prompt tells it
+    to call, and the eval then reports a run in which nothing was ever measured as
+    a result. The capture path composes its own in-process server for the same
+    reason serving builds its own: the target belongs to the caller
+    (`src/agents/mcp/adapter.py`), and importing the serving lifespan here would
+    drag in the API layer, the checkpointer pool, and the production database.
+    """
+    from src.agents.mcp.adapter import list_job_tools
+    from src.agents.mcp.job_server import create_job_mcp_server
+
+    return await list_job_tools(create_job_mcp_server())
+
+
 async def capture_scenario(scenario: dict[str, Any], prompts: Any) -> list[dict[str, Any]]:
     """Use the same agent thread for each turn in a conversational scenario."""
     from langchain_core.messages import SystemMessage
@@ -139,7 +157,15 @@ async def capture_scenario(scenario: dict[str, Any], prompts: Any) -> list[dict[
     from src.agents.tracing.langfuse import langfuse_prompt_attributes, langfuse_request_trace, validate_langfuse_trace_context
 
     conversational = scenario.get("type") == "conversational"
-    agent = agent_factory(system_prompt=SystemMessage(content=prompts.system.content), **({"checkpointer": InMemorySaver()} if conversational else {}))
+    # Both of the arguments below are load-bearing, and neither has a default that
+    # fails loudly: `agent_factory` is a coroutine function, so an un-awaited call
+    # binds a coroutine where a graph is expected, and `tools` falls back to an
+    # empty list, so an omitted call binds an agent with no tool to call.
+    agent = await agent_factory(
+        system_prompt=SystemMessage(content=prompts.system.content),
+        tools=await discover_job_tools(),
+        **({"checkpointer": InMemorySaver()} if conversational else {}),
+    )
     config: dict[str, Any] = {"configurable": {"thread_id": scenario["id"]}} if conversational else {}
     turns = scenario["turns"] if conversational else [scenario["input"]]
     captured: list[dict[str, Any]] = []

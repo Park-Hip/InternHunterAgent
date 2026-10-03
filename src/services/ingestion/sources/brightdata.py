@@ -237,7 +237,9 @@ class _Attempt:
             )
         return self.record(send, **facts)
 
-    def fail(self, category: str, outcome: str) -> None:
+    def fail(self, category: str | None, outcome: str) -> None:
+        """Record how the run ended. No category is the successful case: the
+        provider answered in the declared shape and nothing else went wrong."""
         self.failure, self.outcome = category, outcome
 
 

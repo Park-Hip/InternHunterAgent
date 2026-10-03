@@ -15,9 +15,16 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 import yaml
 
+from src.services.ingestion.models import SHADOW_EVIDENCE_TABLES
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEED_SQL_PATH = Path(__file__).resolve().parent / "seed_eval_db.sql"
 SETTINGS_PATH = REPO_ROOT / "config" / "settings.yaml"
+
+# The legacy serving tables and Alembic's own bookkeeping table are not shadow
+# evidence and are never touched by the append-only trigger, so they are listed
+# here rather than borrowed from the shadow roster.
+_LEGACY_TABLES = ("ingestion_runs", "clean_jobs", "raw_jobs")
 
 # Seconds to wait for the fixture database to accept a TCP connection before
 # declaring it unavailable. This is a socket preflight only, never a SQL round
@@ -160,17 +167,15 @@ def _upgrade_schema(dsn: str) -> None:
 
 def _drop_fixture_schema(dsn: str) -> None:
     """Clear the dedicated fixture schema before recreating its pinned dataset."""
+    # Shadow tables come straight from the canonical roster so a table added to
+    # the ingestion layer is dropped here without anyone remembering to list it.
+    tables = ", ".join(
+        (*reversed(SHADOW_EVIDENCE_TABLES), *_LEGACY_TABLES, "alembic_version")
+    )
     engine = create_engine(dsn)
     try:
         with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "DROP TABLE IF EXISTS field_provenance, normalization_results, "
-                    "duplicate_deliveries, raw_observations, raw_artifacts, "
-                    "collection_runs, collection_plans, ingestion_runs, "
-                    "clean_jobs, raw_jobs, alembic_version CASCADE"
-                )
-            )
+            conn.execute(text(f"DROP TABLE IF EXISTS {tables} CASCADE"))
             conn.execute(text("DROP FUNCTION IF EXISTS reject_ingestion_evidence_mutation()"))
     finally:
         engine.dispose()

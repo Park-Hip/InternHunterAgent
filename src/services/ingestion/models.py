@@ -77,6 +77,35 @@ class Base(DeclarativeBase):
     pass
 
 
+# ---------------------------------------------------------------------------
+# Shadow evidence table roster
+# ---------------------------------------------------------------------------
+#
+# Sole canonical list of the append-only shadow tables introduced by Alembic
+# revision e51a8c07d942. Anything that has to enumerate those tables - fixture
+# teardown, the migration round-trip test - imports this instead of re-listing
+# them, so adding a table cannot leave a stale copy behind in one of them.
+#
+# Order is foreign-key dependency order: a table appears after every *other*
+# table it references, so dropping in reverse order never trips a dependency.
+# A self-reference (collection_runs.replay_of_run_id) is dropped along with its
+# own table and does not constrain the position. The order does not matter for
+# attaching the append-only trigger or for DROP TABLE IF EXISTS ... CASCADE.
+#
+# The migration itself keeps its own literal. A migration is the historical
+# record of one revision and must not move when the models move, which is the
+# one place a duplicate of this list is allowed to exist.
+SHADOW_EVIDENCE_TABLES: tuple[str, ...] = (
+    "collection_plans",
+    "collection_runs",
+    "raw_artifacts",
+    "raw_observations",
+    "duplicate_deliveries",
+    "normalization_results",
+    "field_provenance",
+)
+
+
 IngestionRunOutcome = Literal["completed", "safety_aborted", "failed"]
 IngestionFailurePhase = Literal[
     "schema_check",

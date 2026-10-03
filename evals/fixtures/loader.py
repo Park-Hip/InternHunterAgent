@@ -12,7 +12,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import Connection, make_url
 import yaml
 
 from src.services.ingestion.models import ingestion_teardown_statements
@@ -161,14 +161,49 @@ def _upgrade_schema(dsn: str) -> None:
 
 
 def _drop_fixture_schema(dsn: str) -> None:
-    """Clear the dedicated fixture schema before recreating its pinned dataset."""
+    """Clear the dedicated fixture schema before recreating its pinned dataset.
+
+    Two steps, and the second is the one that matters.
+
+    The derived teardown drops every table the models declare, plus the
+    append-only trigger function. That alone is enough to stop the schema being
+    wedged by a trigger on a table nobody declares.
+
+    It is not enough to make the fixture actually clean. The database outlives
+    the branch that created it, so it can still carry a table from an abandoned
+    experiment - and a stale table is worse than a stale row, because it can
+    satisfy a query or fail a test for a reason that has nothing to do with the
+    code under test. The fixture contract is "empty", so this reads what is
+    actually there and drops it too, rather than trusting a list to have
+    stayed complete.
+
+    Reading the catalog is what makes this safe to rely on: it cannot drift. The
+    named list is still done first, so a failure names the table that caused it
+    instead of a bulk drop.
+    """
     engine = create_engine(dsn)
     try:
         with engine.begin() as conn:
             for statement in ingestion_teardown_statements(version_table="alembic_version"):
                 conn.execute(text(statement))
+            for leftover in _unlisted_tables(conn):
+                conn.execute(text(f'DROP TABLE IF EXISTS "{leftover}" CASCADE'))
     finally:
         engine.dispose()
+
+
+def _unlisted_tables(conn: Connection) -> list[str]:
+    """Base tables in the target schema that the derived teardown did not name."""
+    schema = conn.execute(text("SELECT current_schema()")).scalar_one()
+    rows = conn.execute(
+        text(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = :schema AND table_type = 'BASE TABLE' "
+            "ORDER BY table_name"
+        ),
+        {"schema": schema},
+    ).scalars()
+    return list(rows)
 
 
 def _ensure_database_exists(dsn: str) -> None:

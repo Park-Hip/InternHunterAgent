@@ -30,6 +30,7 @@ from evals.fixtures.loader import (
     fixture_database_url,
     load_fixture,
 )
+from evals.run import score_turn
 
 V0 = dataset("v0")
 V1_IDS = frozenset(s["id"] for s in dataset("default").scenarios())
@@ -152,6 +153,52 @@ class TestStructure:
         doc = _DISPOSITION.read_text(encoding="utf-8")
         named = set(re.findall(r"`(V0-[A-Z0-9-]+)`", doc))
         assert named == set(cases()), "a v0 case with no v1 lineage is a silent addition"
+
+    def test_every_case_declares_a_tool_contract(self) -> None:
+        # #585: 17 of 19 cases declared none, which resolved to "no tool is
+        # required and no tool is allowed" and inverted the metric.
+        for c in V0.scenarios():
+            assert c.get("tool_expectation"), f"{c['id']} declares no tool contract"
+
+    def test_the_tool_contract_follows_the_contract_shape(self) -> None:
+        # The v0 bundle registers exactly one tool (src/agents/mcp/job_server.py),
+        # so a real shape must call it and `none` must call nothing. The contract
+        # document says so: CLARIFIED gets "no tool result", REFUSED "never a
+        # tool call".
+        for c in V0.scenarios():
+            expectation = c["tool_expectation"]
+            if c["contract_shape"] == "none":
+                assert c["contract_state"] in {"CLARIFIED", "REFUSED"}, c["id"]
+                assert expectation == {"required": [], "allowed": []}, (
+                    f"{c['id']} is a {c['contract_state']} turn and must call nothing"
+                )
+            else:
+                assert expectation == {"required": ["query_jobs"], "allowed": ["query_jobs"]}, (
+                    f"{c['id']} answers from data and must call the only tool the v0 bundle registers"
+                )
+
+    def test_tool_correctness_passes_the_right_tool_and_fails_the_wrong_one(self) -> None:
+        # The acceptance the issue asks for, on the governed dataset: a correct
+        # call scores 1.0 and a wrong or missing call scores 0.0.
+        scored = {c["id"]: c for c in V0.scenarios() if "tool_correctness" in c["metrics"]}
+        assert scored, "no v0 case scores tool_correctness"
+        for sid, case in scored.items():
+            base = {"question": case["input"], "answer": "x"}
+            correct = score_turn({**base, "tools_called": ["query_jobs"]}, case, ["tool_correctness"], 0)[0]
+            wrong = score_turn({**base, "tools_called": ["query_clean_jobs"]}, case, ["tool_correctness"], 0)[0]
+            nothing = score_turn({**base, "tools_called": []}, case, ["tool_correctness"], 0)[0]
+            if case["contract_shape"] == "none":
+                assert (nothing["score"], wrong["score"]) == (1.0, 0.0), f"{sid}: a turn that must call nothing scored nothing as a pass"
+            else:
+                assert correct["score"] == 1.0, f"{sid}: the right tool scored {correct['score']}"
+                assert (wrong["score"], nothing["score"]) == (0.0, 0.0), f"{sid}: a wrong or missing tool did not fail"
+
+    def test_a_repeated_correct_tool_call_still_passes(self) -> None:
+        # Observed live: V0-LIST-ROLE-CITY called query_jobs four times and
+        # scored 0.0. Repeating the required tool is not a selection error.
+        case = cases()["V0-LIST-ROLE-CITY"]
+        capture = {"question": case["input"], "answer": "x", "tools_called": ["query_jobs"] * 4}
+        assert score_turn(capture, case, ["tool_correctness"], 0)[0]["score"] == 1.0
 
 
 # ---------------------------------------------------------------------------

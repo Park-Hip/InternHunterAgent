@@ -80,6 +80,18 @@
                costs no round trip. -->
           <button class="composer__stop" id="stop" type="button" hidden>Dừng</button>
         </div>
+        <!-- Turn state, said out loud. A turn can run to the serving deadline,
+             so "the send control vanished" is not enough for the reader to
+             tell working from stuck. The label is a role="status" and is
+             announced once per transition; the counter is a role="timer",
+             which is implicitly aria-live="off", so a number that changes every
+             second is never announced. Both say only what the client knows:
+             a request went out, tokens are arriving. -->
+        <p class="composer__status" id="stream-status" data-state="ready" hidden>
+          <span class="composer__status-dot" aria-hidden="true"></span>
+          <span class="composer__status-text" id="stream-status-text" role="status"></span>
+          <span class="composer__status-elapsed" id="stream-status-elapsed" role="timer">0s</span>
+        </p>
       </form>
 
       <!-- Suggested questions sit BELOW the composer so the conversation flows

@@ -34,6 +34,9 @@ const sendBtn = document.getElementById("send");
 const stopBtn = document.getElementById("stop");
 const dateline = document.getElementById("dateline");
 const toast = document.getElementById("toast");
+const statusLine = document.getElementById("stream-status");
+const statusText = document.getElementById("stream-status-text");
+const statusElapsed = document.getElementById("stream-status-elapsed");
 
 const markdownRenderer = new window.marked.Renderer();
 markdownRenderer.html = () => "";
@@ -59,6 +62,7 @@ let toastTimer = null;
 let inFlight = false;     // derived from state, kept for the chip guard
 let controller = null;    // AbortController for the turn in flight
 let snapshotDate = "";    // measured corpus date, for the no-answer card
+let elapsedTimer = null;  // interval that advances the elapsed counter
 
 // ===========================================================================
 // Frozen-snapshot notice / dateline - read the snapshot date from /api/v1/ready.
@@ -429,7 +433,51 @@ function showToast(message) {
 //   streaming  -> Stop shown
 //   error      -> the turn is styled as failed; the composer is usable again
 // ===========================================================================
+
+// What the reader is told while a turn runs. Deliberately what the client knows
+// and nothing more: the request went out, tokens are arriving. Not "searching
+// the database", which the client has no evidence for.
+const STATE_COPY = {
+  submitted: "Đang gửi câu hỏi…",
+  streaming: "Đang nhận câu trả lời…",
+};
+
+// A turn can legitimately run to the serving deadline, so the wait is stated
+// rather than endured. Elapsed seconds only: the remaining duration is not
+// knowable from the client, and an invented ETA would be a false claim.
+// role="timer" on the counter is implicitly aria-live="off", so this number is
+// never announced; only the state label is, once per transition.
+function showStatus(next) {
+  if (!STATE_COPY[next]) {
+    statusLine.hidden = true;
+    statusLine.dataset.state = next;
+    statusText.textContent = "";
+    if (elapsedTimer !== null) {
+      window.clearInterval(elapsedTimer);
+      elapsedTimer = null;
+    }
+    return;
+  }
+
+  statusLine.dataset.state = next;
+  statusLine.hidden = false;
+  // Written after the line is visible, so the transition is what changed.
+  statusText.textContent = STATE_COPY[next];
+}
+
+function startElapsedTimer() {
+  const startedAt = performance.now();
+  const render = () => {
+    statusElapsed.textContent = `${Math.floor((performance.now() - startedAt) / 1000)}s`;
+  };
+
+  render();
+  if (elapsedTimer !== null) window.clearInterval(elapsedTimer);
+  elapsedTimer = window.setInterval(render, 1000);
+}
+
 function setState(next) {
+  const wasInFlight = inFlight;
   state = next;
   inFlight = next === "submitted" || next === "streaming";
 
@@ -441,6 +489,11 @@ function setState(next) {
   document.body.dataset.streamState = next;
 
   for (const chip of chipRow.querySelectorAll(".chip")) chip.disabled = inFlight;
+
+  showStatus(next);
+  // `submitted` becomes `streaming` on the first token, which must not restart
+  // the clock: the reader waited for the request to leave as well.
+  if (inFlight && !wasInFlight) startElapsedTimer();
 }
 
 // ===========================================================================

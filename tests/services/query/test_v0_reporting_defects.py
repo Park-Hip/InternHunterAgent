@@ -196,7 +196,70 @@ class TestTheExcludedCountSharesTheFiguresScope:
                 filters=[{"field": "salary_currency", "values": ["USD"]}],
             )
         )
-        assert result.aggregate[0].excluded_no_salary == 0
+        assert result.excluded_no_salary == 0
+
+
+# --- #584 the excluded-no-salary count is one total, not one per currency ---
+
+
+class TestTheExcludedCountIsOneTotalNotOnePerCurrency:
+    """One global exclusion count copied into every bucket read as N exclusions for
+    one excluded row. The count is a total over the matched set, so it belongs on the
+    result, is rendered once, and the gate can no longer be satisfied by a number that
+    is merely present on every bucket.
+    """
+
+    THREE_BUCKETS_ONE_EXCLUDED = {
+        "aggregate": [
+            {"currency": "(not disclosed)", "rows": 1, "with_salary_min": 0, "value": None},
+            {"currency": "USD", "rows": 1, "with_salary_min": 1, "value": 2500.0},
+            {"currency": "VND", "rows": 3, "with_salary_min": 3, "value": 23333333.3},
+        ],
+        "excluded": [{"excluded": 1}],
+    }
+
+    def test_the_count_is_carried_once_on_the_result(self) -> None:
+        result = service_with(self.THREE_BUCKETS_ONE_EXCLUDED).answer(
+            JobQueryRequest(shape="aggregate", metric="average_salary")
+        )
+        assert len(result.aggregate) == 3
+        assert result.excluded_no_salary == 1
+
+    def test_no_bucket_carries_its_own_exclusion_count(self) -> None:
+        """The per-bucket field is gone, so nothing can restate the total per currency."""
+        result = service_with(self.THREE_BUCKETS_ONE_EXCLUDED).answer(
+            JobQueryRequest(shape="aggregate", metric="average_salary")
+        )
+        for bucket in result.aggregate:
+            assert "excluded_no_salary" not in type(bucket).model_fields
+
+    def test_the_renderer_states_the_total_once_not_once_per_currency(self) -> None:
+        from src.agents.tools.v0_query_jobs import render_result
+
+        result = service_with(self.THREE_BUCKETS_ONE_EXCLUDED).answer(
+            JobQueryRequest(shape="aggregate", metric="average_salary")
+        )
+        rendered = render_result(result, {"shape": "aggregate", "metric": "average_salary"})
+        assert rendered.count("ROWS WITH NO SALARY (excluded, total): 1") == 1, rendered
+        # The per-bucket spelling is what made three buckets read as three exclusions.
+        assert "excluded_no_salary=" not in rendered, rendered
+
+    def test_a_zero_exclusion_is_still_stated(self) -> None:
+        """A zero is a statement about the set, not the absence of one."""
+        from src.agents.tools.v0_query_jobs import render_result
+
+        result = service_with(
+            {"aggregate": [{"currency": "USD", "rows": 1, "with_salary_min": 1, "value": 2500.0}],
+             "excluded": [{"excluded": 0}]}
+        ).answer(JobQueryRequest(shape="aggregate", metric="average_salary"))
+        rendered = render_result(result, {"shape": "aggregate", "metric": "average_salary"})
+        assert "ROWS WITH NO SALARY (excluded, total): 0" in rendered
+
+    def test_a_result_that_is_not_a_salary_aggregate_carries_no_count(self) -> None:
+        result = service_with({"list": [{"id": 1}], "total": [{"count": 1}]}).answer(
+            JobQueryRequest(shape="list")
+        )
+        assert result.excluded_no_salary is None
 
 
 # --- #541 one owner per caveat, and a docstring that matches the code --------

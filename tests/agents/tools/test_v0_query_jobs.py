@@ -165,14 +165,15 @@ class TestEvidenceRendering:
             caveats=["CURRENCY_SCOPED", "PERIOD_UNKNOWN"],
             aggregate=[
                 SalaryAggregate(
-                    currency="VND", rows=3, with_salary_min=3, value=23333333.3, excluded_no_salary=1
+                    currency="VND", rows=3, with_salary_min=3, value=23333333.3
                 )
             ],
+            excluded_no_salary=1,
         )
         output = render_result(result, {"shape": "aggregate", "metric": "average_salary"})
         assert "CURRENCY VND" in output
         assert "rows=3" in output
-        assert "excluded_no_salary=1" in output
+        assert "ROWS WITH NO SALARY (excluded, total): 1" in output
         assert "CAVEAT [PERIOD_UNKNOWN]" in output
 
     def test_a_group_names_the_field_and_every_value(self) -> None:

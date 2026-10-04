@@ -275,8 +275,35 @@ class TestDatasetGoldens:
         assert by_currency["VND"].rows == 3
         assert by_currency["VND"].value == 23333333.3
         assert by_currency["(not disclosed)"].value is None
-        assert by_currency["VND"].excluded_no_salary == 1
+        assert result.excluded_no_salary == 1
         assert {"CURRENCY_SCOPED", "PERIOD_UNKNOWN", "DENOMINATOR_STATED"} <= set(result.caveats)
+
+    def test_one_excluded_row_is_reported_once_across_three_currencies(self, service) -> None:
+        """The end-user defect of #584, on the real fixture.
+
+        Three currency buckets each carried the single global count of 1, so the
+        served tool said one row was excluded three times for one excluded row
+        (id 9). The count is one total over the matched set, so the rendered tool
+        output states it exactly once.
+        """
+        from src.agents.tools.v0_query_jobs import render_result
+
+        result = answer(
+            service,
+            shape="aggregate",
+            metric="average_salary",
+            filters=[{"field": "role", "values": ["Data Scientist"]}],
+        )
+        assert len(result.aggregate) == 3, "three currency buckets"
+        assert result.excluded_no_salary == 1
+
+        rendered = render_result(result, {"shape": "aggregate", "metric": "average_salary"})
+        assert rendered.count("ROWS WITH NO SALARY (excluded, total): 1") == 1, rendered
+        assert "excluded_no_salary=" not in rendered, rendered
+
+        # The three buckets' own row counts still account for all five matched rows,
+        # so the single excluded row is read once rather than once per currency.
+        assert sum(item.rows for item in result.aggregate) == result.match_total == 5
 
     def test_top_n_salary(self, service) -> None:
         result = answer(

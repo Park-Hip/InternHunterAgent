@@ -77,6 +77,25 @@ class StaticServingTests(unittest.TestCase):
         self.assertIn('aria-relevant="additions text"', index)
         self.assertIn('aria-busy="false"', index)
 
+    def test_a_failed_turn_publishes_the_failure_not_the_partial_answer(self) -> None:
+        """A turn that fails after tokens streamed must not republish the fragment.
+
+        `endTurn` renders `ctx.rawAnswer` and publishes it to the accessible copy.
+        Calling it after the failure message was painted overwrites both with a
+        truncated answer, so the reader is told nothing about the failure and a
+        screen reader announces a fragment as if it were the whole answer.
+
+        CI has no client-side DOM harness, so this pins the call shape rather than
+        the rendered result.
+        """
+        app = self.client.get("/app.js").text
+
+        handler = app[app.index('ev === "error"') : app.index('ev === "done"')]
+
+        self.assertIn("failTurn(ctx, data.message)", handler)
+        self.assertNotIn("endTurn(", handler)
+        self.assertNotIn("showErrorBubble", app)
+
     def test_composer_offers_a_stop_control(self) -> None:
         index = self.client.get("/").text
         app = self.client.get("/app.js").text

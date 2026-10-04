@@ -353,16 +353,22 @@ function showNoAnswerCard(ctx, query) {
   scrollToEnd();
 }
 
-// Replace the answer with a friendly error bubble (mid-stream `error` event).
-function showErrorBubble(ctx, message) {
+const DEFAULT_TURN_ERROR =
+  "Hiện chưa thể hoàn tất yêu cầu này. Vui lòng thử lại sau.";
+
+// Fail a turn: tell the reader it failed, and say why. Whatever streamed before
+// the failure is a fragment rather than an answer, so it is neither rendered as
+// Markdown nor published to the accessible copy. The failure text takes the same
+// single-announcement path an answer does, so a failed turn is announced once and
+// stays navigable like a successful one.
+function failTurn(ctx, message) {
+  flushPaint(ctx);
   ctx.agent.classList.remove("is-streaming");
   ctx.agent.classList.add("is-error");
+
   ctx.answer.classList.remove("turn__answer--pending");
-  ctx.answer.textContent =
-    message || "Hiện chưa thể hoàn tất yêu cầu này. Vui lòng thử lại sau.";
-  // The error text is published through the same single-announcement path, so a
-  // failed turn is announced once and stays navigable like a successful one.
-  ctx.spoken.textContent = ctx.answer.textContent;
+  ctx.answer.textContent = message || DEFAULT_TURN_ERROR;
+  publishAnswer(ctx, ctx.answer.textContent);
 }
 
 // Publish the finished answer to the accessible copy exactly once, then unmute
@@ -469,8 +475,7 @@ async function ask(query) {
     // Pre-stream failure: a real HTTP status before the stream body opens.
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}));
-      showErrorBubble(ctx, "Câu hỏi chưa được gửi đi.");
-      endTurn(ctx);
+      failTurn(ctx, "Câu hỏi chưa được gửi đi.");
       showToast(payload.detail || "Đã xảy ra lỗi. Vui lòng thử lại.");
       return;
     }
@@ -504,8 +509,7 @@ async function ask(query) {
           if (data.trace_url) showTraceLink(ctx, data.trace_url);
         } else if (ev === "error") {
           setState("error");
-          showErrorBubble(ctx, data.message);
-          endTurn(ctx);
+          failTurn(ctx, data.message);
           return;                                 // stop; no reconnect
         } else if (ev === "done") {
           endTurn(ctx);
@@ -533,8 +537,7 @@ async function ask(query) {
     }
     // Network drop mid-stream: degrade to a friendly bubble, never a crash.
     setState("error");
-    showErrorBubble(ctx, "Kết nối bị gián đoạn - vui lòng thử lại.");
-    endTurn(ctx);
+    failTurn(ctx, "Kết nối bị gián đoạn - vui lòng thử lại.");
   } finally {
     if (controller && controller.signal === signal) controller = null;
     // Ready on every path, including Stop and error: the composer is never left

@@ -37,6 +37,21 @@ def load_max_detail_ids() -> int:
     return max_detail_ids
 
 
+#: Columns kept out of the rendered detail pairs.
+#:
+#: `id` is a surrogate key within one data load, not a business field. The v0
+#: contract permits it for chaining a detail request to a listed posting and
+#: forbids describing it as a durable identifier, so echoing it back as one more
+#: `column=value` pair teaches the model that a machine column exists on the
+#: posting and invites it to repeat the raw key to the reader, which is the
+#: `no_schema_identifier_leak` rule in docs/reference/agent-behavior.md.
+#:
+#: Dropping it from the text costs nothing: the model supplied these ids as the
+#: tool argument, and the structured TableArtifact handed to the obligations
+#: pass keeps the key, so capping, lookup and chaining are untouched.
+_UNRENDERED_COLUMNS = frozenset({"id"})
+
+
 def _build_answer(ids: list[int], capped_ids: list[int], rows: list[dict]) -> str:
     lines = []
     if len(capped_ids) < len(ids):
@@ -50,7 +65,11 @@ def _build_answer(ids: list[int], capped_ids: list[int], rows: list[dict]) -> st
         if row is None:
             lines.append(f"Không tìm thấy tin tuyển dụng nào với mã {job_id}.")
             continue
-        pairs = ", ".join(f"{column}={value}" for column, value in row.items())
+        pairs = ", ".join(
+            f"{column}={value}"
+            for column, value in row.items()
+            if column not in _UNRENDERED_COLUMNS
+        )
         lines.append(f"- {pairs}")
 
     return "\n".join(lines)

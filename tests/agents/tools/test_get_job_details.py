@@ -23,6 +23,82 @@ class GetJobDetailsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Data Analyst Intern", result)
         self.assertIn("Full description text", result)
 
+    @patch("src.agents.tools.get_job_details.fetch_job_details")
+    async def test_the_surrogate_key_is_not_rendered_in_the_detail_answer(
+        self, mock_fetch_job_details
+    ) -> None:
+        from src.agents.tools.get_job_details import run_get_job_details
+
+        mock_fetch_job_details.return_value = [
+            {"id": 18, "title": "AI Expert", "company": "Viettel High Tech", "location": "Hanoi"},
+        ]
+
+        result = await run_get_job_details([18])
+
+        self.assertNotIn("id=", result)
+        self.assertNotIn("id=18", result)
+
+    @patch("src.agents.tools.get_job_details.fetch_job_details")
+    async def test_every_other_stored_value_is_still_reproduced_exactly(
+        self, mock_fetch_job_details
+    ) -> None:
+        from src.agents.tools.get_job_details import run_get_job_details
+
+        mock_fetch_job_details.return_value = [
+            {
+                "id": 18,
+                "title": "AI Expert",
+                "company": "Viettel High Tech",
+                "location": "Hanoi",
+                "source_url": "https://example.test/ai-expert",
+                "is_salary_negotiable": False,
+            },
+        ]
+
+        result = await run_get_job_details([18])
+
+        for column, value in (
+            ("title", "AI Expert"),
+            ("company", "Viettel High Tech"),
+            ("location", "Hanoi"),
+            ("source_url", "https://example.test/ai-expert"),
+            ("is_salary_negotiable", "False"),
+        ):
+            self.assertIn(f"{column}={value}", result)
+
+    @patch("src.agents.tools.get_job_details.fetch_job_details")
+    async def test_the_structured_artifact_keeps_the_key_for_chaining(
+        self, mock_fetch_job_details
+    ) -> None:
+        from src.agents.tools.get_job_details import _table_from_detail_rows
+
+        mock_fetch_job_details.return_value = [{"id": 18, "title": "AI Expert"}]
+
+        table = _table_from_detail_rows([{"id": 18, "title": "AI Expert"}])
+
+        self.assertIn("id", table.columns)
+        self.assertEqual(table.rows, [[18, "AI Expert"]])
+
+    @patch("src.agents.tools.get_job_details.load_max_detail_ids")
+    @patch("src.agents.tools.get_job_details.fetch_job_details")
+    async def test_capped_detail_answer_still_hides_the_key_for_every_row(
+        self, mock_fetch_job_details, mock_load_max_detail_ids
+    ) -> None:
+        from src.agents.tools.get_job_details import run_get_job_details
+
+        mock_load_max_detail_ids.return_value = 2
+        mock_fetch_job_details.return_value = [
+            {"id": 1, "title": "Intern A"},
+            {"id": 2, "title": "Intern B"},
+        ]
+
+        result = await run_get_job_details([1, 2, 3])
+
+        self.assertIn("2 trong số 3", result)
+        self.assertIn("Intern A", result)
+        self.assertIn("Intern B", result)
+        self.assertNotIn("id=", result)
+
     @patch("src.agents.tools.get_job_details.load_max_detail_ids")
     @patch("src.agents.tools.get_job_details.fetch_job_details")
     async def test_id_cap_holds_and_notice_present(

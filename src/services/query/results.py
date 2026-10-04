@@ -66,7 +66,6 @@ class SalaryAggregate(BaseModel):
     rows: int
     with_salary_min: int
     value: float | None
-    excluded_no_salary: int
 
 
 class ShareResult(BaseModel):
@@ -104,6 +103,13 @@ class QueryResult(BaseModel):
     # The two counts of a comparison, side 0 and side 1, in that order.
     compare_sides: list[int] = Field(default_factory=list)
     aggregate: list[SalaryAggregate] = Field(default_factory=list)
+    # Rows excluded from a salary aggregate for having no number at all. This is
+    # ONE count over the whole matched set, not a per-currency count: the compiler
+    # computes it once, scoped to the same set as the figures beside it. It lives
+    # here, on the result, rather than on each SalaryAggregate, because repeating
+    # it per bucket would make one excluded row read as one per currency. None
+    # means the result is not a salary aggregate. See [#584].
+    excluded_no_salary: int | None = None
     share: ShareResult | None = None
     # Rows excluded from a ranking because the ranked field was empty.
     skipped_unranked: int | None = None

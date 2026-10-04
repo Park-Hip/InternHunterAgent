@@ -107,6 +107,8 @@ def _grade_plan(case: dict[str, Any], result: Any) -> tuple[float, str]:
 
 def _grade_result(case: dict[str, Any], result: Any) -> tuple[float, str]:
     """Row ids, aggregates, the total, the state, and the labels must all agree."""
+    from src.agents.tools.v0_query_jobs import render_result
+
     problems: list[str] = []
 
     expected_state = case["contract_state"].lower()
@@ -161,10 +163,23 @@ def _grade_result(case: dict[str, Any], result: Any) -> tuple[float, str]:
                 f"salary figures {observed} are not the reviewed {case['expected_figures']}"
             )
     if "excluded_no_salary" in case and result.aggregate:
-        excluded = {a.excluded_no_salary for a in result.aggregate}
-        if excluded != {case["expected_aggregates"]["excluded_no_salary"]}:
+        # One total over the whole matched set, asserted on the result rather than
+        # on any bucket. The previous check compared a SET of per-bucket values to
+        # one scalar, so a count repeated into every bucket produced the same
+        # one-element set and passed: it could not tell "one row excluded in total"
+        # from "three currencies each claiming one". See [#584].
+        expected_excluded = case["expected_aggregates"]["excluded_no_salary"]
+        if result.excluded_no_salary != expected_excluded:
             problems.append(
-                f"excluded {excluded} is not the reviewed {case['expected_aggregates']['excluded_no_salary']}"
+                f"excluded total {result.excluded_no_salary} is not the reviewed {expected_excluded}"
+            )
+        # The count is a total, so the renderer must state it exactly once. A count
+        # restated per currency is the defect this assertion exists to catch.
+        rendered = render_result(result, case.get("expected_request"))
+        if rendered.count("ROWS WITH NO SALARY (excluded, total):") != 1:
+            problems.append(
+                "the excluded-no-salary total is not rendered exactly once, so a single "
+                "excluded row can read as one per currency"
             )
     if "total" in aggregates and result.match_total != aggregates["total"]:
         problems.append(f"total {result.match_total} is not the reviewed {aggregates['total']}")

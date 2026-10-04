@@ -268,10 +268,16 @@ def _salary_lines(result: QueryResult) -> list[str]:
     for item in result.aggregate:
         lines.append(
             f"CURRENCY {item.currency}: value={_value_text(item.value)} "
-            f"(rows={item.rows}, with_salary_min={item.with_salary_min}, "
-            f"excluded_no_salary={item.excluded_no_salary})"
+            f"(rows={item.rows}, with_salary_min={item.with_salary_min})"
         )
-    return lines or ["AGGREGATE: không có số liệu lương nào để tính."]
+    lines = lines or ["AGGREGATE: không có số liệu lương nào để tính."]
+    # The count of rows with no salary is ONE total over the whole matched set, so
+    # it is reported once, after the figures, and named as a total. Repeating it
+    # per currency made one excluded row read as one excluded row per currency.
+    # See [#584].
+    if result.excluded_no_salary is not None:
+        lines.append(f"ROWS WITH NO SALARY (excluded, total): {result.excluded_no_salary}")
+    return lines
 
 
 def _value_text(value: Any) -> str:

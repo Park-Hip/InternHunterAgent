@@ -299,7 +299,6 @@ class JobQueryService:
                 rows=int(row.get("rows", 0)),
                 with_salary_min=int(row.get("with_salary_min", 0)),
                 value=_float_or_none(row.get("value")),
-                excluded_no_salary=excluded,
             )
             for row in rows.get("aggregate", [])
         ]
@@ -314,6 +313,9 @@ class JobQueryService:
             match_total=sum(item.rows for item in aggregates),
             displayed_count=len(aggregates),
             aggregate=aggregates,
+            # One count for the whole aggregate, reported once beside the figures
+            # rather than copied into every bucket. See [#584].
+            excluded_no_salary=excluded,
         )
 
 

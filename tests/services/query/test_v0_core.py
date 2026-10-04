@@ -521,7 +521,7 @@ class TestServiceAssembly:
         )
         result = service.answer(JobQueryRequest(shape="aggregate", metric="average_salary"))
         assert result.aggregate[0].currency == "USD"
-        assert result.aggregate[0].excluded_no_salary == 1
+        assert result.excluded_no_salary == 1
         assert {"CURRENCY_SCOPED", "PERIOD_UNKNOWN", "DENOMINATOR_STATED"} <= set(result.caveats)
 
     def test_a_comparison_reports_each_side(self) -> None:

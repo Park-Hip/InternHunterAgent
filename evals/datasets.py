@@ -21,6 +21,14 @@ _DEFAULT_DATASET = "default"
 
 _TOOL_KEYS = frozenset({"expected_tools", "tool_expectation", "turn_tool_expectations", "tool_order"})
 _TOOL_FIELDS = frozenset({"required", "allowed"})
+#: The keys that declare a tool contract. ``tool_order`` refines one, so it is
+#: not a declaration on its own.
+_TOOL_DECLARATIONS = frozenset({"expected_tools", "tool_expectation", "turn_tool_expectations"})
+
+
+def _declares_tool_contract(scenario: dict[str, Any]) -> bool:
+    """Whether the scenario states which tools a turn may and must call."""
+    return any(scenario.get(key) for key in _TOOL_DECLARATIONS)
 
 
 def _validate_tool_expectations(sid: str, scenario: dict[str, Any]) -> None:
@@ -85,6 +93,17 @@ class DatasetSpec:
             if "rubric" in names and not scenario.get("rubric"):
                 raise ValueError(f"Scenario {sid} has no rubric")
             _validate_tool_expectations(sid, scenario)
+            if self.is_v0 and "tool_correctness" in names and not _declares_tool_contract(scenario):
+                # #585: an absent declaration resolves to "nothing is required and
+                # nothing is allowed", which scores a correct tool call 0.0 and a
+                # turn that called nothing 1.0. The metric cannot discriminate on a
+                # contract nobody wrote, so the governed dataset refuses to load.
+                raise ValueError(
+                    f"Scenario {sid} declares no tool contract. A governed case must state "
+                    f"one of {sorted(_TOOL_DECLARATIONS)}: an absent contract resolves to an "
+                    "empty one and inverts tool_correctness. Use "
+                    "{required: [], allowed: []} for a turn that must call nothing."
+                )
         return payload
 
 

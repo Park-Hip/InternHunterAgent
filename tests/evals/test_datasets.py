@@ -47,6 +47,13 @@ def write_dataset(tmp_path, *scenarios) -> DatasetSpec:
     return DatasetSpec(path)
 
 
+def write_governed_dataset(tmp_path, *scenarios) -> DatasetSpec:
+    """A dataset whose file name makes it governed, so is_v0 is true."""
+    path = tmp_path / "v0_cases.yaml"
+    path.write_text(yaml.safe_dump(list(scenarios), allow_unicode=True), encoding="utf-8")
+    return DatasetSpec(path)
+
+
 def test_unread_tool_key_is_rejected(tmp_path) -> None:
     spec = write_dataset(tmp_path, {"id": "X-1", "input": "q", "expected": "a", "metrics": ["tool_correctness"], "tool_expectations": {"required": []}})
     with pytest.raises(ValueError, match="unread tool key"):
@@ -63,6 +70,48 @@ def test_tool_expectation_fields_are_lists(tmp_path) -> None:
     spec = write_dataset(tmp_path, {"id": "X-1", "input": "q", "expected": "a", "metrics": ["tool_correctness"], "tool_expectation": {"required": [], "allowed": "query_clean_jobs"}})
     with pytest.raises(ValueError, match="must list allowed tools"):
         spec.scenarios()
+
+
+class TestGovernedToolContract:
+    """#585: a governed case that declares no tool contract must not load.
+
+    An absent declaration resolves to "nothing required, nothing allowed", which
+    inverts tool_correctness: a correct call scores 0.0 and a turn that called
+    nothing scores 1.0. The replay registry is not governed and keeps its
+    permissive default, so these cases name the v0 file only.
+    """
+
+    def test_missing_tool_contract_is_rejected(self, tmp_path) -> None:
+        spec = write_governed_dataset(tmp_path, {"id": "X-1", "input": "q", "expected": "a", "metrics": ["tool_correctness"]})
+        with pytest.raises(ValueError, match="declares no tool contract"):
+            spec.scenarios()
+
+    def test_an_empty_expected_tools_list_is_still_no_declaration(self, tmp_path) -> None:
+        # `expected_tools: []` is falsy, so it resolves exactly like an absent
+        # key. Treating it as a declaration would reopen the inversion through
+        # the same door.
+        spec = write_governed_dataset(tmp_path, {"id": "X-1", "input": "q", "expected": "a", "metrics": ["tool_correctness"], "expected_tools": []})
+        with pytest.raises(ValueError, match="declares no tool contract"):
+            spec.scenarios()
+
+    def test_an_explicit_no_tool_contract_is_accepted(self, tmp_path) -> None:
+        spec = write_governed_dataset(tmp_path, {"id": "X-1", "input": "q", "expected": "a", "metrics": ["tool_correctness"], "tool_expectation": {"required": [], "allowed": []}})
+        assert [c["id"] for c in spec.scenarios()] == ["X-1"]
+
+    def test_a_case_not_scored_on_tools_needs_no_contract(self, tmp_path) -> None:
+        spec = write_governed_dataset(tmp_path, {"id": "X-1", "input": "q", "expected": "a", "metrics": ["rubric"], "rubric": "r"})
+        assert [c["id"] for c in spec.scenarios()] == ["X-1"]
+
+    def test_the_replay_registry_keeps_its_permissive_default(self, tmp_path) -> None:
+        # The v1 registry has 7 cases that declare none. This fix is scoped to
+        # the governed dataset; the gap there is tracked on its own issue.
+        spec = write_dataset(tmp_path, {"id": "X-1", "input": "q", "expected": "a", "metrics": ["tool_correctness"]})
+        assert [c["id"] for c in spec.scenarios()] == ["X-1"]
+
+    def test_tool_order_alone_is_not_a_declaration(self, tmp_path) -> None:
+        spec = write_governed_dataset(tmp_path, {"id": "X-1", "input": "q", "expected": "a", "metrics": ["tool_correctness"], "tool_order": True})
+        with pytest.raises(ValueError, match="declares no tool contract"):
+            spec.scenarios()
 
 
 class TestRegistry:

@@ -121,6 +121,21 @@ class StaticServingTests(unittest.TestCase):
         self.assertIn("Đang gửi câu hỏi", app)
         self.assertIn("Đang nhận câu trả lời", app)
 
+    def test_live_region_is_muted_before_the_turn_is_appended(self) -> None:
+        """The append is the announcement, so muting has to happen before it.
+
+        A role="log" announces added nodes. Appending the turn while the log is
+        still unmuted makes the question speak once on arrival and the answer
+        speak again when aria-busy clears, which is the double utterance the
+        screen-reader contract above the file header promises to avoid.
+        """
+        app = self.client.get("/app.js").text
+
+        muted = app.index('conversation.setAttribute("aria-busy", "true")')
+        appended = app.index("conversation.appendChild(turn)")
+
+        self.assertLess(muted, appended)
+
     def test_composer_offers_a_stop_control(self) -> None:
         index = self.client.get("/").text
         app = self.client.get("/app.js").text

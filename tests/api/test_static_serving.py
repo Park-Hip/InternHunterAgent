@@ -96,6 +96,31 @@ class StaticServingTests(unittest.TestCase):
         self.assertNotIn("endTurn(", handler)
         self.assertNotIn("showErrorBubble", app)
 
+    def test_turn_status_announces_the_state_and_silences_the_counter(self) -> None:
+        """A turn can run for two minutes, so the state is stated, not implied.
+
+        Two roles carry the whole accessibility contract here, so they are
+        pinned: the label is a role="status" and is announced once per
+        transition, and the per-second counter is a role="timer", which is
+        implicitly aria-live="off". An aria-live attribute anywhere in the block
+        would override both defaults and make a number that changes every second
+        speak, which is the failure this design exists to avoid.
+        """
+        index = self.client.get("/").text
+        app = self.client.get("/app.js").text
+
+        start = index.index('id="stream-status"')
+        block = index[start : index.index("</form>", start)]
+
+        self.assertIn('id="stream-status-text" role="status"', block)
+        self.assertIn('id="stream-status-elapsed" role="timer"', block)
+        self.assertNotIn("aria-live", block)
+        # Idle on first paint, so the suggested questions do not shift.
+        opening_tag = index[index.rindex("<p", 0, start) : index.index(">", start)]
+        self.assertIn("hidden", opening_tag)
+        self.assertIn("Đang gửi câu hỏi", app)
+        self.assertIn("Đang nhận câu trả lời", app)
+
     def test_composer_offers_a_stop_control(self) -> None:
         index = self.client.get("/").text
         app = self.client.get("/app.js").text

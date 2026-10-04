@@ -19,6 +19,8 @@ evals/runs/*
 !evals/runs/iha-v8-judge-combined-judge-scores.json
 !evals/runs/iha-v8-judge-combined-agreement-report.json
 .lavish/
+# Screenshots the mandatory UI review step writes; regenerable, never committed.
+.playwright-cli/
 
 # Agent-skill installs whose docs reference artifacts created by later workflows
 .agents/skills/deepeval/

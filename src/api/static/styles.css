@@ -389,6 +389,50 @@ textarea { font: inherit; color: inherit; }
 }
 .turn__trace a:hover { color: var(--accent); }
 
+/* ---- turn status ---------------------------------------------------------
+   A turn can run to the serving deadline (`stream_turn_timeout_seconds`), so the
+   state of the turn is stated rather than implied by the send control vanishing.
+   What it states is what the client actually knows: a request went out, tokens
+   are arriving. It never claims what the agent is doing, because the client has
+   no evidence for that. Elapsed time only, never an estimate: the remaining
+   duration is not knowable from here. */
+.composer__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.composer__status[hidden] { display: none; }
+/* The same accent the tool card uses while a call is running, so "the agent is
+   working" is one colour across the transcript and the composer. */
+.composer__status-dot {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.composer__status-elapsed {
+  /* Tabular so the number does not shift the label as it counts. */
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+/* No motion is the default: with reduced motion the dot stays a static circle,
+   which is already a visible "something is happening". */
+@media (prefers-reduced-motion: no-preference) {
+  .composer__status[data-state="submitted"] .composer__status-dot,
+  .composer__status[data-state="streaming"] .composer__status-dot {
+    animation: composer-status-pulse var(--dur-standard) var(--ease-standard)
+      infinite alternate;
+  }
+}
+@keyframes composer-status-pulse {
+  from { opacity: 1; }
+  to { opacity: 0.3; }
+}
+
 /* ---- suggested questions (leads) ------------------------------------- */
 .leads { margin-top: var(--space-6); }
 

@@ -16,12 +16,12 @@
 //
 // Screen-reader contract, because mutating a live region token by token makes it
 // unusable: the conversation is a role="log" in the initial markup; aria-busy is
-// set before the first token; tokens land in an aria-hidden visual node; and on
-// completion the full answer is written ONCE to a visually-hidden node before
-// aria-busy is cleared. That yields exactly one announcement per answer, and the
-// answer stays navigable afterwards. There is no W3C normative technique for
-// streaming into a live region, so this is verified by hand with NVDA and
-// VoiceOver rather than assumed correct.
+// set before the turn is appended, because the append is itself the announcement;
+// tokens land in an aria-hidden visual node; and on completion the full answer is
+// written ONCE to a visually-hidden node before aria-busy is cleared. That yields
+// exactly one announcement per answer, and the answer stays navigable afterwards.
+// There is no W3C normative technique for streaming into a live region, so this is
+// verified by hand with NVDA and VoiceOver rather than assumed correct.
 // ===========================================================================
 
 // --- element handles -------------------------------------------------------
@@ -138,11 +138,13 @@ function startTurn(query) {
 
   turn.appendChild(you);
   turn.appendChild(agent);
-  conversation.appendChild(turn);
 
-  // Mute the log before the first token, so nothing that follows is announced
-  // piecemeal.
+  // Mute the log before the turn is appended, not before the first token: the
+  // append is itself an announcement, so muting afterwards lets the question
+  // speak for itself and the answer speak again when aria-busy clears. Muting
+  // first collects the whole turn into one utterance at publish time.
   conversation.setAttribute("aria-busy", "true");
+  conversation.appendChild(turn);
 
   scrollToEnd();
   return {

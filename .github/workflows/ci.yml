@@ -72,6 +72,10 @@ jobs:
 
       - run: uv run mypy
 
+      # The SQL generator must never name a column its own prompt does not
+      # declare (issue #604). No database, no network, no secrets.
+      - run: uv run python scripts/audit_sql_prompt_columns.py
+
       # eval-marked tests are auto-deselected by pyproject addopts; do not add -m.
       - run: uv run pytest -q
 

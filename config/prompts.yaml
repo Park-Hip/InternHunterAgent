@@ -2,8 +2,15 @@
 # evidence for unrelated prompt surfaces remains comparable.
 prompt_versions:
   system: v13
-  schema_context: v11
-  sql_generation: v13
+  # v12 (issue #604): the column guide described three columns using the bare word
+  # "source", which is a hidden ingestion column, so a reader could take it for a
+  # column reference. Wording only; no column was added or removed.
+  schema_context: v12
+  # v14 (issue #604): the real-column list now declares `id`, which this same prompt
+  # orders first on every listing. Through v13 the prompt told the model to SELECT id
+  # and, further down the same prompt, that id was not a real column. The bare word
+  # "source" is gone from this surface too, for the reason given at v12 above.
+  sql_generation: v14
   # The governed v0 system prompt. A request resolves either this surface or
   # `system`, never a mix, and `agent.agent_v0` in config/settings.yaml is the one
   # switch that moves the prompt and the tool registration together.
@@ -96,7 +103,7 @@ prompts:
     Table: clean_jobs
     Columns:
     - id (bigint) — stable surrogate identifier for a posting within this conversation; not durable across data reloads.
-    - title (text) — raw job title from the source posting
+    - title (text) — raw job title, exactly as the posting states it
     - company (text) — company name
     - role (text) — canonical role category (e.g. Data Scientist, Software Engineer, Other for unmatched)
     - description (text) — merged blob of job description, requirements, and benefits
@@ -104,8 +111,8 @@ prompts:
     - location (text) — canonical city/region (e.g. Ho Chi Minh City, Hanoi; unmatched → Other)
     - source_url (text) — direct link to the original job posting
     - job_level (text) — seniority level; one of: Experienced (non-manager), Manager, Fresher/Entry level, Intern/Student, Director and above.
-    - listing_expires_on (date, nullable) — the source's stated listing-expiry date; may be NULL. Not a posting date.
-    - created_on (date, nullable) — when the source record was created on VietnamWorks; may be NULL. This is not necessarily when the role opened or was published.
+    - listing_expires_on (date, nullable) — the listing-expiry date the posting states; may be NULL. Not a posting date.
+    - created_on (date, nullable) — when the VietnamWorks record was created; may be NULL. This is not necessarily when the role opened or was published.
     - is_internship (boolean) — true if the posting is an internship
     - salary_min (numeric, nullable) — minimum salary; NULL if not disclosed
     - salary_max (numeric, nullable) — maximum salary; NULL if not disclosed
@@ -142,12 +149,12 @@ prompts:
     - When the user names a skill or technology concept rather than an exact job title (for example "ML", "AI", "data science"), expand the term to its full form and match only the expanded form against tech_stack, title, and description (e.g. tech_stack ILIKE '%machine learning%' OR title ILIKE '%machine learning%' OR description ILIKE '%machine learning%'). Do NOT add role-category filters (such as role ILIKE '%ML Engineer%') and do NOT also search the bare abbreviation as its own substring pattern ('%ML%' also matches "MLOps" or "MLflow"): a role category is broader than the term and a bare abbreviation matches unrelated fragments, so rows would enter the result without containing the requested concept anywhere. Hedge in the answer that matching is free-text based.
     - The description field contains Vietnamese and English prose. For free-text concepts, match both the English and Vietnamese forms when known (for example, "remote" and "từ xa", or "mentorship" and "cố vấn") rather than searching only one language.
     - listing_expires_on is a DATE (nullable) — the listing's stated expiry. Use date predicates, not ILIKE (e.g. listing_expires_on >= CURRENT_DATE for still-open; ORDER BY listing_expires_on for soonest-expiring). Treat NULL as an unknown expiry.
-    - created_on is a DATE (nullable) — when the source record was created on VietnamWorks, not necessarily when the role opened or was published. Use date predicates, not ILIKE. For "most recent" / "newest" posting questions, ORDER BY created_on DESC NULLS LAST. Treat NULL as unknown.
+    - created_on is a DATE (nullable) — when the VietnamWorks record was created, not necessarily when the role opened or was published. Use date predicates, not ILIKE. For "most recent" / "newest" posting questions, ORDER BY created_on DESC NULLS LAST. Treat NULL as unknown.
     - salary_min and salary_max are numeric; use numeric comparisons and always scope by currency (e.g. salary_min >= 1000 AND salary_currency = 'USD').
     - When ranking or finding the highest/lowest salary across multiple currencies, return one non-ranked group per salary_currency and order only within each group. Never name one global winner or compare raw amounts across currencies. Do not invent a salary payment period.
     - is_internship is a boolean; filter with is_internship = true or is_internship = false.
     - is_salary_negotiable is a boolean; filter with is_salary_negotiable = true.
-    - Reference only real columns: title, company, role, description, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable. Never invent a column.
+    - Reference only real columns: id, title, company, role, description, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable. Never invent a column.
 
 # Behavior glossary - FINAL canonical phrasings (frozen 2026-07-11, T0015.2).
 # Machine source of truth for the G47 glossary in research/agent-behavior-question-bank.md section 10.

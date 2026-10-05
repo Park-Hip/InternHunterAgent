@@ -10,7 +10,7 @@ from src.api.schemas import (
     STREAM_EVENT_SCHEMA,
     QueryRequest,
     QueryResponse,
-    StreamErrorResponse,
+    StreamErrorEvent,
 )
 from src.core.errors import (
     BUSY_MESSAGE,
@@ -145,9 +145,15 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
                     yield item
                     continue
                 event_type = item["type"]
-                data = {key: value for key, value in item.items() if key != "type"}
+                # The payload must carry `type`, not drop it. The published
+                # STREAM_EVENT_SCHEMA is a union discriminated on `type`, so every
+                # variant lists it as required; a client that builds a validator from
+                # /openapi.json rejects a frame without it. The SSE `event:` line
+                # stays the authoritative name, so this is additive for readers that
+                # already parse by key.
+                data = dict(item)
                 if event_type == "error":
-                    data = StreamErrorResponse(**data).model_dump()
+                    data = StreamErrorEvent(**data).model_dump()
                 yield _server_sent_event(event=event_type, data=data)
         finally:
             await stream.aclose()

@@ -4,8 +4,12 @@ api:
   max_query_chars: 2000
   stream_heartbeat_seconds: 15  # SSE comment cadence; keep below normal proxy idle windows.
   demo:
-    # Fallback surfaced by /api/v1/ready when clean_jobs has no measurable
-    # freshness. Frozen at the last successfully measured ingest (2026-08-27).
+    # Static last resort for /api/v1/ready, returned only when the
+    # MAX(last_seen_at) query over clean_jobs returns NULL or raises.
+    # Not a claim about the corpus: documentation and UI read the measured
+    # value from the endpoint. Do not advance this string to look current -
+    # a fallback that is never surfaced would only become a second stale
+    # date, invalidated by the next ingest run.
     data_snapshot_date: "2026-08-27"
   cors:
     allowed_origins: []  # Set deployed/demo UI origin(s) here later; keep empty for same-origin or no-browser use.

@@ -192,8 +192,9 @@ the frozen agent-visible contract stays consistent across prompts, fixtures, and
 
 The scheduled trigger of `.github/workflows/ingestion.yml` is removed under the frozen-data
 portfolio posture.
-The served corpus is a historical snapshot (last measured `2026-08-27`) and is not refreshed;
-`workflow_dispatch` remains for an approved future recovery.
+The served corpus is a historical snapshot, measured live rather than pinned in this file:
+`/api/v1/ready` reports the date. It is not refreshed; `workflow_dispatch` remains for an approved
+future recovery.
 
 This is the intended posture for the public portfolio release, not a temporary gate or a state
 "below specification".

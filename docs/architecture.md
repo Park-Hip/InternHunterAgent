@@ -80,8 +80,8 @@ These are capabilities a user can observe, independent of how they are built.
 
   **Release exception.** This capability is not exercised by the public release. The deployed demo
   is a frozen-data portfolio posture (section 1.7): scheduled ingestion is disabled and the served
-  snapshot (last measured `2026-08-27`) is historical. This bullet is the original v1.0 MVP
-  definition, not a claim the current demo satisfies.
+  snapshot is historical, its measured date reported by `/api/v1/ready`. This bullet is the original
+  v1.0 MVP definition, not a claim the current demo satisfies.
 - **Hold a conversation.** A user can ask an initial question and refine it naturally - "only the
   Python ones", "which of those are remote" - without restating earlier context.
 - **Remember within a session.** Each conversation is remembered while it is happening, persists
@@ -170,8 +170,9 @@ The product can grow in those directions only through a recorded decision and me
 The public demo is published as a **frozen-data portfolio release**, not as a completed
 self-refreshing MVP.
 
-- The served corpus is a historical snapshot whose freshness is the last successfully measured
-  ingest date, `2026-08-27`.
+- The served corpus is a historical snapshot. Its freshness is the last successfully measured ingest
+  date, which `/api/v1/ready` reports as `data_snapshot_date` alongside a provenance of `measured`.
+  This document does not restate the value: it moves with every completed ingest run.
 - Scheduled ingestion is disabled: `.github/workflows/ingestion.yml` keeps `workflow_dispatch` only,
   because the source robots/terms gate failed closed and the armed schedule produced only known
   failures from the 2026-08-28 run onward.

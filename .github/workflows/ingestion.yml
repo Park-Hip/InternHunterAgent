@@ -1,28 +1,57 @@
 name: Nightly ingestion
 
+# SCHEDULE RE-ARMED 2026-10-05 (#605), reversing the 2026-09-18 removal
+# under the frozen-data portfolio release (#405, ADR-0053). The reason that
+# removal recorded no longer holds, and the re-arm followed the gate order
+# in that issue: prove a manual run green first, arm the trigger second,
+# observe one scheduled run third, revert the frozen-data notices last.
+#
+# Evidence that the path is green, both on `main` and both before this
+# trigger existed:
+#   run 36299600573  2026-09-27  workflow_dispatch  success
+#                    ingestion.completed fetched: 105  pages_failed: 0
+#   run 37318661030  2026-10-05  workflow_dispatch  success
+#                    ingestion.completed fetched: 110  pages_failed: 0
+# Both cleared `safety.min_yield: 20`, both logged `ingestion.schema_ok` with
+# `columns: 22`, and both ended in `ingestion.ping_sent`. The robots preflight
+# that closed the gate in 2026-08 reads the permitted-absence event
+# `ingestion.robots_policy_absent_permitted` (HTTP 404) on every run, which is
+# the reviewed `robots.allow_404` case in ADR-0034, not a policy denial.
+#
+# Merging this to the default branch IS the activation, not a precondition
+# for it. PR #29 (`bcc81db`, 2026-07-22) proved that by arming the cron
+# before its gates were signed; all 19 runs through 2026-08-09 failed at
+# config load with `DATABASE_URL` unset. The rule that survived is unchanged:
+# prove a run works by `workflow_dispatch` BEFORE re-arming a schedule, never
+# the reverse.
 on:
-  # SCHEDULE REMOVED 2026-09-18 under the frozen-data portfolio release (#405,
-  # ADR-0053). The VietnamWorks robots/terms gate failed closed as of the
-  # 2026-08-28 run, and every scheduled attempt since then failed before
-  # fetching or writing (#403). The deployed demo now serves a historical
-  # snapshot (last measured 2026-08-27). An armed schedule would only keep
-  # producing known failures, so it is removed. `workflow_dispatch` stays for
-  # an approved future recovery.
-  #
-  # Do not silently re-arm `schedule:` here. Restoring ingestion follows the
-  # cron activation runbook and requires a provider-authorized path proven by
-  # one manual and one scheduled run, then the frozen-data notice and affected
-  # docs are reverted together (see the #405 rollback path).
-  #
-  # History that stays true: GitHub fires `schedule:` from the default branch
-  # AUTOMATICALLY, so re-adding the trigger to `main` IS the activation, not a
-  # precondition for it. PR #29 (`bcc81db`, 2026-07-22) proved this by arming
-  # the cron before several activation gates were signed, and all 19 runs
-  # through 2026-08-09 failed at config load (`DATABASE_URL` secret unset).
-  # The rule that survived is unchanged for any future recovery: prove a run
-  # works by `workflow_dispatch` BEFORE re-arming a schedule, never the
-  # reverse.
+  schedule:
+    # 02:00 UTC = 09:00 ICT. GitHub fires `schedule:` from the default branch
+    # only. Actual firing time can drift under Actions load; a run landing a
+    # few minutes late is expected, not a failure.
+    - cron: '0 2 * * *'
   workflow_dispatch: {}
+
+# A green scheduled run every night is not what this design promises, and
+# the difference matters when reading the history. The row-quality gate
+# fails the whole run closed before any clean upsert or expiry pass, so one
+# bad source row costs the day and touches nothing: run 36298272356
+# (2026-09-27) logged `ingestion.row_quality_failed salary_bounds=2` and
+# `outcome: safety_aborted` with no write to `clean_jobs`, and the dispatch
+# 28 minutes later completed. That is the gate working, not a regression.
+#
+# REVOCATION CONDITION: if a scheduled run fails closed for any other
+# reason - config load, schema drift, a robots policy that is no longer
+# absent, the yield floor, or the 15-minute ceiling - remove the
+# `schedule:` trigger the same day and record the failure. The corpus in
+# `clean_jobs` is retained by design; ingestion accumulates rows and never
+# truncates them, so a disarm loses no data.
+#
+# OPEN MAINTAINER POINT, unchanged by this re-arm: the serving path does
+# not filter `is_active`, so expired postings stay visible and are answered
+# from. A daily schedule keeps producing expired rows, and the 2026-10-05
+# run expired 223 of them. Filtering the serving query is out of scope here
+# and is stated in the documentation rather than left implicit.
 
 concurrency:
   group: ingestion

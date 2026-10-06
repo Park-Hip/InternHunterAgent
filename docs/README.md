@@ -14,7 +14,7 @@ Each document has one owner and one intended reader.
 | [Configuration reference](reference/configuration.md) | Stack, dependencies, tunables, hosted services, quotas | Engineering |
 | [Schema reference](reference/schema.md) | Frozen agent-visible `clean_jobs` columns and evolution path | Engineering and evaluation |
 | [Agent behavior reference](reference/agent-behavior.md) | Frozen agent behavior requirements and probe protocol | Agent and evaluation work |
-| [Refactor charter](refactor/charter.md), [component index](refactor/component-index.md), [layer map](refactor/target-layer-dependency-map.md), [active backlog](refactor/active-backlog.md), and [ingestion gate register](refactor/ingestion-gate-register.md) | Active in-place module-layer refactor scope, current component status, target dependencies, next slices, and live per-source collection authorization | Maintainers and implementers |
+| [Refactor charter](refactor/charter.md), [component index](refactor/component-index.md), [layer map](refactor/target-layer-dependency-map.md), [active backlog](refactor/active-backlog.md) | Active in-place module-layer refactor scope, current component status, target dependencies, next slices | Maintainers and implementers |
 | [Decision records](decisions/README.md) | Durable decision rationale, one record per decision | Decision makers |
 | [Conventions](Docs_Conventions.md) | Documentation rules and exemptions | Documentation authors |
 

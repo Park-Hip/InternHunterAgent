@@ -204,8 +204,9 @@ The self-refreshing MVP requirement is recorded as superseded for this release b
 Do not re-arm the schedule or set its secrets from this document.
 Restoring ingestion follows [T0020.4 Cron Activation Runbook](cron-activation-runbook.md) and
 requires a provider-authorized path proven by one manual and one scheduled run.
-Whether collection from a given source is permitted at all, and against which named gates, is
-recorded per source in the [ingestion gate register](../refactor/ingestion-gate-register.md).
+Collection is authorized for VietnamWorks only, under
+[ADR-0034](../decisions/adr-0034-vietnamworks-robots-and-terms-gate.md) and
+[ADR-0058](../decisions/adr-0058-single-source-mvp-ingestion.md).
 The VietnamWorks robots preflight below is a per-run access check on top of that gate, not a
 substitute for it.
 The workflow's `DATABASE_URL` must use Neon's direct, non-pooled host because it writes data

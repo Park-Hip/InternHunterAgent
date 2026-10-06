@@ -1,6 +1,6 @@
 # Collection from a source is authorized by a named gate with named evidence
 
-> **Status:** Active · **Decided:** 2026-09-28
+> **Status:** Superseded by [ADR-0058](adr-0058-single-source-mvp-ingestion.md) · **Decided:** 2026-09-28
 
 ## Context
 

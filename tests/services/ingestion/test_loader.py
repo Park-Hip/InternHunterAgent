@@ -4,22 +4,11 @@ from unittest.mock import MagicMock, patch
 
 from src.services.ingestion.models import NormalizedJob, RawPosting
 from src.services.ingestion.raw_store import RawUpsertCounts
-from src.services.ingestion.source_registry import SourceBinding
-from src.services.ingestion.sources.base import JobSource
 
 
-def _use_normalizer(mock_binding: MagicMock, normalize: MagicMock) -> None:
-    """Resolve the source's normalizer to `normalize` for the duration of a test.
-
-    The loader reaches its normalizer through the source registry, so a test
-    stubs the resolution the loader performs rather than the use it makes of the
-    result. The binding is a real one, which keeps the source id the loader asks
-    for meaningful.
-    """
-    mock_binding.return_value = SourceBinding(
-        source_id="vietnamworks", normalize=normalize, provenance_paths={},
-        normalization_version="test-v1",
-    )
+def _use_normalizer(mock_normalize: MagicMock, normalize: MagicMock) -> None:
+    """Route the loader's normalizer call to `normalize` for the duration of a test."""
+    mock_normalize.side_effect = normalize
 
 
 def _make_posting(
@@ -51,8 +40,9 @@ def _make_normalized_job(external_id: str = "job-001") -> NormalizedJob:
     )
 
 
-class StubSource(JobSource):
+class StubSource:
     source = "vietnamworks"
+    pages_failed = 0
 
     def __init__(self, postings: list[RawPosting]) -> None:
         self._postings = postings
@@ -73,7 +63,7 @@ class RunIngestionTests(unittest.TestCase):
     @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
-    @patch("src.services.ingestion.loader.resolve_binding")
+    @patch("src.services.ingestion.loader.to_normalized_job")
     def test_summary_counts_match_fetched_postings(
         self,
         mock_binding: MagicMock,
@@ -111,7 +101,7 @@ class RunIngestionTests(unittest.TestCase):
     @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
-    @patch("src.services.ingestion.loader.resolve_binding")
+    @patch("src.services.ingestion.loader.to_normalized_job")
     def test_raw_upsert_called_before_clean_upsert_before_expiry(
         self,
         mock_binding: MagicMock,
@@ -144,7 +134,7 @@ class RunIngestionTests(unittest.TestCase):
     @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
-    @patch("src.services.ingestion.loader.resolve_binding")
+    @patch("src.services.ingestion.loader.to_normalized_job")
     def test_normalized_jobs_derive_from_fetched_payloads(
         self,
         mock_binding: MagicMock,
@@ -169,14 +159,14 @@ class RunIngestionTests(unittest.TestCase):
 
         run_ingestion(source=StubSource([posting]))
 
-        mock_binding.return_value.normalize.assert_called_once_with(payload)
+        mock_binding.assert_called_once_with(payload)
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
     @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
-    @patch("src.services.ingestion.loader.resolve_binding")
+    @patch("src.services.ingestion.loader.to_normalized_job")
     def test_empty_fetch_passes_empty_lists_through(
         self,
         mock_binding: MagicMock,
@@ -201,7 +191,7 @@ class RunIngestionTests(unittest.TestCase):
         self.assertEqual(result["fetched"], 0)
         mock_upsert_raw.assert_called_once_with([])
         mock_upsert_clean.assert_called_once_with([])
-        mock_binding.return_value.normalize.assert_not_called()
+        mock_binding.assert_not_called()
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
@@ -245,7 +235,7 @@ class RunIngestionTests(unittest.TestCase):
     @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
-    @patch("src.services.ingestion.loader.resolve_binding")
+    @patch("src.services.ingestion.loader.to_normalized_job")
     def test_expiry_runs_after_upsert_with_configured_window(
         self,
         mock_binding: MagicMock,
@@ -371,7 +361,7 @@ class RunIngestionTests(unittest.TestCase):
     @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
-    @patch("src.services.ingestion.loader.resolve_binding")
+    @patch("src.services.ingestion.loader.to_normalized_job")
     def test_happy_path_calls_all_checks_in_order_with_unchanged_summary_keys(
         self,
         mock_binding: MagicMock,
@@ -424,7 +414,7 @@ class RunIngestionTests(unittest.TestCase):
     @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
-    @patch("src.services.ingestion.loader.resolve_binding")
+    @patch("src.services.ingestion.loader.to_normalized_job")
     def test_row_quality_violation_aborts_before_clean_write_and_expiry(
         self,
         mock_binding: MagicMock,
@@ -479,7 +469,7 @@ class RunIngestionTests(unittest.TestCase):
     @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
-    @patch("src.services.ingestion.loader.resolve_binding")
+    @patch("src.services.ingestion.loader.to_normalized_job")
     def test_row_quality_passes_through_to_clean_upsert(
         self,
         mock_binding: MagicMock,
@@ -524,7 +514,7 @@ class RunIngestionTests(unittest.TestCase):
     @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
-    @patch("src.services.ingestion.loader.resolve_binding")
+    @patch("src.services.ingestion.loader.to_normalized_job")
     def test_row_quality_non_finite_salary_aborts_before_clean_write_and_expiry(
         self,
         mock_binding: MagicMock,
@@ -603,103 +593,17 @@ class RunIngestionTests(unittest.TestCase):
         importlib.reload(_loader)
 
 
-class DeclaredSourceResolutionTests(unittest.TestCase):
-    """A declared source resolves before anything is fetched or written.
-
-    The rule is the one that keeps an unauthorized source out of the serving path:
-    a source with no authorized adapter, or no rule at all, is refused at
-    initialization, so it never reaches `raw_jobs`, `clean_jobs`, or an expiry pass.
-    """
-
-    def setUp(self) -> None:
-        self.patches = [
-            patch("src.services.ingestion.loader.persist_ingestion_run"),
-            patch("src.services.ingestion.loader.assert_clean_jobs_schema"),
-            patch("src.services.ingestion.loader.upsert_raw_postings"),
-            patch("src.services.ingestion.loader.upsert_clean_jobs"),
-            patch("src.services.ingestion.loader.expire_stale_clean_jobs"),
-            patch("src.services.ingestion.loader.settings"),
-        ]
-        mocks = [started.start() for started in self.patches]
-        self.addCleanup(patch.stopall)
-        (self.mock_persist, self.mock_schema, self.mock_raw,
-         self.mock_clean, self.mock_expire, self.mock_settings) = mocks
-        self.mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
-            "safety": {"min_yield": 0},
-        }
-
-    def test_an_undeclared_source_still_resolves_the_authorized_one(self) -> None:
+class DefaultSourceTests(unittest.TestCase):
+    def test_no_source_builds_vietnamworks(self) -> None:
         from src.services.ingestion.loader import run_ingestion
-        from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
 
-        self.mock_raw.return_value = RawUpsertCounts(1, 0, 0)
-        self.mock_clean.return_value = 1
-        self.mock_expire.return_value = 0
-        with patch("src.services.ingestion.loader.resolve_source") as resolve:
-            resolve.return_value = StubSource([_make_posting()])
-            result = run_ingestion()
-
-        resolve.assert_called_once_with(None)
-        self.assertEqual(VietnamWorksSource.source, "vietnamworks")
-        self.assertEqual(result["clean_loaded"], 1)
-        self.assertEqual(
-            self.mock_persist.call_args.args[0].outcome, "completed")
-
-    def test_declaring_a_source_with_no_serving_adapter_fails_closed(self) -> None:
-        from src.services.ingestion.loader import run_ingestion
-        from src.services.ingestion.source_registry import UnknownSourceError
-
-        with self.assertRaises(UnknownSourceError):
-            run_ingestion(declared_source="linkedin_via_brightdata")
-
-        self.mock_raw.assert_not_called()
-        self.mock_clean.assert_not_called()
-        self.mock_expire.assert_not_called()
-        persisted = self.mock_persist.call_args.args[0]
-        self.assertEqual(persisted.outcome, "failed")
-        self.assertEqual(persisted.failure_phase, "source_initialization")
-        self.assertEqual(persisted.failure_code, "unexpected_error")
-
-    def test_declaring_a_source_this_build_does_not_know_fails_closed(self) -> None:
-        from src.services.ingestion.loader import run_ingestion
-        from src.services.ingestion.source_registry import UnknownSourceError
-
-        with self.assertRaises(UnknownSourceError):
-            run_ingestion(declared_source="not-a-declared-source")
-
-        self.mock_raw.assert_not_called()
-        self.assertEqual(
-            self.mock_persist.call_args.args[0].failure_phase, "source_initialization")
-
-    def test_an_injected_source_without_a_rule_fails_before_it_writes(self) -> None:
-        from src.services.ingestion.loader import run_ingestion
-        from src.services.ingestion.source_registry import UnknownSourceError
-
-        class Unregistered(StubSource):
-            source = "a-source-this-build-does-not-know"
-
-        with self.assertRaises(UnknownSourceError):
-            run_ingestion(source=Unregistered([_make_posting()]))
-
-        self.mock_raw.assert_not_called()
-        self.assertEqual(
-            self.mock_persist.call_args.args[0].failure_phase, "source_initialization")
-
-    def test_the_vietnamworks_source_resolves_to_its_own_rule(self) -> None:
-        from src.services.ingestion.loader import run_ingestion
-        from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
-
-        self.mock_raw.return_value = RawUpsertCounts(1, 0, 0)
-        self.mock_clean.return_value = 1
-        self.mock_expire.return_value = 0
-        with patch("src.services.ingestion.loader.resolve_source") as resolve:
-            resolve.return_value = StubSource([_make_posting()])
-            result = run_ingestion(declared_source="vietnamworks")
-
-        resolve.assert_called_once_with("vietnamworks")
-        self.assertEqual(result["clean_loaded"], 1)
-        self.assertEqual(VietnamWorksSource.source, "vietnamworks")
+        with patch("src.services.ingestion.loader.persist_ingestion_run"), \
+             patch("src.services.ingestion.loader.assert_clean_jobs_schema"), \
+             patch("src.services.ingestion.loader.VietnamWorksSource") as mock_source:
+            mock_source.return_value.fetch.side_effect = RuntimeError("stop after init")
+            with self.assertRaisesRegex(RuntimeError, "stop after init"):
+                run_ingestion()
+        mock_source.assert_called_once_with()
 
 
 if __name__ == "__main__":

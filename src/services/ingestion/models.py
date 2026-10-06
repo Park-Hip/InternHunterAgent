@@ -33,9 +33,8 @@ class RawPosting(BaseModel):
     assigned by the database, not the adapter.
 
     `content_hash` is the adapter's claim about `raw_payload`, not a label: it is
-    `evidence_store.content_digest(raw_payload)`, computed by the adapter at the
-    moment it captured the payload. The shadow writer checks the claim against the
-    payload it received, and `raw_store` treats a change in it as a changed
+    `raw_store.content_digest(raw_payload)`, computed by the adapter at the
+    moment it captured the payload. `raw_store` treats a change in it as a changed
     record, so a hash from any other encoding of the payload is wrong here. There
     is one canonical digest in the ingestion layer, and a second one is a
     disagreement waiting to be reported as a broken capture.

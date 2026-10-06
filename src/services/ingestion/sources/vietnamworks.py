@@ -6,12 +6,11 @@ import httpx
 from src.core.config import settings
 from src.core.logger import logger
 from src.services.ingestion.compliance import RobotsPolicyGate, target_url_for_robots
-from src.services.ingestion.evidence_store import content_digest
+from src.services.ingestion.raw_store import content_digest
 from src.services.ingestion.models import RawPosting
-from src.services.ingestion.sources.base import JobSource
 
 
-class VietnamWorksSource(JobSource):
+class VietnamWorksSource:
     """Fetches IT/AI-Data postings from the VietnamWorks public JSON search API.
 
     Keyword recall (8 AI/Data queries) + jobFunction precision filter (parentId
@@ -28,6 +27,7 @@ class VietnamWorksSource(JobSource):
     """
 
     source = "vietnamworks"
+    pages_failed: int = 0
 
     def __init__(self, client: httpx.Client | None = None) -> None:
         cfg = settings.ingestion_yaml

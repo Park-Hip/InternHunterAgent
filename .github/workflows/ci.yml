@@ -25,6 +25,11 @@ jobs:
 
       - run: uv run python scripts/docs_lint.py
 
+      # AGENTS.md section 3 requires this for any change to
+      # src/api/static/tokens.css, and both tokens.css and styles.css advertise it
+      # as enforced. Until now no workflow ran it. Stdlib-only, ~0s.
+      - run: uv run python scripts/check_contrast.py
+
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15

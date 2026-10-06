@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from src.agents.service import FALLBACK_ANSWER
 from src.api.app import create_app
 from src.api.routes.query import _server_sent_event
+from src.api.schemas import STREAM_EVENT_SCHEMA
 from src.core.errors import (
     BUSY_MESSAGE,
     GENERIC_ERROR_MESSAGE,
@@ -70,17 +71,20 @@ class StreamQueryRouteTests(unittest.TestCase):
             [event_type for event_type, _ in events],
             ["session", "token", "token", "metadata", "done"],
         )
-        self.assertEqual(events[0][1], {"session_id": "session-123"})
-        self.assertEqual(events[1][1], {"text": "There are "})
-        self.assertEqual(events[2][1], {"text": "3 roles."})
+        # The payload carries `type` because the published schema requires it; the
+        # SSE `event:` line remains the authoritative name for the frame.
+        self.assertEqual(events[0][1], {"type": "session", "session_id": "session-123"})
+        self.assertEqual(events[1][1], {"type": "token", "text": "There are "})
+        self.assertEqual(events[2][1], {"type": "token", "text": "3 roles."})
         self.assertEqual(
             events[3][1],
             {
+                "type": "metadata",
                 "trace_id": "t-1",
                 "trace_url": "https://cloud.langfuse.com/project/p/traces/t-1",
             },
         )
-        self.assertEqual(events[4][1], {})
+        self.assertEqual(events[4][1], {"type": "done"})
 
     def test_stream_route_returns_fallback_before_metadata_when_no_tokens(self) -> None:
         async def _fake_astream(**kwargs):
@@ -99,8 +103,10 @@ class StreamQueryRouteTests(unittest.TestCase):
             [event_type for event_type, _ in events],
             ["session", "token", "metadata", "done"],
         )
-        self.assertEqual(events[1][1], {"text": FALLBACK_ANSWER})
-        self.assertEqual(events[2][1], {"trace_id": None, "trace_url": None})
+        self.assertEqual(events[1][1], {"type": "token", "text": FALLBACK_ANSWER})
+        self.assertEqual(
+            events[2][1], {"type": "metadata", "trace_id": None, "trace_url": None}
+        )
 
     def test_stream_route_returns_in_band_error_and_done_for_mid_run_failure(
         self,
@@ -126,12 +132,13 @@ class StreamQueryRouteTests(unittest.TestCase):
         self.assertEqual(
             events[2][1],
             {
+                "type": "error",
                 "message": GENERIC_ERROR_MESSAGE,
                 "code": INTERNAL_ERROR_CODE,
                 "retryable": False,
             },
         )
-        self.assertEqual(events[3][1], {})
+        self.assertEqual(events[3][1], {"type": "done"})
 
     def test_stream_route_marks_provider_busy_as_retryable(self) -> None:
         async def _fake_astream(**kwargs):
@@ -154,6 +161,7 @@ class StreamQueryRouteTests(unittest.TestCase):
         self.assertEqual(
             events[1][1],
             {
+                "type": "error",
                 "message": BUSY_MESSAGE,
                 "code": PROVIDER_BUSY_ERROR_CODE,
                 "retryable": True,
@@ -223,6 +231,100 @@ class StreamOpenAPITests(unittest.TestCase):
             _server_sent_event(event="token", data={"text": "first\nsecond"}),
             'event: token\ndata: {"text": "first\\nsecond"}\n\n',
         )
+
+
+class StreamPublishedContractTests(unittest.TestCase):
+    """The bytes on the wire must satisfy the schema published at /openapi.json.
+
+    The published ``STREAM_EVENT_SCHEMA`` is a union discriminated on ``type``,
+    so every variant lists ``type`` among its required properties. A client that
+    generates a validator from ``/openapi.json`` therefore rejects every frame the
+    server actually sends, because the route strips ``type`` before writing the
+    payload. These tests assert the contract rather than the implementation: they
+    check the streamed frames against the published schema, not against the route's
+    own copy of it.
+    """
+
+    def setUp(self) -> None:
+        self.app = create_app(rate_limit="1000/minute", docs_enabled=False)
+        self.app.state.runtime = AsyncMock()
+        self.client = TestClient(self.app)
+
+    @staticmethod
+    def _required_properties(event_type: str) -> set[str]:
+        ref = STREAM_EVENT_SCHEMA["discriminator"]["mapping"][event_type]
+        definition = ref.rsplit("/", maxsplit=1)[-1]
+        return set(STREAM_EVENT_SCHEMA["$defs"][definition].get("required", []))
+
+    def test_every_streamed_frame_satisfies_the_published_schema(self) -> None:
+        async def _fake_astream(**kwargs):
+            yield {"type": "token", "text": "There are "}
+            yield {
+                "type": "tool",
+                "name": "query_jobs",
+                "status": "ok",
+                "call_id": "call-1",
+                "arguments": {"technology": "python"},
+                "duration_ms": 12,
+                "error": None,
+                "row_count": 7,
+                "truncated": False,
+            }
+            yield {
+                "type": "metadata",
+                "trace_id": "t-1",
+                "trace_url": "https://cloud.langfuse.com/project/p/traces/t-1",
+            }
+
+        self.app.state.runtime.astream = _fake_astream
+
+        response = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "list 3 data engineer jobs", "session_id": "session-123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        events = _parse_sse_events(response.text)
+        self.assertEqual(
+            [event_type for event_type, _ in events],
+            ["session", "token", "tool", "metadata", "done"],
+        )
+        for event_type, payload in events:
+            with self.subTest(event=event_type):
+                missing = self._required_properties(event_type) - set(payload)
+                self.assertEqual(
+                    missing,
+                    set(),
+                    f"the {event_type!r} frame omits {sorted(missing)}, which the "
+                    f"published schema marks as required",
+                )
+
+    def test_the_error_frame_satisfies_the_published_schema(self) -> None:
+        async def _fake_astream(**kwargs):
+            yield {
+                "type": "error",
+                "message": GENERIC_ERROR_MESSAGE,
+                "code": INTERNAL_ERROR_CODE,
+                "retryable": False,
+            }
+
+        self.app.state.runtime.astream = _fake_astream
+
+        response = self.client.post(
+            "/api/v1/agent/chat/stream",
+            json={"query": "list 3 data engineer jobs", "session_id": "session-123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        errors = [
+            (event_type, payload)
+            for event_type, payload in _parse_sse_events(response.text)
+            if event_type == "error"
+        ]
+        self.assertEqual(len(errors), 1)
+        _, payload = errors[0]
+        missing = self._required_properties("error") - set(payload)
+        self.assertEqual(missing, set(), f"the error frame omits {sorted(missing)}")
 
 
 class _MultiTurnRuntime:

@@ -1,6 +1,6 @@
 # Evidence-first ingestion preserves source evidence before serving projections
 
-> **Status:** Active · **Decided:** 2026-09-27
+> **Status:** Superseded by [ADR-0058](adr-0058-single-source-mvp-ingestion.md) · **Decided:** 2026-09-27
 
 ## Context
 

@@ -1,5 +1,7 @@
 # Evidence-first ingestion blueprint
 
+> **Status:** Retired by [ADR-0058](adr-0058-single-source-mvp-ingestion.md). Kept as a historical design record; nothing in it is implemented or planned.
+
 > **Status:** Approved design for [issue #455](https://github.com/Park-Hip/InternHunterAgent/issues/455).
 > The minimum evidence contract is finalized by
 > [#477](https://github.com/Park-Hip/InternHunterAgent/issues/477) and authorized by

@@ -20,7 +20,7 @@ select the next approved boundary without consulting the legacy discovery collec
 | [Target layer and dependency map](target-layer-dependency-map.md) | Intended layers, dependency direction, and known gaps | Maintainers and implementers |
 | [Component index](component-index.md) | Current component groups, refactor state, and immediate next action | Maintainers and implementers |
 | [Active backlog](active-backlog.md) | Ordered next decisions and vertical slices | Maintainers and implementers |
-| [Ingestion gate register](ingestion-gate-register.md) | Live per-source gate state, required maintainer actions, and the deferral register | Maintainers and implementers |
+| [Ingestion gate register](ingestion-gate-register.md) | Retired; see ADR-0058 | Maintainers and implementers |
 | [Agent v0 evaluation baseline](agent-v0-baseline.md) | Measured agent and evaluation baseline, v1 retention, and open decisions for the agent-v0 track | Maintainers and implementers |
 | [Agent v0 behavior and metric contract](agent-v0-contract.md) | The active v0 specification of what the agent may claim, and how each number is computed | Maintainers and implementers |
 | [Agent v0 legacy rule disposition](agent-v0-legacy-rules.md) | The auditable map from the legacy `G01` to `G47` expectations to the v0 contract | Maintainers and implementers |
@@ -49,12 +49,7 @@ This reset authorizes documentation only.
 It does not authorize a replacement application, a parallel product, a `src/` rewrite, data
 collection, schema work, provider changes, deployment changes, or deletion of legacy material.
 
-That list bounds this workspace, not the project.
-Data collection and schema work are authorized only by an approved record in `docs/decisions/`
-together with a met row in the
-[ingestion gate register](ingestion-gate-register.md), and never by this workspace.
-The register authorizes no collection today beyond the VietnamWorks automated-access row, which is
-itself bounded by [ADR-0034](../decisions/adr-0034-vietnamworks-robots-and-terms-gate.md).
+That list bounds this workspace, not the project. Ingestion scope is set by [ADR-0058](../decisions/adr-0058-single-source-mvp-ingestion.md): VietnamWorks is the only source, authorized by [ADR-0034](../decisions/adr-0034-vietnamworks-robots-and-terms-gate.md). A second source needs its own approved decision record.
 
 A technical slice requires its own approved issue before implementation.
 That issue must name the affected boundary, source-backed current behavior, compatibility decision,

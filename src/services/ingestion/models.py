@@ -8,10 +8,8 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Date,
-    ForeignKey,
     Identity,
     Index,
-    Integer,
     Numeric,
     Text,
     UniqueConstraint,
@@ -22,7 +20,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 # ---------------------------------------------------------------------------
-# Pydantic record models — internal pipeline DTOs (no DB connection on import)
+# Pydantic record models - internal pipeline DTOs (no DB connection on import)
 # ---------------------------------------------------------------------------
 
 
@@ -84,82 +82,27 @@ class Base(DeclarativeBase):
     pass
 
 
-# ---------------------------------------------------------------------------
-# Canonical table lists
-# ---------------------------------------------------------------------------
-# Every site that tears the ingestion schema down used to spell these names out
-# by hand: the fixture loader, and the migration round-trip test, and twice more
-# inside the shadow-evidence migration itself. Four copies of one value, with
-# nothing that fails when they disagree, is how a stale table survives a
-# teardown and then wedges the next one.
-#
-# The migration keeps its own literal. A migration is the historical record of
-# one revision and must not silently follow the models. That one deliberate
-# duplicate is the whole allowance; the two callers below import instead.
+#: Every table the ingestion layer owns, in a drop-safe order.
+INGESTION_TABLES: Final = ("ingestion_runs", "clean_jobs", "raw_jobs")
 
-#: Tables carrying the append-only ``immutable_evidence`` trigger, in creation
-#: order. Asserted by the migration round-trip test, so a table added here that
-#: the migration does not attach a trigger to fails there rather than silently
-#: losing append-only protection.
-APPEND_ONLY_EVIDENCE_TABLES: Final = (
-    "collection_plans",
-    "collection_runs",
-    "collection_request_bodies",
-    "collection_request_executions",
-    "raw_artifacts",
-    "raw_observations",
-    "duplicate_deliveries",
-    "normalization_results",
-    "field_provenance",
+# Dropped by ADR-0058. A database at an older revision may still hold them, so a
+# teardown removes them too; IF EXISTS makes that a no-op everywhere else.
+_LEGACY_EVIDENCE_TABLES: Final = (
+    "field_provenance", "normalization_results", "duplicate_deliveries",
+    "raw_observations", "raw_artifacts", "collection_request_executions",
+    "collection_request_bodies", "collection_runs", "collection_plans",
 )
-
-#: The trigger function guarding :data:`APPEND_ONLY_EVIDENCE_TABLES`.
-APPEND_ONLY_EVIDENCE_FUNCTION: Final = "reject_ingestion_evidence_mutation"
-
-#: Every table the ingestion layer owns, in a drop-safe order: children first,
-#: then the append-only evidence block in reverse dependency order, then the
-#: projection and landing tables. Teardown sites drop these with ``CASCADE``.
-INGESTION_TABLES: Final = (
-    "field_provenance",
-    "normalization_results",
-    "duplicate_deliveries",
-    "raw_observations",
-    "raw_artifacts",
-    "collection_request_executions",
-    "collection_request_bodies",
-    "collection_runs",
-    "collection_plans",
-    "ingestion_runs",
-    "clean_jobs",
-    "raw_jobs",
-)
+_LEGACY_EVIDENCE_FUNCTION: Final = "reject_ingestion_evidence_mutation"
 
 
 def ingestion_teardown_statements(*, version_table: str | None = None) -> tuple[str, ...]:
-    """SQL statements that clear the ingestion layer, in an order that always runs.
-
-    Derived from the canonical lists above rather than spelled out, so a new
-    model is covered by every teardown the day it is declared instead of the day
-    someone remembers three other files.
-
-    The function drop carries ``CASCADE`` on purpose. Dropping the named tables
-    in dependency order removes every trigger this repository installs, but a
-    database is a thing that outlives the code that built it: a table left by an
-    abandoned experiment, or by a revision this branch has not merged, can hold a
-    trigger that depends on the function, and a teardown that wedges on that
-    stops every caller behind it from resetting their own schema. ``CASCADE``
-    cannot drift, and here it only ever drops a trigger on a database that is
-    about to be rebuilt from scratch.
-
-    ``version_table`` is dropped last and is Alembic's own bookkeeping rather
-    than a model, so callers that track the revision pass it in explicitly.
-    """
-    tables = [*INGESTION_TABLES]
+    """SQL that clears the ingestion layer of a database at any revision."""
+    tables = [*_LEGACY_EVIDENCE_TABLES, *INGESTION_TABLES]
     if version_table is not None:
         tables.append(version_table)
     return (
         f"DROP TABLE IF EXISTS {', '.join(tables)} CASCADE",
-        f"DROP FUNCTION IF EXISTS {APPEND_ONLY_EVIDENCE_FUNCTION}() CASCADE",
+        f"DROP FUNCTION IF EXISTS {_LEGACY_EVIDENCE_FUNCTION}() CASCADE",
     )
 
 
@@ -251,301 +194,6 @@ class IngestionRun(Base):
     skipped: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     expired_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     pages_failed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-
-
-class CollectionPlan(Base):
-    __tablename__ = "collection_plans"
-    __table_args__ = (UniqueConstraint("source_id", "plan_version"),)
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    source_id: Mapped[str] = mapped_column(Text, nullable=False)
-    plan_version: Mapped[str] = mapped_column(Text, nullable=False)
-    declared_scope: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    declared_caps: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    requested_fields: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    declared_completion_rule: Mapped[str] = mapped_column(Text, nullable=False)
-    declared_endpoint_set: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    retrieval_precision: Mapped[str] = mapped_column(Text, nullable=False)
-    authorization_revision: Mapped[str] = mapped_column(Text, nullable=False)
-    configuration_digest: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-
-class CollectionRun(Base):
-    __tablename__ = "collection_runs"
-    __table_args__ = (
-        UniqueConstraint("idempotency_key"),
-        CheckConstraint("run_kind IN ('scheduled', 'manual', 'replay')", name="ck_collection_runs_kind"),
-        CheckConstraint(
-            "outcome IN ('complete', 'incomplete', 'failed', 'authorization_blocked', 'aborted')",
-            name="ck_collection_runs_outcome",
-        ),
-        CheckConstraint(
-            "coverage_result IN ('complete', 'partial', 'unknown') AND "
-            "(coverage_result <> 'complete' OR outcome = 'complete')",
-            name="ck_collection_runs_coverage",
-        ),
-        CheckConstraint(
-            "(outcome <> 'complete' OR (finished_at IS NOT NULL AND failure_category IS NULL)) "
-            "AND (outcome = 'complete' OR failure_category IS NOT NULL) "
-            "AND (run_kind <> 'replay' OR (replay_of_run_id IS NOT NULL AND replay_reason IS NOT NULL))",
-            name="ck_collection_runs_result",
-        ),
-        CheckConstraint(
-            "observed_record_count >= 0 AND request_count >= 0 AND "
-            "(declared_record_cap IS NULL OR declared_record_cap >= 0)",
-            name="ck_collection_runs_counts",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    plan_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_plans.id"), nullable=False)
-    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
-    run_kind: Mapped[str] = mapped_column(Text, nullable=False)
-    started_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    finished_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    outcome: Mapped[str] = mapped_column(Text, nullable=False)
-    coverage_result: Mapped[str] = mapped_column(Text, nullable=False)
-    declared_record_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    observed_record_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    declared_scope_digest: Mapped[str] = mapped_column(Text, nullable=False)
-    request_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    failure_category: Mapped[str | None] = mapped_column(Text, nullable=True)
-    configuration_digest: Mapped[str] = mapped_column(Text, nullable=False)
-    input_digest: Mapped[str] = mapped_column(Text, nullable=False)
-    replay_of_run_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=True)
-    replay_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-
-class CollectionRequestBody(Base):
-    """One request attempt exactly as this project issued it, before it was sent.
-
-    The row is this project's own assertion, not a provider return value. It is
-    captured before the send rather than reconstructed afterwards, so it is never
-    built from a provider echo, a redirect, or a retry log, and an omitted
-    parameter stays absent instead of arriving back as an empty string.
-
-    One row per attempt, keyed by `(collection_run_id, request_ordinal,
-    attempt_number)`. A retry or a second discovery input inside one run is
-    therefore its own row with its own ordinal rather than an entry inside a
-    single document, which is what makes a multi-request run walkable.
-
-    `endpoint_name` names the entry in the executed plan's
-    `declared_endpoint_set` that `endpoint` was rendered from, and
-    `path_parameters` is what renders it. Storing both makes "this request only
-    addressed a declared endpoint" a fact a reader can check against the plan row
-    rather than a property of the adapter that made it.
-
-    `credential_env` is a named secret location and never a credential value. The
-    check constraint is what makes that a database guarantee and not a
-    convention, because a lowercase token is a value and no location has that
-    shape.
-    """
-
-    __tablename__ = "collection_request_bodies"
-    __table_args__ = (
-        UniqueConstraint("collection_run_id", "request_ordinal", "attempt_number"),
-        CheckConstraint(
-            "request_ordinal > 0 AND attempt_number > 0",
-            name="ck_collection_request_bodies_count",
-        ),
-        CheckConstraint(
-            "credential_env IS NULL OR credential_env ~ '^[A-Z][A-Z0-9_]*$'",
-            name="ck_collection_request_bodies_credential",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
-    request_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
-    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    adapter_id: Mapped[str] = mapped_column(Text, nullable=False)
-    method: Mapped[str] = mapped_column(Text, nullable=False)
-    endpoint_name: Mapped[str] = mapped_column(Text, nullable=False)
-    endpoint: Mapped[str] = mapped_column(Text, nullable=False)
-    path_parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    query_parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    body: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    body_digest: Mapped[str] = mapped_column(Text, nullable=False)
-    credential_env: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # The plan's declarations, restated so one row is self-describing. What this
-    # particular request carried is in `body` and `query_parameters`; these two are
-    # the caps and the field meanings the request was issued under.
-    declared_caps: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    requested_fields: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    sent_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-
-class CollectionRequestExecution(Base):
-    """What the provider observably returned for one stored request.
-
-    A separate record from the request body because the echo of a submitted
-    request is not the submitted request. Reading this row tells a reviewer the
-    status, the digest, and the declared progress facts; it never tells them what
-    was asked for, which is what the referenced request body is for.
-
-    Exactly one row per stored request, enforced by the unique reference. A
-    transport failure still has one, because an attempt that produced nothing is
-    evidence of an attempt and must not be indistinguishable from an attempt that
-    never happened.
-    """
-
-    __tablename__ = "collection_request_executions"
-    __table_args__ = (
-        UniqueConstraint("request_body_id"),
-        Index("ix_collection_request_executions_run", "collection_run_id"),
-        CheckConstraint(
-            "(http_status IS NULL) <> (transport_error IS NULL)",
-            name="ck_collection_request_executions_response",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
-    request_body_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("collection_request_bodies.id"), nullable=False
-    )
-    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    transport_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    response_digest: Mapped[str] = mapped_column(Text, nullable=False)
-    observed_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    provider_facts: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-
-class RawArtifact(Base):
-    __tablename__ = "raw_artifacts"
-    __table_args__ = (
-        CheckConstraint(
-            "retention_disposition IN ('retained_full', 'retained_redacted', "
-            "'retained_derived', 'discarded')",
-            name="ck_raw_artifacts_disposition",
-        ),
-        CheckConstraint(
-            "(retention_disposition = 'discarded' OR "
-            "(retention_until IS NOT NULL AND representation IS NOT NULL)) AND "
-            "(retention_disposition <> 'retained_redacted' OR redaction_rules IS NOT NULL)",
-            name="ck_raw_artifacts_retention",
-        ),
-        CheckConstraint("byte_length >= 0", name="ck_raw_artifacts_length"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
-    content_digest: Mapped[str] = mapped_column(Text, nullable=False)
-    representation_version: Mapped[str] = mapped_column(Text, nullable=False)
-    media_type: Mapped[str] = mapped_column(Text, nullable=False)
-    byte_length: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    storage_locator: Mapped[str] = mapped_column(Text, nullable=False)
-    representation: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    acquired_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    retention_disposition: Mapped[str] = mapped_column(Text, nullable=False)
-    retention_until: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    authorization_revision: Mapped[str] = mapped_column(Text, nullable=False)
-    redaction_rules: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-
-class RawObservation(Base):
-    __tablename__ = "raw_observations"
-    __table_args__ = (
-        UniqueConstraint("source_id", "delivery_id"),
-        UniqueConstraint("idempotency_key"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
-    raw_artifact_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("raw_artifacts.id"), nullable=False)
-    source_id: Mapped[str] = mapped_column(Text, nullable=False)
-    source_listing_key: Mapped[str] = mapped_column(Text, nullable=False)
-    provider_listing_key: Mapped[str | None] = mapped_column(Text, nullable=True)
-    delivery_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    retrieved_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    source_urls: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    field_presence: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-
-class DuplicateDelivery(Base):
-    """Append-only duplicate outcome, pointing to the original observation."""
-
-    __tablename__ = "duplicate_deliveries"
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
-    existing_observation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("raw_observations.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-
-class NormalizationResult(Base):
-    __tablename__ = "normalization_results"
-    __table_args__ = (
-        UniqueConstraint("observation_id", "normalization_version", "attempt_number"),
-        CheckConstraint(
-            "outcome IN ('succeeded', 'quarantined', 'rejected', 'superseded')",
-            name="ck_normalization_results_outcome",
-        ),
-        CheckConstraint(
-            "(outcome <> 'quarantined' OR (quarantine_reason_code IS NOT NULL AND quarantine_reason_code IN "
-            "('identity_absent', 'listing_key_absent', 'artifact_integrity_failed', "
-            "'declared_digest_mismatch', 'adapter_contract_violated', 'shape_unparseable', "
-            "'display_field_invalid', 'unauthorized_field'))) AND "
-            "(outcome = 'quarantined' OR quarantine_reason_code IS NULL) AND "
-            "(outcome <> 'succeeded' OR (output_digest IS NOT NULL AND output_values IS NOT NULL))",
-            name="ck_normalization_results_values",
-        ),
-        CheckConstraint("attempt_number > 0", name="ck_normalization_results_attempt"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    observation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("raw_observations.id"), nullable=False)
-    collection_run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("collection_runs.id"), nullable=False)
-    normalization_version: Mapped[str] = mapped_column(Text, nullable=False)
-    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    outcome: Mapped[str] = mapped_column(Text, nullable=False)
-    quarantine_reason_code: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rule_version: Mapped[str] = mapped_column(Text, nullable=False)
-    output_digest: Mapped[str | None] = mapped_column(Text, nullable=True)
-    output_values: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    warnings: Mapped[list] = mapped_column(JSONB, nullable=False)
-    evaluator_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-
-class FieldProvenance(Base):
-    __tablename__ = "field_provenance"
-    __table_args__ = (
-        UniqueConstraint("normalization_result_id", "output_field"),
-        CheckConstraint(
-            "transform IN ('copy', 'parse', 'normalize', 'derive', 'unavailable')",
-            name="ck_field_provenance_transform",
-        ),
-        CheckConstraint(
-            "value_state IN ('present', 'source_empty', 'source_missing', 'invalid', "
-            "'unavailable', 'unknown')",
-            name="ck_field_provenance_state",
-        ),
-        CheckConstraint(
-            "review_status IN ('automatic', 'reviewed', 'quarantined', 'superseded')",
-            name="ck_field_provenance_review",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    normalization_result_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("normalization_results.id"), nullable=False)
-    output_field: Mapped[str] = mapped_column(Text, nullable=False)
-    source_field: Mapped[str] = mapped_column(Text, nullable=False)
-    locale: Mapped[str | None] = mapped_column(Text, nullable=True)
-    observation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("raw_observations.id"), nullable=False)
-    artifact_digest: Mapped[str] = mapped_column(Text, nullable=False)
-    rule_version: Mapped[str] = mapped_column(Text, nullable=False)
-    transform: Mapped[str] = mapped_column(Text, nullable=False)
-    value_state: Mapped[str] = mapped_column(Text, nullable=False)
-    review_status: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
 
 class CleanJob(Base):

@@ -1,3 +1,7 @@
+"""raw_jobs upsert. One row per (source, external_id), holding the latest payload only: a changed payload overwrites the previous one (ADR-0058)."""
+
+import hashlib
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -7,6 +11,21 @@ from sqlalchemy.exc import DBAPIError, OperationalError
 
 from src.core.db import session_factory
 from src.services.ingestion.models import RawJob, RawPosting
+
+
+def _bytes(value: object) -> bytes:
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, allow_nan=False,
+                      separators=(",", ":")).encode("utf-8")
+
+
+def content_digest(value: object) -> str:
+    """SHA-256 over the canonical JSON encoding of a value.
+
+    Canonical means sorted keys, no insignificant whitespace, no NaN, and no
+    ASCII escaping, so the same facts always produce the same digest whatever
+    order or encoding they arrived in.
+    """
+    return hashlib.sha256(_bytes(value)).hexdigest()
 
 
 class RawStoreError(Exception):

@@ -149,14 +149,6 @@ jobs:
       - name: Run migration round-trip test
         run: uv run pytest tests/migrations/test_baseline_roundtrip.py -q
 
-      # The shadow-evidence contract is gated on a disposable database, so the
-      # unit suite skips all nine of its cases and the "no serving writes" claim
-      # goes unguarded. It runs here instead, where that database already exists.
-      # Each case owns a uniquely named schema and drops it, so it neither
-      # observes nor disturbs the round-trip above.
-      - name: Run the shadow-evidence contract
-        run: uv run pytest tests/services/ingestion -q
-
   v0-gate:
     name: Governed v0 acceptance gate
     runs-on: ubuntu-latest

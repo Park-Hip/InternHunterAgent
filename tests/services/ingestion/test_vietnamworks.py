@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from src.services.ingestion.evidence_store import content_digest
+from src.services.ingestion.raw_store import content_digest
 from src.services.ingestion.models import RawPosting
 from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
 

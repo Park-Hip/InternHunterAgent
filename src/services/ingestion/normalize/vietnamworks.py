@@ -1,12 +1,10 @@
 """VietnamWorks-specific normalizer: maps a raw payload dict → NormalizedJob.
 
-All source-specific field name knowledge lives here, including the lineage each
-populated output field declares. The reusable transforms (html_to_text,
-classify_role, etc.) are imported from transform.py.
+All source-specific field name knowledge lives here. The reusable transforms
+(html_to_text, classify_role, etc.) are imported from transform.py.
 """
 from __future__ import annotations
 
-from src.services.ingestion.evidence_store import ProvenancePaths
 from src.services.ingestion.models import NormalizedJob
 from src.services.ingestion.transform import (
     classify_role,
@@ -19,37 +17,6 @@ from src.services.ingestion.transform import (
 
 # The declared source namespace this rule set belongs to.
 SOURCE_ID = "vietnamworks"
-
-# The version of this rule set. Every populated field it produces is recorded
-# against it, so changing a mapping means a new version, never an edit.
-NORMALIZATION_VERSION = "vietnamworks-normalize-v1"
-
-# Candidate field lineage for every output field, resolved by declared source
-# through the source registry rather than imported at a call site. Each entry is
-# (source field path, transform); a comma-separated path means a value derived
-# from several source fields. `unavailable` marks a field the source cannot
-# supply, so its lineage names no field at all.
-PROVENANCE_PATHS: ProvenancePaths = {
-    "source": ("@plan.source_id", "copy"),
-    "external_id": ("jobId", "copy"),
-    "source_url": ("jobUrl", "copy"),
-    "title": ("jobTitle", "copy"),
-    "company": ("companyName", "copy"),
-    "role": ("jobTitle,jobFunction", "derive"),
-    "description": ("jobDescription,jobRequirement,benefits", "normalize"),
-    "tech_stack": ("skills,jobDescription,jobRequirement", "derive"),
-    "job_level": ("jobLevel,jobLevelVI", "copy"),
-    "location": ("address,workingLocations", "normalize"),
-    "listing_expires_on": ("expiredOn", "parse"),
-    "created_on": ("createdOn", "parse"),
-    "is_internship": ("jobLevel,jobLevelVI", "derive"),
-    "salary_min": ("salaryMin,isSalaryVisible", "normalize"),
-    "salary_max": ("salaryMax,isSalaryVisible", "normalize"),
-    "salary_currency": ("salaryCurrency,isSalaryVisible", "normalize"),
-    "is_salary_negotiable": ("isSalaryVisible", "derive"),
-    "technical_seniority": ("unavailable", "unavailable"),
-    "leadership_scope": ("unavailable", "unavailable"),
-}
 
 
 def _extract_benefits(payload: dict) -> list[str]:
@@ -161,12 +128,8 @@ def to_normalized_job(payload: dict) -> NormalizedJob:
     # VietnamWorks surfaces no *reliable* published date. The timestamps it does expose
     # (onlineOn/approvedOn/expiredOn) each mean something other than "first posted" —
     # onlineOn churns on every employer re-list, approvedOn is an admin approval time,
-    # expiredOn is a future expiry — so none is a trustworthy posting date. The reliable
-    # path is an ingestion-owned first_seen_at / an honestly-renamed listed_on column,
-    # both of which depend on the accumulate-upsert persistence planned for T0014 (today
-    # clean_jobs is TRUNCATE'd and rebuilt each run). See Known_Issues.md ("posted_date
-    # intentionally absent from agent schema") and research/job-site-comparison.md §122.
-    # The column is nullable so this is safe to leave until that work lands.
+    # expiredOn is a future expiry — so none is a trustworthy posting date.
+    # clean_jobs accumulates rows and records first_seen_at, the date this project first saw a posting; that is not a publish date and is not substituted for one.
 
     return NormalizedJob(
         source=SOURCE_ID,

@@ -55,7 +55,7 @@ clarifying question about which of the remaining ones to compute next.
 | Open-ended analysis, "analyze the market", "find anything interesting" | `UNSUPPORTED` | No v0 shape expresses it. The decision belongs to #487. |
 | A request that depends on a prior turn, such as "now only the ones in Da Nang" or "how about the second one" | `UNSUPPORTED` | v0 is single-turn and carries no state between turns, so the referent has nothing to resolve against. A self-contained follow-up is answered normally. |
 | "Is this posting still open", "which are new this week", "when was it published" | `UNSUPPORTED` | The data records no publication date, no application deadline, and no truth about open status. See the three date fields in the field contract. |
-| Any question that needs `source`, `external_id`, `posted_date`, `is_active`, `first_seen_at`, or `last_seen_at` | `UNSUPPORTED` | Hidden from the agent by contract, in `config/prompts.yaml` and enforced in `src/api/schema_guard.py`. Their existence is not disclosed. |
+| Any question that needs `source`, `external_id`, `posted_date`, `first_seen_at`, or `last_seen_at` | `UNSUPPORTED` | Hidden from the agent by contract, in `config/prompts.yaml` and enforced in `src/api/schema_guard.py`. Their existence is not disclosed. |
 | One salary figure across two or more currencies | `UNSUPPORTED` | The values are not comparable without a rate the data does not carry. The scoped alternative is offered instead. |
 | Writes, deletions, configuration changes, prompt text, connection strings | `REFUSED` | Read-only scope. |
 | Instructions embedded in a posting's text | `REFUSED` | Tool-returned text is data, never instruction. |

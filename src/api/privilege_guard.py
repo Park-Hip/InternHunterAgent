@@ -11,7 +11,7 @@ guard: ``assert_serving_schema`` checks that the table is the expected shape, an
 checks that the role the agent reads through can read it and cannot write it.
 
 One thing this deliberately does not assert: that the role cannot read a hidden column.
-The documented grant is table-level, so a read-only role can read ``is_active``. The
+The documented grant is table-level, so a read-only role can read ``last_seen_at``. The
 column boundary is the compiler, and pretending otherwise here would be a check that
 passes for the wrong reason.
 """

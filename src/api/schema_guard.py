@@ -23,7 +23,7 @@ class SchemaGuardError(RuntimeError):
 
 
 # The frozen clean_jobs contract: 16 agent-visible columns + source/external_id/
-# posted_date bookkeeping + is_active/first_seen_at/last_seen_at lifecycle.
+# posted_date bookkeeping + first_seen_at/last_seen_at lifecycle.
 # Duplicated here deliberately to keep the serving path free of any
 # src.services.ingestion import (layer-isolation rule, T0021.1). A legitimate
 # schema change must update this constant AND the ingestion ORM in tandem.
@@ -48,11 +48,14 @@ EXPECTED_COLUMNS: frozenset[str] = frozenset(
         "salary_max",
         "salary_currency",
         "is_salary_negotiable",
-        "is_active",
         "first_seen_at",
         "last_seen_at",
     }
 )
+
+# Dropped by ADR-0059. Tolerated only until production runs the migration that
+# drops it; remove this set in the follow-up PR on the same issue.
+LEGACY_TOLERATED_COLUMNS: frozenset[str] = frozenset({"is_active"})
 
 
 def assert_serving_schema() -> None:
@@ -81,7 +84,7 @@ def assert_serving_schema() -> None:
         )
 
     missing = EXPECTED_COLUMNS - actual
-    unexpected = actual - EXPECTED_COLUMNS
+    unexpected = actual - EXPECTED_COLUMNS - LEGACY_TOLERATED_COLUMNS
 
     if missing or unexpected:
         logger.error(

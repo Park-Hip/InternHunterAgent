@@ -54,11 +54,6 @@ job_function:
 # ever exceeds ~150, raise this again rather than let it bind.
 max_jobs: 150
 
-# Lifecycle: time-based soft expiry. A posting absent from search for this many
-# consecutive days flips is_active=false. Rows are NEVER deleted.
-lifecycle:
-  expire_after_days: 7
-
 # Unattended-run safety. min_yield is a pre-write floor: a run that fetches
 # fewer than this many postings aborts before touching clean_jobs, so a broken
 # fetch can never overwrite good rows. Measured steady state is ~50/run.

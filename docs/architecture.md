@@ -916,7 +916,7 @@ JobSource (VietnamWorks) --RawPosting--> raw_jobs   verbatim landing, upsert on 
   dates, an internship flag, job level, canonical location, and structured salary as minimum,
   maximum, currency, and a negotiable flag. The title stays the raw posting title while role and
   location hold canonical normalized values. Unique on `(source, external_id)`. Hidden lifecycle
-  columns carry first-seen and last-seen timestamps and an active flag.
+  columns carry first-seen and last-seen timestamps.
 
 **`description` is a single merged free-text blob** combining job description, requirements, and
 benefits.
@@ -964,8 +964,8 @@ and a partial run cannot shrink the served corpus.
 A tunable maximum bounds a run.
 
 Load semantics are **accumulate, never wipe**.
-There is no truncate-and-reinsert; the upsert is joined by hidden lifecycle columns and a time-based
-expiry pass that ages rows on their last-seen timestamp.
+There is no truncate-and-reinsert; the upsert refreshes a hidden `last_seen_at` on every sighting, and
+nothing is expired or deleted (ADR-0059).
 This is what makes running the CLI against the production database safe.
 
 Everything tunable lives under `ingestion.*` in `config/settings.yaml`: the API URL, the AI and data
@@ -995,10 +995,7 @@ orders them so that **every abort happens before the write it protects**.
 - **Minimum-yield assertion, after the raw upsert and before the clean upsert.** It raises when a
   run returns implausibly few postings, bounded by `ingestion.safety.min_yield`. The placement is
   deliberate and load-bearing in two ways. The raw table is written *first*, so a bad run still
-  preserves its evidence for diagnosis. And the abort lands *before both* the clean upsert **and**
-  the expiry pass, which matters because expiry ages rows on their last-seen timestamp: aborting
-  after a skipped clean write but before expiry would let a single bad fetch mark the entire healthy
-  corpus inactive.
+  preserves its evidence for diagnosis. And the abort lands *before* the clean upsert.
 - **Row-quality partition, after normalization and before the clean upsert.** Each normalized row
   is checked against the row-quality invariants - a required non-blank `title` and `company`, finite
   salary bounds that never invert (`salary_min > salary_max` when both are present) and never contain
@@ -1008,8 +1005,8 @@ orders them so that **every abort happens before the write it protects**.
   once but counted under each one. The raw table is written *before* this gate, so a violating run
   still preserves its evidence. The run aborts with `IngestionSafetyError` in phase
   `row_quality_check` only when the dropped count exceeds `ingestion.safety.max_rejected_ratio`
-  (0.10) of the fetched total, so exactly 10% still passes; an abort lands *before* the clean upsert
-  **and** the expiry pass, exactly like the yield floor. The warning log reports one aggregate count
+  (0.10) of the fetched total, so exactly 10% still passes; an abort lands *before* the clean upsert,
+  exactly like the yield floor. The warning log reports one aggregate count
   per violated invariant plus a parse-failure count and never a posting identifier, so the log and
   persisted summary name the invariant without leaking job data. A dropped row's `last_seen_at` is
   not refreshed that day.

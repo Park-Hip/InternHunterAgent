@@ -61,7 +61,6 @@ class RunIngestionTests(unittest.TestCase):
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     @patch("src.services.ingestion.loader.to_normalized_job")
@@ -70,21 +69,18 @@ class RunIngestionTests(unittest.TestCase):
         mock_binding: MagicMock,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         postings = [_make_posting(f"job-{i}") for i in range(5)]
         stub = StubSource(postings)
         mock_upsert_raw.return_value = RawUpsertCounts(new=2, changed=1, unchanged=2)
         mock_upsert_clean.return_value = 5
-        mock_expire.return_value = 0
         _use_normalizer(mock_binding, MagicMock(return_value=_make_normalized_job()))
 
         result = run_ingestion(source=stub)
@@ -95,27 +91,23 @@ class RunIngestionTests(unittest.TestCase):
         self.assertEqual(result["raw_changed"], 1)
         self.assertEqual(result["raw_unchanged"], 2)
         self.assertEqual(result["clean_loaded"], 5)
-        self.assertEqual(result["expired_count"], 0)
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     @patch("src.services.ingestion.loader.to_normalized_job")
-    def test_raw_upsert_called_before_clean_upsert_before_expiry(
+    def test_raw_upsert_called_before_clean_upsert(
         self,
         mock_binding: MagicMock,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         call_order: list[str] = []
@@ -123,16 +115,14 @@ class RunIngestionTests(unittest.TestCase):
             call_order.append("raw") or RawUpsertCounts(1, 0, 0)
         )
         mock_upsert_clean.side_effect = lambda _: call_order.append("clean") or 1
-        mock_expire.side_effect = lambda _: call_order.append("expire") or 0
         _use_normalizer(mock_binding, MagicMock(return_value=_make_normalized_job()))
 
         run_ingestion(source=StubSource([_make_posting()]))
 
-        self.assertEqual(call_order, ["raw", "clean", "expire"])
+        self.assertEqual(call_order, ["raw", "clean"])
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     @patch("src.services.ingestion.loader.to_normalized_job")
@@ -141,14 +131,12 @@ class RunIngestionTests(unittest.TestCase):
         mock_binding: MagicMock,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         payload = {"jobId": "42", "jobTitle": "Intern", "companyName": "Corp"}
@@ -156,7 +144,6 @@ class RunIngestionTests(unittest.TestCase):
         _use_normalizer(mock_binding, MagicMock(return_value=_make_normalized_job()))
         mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
         mock_upsert_clean.return_value = 1
-        mock_expire.return_value = 0
 
         run_ingestion(source=StubSource([posting]))
 
@@ -164,7 +151,6 @@ class RunIngestionTests(unittest.TestCase):
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     @patch("src.services.ingestion.loader.to_normalized_job")
@@ -173,19 +159,16 @@ class RunIngestionTests(unittest.TestCase):
         mock_binding: MagicMock,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         mock_upsert_raw.return_value = RawUpsertCounts(0, 0, 0)
         mock_upsert_clean.return_value = 0
-        mock_expire.return_value = 0
 
         result = run_ingestion(source=StubSource([]))
 
@@ -196,7 +179,6 @@ class RunIngestionTests(unittest.TestCase):
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     @patch("src.services.ingestion.loader.to_normalized_job")
@@ -205,14 +187,12 @@ class RunIngestionTests(unittest.TestCase):
         mock_binding: MagicMock,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import IngestionSafetyError, run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         postings = [_make_posting(f"job-{i}") for i in range(20)]
@@ -228,14 +208,12 @@ class RunIngestionTests(unittest.TestCase):
         _use_normalizer(mock_binding, normalize)
         mock_upsert_raw.return_value = RawUpsertCounts(20, 0, 0)
         mock_upsert_clean.return_value = 17
-        mock_expire.return_value = 0
 
         with self.assertRaises(IngestionSafetyError):
             run_ingestion(source=StubSource(postings))
 
         mock_upsert_raw.assert_called_once()
         mock_upsert_clean.assert_not_called()
-        mock_expire.assert_not_called()
         persisted = self.mock_persist.call_args.args[0]
         self.assertEqual(persisted.outcome, "safety_aborted")
         self.assertEqual(persisted.failure_phase, "row_quality_check")
@@ -243,57 +221,22 @@ class RunIngestionTests(unittest.TestCase):
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
-    @patch("src.services.ingestion.loader.upsert_clean_jobs")
-    @patch("src.services.ingestion.loader.upsert_raw_postings")
-    @patch("src.services.ingestion.loader.to_normalized_job")
-    def test_expiry_runs_after_upsert_with_configured_window(
-        self,
-        mock_binding: MagicMock,
-        mock_upsert_raw: MagicMock,
-        mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
-        mock_settings: MagicMock,
-        mock_schema_assert: MagicMock,
-    ) -> None:
-        from src.services.ingestion.loader import run_ingestion
-
-        mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 14},
-            "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
-        }
-        mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
-        mock_upsert_clean.return_value = 1
-        mock_expire.return_value = 3
-        _use_normalizer(mock_binding, MagicMock(return_value=_make_normalized_job()))
-
-        result = run_ingestion(source=StubSource([_make_posting()]))
-
-        mock_expire.assert_called_once_with(14)
-        self.assertEqual(result["expired_count"], 3)
-
-    @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
-    @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     def test_pages_failed_surfaced_in_summary(
         self,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         mock_upsert_raw.return_value = RawUpsertCounts(0, 0, 0)
         mock_upsert_clean.return_value = 0
-        mock_expire.return_value = 0
 
         stub = StubSource([])
         stub.pages_failed = 3
@@ -304,21 +247,18 @@ class RunIngestionTests(unittest.TestCase):
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     def test_schema_assertion_failure_aborts_before_any_upsert(
         self,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import IngestionSafetyError, run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         mock_schema_assert.side_effect = IngestionSafetyError(
@@ -330,25 +270,21 @@ class RunIngestionTests(unittest.TestCase):
 
         mock_upsert_raw.assert_not_called()
         mock_upsert_clean.assert_not_called()
-        mock_expire.assert_not_called()
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
-    def test_under_floor_yield_aborts_before_clean_write_and_expiry(
+    def test_under_floor_yield_aborts_before_clean_write(
         self,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import IngestionSafetyError, run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 20, "max_rejected_ratio": 0.10},
         }
         mock_upsert_raw.return_value = RawUpsertCounts(1, 0, 0)
@@ -358,18 +294,15 @@ class RunIngestionTests(unittest.TestCase):
 
         mock_upsert_raw.assert_called_once()
         mock_upsert_clean.assert_not_called()
-        mock_expire.assert_not_called()
         persisted = self.mock_persist.call_args.args[0]
         self.assertEqual(persisted.outcome, "safety_aborted")
         self.assertEqual(persisted.failure_phase, "yield_check")
         self.assertEqual(persisted.fetched, 1)
         self.assertEqual(persisted.raw_upserted, 1)
         self.assertIsNone(persisted.clean_loaded)
-        self.assertIsNone(persisted.expired_count)
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     @patch("src.services.ingestion.loader.to_normalized_job")
@@ -378,14 +311,12 @@ class RunIngestionTests(unittest.TestCase):
         mock_binding: MagicMock,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 1, "max_rejected_ratio": 0.10},
         }
         call_order: list[str] = []
@@ -394,12 +325,11 @@ class RunIngestionTests(unittest.TestCase):
             call_order.append("raw") or RawUpsertCounts(1, 0, 0)
         )
         mock_upsert_clean.side_effect = lambda _: call_order.append("clean") or 1
-        mock_expire.side_effect = lambda _: call_order.append("expire") or 0
         _use_normalizer(mock_binding, MagicMock(return_value=_make_normalized_job()))
 
         result = run_ingestion(source=StubSource([_make_posting()]))
 
-        self.assertEqual(call_order, ["schema", "raw", "clean", "expire"])
+        self.assertEqual(call_order, ["schema", "raw", "clean"])
         self.assertEqual(
             set(result.keys()),
             {
@@ -410,7 +340,6 @@ class RunIngestionTests(unittest.TestCase):
                 "raw_unchanged",
                 "clean_loaded",
                 "skipped",
-                "expired_count",
                 "pages_failed",
             },
         )
@@ -422,7 +351,6 @@ class RunIngestionTests(unittest.TestCase):
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     @patch("src.services.ingestion.loader.to_normalized_job")
@@ -431,14 +359,12 @@ class RunIngestionTests(unittest.TestCase):
         mock_binding: MagicMock,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         postings = [_make_posting(f"job-{i}") for i in range(20)]
@@ -452,18 +378,15 @@ class RunIngestionTests(unittest.TestCase):
         _use_normalizer(mock_binding, normalize)
         mock_upsert_raw.return_value = RawUpsertCounts(20, 0, 0)
         mock_upsert_clean.return_value = 19
-        mock_expire.return_value = 0
 
         result = run_ingestion(source=StubSource(postings))
 
         self.assertEqual(result["skipped"], 1)
         loaded = mock_upsert_clean.call_args[0][0]
         self.assertEqual(len(loaded), 19)
-        mock_expire.assert_called_once()
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     @patch("src.services.ingestion.loader.to_normalized_job")
@@ -472,14 +395,12 @@ class RunIngestionTests(unittest.TestCase):
         mock_binding: MagicMock,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         postings = [_make_posting(f"job-{i}") for i in range(20)]
@@ -493,18 +414,15 @@ class RunIngestionTests(unittest.TestCase):
         _use_normalizer(mock_binding, normalize)
         mock_upsert_raw.return_value = RawUpsertCounts(20, 0, 0)
         mock_upsert_clean.return_value = 18
-        mock_expire.return_value = 0
 
         result = run_ingestion(source=StubSource(postings))
 
         self.assertEqual(result["skipped"], 2)
         loaded = mock_upsert_clean.call_args[0][0]
         self.assertEqual(len(loaded), 18)
-        mock_expire.assert_called_once()
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     @patch("src.services.ingestion.loader.to_normalized_job")
@@ -513,14 +431,12 @@ class RunIngestionTests(unittest.TestCase):
         mock_binding: MagicMock,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import IngestionSafetyError, run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         postings = [_make_posting(f"job-{i}") for i in range(20)]
@@ -534,14 +450,12 @@ class RunIngestionTests(unittest.TestCase):
         _use_normalizer(mock_binding, normalize)
         mock_upsert_raw.return_value = RawUpsertCounts(20, 0, 0)
         mock_upsert_clean.return_value = 17
-        mock_expire.return_value = 0
 
         with self.assertRaises(IngestionSafetyError):
             run_ingestion(source=StubSource(postings))
 
         mock_upsert_raw.assert_called_once()
         mock_upsert_clean.assert_not_called()
-        mock_expire.assert_not_called()
         persisted = self.mock_persist.call_args.args[0]
         self.assertEqual(persisted.outcome, "safety_aborted")
         self.assertEqual(persisted.failure_phase, "row_quality_check")
@@ -549,7 +463,6 @@ class RunIngestionTests(unittest.TestCase):
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     @patch("src.services.ingestion.loader.settings")
-    @patch("src.services.ingestion.loader.expire_stale_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_clean_jobs")
     @patch("src.services.ingestion.loader.upsert_raw_postings")
     @patch("src.services.ingestion.loader.to_normalized_job")
@@ -558,14 +471,12 @@ class RunIngestionTests(unittest.TestCase):
         mock_binding: MagicMock,
         mock_upsert_raw: MagicMock,
         mock_upsert_clean: MagicMock,
-        mock_expire: MagicMock,
         mock_settings: MagicMock,
         mock_schema_assert: MagicMock,
     ) -> None:
         from src.services.ingestion.loader import run_ingestion
 
         mock_settings.ingestion_yaml = {
-            "lifecycle": {"expire_after_days": 7},
             "safety": {"min_yield": 0, "max_rejected_ratio": 0.10},
         }
         postings = [_make_posting(f"job-{i}") for i in range(20)]
@@ -579,12 +490,10 @@ class RunIngestionTests(unittest.TestCase):
         _use_normalizer(mock_binding, normalize)
         mock_upsert_raw.return_value = RawUpsertCounts(20, 0, 0)
         mock_upsert_clean.return_value = 19
-        mock_expire.return_value = 0
 
         result = run_ingestion(source=StubSource(postings))
 
         self.assertEqual(result["skipped"], 1)
-        mock_expire.assert_called_once()
 
     @patch("src.services.ingestion.loader.assert_clean_jobs_schema")
     def test_runtime_failure_persists_known_partial_metrics(

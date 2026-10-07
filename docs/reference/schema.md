@@ -67,15 +67,12 @@ agent:
   questions, and kept unreferenced rather than repurposed.
 
 Added by T0019.3 (2026-07-18) as hidden lifecycle bookkeeping — written by
-`upsert_clean_jobs` / `expire_stale_clean_jobs`, never surfaced to the agent:
+`upsert_clean_jobs`, never surfaced to the agent:
 
-- `is_active`: `boolean not null default true`. Flipped to `false` by the time-based
-  expiry pass; never a `DELETE`. Agent exposure is deferred — see the `is_active` section
-  below.
 - `first_seen_at`: `timestamptz not null default now()`, insert-only, never refreshed.
 - `last_seen_at`: `timestamptz not null default now()`, refreshed on every upsert conflict.
 
-`tests/agents/runtime/test_prompts.py` asserts all three never appear in `schema_context`.
+`tests/agents/runtime/test_prompts.py` asserts both never appear in `schema_context`.
 
 ## Frozen Eval Fixture
 
@@ -84,30 +81,20 @@ data fixture for the v1 golden dataset. The fixture contains 24 rows. Reproducib
 comparison requires both the schema contract and the fixture data to stay stable unless a
 ticket explicitly declares a recalibration.
 
-## Future `is_active` — column shipped, exposure still deferred
+## Removed `is_active`
 
-**The column now exists; only its agent visibility is deferred.** T0019.3 (2026-07-18) added
-`is_active` to `clean_jobs` as a **hidden** lifecycle column — physically present, written by
-`upsert_clean_jobs` and `expire_stale_clean_jobs`, but deliberately absent from
-`NormalizedJob`, `config/prompts.yaml`, and this contract's visible set. Keep the two
-questions apart: *does the column exist* (yes, since T0019.3) versus *can the agent see it*
-(no).
-
-Exposure remains the single known future agent-visible addition. Its required gate is T0011.5
-baseline calibration, then a prompt-v2 few-shot pass and targeted recalibration delta. T0019 cut
-the exposure from its own scope precisely because the
-calibration evidence needed to justify an honesty hedge does not yet exist. It is an
-additive change and not a reason to delay or weaken this v1 freeze.
+The `is_active` column was dropped by ADR-0059, along with the time-based expiry pass that wrote it, so the agent's population is every posting ever collected.
+Lifecycle questions stay unsupported by the v1 contract, and any future "recently listed" need is derived at query time from `last_seen_at` under a new decision.
 
 **Visible vs. physical column count.** This contract freezes **16 agent-visible** columns;
-`clean_jobs` physically has **22** after T0019.3. The gap is 3 pre-existing hidden columns
-(`source` and `external_id` bookkeeping, plus `posted_date`, per the notes above) plus the 3
-T0019.3 lifecycle columns (`is_active`, `first_seen_at`, `last_seen_at`) — both sets
-enumerated under [Hidden DDL Columns](#hidden-ddl-columns) above. A physical column count
-that exceeds 16 is expected and is not a contract breach — the enforcement test below checks
-the *visible* set and the hidden-column exclusions, not the table width.
+`clean_jobs` physically has **21** after ADR-0059. The gap is 3 pre-existing hidden columns
+(`source` and `external_id` bookkeeping, plus `posted_date`, per the notes above) plus the 2
+remaining lifecycle columns (`first_seen_at`, `last_seen_at`) - both sets enumerated under
+[Hidden DDL Columns](#hidden-ddl-columns) above. A physical column count that exceeds 16 is
+expected and is not a contract breach - the enforcement test below checks the *visible* set
+and the hidden-column exclusions, not the table width.
 
-These same 6 are the columns T0019.10 removed from `fetch_job_details`'s projection: before
+These same 5 are the columns T0019.10 removed from `fetch_job_details`'s projection: before
 that ticket it ran `SELECT *`, so the hidden set reached the agent verbatim despite this
 contract.
 

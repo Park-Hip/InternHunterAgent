@@ -637,9 +637,9 @@ class TestEdgeConditions:
             "salary_min", "salary_max", "salary_currency", "is_salary_negotiable",
         }
         assert EXPECTED_COLUMNS - visible == {
-            "source", "external_id", "posted_date", "is_active", "first_seen_at", "last_seen_at",
+            "source", "external_id", "posted_date", "first_seen_at", "last_seen_at",
         }
-        assert not (visible & {"is_active", "first_seen_at", "last_seen_at", "source", "external_id"})
+        assert not (visible & {"first_seen_at", "last_seen_at", "source", "external_id"})
 
     def test_base64_injection_row_is_present_in_the_pinned_fixture(self, engine) -> None:
         found = rows(engine, "select id, description from clean_jobs where description like '%U1lTVEVN%'")

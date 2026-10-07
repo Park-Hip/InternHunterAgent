@@ -85,7 +85,7 @@ def test_baseline_upgrade_matches_metadata():
         rows = conn.execute(text("SELECT version_num FROM alembic_version")).fetchall()
 
     assert len(rows) == 1
-    assert rows[0][0] == "f4b91860ea32"
+    assert rows[0][0] == "1d032eb356bf"
     assert {index["name"] for index in inspector.get_indexes("ingestion_runs")} == {
         "ix_ingestion_runs_finished_at",
         "ix_ingestion_runs_source_started_at",

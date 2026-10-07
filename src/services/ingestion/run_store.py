@@ -26,7 +26,6 @@ def persist_ingestion_run(summary: IngestionRunSummary) -> bool:
                     raw_unchanged=summary.raw_unchanged,
                     clean_loaded=summary.clean_loaded,
                     skipped=summary.skipped,
-                    expired_count=summary.expired_count,
                     pages_failed=summary.pages_failed,
                 )
             )

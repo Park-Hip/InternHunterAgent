@@ -116,7 +116,6 @@ IngestionFailurePhase = Literal[
     "normalize",
     "row_quality_check",
     "clean_upsert",
-    "expiry",
 ]
 IngestionFailureCode = Literal["safety_check_failed", "unexpected_error"]
 
@@ -138,7 +137,6 @@ class IngestionRunSummary:
     raw_unchanged: int | None = None
     clean_loaded: int | None = None
     skipped: int | None = None
-    expired_count: int | None = None
     pages_failed: int | None = None
 
 
@@ -192,7 +190,6 @@ class IngestionRun(Base):
     raw_unchanged: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     clean_loaded: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     skipped: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    expired_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     pages_failed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
 
@@ -222,9 +219,6 @@ class CleanJob(Base):
     salary_currency: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_salary_negotiable: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
-    )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true"
     )
     first_seen_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default="now()"

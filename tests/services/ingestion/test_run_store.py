@@ -21,7 +21,6 @@ def _summary(**overrides) -> IngestionRunSummary:
         "raw_unchanged": 1,
         "clean_loaded": 3,
         "skipped": 0,
-        "expired_count": 0,
         "pages_failed": 0,
     }
     return IngestionRunSummary(**{**defaults, **overrides})
@@ -63,7 +62,6 @@ class PersistIngestionRunTests(unittest.TestCase):
                 failure_code="safety_check_failed",
                 clean_loaded=None,
                 skipped=None,
-                expired_count=None,
             )
         )
 
@@ -72,7 +70,6 @@ class PersistIngestionRunTests(unittest.TestCase):
         self.assertEqual(row.failure_phase, "yield_check")
         self.assertIsNone(row.clean_loaded)
         self.assertIsNone(row.skipped)
-        self.assertIsNone(row.expired_count)
 
     @patch("src.services.ingestion.run_store.session_factory")
     def test_runtime_failure_preserves_unknown_metrics_as_null(
@@ -91,7 +88,6 @@ class PersistIngestionRunTests(unittest.TestCase):
                 raw_unchanged=None,
                 clean_loaded=None,
                 skipped=None,
-                expired_count=None,
             )
         )
 

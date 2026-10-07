@@ -46,12 +46,6 @@ on:
 # `schedule:` trigger the same day and record the failure. The corpus in
 # `clean_jobs` is retained by design; ingestion accumulates rows and never
 # truncates them, so a disarm loses no data.
-#
-# OPEN MAINTAINER POINT, unchanged by this re-arm: the serving path does
-# not filter `is_active`, so expired postings stay visible and are answered
-# from. A daily schedule keeps producing expired rows, and the 2026-10-05
-# run expired 223 of them. Filtering the serving query is out of scope here
-# and is stated in the documentation rather than left implicit.
 
 concurrency:
   group: ingestion

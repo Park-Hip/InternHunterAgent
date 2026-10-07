@@ -1,6 +1,6 @@
 # Frozen-data portfolio release supersedes the self-refreshing MVP gate
 
-> **Status:** Active · **Decided:** 2026-09-18
+> **Status:** Superseded by [ADR-0057](adr-0057-nightly-ingestion-restored.md) · **Decided:** 2026-09-18
 
 ## Decision
 

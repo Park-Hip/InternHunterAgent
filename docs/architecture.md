@@ -21,12 +21,12 @@ graph LR
     API --> AG[ReAct agent runtime]
     AG -->|validated read-only SQL| DB[(Neon PostgreSQL clean_jobs)]
     API -.->|traces and scores| LF[Langfuse Cloud]
-    ING[GitHub Actions ingestion workflow] -.->|manual workflow_dispatch upsert| DB
+    ING[GitHub Actions ingestion workflow] -.->|nightly schedule + manual dispatch upsert| DB
     ING -.->|scrape| SRC[VietnamWorks]
 ```
 
-Scheduled ingestion is disabled under the frozen-data portfolio posture (section 1.7); the workflow
-retains only `workflow_dispatch`, so the ingestion edge above is manual, not automatic.
+Ingestion runs nightly on the workflow's `schedule:` trigger (ADR-0057) and can also be dispatched
+manually.
 
 ## C4 container view
 
@@ -78,10 +78,8 @@ These are capabilities a user can observe, independent of how they are built.
   satisfy this: a user asking today is answered from the most recent completed run, not from a
   frozen extract.
 
-  **Release exception.** This capability is not exercised by the public release. The deployed demo
-  is a frozen-data portfolio posture (section 1.7): scheduled ingestion is disabled and the served
-  snapshot is historical, its measured date reported by `/api/v1/ready`. This bullet is the original
-  v1.0 MVP definition, not a claim the current demo satisfies.
+  **Nightly refresh.** The deployed demo exercises this capability: ingestion runs nightly on the
+  workflow's `schedule:` trigger (ADR-0057). Results still do not establish current vacancies.
 - **Hold a conversation.** A user can ask an initial question and refine it naturally - "only the
   Python ones", "which of those are remote" - without restating earlier context.
 - **Remember within a session.** Each conversation is remembered while it is happening, persists
@@ -123,18 +121,14 @@ The MVP is done when all of the following are observably true.
 - Every interaction appears as a trace that maps cleanly back to the request.
 - The application starts cleanly with a single documented command.
 
-The frozen-data portfolio release (section 1.7) does not satisfy the "refreshes on its schedule"
-condition above: it is published as an archive, not as a completed self-refreshing MVP.
-
 ### 1.5 Scope and accepted limitations
 
 In scope: the six capabilities in section 1.2, held to the bar in section 1.3.
 Scheduled ingestion is one of them, so a manually loaded static corpus does not meet this
 specification however current its contents happen to be on the day it is loaded.
 
-The public release is a frozen-data portfolio posture (section 1.7), not a claim that the
-self-refreshing MVP is complete: scheduled ingestion is suspended and the served corpus is an
-explicitly historical snapshot.
+The public release serves a nightly-refreshed corpus (section 1.7). Results do not establish which
+postings are currently open.
 
 Deferred on purpose, each mapped to a future phase so "not yet" never reads as "forgotten":
 
@@ -148,10 +142,8 @@ Accepted limitations:
 
 - Answers are text-only. No tables, charts, or downloadable results.
 - The corpus covers the current VietnamWorks ingestion scope and is not comprehensive.
-- The corpus is a historical snapshot, not a live feed. In the frozen-data portfolio posture
-  (section 1.7) it does not refresh at all: scheduled ingestion is disabled and results must not be
-  read as current vacancies. Before the freeze, refresh cadence was an accepted limit rather than a
-  freeze.
+- The corpus refreshes nightly (section 1.7), not continuously. Results must not be read as current
+  vacancies, because rows accumulate rather than being deleted and lifecycle data stays hidden.
 
 ### 1.6 Future direction
 
@@ -165,25 +157,19 @@ Intent, not commitment.
 
 The product can grow in those directions only through a recorded decision and measured design work.
 
-### 1.7 Frozen-data portfolio release
+### 1.7 Nightly-refreshed release
 
-The public demo is published as a **frozen-data portfolio release**, not as a completed
-self-refreshing MVP.
+The public demo is published as a **nightly-refreshed release**, not as a static archive.
 
-- The served corpus is a historical snapshot. Its freshness is the last successfully measured ingest
-  date, which `/api/v1/ready` reports as `data_snapshot_date` alongside a provenance of `measured`.
-  This document does not restate the value: it moves with every completed ingest run.
-- Scheduled ingestion is disabled: `.github/workflows/ingestion.yml` keeps `workflow_dispatch` only,
-  because the source robots/terms gate failed closed and the armed schedule produced only known
-  failures from the 2026-08-28 run onward.
-- The UI states plainly that the data is a historical snapshot and does not establish current
-  vacancies; `/api/v1/ready` continues to return the measured snapshot date and provenance.
-- ADR-0053 records this narrower posture and supersedes ADR-0038's claim that a live schedule gates
-  the v1.0 tag for this release.
-
-Resuming scheduled ingestion requires a provider-authorized path approved, deployed, and proven by
-one manual and one scheduled run, then reverting this section, the UI notice, and the workflow
-`schedule` trigger together.
+- Ingestion runs nightly at 02:00 UTC on the workflow's `schedule:` trigger and keeps
+  `workflow_dispatch` (ADR-0057).
+- `/api/v1/ready` reports the measured freshness of the latest load as `data_snapshot_date`, and the
+  UI dateline shows that measured date rather than a pinned string.
+- Results do not establish that a posting is currently open: lifecycle data stays hidden from the
+  agent under ADR-0021, and rows accumulate rather than being deleted.
+- If a scheduled run fails closed for any reason other than a row-level data rejection, the
+  `schedule:` trigger is removed the same day and the failure is recorded (ADR-0057's revocation
+  condition). ADR-0053 is superseded.
 
 
 ## 2. Layered architecture
@@ -884,8 +870,8 @@ deliberate cheap-growth path.
 
 Ingestion is offline batch tooling under `src/services/ingestion/`, isolated from the request
 pipeline by the layer law in section 2.2.
-It runs as a re-runnable CLI, invoked via manual `workflow_dispatch` (the scheduled trigger is
-disabled under the frozen-data portfolio posture, section 1.7), never inside an API request.
+It runs as a re-runnable CLI, invoked nightly by the workflow's `schedule:` trigger and on manual
+`workflow_dispatch`, never inside an API request.
 VietnamWorks is the selected first source under the recorded robots and terms decision (D-034).
 
 **Design intent: source-agnostic.**

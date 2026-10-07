@@ -14,6 +14,11 @@ class IngestionSafetyError(Exception):
     """Raised when a pre-flight or pre-write safety check fails. The CLI exits non-zero on this."""
 
 
+# Dropped by ADR-0059. Tolerated only until production runs the migration that
+# drops it; remove this set in the follow-up PR on the same issue.
+_LEGACY_TOLERATED_COLUMNS: frozenset[str] = frozenset({"is_active"})
+
+
 def assert_clean_jobs_schema() -> None:
     """Compare live clean_jobs columns against CleanJob's ORM metadata.
 
@@ -39,7 +44,7 @@ def assert_clean_jobs_schema() -> None:
 
     expected = {c.name for c in CleanJob.__table__.columns}
     missing = expected - actual
-    unexpected = actual - expected
+    unexpected = actual - expected - _LEGACY_TOLERATED_COLUMNS
 
     if missing or unexpected:
         logger.error(

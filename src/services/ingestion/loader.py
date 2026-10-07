@@ -6,10 +6,7 @@ from datetime import UTC, datetime
 
 from src.core.config import settings
 from src.core.logger import logger
-from src.services.ingestion.clean_store import (
-    expire_stale_clean_jobs,
-    upsert_clean_jobs,
-)
+from src.services.ingestion.clean_store import upsert_clean_jobs
 from src.services.ingestion.models import (
     IngestionFailurePhase,
     IngestionRunSummary,
@@ -98,16 +95,7 @@ def run_ingestion(source: VietnamWorksSource | None = None) -> dict:
 
         phase = "clean_upsert"
         clean_count = upsert_clean_jobs(accepted)
-        summary = replace(summary, clean_loaded=clean_count)
-
-        phase = "expiry"
-        expire_after_days = settings.ingestion_yaml["lifecycle"]["expire_after_days"]
-        expired_count = expire_stale_clean_jobs(expire_after_days)
-        summary = replace(
-            summary,
-            expired_count=expired_count,
-            outcome="completed",
-        )
+        summary = replace(summary, clean_loaded=clean_count, outcome="completed")
 
         return {
             "fetched": len(postings),
@@ -117,7 +105,6 @@ def run_ingestion(source: VietnamWorksSource | None = None) -> dict:
             "raw_unchanged": raw_counts.unchanged,
             "clean_loaded": clean_count,
             "skipped": rejected,
-            "expired_count": expired_count,
             "pages_failed": summary.pages_failed,
         }
     except IngestionSafetyError:

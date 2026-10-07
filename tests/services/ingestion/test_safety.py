@@ -37,6 +37,13 @@ class AssertCleanJobsSchemaTests(unittest.TestCase):
         assert_clean_jobs_schema()
 
     @patch("src.services.ingestion.safety.session_factory")
+    def test_leftover_is_active_column_is_tolerated(self, mock_session_factory: MagicMock) -> None:
+        rows = [(name,) for name in _expected_columns() | {"is_active"}]
+        _mock_session(mock_session_factory, rows)
+
+        assert_clean_jobs_schema()
+
+    @patch("src.services.ingestion.safety.session_factory")
     def test_missing_column_raises_and_names_it(self, mock_session_factory: MagicMock) -> None:
         columns = _expected_columns() - {"location"}
         rows = [(name,) for name in columns]

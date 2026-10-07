@@ -213,7 +213,7 @@ and runs schema safety checks against production.
 Every attempt appends one immutable row to `ingestion_runs`, retained indefinitely for operational
 trend analysis. It records UTC `started_at` / `finished_at`, the source, and one of three outcomes:
 `completed`, `safety_aborted`, or `failed`. Counters are stage-complete facts: `fetched`, the raw
-upsert totals, normalization `skipped`, `clean_loaded`, `expired_count`, and `pages_failed` are
+upsert totals, normalization `skipped`, `clean_loaded`, and `pages_failed` are
 written only after the relevant stage completes. A not-yet-reached or incomplete stage is `NULL`,
 never a synthetic zero.
 

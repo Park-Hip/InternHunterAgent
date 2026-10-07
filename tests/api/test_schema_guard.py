@@ -27,6 +27,13 @@ class AssertServingSchemaTests(unittest.TestCase):
         assert_serving_schema()
 
     @patch("src.api.schema_guard.session_factory")
+    def test_leftover_is_active_column_is_tolerated(self, mock_session_factory: MagicMock) -> None:
+        rows = [(name,) for name in EXPECTED_COLUMNS | {"is_active"}]
+        _mock_session(mock_session_factory, rows)
+
+        assert_serving_schema()
+
+    @patch("src.api.schema_guard.session_factory")
     def test_missing_column_raises_and_names_it(self, mock_session_factory: MagicMock) -> None:
         columns = EXPECTED_COLUMNS - {"location"}
         rows = [(name,) for name in columns]

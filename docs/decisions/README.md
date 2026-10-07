@@ -39,6 +39,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0054](adr-0054-litellm-configured-serving-deployments.md) | LiteLLM serves trusted configured deployments | Agent runtime |
 | [ADR-0057](adr-0057-nightly-ingestion-restored.md) | Nightly VietnamWorks ingestion is restored | Product scope |
 | [ADR-0058](adr-0058-single-source-mvp-ingestion.md) | Ingestion is one authorized source feeding one serving table | Data governance |
+| [ADR-0059](adr-0059-no-stored-posting-lifecycle.md) | Posting lifecycle is not stored; the agent counts every posting ever collected | Data honesty |
 
 Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
 superseded by ADR-0052 and keep their files with a `Superseded by` status.

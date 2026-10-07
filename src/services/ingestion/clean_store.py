@@ -9,7 +9,7 @@ from src.services.ingestion.models import CleanJob, NormalizedJob
 
 
 class CleanStoreError(Exception):
-    """Raised when a clean_jobs upsert or expiry pass fails at the database layer."""
+    """Raised when a clean_jobs upsert fails at the database layer."""
 
 
 def upsert_clean_jobs(jobs: Iterable[NormalizedJob]) -> int:
@@ -68,7 +68,6 @@ def upsert_clean_jobs(jobs: Iterable[NormalizedJob]) -> int:
             "salary_currency": insert(CleanJob).excluded.salary_currency,
             "is_salary_negotiable": insert(CleanJob).excluded.is_salary_negotiable,
             "last_seen_at": text("now()"),
-            "is_active": text("true"),
         },
     )
 
@@ -80,27 +79,3 @@ def upsert_clean_jobs(jobs: Iterable[NormalizedJob]) -> int:
         raise CleanStoreError(f"Failed to upsert clean jobs: {exc}") from exc
 
     return len(rows)
-
-
-def expire_stale_clean_jobs(expire_after_days: int) -> int:
-    """Soft-expire postings unseen for N consecutive days. Never deletes rows.
-
-    Time-based only — a posting flips is_active=false purely because
-    last_seen_at has aged past the window, never because it was absent from a
-    single run. Rollback: clean_jobs can always be rebuilt from raw_jobs via
-    to_normalized_job + upsert_clean_jobs, since raw_jobs is never truncated.
-    """
-    stmt = text(
-        "UPDATE clean_jobs"
-        " SET is_active = false"
-        " WHERE last_seen_at < now() - make_interval(days => :days)"
-    )
-
-    try:
-        with session_factory() as session:
-            result = session.execute(stmt, {"days": expire_after_days})
-            session.commit()
-    except (OperationalError, DBAPIError) as exc:
-        raise CleanStoreError(f"Failed to expire stale clean jobs: {exc}") from exc
-
-    return result.rowcount

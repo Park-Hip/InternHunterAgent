@@ -15,7 +15,6 @@ NON_AGENT_VISIBLE_COLUMNS = frozenset(
         "source",
         "external_id",
         "posted_date",
-        "is_active",
         "first_seen_at",
         "last_seen_at",
     }

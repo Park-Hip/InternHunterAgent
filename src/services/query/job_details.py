@@ -17,7 +17,7 @@ def fetch_job_details(ids: list[int]) -> list[dict]:
             # change together: schema_context tells the model "unlisted columns do not
             # exist in this schema", while this query decides what the model actually
             # receives. Selecting anything beyond the contract (clean_jobs also holds
-            # is_active, first_seen_at, last_seen_at, posted_date, source, external_id)
+            # first_seen_at, last_seen_at, posted_date, source, external_id)
             # hands the agent vocabulary it was never given and never calibrated for.
             result = session.execute(
                 text(

@@ -553,7 +553,7 @@ class TestLeastPrivilege:
         reader = create_engine(reader_url)
         try:
             with reader.connect() as conn:
-                assert conn.execute(text("select is_active from clean_jobs limit 1")).scalar() is not None
+                assert conn.execute(text("select last_seen_at from clean_jobs limit 1")).scalar() is not None
         finally:
             reader.dispose()
 

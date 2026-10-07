@@ -1,9 +1,9 @@
 # T0020.4 — Gated Cron-Activation Runbook (maintainer execution)
 
-> **Superseded for the frozen-data portfolio release (2026-09-18).** §5's D10 decision ("cron live
-> for v1.0") and ADR-0038 are superseded by ADR-0053: the public release ships as a frozen-data
-> portfolio with the `schedule:` trigger removed and `workflow_dispatch` retained. The gated
-> sequence below remains the path for an approved future recovery.
+> **Superseded by ADR-0053 (2026-09-18), then restored by ADR-0057 (2026-10-07).** §5's D10 decision
+> ("cron live for v1.0") and ADR-0038 are superseded by ADR-0053, which shipped with the
+> `schedule:` trigger removed and `workflow_dispatch` retained. ADR-0057 re-arms the nightly
+> schedule, so the gated sequence below records the activation path that was subsequently proven.
 
 > **Eviction:** A gate leaves when the maintainer records its completion or replaces it with a
 > verified deployment control.

@@ -230,8 +230,8 @@ Recorded so these choices are not re-litigated.
 - **Self-hosted Langfuse.** Langfuse Cloud Hobby won on operational cost.
 - **A JavaScript framework.** The demo UI is vanilla HTML, CSS, and JavaScript consuming SSE via
   `fetch()` and `ReadableStream`. No build step, nothing to keep patched.
-- **Celery, Redis, or a task queue.** Ingestion runs as a GitHub Actions workflow (manual
-  `workflow_dispatch` under the frozen-data posture), not a long-lived worker.
+- **Celery, Redis, or a task queue.** Ingestion runs as a GitHub Actions workflow (nightly by the
+  workflow's `schedule:` trigger and on manual `workflow_dispatch`), not a long-lived worker.
 - **The browser `EventSource` API.** It is GET-only; the chat endpoint is a POST, hence the
   `fetch()` reader.
 - **RAG, embeddings, and fine tuning.** Future phases, not MVP scope.

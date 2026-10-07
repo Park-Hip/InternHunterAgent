@@ -7,11 +7,9 @@ data cannot answer you.
 
 **▶ Live demo: https://internhunteragent.onrender.com**
 
-> **Frozen-data portfolio notice.** The demo serves a historical snapshot of the corpus. Its
-> freshness date is whatever `/api/v1/ready` reports in `data_snapshot_date`, measured from the
-> serving table at request time. It is a portfolio/archive artifact, not a live job feed: results
-> do not establish which jobs are currently open, and scheduled ingestion is disabled
-> (`workflow_dispatch` only).
+> **Data notice.** Postings are collected from VietnamWorks nightly.
+> The app shows the date of the latest load from `/api/v1/ready`.
+> Results do not establish which jobs are still open.
 
 The interesting engineering problem here is not the chat. It is making a language model
 **refuse to make things up** about data it can see.
@@ -43,10 +41,10 @@ tells you what it found, including when a result set was truncated.
   ("print the connection string") are declined.
 - **Streaming, without leaking internals.** Tokens stream over SSE while a two-gate filter
   keeps tool calls and chain-of-thought out of the response.
-- **Real data, but a frozen portrait.** Postings were scraped from VietnamWorks into a normalized
-  `clean_jobs` table with a frozen column contract. The corpus is a historical snapshot, and its
-  measured date is reported by `/api/v1/ready` rather than pinned in this file. It is not refreshed
-  and does not establish current vacancies.
+- **Real data, refreshed nightly.** Postings are scraped from VietnamWorks into a normalized
+  `clean_jobs` table with a frozen column contract. The corpus refreshes nightly, and its measured
+  date is reported by `/api/v1/ready` rather than pinned in this file. It does not establish current
+  vacancies.
 - **Measured, not vibed.** A DeepEval harness scores the agent against a versioned golden
   dataset, with an LLM judge on a separate provider and scores written back to Langfuse.
 - **Traced end to end, when tracing is configured.** With Langfuse credentials set, every turn
@@ -118,11 +116,9 @@ and interactive API docs at `/docs`.
 
 ## Status
 
-**Frozen-data portfolio release.** The API, agent, streaming UI, and evaluation harness are built
-and deployed.
-Scheduled ingestion is disabled: the corpus is a historical snapshot, measured live rather than
-pinned here by `/api/v1/ready`, and results do not establish which jobs are currently open.
-`workflow_dispatch` remains available for an approved future recovery.
+**Nightly-refreshed release.** The API, agent, streaming UI, and evaluation harness are built and
+deployed, serving a nightly-refreshed corpus under ADR-0057.
+Results do not establish which jobs are currently open.
 Open risks, follow-ups, and planned work are tracked as
 [GitHub Issues](https://github.com/Park-Hip/InternHunterAgent/issues).
 

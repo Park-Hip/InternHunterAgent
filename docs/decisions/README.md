@@ -36,17 +36,17 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0049](adr-0049-cancel-streamed-generation-on-client-disconnect.md) | Streamed generation stops when its client disconnects | Operations |
 | [ADR-0050](adr-0050-sse-comments-keep-silent-streams-alive.md) | SSE comments keep silent streams alive | Operations |
 | [ADR-0052](adr-0052-per-class-release-thresholds-real-sweep.md) | Per-class release thresholds from the real corpus re-sweep | Evaluation |
-| [ADR-0053](adr-0053-frozen-data-portfolio-release.md) | The public release is a frozen-data portfolio, not a self-refreshing MVP claim | Product scope |
 | [ADR-0054](adr-0054-litellm-configured-serving-deployments.md) | LiteLLM serves trusted configured deployments | Agent runtime |
+| [ADR-0057](adr-0057-nightly-ingestion-restored.md) | Nightly VietnamWorks ingestion is restored | Product scope |
 | [ADR-0058](adr-0058-single-source-mvp-ingestion.md) | Ingestion is one authorized source feeding one serving table | Data governance |
 
 Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
 superseded by ADR-0052 and keep their files with a `Superseded by` status.
 Records ADR-0055 (evidence-first ingestion contract) and ADR-0056 (per-source ingestion gates)
 are superseded by ADR-0058 and keep their files with a `Superseded by` status.
-Record ADR-0038 (scheduled ingestion required for MVP) is superseded by ADR-0053 (frozen-data
-portfolio release) for the public portfolio release and keeps its file with a `Superseded by`
-status.
+Record ADR-0038 (scheduled ingestion required for MVP) is superseded by ADR-0053, and ADR-0053 is
+itself superseded by ADR-0057 (nightly ingestion restored). Both keep their files with a
+`Superseded by` status.
 
 ## Retired decisions, and why they were not carried over
 

@@ -3,7 +3,7 @@
 > **Retired:** 2026-09-18
 
 The live semantic release-gate CI path is retired.
-Release readiness for the frozen-data portfolio no longer requires a successful live semantic
+Release readiness for the portfolio release no longer requires a successful live semantic
 judge run, and this release process publishes no current model-quality certification.
 
 ## What changed

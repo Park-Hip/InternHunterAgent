@@ -64,61 +64,77 @@ def assert_min_yield(fetched: int, min_yield: int) -> None:
         )
 
 
-def assert_normalized_row_quality(jobs: Iterable[NormalizedJob]) -> None:
-    """Block clean ingestion when any normalized row violates a quality invariant.
+def partition_by_row_quality(
+    jobs: Iterable[NormalizedJob],
+) -> tuple[list[NormalizedJob], dict[str, int]]:
+    """Split jobs into those passing every row-quality rule and per-rule violation counts.
 
-    Enforced invariants, one count per violated invariant (never per violating
-    row, so the log cannot leak posting identifiers):
-
-    - title/company required: neither may be empty or whitespace-only.
-    - salary bounds: when both bounds are present, min must not exceed max.
-    - finite salary: present bounds must be finite - reject NaN and ±infinity,
-      which otherwise slip past the ordering comparison.
-    - coherent dates: when both are present, expiry must not precede posted.
-
-    A violation fails the whole run before any clean upsert or expiry pass.
-    Nothing here repairs or skips a bad row.
+    A row violating several rules is rejected once but counted under each rule.
+    Only rules with a non-zero count appear in the returned dict.
     """
-    title_missing = 0
-    company_missing = 0
-    salary_inverted = 0
-    salary_non_finite = 0
-    expiry_before_posted = 0
+    accepted: list[NormalizedJob] = []
+    title_required = 0
+    company_required = 0
+    salary_finite = 0
+    salary_bounds = 0
+    expiry_after_posted = 0
 
     for job in jobs:
+        failed = False
         if not job.title or not job.title.strip():
-            title_missing += 1
+            title_required += 1
+            failed = True
         if not job.company or not job.company.strip():
-            company_missing += 1
-        for bound in (job.salary_min, job.salary_max):
-            if bound is not None and not math.isfinite(bound):
-                salary_non_finite += 1
+            company_required += 1
+            failed = True
+        if any(
+            bound is not None and not math.isfinite(bound)
+            for bound in (job.salary_min, job.salary_max)
+        ):
+            salary_finite += 1
+            failed = True
         if (
             job.salary_min is not None
             and job.salary_max is not None
             and job.salary_min > job.salary_max
         ):
-            salary_inverted += 1
+            salary_bounds += 1
+            failed = True
         if (
             job.posted_date is not None
             and job.listing_expires_on is not None
             and job.listing_expires_on < job.posted_date
         ):
-            expiry_before_posted += 1
+            expiry_after_posted += 1
+            failed = True
+
+        if not failed:
+            accepted.append(job)
 
     violations = {
-        "title_required": title_missing,
-        "company_required": company_missing,
-        "salary_finite": salary_non_finite,
-        "salary_bounds": salary_inverted,
-        "expiry_after_posted": expiry_before_posted,
+        "title_required": title_required,
+        "company_required": company_required,
+        "salary_finite": salary_finite,
+        "salary_bounds": salary_bounds,
+        "expiry_after_posted": expiry_after_posted,
     }
-    failed = {name: count for name, count in violations.items() if count}
+    return accepted, {name: count for name, count in violations.items() if count}
 
-    if failed:
-        logger.error("ingestion.row_quality_failed", **failed)
-        detail = ", ".join(f"{name}={count}" for name, count in sorted(failed.items()))
-        raise IngestionSafetyError(f"Normalized row-quality gate failed: {detail}")
+
+def assert_rejection_ratio(rejected: int, fetched: int, max_ratio: float) -> None:
+    """Raise IngestionSafetyError when rejected/fetched exceeds max_ratio."""
+    if fetched == 0:
+        return
+    if rejected / fetched > max_ratio:
+        logger.error(
+            "ingestion.rejection_ratio_exceeded",
+            rejected=rejected,
+            fetched=fetched,
+            max_ratio=max_ratio,
+        )
+        raise IngestionSafetyError(
+            f"Rejected {rejected} of {fetched} records, above max_rejected_ratio={max_ratio}"
+        )
 
 
 def send_dead_man_ping(url: str | None) -> bool:

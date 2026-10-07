@@ -64,6 +64,10 @@ lifecycle:
 # fetch can never overwrite good rows. Measured steady state is ~50/run.
 safety:
   min_yield: 20
+  # Records that fail to normalize or fail a row-quality rule are dropped and counted
+  # in ingestion_runs.skipped. The run aborts only when dropped/fetched exceeds this
+  # ratio (ADR-0058). Exactly at the ratio passes.
+  max_rejected_ratio: 0.10
 
 # Legacy technology seed for scripts/build_tech_vocabulary.py.
 # Runtime extraction reads config/tech_vocabulary.yaml, not this list directly.

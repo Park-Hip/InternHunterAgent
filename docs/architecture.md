@@ -999,16 +999,20 @@ orders them so that **every abort happens before the write it protects**.
   the expiry pass, which matters because expiry ages rows on their last-seen timestamp: aborting
   after a skipped clean write but before expiry would let a single bad fetch mark the entire healthy
   corpus inactive.
-- **Normalized row-quality gate, after normalization and before the clean upsert.** It fails the
-  whole run the moment any normalized row violates one of four invariants: a required non-blank
-  `title` and `company`, finite salary bounds that never invert (`salary_min > salary_max` when
-  both are present) and never contain `NaN` or infinity, and a `listing_expires_on` that never
-  precedes `posted_date` when both are present. The
-  raw table is written *before* this gate, so a violating run still preserves its evidence, and the
-  abort lands *before* the clean upsert **and** the expiry pass, exactly like the yield floor. The
-  failure reports one aggregate count per violated invariant and never a posting identifier, so the
-  log and persisted summary name the invariant without leaking job data. It does not repair or skip
-  a bad row: the run fails closed for operator attention.
+- **Row-quality partition, after normalization and before the clean upsert.** Each normalized row
+  is checked against the row-quality invariants - a required non-blank `title` and `company`, finite
+  salary bounds that never invert (`salary_min > salary_max` when both are present) and never contain
+  `NaN` or infinity, and a `listing_expires_on` that never precedes `posted_date` when both are
+  present. A row that violates any invariant is dropped and counted in `ingestion_runs.skipped`, which
+  now totals parse failures plus quality rejections; a row violating several invariants is dropped
+  once but counted under each one. The raw table is written *before* this gate, so a violating run
+  still preserves its evidence. The run aborts with `IngestionSafetyError` in phase
+  `row_quality_check` only when the dropped count exceeds `ingestion.safety.max_rejected_ratio`
+  (0.10) of the fetched total, so exactly 10% still passes; an abort lands *before* the clean upsert
+  **and** the expiry pass, exactly like the yield floor. The warning log reports one aggregate count
+  per violated invariant plus a parse-failure count and never a posting identifier, so the log and
+  persisted summary name the invariant without leaking job data. A dropped row's `last_seen_at` is
+  not refreshed that day.
 - **Dead-man-switch ping, last, and only on a fully green run.** It posts to an optional monitor URL
   and never raises: an unset URL logs a skip and returns false, the normal local path rather than an
   error, and any HTTP failure logs a failure and returns false. **The signal is the withheld ping,

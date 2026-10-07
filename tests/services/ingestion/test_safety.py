@@ -10,7 +10,8 @@ from src.services.ingestion.safety import (
     IngestionSafetyError,
     assert_clean_jobs_schema,
     assert_min_yield,
-    assert_normalized_row_quality,
+    assert_rejection_ratio,
+    partition_by_row_quality,
     send_dead_man_ping,
 )
 
@@ -125,155 +126,99 @@ def _make_job(**overrides) -> NormalizedJob:
     return NormalizedJob(**{**defaults, **overrides})
 
 
-class AssertNormalizedRowQualityTests(unittest.TestCase):
-    def test_valid_jobs_do_not_raise(self) -> None:
+class PartitionByRowQualityTests(unittest.TestCase):
+    def test_valid_jobs_all_accepted(self) -> None:
         jobs = [_make_job(external_id=f"job-{i}") for i in range(3)]
 
-        assert_normalized_row_quality(jobs)
+        accepted, violations = partition_by_row_quality(jobs)
 
-    def test_empty_iterable_does_not_raise(self) -> None:
-        assert_normalized_row_quality([])
+        self.assertEqual(len(accepted), 3)
+        self.assertEqual(violations, {})
 
-    # ---- title / company required ----
+    def test_empty_input(self) -> None:
+        accepted, violations = partition_by_row_quality([])
 
-    def test_empty_title_raises_title_required(self) -> None:
-        with self.assertRaises(IngestionSafetyError) as ctx:
-            assert_normalized_row_quality([_make_job(title="")])
+        self.assertEqual(accepted, [])
+        self.assertEqual(violations, {})
 
-        self.assertIn("title_required=1", str(ctx.exception))
+    # ---- one row per rule ----
 
-    def test_whitespace_title_raises_title_required(self) -> None:
-        with self.assertRaises(IngestionSafetyError):
-            assert_normalized_row_quality([_make_job(title="   ")])
+    def test_blank_title_rejected_and_counted(self) -> None:
+        accepted, violations = partition_by_row_quality([_make_job(title="")])
 
-    def test_empty_company_raises_company_required(self) -> None:
-        with self.assertRaises(IngestionSafetyError) as ctx:
-            assert_normalized_row_quality([_make_job(company="")])
+        self.assertEqual(accepted, [])
+        self.assertEqual(violations, {"title_required": 1})
 
-        self.assertIn("company_required=1", str(ctx.exception))
+    def test_blank_company_rejected_and_counted(self) -> None:
+        accepted, violations = partition_by_row_quality([_make_job(company="")])
 
-    def test_whitespace_company_raises_company_required(self) -> None:
-        with self.assertRaises(IngestionSafetyError):
-            assert_normalized_row_quality([_make_job(company="\t ")])
+        self.assertEqual(accepted, [])
+        self.assertEqual(violations, {"company_required": 1})
 
-    # ---- salary bounds ----
-
-    def test_inverted_salary_bounds_raise(self) -> None:
-        with self.assertRaises(IngestionSafetyError) as ctx:
-            assert_normalized_row_quality([_make_job(salary_min=3000.0, salary_max=2000.0)])
-
-        self.assertIn("salary_bounds=1", str(ctx.exception))
-
-    def test_positive_min_smaller_nonzero_max_still_raises(self) -> None:
-        # The source normalizer only collapses salaryMax==0; a nonzero smaller
-        # maximum remains a genuine inversion and must still fail the gate.
-        with self.assertRaises(IngestionSafetyError) as ctx:
-            assert_normalized_row_quality([_make_job(salary_min=1500.0, salary_max=1.0)])
-
-        self.assertIn("salary_bounds=1", str(ctx.exception))
-
-    def test_equal_salary_bounds_pass(self) -> None:
-        assert_normalized_row_quality([_make_job(salary_min=2000.0, salary_max=2000.0)])
-
-    def test_ordered_salary_bounds_pass(self) -> None:
-        assert_normalized_row_quality([_make_job(salary_min=2000.0, salary_max=3000.0)])
-
-    def test_single_sided_salary_passes(self) -> None:
-        assert_normalized_row_quality(
-            [
-                _make_job(salary_min=2000.0, salary_max=None),
-                _make_job(salary_min=None, salary_max=3000.0),
-            ]
+    def test_non_finite_salary_rejected_and_counted(self) -> None:
+        accepted, violations = partition_by_row_quality(
+            [_make_job(salary_min=float("nan"))]
         )
 
-    # ---- salary finiteness ----
+        self.assertEqual(accepted, [])
+        self.assertEqual(violations, {"salary_finite": 1})
 
-    def test_nan_salary_min_raises(self) -> None:
-        with self.assertRaises(IngestionSafetyError) as ctx:
-            assert_normalized_row_quality([_make_job(salary_min=float("nan"))])
-
-        self.assertIn("salary_finite=1", str(ctx.exception))
-
-    def test_nan_salary_max_raises(self) -> None:
-        with self.assertRaises(IngestionSafetyError) as ctx:
-            assert_normalized_row_quality([_make_job(salary_max=float("nan"))])
-
-        self.assertIn("salary_finite=1", str(ctx.exception))
-
-    def test_positive_infinity_salary_raises(self) -> None:
-        with self.assertRaises(IngestionSafetyError):
-            assert_normalized_row_quality([_make_job(salary_min=float("inf"))])
-
-    def test_negative_infinity_salary_raises(self) -> None:
-        with self.assertRaises(IngestionSafetyError):
-            assert_normalized_row_quality([_make_job(salary_max=float("-inf"))])
-
-    def test_both_non_finite_salary_bounds_counted(self) -> None:
-        with self.assertRaises(IngestionSafetyError) as ctx:
-            assert_normalized_row_quality(
-                [_make_job(salary_min=float("nan"), salary_max=float("inf"))]
-            )
-
-        self.assertIn("salary_finite=2", str(ctx.exception))
-
-    # ---- posted / expiry coherence ----
-
-    def test_expiry_before_posted_raises(self) -> None:
-        with self.assertRaises(IngestionSafetyError) as ctx:
-            assert_normalized_row_quality(
-                [_make_job(posted_date=date(2026, 7, 1), listing_expires_on=date(2026, 6, 30))]
-            )
-
-        self.assertIn("expiry_after_posted=1", str(ctx.exception))
-
-    def test_expiry_after_posted_passes(self) -> None:
-        assert_normalized_row_quality(
-            [_make_job(posted_date=date(2026, 1, 1), listing_expires_on=date(2026, 6, 30))]
+    def test_inverted_salary_bounds_rejected_and_counted(self) -> None:
+        accepted, violations = partition_by_row_quality(
+            [_make_job(salary_min=3000.0, salary_max=2000.0)]
         )
 
-    def test_expiry_equal_to_posted_passes(self) -> None:
-        assert_normalized_row_quality(
-            [_make_job(posted_date=date(2026, 6, 30), listing_expires_on=date(2026, 6, 30))]
+        self.assertEqual(accepted, [])
+        self.assertEqual(violations, {"salary_bounds": 1})
+
+    def test_expiry_before_posted_rejected_and_counted(self) -> None:
+        accepted, violations = partition_by_row_quality(
+            [_make_job(posted_date=date(2026, 7, 1), listing_expires_on=date(2026, 6, 30))]
         )
 
-    def test_missing_posted_date_passes(self) -> None:
-        assert_normalized_row_quality([_make_job(posted_date=None)])
+        self.assertEqual(accepted, [])
+        self.assertEqual(violations, {"expiry_after_posted": 1})
 
-    def test_missing_expiry_passes(self) -> None:
-        assert_normalized_row_quality([_make_job(listing_expires_on=None)])
+    # ---- multi-rule and multi-row ----
 
-    # ---- failure reporting is aggregate and PII-free ----
-
-    def test_violation_message_names_counts_not_identifiers(self) -> None:
-        job = _make_job(
-            external_id="secret-id-42",
-            title="",
-            company="   ",
-            salary_min=4000.0,
-            salary_max=1000.0,
+    def test_blank_title_and_inverted_salary_rejected_once_counted_twice(self) -> None:
+        accepted, violations = partition_by_row_quality(
+            [_make_job(title="", salary_min=3000.0, salary_max=2000.0)]
         )
 
-        with self.assertRaises(IngestionSafetyError) as ctx:
-            assert_normalized_row_quality([job])
+        self.assertEqual(accepted, [])
+        self.assertEqual(violations, {"title_required": 1, "salary_bounds": 1})
 
-        message = str(ctx.exception)
-        self.assertIn("title_required=1", message)
-        self.assertIn("company_required=1", message)
-        self.assertIn("salary_bounds=1", message)
-        self.assertNotIn("secret-id-42", message)
-
-    def test_multiple_violations_across_rows_are_counted(self) -> None:
+    def test_non_finite_salary_bounds_on_separate_rows(self) -> None:
         jobs = [
-            _make_job(external_id="a", title=""),
-            _make_job(external_id="b", title=" "),
-            _make_job(external_id="c", company=""),
+            _make_job(external_id="a", salary_min=float("nan")),
+            _make_job(external_id="b", salary_max=float("inf")),
         ]
 
-        with self.assertRaises(IngestionSafetyError) as ctx:
-            assert_normalized_row_quality(jobs)
+        accepted, violations = partition_by_row_quality(jobs)
 
-        self.assertIn("title_required=2", str(ctx.exception))
-        self.assertIn("company_required=1", str(ctx.exception))
+        self.assertEqual(accepted, [])
+        self.assertEqual(violations, {"salary_finite": 2})
+
+    def test_both_non_finite_bounds_counted_once_per_row(self) -> None:
+        accepted, violations = partition_by_row_quality(
+            [_make_job(salary_min=float("nan"), salary_max=float("inf"))]
+        )
+
+        self.assertEqual(accepted, [])
+        self.assertEqual(violations, {"salary_finite": 1})
+
+
+class AssertRejectionRatioTests(unittest.TestCase):
+    def test_zero_fetched_does_not_raise(self) -> None:
+        assert_rejection_ratio(0, 0, 0.1)
+
+    def test_exactly_at_ratio_does_not_raise(self) -> None:
+        assert_rejection_ratio(2, 20, 0.1)
+
+    def test_above_ratio_raises(self) -> None:
+        with self.assertRaises(IngestionSafetyError):
+            assert_rejection_ratio(3, 20, 0.1)
 
 
 class SendDeadManPingTests(unittest.TestCase):

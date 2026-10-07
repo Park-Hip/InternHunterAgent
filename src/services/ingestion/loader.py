@@ -22,7 +22,8 @@ from src.services.ingestion.safety import (
     IngestionSafetyError,
     assert_clean_jobs_schema,
     assert_min_yield,
-    assert_normalized_row_quality,
+    assert_rejection_ratio,
+    partition_by_row_quality,
     send_dead_man_ping,
 )
 from src.services.ingestion.sources.vietnamworks import VietnamWorksSource
@@ -73,24 +74,30 @@ def run_ingestion(source: VietnamWorksSource | None = None) -> dict:
 
         phase = "normalize"
         normalized: list[NormalizedJob] = []
-        skipped = 0
+        parse_failed = 0
         for p in postings:
             try:
                 normalized.append(to_normalized_job(p.raw_payload))
             except Exception:
-                skipped += 1
+                parse_failed += 1
                 logger.warning(
                     "ingestion.normalize_skipped",
                     source=p.source,
                     external_id=p.external_id,
                 )
-        summary = replace(summary, skipped=skipped)
 
         phase = "row_quality_check"
-        assert_normalized_row_quality(normalized)
+        accepted, violations = partition_by_row_quality(normalized)
+        rejected = parse_failed + (len(normalized) - len(accepted))
+        summary = replace(summary, skipped=rejected)
+        if rejected:
+            logger.warning("ingestion.rows_rejected", parse_failed=parse_failed, **violations)
+        assert_rejection_ratio(
+            rejected, len(postings), settings.ingestion_yaml["safety"]["max_rejected_ratio"]
+        )
 
         phase = "clean_upsert"
-        clean_count = upsert_clean_jobs(normalized)
+        clean_count = upsert_clean_jobs(accepted)
         summary = replace(summary, clean_loaded=clean_count)
 
         phase = "expiry"
@@ -109,7 +116,7 @@ def run_ingestion(source: VietnamWorksSource | None = None) -> dict:
             "raw_changed": raw_counts.changed,
             "raw_unchanged": raw_counts.unchanged,
             "clean_loaded": clean_count,
-            "skipped": skipped,
+            "skipped": rejected,
             "expired_count": expired_count,
             "pages_failed": summary.pages_failed,
         }

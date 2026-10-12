@@ -27,7 +27,6 @@ What it deliberately is not:
 - **No LLM.** Every transform is a pure function of the payload and the YAML config.
 
 Decisions:
-
 - [ADR-0058](../decisions/adr-0058-single-source-mvp-ingestion.md): single source, drop and count
 - [ADR-0057](../decisions/adr-0057-nightly-ingestion-restored.md): nightly schedule restored
 - [ADR-0059](../decisions/adr-0059-no-stored-posting-lifecycle.md): no stored lifecycle
@@ -66,8 +65,7 @@ flowchart TD
 | Fetch | Builds the source from config, then queries, filters, dedups, caps, retries | `src/services/ingestion/sources/vietnamworks.py` → `VietnamWorksSource` | none | `failed` / `source_initialization` or `fetch` |
 | Raw upsert | Lands payloads, counts new, changed, unchanged | `src/services/ingestion/raw_store.py` → `upsert_raw_postings` | `raw_jobs` | `failed` / `raw_upsert` |
 | Yield floor | Aborts if fewer than `safety.min_yield` postings | `src/services/ingestion/safety.py` → `assert_min_yield` | none | `safety_aborted` / `yield_check` |
-| Normalize | Maps each payload to a `NormalizedJob` | `src/services/ingestion/normalize/vietnamworks.py` → `to_normalized_job` | none | bad record dropped and counted |
-| Row quality | Drops rows that break a rule, aborts above the ratio | `src/services/ingestion/safety.py` → `partition_by_row_quality`, `assert_rejection_ratio` | none | `safety_aborted` / `row_quality_check` |
+| Normalize, row quality | Maps each payload to a `NormalizedJob`, drops rows that break a rule, aborts above the ratio | `src/services/ingestion/normalize/vietnamworks.py` → `to_normalized_job`; `src/services/ingestion/safety.py` → `partition_by_row_quality`, `assert_rejection_ratio` | none | bad record dropped and counted; above the ratio `safety_aborted` / `row_quality_check` |
 | Clean upsert | Upserts accepted rows, refreshes `last_seen_at` | `src/services/ingestion/clean_store.py` → `upsert_clean_jobs` | `clean_jobs` | `failed` / `clean_upsert` |
 | Run summary, ping | Appends the attempt (best effort); pings the dead-man monitor if completed | `src/services/ingestion/run_store.py` → `persist_ingestion_run`; `src/services/ingestion/safety.py` → `send_dead_man_ping` | `ingestion_runs` | logged, outcome unchanged |
 
@@ -96,13 +94,27 @@ That logs `ingestion.robots_policy_absent_permitted` and proceeds; every other o
 Matching follows RFC 9309 (longest rule wins, `Allow` wins a tie).
 A block logs `ingestion.compliance_gate_blocked`, then `ingestion.aborted`, and exits 1.
 
+**What is searched.**
+Each request sends one of these eight keywords (`queries`) as its `query` field:
+
+1. `data scientist`
+2. `data engineer`
+3. `data analyst`
+4. `machine learning`
+5. `AI engineer`
+6. `MLOps`
+7. `computer vision`
+8. `deep learning`
+
 **Fetch selection and bounds.**
 
-- **Recall:** eight search queries (`queries`), deduplicated by `jobId` across queries and pages.
+- **Recall:** the queries above, deduplicated by `jobId` across queries and pages.
+  Keyword search alone is noisy (it matches description text, surfacing Sales and Marketing roles).
 - **Precision:** keep a hit only if `jobFunction.parentId` equals `job_function.parent_id` and one
   child id is in `job_function.child_ids`.
-- **Order:** page-major (page 0 of every query, then page 1), so a truncated run thins every query
-  evenly instead of starving the last ones.
+- **Order:** page-major (page 0 of every query, then page 1), so a cut-short run thins all evenly.
+- **Page size:** 50 hits per request (`api.hits_per_page`), 2 pages per query: at most 800 hits
+  before filtering. 50 is the spike's value (`scripts/scrape_spike.py`); no measurement is recorded.
 
 | Bound | Value | Source |
 |---|---|---|
@@ -127,7 +139,7 @@ A block logs `ingestion.compliance_gate_blocked`, then `ingestion.aborted`, and 
 - One statement upserts every row on `(source, external_id)`.
   A Postgres advisory lock serializes the new/changed/unchanged count with the write, so counts stay
   exact if two runs overlap.
-- Change detection compares `content_hash`, a SHA-256 of the canonical JSON payload.
+  Changes are detected by comparing `content_hash`, a SHA-256 of the canonical JSON payload.
 
 **Drop and count (ADR-0058).**
 
@@ -138,12 +150,8 @@ A block logs `ingestion.compliance_gate_blocked`, then `ingestion.aborted`, and 
 - A dropped row keeps its old `clean_jobs` version; its `last_seen_at` is not refreshed that day.
 - The run aborts only if `skipped / fetched` is strictly above `safety.max_rejected_ratio` (0.10).
   One bad record should cost one row, not the night, while a broken mapping still stops the run.
-
-| Case | Outcome |
-|---|---|
-| One malformed record | Dropped, `skipped = 1`, `ingestion.rows_rejected`, run completes |
-| 15% malformed | `ingestion.rejection_ratio_exceeded`, `safety_aborted` / `row_quality_check` |
-| Nothing fetched | The yield floor aborts first (0 is below 20) |
+- One malformed record: `skipped = 1`, `ingestion.rows_rejected`, run completes.
+  15% malformed: `ingestion.rejection_ratio_exceeded`, `safety_aborted` / `row_quality_check`.
 
 **Clean upsert.**
 One statement upserts all accepted rows on `(source, external_id)`.
@@ -191,8 +199,7 @@ Source field names live in `to_normalized_job`; shared rules live in
 | `last_seen_at` | none | `now()` on insert and on every upsert | `upsert_clean_jobs` |
 
 HTML stripping replaces tags with spaces, unescapes entities, and collapses whitespace.
-Without the zero-max rule, a lower-bound-only posting becomes inverted bounds and fails row quality
-(#464).
+Without the zero-max rule a lower-bound-only salary fails row quality as inverted bounds (#464).
 The role and city maps in `config/ingestion.yaml` also feed the agent's query vocabulary.
 
 **`is_salary_negotiable = true`** means VietnamWorks hid the salary, nothing more.
@@ -271,11 +278,9 @@ All keys are in `config/ingestion.yaml`.
 
 | Key | Value | Effect | Coupled to |
 |---|---|---|---|
-| `api.url` | VietnamWorks search endpoint | Where job requests go | `robots.target_path` must name its path |
-| `api.hits_per_page`, `api.pages_per_query` | 50, 2 | Hits per request, pages per query | request count, 16 x 50 hits at most |
+| `api.url`, `api.hits_per_page`, `api.pages_per_query` | search endpoint, 50, 2 | Where requests go; hits per request; pages per query | `robots.target_path` must name the endpoint's path; request count |
 | `api.timeout_seconds`, `api.retry_attempts`, `api.retry_backoff_seconds` | 30, 2, 2.0 | Request timeout (robots GET too), retries, base backoff (doubles) | worst page 3 x 30 + 2 + 4 = 96 s |
-| `api.delay_seconds` | 0.6 | Pause after every page | politeness; about 10 s per run |
-| `api.user_agent` | `InternHunterAgent/1.0 (+repo URL)` | Honest client name | robots rules are tested for this token |
+| `api.delay_seconds`, `api.user_agent` | 0.6, `InternHunterAgent/1.0 (+repo URL)` | Pause after every page (about 10 s per run); honest client name | robots rules are tested for this token |
 | `api.max_elapsed_seconds` | 600 | Fetch wall-clock budget | **600 + 96 s must stay under workflow `timeout-minutes: 15`** |
 | `robots.url`, `robots.target_path` | `ms.vietnamworks.com` robots.txt, `/job-search/v1.0/search` | Policy and path tested | exact API host, not `www`; `api.url` |
 | `robots.cache_ttl_seconds`, `robots.allow_404` | 300, true | Policy cache (idle in a one-shot run); permits the reviewed 404 | ADR-0034; `allow_404: false` blocks every run today |
@@ -312,8 +317,8 @@ Coupled: the timing keys to the workflow timeout; the role and city maps to serv
   Use a temporary tolerance in two steps, as #624 did.
 
 **Add a search query or change the filter.**
-Edit `queries` or `job_function`, run a manual dispatch, and check `fetched` stays well above
-`safety.min_yield` and below `max_jobs`; each query adds two requests.
+Edit `queries` or `job_function`, run a manual dispatch, and check `fetched` stays between
+`safety.min_yield` and `max_jobs`; each query adds two requests.
 
 **Add a second source.**
 Write a new ADR first (ADR-0058 requires it), then a small source interface, a second normalizer,
@@ -337,11 +342,9 @@ The tables already key on `(source, external_id)`; the loader calls VietnamWorks
 
 | Removed | Why | Issue |
 |---|---|---|
-| Evidence layer: shadow writer, collection plans | Never ran in production; about 2,160 of 3,900 module lines | #620 (#626) |
-| Nine evidence tables and trigger function | Written only by tests; dropped behind an emptiness guard | #621 (#627) |
+| Evidence layer: shadow writer, collection plans, nine evidence tables | Never ran in production, written only by tests; about 2,160 of 3,900 module lines; tables dropped behind an emptiness guard | #620 (#626), #621 (#627) |
 | Bright Data / LinkedIn adapter, source registry, base class | No second source is in scope; an abstraction over one source | #620 |
 | Abort on any bad row | One record cost the whole night; now drop and count | #622 (#628) |
 | `clean_jobs.is_active`, `ingestion_runs.expired_count`, expiry pass | A function of `last_seen_at`; no reader. Until the #624 follow-up, `src/services/ingestion/safety.py` and `src/api/schema_guard.py` still tolerate a leftover `is_active` column; older logs show `columns: 22` and `expired_count` | #624 (#631), ADR-0059 |
 
-The removed code is recoverable from git tag `ingestion-evidence-archive` (ADR-0058), for example
-`git show ingestion-evidence-archive:src/services/ingestion/plans.py`.
+The removed code is on git tag `ingestion-evidence-archive` (ADR-0058).

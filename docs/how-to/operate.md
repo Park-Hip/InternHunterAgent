@@ -28,7 +28,7 @@ It never contains secret values.
 
 | Variable | Where set | Render mode | Ingestion workflow | Notes |
 |---|---|---|---|---|
-| `DEEPSEEK_API_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Not used | Serves the agent (D-045). Required at boot while a served profile selects `deepseek`, which both do; unset or empty refuses startup. |
+| `DEEPSEEK_API_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Not used | Serves the agent ([ADR-0045](../decisions/adr-0045-deepseek-serves-the-agent.md)). Required at boot while a served profile selects `deepseek`, which both do; unset or empty refuses startup. |
 | `GROQ_API_KEY` | `.env` only | Deliberately undeclared | Literal unused placeholder | Optional eval-judge alternate branch (`evals/judge.py`); not on the serving path, and no `config/settings.yaml` deployment references it. Ingestion does not call an LLM. |
 | `OPENROUTER_API_KEY` | `.env` only | Deliberately undeclared | Not used | Eval-judge fallback key (OpenRouter arm of `build_judge()`); not declared for Render. The active judge runs on Google AI Studio via `GOOGLE_API_KEY`. |
 | `GOOGLE_API_KEY` | `.env` only | Deliberately undeclared | Not used | Active eval-judge key (`gemma-4-31b-it` via Google AI Studio); not declared for Render. |

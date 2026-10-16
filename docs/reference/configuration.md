@@ -91,8 +91,6 @@ All other provider options, unqualified models, missing sections, and unknown de
 To roll back, revert the deployment contract and LiteLLM runtime together with the dependency change, then restore the native adapter configuration while retaining the existing environment variables through the rollback window.
 
 
-## Technology stack
-
 ## 10. Technology stack
 
 This section is the single owner of "what is this built with": versions, runtime choices, and hosted

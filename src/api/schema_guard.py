@@ -53,10 +53,6 @@ EXPECTED_COLUMNS: frozenset[str] = frozenset(
     }
 )
 
-# Dropped by ADR-0059. Tolerated only until production runs the migration that
-# drops it; remove this set in the follow-up PR on the same issue.
-LEGACY_TOLERATED_COLUMNS: frozenset[str] = frozenset({"is_active"})
-
 
 def assert_serving_schema() -> None:
     """Compare live clean_jobs columns against the frozen serving contract.
@@ -84,7 +80,7 @@ def assert_serving_schema() -> None:
         )
 
     missing = EXPECTED_COLUMNS - actual
-    unexpected = actual - EXPECTED_COLUMNS - LEGACY_TOLERATED_COLUMNS
+    unexpected = actual - EXPECTED_COLUMNS
 
     if missing or unexpected:
         logger.error(

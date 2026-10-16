@@ -347,7 +347,7 @@ Chat models are wrapped by the provider in `src/agents/runtime/provider.py`.
 This is the one place model construction lives; no other layer constructs a model.
 
 Configuration is read from `config/settings.yaml` under a trusted `agent.providers` deployment allowlist and two explicit profiles: `agent.react.*` for the outer conversational ReAct agent and `agent.sql_generation.*` for the nested SQL-generation call inside the job-query tool.
-A deployment defines the LiteLLM provider-qualified model and the name of its API-key environment variable, while a profile selects a deployment and carries `temperature`, `max_tokens`, `timeout`, `max_retries`, `streaming`, and validated `provider_options`.
+A deployment defines the LiteLLM provider-qualified model and the name of its API-key environment variable, while a profile selects a deployment and carries `temperature`, `max_tokens`, `timeout`, `max_attempts`, `streaming`, and validated `provider_options`.
 
 `src/agents/runtime/provider.py` uses the in-process `ChatLiteLLM` adapter, so model construction has no provider-specific constructor branch.
 The selected deployment reads its own key and raises naming the profile when it is unset or empty; the serving boot guard runs that same check for every served profile before accepting any request, so a checkout needs only the selected provider's key.

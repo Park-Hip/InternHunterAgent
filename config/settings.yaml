@@ -67,7 +67,7 @@ agent:
     temperature: 0.2
     max_tokens: 2048
     timeout: 30
-    max_retries: 2
+    max_attempts: 2
     streaming: true
     provider_options:
       # DeepSeek ignores temperature when thinking is enabled (T0027.1).
@@ -78,7 +78,7 @@ agent:
     temperature: 0.0
     max_tokens: 1024
     timeout: 30
-    max_retries: 2
+    max_attempts: 2
     streaming: false
     provider_options:
       # This profile's determinism depends on temperature: 0.0.

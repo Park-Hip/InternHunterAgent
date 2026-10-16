@@ -100,6 +100,11 @@ def _validate_nonnegative_int(value: Any, *, name: str) -> None:
         raise _config_error(f"'{name}' must be a nonnegative integer")
 
 
+def _validate_positive_int(value: Any, *, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise _config_error(f"'{name}' must be a positive integer")
+
+
 def _validate_provider_options(provider: str, options: dict[str, Any], *, name: str) -> None:
     if provider == "deepseek":
         unknown = set(options) - {"thinking"}
@@ -168,7 +173,9 @@ def validate_agent_config(config: dict[str, Any]) -> None:
         if profile_config["max_tokens"] == 0:
             raise _config_error(f"'agent.{profile}.max_tokens' must be positive")
         _validate_positive_number(profile_config.get("timeout"), name=f"agent.{profile}.timeout")
-        _validate_nonnegative_int(profile_config.get("max_retries"), name=f"agent.{profile}.max_retries")
+        _validate_positive_int(
+            profile_config.get("max_attempts"), name=f"agent.{profile}.max_attempts"
+        )
         if not isinstance(profile_config.get("streaming"), bool):
             raise _config_error(f"'agent.{profile}.streaming' must be a boolean")
 

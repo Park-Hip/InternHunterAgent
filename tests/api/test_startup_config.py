@@ -1,31 +1,73 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+import tempfile
+import textwrap
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
 from src.api.app import create_app
 from src.api.schema_guard import SchemaGuardError
-from src.core.config import ConfigLoadError
 from src.serving import composition
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+# A fresh interpreter imports the entrypoint the way uvicorn does. Configuration is
+# loaded before every other import, so the run fails fast without paying for the
+# LangChain, LiteLLM, and FastMCP import chain. Two settings make the failure real
+# rather than environmental: the required variables are removed from the child
+# environment, and the `.env` file source is switched off, because a developer's
+# `.env` (the documented local setup) would otherwise supply the very DSNs this
+# test removes and the import would succeed. The child runs from an empty
+# directory so no `.env` beside the working directory can be picked up either.
+IMPORT_WITH_BAD_CONFIG = textwrap.dedent(
+    """
+    import src.core.config as config
+
+    config.Settings.model_config["env_file"] = None
+
+    from src.serving import composition  # noqa: F401
+    """
+)
 
 
 class StartupConfigTests(unittest.TestCase):
-    def test_lifespan_fails_fast_when_config_load_fails(self) -> None:
-        with patch(
-            "src.serving.composition.load_settings",
-            side_effect=ConfigLoadError("bad config"),
-        ):
-            with self.assertRaises(ConfigLoadError) as ctx:
-                with TestClient(composition.app):
-                    pass
+    def test_import_fails_fast_when_config_load_fails(self) -> None:
+        # Configuration is the import-time contract (#640): uvicorn loads
+        # `src.serving.composition:app`, `load_settings()` runs, and a bad config
+        # kills the process before the lifespan exists. This exercises that real
+        # path rather than patching a call that cannot fail.
+        env = dict(os.environ)
+        env.pop("DATABASE_URL", None)
+        env.pop("AGENT_DATABASE_URL", None)
+        env["PYTHONPATH"] = os.pathsep.join(
+            [str(PROJECT_ROOT), env.get("PYTHONPATH", "")]
+        ).rstrip(os.pathsep)
 
-        self.assertIn("bad config", str(ctx.exception))
+        with tempfile.TemporaryDirectory() as empty_cwd:
+            result = subprocess.run(
+                [sys.executable, "-c", IMPORT_WITH_BAD_CONFIG],
+                env=env,
+                capture_output=True,
+                text=True,
+                cwd=empty_cwd,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertIn("ConfigLoadError", result.stderr)
+        self.assertIn("DATABASE_URL", result.stderr)
+        self.assertIn("AGENT_DATABASE_URL", result.stderr)
+        # The refusal is composition's own module body, so the traceback names it:
+        # the app object and the lifespan are never defined.
+        self.assertIn("composition.py", result.stderr)
 
     def test_lifespan_fails_before_pool_when_schema_guard_fails(self) -> None:
         with (
-            patch("src.serving.composition.load_settings"),
             patch(
                 "src.serving.composition.assert_serving_schema",
                 side_effect=SchemaGuardError("clean_jobs drift"),
@@ -70,10 +112,6 @@ class StartupConfigTests(unittest.TestCase):
 
         with (
             patch(
-                "src.serving.composition.load_settings",
-                side_effect=lambda: events.append("settings load"),
-            ),
-            patch(
                 "src.serving.composition.assert_serving_schema",
                 side_effect=lambda: events.append("schema guard"),
             ),
@@ -117,7 +155,6 @@ class StartupConfigTests(unittest.TestCase):
         self.assertEqual(
             events,
             [
-                "settings load",
                 "schema guard",
                 "privilege guard",
                 "pool open",

@@ -4,11 +4,24 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from src.core.config import load_settings
+
+# Configuration is the import-time contract (#640). The imports below read
+# settings while they run (the MCP server reads `agent.agent_v0`), so loading here
+# first makes the refusal explicit instead of accidental: a missing DATABASE_URL or
+# AGENT_DATABASE_URL, bad YAML, or an invalid agent section raises ConfigLoadError
+# and uvicorn exits 1 before the MCP server, the app object, or the lifespan
+# exists, and before LangChain, LiteLLM, and FastMCP are imported. The lifespan
+# therefore trusts the cached settings and never reloads them.
+load_settings()
+
+# The remaining imports follow the configuration load on purpose, so the
+# expensive ones below cannot run before a bad configuration has refused boot.
+# E402 is waived for this module in pyproject.toml.
 from fastapi import FastAPI
 from fastmcp.utilities.lifespan import combine_lifespans
 
 from src.agents.mcp.adapter import list_job_tools
-from src.api.privilege_guard import assert_agent_privileges
 from src.agents.mcp.job_server import (
     MCP_ENDPOINT_PATH,
     create_job_mcp_server,
@@ -22,9 +35,9 @@ from src.agents.tracing.langfuse import (
     shutdown_langfuse,
 )
 from src.api.app import create_app
+from src.api.privilege_guard import assert_agent_privileges
 from src.api.schema_guard import assert_serving_schema
 from src.core.checkpointer import build_checkpointer, build_checkpointer_pool
-from src.core.config import load_settings
 
 # The shared FastMCP server backs both the in-process agent adapter and, when
 # explicitly enabled, the Streamable HTTP endpoint. It is created once at import
@@ -39,7 +52,6 @@ _mcp_asgi = _mcp_server.http_app(path=MCP_ENDPOINT_PATH)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Assemble and tear down dependencies needed by the HTTP service."""
-    load_settings()
     await asyncio.to_thread(
         assert_serving_schema
     )  # boot fails loudly on clean_jobs drift

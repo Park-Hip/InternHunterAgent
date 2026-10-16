@@ -208,8 +208,7 @@ or after it, because the diagnostic is not awaited.
   refuses boot with `SchemaGuardError` within the bound whatever the DSN string carries (#642).
 - **Served deployments carry their keys at boot.** The credential guard checks the deployments the
   served tool surface can invoke, `react` always and `sql_generation` while the v1 tool set is
-  registered, so the declared but unselected Groq arm stays optional and a checkout needs only the
-  selected provider's key (#641).
+  registered, so a checkout needs only each served deployment's key (#641).
 - **Tracing never blocks boot.** Langfuse is optional: prompts fall back to the reviewed YAML text,
   the client is created locally with no network round trip, and the credential check is
   fire-and-track so boot never waits on a response.

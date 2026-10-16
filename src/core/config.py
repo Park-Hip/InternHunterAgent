@@ -19,10 +19,9 @@ class ConfigLoadError(Exception):
 
 class Settings(BaseSettings):
     # Every provider key is optional here; the serving lifespan validates the
-    # deployment each served profile selects before the pool opens. Two providers
-    # can serve (deepseek, groq) and a third hosts the judge (OpenRouter), so no
-    # single key is required to load settings: requiring one would break a
-    # checkout that holds only the selected provider's key. See
+    # deployment each served profile selects before the pool opens, and the eval
+    # judge validates its own branch. No single key is required to load settings:
+    # a checkout that holds only the keys it needs still runs. See
     # docs/decisions/adr-0045-deepseek-serves-the-agent.md.
     GROQ_API_KEY: str | None = None
     GOOGLE_API_KEY: str | None = None
@@ -109,15 +108,6 @@ def _validate_provider_options(provider: str, options: dict[str, Any], *, name: 
         thinking = options.get("thinking", "disabled")
         if thinking not in {"disabled", "enabled"}:
             raise _config_error(f"'{name}.thinking' must be 'disabled' or 'enabled'")
-        return
-
-    if provider == "groq":
-        unknown = set(options) - {"reasoning_format", "reasoning_effort"}
-        if unknown:
-            raise _config_error(f"'{name}' has unsupported Groq options: {sorted(unknown)}")
-        for option in ("reasoning_format", "reasoning_effort"):
-            if option in options:
-                _required_nonempty_string(options[option], name=f"{name}.{option}")
         return
 
     if options:

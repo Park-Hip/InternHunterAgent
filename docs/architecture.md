@@ -351,7 +351,7 @@ A deployment defines the LiteLLM provider-qualified model and the name of its AP
 
 `src/agents/runtime/provider.py` uses the in-process `ChatLiteLLM` adapter, so model construction has no provider-specific constructor branch.
 The selected deployment reads its own key and raises naming the profile when it is unset or empty; the serving boot guard runs that same check for every served profile before accepting any request, so a checkout needs only the selected provider's key.
-Both profiles select the DeepSeek deployment (D-045), and a Groq deployment remains selectable.
+Both profiles select the DeepSeek deployment (D-045).
 No API caller can select a deployment, model, endpoint, or credential.
 See ADR-0054 for the LiteLLM decision, exclusions, and rollback path.
 

@@ -81,9 +81,9 @@ docker compose up -d                       # Postgres on host port 5433
 ```
 
 `.env.example` already points `DATABASE_URL` at that container, so `DEEPSEEK_API_KEY` is the only
-value you must supply to run the agent — it is the provider both profiles select in
-`config/settings.yaml`. Switching a profile back to `groq` needs `GROQ_API_KEY` instead; the Gemini
-key enables the eval harness.
+value you must supply to run the agent: it is the provider both profiles select in
+`config/settings.yaml`. Serving on Groq again would need a reviewed `agent.providers` entry plus
+`GROQ_API_KEY`; the Gemini key enables the eval harness.
 Langfuse keys are optional locally: without them the app runs with tracing disabled.
 
 Initialise the schema (idempotent — safe to re-run):

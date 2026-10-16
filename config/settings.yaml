@@ -52,10 +52,6 @@ agent:
       provider: deepseek
       model: deepseek/deepseek-flash
       api_key_env: DEEPSEEK_API_KEY
-    groq_qwen:
-      provider: groq
-      model: groq/qwen/qwen3.6-27b
-      api_key_env: GROQ_API_KEY
 
   # End-to-end serving deadline for one SSE turn. Invalid or omitted values fall
   # back to 120 seconds so one blocked stream cannot occupy the sole web worker.

@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from litellm import get_optional_params
 
 from src.agents.runtime.provider import AgentProvider, ProviderCredentialError
 from src.core.config import ConfigLoadError, validate_agent_config
@@ -11,9 +10,7 @@ from src.core.config import ConfigLoadError, validate_agent_config
 
 def _agent_config(
     *,
-    react_deployment: str = "deepseek_flash",
     react_options: dict | None = None,
-    sql_options: dict | None = None,
 ) -> dict:
     return {
         "agent": {
@@ -23,14 +20,9 @@ def _agent_config(
                     "model": "deepseek/deepseek-flash",
                     "api_key_env": "DEEPSEEK_API_KEY",
                 },
-                "groq_qwen": {
-                    "provider": "groq",
-                    "model": "groq/qwen/qwen3.6-27b",
-                    "api_key_env": "GROQ_API_KEY",
-                },
             },
             "react": {
-                "deployment": react_deployment,
+                "deployment": "deepseek_flash",
                 "temperature": 0.2,
                 "max_tokens": 2048,
                 "timeout": 30,
@@ -39,14 +31,13 @@ def _agent_config(
                 "provider_options": react_options or {"thinking": "disabled"},
             },
             "sql_generation": {
-                "deployment": "groq_qwen",
+                "deployment": "deepseek_flash",
                 "temperature": 0.0,
                 "max_tokens": 1024,
                 "timeout": 15,
                 "max_retries": 1,
                 "streaming": False,
-                "provider_options": sql_options
-                or {"reasoning_format": "hidden", "reasoning_effort": "none"},
+                "provider_options": {"thinking": "disabled"},
             },
         }
     }
@@ -76,40 +67,28 @@ def test_build_model_resolves_a_deepseek_profile(
 
 @patch("src.agents.runtime.provider.ChatLiteLLM")
 @patch("src.agents.runtime.provider.settings")
-def test_profiles_resolve_independent_deployments(
+def test_each_profile_builds_with_its_own_generation_settings(
     mock_settings, mock_chat_litellm, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     mock_settings.config_yaml = _agent_config()
     monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-test-key")
-    monkeypatch.setenv("GROQ_API_KEY", "groq-test-key")
 
     provider = AgentProvider()
     provider.build_model("react")
     provider.build_model("sql_generation")
 
-    deepseek_kwargs = mock_chat_litellm.call_args_list[0].kwargs
-    groq_kwargs = mock_chat_litellm.call_args_list[1].kwargs
-    assert deepseek_kwargs["model"] == "deepseek/deepseek-flash"
-    assert deepseek_kwargs["model_kwargs"] == {
-        "extra_body": {"thinking": {"type": "disabled"}}
-    }
-    assert groq_kwargs["model"] == "groq/qwen/qwen3.6-27b"
-    assert groq_kwargs["temperature"] == 0.0
-    assert groq_kwargs["streaming"] is False
-    assert groq_kwargs["model_kwargs"] == {
-        "reasoning_effort": "none",
-        "allowed_openai_params": ["reasoning_effort"],
-        "extra_body": {"reasoning_format": "hidden"},
-    }
-    optional_params = get_optional_params(
-        model=groq_kwargs["model"],
-        custom_llm_provider="groq",
-        **groq_kwargs["model_kwargs"],
-    )
-    assert optional_params["reasoning_effort"] == "none"
-    assert optional_params["extra_body"] == {"reasoning_format": "hidden"}
+    react_kwargs = mock_chat_litellm.call_args_list[0].kwargs
+    sql_kwargs = mock_chat_litellm.call_args_list[1].kwargs
+    assert react_kwargs["model"] == "deepseek/deepseek-flash"
+    assert react_kwargs["temperature"] == 0.2
+    assert react_kwargs["max_tokens"] == 2048
+    assert react_kwargs["streaming"] is True
+    assert sql_kwargs["model"] == "deepseek/deepseek-flash"
+    assert sql_kwargs["temperature"] == 0.0
+    assert sql_kwargs["max_tokens"] == 1024
+    assert sql_kwargs["streaming"] is False
     assert provider.provider_for("react") == "deepseek"
-    assert provider.provider_for("sql_generation") == "groq"
+    assert provider.provider_for("sql_generation") == "deepseek"
 
 
 @patch("src.agents.runtime.provider.ChatLiteLLM")
@@ -230,9 +209,9 @@ def test_eval_driver_disables_provider_retries(
         ),
         (
             lambda config: config["agent"]["sql_generation"].update(
-                {"provider_options": {"thinking": "disabled"}}
+                {"provider_options": {"thinking": "auto"}}
             ),
-            "unsupported Groq options",
+            "must be 'disabled' or 'enabled'",
         ),
     ],
 )
@@ -243,4 +222,19 @@ def test_invalid_configuration_is_rejected_before_model_construction(
     mutation(config)
 
     with pytest.raises(ConfigLoadError, match=message):
+        validate_agent_config(config)
+
+
+def test_options_for_a_provider_without_a_serving_contract_are_rejected() -> None:
+    config = _agent_config()
+    config["agent"]["providers"]["unreviewed"] = {
+        "provider": "custom",
+        "model": "custom/model-a",
+        "api_key_env": "CUSTOM_API_KEY",
+    }
+    config["agent"]["react"].update(
+        {"deployment": "unreviewed", "provider_options": {"temperature": 1}}
+    )
+
+    with pytest.raises(ConfigLoadError, match="not supported for provider 'custom'"):
         validate_agent_config(config)

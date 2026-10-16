@@ -18,7 +18,7 @@ Procedures for setting keys and pricing in Langfuse stay in [the operate how-to]
 - **Profile.** A job the app needs a model for.
   There are exactly two, fixed in code by `AGENT_PROFILES`: `react`, the conversational agent, and `sql_generation`, the model call inside the `query_clean_jobs` tool that writes SQL.
 - **Provider options.** The few vendor-specific knobs a profile may set.
-  Today that is DeepSeek's `thinking`, and Groq's `reasoning_format` and `reasoning_effort`.
+  Today that is DeepSeek's `thinking`.
 - **LiteLLM.** A library that speaks one request shape to many vendors.
   We use it in process through `ChatLiteLLM`, with no proxy server (ADR-0054).
 
@@ -38,9 +38,8 @@ What it deliberately is not:
   The deployment is fixed by reviewed config.
 
 **Which models serve.**
-Both profiles select one deployment, `deepseek_flash`, which is `deepseek/deepseek-v4-flash` with `DEEPSEEK_API_KEY` (ADR-0045).
-That id is now a legacy alias that DeepSeek serves with V4.1-Flash; #653 renames it to `deepseek/deepseek-flash` and refreshes the Langfuse prices.
-A second deployment, `groq_qwen`, is allowlisted but selected by no profile; #655 proposes removing it.
+Both profiles select one deployment, `deepseek_flash`, which is `deepseek/deepseek-flash` with `DEEPSEEK_API_KEY` (ADR-0045; #653 renamed it from the legacy `deepseek/deepseek-v4-flash` alias and refreshed the Langfuse prices).
+Every allowlisted deployment is selected by a profile: the unused `groq_qwen` arm was removed by #655, because an arm nobody selects or exercises does not keep the provider seam honest, and that seam is now LiteLLM's (ADR-0054).
 
 ## 2. The shape
 
@@ -55,8 +54,7 @@ flowchart LR
         S["sql_generation<br/>temp 0.0, 1024 tokens<br/>no stream, 30 s, thinking off"]
     end
     subgraph DEPLOYMENTS["Deployments: which model, whose key"]
-        D["deepseek_flash<br/>deepseek/deepseek-v4-flash<br/>key name: DEEPSEEK_API_KEY"]
-        G["groq_qwen<br/>groq/qwen/qwen3.6-27b<br/>key name: GROQ_API_KEY<br/>selected by no profile"]
+        D["deepseek_flash<br/>deepseek/deepseek-flash<br/>key name: DEEPSEEK_API_KEY"]
     end
     R --> D
     S --> D
@@ -71,12 +69,8 @@ agent:
   providers:
     deepseek_flash:
       provider: deepseek
-      model: deepseek/deepseek-v4-flash
+      model: deepseek/deepseek-flash
       api_key_env: DEEPSEEK_API_KEY
-    groq_qwen:
-      provider: groq
-      model: groq/qwen/qwen3.6-27b
-      api_key_env: GROQ_API_KEY
   stream_turn_timeout_seconds: 120
   react:
     deployment: deepseek_flash
@@ -170,7 +164,7 @@ Anything else, including a 500, becomes `internal_error` with `retryable: false`
    The exception is `stream_turn_timeout_seconds`, which silently falls back to 120 when missing or invalid.
 2. **A missing key refuses boot, but only for a served profile** (#641).
    With `DEEPSEEK_API_KEY` unset or blank, the lifespan raises `ProviderCredentialError` and uvicorn exits 3.
-   `GROQ_API_KEY` stays optional because no profile selects `groq_qwen`, and `sql_generation`'s key is checked only once the v1 tool is registered.
+   `GROQ_API_KEY` is not a deployment key any more (it survives only as the eval judge's optional alternate branch), so nothing validates it at boot; `sql_generation`'s key is checked only once the v1 tool is registered.
 3. **`max_retries: 2` means one retry**, and `0` and `1` behave the same (section 5).
 4. **The model's own settings are invisible to callers.**
    `factory.py` and `query_clean_jobs.py` pass only a profile name.
@@ -179,7 +173,7 @@ Anything else, including a 500, becomes `internal_error` with `retryable: false`
    The SQL generation observation itself is attributed correctly: inside the agent, LangChain's callback records the model, and outside it `generate_sql` names `sql_generation`'s model explicitly.
 6. **Cost is priced from a separate file.**
    `config/langfuse_models.yaml` prices exactly one model, and `scripts/provision_langfuse_models.py` pushes it to Langfuse.
-   Nothing checks it against `settings.yaml`, so changing a model without that file leaves its traces unpriced (#653 is the current case).
+   Nothing checks it against `settings.yaml`, so changing a model without that file leaves its traces unpriced (#653 was the last case).
 7. **A key is read from the process environment first, and `.env` only if the variable is unset.**
    A variable that is set but empty counts as missing; `.env` is not consulted.
    `get_configured_secret` also refuses a name that is not an environment variable name, so a pasted secret cannot be used as one.
@@ -250,10 +244,7 @@ Each item below was observed on 2026-10-16 and is tracked by an issue.
 9. **A stateless class.**
    `AgentProvider` holds no state and is constructed at each call site; `provider_for` is used only by tests.
    A module function `build_model(profile)` would do, and each profile's model could be built once.
-10. **The unused Groq deployment** (#655).
-    It is selected by no profile, has no pricing, and keeps a Groq branch alive in both option functions.
-    ADR-0045 kept it to "keep the provider seam honest", but an arm nobody exercises does not, and the seam is now LiteLLM's.
-11. **Pointers to a deleted decision log** (#657).
+10. **Pointers to a deleted decision log** (#657).
     `render.yaml`, the operate how-to, and the architecture document cite "D-045", an entry of the decision log deleted in `d83dc97`; they should cite ADR-0045, as the `Settings` comment now does.
 
 ## 8. Changing it safely

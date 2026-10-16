@@ -29,7 +29,7 @@ It never contains secret values.
 | Variable | Where set | Render mode | Ingestion workflow | Notes |
 |---|---|---|---|---|
 | `DEEPSEEK_API_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Not used | Serves the agent (D-045). Required at boot while a served profile selects `deepseek`, which both do; unset or empty refuses startup. |
-| `GROQ_API_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | The selectable second serving arm; unused and not validated at boot while both profiles are `deepseek`. Ingestion does not call an LLM. |
+| `GROQ_API_KEY` | `.env` only | Deliberately undeclared | Literal unused placeholder | Optional eval-judge alternate branch (`evals/judge.py`); not on the serving path, and no `config/settings.yaml` deployment references it. Ingestion does not call an LLM. |
 | `OPENROUTER_API_KEY` | `.env` only | Deliberately undeclared | Not used | Eval-judge fallback key (OpenRouter arm of `build_judge()`); not declared for Render. The active judge runs on Google AI Studio via `GOOGLE_API_KEY`. |
 | `GOOGLE_API_KEY` | `.env` only | Deliberately undeclared | Not used | Active eval-judge key (`gemma-4-31b-it` via Google AI Studio); not declared for Render. |
 | `DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | GitHub `DATABASE_URL` secret | Cron and migrations use Neon's direct, non-pooled host. |
@@ -48,7 +48,7 @@ It does not synchronize or store the value in the repository.
 
 The provider key for each served profile's selected deployment is required to boot.
 `src/core/config.py` still requires only the database URLs; `src/serving/composition.py` then validates those deployments before the checkpointer pool opens, refusing startup with the missing variable named.
-That is `DEEPSEEK_API_KEY` today, while both profiles select `deepseek_flash`; a declared but unselected deployment (the Groq arm) stays optional.
+That is `DEEPSEEK_API_KEY` today, while both profiles select `deepseek_flash`; a declared but unselected deployment stays optional.
 Without Langfuse credentials, the service uses its reviewed prompt fallbacks and disables tracing.
 
 ## Deploy flow

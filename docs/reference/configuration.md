@@ -69,7 +69,7 @@ process from the same FastMCP server the agent uses (`src/agents/mcp/job_server.
 
 The prior `agent.provider` and per-profile `provider` plus `model` fields are replaced by named `agent.providers` deployments.
 Each deployment must contain a LiteLLM provider-qualified model and an `api_key_env` name, and each profile must select it through `deployment`.
-Existing `DEEPSEEK_API_KEY` and `GROQ_API_KEY` values remain valid because the bundled deployment definitions reference those same names.
+The bundled deployment references `DEEPSEEK_API_KEY`; the optional eval-judge Groq branch still reads `GROQ_API_KEY` from `.env`.
 Do not place an API key value in YAML, documentation, a Langfuse tag, or a log message.
 
 ```yaml
@@ -86,7 +86,6 @@ agent:
 ```
 
 DeepSeek accepts only the explicit `thinking` option in the serving contract.
-Groq accepts only explicit `reasoning_format` and `reasoning_effort` options in the serving contract.
 All other provider options, unqualified models, unknown deployments, and unavailable selected credentials fail before model construction.
 To roll back, revert the deployment contract and LiteLLM runtime together with the dependency change, then restore the native adapter configuration while retaining the existing environment variables through the rollback window.
 
@@ -111,7 +110,6 @@ Other documents link here rather than restating.
 | API | FastAPI and uvicorn | >=0.136.3 / >=0.48.0 | `src/api/app.py` |
 | Agent | LangChain ReAct | >=1.4.2 | `src/agents/`, `config/settings.yaml`, `config/prompts.yaml` |
 | Model, serving | LiteLLM with a configured DeepSeek deployment | - | `config/settings.yaml`, `agent` |
-| Model, alternate deployment | Groq, selectable | - | `config/settings.yaml`, `agent` |
 | Database | PostgreSQL | 17 on Neon | `DATABASE_URL` |
 | ORM and driver | SQLAlchemy and psycopg | >=2.0 / >=3.2 | `src/services/query/` |
 | Migrations | Alembic | >=1.14 | `alembic/`, `alembic.ini` |
@@ -137,7 +135,7 @@ Other documents link here rather than restating.
 | Package | Compatible range | Role |
 |---|---|---|
 | `langchain` | `>=1.4.2,<1.5.0` with the `mcp` extra | ReAct agent runtime and tool binding. The `mcp` extra pulls in FastMCP and provides `langchain.mcp.MCPAdapter`, which discovers the read-only job-query tools in process (see `src/agents/mcp/`). |
-| `langchain-litellm` | `>=0.8.0,<0.9.0` | In-process provider-neutral serving adapter. It brings LiteLLM for provider-qualified models and supports the configured DeepSeek and Groq deployments. |
+| `langchain-litellm` | `>=0.8.0,<0.9.0` | In-process provider-neutral serving adapter. It brings LiteLLM for provider-qualified models and serves the configured deployment allowlist. |
 | `langchain-groq` | `>=1.1.2,<1.2.0` | Evaluation judge's Groq alternate branch. It is not on the serving path. |
 | `langchain-openai` | `>=1.5.0,<1.6.0` | Evaluation-judge fallback via OpenRouter's OpenAI-compatible endpoint, never on the serving path. |
 | `langchain-google-genai` | `>=4.3.5,<4.4.0` | Evaluation judge (`gemma-4-31b-it`) via Google AI Studio, never on the serving path. Restored after the OpenRouter detour; the retired arm was Gemini 2.5 Flash. |
@@ -223,10 +221,6 @@ Serving traffic on the demo is the same per-turn shape.
 For the measured derivation see [T0027.3 DeepSeek arm](../../evals/archive/t0027_deepseek_arm.md); for the
 judge-side rate-limit caveats see
 the evaluation strategy record on git tag docs-history-pre-redesign, sections 4a and 4b.
-
-The Groq arm remains selectable on its free tier, at 8000 tokens per minute and 200K per day.
-That ceiling is what the driver's turn-pacing setting exists for: restore it whenever a profile
-moves back to Groq.
 
 ### 5 Deliberately not used
 

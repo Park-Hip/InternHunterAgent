@@ -181,6 +181,20 @@ class ConfigLoadTests(unittest.TestCase):
         with self.assertRaisesRegex(config_module.ConfigLoadError, "Duplicate values"):
             config_module._validate_observability_config(config)
 
+    def test_database_config_rejects_missing_section(self) -> None:
+        with self.assertRaisesRegex(config_module.ConfigLoadError, "database"):
+            config_module._validate_database_config({})
+
+    def test_database_config_rejects_malformed_connect_timeout(self) -> None:
+        for value in (0, -1, True, "5", 5.0):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(
+                    config_module.ConfigLoadError, "connect_timeout_seconds"
+                ):
+                    config_module._validate_database_config(
+                        {"database": {"connect_timeout_seconds": value}}
+                    )
+
 
 class DuplicateKeyTests(unittest.TestCase):
     """A repeated YAML key is a contradiction, not a merge."""

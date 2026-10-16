@@ -144,6 +144,12 @@ dashboard (key: `AGENT_DATABASE_URL`, sync: false). The connection string format
 postgresql+psycopg://internhunter_agent:<password>@<host>:5432/internhunter
 ```
 
+The DSN needs no `connect_timeout`. The service bounds every connection attempt through
+`database.connect_timeout_seconds` in `config/settings.yaml` (10 seconds by default), and that
+value wins over one in the DSN. An unreachable database therefore fails boot with
+`SchemaGuardError` within the bound instead of leaving uvicorn at
+`Waiting for application startup.`
+
 **A rebuilt table drops the grant.** A `GRANT` belongs to the table object, so anything that
 recreates `clean_jobs` — the evaluation fixture loader, or a migration that recreates the table —
 drops the reader role's `SELECT` while leaving the role able to authenticate and connect. The

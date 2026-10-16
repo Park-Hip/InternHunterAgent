@@ -3,6 +3,7 @@ from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from src.core.config import settings
+from src.core.db import connect_timeout_seconds
 
 
 def _checkpointer_dsn() -> str:
@@ -17,6 +18,11 @@ def build_checkpointer_pool() -> AsyncConnectionPool:
             "autocommit": True,
             "row_factory": dict_row,
             "prepare_threshold": 0,
+            # Background worker connects carry the same service-owned bound as the
+            # engines. This does not make `open()` wait: called without `wait=True`
+            # it only starts the workers, and the pool's own 30 s acquisition
+            # timeout stays the outer bound (#642).
+            "connect_timeout": connect_timeout_seconds(),
         },
         open=False,
     )

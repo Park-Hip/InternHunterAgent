@@ -103,6 +103,9 @@ That is the point: the schema guard turns a renamed column into a refused boot i
 the first question, and the privilege guard does the same for a lost `GRANT` after a table rebuild
 (#509).
 Both run in a worker thread (`asyncio.to_thread`) because they use synchronous SQLAlchemy.
+Each connection attempt is bounded by the service-owned `database.connect_timeout_seconds` (10 s),
+so an unreachable database refuses boot with `SchemaGuardError` within the bound whatever the DSN
+carries (#642).
 
 **Configuration loads first, at import.**
 `load_settings()` is the first statement composition's module body runs, before the LangChain,
@@ -180,7 +183,7 @@ or after it, because the diagnostic is not awaited.
 | `api.schema_drift`, `SchemaGuardError`, `Application startup failed`, exit 3 | Lifespan | `clean_jobs` differs from `EXPECTED_COLUMNS`; a migration and the guard disagree |
 | `AgentPrivilegeError` naming the operate how-to | Lifespan | The agent role lost `SELECT` or can write; re-apply the role steps |
 | `api.agent_privilege_check_skipped` | Lifespan | The two DSNs name different databases; nothing was checked |
-| Stuck at `Waiting for application startup.` | Lifespan | The database is unreachable and the DSN has no `connect_timeout`, see section 6 |
+| `SchemaGuardError` naming `connection timeout expired`, `Application startup failed`, exit 3 | Lifespan | The database is unreachable; the connect attempt is bounded by `database.connect_timeout_seconds`, see section 6 |
 | `Langfuse startup authentication failed` | After boot | Tracing keys are wrong; serving is unaffected |
 
 ## 6. Trade-offs, and what would now be decided differently
@@ -191,6 +194,9 @@ or after it, because the diagnostic is not awaited.
   real users instead of on the deploy.
 - **Configuration loads at import, before anything else.** The lifespan cannot reload settings, so
   it does not pretend to. The refusal is uvicorn's, at import, with the missing variable named.
+- **Database connection attempts are bounded by the service, not the DSN.** Both engines and the
+  checkpointer pool carry `database.connect_timeout_seconds` (10 s), so an unreachable database
+  refuses boot with `SchemaGuardError` within the bound whatever the DSN string carries (#642).
 - **Tracing never blocks boot.** Langfuse is optional: prompts fall back to the reviewed YAML text,
   and the credential check is fire-and-track so boot never waits on a network round trip.
 - **The API layer takes a lifespan instead of building one.** That keeps direct LangChain,
@@ -198,8 +204,9 @@ or after it, because the diagnostic is not awaited.
 
 **Would now be decided differently.** Each was observed by running the code on 2026-10-16, and
 each is tracked by its own follow-up issue.
-A fourth observation, that configuration failed at import while the lifespan pretended to load it,
-was resolved by #640 and is now the second deliberate choice above.
+Two of the four observations have since been resolved: configuration failing at import while the
+lifespan pretended to load it (#640, now the second deliberate choice above), and an unreachable
+database hanging boot (#642, now a deliberate choice above).
 
 1. **A missing provider key does not stop boot.**
    The model is built on the first request (`AgentRuntime` compiles one agent per prompt version),
@@ -207,11 +214,7 @@ was resolved by #640 and is now the second deliberate choice above.
    Every question then fails: `/api/v1/agent/chat` returns a 500, and the stream returns 200 with
    an `error` event (`internal_error`, not retryable); only the log names the missing key (#641).
    Building or validating the `react` deployment in the lifespan would move that to boot.
-2. **An unreachable database hangs boot.**
-   With no `connect_timeout` in the DSN, the schema guard's first connection waited more than 60 s
-   locally; with `connect_timeout=3` it failed in 3.3 s and uvicorn exited 3.
-   The guards have no timeout of their own (#642).
-3. **Composition shuts down a client it did not create.**
+2. **Composition shuts down a client it did not create.**
    The Langfuse client is created as a side effect of importing the tracing module; composition
    only owns its shutdown.
    Creating it in the lifespan would put both ends of its life in one place (#643).
@@ -247,6 +250,7 @@ that import `src.serving.composition` all name it; move them in one pull request
 | `src/api/schema_guard.py` → `assert_serving_schema`, `EXPECTED_COLUMNS` | Schema guard |
 | `src/api/privilege_guard.py` → `assert_agent_privileges` | Privilege guard |
 | `src/core/checkpointer.py` → `build_checkpointer_pool`, `build_checkpointer` | Pool and checkpoint tables |
+| `src/core/db.py` → `connect_timeout_seconds` | The service-owned connect bound carried by both engines and the checkpointer pool |
 | `src/core/config.py` → `load_settings`, `ConfigLoadError` | The import-time configuration contract |
 | `src/agents/mcp/job_server.py` → `create_job_mcp_server`, `mcp_endpoint_enabled` | Tool surface, endpoint switch |
 | `src/agents/mcp/adapter.py` → `list_job_tools` | Tool discovery |

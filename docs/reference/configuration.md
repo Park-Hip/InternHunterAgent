@@ -43,6 +43,7 @@ to `DATABASE_URL`.
 `agent.react.*` and `agent.sql_generation.*` select a deployment and configure portable generation settings plus explicit validated provider options.
 `agent.prompts.*` configures the managed-prompt deployment label and cache lifetime (see the [Langfuse prompt management guide](../how-to/manage-langfuse-prompts.md)).
 `agent.stream_turn_timeout_seconds` is the end-to-end SSE serving deadline and falls back to 120 seconds when omitted or invalid.
+`database.connect_timeout_seconds` bounds every connection attempt (TCP, TLS, and authentication) so an unreachable database refuses boot within the bound; the configured value overrides any `connect_timeout` in a DSN.
 `agent.memory.*` controls the memory window, `agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence (validated during settings load and application startup).
 `ingestion.*` configures the pipeline.
 Per project convention, parameters are configured here rather than hard-coded.

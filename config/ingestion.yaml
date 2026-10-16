@@ -138,9 +138,9 @@ tech_dictionary:
   - Jupyter
   - Databricks
 
-# Role taxonomy — canonical role → match keywords/patterns applied to the raw job title.
-# Matching is case-insensitive; first match wins; jobFunction child_id 27 breaks ties
-# for the AI/Data cluster. Unmatched titles fall back to "Other" (transform default).
+# Role taxonomy — canonical role → match keywords applied to the raw job title.
+# Matching is case-insensitive on whole keywords (bounded phrases), never raw
+# substrings; first match wins. Unmatched titles fall back to "Other" (transform default).
 role_taxonomy:
   "AI Engineer":
     keywords:

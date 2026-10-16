@@ -164,6 +164,32 @@ class FindTechStackTests(unittest.TestCase):
         techs = result.split(", ")  # type: ignore[union-attr]
         self.assertIn("Go", techs)
 
+    def test_lowercase_go_verb_is_not_go_language(self) -> None:
+        # "go" in "go through" is prose, not the Go language
+        result = find_tech_stack("We will go through the plan")
+        techs = result.split(", ") if result else []
+        self.assertNotIn("Go", techs)
+
+    def test_r_and_d_not_detected_inside_randd(self) -> None:
+        # "R&D" is Research & Development, not the R and D languages
+        result = find_tech_stack("The R&D team ships weekly")
+        techs = result.split(", ") if result else []
+        self.assertNotIn("R", techs)
+        self.assertNotIn("D", techs)
+
+    def test_short_tech_names_do_not_match_plain_prose(self) -> None:
+        result = find_tech_stack(
+            "Python", "We go to market; R&D team; work with sql and Power BI"
+        )
+        self.assertIsNotNone(result)
+        techs = result.split(", ")  # type: ignore[union-attr]
+        self.assertIn("Power BI", techs)
+        self.assertIn("Python", techs)
+        self.assertIn("SQL", techs)
+        self.assertNotIn("Go", techs)
+        self.assertNotIn("R", techs)
+        self.assertNotIn("D", techs)
+
     def test_csharp_detected(self) -> None:
         result = find_tech_stack("Build APIs with C# and .NET")
         self.assertIsNotNone(result)
@@ -211,6 +237,10 @@ class ClassifyRoleTests(unittest.TestCase):
     def test_mlops_maps_to_ml_engineer(self) -> None:
         self.assertEqual(classify_role("MLOps Engineer", None), "ML Engineer")
 
+    def test_html_engineer_does_not_match_ml_engineer(self) -> None:
+        # "ml engineer" is a bounded phrase; it must not match inside "html engineer"
+        self.assertEqual(classify_role("Senior HTML Engineer", None), "Other")
+
     def test_intern_data_engineer_title(self) -> None:
         # Vietnamese intern title — "data engineer" keyword present
         self.assertEqual(classify_role("Thực Tập Sinh Data Engineer", None), "Data Engineer")
@@ -219,6 +249,10 @@ class ClassifyRoleTests(unittest.TestCase):
         # Passing children should not change the result (no crash)
         children = [{"id": 27, "name": "Data Engineer/Data Analyst/AI"}]
         self.assertEqual(classify_role("Data Scientist", children), "Data Scientist")
+
+    def test_job_function_children_do_not_break_ties(self) -> None:
+        # jobFunction child id 27 is not consulted by the role classifier
+        self.assertEqual(classify_role("Quant Researcher", [{"id": 27}]), "Other")
 
 
 class NormalizeLocationTests(unittest.TestCase):

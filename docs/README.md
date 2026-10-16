@@ -5,6 +5,7 @@ Each document has one owner and one intended reader.
 | Doc | Owns | Reader |
 |---|---|---|
 | [Architecture](architecture.md) | Product scope, architecture, layer laws, serving design | Product and engineering |
+| [Composition module guide](modules/composition.md) | How the web service boots: import versus lifespan, the boot guards, the shared MCP server, teardown, and what would now be decided differently | Maintainers |
 | [Ingestion module guide](modules/ingestion.md) | How the nightly VietnamWorks ingestion works: stages, gates, field mapping, reading a run, safe changes | Maintainers |
 | [Desktop UI foundation](ui/desktop-foundation.md) | Approved employer overview and Vietnamese demo design intent, with implementation gates | UI maintainers and implementers |
 | [Operate how-to](how-to/operate.md) | Deploy topology, configuration, database procedures, ingestion pipeline and cron, incidents | Operators |

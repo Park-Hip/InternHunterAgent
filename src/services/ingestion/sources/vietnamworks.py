@@ -53,7 +53,6 @@ class VietnamWorksSource:
         self._queries: list[str] = cfg["queries"]
         self._parent_id: int = cfg["job_function"]["parent_id"]
         self._child_ids: set[int] = set(cfg["job_function"]["child_ids"])
-        self._max_jobs: int = cfg["max_jobs"]
         self._client = client
         self._deadline: float | None = None
         self.budget_exhausted = False
@@ -165,21 +164,21 @@ class VietnamWorksSource:
         return fn.get("parentId") == self._parent_id and bool(self._child_ids & child_ids)
 
     def _collect(self, client: httpx.Client) -> Iterator[RawPosting]:
-        """Inner generator: iterate pages × queries round-robin, filter, dedup, cap.
+        """Inner generator: iterate pages × queries round-robin, filter, dedup.
 
         Page-major on purpose: page 0 of every query, then page 1 of every query.
-        The cap is global, so a query-major order would spend the whole budget on
-        the first queries in the config list and never reach the last ones —
-        interleaving makes a truncated run truncate evenly across queries instead
-        of starving whichever roles happen to be listed later.
+        The wall-clock budget, not a record cap, is what can truncate a run, so
+        a query-major order would spend the whole budget on the first queries in
+        the config list and never reach the last ones - interleaving makes a
+        truncated run truncate evenly across queries instead of starving
+        whichever roles happen to be listed later.
         """
         seen_ids: set[int] = set()
-        kept = 0
         for page in range(self._pages_per_query):
-            if kept >= self._max_jobs or self._out_of_budget():
+            if self._out_of_budget():
                 break
             for query in self._queries:
-                if kept >= self._max_jobs or self._out_of_budget():
+                if self._out_of_budget():
                     break
                 try:
                     jobs = self._post_with_retry(client, query, page)
@@ -192,8 +191,6 @@ class VietnamWorksSource:
                         seen_ids.add(job_id)
                         if not self._is_ai_data(job):
                             continue
-                        if kept >= self._max_jobs:
-                            break
                         yield RawPosting(
                             source=self.source,
                             external_id=str(job_id),
@@ -203,9 +200,8 @@ class VietnamWorksSource:
                             # writer can check the claim instead of restating it.
                             content_hash=content_digest(job),
                         )
-                        kept += 1
                 finally:
-                    # Runs even on a skipped page — the politeness delay must not be
+                    # Runs even on a skipped page - the politeness delay must not be
                     # bypassed exactly when the server is signalling distress.
                     time.sleep(self._delay)
 

@@ -228,17 +228,6 @@ class VietnamWorksSourceTests(unittest.TestCase):
         self.assertNotEqual(hash_orig, hash_mod)
 
     # ------------------------------------------------------------------
-    # max_jobs cap
-    # ------------------------------------------------------------------
-
-    def test_max_jobs_cap_is_honoured(self) -> None:
-        # Fixture yields 2 AI/Data jobs (1001 and 1003); cap to 1 → only 1 emitted.
-        source = self._source()
-        source._max_jobs = 1
-        results = list(source.fetch())
-        self.assertEqual(len(results), 1)
-
-    # ------------------------------------------------------------------
     # No live network
     # ------------------------------------------------------------------
 
@@ -340,26 +329,29 @@ class VietnamWorksResilienceTests(unittest.TestCase):
 
 
 class VietnamWorksCoverageTests(unittest.TestCase):
-    """Round-robin interleave: a cap must truncate evenly across queries (T0019.9).
+    """Round-robin interleave: the time budget must truncate evenly across queries.
 
     Shape used throughout: 8 queries x 2 pages x 2 AI/Data jobs per page = 32
-    jobs available, `max_jobs = 20`. The 2-per-page figure is load-bearing — the
-    interleave's granularity is a *page*, not a job, since `_collect` drains a
-    whole page before moving to the next query. Jobs-per-query-per-page must
-    therefore be <= max_jobs / len(queries) for a cap to reach every query at
-    all; with 10 jobs per page the budget is spent on two queries regardless of
-    loop order, and the anti-skew assertion below could not discriminate.
+    jobs available. The 2-per-page figure is load-bearing - the interleave's
+    granularity is a *page*, not a job, since `_collect` drains a whole page
+    before moving to the next query. Page-major order reaches every query's
+    page 0 before any query's page 1, so a run cut short by the wall-clock
+    budget thins every query evenly instead of starving whichever roles happen
+    to be listed later.
     """
 
     QUERIES = [f"q{i}" for i in range(1, 9)]
     PAGES = 2
     PER_PAGE = 2
-    MAX_JOBS = 20
 
     def setUp(self) -> None:
-        patcher = patch("time.sleep")
-        self.mock_sleep = patcher.start()
-        self.addCleanup(patcher.stop)
+        self.clock = _FakeClock()
+        sleep_patcher = patch("time.sleep", side_effect=self.clock.advance)
+        self.mock_sleep = sleep_patcher.start()
+        self.addCleanup(sleep_patcher.stop)
+        monotonic_patcher = patch("time.monotonic", side_effect=self.clock.monotonic)
+        monotonic_patcher.start()
+        self.addCleanup(monotonic_patcher.stop)
         # query -> page -> jobs. IDs encode the query index: qN owns N00..N99.
         self.jobs_by_query = {
             query: {
@@ -372,11 +364,11 @@ class VietnamWorksCoverageTests(unittest.TestCase):
             for qi, query in enumerate(self.QUERIES)
         }
 
-    def _source(self, client: MagicMock, max_jobs: int | None = None) -> VietnamWorksSource:
+    def _source(self, client: MagicMock, max_elapsed: float = 600.0) -> VietnamWorksSource:
         source = VietnamWorksSource(client=client)
         source._queries = list(self.QUERIES)
         source._pages_per_query = self.PAGES
-        source._max_jobs = self.MAX_JOBS if max_jobs is None else max_jobs
+        source._max_elapsed = max_elapsed
         return source
 
     @staticmethod
@@ -384,25 +376,30 @@ class VietnamWorksCoverageTests(unittest.TestCase):
         return f"q{int(external_id) // 100}"
 
     # ------------------------------------------------------------------
-    # The anti-skew assertion — this ticket's core test
+    # The anti-skew assertion - this ticket's core test
     # ------------------------------------------------------------------
 
-    def test_cap_truncates_evenly_across_queries_not_alphabetically(self) -> None:
-        # Against the old query-outer loop the budget of 20 is consumed by the
-        # first 5 queries (4 jobs each) and q6..q8 are never requested at all.
-        source = self._source(_per_query_client(self.jobs_by_query))
+    def test_budget_truncates_evenly_across_queries_not_alphabetically(self) -> None:
+        # A 4.4 s budget lets every query finish page 0 (the eighth fetch's
+        # pre-check happens at 7 x 0.6 = 4.2 s) but runs out before page 1 (its
+        # first pre-check is at 8 x 0.6 = 4.8 s). Page-major order means every
+        # query is reached instead of the first few consuming the whole budget.
+        source = self._source(_per_query_client(self.jobs_by_query), max_elapsed=4.4)
 
         results = list(source.fetch())
 
         covered = {self._query_of(r.external_id) for r in results}
-        self.assertEqual(covered, set(self.QUERIES), "some queries were starved by the cap")
+        self.assertEqual(covered, set(self.QUERIES), "some queries were starved by the budget")
 
-    def test_cap_is_still_exact_and_global(self) -> None:
-        source = self._source(_per_query_client(self.jobs_by_query))
+    def test_budget_cuts_between_pages_not_mid_page(self) -> None:
+        # 5.0 s: page 0 completes (8 x 0.6 = 4.8 s), page 1's first query runs
+        # (its sleep reaches 5.4 s), and the budget check before page 1's second
+        # query stops the run. Full page 0 plus page 1's first query: 16 + 2.
+        source = self._source(_per_query_client(self.jobs_by_query), max_elapsed=5.0)
 
         results = list(source.fetch())
 
-        self.assertEqual(len(results), self.MAX_JOBS)
+        self.assertEqual(len(results), self.PER_PAGE * len(self.QUERIES) + self.PER_PAGE)
 
     def test_dedup_holds_across_the_interleave(self) -> None:
         # q1 and q5 both return job 999 on page 0; it must be emitted exactly once.
@@ -410,7 +407,7 @@ class VietnamWorksCoverageTests(unittest.TestCase):
         jobs = copy.deepcopy(self.jobs_by_query)
         jobs["q1"][0] = [*jobs["q1"][0], shared]
         jobs["q5"][0] = [*jobs["q5"][0], shared]
-        source = self._source(_per_query_client(jobs), max_jobs=100)
+        source = self._source(_per_query_client(jobs))
 
         results = list(source.fetch())
 
@@ -419,7 +416,7 @@ class VietnamWorksCoverageTests(unittest.TestCase):
         self.assertEqual(len(external_ids), len(set(external_ids)))
 
     def test_request_order_is_page_major(self) -> None:
-        source = self._source(_per_query_client(self.jobs_by_query), max_jobs=1000)
+        source = self._source(_per_query_client(self.jobs_by_query))
 
         list(source.fetch())
 
@@ -429,18 +426,18 @@ class VietnamWorksCoverageTests(unittest.TestCase):
         self.assertEqual(pages, [0] * len(self.QUERIES) + [1] * len(self.QUERIES))
 
     def test_politeness_delay_runs_once_per_page_attempt(self) -> None:
-        source = self._source(_per_query_client(self.jobs_by_query), max_jobs=1000)
+        source = self._source(_per_query_client(self.jobs_by_query))
 
         list(source.fetch())
 
-        # No failures, so no backoff sleeps — every sleep is the politeness delay.
+        # No failures, so no backoff sleeps - every sleep is the politeness delay.
         delay_sleeps = [c for c in self.mock_sleep.call_args_list if c.args[0] == source._delay]
         self.assertEqual(len(delay_sleeps), source._client.post.call_count)
         self.assertEqual(len(delay_sleeps), len(self.QUERIES) * self.PAGES)
 
     def test_retry_skip_still_works_under_the_interleave(self) -> None:
         client = _per_query_client(self.jobs_by_query, fail_pages={("q3", 0)})
-        source = self._source(client, max_jobs=1000)
+        source = self._source(client)
 
         results = list(source.fetch())
 

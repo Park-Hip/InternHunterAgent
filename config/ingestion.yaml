@@ -45,18 +45,11 @@ job_function:
   parent_id: 5    # "Information Technology/Telecommunications" — IT precision filter
   child_ids: [27] # "Data Engineer/Data Analyst/AI" — AI/Data focus subset
 
-# Safety ceiling, NOT a target. It exists to bound a runaway run, and it now sits
-# deliberately above the measured ~50-112 yield (research/data-ingestion-stage.md
-# §11) so the API's actual output — not this cap — is what ends a run. Raising it
-# does NOT increase per-run request volume: pages_per_query x queries determines
-# how many requests are issued, and both are unchanged. It only stops the cap
-# from cutting a run short. Re-measure per the §11 runbook; if the real yield
-# ever exceeds ~150, raise this again rather than let it bind.
-max_jobs: 150
-
-# Unattended-run safety. min_yield is a pre-write floor: a run that fetches
-# fewer than this many postings aborts before touching clean_jobs, so a broken
-# fetch can never overwrite good rows. Measured steady state is ~50/run.
+# Unattended-run safety. min_yield is a health floor, not a data-protection
+# guard: a run that fetches fewer than this many postings aborts instead of
+# completing and sending the dead-man ping, so a collapsed fetch (every page
+# failing, a renamed response field, or changed jobFunction ids) fails loudly
+# rather than ending silently green. Measured steady state is ~110/run.
 safety:
   min_yield: 20
   # Records that fail to normalize or fail a row-quality rule are dropped and counted

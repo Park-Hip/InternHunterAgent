@@ -50,7 +50,7 @@ agent:
   providers:
     deepseek_flash:
       provider: deepseek
-      model: deepseek/deepseek-v4-flash
+      model: deepseek/deepseek-flash
       api_key_env: DEEPSEEK_API_KEY
     groq_qwen:
       provider: groq

@@ -116,7 +116,7 @@ def test_trace_attributes_propagate_request_metadata_and_closed_tags() -> None:
             "prompt:schema_context:v12",
             "prompt:sql_generation:v14",
             "provider:deepseek",
-            "model:deepseek/deepseek-v4-flash",
+            "model:deepseek/deepseek-flash",
         ],
         metadata={
             "prompt_versions": {
@@ -163,7 +163,7 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
             "prompt:schema_context:v12",
             "prompt:sql_generation:v14",
             "provider:deepseek",
-            "model:deepseek/deepseek-v4-flash",
+            "model:deepseek/deepseek-flash",
         ],
         metadata={
             "prompt_versions": {
@@ -272,7 +272,7 @@ def test_stream_observation_records_error_without_visible_ttft() -> None:
     assert metadata["outcome"] == "error"
     assert metadata["cold_start"] in {"process-first-agent-request", "warm"}
     assert metadata["environment"] in {"local", "production", "evaluation"}
-    assert metadata["model"] == "deepseek/deepseek-v4-flash"
+    assert metadata["model"] == "deepseek/deepseek-flash"
 
 
 def test_stream_latency_has_no_tracing_side_effects() -> None:

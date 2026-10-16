@@ -20,7 +20,7 @@ def _agent_config(
             "providers": {
                 "deepseek_flash": {
                     "provider": "deepseek",
-                    "model": "deepseek/deepseek-v4-flash",
+                    "model": "deepseek/deepseek-flash",
                     "api_key_env": "DEEPSEEK_API_KEY",
                 },
                 "groq_qwen": {
@@ -63,7 +63,7 @@ def test_build_model_resolves_a_deepseek_profile(
     AgentProvider().build_model("react")
 
     mock_chat_litellm.assert_called_once_with(
-        model="deepseek/deepseek-v4-flash",
+        model="deepseek/deepseek-flash",
         api_key="deepseek-test-key",
         temperature=0.2,
         max_tokens=2048,
@@ -89,7 +89,7 @@ def test_profiles_resolve_independent_deployments(
 
     deepseek_kwargs = mock_chat_litellm.call_args_list[0].kwargs
     groq_kwargs = mock_chat_litellm.call_args_list[1].kwargs
-    assert deepseek_kwargs["model"] == "deepseek/deepseek-v4-flash"
+    assert deepseek_kwargs["model"] == "deepseek/deepseek-flash"
     assert deepseek_kwargs["model_kwargs"] == {
         "extra_body": {"thinking": {"type": "disabled"}}
     }
@@ -177,7 +177,7 @@ def test_eval_driver_disables_provider_retries(
         ),
         (
             lambda config: config["agent"]["providers"]["deepseek_flash"].update(
-                {"model": "deepseek-v4-flash"}
+                {"model": "deepseek-flash"}
             ),
             "must start with 'deepseek/'",
         ),

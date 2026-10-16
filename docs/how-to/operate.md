@@ -66,9 +66,17 @@ It does not create or update secret values in Render.
 
 The version-controlled pricing definitions live in
 [`config/langfuse_models.yaml`](../../config/langfuse_models.yaml).
-The committed DeepSeek V4 Flash rates were checked against both the
+The committed DeepSeek Flash rates were checked against both the
 [English pricing page](https://api-docs.deepseek.com/quick_start/pricing/) and the
-[Chinese pricing page](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) on 2026-08-21.
+[Chinese pricing page](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) on 2026-10-16.
+DeepSeek bills Flash on a weekday peak/off-peak schedule, with peak at 01:00-04:00 and
+06:00-10:00 UTC excluding Chinese public holidays, and Langfuse pricing tiers cannot
+condition on time of day, so the committed prices are the off-peak rates scaled by the
+weekday time-weighted ratio 203/168.
+The same pages mark the earlier v4-flash identifiers as retired legacy names that are still
+accepted but served by DeepSeek-V4.1-Flash at the Flash price, so the committed definition
+carries only the live `deepseek/deepseek-flash` name and the already-provisioned definition
+for the old name stays for the rollback window until it is removed manually.
 
 Validate the YAML locally without Langfuse credentials before reviewing or provisioning a change:
 

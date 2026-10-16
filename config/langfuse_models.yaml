@@ -1,18 +1,30 @@
 evidence:
-  retrieved_on: "2026-08-21"
+  retrieved_on: "2026-10-16"
   source: https://api-docs.deepseek.com/quick_start/pricing/
   corroborating_source: https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
   unit: USD per token
   notes: >-
-    DeepSeek publishes these prices per one million tokens. The English and Chinese first-party
-    pricing pages both list $0.0028/M cache-hit input, $0.14/M cache-miss input, and $0.28/M
-    output for deepseek-v4-flash. Cache-hit input is a separate, mutually exclusive usage bucket
-    from cache-miss input.
+    DeepSeek publishes these prices per one million tokens for the live model name
+    deepseek-flash. Both first-party pricing pages carry the 2026-10-16 peak/off-peak
+    schedule: off-peak is $0.003/M cache-hit input, $0.15/M cache-miss input, and $0.6/M
+    output, and peak is exactly double. Cache-hit input is a separate, mutually exclusive
+    usage bucket from cache-miss input. Peak is 01:00-04:00 and 06:00-10:00 UTC on
+    weekdays, excluding Chinese public holidays; every other hour is off-peak. Langfuse
+    pricing tiers cannot condition on time of day (their conditions read usage details,
+    model parameters, and metadata only), so the committed prices are the off-peak rates
+    scaled by the weekday time-weighted ratio 203/168, which assumes usage spread evenly
+    through the week: peak is 35 of 168 hours per week and bills at twice the off-peak
+    rate, so the blend equals off-peak x (133 + 2 x 35) / 168. The pages also mark the
+    earlier v4-flash identifiers, including the vision experiment variant, as retired
+    legacy names: still accepted, served by the DeepSeek-V4.1-Flash model, and billed at
+    the Flash price. This definition deliberately carries the live name only; the
+    old-name definition already in Langfuse keeps the rollback window priced at the old
+    rates.
 
 models:
-  - model_name: deepseek/deepseek-v4-flash
-    match_pattern: "(?i)^deepseek/deepseek-v4-flash$"
-    start_date: "2026-08-21T00:00:00Z"
+  - model_name: deepseek/deepseek-flash
+    match_pattern: "(?i)^deepseek/deepseek-flash$"
+    start_date: "2026-10-16T00:00:00Z"
     unit: TOKENS
     pricing_tiers:
       - name: default
@@ -20,6 +32,6 @@ models:
         priority: 0
         conditions: []
         prices:
-          input: 0.00000014
-          input_cached_tokens: 0.0000000028
-          output: 0.00000028
+          input: 0.00000018125
+          input_cached_tokens: 0.000000003625
+          output: 0.000000725

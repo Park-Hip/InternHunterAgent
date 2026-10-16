@@ -342,6 +342,6 @@ The tables already key on `(source, external_id)`; the loader calls VietnamWorks
 | Evidence layer: shadow writer, collection plans, nine evidence tables | Never ran in production, written only by tests; about 2,160 of 3,900 module lines; tables dropped behind an emptiness guard | #620 (#626), #621 (#627) |
 | Bright Data / LinkedIn adapter, source registry, base class | No second source is in scope; an abstraction over one source | #620 |
 | Abort on any bad row | One record cost the whole night; now drop and count | #622 (#628) |
-| `clean_jobs.is_active`, `ingestion_runs.expired_count`, expiry pass | A function of `last_seen_at`; no reader. Until the #624 follow-up, `src/services/ingestion/safety.py` and `src/api/schema_guard.py` still tolerate a leftover `is_active` column; older logs show `columns: 22` and `expired_count` | #624 (#631), ADR-0059 |
+| `clean_jobs.is_active`, `ingestion_runs.expired_count`, expiry pass | A function of `last_seen_at`; no reader. Older logs still show `columns: 22` and an `expired_count` key from before the production migration | #624 (#631), ADR-0059 |
 
 The removed code is on git tag `ingestion-evidence-archive` (ADR-0058).

@@ -57,6 +57,10 @@ extend-exclude = [
 [tool.ruff.lint.per-file-ignores]
 # The src.* imports must follow the sys.path bootstrap so the script runs standalone.
 "scripts/register_langfuse_prompts.py" = ["E402"]
+# Composition loads and validates configuration at import before the LangChain,
+# LiteLLM, and FastMCP imports, so a bad configuration refuses boot in
+# milliseconds instead of after a long import chain. See issue #640.
+"src/serving/composition.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.12"

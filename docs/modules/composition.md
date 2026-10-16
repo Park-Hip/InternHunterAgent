@@ -34,7 +34,7 @@ paid here and nowhere else.
 What it deliberately is not:
 
 - **Not transport.** Middleware, CORS, rate limits, routes, and static files are `create_app`'s.
-- **Not configuration.** It calls `load_settings`; parsing and validation live in
+- **Not configuration.** It calls `load_settings` once, at import; parsing and validation live in
   `src/core/config.py`.
 - **Not the agent.** It hands tools and a checkpointer to `AgentRuntime`; the model and graph are
   built later, on the first request for each prompt version.
@@ -53,7 +53,8 @@ once the pool exists.
 flowchart TD
     subgraph IMPORT["Import: uvicorn loads src.serving.composition:app"]
         direction TB
-        I1["Import tracing: Langfuse client created or disabled"] --> I2{{"Build MCP server: loads settings, reads agent.agent_v0"}}
+        I0{{"Load settings: DATABASE_URL, AGENT_DATABASE_URL, YAML"}} --> I1["Import tracing: Langfuse client created or disabled"]
+        I1 --> I2{{"Build MCP server: reads agent.agent_v0"}}
         I2 --> I3["Build the /mcp ASGI app"]
         I3 --> I4{"MCP_ENABLED?"}
         I4 -->|no| A1["create_app(lifespan)"]
@@ -61,7 +62,7 @@ flowchart TD
     end
     subgraph LIFESPAN["Lifespan: before the first request"]
         direction TB
-        L1["load_settings (cached)"] --> L2{{"Schema guard: clean_jobs columns"}}
+        L2{{"Schema guard: clean_jobs columns"}}
         L2 --> L3{{"Privilege guard: agent role reads, cannot write"}}
         L3 --> L4["Open checkpointer pool"]
         L4 --> L5{{"Checkpointer setup"}}
@@ -82,10 +83,10 @@ flowchart TD
 
 | Stage | What it does | Code | On failure |
 |---|---|---|---|
+| Settings | Loads and validates `Settings` and every YAML file, before any other import | `src/core/config.py` → `load_settings` (called at composition import) | Import fails, uvicorn exits 1, in under two seconds |
 | Tracing import | Creates the Langfuse client if both keys are set and `LANGFUSE_ENABLED` is not false | `src/agents/tracing/langfuse.py` (module level) | Logged; tracing disabled; boot continues |
 | MCP server | Registers `query_jobs` (v0) or `query_clean_jobs` + `get_job_details` (v1) | `src/agents/mcp/job_server.py` → `create_job_mcp_server` | Import fails, uvicorn exits 1 |
 | App | Builds FastAPI with the lifespan, and `/mcp` before the static catch-all if enabled | `src/api/app.py` → `create_app` | Import fails |
-| Settings | Returns the cached `Settings`; the import already loaded them | `src/core/config.py` → `load_settings` | In practice cannot fail here, see section 6 |
 | Schema guard | Live `clean_jobs` columns must equal `EXPECTED_COLUMNS` exactly | `src/api/schema_guard.py` → `assert_serving_schema` | `SchemaGuardError`; uvicorn exits 3 |
 | Privilege guard | Agent role reads the 16 visible columns and is refused a write | `src/api/privilege_guard.py` → `assert_agent_privileges` | `AgentPrivilegeError`; skipped with a warning if the DSNs name different databases |
 | Pool | Creates and opens the checkpointer pool without waiting for a connection | `src/core/checkpointer.py` → `build_checkpointer_pool` | - |
@@ -102,6 +103,17 @@ That is the point: the schema guard turns a renamed column into a refused boot i
 the first question, and the privilege guard does the same for a lost `GRANT` after a table rebuild
 (#509).
 Both run in a worker thread (`asyncio.to_thread`) because they use synchronous SQLAlchemy.
+
+**Configuration loads first, at import.**
+`load_settings()` is the first statement composition's module body runs, before the LangChain,
+LiteLLM, and FastMCP imports, so a bad configuration refuses boot in about two seconds instead of
+after a fifteen-second import chain, and the traceback names `composition.py` rather than a symptom
+further down.
+The imports need settings anyway: the MCP server reads `agent.agent_v0` while it is built, and the
+tracing module reads the Langfuse keys while it is imported.
+The lifespan therefore reloads nothing, and the test that pins this imports the entrypoint in a
+fresh interpreter with no database configured (`test_import_fails_fast_when_config_load_fails`)
+instead of patching a call that cannot fail (#640).
 
 **One MCP server, built at import.**
 The agent and the optional `/mcp` endpoint must expose the same tools, so there is exactly one
@@ -164,7 +176,7 @@ or after it, because the diagnostic is not awaited.
 
 | You see | Phase | Meaning |
 |---|---|---|
-| Traceback through `composition.py` at `_mcp_server = create_job_mcp_server()`, exit 1 | Import | Settings failed: a missing `DATABASE_URL` or `AGENT_DATABASE_URL`, bad YAML, an invalid `agent` section. With tracing on, the first line is `Langfuse tracing disabled: failed to initialize`, carrying the same error |
+| Traceback through `composition.py` at `load_settings()`, exit 1, under two seconds | Import | Settings failed: a missing `DATABASE_URL` or `AGENT_DATABASE_URL`, bad YAML, an invalid `agent` section. Nothing else is imported yet |
 | `api.schema_drift`, `SchemaGuardError`, `Application startup failed`, exit 3 | Lifespan | `clean_jobs` differs from `EXPECTED_COLUMNS`; a migration and the guard disagree |
 | `AgentPrivilegeError` naming the operate how-to | Lifespan | The agent role lost `SELECT` or can write; re-apply the role steps |
 | `api.agent_privilege_check_skipped` | Lifespan | The two DSNs name different databases; nothing was checked |
@@ -177,6 +189,8 @@ or after it, because the diagnostic is not awaited.
 
 - **Fail loud at boot, never degrade.** A service that boots with a broken table or role fails on
   real users instead of on the deploy.
+- **Configuration loads at import, before anything else.** The lifespan cannot reload settings, so
+  it does not pretend to. The refusal is uvicorn's, at import, with the missing variable named.
 - **Tracing never blocks boot.** Langfuse is optional: prompts fall back to the reviewed YAML text,
   and the credential check is fire-and-track so boot never waits on a network round trip.
 - **The API layer takes a lifespan instead of building one.** That keeps direct LangChain,
@@ -184,24 +198,20 @@ or after it, because the diagnostic is not awaited.
 
 **Would now be decided differently.** Each was observed by running the code on 2026-10-16, and
 each is tracked by its own follow-up issue.
+A fourth observation, that configuration failed at import while the lifespan pretended to load it,
+was resolved by #640 and is now the second deliberate choice above.
 
-1. **Configuration fails at import, not in the lifespan.**
-   Building the MCP server at import reads `agent.agent_v0`, which loads settings, so a missing
-   variable kills uvicorn (exit 1) before the lifespan exists.
-   The lifespan's `load_settings()` only reads the cache, and
-   `test_lifespan_fails_fast_when_config_load_fails` passes only because it patches that call.
-   The outcome is the same (no boot), but the documented order is not what runs (#640).
-2. **A missing provider key does not stop boot.**
+1. **A missing provider key does not stop boot.**
    The model is built on the first request (`AgentRuntime` compiles one agent per prompt version),
    so a missing `DEEPSEEK_API_KEY` boots green.
    Every question then fails: `/api/v1/agent/chat` returns a 500, and the stream returns 200 with
    an `error` event (`internal_error`, not retryable); only the log names the missing key (#641).
    Building or validating the `react` deployment in the lifespan would move that to boot.
-3. **An unreachable database hangs boot.**
+2. **An unreachable database hangs boot.**
    With no `connect_timeout` in the DSN, the schema guard's first connection waited more than 60 s
    locally; with `connect_timeout=3` it failed in 3.3 s and uvicorn exited 3.
    The guards have no timeout of their own (#642).
-4. **Composition shuts down a client it did not create.**
+3. **Composition shuts down a client it did not create.**
    The Langfuse client is created as a side effect of importing the tracing module; composition
    only owns its shutdown.
    Creating it in the lifespan would put both ends of its life in one place (#643).
@@ -231,11 +241,13 @@ that import `src.serving.composition` all name it; move them in one pull request
 | Start here | For |
 |---|---|
 | `src/serving/composition.py` → `lifespan` | Boot and teardown order |
+| `src/serving/composition.py` → module body | The import-time configuration contract |
 | `src/serving/composition.py` → `app`, `_mcp_server`, `_mcp_asgi` | Import-time assembly and the MCP switch |
 | `src/api/app.py` → `create_app`, `_register_mcp_before_static` | How the lifespan and `/mcp` are attached |
 | `src/api/schema_guard.py` → `assert_serving_schema`, `EXPECTED_COLUMNS` | Schema guard |
 | `src/api/privilege_guard.py` → `assert_agent_privileges` | Privilege guard |
 | `src/core/checkpointer.py` → `build_checkpointer_pool`, `build_checkpointer` | Pool and checkpoint tables |
+| `src/core/config.py` → `load_settings`, `ConfigLoadError` | The import-time configuration contract |
 | `src/agents/mcp/job_server.py` → `create_job_mcp_server`, `mcp_endpoint_enabled` | Tool surface, endpoint switch |
 | `src/agents/mcp/adapter.py` → `list_job_tools` | Tool discovery |
 | `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup`, `diagnose_langfuse_startup`, `shutdown_langfuse` | Tracing lifecycle |

@@ -5,7 +5,7 @@ The harness has two datasets and two ways to run them.
 | Dataset | What it describes | How it runs |
 | --- | --- | --- |
 | `default` | The v1 scenarios, preserved as evidence for the replays | A live capture against the serving agent, or a retained capture |
-| `v0` | The 16 governed v0 acceptance cases, derived from [the v0 contract](../../docs/refactor/agent-v0-contract.md) | The credential-free gate, which calls the query core directly |
+| `v0` | The 16 governed v0 acceptance cases, derived from the v0 contract that [ADR-0060](../../docs/decisions/adr-0060-retire-the-agent-v0-bundle.md) retired with the v0 bundle itself | The credential-free gate, which calls the query core directly |
 
 It persists one JSON artifact whose `by_metric` key groups every scored row under its metric name, and prints the same grouping as a table.
 Historical v1 replay, calibration, and instrument documents remain on disk as evidence, not as current operating instructions.
@@ -50,8 +50,13 @@ The gate is deliberately stricter than a rate. A percentage would let a false su
 ### Retired metrics on the governed path
 
 `sql_accuracy` and `memory` are retired for the v0 path and remain for the v1 replays.
-[#487](../../docs/refactor/agent-v0-sql-decision.md) decided a no-go on guarded SQL, so there is no SQL string to score, and v0 is single-turn, so there is no memory to score.
+The v0 path never wrote SQL and is single-turn, so there is no SQL string to score and no memory
+to score.
 A v0 case that declares either is rejected when the dataset loads.
+
+**This gate does not survive the v0 retirement.** ADR-0060 deletes the v0 bundle and, with it, the
+only deterministic CI gate on agent answer behavior. That record names the successor gate and makes
+merging the removal conditional on it. Read ADR-0060 before changing anything in this section.
 
 ## Live evaluation of the v1 scenarios
 

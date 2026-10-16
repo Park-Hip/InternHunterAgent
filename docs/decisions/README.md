@@ -40,6 +40,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0057](adr-0057-nightly-ingestion-restored.md) | Nightly VietnamWorks ingestion is restored | Product scope |
 | [ADR-0058](adr-0058-single-source-mvp-ingestion.md) | Ingestion is one authorized source feeding one serving table | Data governance |
 | [ADR-0059](adr-0059-no-stored-posting-lifecycle.md) | Posting lifecycle is not stored; the agent counts every posting ever collected | Data honesty |
+| [ADR-0060](adr-0060-retire-the-agent-v0-bundle.md) | The agent v0 bundle is retired and the legacy SQL query path serves permanently | Agent runtime |
 
 Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
 superseded by ADR-0052 and keep their files with a `Superseded by` status.
@@ -48,6 +49,10 @@ are superseded by ADR-0058 and keep their files with a `Superseded by` status.
 Record ADR-0038 (scheduled ingestion required for MVP) is superseded by ADR-0053, and ADR-0053 is
 itself superseded by ADR-0057 (nightly ingestion restored). Both keep their files with a
 `Superseded by` status.
+The six `docs/refactor/agent-v0-*` records - the v0 baseline, behavior and metric contract, legacy
+rule disposition, scenario disposition, SQL decision, and cutover - are superseded by ADR-0060 and
+retired from the working tree rather than kept with a status, because they described a bundle that
+no longer exists. Their content remains on git at `ca4eb9a`, and ADR-0060 lists what each decided.
 
 ## Retired decisions, and why they were not carried over
 

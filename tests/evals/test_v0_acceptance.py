@@ -12,12 +12,16 @@ Three layers, in order of what they prove:
    never modified and no expectation depends on the transaction.
 
 The v1 registry is the historical baseline and is deliberately not touched.
+
+ADR-0060 retired the v0 scenario disposition record along with the v0 bundle it
+described, and with it the two lineage assertions that graded that record's
+completeness: that every v1 scenario carried a disposition, and that every v0
+case named one. Their subject no longer exists, so there is nothing left for
+them to assert. The record's totals - 17 carried, 19 restated, 14 retired -
+and what each disposition meant are preserved in that ADR.
 """
 
 from __future__ import annotations
-
-import re
-from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -34,10 +38,6 @@ from evals.run import score_turn
 
 V0 = dataset("v0")
 V1_IDS = frozenset(s["id"] for s in dataset("default").scenarios())
-
-_DISPOSITION = (
-    Path(__file__).resolve().parents[2] / "docs" / "refactor" / "agent-v0-scenario-disposition.md"
-)
 
 CONTRACT_STATES = frozenset({"ANSWERED", "CLARIFIED", "UNSUPPORTED", "REFUSED"})
 CONTRACT_SHAPES = frozenset(
@@ -141,18 +141,6 @@ class TestStructure:
     def test_fixture_revision_is_pinned(self) -> None:
         raw = V0.path.read_text(encoding="utf-8")
         assert "evals/fixtures/seed_eval_db.sql" in raw
-
-    def test_every_v1_scenario_is_dispositioned(self) -> None:
-        doc = _DISPOSITION.read_text(encoding="utf-8")
-        rows = re.findall(r"^\| `([A-Z]+-[A-Z0-9-]+)` \| `(carried|restated|retired)` \|", doc, re.M)
-        assert len(rows) == len(V1_IDS) == 50
-        assert {sid for sid, _ in rows} == V1_IDS
-        assert len({sid for sid, _ in rows}) == 50
-
-    def test_every_v0_case_is_accounted_for_by_the_disposition(self) -> None:
-        doc = _DISPOSITION.read_text(encoding="utf-8")
-        named = set(re.findall(r"`(V0-[A-Z0-9-]+)`", doc))
-        assert named == set(cases()), "a v0 case with no v1 lineage is a silent addition"
 
     def test_every_case_declares_a_tool_contract(self) -> None:
         # #585: 17 of 19 cases declared none, which resolved to "no tool is

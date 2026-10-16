@@ -41,7 +41,7 @@ Hexagons are gates that can abort the run; cylinders are the three tables the mo
 flowchart TD
     T["Trigger: 02:00 UTC schedule or manual dispatch"] --> G1{{"Schema check"}}
     G1 --> G2{{"Robots preflight"}}
-    G2 --> F["Fetch: 8 queries x 2 pages, filter, dedup, cap"]
+    G2 --> F["Fetch: 8 queries x 2 pages, filter, dedup"]
     F --> R["Raw upsert"]
     R --> RAW[("raw_jobs")]
     R --> G3{{"Yield floor"}}
@@ -62,9 +62,9 @@ flowchart TD
 |---|---|---|---|---|
 | Schema check | Compares live `clean_jobs` columns with the ORM | `src/services/ingestion/safety.py` → `assert_clean_jobs_schema` | none | `safety_aborted` / `schema_check` |
 | Robots preflight | Fetches and evaluates robots.txt for the API host | `src/services/ingestion/compliance.py` → `RobotsPolicyGate` | none | `safety_aborted` / `fetch` |
-| Fetch | Builds the source from config, then queries, filters, dedups, caps, retries | `src/services/ingestion/sources/vietnamworks.py` → `VietnamWorksSource` | none | `failed` / `source_initialization` or `fetch` |
+| Fetch | Builds the source from config, then queries, filters, dedups, retries | `src/services/ingestion/sources/vietnamworks.py` → `VietnamWorksSource` | none | `failed` / `source_initialization` or `fetch` |
 | Raw upsert | Lands payloads, counts new, changed, unchanged | `src/services/ingestion/raw_store.py` → `upsert_raw_postings` | `raw_jobs` | `failed` / `raw_upsert` |
-| Yield floor | Aborts if fewer than `safety.min_yield` postings | `src/services/ingestion/safety.py` → `assert_min_yield` | none | `safety_aborted` / `yield_check` |
+| Yield floor | Aborts, and withholds the dead-man ping, if the fetch returned fewer than `safety.min_yield` postings | `src/services/ingestion/safety.py` → `assert_min_yield` | none | `safety_aborted` / `yield_check` |
 | Normalize, row quality | Maps each payload to a `NormalizedJob`, drops rows that break a rule, aborts above the ratio | `src/services/ingestion/normalize/vietnamworks.py` → `to_normalized_job`; `src/services/ingestion/safety.py` → `partition_by_row_quality`, `assert_rejection_ratio` | none | bad record dropped and counted; above the ratio `safety_aborted` / `row_quality_check` |
 | Clean upsert | Upserts accepted rows, refreshes `last_seen_at` | `src/services/ingestion/clean_store.py` → `upsert_clean_jobs` | `clean_jobs` | `failed` / `clean_upsert` |
 | Run summary, ping | Appends the attempt (best effort); pings the dead-man monitor if completed | `src/services/ingestion/run_store.py` → `persist_ingestion_run`; `src/services/ingestion/safety.py` → `send_dead_man_ping` | `ingestion_runs` | logged, outcome unchanged |
@@ -119,7 +119,6 @@ Each request sends one of these eight keywords (`queries`) as its `query` field:
 | Bound | Value | Source |
 |---|---|---|
 | Requests | 8 queries x 2 pages = 16, plus one robots GET, plus retries | `queries`, `api.pages_per_query` |
-| Records | at most 150 kept | `max_jobs` |
 | Time | no new request after 600 s; the page in flight still finishes | `api.max_elapsed_seconds` |
 
 **Retry ladder.**
@@ -285,12 +284,11 @@ All keys are in `config/ingestion.yaml`.
 | `robots.url`, `robots.target_path` | `ms.vietnamworks.com` robots.txt, `/job-search/v1.0/search` | Policy and path tested | exact API host, not `www`; `api.url` |
 | `robots.cache_ttl_seconds`, `robots.allow_404` | 300, true | Policy cache (idle in a one-shot run); permits the reviewed 404 | ADR-0034; `allow_404: false` blocks every run today |
 | `queries`, `job_function.parent_id`, `child_ids` | 8 AI/Data terms; 5, `[27]` | Keyword recall; precision filter | each query adds 2 requests; VietnamWorks' own taxonomy ids |
-| `max_jobs` | 150 | Safety ceiling, not a target | real yield is 105 to 113; raise before it binds |
-| `safety.min_yield`, `safety.max_rejected_ratio` | 20, 0.10 | Yield floor; abort threshold, strictly above | lowering either weakens a guard; ADR-0058 |
+| `safety.min_yield`, `safety.max_rejected_ratio` | 20, 0.10 | Collapsed-fetch abort (no green ping); drop-and-count abort threshold, strictly above | lowering either weakens a guard; ADR-0058 |
 | `role_taxonomy`, `city_alias_map` | 6 roles; 20 aliases | Title keywords, **order matters**; location aliases, order breaks ties | agent query vocabulary and prompts |
 | `tech_dictionary` | seed list | Input to `scripts/build_tech_vocabulary.py` only | runtime reads `config/tech_vocabulary.yaml` |
 
-Safe alone: `queries`, `max_jobs` (watch the yield), `api.delay_seconds`.
+Safe alone: `queries`, `api.delay_seconds`.
 Coupled: the timing keys to the workflow timeout; the role and city maps to serving prompts.
 
 ## 7. Changing it safely
@@ -317,8 +315,8 @@ Coupled: the timing keys to the workflow timeout; the role and city maps to serv
   Use a temporary tolerance in two steps, as #624 did.
 
 **Add a search query or change the filter.**
-Edit `queries` or `job_function`, run a manual dispatch, and check `fetched` stays between
-`safety.min_yield` and `max_jobs`; each query adds two requests.
+Edit `queries` or `job_function`, run a manual dispatch, and check `fetched` stays well above
+`safety.min_yield`; each query adds two requests.
 
 **Add a second source.**
 Write a new ADR first (ADR-0058 requires it), then a small source interface, a second normalizer,

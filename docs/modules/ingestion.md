@@ -327,12 +327,11 @@ The tables already key on `(source, external_id)`; the loader calls VietnamWorks
 
 **Limits.**
 
-- Role, location, and tech-stack accuracy is unmeasured; the defects below are tracked in #632.
-- The role classifier reads the title only, as a substring match.
-  `jobFunction` filters the fetch but is not used for the role, although the YAML comment and the
-  `classify_role` docstring describe a tiebreaker.
-  "Senior HTML Engineer" contains `ml engineer`, so it becomes ML Engineer.
-- Short technology names match plain prose: "go to market" and "R&D" yield `Go`, `R`, and `D`.
+- Role, location, and tech-stack accuracy is unmeasured; the residual defects are tracked in #632.
+- The role classifier reads the title only, as a case-insensitive whole-keyword match.
+  `jobFunction` filters the fetch but is not used for the role.
+- Short technology names can still read common prose as tech when the casing happens to match
+  (for example a standalone "R" or "D" that is not an "R&D"-style abbreviation).
 - Unknown cities become `"Other"`, `is_internship` ignores the title, and the corpus only grows
   with no listing history.
 

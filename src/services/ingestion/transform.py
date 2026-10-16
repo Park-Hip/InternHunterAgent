@@ -43,6 +43,32 @@ def derive_is_internship(job_level: str | None, job_level_vi: str | None) -> boo
     return "intern" in blob or "thực tập" in blob
 
 
+def _tech_alias_pattern(alias: str) -> re.Pattern[str]:
+    """Compile the match pattern for one tech-vocabulary alias.
+
+    Every alias is pinned on both sides to a non-word boundary, so short names
+    are never matched inside larger words ("R" inside "Keras", "Go" inside
+    "MongoDB"). Short alphabetic names get two extra guards because they are
+    ambiguous in free text:
+
+    * one-letter names match case-sensitively and are rejected when joined to
+      a neighbour by "&" (so "R" and "D" inside "R&D" are not read as
+      languages);
+    * two-letter alphabetic names match case-sensitively (so the verb "go" is
+      not read as the Go language).
+
+    Longer names and names carrying punctuation (C#, C++, Node.js) keep the
+    default case-insensitive matching.
+    """
+    boundary = r"(?<!\w)" + re.escape(alias) + r"(?!\w)"
+    short_alpha = len(alias) <= 2 and alias.isascii() and alias.isalpha()
+    if len(alias) == 1 and short_alpha:
+        return re.compile(r"(?<![\w&])" + re.escape(alias) + r"(?![\w&])")
+    if short_alpha:
+        return re.compile(boundary)
+    return re.compile(boundary, re.IGNORECASE)
+
+
 def find_tech_stack(*text_sources: str) -> str | None:
     """Extract canonical technologies from source tags and description text."""
     combined = " ".join(text_sources)
@@ -71,11 +97,9 @@ def find_tech_stack(*text_sources: str) -> str | None:
         key=lambda item: (len(item[0]), item[0].casefold()),
         reverse=True,
     ):
-        # Use negative lookbehind/lookahead instead of \b so that non-word
-        # characters in tech names (e.g. C#, C++, Node.js) are handled correctly.
-        pattern = r"(?<!\w)" + re.escape(alias) + r"(?!\w)"
+        pattern = _tech_alias_pattern(alias)
         canonical_key = canonical.casefold()
-        if canonical_key not in seen and re.search(pattern, combined, re.IGNORECASE):
+        if canonical_key not in seen and pattern.search(combined):
             found.append(canonical)
             seen.add(canonical_key)
     return ", ".join(found) if found else None
@@ -84,16 +108,21 @@ def find_tech_stack(*text_sources: str) -> str | None:
 def classify_role(title: str, job_function_children: list[dict] | None) -> str:
     """Map a raw job title to a canonical role label using the ingestion_yaml taxonomy.
 
-    Iterates role_taxonomy in YAML order; first keyword match wins (case-insensitive
-    substring of the lowercased title). jobFunction child id 27 (AI/Data cluster) is
-    available as a tiebreaker for ambiguous titles, though first-match-wins covers
-    the current keyword set. Unmatched titles return "Other".
+    Iterates role_taxonomy in YAML order; the first matching keyword wins.
+    Keywords are matched as whole, case-insensitive phrases against the
+    lowercased title, never raw substrings, so "ml engineer" does not match
+    inside "html engineer". Unmatched titles return "Other".
+
+    job_function_children is not consulted: the role is derived from the title
+    alone. The parameter remains only to keep the VietnamWorks normalizer's call
+    shape.
     """
     title_lower = title.lower()
     taxonomy: dict[str, dict] = settings.ingestion_yaml["role_taxonomy"]
     for role, config in taxonomy.items():
         for keyword in config["keywords"]:
-            if keyword in title_lower:
+            pattern = r"(?<!\w)" + re.escape(keyword.lower()) + r"(?!\w)"
+            if re.search(pattern, title_lower):
                 return role
     return "Other"
 

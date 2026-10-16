@@ -3,8 +3,8 @@
 > **Eviction:** A section leaves when the implementation it explains is retired or its decision is
 > superseded.
 
-This document owns product scope, architecture, agent runtime, serving, schema evolution, and
-ingestion design.
+This document owns product scope, architecture, agent runtime, serving, and schema evolution.
+Ingestion design lives in the [ingestion module guide](modules/ingestion.md).
 Operational procedures live in [how-to/operate.md](how-to/operate.md); evaluation in
 [how-to/evaluate.md](how-to/evaluate.md); configuration and stack in
 [reference/configuration.md](reference/configuration.md).
@@ -861,153 +861,12 @@ deliberate cheap-growth path.
   holds postings that have dropped out of search and cannot be re-fetched, met the second.
 - **Migrations are only half the problem.** A create-if-not-exists silently no-ops on a table whose
   columns drifted out-of-band, which a migration tool does not detect. That is why ingestion carries
-  a separate pre-flight column assertion; see section 6.4.
+  a separate pre-flight column assertion; see the
+  [ingestion module guide](modules/ingestion.md).
 
 
 ## 6. Ingestion pipeline
 
-## 6. Ingestion pipeline
-
-Ingestion is offline batch tooling under `src/services/ingestion/`, isolated from the request
-pipeline by the layer law in section 2.2.
-It runs as a re-runnable CLI, invoked nightly by the workflow's `schedule:` trigger and on manual
-`workflow_dispatch`, never inside an API request.
-VietnamWorks is the selected first source under the recorded robots and terms decision (D-034).
-
-**Design intent: source-agnostic.**
-Version one ingests VietnamWorks only, but the schema, cleaning, and interfaces are built so a
-future board is a new adapter and normalizer with **no table reshape**.
-Only two components ever know a source's specifics - the **adapter** that fetches and the
-**normalizer** that maps payload to common shape.
-Everything downstream is shared.
-
-### 1 Dataflow and tables
-
-```text
-JobSource (VietnamWorks) --RawPosting--> raw_jobs   verbatim landing, upsert on (source, external_id)
-   -> Normalizer (source-specific: payload -> NormalizedJob)
-   -> Transform (shared, deterministic, no model call, no network):
-        HTML to text, internship flag, tech-stack keyword finder, role taxonomy, city-alias map
-   -> Loader: upsert into clean_jobs on (source, external_id)
-```
-
-**Tables.**
-
-- **`raw_jobs`**, the current verbatim landing table: id, source, external id, source URL, the raw
-  payload as JSON, a content hash, and a fetch timestamp, unique on `(source, external_id)`. Each
-  natural-key upsert overwrites the current payload and hash; it does not retain payload history.
-  It lives in the application database alongside the served table, never in Langfuse's Postgres.
-- **`clean_jobs`**, enriched and agent-facing: the posting title, company, description, and tech
-  stack, plus canonical role, source and external id, source URL, creation and listing-expiry
-  dates, an internship flag, job level, canonical location, and structured salary as minimum,
-  maximum, currency, and a negotiable flag. The title stays the raw posting title while role and
-  location hold canonical normalized values. Unique on `(source, external_id)`. Hidden lifecycle
-  columns carry first-seen and last-seen timestamps.
-
-**`description` is a single merged free-text blob** combining job description, requirements, and
-benefits.
-There are deliberately **no separate requirement or benefits columns**, because one blob is the
-common shape across boards.
-VietnamWorks supplies them separately and its normalizer concatenates them back; they survive
-verbatim in the raw table either way.
-
-### 2 Deterministic cleaning
-
-All transforms are pure, unit-tested, and contain no model or network call.
-That keeps ingestion testable and aligned with the no-over-engineering rule; model-based extraction
-is a deferred future enhancement.
-
-- **`tech_stack`.** A keyword finder matches the source skills array and the description text
-  against a curated technology vocabulary in configuration, keeps technologies only and drops
-  role or category labels, dedups, and emits the comma-separated string the agent expects.
-- **`role`.** A role taxonomy maps the messy title into a fixed canonical set - AI Engineer, Data
-  Scientist, Data Engineer, Data Analyst, ML Engineer, Software Developer - using keyword and
-  pattern rules with the source job function as a tiebreaker. Unmatched titles fall to `Other` and
-  are never dropped.
-- **`location`.** A city alias map collapses messy location text to a unified city or province, so
-  the several spellings of Hanoi and of Ho Chi Minh City each converge. Multiple cities become a
-  comma-separated canonical set, and the street address is discarded.
-- **`description`.** Source text is merged into one free-text blob with HTML stripped, giving one
-  shape across all sources and one field for the agent to read.
-- **Salary** is mapped into **structured** fields rather than a display string, so the agent can
-  range-filter and sort, which is the core "pay at least X" query. Currency is required whenever a
-  number is present, because the source mixes currencies. VietnamWorks maps its numeric fields
-  directly and derives the negotiable flag from salary visibility; a future string-only board parses
-  its salary string deterministically, or else leaves the numbers null and marks it negotiable.
-
-Because the enriched columns are agent-visible, the schema context, the SQL-generation prompt, and
-the honesty rules all move with them.
-Notably, salary is numeric and currency-scoped - filter within one currency - and may be null or
-negotiable, which is "may be missing or negotiable for some postings", not "not in the data".
-That is the column-cheap schema growth of the schema-evolution section, applied.
-
-### 3 Identity, idempotency, and configuration
-
-Upsert on `(source, external_id)` compares the incoming content hash with the stored hash before
-refreshing the current raw row, recording per-run new, changed, and unchanged counters without
-creating history. Re-running identical postings is therefore idempotent rather than duplicating,
-and a partial run cannot shrink the served corpus.
-A tunable maximum bounds a run.
-
-Load semantics are **accumulate, never wipe**.
-There is no truncate-and-reinsert; the upsert refreshes a hidden `last_seen_at` on every sighting, and
-nothing is expired or deleted (ADR-0059).
-This is what makes running the CLI against the production database safe.
-
-Everything tunable lives under `ingestion.*` in `config/settings.yaml`: the API URL, the AI and data
-keyword queries, job-function ids, the run cap, the delay, the user agent, the technology
-vocabulary, the role taxonomy, and the city alias map.
-Internal records and the table models live in the ingestion package's `models.py`, per project
-convention.
-
-The [vendored technology vocabulary sources](../data/vendor/README.md) record the inputs to the
-vocabulary builder.
-
-### 4 Unattended-run safety
-
-Once the CLI runs unattended on a schedule against the live database, "it failed and someone
-noticed" stops being a reliable control.
-`src/services/ingestion/safety.py` supplies four checks, and `src/services/ingestion/loader.py`
-orders them so that **every abort happens before the write it protects**.
-
-- **Schema assertion, pre-flight, before anything is fetched.** It queries the live information
-  schema for the served table and compares against the column set **derived from the ORM, never
-  hand-maintained** - that is the whole point, since a hand-copied column list is exactly the
-  artifact that drifts. It reports both directions, missing and unexpected, and treats an empty
-  column set as "table absent" with its own message rather than listing every column as missing. It
-  runs **first**, before the source is constructed, so a drifted schema costs zero fetches and zero
-  writes. This is the *detection* half of the schema-drift problem; migrations are the *correction*
-  half, and they cannot detect a database altered out of band.
-- **Minimum-yield assertion, after the raw upsert and before the clean upsert.** It raises when a
-  run returns implausibly few postings, bounded by `ingestion.safety.min_yield`. The placement is
-  deliberate and load-bearing in two ways. The raw table is written *first*, so a bad run still
-  preserves its evidence for diagnosis. And the abort lands *before* the clean upsert.
-- **Row-quality partition, after normalization and before the clean upsert.** Each normalized row
-  is checked against the row-quality invariants - a required non-blank `title` and `company`, finite
-  salary bounds that never invert (`salary_min > salary_max` when both are present) and never contain
-  `NaN` or infinity, and a `listing_expires_on` that never precedes `posted_date` when both are
-  present. A row that violates any invariant is dropped and counted in `ingestion_runs.skipped`, which
-  now totals parse failures plus quality rejections; a row violating several invariants is dropped
-  once but counted under each one. The raw table is written *before* this gate, so a violating run
-  still preserves its evidence. The run aborts with `IngestionSafetyError` in phase
-  `row_quality_check` only when the dropped count exceeds `ingestion.safety.max_rejected_ratio`
-  (0.10) of the fetched total, so exactly 10% still passes; an abort lands *before* the clean upsert,
-  exactly like the yield floor. The warning log reports one aggregate count
-  per violated invariant plus a parse-failure count and never a posting identifier, so the log and
-  persisted summary name the invariant without leaking job data. A dropped row's `last_seen_at` is
-  not refreshed that day.
-- **Dead-man-switch ping, last, and only on a fully green run.** It posts to an optional monitor URL
-  and never raises: an unset URL logs a skip and returns false, the normal local path rather than an
-  error, and any HTTP failure logs a failure and returns false. **The signal is the withheld ping,
-  not a sent alert** - the monitor alerts on *silence*, which is what makes it a dead man's switch
-  rather than one more thing that can fail quietly.
-
-The library and process split is kept clean.
-The run function stays library code and lets the safety error propagate; the CLI entrypoint owns the
-process contract, catching it, logging the abort, and exiting non-zero.
-Nothing in this module imports or is imported by the request path.
-
-**Deferred.** Other boards, anti-bot scrapers, model-based extraction, parsing a salary *string*
-into numbers, translating source text to a single language, and cross-board deduplication are out of
-scope.
-
+Ingestion is offline batch tooling: one source (VietnamWorks), run nightly, copying raw to clean
+with every safety gate placed before the write it protects, and never inside an API request.
+The design is owned by the [ingestion module guide](modules/ingestion.md).

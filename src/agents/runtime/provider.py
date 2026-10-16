@@ -12,6 +12,26 @@ from src.core.config import (
 )
 
 
+class ProviderCredentialError(ValueError):
+    """A selected serving deployment has no usable API key. Refuses to serve."""
+
+
+def _resolve_deployment_credential(deployment: AgentDeployment, profile: str) -> str:
+    """Read one deployment's key for the boot guard and for model construction.
+
+    The serving lifespan refuses to start when this raises, and ``build_model``
+    raises the same way on first use, so the two cannot drift apart.
+    """
+    api_key = get_configured_secret(deployment.api_key_env)
+    if api_key is None:
+        raise ProviderCredentialError(
+            f"agent.{profile}.deployment is '{deployment.name}' but "
+            f"{deployment.api_key_env} is unset or empty. "
+            "Set it in .env or the Render dashboard; see docs/how-to/operate.md."
+        )
+    return api_key
+
+
 def provider_options_to_model_kwargs(deployment: AgentDeployment) -> dict[str, Any]:
     """Translate validated, provider-specific options for LiteLLM's request shape."""
 
@@ -45,14 +65,17 @@ class AgentProvider:
 
         return self.deployment_for(profile).provider
 
+    def assert_profile_credential(self, profile: str) -> None:
+        """Refuse when the profile's selected deployment has no usable key.
+
+        The serving lifespan calls this before the checkpointer pool opens, so a
+        deploy that would fail every question refuses to start instead.
+        """
+        _resolve_deployment_credential(self.deployment_for(profile), profile)
+
     def build_model(self, profile: str = "react") -> BaseChatModel:
         deployment = self.deployment_for(profile)
-        api_key = get_configured_secret(deployment.api_key_env)
-        if api_key is None:
-            raise ValueError(
-                f"agent.{profile}.deployment is '{deployment.name}' but "
-                f"{deployment.api_key_env} is unset"
-            )
+        api_key = _resolve_deployment_credential(deployment, profile)
 
         profile_config = deployment.profile
         max_retries = (

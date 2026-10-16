@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from litellm import get_optional_params
 
-from src.agents.runtime.provider import AgentProvider
+from src.agents.runtime.provider import AgentProvider, ProviderCredentialError
 from src.core.config import ConfigLoadError, validate_agent_config
 
 
@@ -141,6 +141,11 @@ def test_thinking_enabled_omits_the_deepseek_override(
     assert mock_chat_litellm.call_args.kwargs["model_kwargs"] == {}
 
 
+def test_provider_credential_error_is_a_value_error() -> None:
+    """Callers that catch ValueError keep working; only the type name is new."""
+    assert issubclass(ProviderCredentialError, ValueError)
+
+
 @patch("src.agents.runtime.provider.settings")
 def test_missing_selected_credential_names_the_profile(
     mock_settings, monkeypatch: pytest.MonkeyPatch
@@ -148,8 +153,44 @@ def test_missing_selected_credential_names_the_profile(
     mock_settings.config_yaml = _agent_config()
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
-    with pytest.raises(ValueError, match="agent.react.deployment.*DEEPSEEK_API_KEY"):
+    with pytest.raises(
+        ProviderCredentialError,
+        match=r"agent\.react\.deployment.*DEEPSEEK_API_KEY is unset or empty",
+    ):
         AgentProvider().build_model("react")
+
+
+@patch("src.agents.runtime.provider.settings")
+def test_whitespace_selected_credential_is_refused(
+    mock_settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mock_settings.config_yaml = _agent_config()
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "   ")
+
+    with pytest.raises(
+        ProviderCredentialError, match="DEEPSEEK_API_KEY is unset or empty"
+    ):
+        AgentProvider().build_model("react")
+
+
+@patch("src.agents.runtime.provider.settings")
+def test_assert_profile_credential_matches_build_model(
+    mock_settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The boot guard and first-use construction share one refusal."""
+    mock_settings.config_yaml = _agent_config()
+    provider = AgentProvider()
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-test-key")
+    provider.assert_profile_credential("react")
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "   ")
+    with pytest.raises(ProviderCredentialError) as guard_error:
+        provider.assert_profile_credential("react")
+    with pytest.raises(ProviderCredentialError) as model_error:
+        provider.build_model("react")
+
+    assert str(guard_error.value) == str(model_error.value)
 
 
 @patch("src.agents.runtime.provider.ChatLiteLLM")

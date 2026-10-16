@@ -30,7 +30,8 @@ Those stores have separate owners, lifecycles, and schemas, and no overlap.
 The database URL and the agent-read database URL are required at boot.
 The Langfuse keys are optional and enable tracing plus managed prompt resolution when present.
 Without them, the service uses its reviewed release-pinned prompt fallbacks and disables tracing.
-Provider keys are optional at boot and validated by the branch that needs them, so a checkout runs with only the selected provider's key.
+The provider key for every deployment a served profile selects is required at boot: the serving lifespan refuses to start when it is unset or empty, naming the variable.
+Declared but unselected deployments stay optional, so a checkout runs with only the selected provider's key.
 
 The agent-facing SQL-read path uses `AGENT_DATABASE_URL`, a dedicated least-privilege credential
 backed by a separate PostgreSQL role with `SELECT` only on `clean_jobs`. The writer paths

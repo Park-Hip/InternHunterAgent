@@ -18,10 +18,12 @@ class ConfigLoadError(Exception):
 
 
 class Settings(BaseSettings):
-    # Every provider key is optional here, and validated by the branch that needs it.
-    # Two providers can serve (deepseek, groq) and a third hosts the judge (OpenRouter),
-    # so no single key is required to boot: requiring one would break a checkout that
-    # holds only the selected provider's key. See D-045 in docs/Decision_Log.md.
+    # Every provider key is optional here; the serving lifespan validates the
+    # deployment each served profile selects before the pool opens. Two providers
+    # can serve (deepseek, groq) and a third hosts the judge (OpenRouter), so no
+    # single key is required to load settings: requiring one would break a
+    # checkout that holds only the selected provider's key. See
+    # docs/decisions/adr-0045-deepseek-serves-the-agent.md.
     GROQ_API_KEY: str | None = None
     GOOGLE_API_KEY: str | None = None
     OPENROUTER_API_KEY: str | None = None

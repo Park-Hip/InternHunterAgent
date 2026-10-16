@@ -1,6 +1,6 @@
 # DeepSeek serves the agent, on measured throughput
 
-> **Status:** Active · **Decided:** 2026-08-15
+> **Status:** Active · **Decided:** 2026-08-15 · **Amended:** 2026-10-16
 
 ## Context
 
@@ -16,7 +16,8 @@ difference; the decision was taken at step 4.
 ## Consequences
 
 Driver turn pacing moved to 0 (it existed for Groq's per-minute ceiling).
-No provider key is required at boot; each branch validates its own.
+The deployment a served profile selects must carry its key at boot (amended 2026-10-16 by #641): the serving lifespan refuses to start when it is unset or empty, naming the variable, instead of booting green and failing every question.
+Each branch still validates its own key on first use, and a declared deployment no served profile selects stays optional.
 The Groq branch stays selectable - two working branches keep the provider seam honest, and DeepSeek
 has no free tier to fall back on.
 

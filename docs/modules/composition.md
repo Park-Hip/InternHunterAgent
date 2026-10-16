@@ -26,8 +26,8 @@ paid here and nowhere else.
 **What it owns.**
 
 - The process's single FastMCP job-query server, built once and shared by the agent and `/mcp`.
-- The boot order: two database guards, the checkpointer pool, the Langfuse client, prompt warming,
-  tool discovery, the runtime, and a non-fatal Langfuse check.
+- The boot order: two database guards, the served-credential guard, the checkpointer pool, the
+  Langfuse client, prompt warming, tool discovery, the runtime, and a non-fatal Langfuse check.
 - The teardown order: the diagnostic task, then Langfuse, then the pool.
 - Both ends of the Langfuse client's life: `init_langfuse` creates it after the guards, and the
   teardown chain drains it. Importing the tracing module has no side effect.
@@ -65,20 +65,21 @@ flowchart TD
         direction TB
         L2{{"Schema guard: clean_jobs columns"}}
         L2 --> L3{{"Privilege guard: agent role reads, cannot write"}}
-        L3 --> L4["Open checkpointer pool"]
-        L4 --> L4B["Initialize Langfuse: client created or disabled"]
-        L4B --> L5{{"Checkpointer setup"}}
-        L5 --> L6{{"Warm prompts"}}
-        L6 --> L7{{"Discover MCP tools"}}
-        L7 --> L8["app.state.runtime, stream observation factory"]
-        L8 --> L9["Start Langfuse auth diagnostic, not awaited"]
-        L9 --> SERVE(["Serve requests"])
+        L3 --> L4{{"Credential guard: served deployments have keys"}}
+        L4 --> L5["Open checkpointer pool"]
+        L5 --> L5B["Initialize Langfuse: client created or disabled"]
+        L5B --> L6{{"Checkpointer setup"}}
+        L6 --> L7{{"Warm prompts"}}
+        L7 --> L8{{"Discover MCP tools"}}
+        L8 --> L9["app.state.runtime, stream observation factory"]
+        L9 --> L10["Start Langfuse auth diagnostic, not awaited"]
+        L10 --> SERVE(["Serve requests"])
     end
     IMPORT -->|"uvicorn starts the lifespan"| LIFESPAN
     SERVE -.->|shutdown| T1["Cancel and await diagnostic"]
     T1 -.-> T2["Shut down Langfuse"]
     T2 -.-> T3["Close pool"]
-    L5 & L6 & L7 -.->|raise| T2
+    L6 & L7 & L8 -.->|raise| T2
 ```
 
 ## 3. Stage by stage
@@ -90,6 +91,7 @@ flowchart TD
 | App | Builds FastAPI with the lifespan, and `/mcp` before the static catch-all if enabled | `src/api/app.py` → `create_app` | Import fails |
 | Schema guard | Live `clean_jobs` columns must equal `EXPECTED_COLUMNS` exactly | `src/api/schema_guard.py` → `assert_serving_schema` | `SchemaGuardError`; uvicorn exits 3 |
 | Privilege guard | Agent role reads the 16 visible columns and is refused a write | `src/api/privilege_guard.py` → `assert_agent_privileges` | `AgentPrivilegeError`; skipped with a warning if the DSNs name different databases |
+| Credential guard | Each served profile's selected deployment has a nonempty API key | `src/agents/runtime/provider.py` → `AgentProvider.assert_profile_credential` | `ProviderCredentialError`; uvicorn exits 3 |
 | Pool | Creates and opens the checkpointer pool without waiting for a connection | `src/core/checkpointer.py` → `build_checkpointer_pool` | - |
 | Langfuse init | Creates the client and callback handler when both keys are set and `LANGFUSE_ENABLED` is not false; never raises | `src/agents/tracing/langfuse.py` → `init_langfuse` | Logged; tracing disabled; boot continues |
 | Checkpointer | Creates or migrates LangGraph's checkpoint tables on `DATABASE_URL` | `src/core/checkpointer.py` → `build_checkpointer` | Raises; pool closed |
@@ -102,9 +104,11 @@ flowchart TD
 uvicorn accepts no request until the lifespan finishes, so a guard that raises means the process
 never answers, and a deploy never passes Render's `/api/v1/health` check.
 That is the point: the schema guard turns a renamed column into a refused boot instead of a 500 on
-the first question, and the privilege guard does the same for a lost `GRANT` after a table rebuild
-(#509).
-Both run in a worker thread (`asyncio.to_thread`) because they use synchronous SQLAlchemy.
+the first question, the privilege guard does the same for a lost `GRANT` after a table rebuild
+(#509), and the credential guard does the same for a missing provider key that would otherwise fail
+every question (#641).
+The database guards run in a worker thread (`asyncio.to_thread`) because they use synchronous
+SQLAlchemy; the credential guard only reads settings, so it runs inline.
 Each connection attempt is bounded by the service-owned `database.connect_timeout_seconds` (10 s),
 so an unreachable database refuses boot with `SchemaGuardError` within the bound whatever the DSN
 carries (#642).
@@ -174,8 +178,9 @@ one pool, one runtime, and one MCP server per deploy.
 
 ## 5. Reading a boot
 
-A healthy boot logs, in order: `api.schema_ok`, `api.agent_privileges_ok`, and
-`langfuse.prompts_prefetched` (with each prompt's version and the served system surface).
+A healthy boot logs, in order: `api.schema_ok`, `api.agent_privileges_ok`,
+`api.provider_credentials_ok` (with the profiles checked), and `langfuse.prompts_prefetched` (with
+each prompt's version and the served system surface).
 The Langfuse authentication result lands near uvicorn's `Application startup complete`, before
 or after it, because the diagnostic is not awaited.
 
@@ -186,6 +191,7 @@ or after it, because the diagnostic is not awaited.
 | `api.schema_drift`, `SchemaGuardError`, `Application startup failed`, exit 3 | Lifespan | `clean_jobs` differs from `EXPECTED_COLUMNS`; a migration and the guard disagree |
 | `AgentPrivilegeError` naming the operate how-to | Lifespan | The agent role lost `SELECT` or can write; re-apply the role steps |
 | `api.agent_privilege_check_skipped` | Lifespan | The two DSNs name different databases; nothing was checked |
+| `ProviderCredentialError` naming the variable and the operate how-to | Lifespan | A deployment a served profile selects has no key; set it in the Render dashboard and redeploy |
 | `SchemaGuardError` naming `connection timeout expired`, `Application startup failed`, exit 3 | Lifespan | The database is unreachable; the connect attempt is bounded by `database.connect_timeout_seconds`, see section 6 |
 | `Langfuse startup authentication failed` | After boot | Tracing keys are wrong; serving is unaffected |
 
@@ -200,6 +206,10 @@ or after it, because the diagnostic is not awaited.
 - **Database connection attempts are bounded by the service, not the DSN.** Both engines and the
   checkpointer pool carry `database.connect_timeout_seconds` (10 s), so an unreachable database
   refuses boot with `SchemaGuardError` within the bound whatever the DSN string carries (#642).
+- **Served deployments carry their keys at boot.** The credential guard checks the deployments the
+  served tool surface can invoke, `react` always and `sql_generation` while the v1 tool set is
+  registered, so the declared but unselected Groq arm stays optional and a checkout needs only the
+  selected provider's key (#641).
 - **Tracing never blocks boot.** Langfuse is optional: prompts fall back to the reviewed YAML text,
   the client is created locally with no network round trip, and the credential check is
   fire-and-track so boot never waits on a response.
@@ -208,18 +218,12 @@ or after it, because the diagnostic is not awaited.
 
 **Would now be decided differently.** Each was observed by running the code on 2026-10-16, and
 each is tracked by its own follow-up issue.
-Three of the four observations have since been resolved: configuration failing at import while the
-lifespan pretended to load it (#640, now the second deliberate choice above), an unreachable
-database hanging boot (#642, now a deliberate choice above), and composition shutting down a
-Langfuse client it did not create (#643: the client is now created by `init_langfuse` in the
-lifespan, and importing the tracing module has no side effect).
-
-1. **A missing provider key does not stop boot.**
-   The model is built on the first request (`AgentRuntime` compiles one agent per prompt version),
-   so a missing `DEEPSEEK_API_KEY` boots green.
-   Every question then fails: `/api/v1/agent/chat` returns a 500, and the stream returns 200 with
-   an `error` event (`internal_error`, not retryable); only the log names the missing key (#641).
-   Building or validating the `react` deployment in the lifespan would move that to boot.
+All four observations have since been resolved: configuration failing at import while the lifespan
+pretended to load it (#640, now the second deliberate choice above), a missing provider key booting
+green and failing every question (#641, now a deliberate choice above), an unreachable database
+hanging boot (#642, now a deliberate choice above), and composition shutting down a Langfuse client
+it did not create (#643: the client is now created by `init_langfuse` in the lifespan, and
+importing the tracing module has no side effect).
 
 ## 7. Changing it safely
 
@@ -231,7 +235,7 @@ If routes need it, pass it through `app.state` for now, and note it on the seam 
 **Add a boot guard.**
 Put it before `build_checkpointer_pool`, so a refusal leaves nothing to tear down.
 Run synchronous database work through `asyncio.to_thread`, raise a named error, and say in the
-message which procedure fixes it, as `AgentPrivilegeError` does.
+message which procedure fixes it, as `AgentPrivilegeError` and `ProviderCredentialError` do.
 
 **Change the tool surface.**
 Edit `create_job_mcp_server`, not composition; the agent and `/mcp` follow automatically.
@@ -251,6 +255,7 @@ that import `src.serving.composition` all name it; move them in one pull request
 | `src/api/app.py` → `create_app`, `_register_mcp_before_static` | How the lifespan and `/mcp` are attached |
 | `src/api/schema_guard.py` → `assert_serving_schema`, `EXPECTED_COLUMNS` | Schema guard |
 | `src/api/privilege_guard.py` → `assert_agent_privileges` | Privilege guard |
+| `src/agents/runtime/provider.py` → `AgentProvider.assert_profile_credential`, `build_model` | Credential guard and model construction |
 | `src/core/checkpointer.py` → `build_checkpointer_pool`, `build_checkpointer` | Pool and checkpoint tables |
 | `src/core/db.py` → `connect_timeout_seconds` | The service-owned connect bound carried by both engines and the checkpointer pool |
 | `src/core/config.py` → `load_settings`, `ConfigLoadError` | The import-time configuration contract |

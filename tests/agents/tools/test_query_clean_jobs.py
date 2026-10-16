@@ -297,7 +297,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         fake_provider = mock_provider.return_value
         fake_provider.build_model.return_value = fake_model
         fake_provider.deployment_for.return_value = SimpleNamespace(
-            model="deepseek/deepseek-v4-flash"
+            model="deepseek/deepseek-flash"
         )
         fake_client = _RecordingLangfuseClient()
 
@@ -318,7 +318,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
             fake_client.observation_kwargs["name"], SQL_GENERATION_OBSERVATION_NAME
         )
         self.assertEqual(
-            fake_client.observation_kwargs["model"], "deepseek/deepseek-v4-flash"
+            fake_client.observation_kwargs["model"], "deepseek/deepseek-flash"
         )
         self.assertIs(
             fake_client.observation_kwargs["prompt"],

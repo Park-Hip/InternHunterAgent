@@ -77,7 +77,7 @@ agent:
   providers:
     approved_deployment:
       provider: deepseek
-      model: deepseek/deepseek-v4-flash
+      model: deepseek/deepseek-flash
       api_key_env: DEEPSEEK_API_KEY
   react:
     deployment: approved_deployment

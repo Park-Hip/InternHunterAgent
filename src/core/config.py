@@ -332,6 +332,29 @@ def _validate_prompt_config(config: dict[str, Any]) -> None:
         )
 
 
+def _validate_database_config(config: dict[str, Any]) -> None:
+    """Reject a malformed connect bound before any engine can be built.
+
+    The bound must never be absent: libpq's own default is to wait forever, and
+    that is what left uvicorn at "Waiting for application startup." on an
+    unreachable database (#642).
+    """
+    database = config.get("database")
+    if not isinstance(database, dict):
+        raise ConfigLoadError("Missing 'database' section in config/settings.yaml")
+
+    connect_timeout = database.get("connect_timeout_seconds")
+    if (
+        isinstance(connect_timeout, bool)
+        or not isinstance(connect_timeout, int)
+        or connect_timeout <= 0
+    ):
+        raise ConfigLoadError(
+            "database.connect_timeout_seconds must be a positive integer "
+            "in config/settings.yaml"
+        )
+
+
 def _validate_api_config(config: dict[str, Any]) -> None:
     """Reject an invalid stream heartbeat before the application starts."""
     api = config.get("api")
@@ -428,6 +451,7 @@ def load_settings(*, force_reload: bool = False) -> Settings:
         raise ConfigLoadError(_format_validation_error(exc)) from exc
 
     settings.config_yaml = _load_yaml_file(_config_path("settings.yaml"))
+    _validate_database_config(settings.config_yaml)
     _validate_api_config(settings.config_yaml)
     _validate_prompt_config(settings.config_yaml)
     _validate_observability_config(settings.config_yaml)

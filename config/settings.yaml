@@ -1,3 +1,10 @@
+database:
+  # Bounds every connection attempt (TCP, TLS, authentication) the process
+  # makes: boot guards, agent queries, and checkpointer pool workers. The value
+  # wins over any connect_timeout in a DSN, and libpq's own default would wait
+  # forever, so an unreachable database refuses boot instead of hanging it.
+  connect_timeout_seconds: 10
+
 api:
   docs_enabled: true
   rate_limit: "15/minute"

@@ -1,9 +1,13 @@
+import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from psycopg_pool import AsyncConnectionPool
 
+from src.core import checkpointer as checkpointer_module
+from src.core import db as db_module
 from src.core.checkpointer import _checkpointer_dsn, build_checkpointer, build_checkpointer_pool
+from src.core.db import connect_timeout_seconds
 
 
 def test_checkpointer_dsn_strips_sqlalchemy_driver_suffix() -> None:
@@ -20,6 +24,31 @@ def test_build_checkpointer_pool_uses_required_kwargs() -> None:
     assert pool.kwargs["prepare_threshold"] == 0
     assert "+psycopg" not in pool.conninfo
     assert pool._check is AsyncConnectionPool.check_connection
+    assert pool.kwargs["connect_timeout"] == connect_timeout_seconds()
+
+
+@pytest.mark.asyncio
+async def test_pool_open_does_not_wait_for_an_unreachable_database(monkeypatch) -> None:
+    """Issue #642: without `wait=True`, `open()` starts workers and returns.
+
+    The pool's own 30 s acquisition timeout and its 5 s close timeout stay the
+    outer bounds; the connect attempts themselves carry the configured bound.
+    """
+
+    class _Unreachable:
+        DATABASE_URL = "postgresql+psycopg://u:p@127.0.0.1:1/db"
+        config_yaml = {"database": {"connect_timeout_seconds": 1}}
+
+    monkeypatch.setattr(checkpointer_module, "settings", _Unreachable())
+    monkeypatch.setattr(db_module, "settings", _Unreachable())
+
+    pool = build_checkpointer_pool()
+    started = time.monotonic()
+    await pool.open()
+    try:
+        assert time.monotonic() - started < 5
+    finally:
+        await pool.close()
 
 
 @pytest.mark.asyncio

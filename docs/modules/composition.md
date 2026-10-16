@@ -1,0 +1,242 @@
+# Composition module guide
+
+> **Last verified:** 2026-10-16
+
+> **Eviction:** Rewritten whenever `src/serving/` changes; removed when the module is retired.
+
+`src/serving/composition.py` is the one place that builds the running web service.
+It builds the shared MCP tool server, wires the lifespan that checks the database and builds the
+agent runtime, and exposes the ASGI `app` that Docker starts.
+Nothing in the codebase imports it except the entrypoint and its tests.
+This guide is the one owner of boot design.
+Procedures (the agent read role, secrets, deploys) stay in
+[the operate how-to](../how-to/operate.md).
+
+## 1. Summary and scope
+
+**Why boot lives here.**
+Before #442, `src/api/app.py` built the runtime, the checkpointer, the schema guard, and the
+Langfuse lifecycle itself, so the transport layer knew how the agent was built.
+#442 (PR #443) moved that assembly out: `create_app` now takes a `lifespan` as a parameter.
+`src/api/` imports no LangChain, Langfuse, checkpointer, or runtime module directly; its routes
+call the application service (`src/agents/service.py`) with the runtime they find on `app.state`.
+Composition is the only module allowed to know every layer at once, and the cost of that rule is
+paid here and nowhere else.
+
+**What it owns.**
+
+- The process's single FastMCP job-query server, built once and shared by the agent and `/mcp`.
+- The boot order: two database guards, the checkpointer pool, prompt warming, tool discovery,
+  the runtime, and a non-fatal Langfuse check.
+- The teardown order: the diagnostic task, then Langfuse, then the pool.
+- The ASGI `app`, with or without the `/mcp` endpoint, chosen by `MCP_ENABLED`.
+
+What it deliberately is not:
+
+- **Not transport.** Middleware, CORS, rate limits, routes, and static files are `create_app`'s.
+- **Not configuration.** It calls `load_settings`; parsing and validation live in
+  `src/core/config.py`.
+- **Not the agent.** It hands tools and a checkpointer to `AgentRuntime`; the model and graph are
+  built later, on the first request for each prompt version.
+- **Not the owner of the Langfuse client.** The tracing module creates the client when it is
+  imported; composition only checks it after boot and shuts it down.
+
+## 2. Boot in one picture
+
+Boot happens in two phases.
+**Import** runs when uvicorn loads `src.serving.composition:app`; **lifespan** runs before the first
+request is accepted.
+Hexagons can refuse to boot; dotted arrows are teardown, which runs whether boot succeeded or not
+once the pool exists.
+
+```mermaid
+flowchart TD
+    subgraph IMPORT["Import: uvicorn loads src.serving.composition:app"]
+        direction TB
+        I1["Import tracing: Langfuse client created or disabled"] --> I2{{"Build MCP server: loads settings, reads agent.agent_v0"}}
+        I2 --> I3["Build the /mcp ASGI app"]
+        I3 --> I4{"MCP_ENABLED?"}
+        I4 -->|no| A1["create_app(lifespan)"]
+        I4 -->|yes| A2["create_app(lifespan + MCP lifespan, /mcp route)"]
+    end
+    subgraph LIFESPAN["Lifespan: before the first request"]
+        direction TB
+        L1["load_settings (cached)"] --> L2{{"Schema guard: clean_jobs columns"}}
+        L2 --> L3{{"Privilege guard: agent role reads, cannot write"}}
+        L3 --> L4["Open checkpointer pool"]
+        L4 --> L5{{"Checkpointer setup"}}
+        L5 --> L6{{"Warm prompts"}}
+        L6 --> L7{{"Discover MCP tools"}}
+        L7 --> L8["app.state.runtime, stream observation factory"]
+        L8 --> L9["Start Langfuse auth diagnostic, not awaited"]
+        L9 --> SERVE(["Serve requests"])
+    end
+    IMPORT -->|"uvicorn starts the lifespan"| LIFESPAN
+    SERVE -.->|shutdown| T1["Cancel and await diagnostic"]
+    T1 -.-> T2["Shut down Langfuse"]
+    T2 -.-> T3["Close pool"]
+    L5 & L6 & L7 -.->|raise| T2
+```
+
+## 3. Stage by stage
+
+| Stage | What it does | Code | On failure |
+|---|---|---|---|
+| Tracing import | Creates the Langfuse client if both keys are set and `LANGFUSE_ENABLED` is not false | `src/agents/tracing/langfuse.py` (module level) | Logged; tracing disabled; boot continues |
+| MCP server | Registers `query_jobs` (v0) or `query_clean_jobs` + `get_job_details` (v1) | `src/agents/mcp/job_server.py` → `create_job_mcp_server` | Import fails, uvicorn exits 1 |
+| App | Builds FastAPI with the lifespan, and `/mcp` before the static catch-all if enabled | `src/api/app.py` → `create_app` | Import fails |
+| Settings | Returns the cached `Settings`; the import already loaded them | `src/core/config.py` → `load_settings` | In practice cannot fail here, see section 6 |
+| Schema guard | Live `clean_jobs` columns must equal `EXPECTED_COLUMNS` exactly | `src/api/schema_guard.py` → `assert_serving_schema` | `SchemaGuardError`; uvicorn exits 3 |
+| Privilege guard | Agent role reads the 16 visible columns and is refused a write | `src/api/privilege_guard.py` → `assert_agent_privileges` | `AgentPrivilegeError`; skipped with a warning if the DSNs name different databases |
+| Pool | Creates and opens the checkpointer pool without waiting for a connection | `src/core/checkpointer.py` → `build_checkpointer_pool` | - |
+| Checkpointer | Creates or migrates LangGraph's checkpoint tables on `DATABASE_URL` | `src/core/checkpointer.py` → `build_checkpointer` | Raises; pool closed |
+| Prompts | Resolves every prompt the served bundle uses, Langfuse first, YAML fallback | `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup` | Langfuse errors fall back; a missing YAML prompt raises |
+| Tools | Lists the MCP server's tools as LangChain tools, in process | `src/agents/mcp/adapter.py` → `list_job_tools` | Raises before the runtime exists |
+| Runtime | `AgentRuntime(checkpointer, tools)` on `app.state.runtime` | `src/agents/runtime/react_agent.py` → `AgentRuntime` | - |
+| Diagnostic | Checks Langfuse credentials in a background task | `src/agents/tracing/langfuse.py` → `diagnose_langfuse_startup` | Logged only |
+
+**Why the guards run first.**
+uvicorn accepts no request until the lifespan finishes, so a guard that raises means the process
+never answers, and a deploy never passes Render's `/api/v1/health` check.
+That is the point: the schema guard turns a renamed column into a refused boot instead of a 500 on
+the first question, and the privilege guard does the same for a lost `GRANT` after a table rebuild
+(#509).
+Both run in a worker thread (`asyncio.to_thread`) because they use synchronous SQLAlchemy.
+
+**One MCP server, built at import.**
+The agent and the optional `/mcp` endpoint must expose the same tools, so there is exactly one
+server, `_mcp_server`.
+It is built at import, not in the lifespan, because `create_app` needs the `/mcp` routes when the
+app object is constructed, which is before any lifespan runs.
+The tool set follows `agent.agent_v0`, the same switch the system prompt reads, so the prompt and
+the tools cannot disagree.
+
+**Tool discovery happens once, and all or nothing.**
+`list_job_tools` connects to the in-process server object directly: no socket, no URL.
+If it raises, `app.state.runtime` is never set, so the service cannot publish an agent with a
+partial tool surface.
+
+**The MCP endpoint is off by default.**
+`MCP_ENABLED` must be `1`, `true`, or `yes`; Render never sets it (#465, option A: internal and
+development use only).
+When on, the MCP session manager's lifespan is combined with the service lifespan: it starts after
+the service is ready and stops before the service tears down.
+
+**Teardown is nested `finally` blocks.**
+Each step runs even if the one before it raised: the diagnostic is cancelled and awaited, Langfuse
+flushes in a thread, and the pool closes last.
+A failure in the guards happens before the pool exists, so there is nothing to tear down.
+
+## 4. Contract
+
+**Upstream: what composition hands to the API layer.**
+
+| Name | Kind | Consumer |
+|---|---|---|
+| `app` | ASGI app, `src.serving.composition:app` | `docker/Dockerfile` `CMD`, README, `tests/api/test_query.py` |
+| `lifespan` | async context manager | `tests/api/test_startup_config.py` builds its own app around it |
+| `app.state.runtime` | `AgentRuntime` | `src/api/routes/query.py` → `query_agent`, `stream_query_agent` |
+| `app.state.stream_observation_factory` | callable returning a stream observation | `stream_query_agent`; falls back to a no-op if absent |
+| `MCP_ENABLED` | environment variable | read once at import |
+
+`app.state` is a temporary seam from #442: routes reach the runtime through it, instead of
+through an application-service dependency.
+Replacing it is a later boundary change ([component index](../refactor/component-index.md)).
+
+**Downstream: what composition imports.**
+`src.agents.mcp`, `src.agents.runtime`, `src.agents.tracing`, `src.api`, and `src.core`.
+The arrow only points down: none of those import `src.serving`.
+The API layer gets the lifespan and the MCP app as arguments to `create_app`, and the runtime
+through `app.state`.
+`evals/run.py` deliberately builds its own MCP server rather than importing composition, which
+would pull in the API layer, the pool, and the production database.
+
+**Process model.**
+One process (`WEB_CONCURRENCY=1` in `render.yaml`, which uvicorn reads as its worker count), so
+one pool, one runtime, and one MCP server per deploy.
+
+## 5. Reading a boot
+
+A healthy boot logs, in order: `api.schema_ok`, `api.agent_privileges_ok`, and
+`langfuse.prompts_prefetched` (with each prompt's version and the served system surface).
+The Langfuse authentication result lands near uvicorn's `Application startup complete`, before
+or after it, because the diagnostic is not awaited.
+
+| You see | Phase | Meaning |
+|---|---|---|
+| Traceback through `composition.py` at `_mcp_server = create_job_mcp_server()`, exit 1 | Import | Settings failed: a missing `DATABASE_URL` or `AGENT_DATABASE_URL`, bad YAML, an invalid `agent` section. With tracing on, the first line is `Langfuse tracing disabled: failed to initialize`, carrying the same error |
+| `api.schema_drift`, `SchemaGuardError`, `Application startup failed`, exit 3 | Lifespan | `clean_jobs` differs from `EXPECTED_COLUMNS`; a migration and the guard disagree |
+| `AgentPrivilegeError` naming the operate how-to | Lifespan | The agent role lost `SELECT` or can write; re-apply the role steps |
+| `api.agent_privilege_check_skipped` | Lifespan | The two DSNs name different databases; nothing was checked |
+| Stuck at `Waiting for application startup.` | Lifespan | The database is unreachable and the DSN has no `connect_timeout`, see section 6 |
+| `Langfuse startup authentication failed` | After boot | Tracing keys are wrong; serving is unaffected |
+
+## 6. Trade-offs, and what would now be decided differently
+
+**Deliberate, and still right.**
+
+- **Fail loud at boot, never degrade.** A service that boots with a broken table or role fails on
+  real users instead of on the deploy.
+- **Tracing never blocks boot.** Langfuse is optional: prompts fall back to the reviewed YAML text,
+  and the credential check is fire-and-track so boot never waits on a network round trip.
+- **The API layer takes a lifespan instead of building one.** That keeps direct LangChain,
+  Langfuse, and checkpointer imports out of `src/api/`, as `AGENTS.md` requires.
+
+**Would now be decided differently.** Each was observed by running the code on 2026-10-16, and
+each is tracked by its own follow-up issue.
+
+1. **Configuration fails at import, not in the lifespan.**
+   Building the MCP server at import reads `agent.agent_v0`, which loads settings, so a missing
+   variable kills uvicorn (exit 1) before the lifespan exists.
+   The lifespan's `load_settings()` only reads the cache, and
+   `test_lifespan_fails_fast_when_config_load_fails` passes only because it patches that call.
+   The outcome is the same (no boot), but the documented order is not what runs (#640).
+2. **A missing provider key does not stop boot.**
+   The model is built on the first request (`AgentRuntime` compiles one agent per prompt version),
+   so a missing `DEEPSEEK_API_KEY` boots green.
+   Every question then fails: `/api/v1/agent/chat` returns a 500, and the stream returns 200 with
+   an `error` event (`internal_error`, not retryable); only the log names the missing key (#641).
+   Building or validating the `react` deployment in the lifespan would move that to boot.
+3. **An unreachable database hangs boot.**
+   With no `connect_timeout` in the DSN, the schema guard's first connection waited more than 60 s
+   locally; with `connect_timeout=3` it failed in 3.3 s and uvicorn exited 3.
+   The guards have no timeout of their own (#642).
+4. **Composition shuts down a client it did not create.**
+   The Langfuse client is created as a side effect of importing the tracing module; composition
+   only owns its shutdown.
+   Creating it in the lifespan would put both ends of its life in one place (#643).
+
+## 7. Changing it safely
+
+**Add a boot dependency.**
+Create it in `lifespan` after the guards, release it in the `finally` chain in reverse order, and
+add its step to the expected order in `test_lifespan_preserves_dependency_lifecycle_order`.
+If routes need it, pass it through `app.state` for now, and note it on the seam in section 4.
+
+**Add a boot guard.**
+Put it before `build_checkpointer_pool`, so a refusal leaves nothing to tear down.
+Run synchronous database work through `asyncio.to_thread`, raise a named error, and say in the
+message which procedure fixes it, as `AgentPrivilegeError` does.
+
+**Change the tool surface.**
+Edit `create_job_mcp_server`, not composition; the agent and `/mcp` follow automatically.
+A tool rename is a compatibility decision (#465), and prompts and evals name the tools.
+
+**Change the entrypoint path.**
+`docker/Dockerfile` `CMD`, the README run command, `docs/reference/configuration.md`, and the tests
+that import `src.serving.composition` all name it; move them in one pull request, as #443 did.
+
+## 8. Code map
+
+| Start here | For |
+|---|---|
+| `src/serving/composition.py` → `lifespan` | Boot and teardown order |
+| `src/serving/composition.py` → `app`, `_mcp_server`, `_mcp_asgi` | Import-time assembly and the MCP switch |
+| `src/api/app.py` → `create_app`, `_register_mcp_before_static` | How the lifespan and `/mcp` are attached |
+| `src/api/schema_guard.py` → `assert_serving_schema`, `EXPECTED_COLUMNS` | Schema guard |
+| `src/api/privilege_guard.py` → `assert_agent_privileges` | Privilege guard |
+| `src/core/checkpointer.py` → `build_checkpointer_pool`, `build_checkpointer` | Pool and checkpoint tables |
+| `src/agents/mcp/job_server.py` → `create_job_mcp_server`, `mcp_endpoint_enabled` | Tool surface, endpoint switch |
+| `src/agents/mcp/adapter.py` → `list_job_tools` | Tool discovery |
+| `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup`, `diagnose_langfuse_startup`, `shutdown_langfuse` | Tracing lifecycle |
+| `tests/api/test_startup_config.py`, `tests/api/test_mcp.py`, `tests/api/test_privilege_guard.py` | The behaviour pinned by tests |

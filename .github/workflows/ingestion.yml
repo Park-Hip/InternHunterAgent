@@ -33,12 +33,12 @@ on:
   workflow_dispatch: {}
 
 # A green scheduled run every night is not what this design promises, and
-# the difference matters when reading the history. The row-quality gate
-# fails the whole run closed before any clean upsert or expiry pass, so one
-# bad source row costs the day and touches nothing: run 36298272356
-# (2026-09-27) logged `ingestion.row_quality_failed salary_bounds=2` and
-# `outcome: safety_aborted` with no write to `clean_jobs`, and the dispatch
-# 28 minutes later completed. That is the gate working, not a regression.
+# the difference matters when reading the history. Since #628 a bad source
+# row is dropped and counted, not allowed to fail the night: the run logs
+# `ingestion.rows_rejected` and keeps going, and it aborts only when the
+# dropped ratio is above `safety.max_rejected_ratio` (0.10), logging
+# `ingestion.rejection_ratio_exceeded` with `outcome: safety_aborted` before
+# the clean upsert. That is the gate working, not a regression.
 #
 # REVOCATION CONDITION: if a scheduled run fails closed for any other
 # reason - config load, schema drift, a robots policy that is no longer

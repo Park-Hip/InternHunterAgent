@@ -160,10 +160,15 @@ Other documents link here rather than restating.
 
 | Package | Role |
 |---|---|
-| `cloudscraper` | Fetches VietnamWorks listings past bot protection. |
 | `httpx` | HTTP client for the JSON API path. |
-| `beautifulsoup4` | HTML parsing for detail pages. |
-| `lxml` | Parser backend for BeautifulSoup. |
+
+**Scraping spikes** (throwaway scripts, excluded from lint)
+
+| Package | Role |
+|---|---|
+| `cloudscraper` | Cloudflare bypass in the `scripts/scrape_*_spike.py` throwaway spikes only; no `src/` module imports it. |
+| `beautifulsoup4` | HTML parsing in the `scripts/scrape_*_spike.py` throwaway spikes only; no `src/` module imports it. |
+| `lxml` | Parser backend for BeautifulSoup in the `scripts/scrape_*_spike.py` throwaway spikes only; no `src/` module imports it. |
 
 **Quality, dev group**
 

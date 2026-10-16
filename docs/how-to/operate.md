@@ -15,7 +15,7 @@ The production image is slim, non-root, and auto-deployed to Render on every pus
 | Surface | Current operation | Configuration / check |
 |---|---|---|
 | API | Render web service, Docker runtime, Singapore, Free plan | Deploys `main`; `WEB_CONCURRENCY=1`; health: `/api/v1/health` |
-| Database | Neon PostgreSQL 17 | Alembic head `c9d3e6f7a2b1`; use the direct host for migrations and cron |
+| Database | Neon PostgreSQL 17 | Alembic head `1d032eb356bf`; use the direct host for migrations and cron |
 | Tracing | Langfuse Cloud Hobby, JP | Render receives the Langfuse credentials as dashboard secrets |
 | Public URL | `https://internhunteragent.onrender.com` | `/api/v1/health` for liveness; `/api/v1/ready` for database readiness |
 
@@ -175,8 +175,7 @@ uv run alembic current
 uv run alembic upgrade head
 ```
 
-The repository migration head is `c9d3e6f7a2b1`. Until this change is deployed, production
-remains at `b7e2f4a91c3d`.
+The repository migration head is `1d032eb356bf`.
 For Neon, set `ALEMBIC_DATABASE_URL` to the direct, non-pooled Neon connection URL before
 running Alembic.
 Do not use a `-pooler` host for migrations.

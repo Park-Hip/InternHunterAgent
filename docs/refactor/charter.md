@@ -21,12 +21,13 @@ select the next approved boundary without consulting the legacy discovery collec
 | [Component index](component-index.md) | Current component groups, refactor state, and immediate next action | Maintainers and implementers |
 | [Active backlog](active-backlog.md) | Ordered next decisions and vertical slices | Maintainers and implementers |
 | [Ingestion gate register](ingestion-gate-register.md) | Retired; see ADR-0058 | Maintainers and implementers |
-| [Agent v0 evaluation baseline](agent-v0-baseline.md) | Measured agent and evaluation baseline, v1 retention, and open decisions for the agent-v0 track | Maintainers and implementers |
-| [Agent v0 behavior and metric contract](agent-v0-contract.md) | The active v0 specification of what the agent may claim, and how each number is computed | Maintainers and implementers |
-| [Agent v0 legacy rule disposition](agent-v0-legacy-rules.md) | The auditable map from the legacy `G01` to `G47` expectations to the v0 contract | Maintainers and implementers |
-| [Agent v0 scenario disposition](agent-v0-scenario-disposition.md) | The audit trail from the 50 v1 evaluation scenarios to the 16 v0 acceptance cases, and the behaviors nothing covers yet | Maintainers and implementers |
-| [Agent v0 SQL decision](agent-v0-sql-decision.md) | The Stage 4 go/no-go on exploratory SQL, its measurement, and the admission policy a future path would need | Maintainers and implementers |
-| [Agent v0 cutover](agent-v0-cutover.md) | Which prompt and tool set are serving, the one-key rollback, and what the cutover has and has not been observed doing | Maintainers and implementers |
+| [ADR-0060](../decisions/adr-0060-retire-the-agent-v0-bundle.md) | Why the v0 bundle was retired and the legacy SQL query path serves permanently, including the accepted false-success risk | Maintainers and implementers |
+
+The six `docs/refactor/agent-v0-*` records this workspace used to own - the v0 baseline, behavior
+and metric contract, legacy rule disposition, scenario disposition, SQL decision, and cutover - are
+superseded by ADR-0060 and retired from the working tree. They described a bundle that no longer
+exists, so keeping them with a status would leave a second, stale specification of what the agent
+may claim. Their content remains on git at `ca4eb9a`, and ADR-0060 names what each one decided.
 
 `docs/discovery/` is retained as historical, source-backed discovery evidence.
 It does not set implementation order or create an architecture decision unless an approved record in
@@ -71,6 +72,9 @@ The expected explanation is: API transport invokes an application service, which
 agent/runtime and domain ports, while infrastructure and tracing remain replaceable adapters.
 A second question is now answerable from the same place: whether a given source may be
 collected from, and against which named gates.
-A third is answerable too: what the agent is allowed to claim about a posting, and which number
-answers which question, from the
-[v0 contract](agent-v0-contract.md) alone.
+A third is no longer answerable from this workspace, and that is the intended consequence of
+ADR-0060: there is no longer a separate contract for what the agent may claim. The agent has one
+query path, so the rules that govern a number live in the code that produces it - the validator, the
+obligations layer, and the evaluation gate - and
+[ADR-0060](../decisions/adr-0060-retire-the-agent-v0-bundle.md)
+names the false-success risks that path accepts and the gate that must replace the retired one.

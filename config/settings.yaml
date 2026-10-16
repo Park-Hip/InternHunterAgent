@@ -33,7 +33,8 @@ agent:
   # The governed v0 bundle. This one switch moves the system prompt and the tool
   # registration together, so a new prompt can never run against the old tools.
   # The rollback is this key set back to false, which restores the v1 prompt and
-  # the v1 tool pair. See docs/refactor/agent-v0-cutover.md.
+  # the v1 tool pair. ADR-0060 sets this key to false, then removes it and the
+  # v0 bundle with it; see docs/decisions/adr-0060-retire-the-agent-v0-bundle.md.
   agent_v0: true
 
   # Named deployments are the serving allowlist. Model names must use LiteLLM's
@@ -91,7 +92,8 @@ agent:
     # Governed query core, shared by search and analytics. The limits live here
     # rather than in the query package so the display cap above stays the one
     # cap: the core never invents a second number for how many rows may show.
-    # The behavior these limits serve is docs/refactor/agent-v0-contract.md.
+    # The behavior these limits serve was the v0 contract, which ADR-0060 retired
+    # with the core that reads them; all six go at step 3.
     max_filters: 4
     max_values_per_filter: 4
     max_group_values: 20
@@ -100,6 +102,10 @@ agent:
     # Every compiled statement runs inside a read-only transaction on the
     # least-privilege agent role, with a server-side statement timeout and a
     # byte budget on the returned rows. Neither replaces the other.
+    # These two are read ONLY by the v0 BoundedExecutor today; ADR-0060 requires
+    # them to migrate to the v1 executor in the step that deletes it, because
+    # they are otherwise the only execution budget in the codebase and would be
+    # deleted with their sole reader.
     statement_timeout_ms: 2000
     max_result_bytes: 262144
     # User-side city synonyms that the ingestion alias map does not carry. The

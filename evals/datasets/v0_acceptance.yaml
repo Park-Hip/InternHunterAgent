@@ -1,6 +1,7 @@
 # v0 acceptance dataset, version 1.
 #
-# Derived from docs/refactor/agent-v0-contract.md, not pruned from the v1 registry.
+# Derived from the v0 contract that ADR-0060 retired with the v0 bundle itself,
+# not pruned from the v1 registry.
 # Every expected value here was computed against the pinned 24-row fixture in
 # evals/fixtures/seed_eval_db.sql and is re-verified by
 # tests/evals/test_v0_acceptance.py against a live fixture database.

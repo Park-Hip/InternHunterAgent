@@ -2,9 +2,9 @@
 
 Each dataset is keyed by a short name and points at one YAML file of
 scenarios. ``default`` is the v1 registry; ``v0`` is the v0 acceptance set
-derived from docs/refactor/agent-v0-contract.md. The two never mix: a new
-version is a new entry, never an edit to the registry that is already
-selectable.
+whose contract was retired by docs/decisions/adr-0060-retire-the-agent-v0-bundle.md
+along with the v0 bundle it graded. The two never mix: a new version is a new
+entry, never an edit to the registry that is already selectable.
 """
 
 from __future__ import annotations

@@ -104,6 +104,9 @@ class StartupConfigTests(unittest.TestCase):
         async def diagnose() -> None:
             events.append("langfuse diagnostic")
 
+        def init() -> None:
+            events.append("langfuse init")
+
         async def shutdown() -> None:
             events.append("langfuse shutdown")
 
@@ -139,6 +142,10 @@ class StartupConfigTests(unittest.TestCase):
                 ),
             ),
             patch(
+                "src.serving.composition.init_langfuse",
+                side_effect=init,
+            ),
+            patch(
                 "src.serving.composition.diagnose_langfuse_startup",
                 new=AsyncMock(side_effect=diagnose),
             ),
@@ -158,6 +165,7 @@ class StartupConfigTests(unittest.TestCase):
                 "schema guard",
                 "privilege guard",
                 "pool open",
+                "langfuse init",
                 "checkpointer setup",
                 "prompt prefetch",
                 "tool discovery",

@@ -311,25 +311,46 @@ async def langfuse_request_trace(
             yield client.get_current_trace_id()
 
 
-try:
-    tracing_disabled = os.getenv("LANGFUSE_ENABLED", "true").lower() in {
-        "0",
-        "false",
-        "no",
-    }
-    if (
-        not tracing_disabled
-        and settings.LANGFUSE_PUBLIC_KEY
-        and settings.LANGFUSE_SECRET_KEY
-    ):
-        _langfuse = create_langfuse_client()
-        _langfuse_handler = CallbackHandler()
-    elif tracing_disabled:
-        logger.info("Langfuse tracing disabled for this process")
-    else:
-        logger.warning("Langfuse tracing disabled: missing Langfuse credentials")
-except Exception as exc:
-    logger.warning("Langfuse tracing disabled: failed to initialize", error=str(exc))
+def init_langfuse() -> None:
+    """Create the process client and callback handler, or leave tracing disabled.
+
+    Ownership is explicit: the serving lifespan and the evaluation driver call
+    this for their own process and hand the client to `shutdown_langfuse` the
+    same way. Importing this module does nothing, so a broken configuration can
+    no longer surface first as a tracing warning, and a client can no longer
+    outlive the process that was supposed to end it. A client that already
+    exists is left alone, so a second lifespan in one process reuses it instead
+    of leaking another. This never raises: tracing must not block boot.
+    """
+    global _langfuse, _langfuse_handler
+    if _langfuse is not None:
+        return
+
+    try:
+        tracing_disabled = os.getenv("LANGFUSE_ENABLED", "true").lower() in {
+            "0",
+            "false",
+            "no",
+        }
+        if (
+            not tracing_disabled
+            and settings.LANGFUSE_PUBLIC_KEY
+            and settings.LANGFUSE_SECRET_KEY
+        ):
+            client = create_langfuse_client()
+            handler = CallbackHandler()
+            _langfuse = client
+            _langfuse_handler = handler
+        elif tracing_disabled:
+            logger.info("Langfuse tracing disabled for this process")
+        else:
+            logger.warning("Langfuse tracing disabled: missing Langfuse credentials")
+    except Exception as exc:
+        _langfuse = None
+        _langfuse_handler = None
+        logger.warning(
+            "Langfuse tracing disabled: failed to initialize", error=str(exc)
+        )
 
 
 def get_langfuse_handler() -> CallbackHandler | None:
@@ -419,7 +440,13 @@ async def diagnose_langfuse_startup() -> None:
 
 
 async def shutdown_langfuse() -> None:
-    """Drain tracing events during app shutdown without blocking teardown."""
+    """Drain tracing events during app shutdown without blocking teardown.
+
+    The module state is cleared even when draining fails, so the getters report
+    "tracing disabled" after shutdown and a later `init_langfuse` creates a
+    fresh client instead of reusing a drained one.
+    """
+    global _langfuse, _langfuse_handler
     client = get_langfuse_client()
     if client is None:
         return
@@ -428,6 +455,9 @@ async def shutdown_langfuse() -> None:
         await asyncio.to_thread(client.shutdown)
     except Exception as exc:
         logger.warning("Langfuse shutdown failed", error=str(exc))
+    finally:
+        _langfuse = None
+        _langfuse_handler = None
 
 
 def build_langfuse_config(

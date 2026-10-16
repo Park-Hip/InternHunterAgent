@@ -267,42 +267,56 @@ async def run_dataset(spec: DatasetSpec, *, metric_names: list[str] | None = Non
         scenarios = [s for s in scenarios if s["id"] in offline]
         if not scenarios:
             raise ValueError("No dataset scenarios found in capture")
-    else:
-        from src.agents.runtime.prompts import resolve_prompt_bundle_async
-        prompts = await resolve_prompt_bundle_async()
-    results: list[dict[str, Any]] = []
-    captures: dict[str, list[dict[str, Any]]] = {}
-    consecutive_quota_failures = 0
-    quota_halt = capture_settings()["consecutive_quota_failures_before_halt"]
-    for position, scenario in enumerate(scenarios):
-        selected = [name for name in names if name in scenario["metrics"]]
-        try:
-            turns = offline[scenario["id"]] if offline is not None else await capture_scenario(scenario, prompts)
-        except Exception as exc:
-            consecutive_quota_failures = consecutive_quota_failures + 1 if isinstance(exc, QuotaError) else 0
-            for name in selected:
-                results.append({"scenario_id": scenario["id"], "metric": name, "score": None, "error": str(exc)})
-            if consecutive_quota_failures >= quota_halt:
-                for remaining in scenarios[position + 1:]:
-                    results.extend({"scenario_id": remaining["id"], "metric": name, "score": None, "reason": "UNRUN"} for name in names if name in remaining["metrics"])
-                break
-            continue
+    try:
+        prompts: Any = None
+        if offline is None:
+            from src.agents.runtime.prompts import resolve_prompt_bundle_async
+            from src.agents.tracing.langfuse import init_langfuse
+
+            # The driver owns the Langfuse client for its own process, the same
+            # way the serving lifespan does: created before prompts resolve so
+            # the registry can use the remote versions, released in the finally
+            # below so traces flush before the process exits.
+            init_langfuse()
+            prompts = await resolve_prompt_bundle_async()
+        results: list[dict[str, Any]] = []
+        captures: dict[str, list[dict[str, Any]]] = {}
         consecutive_quota_failures = 0
-        captures[scenario["id"]] = turns
-        for index, turn in enumerate(turns):
-            results.extend(score_turn(turn, scenario, selected, index, database_url))
-    # A requested metric that no selected scenario declares is silently dropped
-    # above. An empty report is vacuously free of failures, so a gate built on it
-    # would pass without asserting anything. Refuse the request instead.
-    scored = {row["metric"] for row in results}
-    unexercised = [name for name in names if name not in scored]
-    if unexercised:
-        selected_ids = sorted({s["id"] for s in scenarios})
-        raise ValueError(
-            f"Requested metrics were never scored: {sorted(unexercised)}. "
-            f"Selected scenarios {selected_ids} declare none of them."
-        )
-    return {"dataset": str(spec.path), "capture_source": str(capture_path) if capture_path else "live", "generated_at": datetime.now(timezone.utc).isoformat(), "metrics": names, "captures": captures, "by_metric": group_by_metric(results)}
+        quota_halt = capture_settings()["consecutive_quota_failures_before_halt"]
+        for position, scenario in enumerate(scenarios):
+            selected = [name for name in names if name in scenario["metrics"]]
+            try:
+                turns = offline[scenario["id"]] if offline is not None else await capture_scenario(scenario, prompts)
+            except Exception as exc:
+                consecutive_quota_failures = consecutive_quota_failures + 1 if isinstance(exc, QuotaError) else 0
+                for name in selected:
+                    results.append({"scenario_id": scenario["id"], "metric": name, "score": None, "error": str(exc)})
+                if consecutive_quota_failures >= quota_halt:
+                    for remaining in scenarios[position + 1:]:
+                        results.extend({"scenario_id": remaining["id"], "metric": name, "score": None, "reason": "UNRUN"} for name in names if name in remaining["metrics"])
+                    break
+                continue
+            consecutive_quota_failures = 0
+            captures[scenario["id"]] = turns
+            for index, turn in enumerate(turns):
+                results.extend(score_turn(turn, scenario, selected, index, database_url))
+        # A requested metric that no selected scenario declares is silently dropped
+        # above. An empty report is vacuously free of failures, so a gate built on it
+        # would pass without asserting anything. Refuse the request instead.
+        scored = {row["metric"] for row in results}
+        unexercised = [name for name in names if name not in scored]
+        if unexercised:
+            selected_ids = sorted({s["id"] for s in scenarios})
+            raise ValueError(
+                f"Requested metrics were never scored: {sorted(unexercised)}. "
+                f"Selected scenarios {selected_ids} declare none of them."
+            )
+        return {"dataset": str(spec.path), "capture_source": str(capture_path) if capture_path else "live", "generated_at": datetime.now(timezone.utc).isoformat(), "metrics": names, "captures": captures, "by_metric": group_by_metric(results)}
+    finally:
+        if offline is None:
+            from src.agents.tracing.langfuse import shutdown_langfuse
+
+            await shutdown_langfuse()
 
 
 def write_report(report: dict[str, Any], path: Path) -> None:

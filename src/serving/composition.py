@@ -31,6 +31,7 @@ from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing.langfuse import (
     create_langfuse_stream_observation,
     diagnose_langfuse_startup,
+    init_langfuse,
     prepare_native_prompts_startup,
     shutdown_langfuse,
 )
@@ -64,6 +65,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await pool.open()
     diagnostic_task: asyncio.Task[None] | None = None
     try:
+        # Both ends of the Langfuse client's life are here: created after the
+        # guards and before prompt warming so the registry resolves against it,
+        # drained by the matching shutdown in the finally chain below. The call
+        # is local and never raises, so boot does not wait on Langfuse.
+        init_langfuse()
         checkpointer = await build_checkpointer(pool)
         await prepare_native_prompts_startup()
         # Tool discovery is awaited exactly once at startup. A failure here

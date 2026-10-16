@@ -26,9 +26,11 @@ paid here and nowhere else.
 **What it owns.**
 
 - The process's single FastMCP job-query server, built once and shared by the agent and `/mcp`.
-- The boot order: two database guards, the checkpointer pool, prompt warming, tool discovery,
-  the runtime, and a non-fatal Langfuse check.
+- The boot order: two database guards, the checkpointer pool, the Langfuse client, prompt warming,
+  tool discovery, the runtime, and a non-fatal Langfuse check.
 - The teardown order: the diagnostic task, then Langfuse, then the pool.
+- Both ends of the Langfuse client's life: `init_langfuse` creates it after the guards, and the
+  teardown chain drains it. Importing the tracing module has no side effect.
 - The ASGI `app`, with or without the `/mcp` endpoint, chosen by `MCP_ENABLED`.
 
 What it deliberately is not:
@@ -38,8 +40,8 @@ What it deliberately is not:
   `src/core/config.py`.
 - **Not the agent.** It hands tools and a checkpointer to `AgentRuntime`; the model and graph are
   built later, on the first request for each prompt version.
-- **Not the owner of the Langfuse client.** The tracing module creates the client when it is
-  imported; composition only checks it after boot and shuts it down.
+- **Not the tracing layer.** What is observed, and how tags and prompt lineage are built, stay in
+  `src/agents/tracing/`; composition only decides when the client starts and stops.
 
 ## 2. Boot in one picture
 
@@ -53,8 +55,7 @@ once the pool exists.
 flowchart TD
     subgraph IMPORT["Import: uvicorn loads src.serving.composition:app"]
         direction TB
-        I0{{"Load settings: DATABASE_URL, AGENT_DATABASE_URL, YAML"}} --> I1["Import tracing: Langfuse client created or disabled"]
-        I1 --> I2{{"Build MCP server: reads agent.agent_v0"}}
+        I0{{"Load settings: DATABASE_URL, AGENT_DATABASE_URL, YAML"}} --> I2{{"Build MCP server: reads agent.agent_v0"}}
         I2 --> I3["Build the /mcp ASGI app"]
         I3 --> I4{"MCP_ENABLED?"}
         I4 -->|no| A1["create_app(lifespan)"]
@@ -65,7 +66,8 @@ flowchart TD
         L2{{"Schema guard: clean_jobs columns"}}
         L2 --> L3{{"Privilege guard: agent role reads, cannot write"}}
         L3 --> L4["Open checkpointer pool"]
-        L4 --> L5{{"Checkpointer setup"}}
+        L4 --> L4B["Initialize Langfuse: client created or disabled"]
+        L4B --> L5{{"Checkpointer setup"}}
         L5 --> L6{{"Warm prompts"}}
         L6 --> L7{{"Discover MCP tools"}}
         L7 --> L8["app.state.runtime, stream observation factory"]
@@ -84,12 +86,12 @@ flowchart TD
 | Stage | What it does | Code | On failure |
 |---|---|---|---|
 | Settings | Loads and validates `Settings` and every YAML file, before any other import | `src/core/config.py` → `load_settings` (called at composition import) | Import fails, uvicorn exits 1, in under two seconds |
-| Tracing import | Creates the Langfuse client if both keys are set and `LANGFUSE_ENABLED` is not false | `src/agents/tracing/langfuse.py` (module level) | Logged; tracing disabled; boot continues |
 | MCP server | Registers `query_jobs` (v0) or `query_clean_jobs` + `get_job_details` (v1) | `src/agents/mcp/job_server.py` → `create_job_mcp_server` | Import fails, uvicorn exits 1 |
 | App | Builds FastAPI with the lifespan, and `/mcp` before the static catch-all if enabled | `src/api/app.py` → `create_app` | Import fails |
 | Schema guard | Live `clean_jobs` columns must equal `EXPECTED_COLUMNS` exactly | `src/api/schema_guard.py` → `assert_serving_schema` | `SchemaGuardError`; uvicorn exits 3 |
 | Privilege guard | Agent role reads the 16 visible columns and is refused a write | `src/api/privilege_guard.py` → `assert_agent_privileges` | `AgentPrivilegeError`; skipped with a warning if the DSNs name different databases |
 | Pool | Creates and opens the checkpointer pool without waiting for a connection | `src/core/checkpointer.py` → `build_checkpointer_pool` | - |
+| Langfuse init | Creates the client and callback handler when both keys are set and `LANGFUSE_ENABLED` is not false; never raises | `src/agents/tracing/langfuse.py` → `init_langfuse` | Logged; tracing disabled; boot continues |
 | Checkpointer | Creates or migrates LangGraph's checkpoint tables on `DATABASE_URL` | `src/core/checkpointer.py` → `build_checkpointer` | Raises; pool closed |
 | Prompts | Resolves every prompt the served bundle uses, Langfuse first, YAML fallback | `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup` | Langfuse errors fall back; a missing YAML prompt raises |
 | Tools | Lists the MCP server's tools as LangChain tools, in process | `src/agents/mcp/adapter.py` → `list_job_tools` | Raises before the runtime exists |
@@ -112,8 +114,8 @@ carries (#642).
 LiteLLM, and FastMCP imports, so a bad configuration refuses boot in about two seconds instead of
 after a fifteen-second import chain, and the traceback names `composition.py` rather than a symptom
 further down.
-The imports need settings anyway: the MCP server reads `agent.agent_v0` while it is built, and the
-tracing module reads the Langfuse keys while it is imported.
+The import needs settings anyway: the MCP server reads `agent.agent_v0` while it is built.
+The Langfuse client reads its keys later, when the lifespan initializes tracing.
 The lifespan therefore reloads nothing, and the test that pins this imports the entrypoint in a
 fresh interpreter with no database configured (`test_import_fails_fast_when_config_load_fails`)
 instead of patching a call that cannot fail (#640).
@@ -180,6 +182,7 @@ or after it, because the diagnostic is not awaited.
 | You see | Phase | Meaning |
 |---|---|---|
 | Traceback through `composition.py` at `load_settings()`, exit 1, under two seconds | Import | Settings failed: a missing `DATABASE_URL` or `AGENT_DATABASE_URL`, bad YAML, an invalid `agent` section. Nothing else is imported yet |
+| `Langfuse tracing disabled...` | Lifespan | `LANGFUSE_ENABLED` is false, the keys are missing, or client creation failed; serving is unaffected |
 | `api.schema_drift`, `SchemaGuardError`, `Application startup failed`, exit 3 | Lifespan | `clean_jobs` differs from `EXPECTED_COLUMNS`; a migration and the guard disagree |
 | `AgentPrivilegeError` naming the operate how-to | Lifespan | The agent role lost `SELECT` or can write; re-apply the role steps |
 | `api.agent_privilege_check_skipped` | Lifespan | The two DSNs name different databases; nothing was checked |
@@ -198,15 +201,18 @@ or after it, because the diagnostic is not awaited.
   checkpointer pool carry `database.connect_timeout_seconds` (10 s), so an unreachable database
   refuses boot with `SchemaGuardError` within the bound whatever the DSN string carries (#642).
 - **Tracing never blocks boot.** Langfuse is optional: prompts fall back to the reviewed YAML text,
-  and the credential check is fire-and-track so boot never waits on a network round trip.
+  the client is created locally with no network round trip, and the credential check is
+  fire-and-track so boot never waits on a response.
 - **The API layer takes a lifespan instead of building one.** That keeps direct LangChain,
   Langfuse, and checkpointer imports out of `src/api/`, as `AGENTS.md` requires.
 
 **Would now be decided differently.** Each was observed by running the code on 2026-10-16, and
 each is tracked by its own follow-up issue.
-Two of the four observations have since been resolved: configuration failing at import while the
-lifespan pretended to load it (#640, now the second deliberate choice above), and an unreachable
-database hanging boot (#642, now a deliberate choice above).
+Three of the four observations have since been resolved: configuration failing at import while the
+lifespan pretended to load it (#640, now the second deliberate choice above), an unreachable
+database hanging boot (#642, now a deliberate choice above), and composition shutting down a
+Langfuse client it did not create (#643: the client is now created by `init_langfuse` in the
+lifespan, and importing the tracing module has no side effect).
 
 1. **A missing provider key does not stop boot.**
    The model is built on the first request (`AgentRuntime` compiles one agent per prompt version),
@@ -214,10 +220,6 @@ database hanging boot (#642, now a deliberate choice above).
    Every question then fails: `/api/v1/agent/chat` returns a 500, and the stream returns 200 with
    an `error` event (`internal_error`, not retryable); only the log names the missing key (#641).
    Building or validating the `react` deployment in the lifespan would move that to boot.
-2. **Composition shuts down a client it did not create.**
-   The Langfuse client is created as a side effect of importing the tracing module; composition
-   only owns its shutdown.
-   Creating it in the lifespan would put both ends of its life in one place (#643).
 
 ## 7. Changing it safely
 
@@ -254,5 +256,5 @@ that import `src.serving.composition` all name it; move them in one pull request
 | `src/core/config.py` → `load_settings`, `ConfigLoadError` | The import-time configuration contract |
 | `src/agents/mcp/job_server.py` → `create_job_mcp_server`, `mcp_endpoint_enabled` | Tool surface, endpoint switch |
 | `src/agents/mcp/adapter.py` → `list_job_tools` | Tool discovery |
-| `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup`, `diagnose_langfuse_startup`, `shutdown_langfuse` | Tracing lifecycle |
+| `src/agents/tracing/langfuse.py` → `init_langfuse`, `prepare_native_prompts_startup`, `diagnose_langfuse_startup`, `shutdown_langfuse` | Tracing lifecycle |
 | `tests/api/test_startup_config.py`, `tests/api/test_mcp.py`, `tests/api/test_privilege_guard.py` | The behaviour pinned by tests |

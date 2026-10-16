@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from src.agents.runtime.provider import ProviderCredentialError
 from src.api.app import create_app
 from src.api.schema_guard import SchemaGuardError
 from src.serving import composition
@@ -80,6 +81,29 @@ class StartupConfigTests(unittest.TestCase):
 
         build_pool.assert_not_called()
 
+    def test_lifespan_fails_before_pool_when_a_served_key_is_missing(self) -> None:
+        with (
+            patch("src.serving.composition.assert_serving_schema"),
+            patch("src.serving.composition.assert_agent_privileges"),
+            patch("src.serving.composition.build_checkpointer_pool") as build_pool,
+            patch.dict(os.environ, {"DEEPSEEK_API_KEY": ""}),
+        ):
+            with self.assertRaises(ProviderCredentialError) as ctx:
+                with TestClient(composition.app):
+                    pass
+
+        self.assertIn("agent.react.deployment", str(ctx.exception))
+        self.assertIn("DEEPSEEK_API_KEY is unset or empty", str(ctx.exception))
+        build_pool.assert_not_called()
+
+    def test_served_profiles_follow_the_v0_switch(self) -> None:
+        with patch("src.serving.composition.v0_agent_enabled", return_value=True):
+            self.assertEqual(composition._served_profiles(), ("react",))
+        with patch("src.serving.composition.v0_agent_enabled", return_value=False):
+            self.assertEqual(
+                composition._served_profiles(), ("react", "sql_generation")
+            )
+
     def test_lifespan_preserves_dependency_lifecycle_order(self) -> None:
         events: list[str] = []
         pool = MagicMock()
@@ -96,6 +120,9 @@ class StartupConfigTests(unittest.TestCase):
 
         async def prefetch() -> None:
             events.append("prompt prefetch")
+
+        def credentials_guard() -> None:
+            events.append("credential guard")
 
         async def discover_tools(_mcp_server: object) -> list:
             events.append("tool discovery")
@@ -121,6 +148,10 @@ class StartupConfigTests(unittest.TestCase):
             patch(
                 "src.serving.composition.assert_agent_privileges",
                 side_effect=lambda: events.append("privilege guard"),
+            ),
+            patch(
+                "src.serving.composition._assert_served_profile_credentials",
+                side_effect=credentials_guard,
             ),
             patch("src.serving.composition.build_checkpointer_pool", return_value=pool),
             patch(
@@ -164,6 +195,7 @@ class StartupConfigTests(unittest.TestCase):
             [
                 "schema guard",
                 "privilege guard",
+                "credential guard",
                 "pool open",
                 "langfuse init",
                 "checkpointer setup",

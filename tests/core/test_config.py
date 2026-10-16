@@ -71,7 +71,7 @@ class ConfigLoadTests(unittest.TestCase):
         )
 
     def test_load_settings_boots_with_only_the_selected_providers_key(self) -> None:
-        """No provider key is required at boot; the selected branch validates its own."""
+        """No provider key is needed to load settings; the serving boot guard validates the selected deployment's key."""
         selected_provider_env = {
             "DATABASE_URL": "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter",
             "AGENT_DATABASE_URL": "postgresql+psycopg://internhunter_agent:internhunter@localhost:5433/internhunter",

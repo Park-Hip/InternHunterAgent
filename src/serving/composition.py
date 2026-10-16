@@ -27,6 +27,8 @@ from src.agents.mcp.job_server import (
     create_job_mcp_server,
     mcp_endpoint_enabled,
 )
+from src.agents.runtime.prompts import v0_agent_enabled
+from src.agents.runtime.provider import AgentProvider
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing.langfuse import (
     create_langfuse_stream_observation,
@@ -39,6 +41,7 @@ from src.api.app import create_app
 from src.api.privilege_guard import assert_agent_privileges
 from src.api.schema_guard import assert_serving_schema
 from src.core.checkpointer import build_checkpointer, build_checkpointer_pool
+from src.core.logger import logger
 
 # The shared FastMCP server backs both the in-process agent adapter and, when
 # explicitly enabled, the Streamable HTTP endpoint. It is created once at import
@@ -48,6 +51,33 @@ _mcp_server = create_job_mcp_server()
 # which app.py adds directly ahead of the static catch-all (a Starlette Mount
 # would require a trailing slash).
 _mcp_asgi = _mcp_server.http_app(path=MCP_ENDPOINT_PATH)
+
+
+def _served_profiles() -> tuple[str, ...]:
+    """The profiles the served tool surface can invoke, in refusal order.
+
+    The react loop is always reachable. The nested sql_generation call exists
+    only while the v1 query_clean_jobs tool is registered; the v0 query_jobs
+    tool answers from the governed query core and never calls a model.
+    """
+    if v0_agent_enabled():
+        return ("react",)
+    return ("react", "sql_generation")
+
+
+def _assert_served_profile_credentials() -> None:
+    """Refuse to serve when a served profile's deployment has no usable key.
+
+    Without this, a deploy whose selected provider key is missing boots green
+    and fails every question; refusing here turns that into a failed deploy
+    that names the variable. Deployments no served profile selects stay
+    optional, so a checkout needs only the selected provider's key.
+    """
+    provider = AgentProvider()
+    profiles = _served_profiles()
+    for profile in profiles:
+        provider.assert_profile_credential(profile)
+    logger.info("api.provider_credentials_ok", profiles=list(profiles))
 
 
 @asynccontextmanager
@@ -60,6 +90,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # write it. A rebuilt table drops the grant, and without this the first user
     # request discovers it instead of the process refusing to start.
     await asyncio.to_thread(assert_agent_privileges)
+    # Boot also fails loudly when a deployment a served profile selects has no
+    # key. Without this the process serves 500s on every question; the check
+    # runs before the pool opens, so a refusal leaves nothing to tear down.
+    _assert_served_profile_credentials()
 
     pool = build_checkpointer_pool()
     await pool.open()

@@ -339,9 +339,9 @@ or tracing.
 
 ## 3. Agent runtime
 
-## 3. Agent runtime
-
 ### 1 Model providers
+
+The design is owned by the [model config module guide](modules/model-config.md).
 
 Chat models are wrapped by the provider in `src/agents/runtime/provider.py`.
 This is the one place model construction lives; no other layer constructs a model.

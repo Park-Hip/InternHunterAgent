@@ -298,12 +298,14 @@ class TestOneOwnerPerCaveat:
         assert "served tool of the governed v0 bundle" in docstring
 
 
-def test_the_served_bundle_still_registers_only_the_governed_tool() -> None:
+def test_the_v0_bundle_still_registers_only_the_governed_tool() -> None:
     """The cutover is unchanged by these fixes: one tool, one prompt."""
     import asyncio
 
     from src.agents.mcp.job_server import V0_QUERY_TOOL, create_job_mcp_server
+    from tests.agents.v0_switch import agent_v0
 
-    tools = {tool.name for tool in asyncio.run(create_job_mcp_server()._list_tools())}
+    with agent_v0(True):
+        tools = {tool.name for tool in asyncio.run(create_job_mcp_server()._list_tools())}
     assert tools == {V0_QUERY_TOOL}
     assert QueryShape.DETAIL.value == "detail"

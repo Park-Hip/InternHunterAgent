@@ -42,6 +42,9 @@ to `DATABASE_URL`.
 **Tunable parameters** live in `config/settings.yaml`, read through `src/core/config.py`.
 `agent.providers.*` is the trusted serving-deployment allowlist, with a provider-qualified LiteLLM model and an API-key environment-variable name only.
 `agent.react.*` and `agent.sql_generation.*` select a deployment and configure portable generation settings plus explicit validated provider options.
+`agent.<profile>.max_attempts` counts attempts, not retries: `2` means the request is made twice when the first attempt fails.
+A request timeout, a connection failure, a rate limit, and LiteLLM's generic API error are retried, with waits that start at 4 seconds and cap at 10; provider 5xx and 4xx responses are not retried, because a retry cannot fix a 4xx and provider pressure is already reported to the client as a retryable `provider_busy` error.
+The worst case per call is `timeout x max_attempts` plus those waits: 64 seconds at the shipped 30-second timeout and two attempts, 98 seconds at three, against the 120-second `agent.stream_turn_timeout_seconds` turn deadline.
 `agent.prompts.*` configures the managed-prompt deployment label and cache lifetime (see the [Langfuse prompt management guide](../how-to/manage-langfuse-prompts.md)).
 `agent.stream_turn_timeout_seconds` is the end-to-end SSE serving deadline and falls back to 120 seconds when omitted or invalid.
 `database.connect_timeout_seconds` bounds every connection attempt (TCP, TLS, and authentication) so an unreachable database refuses boot within the bound; the configured value overrides any `connect_timeout` in a DSN.

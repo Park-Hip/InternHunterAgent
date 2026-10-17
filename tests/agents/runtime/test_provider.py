@@ -26,7 +26,7 @@ def _agent_config(
                 "temperature": 0.2,
                 "max_tokens": 2048,
                 "timeout": 30,
-                "max_retries": 2,
+                "max_attempts": 2,
                 "streaming": True,
                 "provider_options": react_options or {"thinking": "disabled"},
             },
@@ -35,7 +35,7 @@ def _agent_config(
                 "temperature": 0.0,
                 "max_tokens": 1024,
                 "timeout": 15,
-                "max_retries": 1,
+                "max_attempts": 1,
                 "streaming": False,
                 "provider_options": {"thinking": "disabled"},
             },
@@ -183,7 +183,8 @@ def test_eval_driver_disables_provider_retries(
 
     AgentProvider().build_model("react")
 
-    assert mock_chat_litellm.call_args.kwargs["max_retries"] == 0
+    # One attempt: the switch disables retries without disabling the call.
+    assert mock_chat_litellm.call_args.kwargs["max_retries"] == 1
 
 
 @pytest.mark.parametrize(
@@ -212,6 +213,22 @@ def test_eval_driver_disables_provider_retries(
                 {"provider_options": {"thinking": "auto"}}
             ),
             "must be 'disabled' or 'enabled'",
+        ),
+        (
+            lambda config: config["agent"]["react"].pop("max_attempts"),
+            "agent.react.max_attempts",
+        ),
+        (
+            lambda config: config["agent"]["react"].update({"max_attempts": 0}),
+            "must be a positive integer",
+        ),
+        (
+            lambda config: config["agent"]["react"].update({"max_attempts": -1}),
+            "must be a positive integer",
+        ),
+        (
+            lambda config: config["agent"]["react"].update({"max_attempts": True}),
+            "must be a positive integer",
         ),
     ],
 )

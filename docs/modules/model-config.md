@@ -77,7 +77,7 @@ agent:
     temperature: 0.2
     max_tokens: 2048
     timeout: 30
-    max_retries: 2
+    max_attempts: 2
     streaming: true
     provider_options:
       thinking: disabled
@@ -86,13 +86,13 @@ agent:
     temperature: 0.0
     max_tokens: 1024
     timeout: 30
-    max_retries: 2
+    max_attempts: 2
     streaming: false
     provider_options:
       thinking: disabled
 ```
 
-`AgentProvider.build_model` maps each profile knob straight onto a `ChatLiteLLM` argument: `timeout` becomes `request_timeout`, `provider_options` become `model_kwargs`, and everything else keeps its name.
+`AgentProvider.build_model` maps each profile knob onto a `ChatLiteLLM` argument: `timeout` becomes `request_timeout`, `max_attempts` becomes the library's `max_retries` (which counts attempts), `provider_options` become `model_kwargs`, and the rest keep their names.
 
 ## 3. When it runs
 
@@ -140,7 +140,7 @@ Each row was measured on 2026-10-16 by pointing `DEEPSEEK_API_BASE` at a local s
 | Limit | Setting | What it actually bounds | Measured |
 |---|---|---|---|
 | Request timeout | `timeout: 30`, passed as `request_timeout` | Time without data from the provider, not the length of a call | A provider that never answers raises `litellm.Timeout` at 30 s. A stream that sends a token every 5 s ran 50 s and completed |
-| Retries | `max_retries: 2`, passed to LangChain's retry decorator | Total **attempts**, not retries: tenacity's `stop_after_attempt(max_retries)` | 429: two attempts, about 4 s apart. A hung provider: two attempts, 64.8 s in total. 500 and 503: one attempt |
+| Retries | `max_attempts: 2`, passed to LangChain's retry decorator as `max_retries` | Total **attempts**, not retries: tenacity's `stop_after_attempt(max_retries)`, so the name now says it | 429: two attempts, about 4 s apart. A hung provider: two attempts, 64.8 s in total. 500 and 503: one attempt |
 | Turn deadline | `agent.stream_turn_timeout_seconds: 120` | One whole streamed turn, every model and tool call included | Enforced by `stream_agent_response` only; the non-streaming `/api/v1/agent/chat` has no deadline (#659) |
 
 **What each protects against.**
@@ -148,7 +148,7 @@ Each row was measured on 2026-10-16 by pointing `DEEPSEEK_API_BASE` at a local s
 - The request timeout stops a hung connection from holding a turn forever.
   It does not stop a slow but steady stream, which is acceptable: that user is seeing tokens.
 - The retry absorbs one transient rate limit, timeout, or dropped connection.
-  LangChain retries only `litellm.Timeout`, `APIError`, `APIConnectionError`, and `RateLimitError`; `InternalServerError` and `ServiceUnavailableError` fail on the first attempt (#654 records whether that is right).
+  LangChain retries only `litellm.Timeout`, `APIError`, `APIConnectionError`, and `RateLimitError`; 5xx and 4xx responses fail on the first attempt, and the configuration reference records why that set stays as it is (#654).
 - The turn deadline protects the single web worker (`WEB_CONCURRENCY=1`) from a turn that never ends.
   One hung model call already uses 65 s of its 120 s, so a second hung call in the same turn hits the deadline.
 
@@ -165,7 +165,7 @@ Anything else, including a 500, becomes `internal_error` with `retryable: false`
 2. **A missing key refuses boot, but only for a served profile** (#641).
    With `DEEPSEEK_API_KEY` unset or blank, the lifespan raises `ProviderCredentialError` and uvicorn exits 3.
    `GROQ_API_KEY` is not a deployment key any more (it survives only as the eval judge's optional alternate branch), so nothing validates it at boot; `sql_generation`'s key is checked only once the v1 tool is registered.
-3. **`max_retries: 2` means one retry**, and `0` and `1` behave the same (section 5).
+3. **`max_attempts: 2` means two requests**, because the `ChatLiteLLM` argument it feeds counts attempts; `0` is refused at load, since a call must happen at least once (section 5).
 4. **The model's own settings are invisible to callers.**
    `factory.py` and `query_clean_jobs.py` pass only a profile name.
 5. **Traces always name the `react` deployment.**
@@ -177,7 +177,7 @@ Anything else, including a 500, becomes `internal_error` with `retryable: false`
 7. **A key is read from the process environment first, and `.env` only if the variable is unset.**
    A variable that is set but empty counts as missing; `.env` is not consulted.
    `get_configured_secret` also refuses a name that is not an environment variable name, so a pasted secret cannot be used as one.
-8. **`EVAL_DRIVER_DISABLE_PROVIDER_RETRIES=1` forces zero retries**, but nothing in `evals/` or `scripts/` sets it (#656 removes it).
+8. **`EVAL_DRIVER_DISABLE_PROVIDER_RETRIES=1` forces one attempt**, but nothing in `evals/` or `scripts/` sets it (#656 removes it).
 
 ## 7. Trade-offs, and what would now be decided differently
 
@@ -218,8 +218,9 @@ Each item below was observed on 2026-10-16 and is tracked by an issue.
 
 *Wrong behaviour today.*
 
-1. **The retry knob does not mean what it says** (#654).
-   Rename it to `max_attempts`, or hand retries to LiteLLM's `num_retries` and set LangChain's to 1, and record which errors deserve a retry.
+1. **The retry knob did not mean what it said.**
+   Resolved by #654: it is renamed to `max_attempts`, validation requires at least 1, and the configuration reference records which errors are retried.
+   Retries stay on LangChain's layer; LiteLLM's `num_retries` was rejected because it also retries 4xx responses and, by default, retries immediately instead of backing off.
 2. **Keys were checked on the first question, not at boot.**
    Resolved by #641: the lifespan now checks each served profile's key, and ADR-0045 is amended to say so.
    It remains a lifespan check rather than part of loading settings, so offline commands such as ingestion do not need a provider key.
@@ -262,7 +263,7 @@ Add a deployment, then an explicit option contract in both `_validate_provider_o
 Provision its key in Render as a runtime variable and name it in `render.yaml`.
 
 **Change a timeout or retry count.**
-Keep `timeout x attempts + backoff` well inside `stream_turn_timeout_seconds`, and remember that `max_retries` counts attempts.
+Keep `timeout x attempts + backoff` well inside `stream_turn_timeout_seconds`, and remember that `max_attempts` counts attempts.
 
 **Enable thinking.**
 Only behind an eval comparison, and only for `react` (section 7).

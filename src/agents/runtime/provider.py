@@ -68,10 +68,13 @@ class AgentProvider:
         api_key = _resolve_deployment_credential(deployment, profile)
 
         profile_config = deployment.profile
-        max_retries = (
-            0
+        # The configured value counts attempts, not retries: ChatLiteLLM feeds
+        # it to tenacity's stop_after_attempt, so 2 is two requests and 1 is a
+        # single attempt. That is why the YAML key is named max_attempts.
+        max_attempts = (
+            1
             if os.getenv("EVAL_DRIVER_DISABLE_PROVIDER_RETRIES") == "1"
-            else profile_config["max_retries"]
+            else profile_config["max_attempts"]
         )
         return ChatLiteLLM(
             model=deployment.model,
@@ -79,7 +82,7 @@ class AgentProvider:
             temperature=profile_config["temperature"],
             max_tokens=profile_config["max_tokens"],
             request_timeout=profile_config["timeout"],
-            max_retries=max_retries,
+            max_retries=max_attempts,
             streaming=profile_config["streaming"],
             model_kwargs=provider_options_to_model_kwargs(deployment),
         )

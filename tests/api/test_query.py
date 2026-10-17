@@ -153,6 +153,19 @@ class QueryRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 429)
         self.assertEqual(response.json(), {"detail": BUSY_MESSAGE})
 
+    def test_query_route_returns_retryable_503_when_the_turn_deadline_expires(self) -> None:
+        with patch(
+            "src.api.routes.query.generate_agent_response",
+            new=AsyncMock(side_effect=ProviderBusyError()),
+        ):
+            response = self.client.post(
+                "/api/v1/agent/chat",
+                json={"query": "what time is it?"},
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"detail": BUSY_MESSAGE})
+
     def test_query_route_returns_400_for_blank_query(self) -> None:
         with patch(
             "src.api.routes.query.generate_agent_response",

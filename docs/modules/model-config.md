@@ -7,7 +7,7 @@
 The model config answers one question for the rest of the codebase: "give me a chat model for this job".
 A caller names a job, called a **profile**, and gets back a configured `ChatLiteLLM` client.
 It never names a model, an endpoint, or a key.
-This guide owns which models serve, why there are two profiles with different settings, and what the timeouts, retries, and stream deadline protect against.
+This guide owns which models serve, why there are two profiles with different settings, and what the timeouts, retries, and turn deadline protect against.
 Procedures for setting keys and pricing in Langfuse stay in [the operate how-to](../how-to/operate.md), and the key reference is in [the configuration reference](../reference/configuration.md).
 
 ## 1. Summary and scope
@@ -101,7 +101,7 @@ Only the first two moments below can stop the process.
 
 | Moment | What happens | Code | On failure |
 |---|---|---|---|
-| Import | `load_settings` validates and resolves the whole `agent` section: model strings are provider-qualified, key names look like environment variable names, profile numbers are in range, provider options are known, and the stream deadline is a positive integer | `src/core/config.py` → `_build_agent_settings` | `ConfigLoadError` naming the YAML path, boot refused in about two seconds |
+| Import | `load_settings` validates and resolves the whole `agent` section: model strings are provider-qualified, key names look like environment variable names, profile numbers are in range, provider options are known, and the turn deadline is a positive integer | `src/core/config.py` → `_build_agent_settings` | `ConfigLoadError` naming the YAML path, boot refused in about two seconds |
 | Boot, in the lifespan | After the database guards and before the checkpointer pool opens, each served profile's deployment must have a non-empty key: `react` always, and `sql_generation` only while the v1 `query_clean_jobs` tool is registered | `src/serving/composition.py` → `_assert_served_profile_credentials`; `src/agents/runtime/provider.py` → `assert_profile_credential` | `ProviderCredentialError` naming the variable, uvicorn exits 3 |
 | First request per system prompt | `AgentRuntime` compiles one agent per system prompt version and content; the first such compile builds the `react` model (once per process) and reads its key again | `src/agents/runtime/factory.py` → `agent_factory` | The same `ProviderCredentialError`, from the same resolver as the boot check, if the key disappeared after boot |
 | Every `query_clean_jobs` call | The `sql_generation` model is built on the first call and reused after | `src/agents/tools/query_clean_jobs.py` → `generate_sql` | Same as above, inside the tool |
@@ -132,7 +132,7 @@ DeepSeek's thinking mode ignores sampling parameters, including temperature, so 
 The default is written in code, not only in YAML: a DeepSeek profile that omits `thinking` still sends `thinking: {type: disabled}`.
 Measured on 2026-10-16: every DeepSeek request body carries that field.
 
-## 5. Timeouts, retries, and the stream deadline
+## 5. Timeouts, retries, and the turn deadline
 
 Three limits stack, from one HTTP request up to one user turn.
 Each row was measured on 2026-10-16 by pointing `DEEPSEEK_API_BASE` at a local server that returned a fixed status, never answered, or sent one token every 5 s.
@@ -141,7 +141,7 @@ Each row was measured on 2026-10-16 by pointing `DEEPSEEK_API_BASE` at a local s
 |---|---|---|---|
 | Request timeout | `timeout: 30`, passed as `request_timeout` | Time without data from the provider, not the length of a call | A provider that never answers raises `litellm.Timeout` at 30 s. A stream that sends a token every 5 s ran 50 s and completed |
 | Retries | `max_attempts: 2`, passed to LangChain's retry decorator as `max_retries` | Total **attempts**, not retries: tenacity's `stop_after_attempt(max_retries)`, so the name now says it | 429: two attempts, about 4 s apart. A hung provider: two attempts, 64.8 s in total. 500 and 503: one attempt |
-| Turn deadline | `agent.stream_turn_timeout_seconds: 120` | One whole streamed turn, every model and tool call included | Enforced by `stream_agent_response` only; the non-streaming `/api/v1/agent/chat` has no deadline (#659) |
+| Turn deadline | `agent.stream_turn_timeout_seconds: 120` | One whole agent turn, streamed or not, every model and tool call included | Enforced by `stream_agent_response` and `generate_agent_response`; both report expiry as `provider_busy` (#659) |
 
 **What each protects against.**
 
@@ -155,7 +155,7 @@ Each row was measured on 2026-10-16 by pointing `DEEPSEEK_API_BASE` at a local s
 **How a failure reaches the user.**
 `classify_provider_busy_error` walks the exception chain.
 A 429, a 408, 503, or 504, or an error whose text says rate limit, quota, or timeout becomes `provider_busy` with `retryable: true` and the "demo is busy" message.
-An expired turn deadline becomes the same `provider_busy` event.
+An expired turn deadline becomes the same `provider_busy` result: an in-band `error` event on `/api/v1/agent/chat/stream`, and a `503` on `/api/v1/agent/chat`.
 Anything else, including a 500, becomes `internal_error` with `retryable: false`.
 
 ## 6. Behaviours that surprise a new developer
@@ -261,7 +261,7 @@ Only behind an eval comparison, and only for `react` (section 7).
 | `src/serving/composition.py` → `_assert_served_profile_credentials`, `_served_profiles` | The boot key check, and which profiles count as served |
 | `src/agents/runtime/factory.py` → `agent_factory` | The `react` caller |
 | `src/agents/tools/query_clean_jobs.py` → `generate_sql` | The `sql_generation` caller |
-| `src/agents/service.py` → `stream_agent_response`; `src/core/errors.py` → `classify_provider_busy_error` | The turn deadline and how failures reach the user |
+| `src/agents/service.py` → `generate_agent_response`, `stream_agent_response`; `src/core/errors.py` → `classify_provider_busy_error` | The turn deadline and how failures reach the user |
 | `src/agents/tracing/langfuse.py` → `_base_langfuse_tags`, `_react_model_name` | Trace attribution |
 | `config/langfuse_models.yaml`, `scripts/provision_langfuse_models.py` | Cost pricing |
 | `tests/agents/runtime/test_provider.py`, `tests/core/test_config.py` | The behaviour pinned by tests |

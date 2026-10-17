@@ -675,8 +675,9 @@ immediately, so the model call and any provider-busy it raises are always after 
   before the generator starts, so it still returns a clean `400`. The per-IP rate limiter also
   rejects with `429` before the route body runs, but that is middleware, not this path.
 - **Provider-busy cannot be a pre-stream status.** It can only be known once the model runs, which
-  is after the session event has committed the `200`. So, unlike the one-shot path which maps
-  provider-busy to a `429`, under streaming it is delivered in-band. This is a deliberate
+  is after the session event has committed the `200`. So, unlike the one-shot path, which maps
+  provider-busy to a status code (`429` for a rate limit, `503` for an expired turn deadline), under
+  streaming it is delivered in-band. This is a deliberate
   consequence of session-first ordering, not an oversight.
 - **All runtime failures are in-band error events.** Once the stream has started, a provider hiccup
   or internal failure is delivered as an error event with a safe message, followed by done. Every

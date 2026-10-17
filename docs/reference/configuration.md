@@ -7,11 +7,7 @@ dependency list.
 Operational procedures live in [how-to/operate.md](../how-to/operate.md); architecture explanation in
 [architecture.md](../architecture.md).
 
-## Stores and environment
-
 ## 5. Data and configuration
-
-### Stores and environment
 
 The agent reads the normalized `clean_jobs` table through a single-table allowlist.
 Its frozen agent-visible columns are owned by [schema reference](schema.md).
@@ -196,7 +192,7 @@ The fixture count tests skip when the evaluation database is unavailable, and th
 expects the nested SQL-generation span to be a child of its tool span, falling back to the
 pre-MCP hierarchy where that span is a sibling sharing the tool span's parent.
 
-### 3 Hosted services
+### 4 Hosted services
 
 | Service | Chosen offering | Why |
 |---|---|---|
@@ -208,7 +204,7 @@ pre-MCP hierarchy where that span is a sibling sharing the tool span's parent.
 For the current cost position, topology, environment variables, deploy procedures, and cron
 operation, see [how-to/operate.md](../how-to/operate.md).
 
-### 4 Provider quotas and cost
+### 5 Provider quotas and cost
 
 The serving agent is metered and the judge is on a free tier, which keeps evaluation work off the
 serving provider's account (D-017).
@@ -222,7 +218,7 @@ For the measured derivation see [T0027.3 DeepSeek arm](../../evals/archive/t0027
 judge-side rate-limit caveats see
 the evaluation strategy record on git tag docs-history-pre-redesign, sections 4a and 4b.
 
-### 5 Deliberately not used
+### 6 Deliberately not used
 
 Recorded so these choices are not re-litigated.
 

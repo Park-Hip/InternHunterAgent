@@ -174,8 +174,6 @@ The public demo is published as a **nightly-refreshed release**, not as a static
 
 ## 2. Layered architecture
 
-## 2. Architecture
-
 ### 1 Request lifecycle
 
 The service exposes one conversational endpoint pair and every request follows one fixed path:
@@ -840,8 +838,6 @@ thin client sufficient.
 
 
 ## 5. Schema evolution
-
-### 5.2 Schema evolution
 
 The schema grew from an original four-column sample into the real job-posting shape along a
 deliberate cheap-growth path.

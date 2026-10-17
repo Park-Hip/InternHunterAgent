@@ -10,6 +10,7 @@ flipping it.
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
 
 import pytest
@@ -48,8 +49,12 @@ def switch(monkeypatch):
     original = SETTINGS.read_text(encoding="utf-8")
 
     def set_value(value: bool):
-        text = original.replace("  agent_v0: true", f"  agent_v0: {str(value).lower()}")
-        assert "agent_v0:" in text
+        text, replaced = re.subn(
+            r"agent_v0: (?:true|false)",
+            f"agent_v0: {str(value).lower()}",
+            original,
+        )
+        assert replaced == 1, "config/settings.yaml must declare agent_v0 once"
         SETTINGS.write_text(text, encoding="utf-8")
         prompt_module.settings.__dict__.pop("config_yaml", None)
         from src.core.config import load_settings
@@ -65,9 +70,9 @@ def switch(monkeypatch):
 
 
 class TestTheSwitchMovesBoth:
-    def test_the_checked_in_default_is_the_v0_bundle(self) -> None:
+    def test_the_checked_in_default_is_the_v1_bundle(self) -> None:
         settings = yaml.safe_load(SETTINGS.read_text(encoding="utf-8"))
-        assert settings["agent"]["agent_v0"] is True
+        assert settings["agent"]["agent_v0"] is False
 
     def test_switch_on_registers_only_the_v0_tool(self, switch) -> None:
         switch(True)

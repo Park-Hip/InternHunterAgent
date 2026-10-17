@@ -37,12 +37,14 @@ observability:
       entry_points: ["api:chat", "api:chat-stream", "eval:driver", "eval:spike"]
 
 agent:
-  # The governed v0 bundle. This one switch moves the system prompt and the tool
-  # registration together, so a new prompt can never run against the old tools.
-  # The rollback is this key set back to false, which restores the v1 prompt and
-  # the v1 tool pair. ADR-0060 sets this key to false, then removes it and the
-  # v0 bundle with it; see docs/decisions/adr-0060-retire-the-agent-v0-bundle.md.
-  agent_v0: true
+  # The governed v0 bundle switch. ADR-0060 has fired: the served bundle is the
+  # v1 system prompt with the v1 tool pair. This one switch moves the system
+  # prompt and the tool registration together, so a prompt can never run against
+  # the other bundle's tools. The rollback during ADR-0060's observation window
+  # is this key set back to true, which restores the v0 prompt and the v0 tool;
+  # step 3 removes the key and the v0 bundle with it. See
+  # docs/decisions/adr-0060-retire-the-agent-v0-bundle.md.
+  agent_v0: false
 
   # Named deployments are the serving allowlist. Model names must use LiteLLM's
   # provider-qualified form, and each profile selects only one deployment.

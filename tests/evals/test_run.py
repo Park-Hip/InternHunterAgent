@@ -358,14 +358,14 @@ def test_live_capture_path_awaits_the_factory_and_binds_the_discovered_tools(mon
     The capture path used to bind one where a graph is expected, so every live
     scenario died on `'coroutine' object has no attribute 'ainvoke'` before a
     model was ever built. The bound tool list is asserted too, because fixing
-    only the await turns the crash into a run whose model can never call the one
-    tool the v0 prompt names.
+    only the await turns the crash into a run whose model can never call the
+    tools the served prompt names.
     """
     record = drive_live_capture(monkeypatch, live_scenario())
 
     assert record["agent"] is record["built_agent"]
     assert not asyncio.iscoroutine(record["agent"])
-    assert record["bound_tool_names"] == ["query_jobs"]
+    assert record["bound_tool_names"] == ["get_job_details", "query_clean_jobs"]
     assert len(record["turns"]) == 1
 
 

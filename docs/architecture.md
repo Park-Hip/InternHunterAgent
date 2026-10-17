@@ -176,6 +176,8 @@ The public demo is published as a **nightly-refreshed release**, not as a static
 
 ### 1 Request lifecycle
 
+The design of one turn, from route to runtime, is owned by the [runtime module guide](modules/runtime.md).
+
 The service exposes one conversational endpoint pair and every request follows one fixed path:
 
 ```text
@@ -467,6 +469,8 @@ SQL-generation prompt, not in tool code.
 
 ### 4 Memory
 
+What is stored and what the model sees, as measured, is in the [runtime module guide](modules/runtime.md), section 5.
+
 Short-term, session-scoped memory lets a user refine questions across turns within one
 conversation.
 It is not the whole agent, and it is deliberately scoped.
@@ -613,6 +617,7 @@ The event vocabulary:
 | Event | Payload | When |
 |---|---|---|
 | `session` | `{session_id}` | first, before any token |
+| `tool` | `{name, status, call_id, arguments, duration_ms, error, row_count, truncated}` | when each tool call starts and ends |
 | `token` | `{text}` | each surviving chunk, many |
 | `metadata` | `{trace_id, trace_url}` | once, after the token stream ends |
 | `error` | `{message, code, retryable}` | in place of further tokens on mid-run failure |
@@ -633,7 +638,7 @@ auto-encode yielded event objects, and the higher-level producer path conflicts 
 pre-stream blank-query rejection.
 The endpoint therefore JSON-frames the small event blocks itself and sets the anti-buffering headers
 `Cache-Control: no-cache` and `X-Accel-Buffering: no`.
-OpenAPI publishes the five logical event blocks as a discriminated schema for API consumers, while
+OpenAPI publishes the six logical event blocks as a discriminated schema for API consumers, while
 the route deliberately retains this hand-built framing as an `EventSourceResponse` upgrade guard:
 framework upgrades must not silently change the wire bytes.
 This still avoids a third-party SSE dependency and keeps the API layer limited to wire-format
@@ -691,8 +696,9 @@ immediately, so the model call and any provider-busy it raises are always after 
   a single token.
 
 **What streaming does not add.**
-Resumable or replayable streams, retry-from-last-token, multi-node progress indicators, and per-tool
-streamed status are explicitly excluded.
+Resumable or replayable streams, retry-from-last-token, and multi-node progress indicators are
+explicitly excluded.
+Tool calls are reported as `tool` events, so the reader can check the answer's provenance.
 The demo streams the final answer only.
 The streamed answer routes through the same tool and prompt path the evaluation harness scores, so
 streaming adds no bypass.

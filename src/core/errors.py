@@ -2,11 +2,13 @@ class InvalidQueryError(ValueError):
     """Raised when the client sends input that cannot be processed (4xx)."""
 
 
-BUSY_MESSAGE = "The demo is busy right now. Please try again in a moment."
-GENERIC_ERROR_MESSAGE = "I couldn't complete that request right now. Please try again later."
+BUSY_MESSAGE = "Bản thử nghiệm đang bận - vui lòng thử lại sau một lát."
+GENERIC_ERROR_MESSAGE = "Hiện chưa thể hoàn tất yêu cầu này. Vui lòng thử lại sau."
 
 # Stable machine-readable values for in-band streaming failures. The messages
-# above remain the only human-facing error text at the public boundary.
+# above remain the only human-facing error text at the public boundary, and the
+# server owns them like every other user-facing string: the client renders
+# `message` verbatim in Vietnamese (ADR-0061).
 PROVIDER_BUSY_ERROR_CODE = "provider_busy"
 INTERNAL_ERROR_CODE = "internal_error"
 

@@ -234,11 +234,11 @@ The last column is the one that matters: does the conversation still work afterw
 |---|---|---|---|
 | Normal turn | `session`, `tool` events, tokens, `metadata`, `done` | The whole exchange | Works |
 | Dừng, or the tab closes, while a tool runs | Nothing more; the tool card keeps "đang chạy…" (#675) | Question and tool call, no tool result | **Fails every time** with `internal_error` (#671) |
-| Deadline expires while a tool runs | `provider_busy`, "try again in a moment", `retryable: true` | Question and tool call, no tool result | **Fails every time**; the promised retry cannot succeed (#671) |
+| Deadline expires while a tool runs | `provider_busy`, "Bản thử nghiệm đang bận - vui lòng thử lại sau một lát.", `retryable: true` | Question and tool call, no tool result | **Fails every time**; the promised retry cannot succeed (#671) |
 | Deadline expires after the tool returned | `provider_busy`, `retryable: true` | Question, tool call, result | Works |
 | Dừng after the first tokens | The partial answer as painted; only screen readers hear "Đã dừng." | Tool calls and results, no answer | Works |
 | Two turns at once on one session | Both answered | Only the later turn's exchange | Works, but one exchange is silently lost |
-| The model answers nothing | One fallback sentence, in English (#676) | Whatever the model wrote | Works |
+| The model answers nothing | One Vietnamese fallback sentence ([ADR-0061](../decisions/adr-0061-user-facing-copy-is-server-owned-vietnamese.md)) | Whatever the model wrote | Works |
 
 **How each path ends.**
 
@@ -269,7 +269,7 @@ It is still a second code path beside the stream, with its own answer extraction
 2. **The first request after a prompt change is slower.**
    `AgentRuntime._active_agent` compiles one agent per system prompt version and content and caches it for the process lifetime; the cache is never evicted.
 3. **The empty-answer fallback is a `token`, not an `error`.**
-   A turn whose model writes nothing still succeeds, with one English sentence as its answer (#676).
+   A turn whose model writes nothing still succeeds, with one Vietnamese fallback sentence as its answer (ADR-0061).
 4. **A failed turn has no trace link.**
    The `error` path skips `metadata`, although the trace exists.
 5. **`retryable: true` after a deadline is not always true.**
@@ -321,7 +321,7 @@ Each item was found while preparing this guide and is tracked by an issue.
    Not decided here: the tracing guide (row 6) decides whether the runtime goes behind a port like the service.
 
 The order is #671 first, then #689, #678, and #679, which edit the same code in that order; #673 and #688 are independent.
-The user-facing follow-ups are #675 (a stopped turn keeps "đang chạy…"), #676 (English messages), and #677 (the tool card's count, row 5).
+The user-facing follow-ups are #675 (a stopped turn keeps "đang chạy…") and #677 (the tool card's count, row 5).
 
 ## 9. Changing it safely
 

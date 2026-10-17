@@ -44,11 +44,13 @@ markdownRenderer.html = () => "";
 // The server's own "I have nothing for you" constant, from
 // src/agents/service.py. Matching it is a documented contract rather than a
 // guess at phrasing; tests/api/test_static_serving.py pins the two together so
-// they cannot drift. Telling "no answer" apart from a real answer needs a
-// richer signal - a tool event carrying the row count - which is deliberately
-// out of scope here.
-const NO_ANSWER_TEXT =
-  "I couldn't produce an answer for that — please try rephrasing.";
+// they cannot drift. Since ADR-0061 the server owns every user-facing string
+// and sends this one in Vietnamese too; the exact-text mirror is still the only
+// way to recognise the empty-answer turn, because that turn carries a `token`
+// and no `code`. Telling "no answer" apart from a real answer needs a richer
+// signal - a tool event carrying the row count - which is deliberately out of
+// scope here.
+const NO_ANSWER_TEXT = "Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại.";
 
 // Re-render at most this often while tokens arrive. Rewriting the whole answer
 // node per token is quadratic and thrashes layout; the stream itself is

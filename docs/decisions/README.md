@@ -41,6 +41,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0058](adr-0058-single-source-mvp-ingestion.md) | Ingestion is one authorized source feeding one serving table | Data governance |
 | [ADR-0059](adr-0059-no-stored-posting-lifecycle.md) | Posting lifecycle is not stored; the agent counts every posting ever collected | Data honesty |
 | [ADR-0060](adr-0060-retire-the-agent-v0-bundle.md) | The agent v0 bundle is retired and the legacy SQL query path serves permanently | Agent runtime |
+| [ADR-0061](adr-0061-user-facing-copy-is-server-owned-vietnamese.md) | User-facing copy at the public boundary is server-owned Vietnamese | Product scope |
 
 Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
 superseded by ADR-0052 and keep their files with a `Superseded by` status.

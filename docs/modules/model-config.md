@@ -1,6 +1,6 @@
 # Model config module guide
 
-> **Last verified:** 2026-10-16
+> **Last verified:** 2026-10-17
 
 > **Eviction:** Rewritten whenever `agent.providers`, `agent.react`, `agent.sql_generation`, or `src/agents/runtime/provider.py` changes; removed when the module is retired.
 
@@ -68,7 +68,6 @@ The whole contract is this excerpt of `config/settings.yaml`:
 agent:
   providers:
     deepseek_flash:
-      provider: deepseek
       model: deepseek/deepseek-flash
       api_key_env: DEEPSEEK_API_KEY
   stream_turn_timeout_seconds: 120
@@ -92,22 +91,24 @@ agent:
       thinking: disabled
 ```
 
-`AgentProvider.build_model` maps each profile knob onto a `ChatLiteLLM` argument: `timeout` becomes `request_timeout`, `max_attempts` becomes the library's `max_retries` (which counts attempts), `provider_options` become `model_kwargs`, and the rest keep their names.
+`build_model(profile)` maps each profile knob onto a `ChatLiteLLM` argument: `timeout` becomes `request_timeout`, `max_attempts` becomes the library's `max_retries` (which counts attempts), `provider_options` become `model_kwargs` through the vendor's `to_model_kwargs()`, and the rest keep their names.
+The client is built on first use and reused for the process lifetime (#656); a deployment names its provider only through the model prefix.
 
 ## 3. When it runs
 
-The YAML is loaded once, but the model config is resolved again at five different moments.
-Only the first two can stop the process.
+The YAML is loaded once, and the agent section is validated and resolved into typed deployments in the same load.
+Only the first two moments below can stop the process.
 
 | Moment | What happens | Code | On failure |
 |---|---|---|---|
-| Import | `load_settings` validates the whole `agent` section: deployments exist, model strings are provider-qualified, key names look like environment variable names, numbers are in range, provider options are known | `src/core/config.py` → `validate_agent_config` | `ConfigLoadError`, boot refused in about two seconds |
-| Boot, in the lifespan | After the database guards and before the checkpointer pool opens, each served profile's deployment must have a non-empty key: `react` always, and `sql_generation` only while the v1 `query_clean_jobs` tool is registered | `src/serving/composition.py` → `_assert_served_profile_credentials`; `src/agents/runtime/provider.py` → `AgentProvider.assert_profile_credential` | `ProviderCredentialError` naming the variable, uvicorn exits 3 |
-| First request per system prompt | `AgentRuntime` compiles one agent per system prompt version and content, which builds the `react` model and reads its key again | `src/agents/runtime/factory.py` → `agent_factory` | The same `ProviderCredentialError`, from the same resolver as the boot check, if the key disappeared after boot |
-| Every `query_clean_jobs` call | A new `sql_generation` model is built for each call | `src/agents/tools/query_clean_jobs.py` → `generate_sql` | Same as above, inside the tool |
-| Every trace | Tracing resolves the `react` deployment for the `provider:` and `model:` tags and the stream latency metadata | `src/agents/tracing/langfuse.py` → `_base_langfuse_tags`, `_react_model_name` | Raises for tags; latency metadata falls back to `"unknown"` |
+| Import | `load_settings` validates and resolves the whole `agent` section: model strings are provider-qualified, key names look like environment variable names, profile numbers are in range, provider options are known, and the stream deadline is a positive integer | `src/core/config.py` → `_build_agent_settings` | `ConfigLoadError` naming the YAML path, boot refused in about two seconds |
+| Boot, in the lifespan | After the database guards and before the checkpointer pool opens, each served profile's deployment must have a non-empty key: `react` always, and `sql_generation` only while the v1 `query_clean_jobs` tool is registered | `src/serving/composition.py` → `_assert_served_profile_credentials`; `src/agents/runtime/provider.py` → `assert_profile_credential` | `ProviderCredentialError` naming the variable, uvicorn exits 3 |
+| First request per system prompt | `AgentRuntime` compiles one agent per system prompt version and content; the first such compile builds the `react` model (once per process) and reads its key again | `src/agents/runtime/factory.py` → `agent_factory` | The same `ProviderCredentialError`, from the same resolver as the boot check, if the key disappeared after boot |
+| Every `query_clean_jobs` call | The `sql_generation` model is built on the first call and reused after | `src/agents/tools/query_clean_jobs.py` → `generate_sql` | Same as above, inside the tool |
+| Every trace | Tracing reads the `react` deployment from the typed settings for the `provider:` and `model:` tags and the stream latency metadata | `src/agents/tracing/langfuse.py` → `_base_langfuse_tags`, `_react_model_name` | Raises if the `react` deployment is missing; there is no fallback |
 
-Each of the last four calls `resolve_agent_deployment`, which runs the full `validate_agent_config` again on configuration that already passed at import.
+The runtime never re-parses YAML: every row below Import reads the typed settings built at load.
+The key check deliberately stays in the lifespan rather than in settings loading, so offline commands such as ingestion do not need a provider key.
 
 While `agent.agent_v0` is `true`, the v0 bundle serves and `query_clean_jobs` is not registered, so the `sql_generation` profile is validated and required but never called in production.
 ADR-0060 retires v0: #648 flips the switch and #649 removes the bundle, after which `sql_generation` is the permanent query path.
@@ -161,7 +162,7 @@ Anything else, including a 500, becomes `internal_error` with `retryable: false`
 ## 6. Behaviours that surprise a new developer
 
 1. **A malformed `agent` section refuses boot**, at import, with the YAML path in the message: an unknown deployment, an unqualified model string, an unknown provider option, a `temperature` below zero.
-   The exception is `stream_turn_timeout_seconds`, which silently falls back to 120 when missing or invalid.
+   Nothing falls back: `stream_turn_timeout_seconds` must be a positive integer, and a missing or invalid value refuses boot too (#656, amending ADR-0048).
 2. **A missing key refuses boot, but only for a served profile** (#641).
    With `DEEPSEEK_API_KEY` unset or blank, the lifespan raises `ProviderCredentialError` and uvicorn exits 3.
    `GROQ_API_KEY` is not a deployment key any more (it survives only as the eval judge's optional alternate branch), so nothing validates it at boot; `sql_generation`'s key is checked only once the v1 tool is registered.
@@ -177,7 +178,6 @@ Anything else, including a 500, becomes `internal_error` with `retryable: false`
 7. **A key is read from the process environment first, and `.env` only if the variable is unset.**
    A variable that is set but empty counts as missing; `.env` is not consulted.
    `get_configured_secret` also refuses a name that is not an environment variable name, so a pasted secret cannot be used as one.
-8. **`EVAL_DRIVER_DISABLE_PROVIDER_RETRIES=1` forces one attempt**, but nothing in `evals/` or `scripts/` sets it (#656 removes it).
 
 ## 7. Trade-offs, and what would now be decided differently
 
@@ -212,41 +212,24 @@ Mechanically it is one line, `agent.react.provider_options.thinking: enabled`, w
 The right shape is a research-led issue after #649 that runs the eval suite with thinking on and off for `react` only, comparing pass rate, time to first token, tokens per turn, and tool-loop errors.
 
 **Would now be decided differently.**
-The module is about 250 lines across `src/core/config.py` and `src/agents/runtime/provider.py` for one deployment and two profiles.
-Most of that weight is hand-written code validating and resolving what a typed model could hold once.
+The typed config refactor landed (2026-10-17, #656): `src/core/config.py` holds frozen `Deployment`, `Profile`, and per-vendor option models, resolved once into the typed agent settings at load, and `build_model(profile)` is a module function with a one-model-per-profile cache.
 Each item below was observed on 2026-10-16 and is tracked by an issue.
 
-*Wrong behaviour today.*
+*Resolved since then.*
 
-1. **The retry knob did not mean what it said.**
-   Resolved by #654: it is renamed to `max_attempts`, validation requires at least 1, and the configuration reference records which errors are retried.
-   Retries stay on LangChain's layer; LiteLLM's `num_retries` was rejected because it also retries 4xx responses and, by default, retries immediately instead of backing off.
-2. **Keys were checked on the first question, not at boot.**
+1. **Keys were checked on the first question, not at boot.**
    Resolved by #641: the lifespan now checks each served profile's key, and ADR-0045 is amended to say so.
    It remains a lifespan check rather than part of loading settings, so offline commands such as ingestion do not need a provider key.
+2. **The retry knob did not mean what it said.**
+   Resolved by #654: it is renamed to `max_attempts`, validation requires at least 1, and the configuration reference records which errors are retried.
+   Retries stay on LangChain's layer; LiteLLM's `num_retries` was rejected because it also retries 4xx responses and, by default, retries immediately instead of backing off.
+3. **The unused Groq deployment.**
+   Resolved by #655: the serving allowlist now holds only deployments a profile selects, and the Groq option contract went with the deployment; `Settings.GROQ_API_KEY` stays for the eval judge's branch.
 
-*The same fact kept in two places* (all #656, which lands after #655).
+*Still open.*
 
-3. **Resolve once, at load.**
-   `load_settings` should build one frozen deployment per profile, so runtime code reads attributes and never re-validates YAML, and `_react_model_name` loses its `"unknown"` fallback.
-4. **Let Pydantic validate the section.**
-   Four helpers (`_validate_positive_number` and friends) check what `PositiveInt`, `NonNegativeFloat`, and `extra="forbid"` would, and `AgentDeployment.profile` is the raw YAML dict read by string keys.
-5. **One home per vendor's options.**
-   `_validate_provider_options` and `provider_options_to_model_kwargs` are two per-vendor if-chains that must agree, with the `"disabled"` default written in both, and the final `return dict(options)` cannot return anything non-empty.
-   One small options model per vendor, with its own `to_model_kwargs()`, holds both.
-6. **Derive the provider from the model string.**
-   Each deployment states `provider: deepseek` *and* `model: deepseek/...`, and the validator checks that they agree; LiteLLM already routes on the prefix.
-7. **One way to read a key.**
-   `Settings.DEEPSEEK_API_KEY` is declared, but serving reads keys by name through `get_configured_secret`, and only a test reads the field.
-
-*Weight with no current caller* (all #656).
-
-8. **The eval-only retry switch in serving code** (section 6, item 8).
-9. **A stateless class.**
-   `AgentProvider` holds no state and is constructed at each call site; `provider_for` is used only by tests.
-   A module function `build_model(profile)` would do, and each profile's model could be built once.
-10. **Pointers to a deleted decision log** (#657).
-    `render.yaml`, the operate how-to, and the architecture document cite "D-045", an entry of the decision log deleted in `d83dc97`; they should cite ADR-0045, as the `Settings` comment now does.
+1. **Pointers to a deleted decision log** (#657).
+   `render.yaml`, the operate how-to, and the architecture document cite "D-045", an entry of the decision log deleted in `d83dc97`; they should cite ADR-0045, as the `Settings` comment now does.
 
 ## 8. Changing it safely
 
@@ -259,7 +242,7 @@ Point that profile's `deployment` at another allowlisted entry; the other profil
 Remember that the trace tags follow `react` only (section 6, item 5).
 
 **Add a vendor.**
-Add a deployment, then an explicit option contract in both `_validate_provider_options` and `provider_options_to_model_kwargs`; without one, any `provider_options` for that vendor are refused at load.
+Add a deployment, then one option model in `src/core/config.py` with its own `to_model_kwargs()`, registered in `_OPTION_CONTRACTS`; without one, any `provider_options` for that vendor are refused at load.
 Provision its key in Render as a runtime variable and name it in `render.yaml`.
 
 **Change a timeout or retry count.**
@@ -273,9 +256,9 @@ Only behind an eval comparison, and only for `react` (section 7).
 | Start here | For |
 |---|---|
 | `config/settings.yaml` → `agent.providers`, `agent.react`, `agent.sql_generation`, `agent.stream_turn_timeout_seconds` | The whole contract |
-| `src/core/config.py` → `validate_agent_config`, `_validate_provider_options` | What refuses boot |
-| `src/core/config.py` → `resolve_agent_deployment`, `AgentDeployment`, `get_configured_secret` | Resolution and key lookup |
-| `src/agents/runtime/provider.py` → `AgentProvider.build_model`, `provider_options_to_model_kwargs` | How a profile becomes a client |
+| `src/core/config.py` → `_build_agent_settings`, `Deployment`, `Profile`, `DeepSeekOptions` | What refuses boot |
+| `src/core/config.py` → `AgentSettings`, `ResolvedDeployment`, `get_configured_secret` | Resolution and key lookup |
+| `src/agents/runtime/provider.py` → `build_model`, `assert_profile_credential`, `reset_built_models` | How a profile becomes a client |
 | `src/serving/composition.py` → `_assert_served_profile_credentials`, `_served_profiles` | The boot key check, and which profiles count as served |
 | `src/agents/runtime/factory.py` → `agent_factory` | The `react` caller, including compaction |
 | `src/agents/tools/query_clean_jobs.py` → `generate_sql` | The `sql_generation` caller |

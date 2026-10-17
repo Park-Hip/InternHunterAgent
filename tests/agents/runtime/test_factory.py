@@ -9,9 +9,9 @@ from src.agents.runtime.factory import agent_factory
 class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
     @patch("src.agents.runtime.factory.create_agent")
     @patch("src.agents.runtime.factory.load_system_prompt")
-    @patch("src.agents.runtime.factory.AgentProvider")
+    @patch("src.agents.runtime.factory.build_model")
     async def test_agent_factory_registers_discovered_tools(
-        self, mock_agent_provider, mock_load_system_prompt, mock_create_agent
+        self, mock_build_model, mock_load_system_prompt, mock_create_agent
     ) -> None:
         tools = [MagicMock(name="query_clean_jobs"), MagicMock(name="get_job_details")]
 
@@ -22,9 +22,9 @@ class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
 
     @patch("src.agents.runtime.factory.create_agent")
     @patch("src.agents.runtime.factory.load_system_prompt")
-    @patch("src.agents.runtime.factory.AgentProvider")
+    @patch("src.agents.runtime.factory.build_model")
     async def test_agent_factory_accepts_optional_checkpointer(
-        self, mock_agent_provider, mock_load_system_prompt, mock_create_agent
+        self, mock_build_model, mock_load_system_prompt, mock_create_agent
     ) -> None:
         fake_checkpointer = object()
 
@@ -44,10 +44,10 @@ class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
     )
     @patch("src.agents.runtime.factory.create_agent")
     @patch("src.agents.runtime.factory.load_system_prompt")
-    @patch("src.agents.runtime.factory.AgentProvider")
+    @patch("src.agents.runtime.factory.build_model")
     async def test_agent_factory_compacts_persisted_history_with_the_serving_model(
         self,
-        mock_agent_provider,
+        mock_build_model,
         mock_load_system_prompt,
         mock_create_agent,
         mock_load_compaction_message_limits,
@@ -56,7 +56,7 @@ class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
         mock_build_trim_middleware,
         mock_build_tool_observation_middleware,
     ) -> None:
-        model = mock_agent_provider.return_value.build_model.return_value
+        model = mock_build_model.return_value
 
         await agent_factory(tools=[])
 
@@ -75,9 +75,9 @@ class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
 
     @patch("src.agents.runtime.factory.create_agent")
     @patch("src.agents.runtime.factory.load_system_prompt")
-    @patch("src.agents.runtime.factory.AgentProvider")
+    @patch("src.agents.runtime.factory.build_model")
     async def test_agent_factory_uses_release_system_prompt_when_none_given(
-        self, mock_agent_provider, mock_load_system_prompt, mock_create_agent
+        self, mock_build_model, mock_load_system_prompt, mock_create_agent
     ) -> None:
         mock_load_system_prompt.return_value = "release-system-prompt"
 

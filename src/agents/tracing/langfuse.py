@@ -23,7 +23,7 @@ from src.agents.tracing.prompt_registry import (
     get_prompt_registry,
 )
 from src.agents.tracing.stream import StreamLatency, StreamObservation, StreamOutcome
-from src.core.config import ConfigLoadError, resolve_agent_deployment, settings
+from src.core.config import settings
 from src.core.logger import logger
 
 _langfuse_handler: CallbackHandler | None = None
@@ -77,10 +77,7 @@ def create_langfuse_stream_observation() -> StreamObservation:
 
 
 def _react_model_name() -> str:
-    try:
-        return resolve_agent_deployment(settings.config_yaml, "react").model
-    except (ConfigLoadError, ValueError):
-        return "unknown"
+    return settings.agent.deployment_for("react").model
 
 
 def _langfuse_taxonomy() -> dict[str, Any]:
@@ -174,7 +171,7 @@ def _base_langfuse_tags(
     if entry_point not in entry_points:
         raise ValueError(f"Unsupported Langfuse entry point: {entry_point}")
 
-    deployment = resolve_agent_deployment(settings.config_yaml, "react")
+    deployment = settings.agent.deployment_for("react")
     provider = deployment.provider
     model = deployment.model
 

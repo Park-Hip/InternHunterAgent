@@ -32,7 +32,6 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from src.agents.runtime.provider import AgentProvider
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing import langfuse
 from src.agents.tracing.prompt_registry import PROMPT_DEFINITIONS
@@ -93,7 +92,7 @@ class _ChatModelStub(GenericFakeChatModel):
         return self
 
 
-def _build_model(_self: AgentProvider, profile: str = "react") -> _ChatModelStub:
+def _build_model(profile: str = "react") -> _ChatModelStub:
     return _ChatModelStub(messages=iter([AIMessage(content=ANSWER)]))
 
 
@@ -187,7 +186,7 @@ def chat(monkeypatch: pytest.MonkeyPatch) -> Iterator[_ChatHarness]:
             name, is_fallback=harness.serve_fallbacks
         ),
     )
-    monkeypatch.setattr(AgentProvider, "build_model", _build_model)
+    monkeypatch.setattr("src.agents.runtime.factory.build_model", _build_model)
     harness.install_runtime()
     yield harness
     harness.shutdown()

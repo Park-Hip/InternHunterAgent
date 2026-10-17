@@ -1,11 +1,22 @@
 import math
 import os
 import re
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Annotated, Any, Dict, Literal, TypeVar
 
-from pydantic import Field, ValidationError
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    StrictBool,
+    StrictInt,
+    StringConstraints,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfigDict
 import yaml
 
@@ -17,16 +28,185 @@ class ConfigLoadError(Exception):
     """Raised when runtime settings or YAML config cannot be loaded."""
 
 
+AGENT_PROFILES = frozenset({"react", "sql_generation"})
+ENVIRONMENT_VARIABLE_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
+# The LiteLLM provider token: the model prefix LiteLLM routes on, and the
+# provider identity everything downstream reads. Lowercase only.
+PROVIDER_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+
+_NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
+def _require_a_number(value: Any) -> Any:
+    """Refuse what a numeric field must never coerce.
+
+    Python's ``bool`` is an ``int`` subclass, so a lax float field would read
+    ``temperature: true`` as ``1.0``, and a lax float would also read numeric
+    strings. YAML writes numbers as numbers, so both are refused here; the
+    range and finiteness checks stay in the fields' ``Field`` constraints.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("must be a number")
+    return value
+
+
+_NonNegativeFiniteFloat = Annotated[
+    float, BeforeValidator(_require_a_number), Field(ge=0, allow_inf_nan=False)
+]
+_PositiveFiniteFloat = Annotated[
+    float, BeforeValidator(_require_a_number), Field(gt=0, allow_inf_nan=False)
+]
+
+
+class ProviderOptions(BaseModel):
+    """One vendor's explicit serving-option contract.
+
+    The same model validates a profile's options and translates them for
+    LiteLLM, so validation and translation cannot drift apart; an option the
+    model does not declare is refused at load instead of passed to the vendor.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    def to_model_kwargs(self) -> dict[str, Any]:
+        """Translate the validated options into LiteLLM's request shape."""
+        raise NotImplementedError
+
+
+class DeepSeekOptions(ProviderOptions):
+    """DeepSeek's serving options: one thinking switch, off by default."""
+
+    thinking: Literal["disabled", "enabled"] = "disabled"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_unknown_options(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            unknown = sorted(set(data) - {"thinking"})
+            if unknown:
+                raise ValueError(f"unsupported DeepSeek options: {unknown}")
+        return data
+
+    def to_model_kwargs(self) -> dict[str, Any]:
+        if self.thinking == "disabled":
+            return {"extra_body": {"thinking": {"type": "disabled"}}}
+        return {}
+
+
+class EmptyProviderOptions(ProviderOptions):
+    """A provider without an option contract; only empty options are accepted."""
+
+    def to_model_kwargs(self) -> dict[str, Any]:
+        return {}
+
+
+_OPTION_CONTRACTS: dict[str, type[ProviderOptions]] = {
+    "deepseek": DeepSeekOptions,
+}
+
+
+class Deployment(BaseModel):
+    """One trusted deployment in the serving allowlist.
+
+    The provider is derived from the model prefix rather than stated a second
+    time: LiteLLM routes on that prefix, so a separate key could only disagree
+    with it.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model: _NonEmptyString
+    api_key_env: _NonEmptyString
+
+    @property
+    def provider(self) -> str:
+        """The LiteLLM provider, read from the model prefix."""
+        return self.model.split("/", 1)[0]
+
+    @field_validator("model")
+    @classmethod
+    def _model_is_provider_qualified(cls, value: str) -> str:
+        provider, _, model_name = value.partition("/")
+        if not model_name or PROVIDER_NAME.fullmatch(provider) is None:
+            raise ValueError(
+                "must be a provider-qualified LiteLLM model, "
+                "like 'deepseek/deepseek-flash'"
+            )
+        return value
+
+    @field_validator("api_key_env")
+    @classmethod
+    def _names_an_environment_variable(cls, value: str) -> str:
+        if ENVIRONMENT_VARIABLE_NAME.fullmatch(value) is None:
+            raise ValueError("must name an environment variable")
+        return value
+
+
+class Profile(BaseModel):
+    """One agent profile: a deployment name plus portable generation settings."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    deployment: _NonEmptyString
+    temperature: _NonNegativeFiniteFloat
+    max_tokens: StrictInt = Field(gt=0)
+    timeout: _PositiveFiniteFloat
+    # Counts attempts, not retries: the provider feeds it to tenacity's
+    # stop_after_attempt, so 1 is one request and 0 could never happen.
+    max_attempts: StrictInt = Field(gt=0)
+    streaming: StrictBool
+    provider_options: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResolvedDeployment(BaseModel):
+    """One profile's deployment and settings, resolved once at load."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    model: str
+    api_key_env: str
+    options: ProviderOptions
+    profile: Profile
+
+    @property
+    def provider(self) -> str:
+        """The LiteLLM provider, read from the model prefix."""
+        return self.model.split("/", 1)[0]
+
+
+class AgentSettings(BaseModel):
+    """The agent section validated and resolved once at load.
+
+    ``deployments`` holds one resolved deployment per profile in
+    ``AGENT_PROFILES``, so runtime code reads attributes instead of walking
+    raw YAML.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    deployments: dict[str, ResolvedDeployment]
+    stream_turn_timeout_seconds: StrictInt = Field(gt=0)
+
+    def deployment_for(self, profile: str) -> ResolvedDeployment:
+        """Return the profile's deployment, refusing an unknown profile."""
+        deployment = self.deployments.get(profile)
+        if deployment is None:
+            raise ValueError(f"Unsupported agent model profile: {profile}")
+        return deployment
+
+
 class Settings(BaseSettings):
-    # Every provider key is optional here; the serving lifespan validates the
-    # deployment each served profile selects before the pool opens, and the eval
-    # judge validates its own branch. No single key is required to load settings:
-    # a checkout that holds only the keys it needs still runs. See
+    # No serving provider key is declared here: serving reads each selected
+    # deployment's key by name through `get_configured_secret`, and the serving
+    # lifespan validates the deployment each served profile selects before the
+    # pool opens. The declared keys below are read by the evaluation judge
+    # (evals/judge.py), so no single key is required to load settings: a
+    # checkout that holds only the keys it needs still runs. See
     # docs/decisions/adr-0045-deepseek-serves-the-agent.md.
     GROQ_API_KEY: str | None = None
     GOOGLE_API_KEY: str | None = None
     OPENROUTER_API_KEY: str | None = None
-    DEEPSEEK_API_KEY: str | None = None
     DATABASE_URL: str = Field(..., min_length=1)
     AGENT_DATABASE_URL: str = Field(..., min_length=1)
     HEALTHCHECKS_URL: str | None = None
@@ -52,163 +232,61 @@ class Settings(BaseSettings):
     ingestion_yaml: Dict[str, Any] = {}
     tech_vocabulary_yaml: Dict[str, Any] = {}
 
+    # The resolved agent section is a private attribute rather than a field: it
+    # is built by `load_settings` and never parsed from the environment, and a
+    # field named `agent` would match an unrelated AGENT variable and refuse
+    # boot. The property is the attribute runtime code reads (#656).
+    _agent: AgentSettings | None = PrivateAttr(default=None)
+
+    @property
+    def agent(self) -> AgentSettings | None:
+        return self._agent
+
+    @agent.setter
+    def agent(self, value: AgentSettings | None) -> None:
+        self._agent = value
+
 
 _settings_cache: Settings | None = None
-DEFAULT_STREAM_TURN_TIMEOUT_SECONDS = 120
-AGENT_PROFILES = frozenset({"react", "sql_generation"})
-ENVIRONMENT_VARIABLE_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
-
-
-@dataclass(frozen=True)
-class AgentDeployment:
-    """One trusted LiteLLM deployment resolved for an agent profile."""
-
-    name: str
-    provider: str
-    model: str
-    api_key_env: str
-    provider_options: dict[str, Any]
-    profile: dict[str, Any]
 
 
 def _config_error(message: str) -> ConfigLoadError:
     return ConfigLoadError(f"Invalid agent configuration: {message}")
 
 
-def _required_nonempty_string(value: Any, *, name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise _config_error(f"'{name}' must be a nonempty string")
-    return value.strip()
+def _agent_config_error(exc: ValidationError, *, path: str) -> ConfigLoadError:
+    """Name the first pydantic refusal with its YAML path."""
+    first = exc.errors()[0]
+    location = ".".join(str(part) for part in first.get("loc", ()))
+    message = str(first.get("msg", "invalid value"))
+    full_path = f"{path}.{location}" if location else path
+    return _config_error(f"'{full_path}': {message}")
 
 
-def _validate_positive_number(value: Any, *, name: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise _config_error(f"'{name}' must be a positive finite number")
-    if not math.isfinite(value) or value <= 0:
-        raise _config_error(f"'{name}' must be a positive finite number")
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
-def _validate_nonnegative_number(value: Any, *, name: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise _config_error(f"'{name}' must be a nonnegative finite number")
-    if not math.isfinite(value) or value < 0:
-        raise _config_error(f"'{name}' must be a nonnegative finite number")
+def _validate_agent_model(model: type[_ModelT], data: Any, *, path: str) -> _ModelT:
+    """Validate one typed model, refusing with the YAML path on error."""
+    try:
+        return model.model_validate(data)
+    except ValidationError as exc:
+        raise _agent_config_error(exc, path=path) from exc
 
 
-def _validate_nonnegative_int(value: Any, *, name: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise _config_error(f"'{name}' must be a nonnegative integer")
-
-
-def _validate_positive_int(value: Any, *, name: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise _config_error(f"'{name}' must be a positive integer")
-
-
-def _validate_provider_options(provider: str, options: dict[str, Any], *, name: str) -> None:
-    if provider == "deepseek":
-        unknown = set(options) - {"thinking"}
-        if unknown:
-            raise _config_error(f"'{name}' has unsupported DeepSeek options: {sorted(unknown)}")
-        thinking = options.get("thinking", "disabled")
-        if thinking not in {"disabled", "enabled"}:
-            raise _config_error(f"'{name}.thinking' must be 'disabled' or 'enabled'")
-        return
-
-    if options:
-        raise _config_error(
-            f"'{name}' is not supported for provider '{provider}'. Add an explicit contract first"
-        )
-
-
-def validate_agent_config(config: dict[str, Any]) -> None:
-    """Validate the trusted, configuration-driven serving deployment contract."""
-
-    agent = config.get("agent")
-    if not isinstance(agent, dict):
-        raise _config_error("missing 'agent' section")
-
-    providers = agent.get("providers")
-    if not isinstance(providers, dict) or not providers:
-        raise _config_error("'agent.providers' must be a nonempty mapping")
-
-    for deployment_name, deployment in providers.items():
-        if not isinstance(deployment_name, str) or not deployment_name.strip():
-            raise _config_error("'agent.providers' names must be nonempty strings")
-        if not isinstance(deployment, dict):
-            raise _config_error(f"'agent.providers.{deployment_name}' must be a mapping")
-        provider = _required_nonempty_string(
-            deployment.get("provider"), name=f"agent.providers.{deployment_name}.provider"
-        ).lower()
-        model = _required_nonempty_string(
-            deployment.get("model"), name=f"agent.providers.{deployment_name}.model"
-        )
-        if not model.startswith(f"{provider}/"):
+def _resolve_provider_options(
+    provider: str, options: dict[str, Any], *, path: str
+) -> ProviderOptions:
+    """Validate a profile's options against its vendor's contract."""
+    contract = _OPTION_CONTRACTS.get(provider)
+    if contract is None:
+        if options:
             raise _config_error(
-                f"'agent.providers.{deployment_name}.model' must start with '{provider}/'"
+                f"'{path}' is not supported for provider '{provider}'. "
+                "Add an explicit contract first"
             )
-        api_key_env = _required_nonempty_string(
-            deployment.get("api_key_env"), name=f"agent.providers.{deployment_name}.api_key_env"
-        )
-        if ENVIRONMENT_VARIABLE_NAME.fullmatch(api_key_env) is None:
-            raise _config_error(
-                f"'agent.providers.{deployment_name}.api_key_env' must name an environment variable"
-            )
-
-    for profile in AGENT_PROFILES:
-        profile_config = agent.get(profile)
-        if not isinstance(profile_config, dict):
-            raise _config_error(f"missing 'agent.{profile}' section")
-        deployment = _required_nonempty_string(
-            profile_config.get("deployment"), name=f"agent.{profile}.deployment"
-        )
-        if deployment not in providers:
-            raise _config_error(
-                f"'agent.{profile}.deployment' references unknown deployment '{deployment}'"
-            )
-        _validate_nonnegative_number(
-            profile_config.get("temperature"), name=f"agent.{profile}.temperature"
-        )
-        _validate_nonnegative_int(profile_config.get("max_tokens"), name=f"agent.{profile}.max_tokens")
-        if profile_config["max_tokens"] == 0:
-            raise _config_error(f"'agent.{profile}.max_tokens' must be positive")
-        _validate_positive_number(profile_config.get("timeout"), name=f"agent.{profile}.timeout")
-        _validate_positive_int(
-            profile_config.get("max_attempts"), name=f"agent.{profile}.max_attempts"
-        )
-        if not isinstance(profile_config.get("streaming"), bool):
-            raise _config_error(f"'agent.{profile}.streaming' must be a boolean")
-
-        options = profile_config.get("provider_options", {})
-        if not isinstance(options, dict):
-            raise _config_error(f"'agent.{profile}.provider_options' must be a mapping")
-        provider = providers[deployment]["provider"].strip().lower()
-        _validate_provider_options(
-            provider,
-            options,
-            name=f"agent.{profile}.provider_options",
-        )
-
-
-def resolve_agent_deployment(config: dict[str, Any], profile: str) -> AgentDeployment:
-    """Resolve one profile without exposing raw configuration to runtime callers."""
-
-    if profile not in AGENT_PROFILES:
-        raise ValueError(f"Unsupported agent model profile: {profile}")
-    validate_agent_config(config)
-
-    agent = config["agent"]
-    profile_config = agent[profile]
-    deployment_name = profile_config["deployment"].strip()
-    deployment = agent["providers"][deployment_name]
-    return AgentDeployment(
-        name=deployment_name,
-        provider=deployment["provider"].strip().lower(),
-        model=deployment["model"].strip(),
-        api_key_env=deployment["api_key_env"].strip(),
-        provider_options=dict(profile_config.get("provider_options", {})),
-        profile=profile_config,
-    )
+        return EmptyProviderOptions()
+    return _validate_agent_model(contract, options, path=path)
 
 
 def get_configured_secret(environment_variable: str) -> str | None:
@@ -228,21 +306,63 @@ def get_configured_secret(environment_variable: str) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-def get_stream_turn_timeout_seconds(config: dict[str, Any]) -> int:
-    """Return the configured bounded SSE turn deadline or its safe fallback."""
+def _build_agent_settings(config: dict[str, Any]) -> AgentSettings:
+    """Validate and resolve the whole agent section once, at load.
 
-    agent_config = config.get("agent")
-    if not isinstance(agent_config, dict):
-        return DEFAULT_STREAM_TURN_TIMEOUT_SECONDS
+    Every refusal names the YAML path, so a malformed section refuses boot
+    with the entry to fix instead of failing later at the first question.
+    """
 
-    timeout_seconds = agent_config.get("stream_turn_timeout_seconds")
-    if (
-        isinstance(timeout_seconds, int)
-        and not isinstance(timeout_seconds, bool)
-        and timeout_seconds > 0
-    ):
-        return timeout_seconds
-    return DEFAULT_STREAM_TURN_TIMEOUT_SECONDS
+    agent = config.get("agent")
+    if not isinstance(agent, dict):
+        raise _config_error("missing 'agent' section")
+
+    providers = agent.get("providers")
+    if not isinstance(providers, dict) or not providers:
+        raise _config_error("'agent.providers' must be a nonempty mapping")
+
+    deployments: dict[str, Deployment] = {}
+    for deployment_name, raw_deployment in providers.items():
+        if not isinstance(deployment_name, str) or not deployment_name.strip():
+            raise _config_error("'agent.providers' names must be nonempty strings")
+        if not isinstance(raw_deployment, dict):
+            raise _config_error(f"'agent.providers.{deployment_name}' must be a mapping")
+        deployments[deployment_name] = _validate_agent_model(
+            Deployment, raw_deployment, path=f"agent.providers.{deployment_name}"
+        )
+
+    resolved: dict[str, ResolvedDeployment] = {}
+    for profile in AGENT_PROFILES:
+        raw_profile = agent.get(profile)
+        if not isinstance(raw_profile, dict):
+            raise _config_error(f"missing 'agent.{profile}' section")
+        profile_settings = _validate_agent_model(
+            Profile, raw_profile, path=f"agent.{profile}"
+        )
+        deployment = deployments.get(profile_settings.deployment)
+        if deployment is None:
+            raise _config_error(
+                f"'agent.{profile}.deployment' references unknown deployment "
+                f"'{profile_settings.deployment}'"
+            )
+        resolved[profile] = ResolvedDeployment(
+            name=profile_settings.deployment,
+            model=deployment.model,
+            api_key_env=deployment.api_key_env,
+            options=_resolve_provider_options(
+                deployment.provider,
+                profile_settings.provider_options,
+                path=f"agent.{profile}.provider_options",
+            ),
+            profile=profile_settings,
+        )
+
+    raw_agent_settings: dict[str, Any] = {"deployments": resolved}
+    if "stream_turn_timeout_seconds" in agent:
+        raw_agent_settings["stream_turn_timeout_seconds"] = agent[
+            "stream_turn_timeout_seconds"
+        ]
+    return _validate_agent_model(AgentSettings, raw_agent_settings, path="agent")
 
 
 def _config_path(filename: str) -> Path:
@@ -454,7 +574,7 @@ def load_settings(*, force_reload: bool = False) -> Settings:
     _validate_api_config(settings.config_yaml)
     _validate_prompt_config(settings.config_yaml)
     _validate_observability_config(settings.config_yaml)
-    validate_agent_config(settings.config_yaml)
+    settings.agent = _build_agent_settings(settings.config_yaml)
     settings.prompts_yaml = _load_yaml_file(_config_path("prompts.yaml"))
     settings.ingestion_yaml = _load_yaml_file(_config_path("ingestion.yaml"))
     settings.tech_vocabulary_yaml = _load_yaml_file(

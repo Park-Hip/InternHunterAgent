@@ -10,7 +10,6 @@ from src.agents.service import (
     FALLBACK_ANSWER,
     GENERIC_ERROR_MESSAGE,
     generate_agent_response,
-    get_stream_turn_timeout_seconds,
     stream_agent_response,
 )
 from src.core.errors import INTERNAL_ERROR_CODE, PROVIDER_BUSY_ERROR_CODE
@@ -95,25 +94,6 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
 
 class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
-    def test_stream_turn_timeout_uses_deterministic_fallback_for_missing_or_invalid_config(
-        self,
-    ) -> None:
-        self.assertEqual(get_stream_turn_timeout_seconds({}), 120)
-        for invalid_value in (0, -1, True, "17"):
-            with self.subTest(invalid_value=invalid_value):
-                self.assertEqual(
-                    get_stream_turn_timeout_seconds(
-                        {"agent": {"stream_turn_timeout_seconds": invalid_value}}
-                    ),
-                    120,
-                )
-        self.assertEqual(
-            get_stream_turn_timeout_seconds(
-                {"agent": {"stream_turn_timeout_seconds": 17}}
-            ),
-            17,
-        )
-
     async def test_stream_marks_ttft_only_when_a_visible_token_is_emitted(
         self,
     ) -> None:
@@ -228,11 +208,12 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(stream.aclose(), timeout=0.1)
         self.assertTrue(runtime_cancelled.is_set())
 
-    @patch("src.agents.service.get_stream_turn_timeout_seconds", return_value=0.01)
+    @patch("src.agents.service.settings")
     @patch("src.agents.service.logger")
     async def test_stream_deadline_cancels_runtime_and_yields_one_safe_error_then_done(
-        self, mock_logger, _mock_timeout
+        self, mock_logger, mock_settings
     ) -> None:
+        mock_settings.agent.stream_turn_timeout_seconds = 0.01
         cancellation_received = asyncio.Event()
         cleaned_up = asyncio.Event()
 
@@ -282,7 +263,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             yield {"type": "token", "text": "A subsequent turn succeeds."}
             yield {"type": "metadata", "trace_id": None, "trace_url": None}
 
-        _mock_timeout.return_value = 1
+        mock_settings.agent.stream_turn_timeout_seconds = 1
         runtime.astream = MagicMock(side_effect=completed_stream)
         follow_up_events = [
             event
@@ -300,8 +281,10 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
         await asyncio.wait_for(cleaned_up.wait(), timeout=0.3)
 
-    @patch("src.agents.service.get_stream_turn_timeout_seconds", return_value=0.01)
-    async def test_deadline_completes_as_error_after_done(self, _mock_timeout) -> None:
+    @patch("src.agents.service.settings")
+    async def test_deadline_completes_as_error_after_done(self, mock_settings) -> None:
+        mock_settings.agent.stream_turn_timeout_seconds = 0.01
+
         async def blocked_stream(**_kwargs):
             await asyncio.Event().wait()
             yield  # pragma: no cover

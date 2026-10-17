@@ -123,7 +123,6 @@ The two model calls do different jobs, so they need different settings.
 | Temperature | 0.2: low, not zero | 0.0: the same question should yield the same SQL, which the validator and evals rely on |
 | `max_tokens` | 2048: an answer with several listings | 1024: one statement |
 | Streaming | Yes: tokens reach the user as they arrive | No: SQL is only usable once complete |
-| Also used by | Conversation compaction: `SummarizationMiddleware` is given the same `react` model | - |
 
 Both select the same deployment today.
 They are separate so they *can* differ: moving SQL generation to a different model is a one-line edit of `agent.sql_generation.deployment`.
@@ -206,7 +205,7 @@ Mechanically it is one line, `agent.react.provider_options.thinking: enabled`, w
 - *What changed:* `ChatLiteLLM` forwards `reasoning_content` on AI messages (langchain-litellm 0.8.1), so that blocker may be gone.
   This is read from the source, not verified live.
 - *What it would cost:* the runtime streams only non-empty string content, so the user sees an empty answer while the model reasons, and time to first token rises.
-  Reasoning is billed as output, may count against `max_tokens: 2048`, spends the 120 s turn deadline, and lands in the checkpointed history that compaction summarises.
+  Reasoning is billed as output, may count against `max_tokens: 2048`, spends the 120 s turn deadline, and lands in the checkpointed history.
 - *Why after #649:* retiring v0 changes the `react` agent's job, so a measurement taken now measures the system about to be removed.
 
 The right shape is a research-led issue after #649 that runs the eval suite with thinking on and off for `react` only, comparing pass rate, time to first token, tokens per turn, and tool-loop errors.
@@ -260,7 +259,7 @@ Only behind an eval comparison, and only for `react` (section 7).
 | `src/core/config.py` → `AgentSettings`, `ResolvedDeployment`, `get_configured_secret` | Resolution and key lookup |
 | `src/agents/runtime/provider.py` → `build_model`, `assert_profile_credential`, `reset_built_models` | How a profile becomes a client |
 | `src/serving/composition.py` → `_assert_served_profile_credentials`, `_served_profiles` | The boot key check, and which profiles count as served |
-| `src/agents/runtime/factory.py` → `agent_factory` | The `react` caller, including compaction |
+| `src/agents/runtime/factory.py` → `agent_factory` | The `react` caller |
 | `src/agents/tools/query_clean_jobs.py` → `generate_sql` | The `sql_generation` caller |
 | `src/agents/service.py` → `stream_agent_response`; `src/core/errors.py` → `classify_provider_busy_error` | The turn deadline and how failures reach the user |
 | `src/agents/tracing/langfuse.py` → `_base_langfuse_tags`, `_react_model_name` | Trace attribution |

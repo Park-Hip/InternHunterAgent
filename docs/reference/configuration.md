@@ -46,7 +46,7 @@ The worst case per call is `timeout x max_attempts` plus those waits: 64 seconds
 `agent.stream_turn_timeout_seconds` is the end-to-end SSE serving deadline.
 It is required, and a missing, non-integer, boolean, or non-positive value refuses boot (ADR-0048, amended by #656) instead of falling back.
 `database.connect_timeout_seconds` bounds every connection attempt (TCP, TLS, and authentication) so an unreachable database refuses boot within the bound; the configured value overrides any `connect_timeout` in a DSN.
-`agent.memory.*` controls the memory window, `agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence (validated during settings load and application startup).
+`agent.memory.max_turns` controls the memory window, `agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence (validated during settings load and application startup).
 `ingestion.*` configures the pipeline.
 Per project convention, parameters are configured here rather than hard-coded.
 

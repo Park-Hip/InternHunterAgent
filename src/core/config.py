@@ -175,6 +175,14 @@ class ResolvedDeployment(BaseModel):
         return self.model.split("/", 1)[0]
 
 
+class MemorySettings(BaseModel):
+    """The session memory bound: one cap measured in complete turns."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    max_turns: StrictInt = Field(gt=0)
+
+
 class AgentSettings(BaseModel):
     """The agent section validated and resolved once at load.
 
@@ -187,6 +195,7 @@ class AgentSettings(BaseModel):
 
     deployments: dict[str, ResolvedDeployment]
     stream_turn_timeout_seconds: StrictInt = Field(gt=0)
+    max_turns: StrictInt = Field(gt=0)
 
     def deployment_for(self, profile: str) -> ResolvedDeployment:
         """Return the profile's deployment, refusing an unknown profile."""
@@ -357,7 +366,17 @@ def _build_agent_settings(config: dict[str, Any]) -> AgentSettings:
             profile=profile_settings,
         )
 
-    raw_agent_settings: dict[str, Any] = {"deployments": resolved}
+    memory = agent.get("memory")
+    if not isinstance(memory, dict):
+        raise _config_error("missing 'agent.memory' section")
+    memory_settings = _validate_agent_model(
+        MemorySettings, memory, path="agent.memory"
+    )
+
+    raw_agent_settings: dict[str, Any] = {
+        "deployments": resolved,
+        "max_turns": memory_settings.max_turns,
+    }
     if "stream_turn_timeout_seconds" in agent:
         raw_agent_settings["stream_turn_timeout_seconds"] = agent[
             "stream_turn_timeout_seconds"

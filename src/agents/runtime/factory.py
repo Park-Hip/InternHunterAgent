@@ -14,14 +14,12 @@ from langchain.messages import SystemMessage
 from langchain_core.tools import BaseTool
 
 from src.agents.runtime.middleware import (
-    build_compaction_middleware,
     build_tool_observation_middleware,
     build_trim_middleware,
-    load_compaction_message_limits,
-    load_max_turns,
 )
 from src.agents.runtime.prompts import load_system_prompt
 from src.agents.runtime.provider import build_model
+from src.core.config import settings
 
 
 async def agent_factory(
@@ -31,7 +29,6 @@ async def agent_factory(
 ):
     """Build one agent with the discovered MCP tools and the present config."""
     model = build_model("react")
-    trigger_messages, keep_messages = load_compaction_message_limits()
 
     return create_agent(
         model=model,
@@ -39,8 +36,7 @@ async def agent_factory(
         system_prompt=system_prompt or load_system_prompt(),
         checkpointer=checkpointer,
         middleware=[
-            build_compaction_middleware(model, trigger_messages, keep_messages),
-            build_trim_middleware(load_max_turns()),
+            build_trim_middleware(settings.agent.max_turns),
             # Innermost, so the reported call is the one as actually issued.
             build_tool_observation_middleware(),
         ],

@@ -233,6 +233,7 @@ def _agent_section() -> dict:
                 "streaming": False,
                 "provider_options": {"thinking": "disabled"},
             },
+            "memory": {"max_turns": 6},
         }
     }
 
@@ -255,6 +256,7 @@ class AgentSectionTests(unittest.TestCase):
         )
         self.assertEqual(react.profile.max_tokens, 2048)
         self.assertEqual(agent.stream_turn_timeout_seconds, 120)
+        self.assertEqual(agent.max_turns, 6)
         self.assertEqual(set(agent.deployments), {"react", "sql_generation"})
 
     def test_provider_is_derived_from_the_model_prefix(self) -> None:
@@ -316,6 +318,39 @@ class AgentSectionTests(unittest.TestCase):
                 self.assertIn(
                     "agent.stream_turn_timeout_seconds", str(ctx.exception)
                 )
+
+    def test_memory_max_turns_refuses_missing_or_invalid_values(self) -> None:
+        for value in ("missing", None, 0, -1, True, "6", 6.0):
+            with self.subTest(value=value):
+                config = _agent_section()
+                if value == "missing":
+                    del config["agent"]["memory"]["max_turns"]
+                else:
+                    config["agent"]["memory"]["max_turns"] = value
+                with self.assertRaises(config_module.ConfigLoadError) as ctx:
+                    config_module._build_agent_settings(config)
+                self.assertIn("agent.memory.max_turns", str(ctx.exception))
+
+    def test_memory_rejects_a_leftover_compaction_section(self) -> None:
+        config = _agent_section()
+        config["agent"]["memory"]["compaction"] = {
+            "trigger_messages": 48,
+            "keep_messages": 12,
+        }
+
+        with self.assertRaises(config_module.ConfigLoadError) as ctx:
+            config_module._build_agent_settings(config)
+
+        self.assertIn("agent.memory.compaction", str(ctx.exception))
+
+    def test_missing_memory_section_is_refused(self) -> None:
+        config = _agent_section()
+        del config["agent"]["memory"]
+
+        with self.assertRaisesRegex(
+            config_module.ConfigLoadError, "missing 'agent.memory' section"
+        ):
+            config_module._build_agent_settings(config)
 
     def test_malformed_agent_sections_refuse_with_the_yaml_path(self) -> None:
         cases: list[tuple[str, Callable[[dict], None], list[str]]] = [

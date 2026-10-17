@@ -15,6 +15,7 @@ from src.core.errors import (
     INTERNAL_ERROR_CODE,
     PROVIDER_BUSY_ERROR_CODE,
     AgentTurnDeadlineExceededError,
+    ProviderBusyError,
     classify_provider_busy_error,
 )
 from src.core.logger import logger
@@ -47,17 +48,49 @@ async def generate_agent_response(
 ) -> AgentResponse:
     session_id = session_id or str(uuid.uuid4())
 
-    try:
-        response = await runtime.ainvoke(
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + settings.agent.stream_turn_timeout_seconds
+    runtime_task = asyncio.create_task(
+        runtime.ainvoke(
             query=query,
             session_id=session_id,
             user_id=user_id,
         )
+    )
+    detach_runtime_task = False
+    try:
+        await asyncio.wait(
+            {runtime_task},
+            timeout=max(0.0, deadline - loop.time()),
+        )
+        if not runtime_task.done():
+            # Cancel without awaiting cleanup: a slow cancellation must not
+            # extend the serving deadline, exactly as on the streamed route.
+            runtime_task.cancel()
+            runtime_task.add_done_callback(_consume_background_task_result)
+            detach_runtime_task = True
+            raise AgentTurnDeadlineExceededError(
+                "Non-streamed agent turn exceeded its serving deadline."
+            )
+        response = runtime_task.result()
+    except AgentTurnDeadlineExceededError as exc:
+        logger.error(
+            "generate_agent_response.failed",
+            session_id=session_id,
+            error=str(exc),
+            reclassified_busy=False,
+            deadline_exceeded=True,
+        )
+        raise ProviderBusyError() from exc
     except Exception as exc:
         provider_busy = classify_provider_busy_error(exc)
         if provider_busy is not None:
             raise provider_busy from exc
         raise
+    finally:
+        if not detach_runtime_task and not runtime_task.done():
+            runtime_task.cancel()
+            await asyncio.gather(runtime_task, return_exceptions=True)
 
     answer = response["answer"]
     if answer is None or not answer.strip():

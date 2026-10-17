@@ -43,7 +43,7 @@ The provider is derived from the model prefix, so no separate `provider` key exi
 A request timeout, a connection failure, a rate limit, and LiteLLM's generic API error are retried, with waits that start at 4 seconds and cap at 10; provider 5xx and 4xx responses are not retried, because a retry cannot fix a 4xx and provider pressure is already reported to the client as a retryable `provider_busy` error.
 The worst case per call is `timeout x max_attempts` plus those waits: 64 seconds at the shipped 30-second timeout and two attempts, 98 seconds at three, against the 120-second `agent.stream_turn_timeout_seconds` turn deadline.
 `agent.prompts.*` configures the managed-prompt deployment label and cache lifetime (see the [Langfuse prompt management guide](../how-to/manage-langfuse-prompts.md)).
-`agent.stream_turn_timeout_seconds` is the end-to-end SSE serving deadline.
+`agent.stream_turn_timeout_seconds` is the end-to-end serving deadline for one agent turn: both the streamed `/api/v1/agent/chat/stream` and the non-streaming `/api/v1/agent/chat` stop at it and report the expiry as a retryable `provider_busy`.
 It is required, and a missing, non-integer, boolean, or non-positive value refuses boot (ADR-0048, amended by #656) instead of falling back.
 `database.connect_timeout_seconds` bounds every connection attempt (TCP, TLS, and authentication) so an unreachable database refuses boot within the bound; the configured value overrides any `connect_timeout` in a DSN.
 `agent.memory.*` controls the memory window, `agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence (validated during settings load and application startup).

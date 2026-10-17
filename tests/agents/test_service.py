@@ -12,7 +12,11 @@ from src.agents.service import (
     generate_agent_response,
     stream_agent_response,
 )
-from src.core.errors import INTERNAL_ERROR_CODE, PROVIDER_BUSY_ERROR_CODE
+from src.core.errors import (
+    INTERNAL_ERROR_CODE,
+    PROVIDER_BUSY_ERROR_CODE,
+    ProviderBusyError,
+)
 
 
 class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
@@ -91,6 +95,58 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             session_id="session-empty-sync",
             failure_category=None,
         )
+
+    @patch("src.agents.service.settings")
+    @patch("src.agents.service.logger")
+    async def test_turn_deadline_returns_provider_busy_without_waiting_for_cleanup(
+        self, mock_logger, mock_settings
+    ) -> None:
+        mock_settings.agent.stream_turn_timeout_seconds = 0.01
+        cancellation_received = asyncio.Event()
+        cleaned_up = asyncio.Event()
+
+        async def blocked_invoke(**_kwargs):
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancellation_received.set()
+                await asyncio.sleep(0.2)
+                raise
+            finally:
+                cleaned_up.set()
+
+        runtime = MagicMock()
+        runtime.ainvoke = MagicMock(side_effect=blocked_invoke)
+
+        started_at = asyncio.get_running_loop().time()
+        with self.assertRaises(ProviderBusyError) as ctx:
+            await generate_agent_response(
+                query="what internships are available?",
+                runtime=runtime,
+                session_id="session-chat-timeout",
+            )
+
+        self.assertLess(asyncio.get_running_loop().time() - started_at, 0.1)
+        self.assertEqual(ctx.exception.status_code, 503)
+        self.assertTrue(ctx.exception.retryable)
+        runtime.ainvoke.assert_called_once_with(
+            query="what internships are available?",
+            session_id="session-chat-timeout",
+            user_id=None,
+        )
+        await asyncio.wait_for(cancellation_received.wait(), timeout=0.1)
+        self.assertFalse(cleaned_up.is_set())
+
+        mock_logger.error.assert_called_once()
+        self.assertEqual(
+            mock_logger.error.call_args.args[0], "generate_agent_response.failed"
+        )
+        kwargs = mock_logger.error.call_args.kwargs
+        self.assertEqual(kwargs["session_id"], "session-chat-timeout")
+        self.assertFalse(kwargs["reclassified_busy"])
+        self.assertTrue(kwargs["deadline_exceeded"])
+
+        await asyncio.wait_for(cleaned_up.wait(), timeout=0.3)
 
 
 class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):

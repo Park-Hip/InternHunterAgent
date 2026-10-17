@@ -8,6 +8,10 @@ Each SSE agent turn is bounded by `agent.stream_turn_timeout_seconds`, shipped a
 `config/settings.yaml`. The application-service stream owns the deadline, rather than the FastAPI route or an
 individual provider. This bounds the complete runtime turn, including agent orchestration and tool
 work, while keeping the HTTP layer independent of how the agent is built.
+The non-streaming `POST /api/v1/agent/chat` turn is bounded by the same setting and the same
+application-service layer (amended 2026-10-17 by #659): cancelling the runtime call the same way and
+reporting expiry as an HTTP `503` retryable `provider_busy` response, rather than introducing a
+second setting or a route-level timeout.
 
 When the deadline expires, the service cancels the in-flight runtime event without waiting for
 its generator cleanup to finish. This keeps delayed cancellation cleanup from extending the serving

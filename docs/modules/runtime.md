@@ -77,7 +77,7 @@ flowchart TD
    Whether the runtime should sit behind a port too is decided in the tracing guide (row 6).
 2. The route imports `src.agents.tracing.stream` for its no-op default observation.
 3. Events are untyped dicts.
-   The typed public models already exist in `src/api/schemas.py`, but the service and runtime cannot import from the API layer, so they build dicts and the service needs `cast` in three places (#679).
+   The typed public models already exist in `src/api/schemas.py`, but the service and runtime cannot import from the API layer, so they build dicts and need `cast` in three places, two in the service and one in the runtime (#679).
 
 ## 3. One turn, measured
 

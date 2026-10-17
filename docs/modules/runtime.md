@@ -77,7 +77,7 @@ flowchart TD
    Whether the runtime should sit behind a port too is decided in the tracing guide (row 6).
 2. The route imports `src.agents.tracing.stream` for its no-op default observation.
 3. Events are untyped dicts.
-   The typed public models already exist in `src/api/schemas.py`, but the service and runtime cannot import from the API layer, so they build dicts and the service needs `cast` in three places (#679).
+   The typed public models already exist in `src/api/schemas.py`, but the service and runtime cannot import from the API layer, so they build dicts and need `cast` in three places, two in the service and one in the runtime (#679).
 
 ## 3. One turn, measured
 
@@ -246,7 +246,7 @@ The last column is the one that matters: does the conversation still work afterw
 - **Deadline.** The service waits for each event with `asyncio.wait_for` and the time left.
   On expiry it cancels the runtime task and detaches it instead of awaiting its cleanup, then yields `provider_busy` and `done`.
   A narrower path, found by reading and reproduced only with a slow consumer: if the deadline passes while the route is still sending an event, the next loop check raises without cancelling the runtime task, and the service's cleanup waits on it after `done`.
-  Three live runs with a fast client, where the deadline expired mid-answer, all closed cleanly.
+  Three live runs with a fast client, where the deadline expired mid-answer, all closed cleanly (#688).
 - **Disconnect.** The route polls `request.is_disconnected` every 50 ms while it waits for each event, then closes the service generator.
   The service records the outcome as cancelled, sets the handshake, cancels the runtime task, and awaits it; the runtime cancels its producer and flushes Langfuse.
   It logs `stream.client_disconnected` once, but today it also logs that line for every completed turn (#674).
@@ -304,15 +304,15 @@ It is still a second code path beside the stream, with its own answer extraction
   A per-session lock would be cheap with one web worker but would do nothing across instances, and the only client that matters cannot send two turns at once.
 
 **Would now be decided differently.**
-Each item was found while preparing this guide; all but the third are tracked by an issue.
+Each item was found while preparing this guide and is tracked by an issue.
 
 1. **Interrupted tool calls are not repaired** (#671, high).
    A `before_model` middleware that answers every dangling tool call with a synthetic tool message covers every cause, including a worker crash, without a cleanup path that must run during cancellation.
 2. **Thread storage has no bound** (#673).
    Removing compaction (#672) left the 6-turn trim as the only memory bound, which limits what the model sees but not what is stored; retention deletes old threads.
-3. **Two entry points.**
+3. **Two entry points** (#689).
    #659 gave `/chat` its own copy of the deadline rather than implementing it by collecting the stream, so `ainvoke`, `generate_agent_response`, and about 100 lines of extraction and trace wiring remain beside the streamed path.
-   Folding `/chat` into the stream would leave one path; it is not tracked by an issue.
+   #689 implements `/chat` by collecting the stream, leaving one path.
 4. **Test-only surface in the runtime** (#678).
    The second mode of `astream`, the `agent=` injection, and two wrappers go; the tool middleware's holder reset moves into a `finally`.
 5. **Untyped events** (#679).
@@ -320,7 +320,7 @@ Each item was found while preparing this guide; all but the third are tracked by
 6. **The runtime imports tracing directly.**
    Not decided here: the tracing guide (row 6) decides whether the runtime goes behind a port like the service.
 
-The order is #671 first, then #678 and #679, which edit the same code in that order; #673 is independent.
+The order is #671 first, then #689, #678, and #679, which edit the same code in that order; #673 and #688 are independent.
 The user-facing follow-ups are #675 (a stopped turn keeps "đang chạy…"), #676 (English messages), and #677 (the tool card's count, row 5).
 
 ## 9. Changing it safely

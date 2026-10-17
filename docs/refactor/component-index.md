@@ -1,6 +1,6 @@
 # Refactor component index
 
-> **Last verified:** 2026-10-16
+> **Last verified:** 2026-10-17
 >
 > **Eviction:** A row leaves this index when its component is retired or its refactor reaches the
 > documented target state. Detailed historical evidence remains in `docs/discovery/`.
@@ -34,7 +34,7 @@ take the next listed boundary. Do not begin the configuration or model-policy wo
 | Configuration | `src/core/config.py`, `config/` | Loads process, YAML, provider, serving, tracing, and command settings. | **Queued (3):** separate command-specific configuration from serving configuration. | [Active backlog](active-backlog.md) |
 | Model construction | `src/agents/runtime/factory.py`, `src/agents/tools/query_clean_jobs.py` | Constructs the serving and SQL-generation models in separate paths. | **Queued (4):** define model/tool contracts, then measure options before changing providers or prompts. | [Active backlog](active-backlog.md) |
 | Offline ingestion and migrations | `src/services/ingestion/`, `.github/workflows/ingestion.yml`, `alembic/` | Legacy source collection, normalization, loading, and database migration paths. | **Single-source MVP per [ADR-0058](../decisions/adr-0058-single-source-mvp-ingestion.md):** the evidence layer, plans, and Bright Data adapter are removed. The nightly schedule is armed (#605). | [ADR-0058](../decisions/adr-0058-single-source-mvp-ingestion.md) |
-| Evaluation, operations, and delivery | `evals/`, `scripts/`, `docker/`, `render.yaml`, `.github/workflows/` | Legacy evaluation, operational automation, container delivery, and CI paths. | **Parked:** retain as evidence until a later approved slice establishes a compatibility or operational need. ADR-0060 retires the v0 acceptance gate and names its required successor, which is a precondition of that removal. | [Architecture map](../discovery/current-state-architecture-maps.md#tracing-and-evaluation-flow) |
+| Evaluation, operations, and delivery | `evals/`, `scripts/`, `docker/`, `render.yaml`, `.github/workflows/` | Legacy evaluation, operational automation, container delivery, and CI paths. | **Parked:** retain as evidence until a later approved slice establishes a compatibility or operational need. ADR-0060 retires the v0 acceptance gate; its successor, the SQL guard gate (`uv run python -m evals --gate`), runs in CI. | [Architecture map](../discovery/current-state-architecture-maps.md#tracing-and-evaluation-flow) |
 
 ## Reading rule
 

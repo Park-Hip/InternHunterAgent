@@ -1,45 +1,48 @@
 # Evaluate agent behavior
 
-The harness has two datasets and two ways to run them.
+The harness has one scenario dataset and one credential-free gate.
 
 | Dataset | What it describes | How it runs |
 | --- | --- | --- |
 | `default` | The v1 scenarios, preserved as evidence for the replays | A live capture against the serving agent, or a retained capture |
-| `v0` | The 16 governed v0 acceptance cases, derived from the v0 contract that [ADR-0060](../../docs/decisions/adr-0060-retire-the-agent-v0-bundle.md) retired with the v0 bundle itself | The credential-free gate, which calls the query core directly |
 
+The SQL guard gate reads its own reviewed corpus rather than a capture dataset, so it is not in the registry above.
 It persists one JSON artifact whose `by_metric` key groups every scored row under its metric name, and prints the same grouping as a table.
 Historical v1 replay, calibration, and instrument documents remain on disk as evidence, not as current operating instructions.
 
-## The v0 acceptance gate
+## The SQL guard gate
 
-This is the gate. It needs the fixture database and nothing else: no serving model, no judge, no secret, and no network.
+This is the gate.
+It needs the fixture database and nothing else: no serving model, no judge, no secret, and no network.
+It is the successor ADR-0060 required when it retired the v0 acceptance gate.
 
 ```sh
 docker compose up -d postgres
 uv run python -m evals.fixtures.loader
-uv run python -m evals --deterministic --dataset v0
+uv run python -m evals --gate
 ```
 
-It scores two deterministic metrics over all 16 cases:
+It runs every reviewed case in [`evals/datasets/sql_guard.yaml`](../../evals/datasets/sql_guard.yaml) through the same pipeline the tool uses - `validate_sql`, `resolve_bounds`, then the fixture - and scores three deterministic metrics:
 
 | Metric | Grades |
 | --- | --- |
-| `plan_correctness` | The criteria the core applied, against the case's reviewed plan. A city the user typed as `Hà Nội` has to be applied as the stored `Hanoi`, and `ML` as the stored `Machine Learning` |
-| `result_equivalence` | Row ids, aggregates, the full match total, the answer state, and the required evidence labels, against the golden |
+| `guard_correctness` | The `validate_sql` verdict against the reviewed one. A rejected case also pins the rule that must reject it, so widening the validator cannot quietly drop the guard's floor |
+| `obligation_correctness` | The obligation set `detect_obligations` emits, against the reviewed one. This is where the false-success class is graded: R05 is a salary average over two currencies, so it fails until the cross-currency rule matches aggregates |
+| `result_equivalence` | The rows the reviewed SQL returns on the fixture, against a reviewer-written reference, through `evals/sql_check.py` |
 
-Three cases have no request at all, because the contract's answer for them is not a query: a missing application deadline, a subjective request, and a destructive request. Their correctness claim is structural, and the gate proves it by checking that no visible column, no filter field, and no query shape can express the refused capability. A refusal that rested on prose would not be testable; the absence of a field for it is.
+The corpus has 15 cases in five classes: `reviewed` questions the guard must accept, the guard's floor (`hidden` and `cost` statements that must stay rejected), `ambiguous` accepted risks (A01-A03) that pin today's behavior and name the risk, and one injection carried by posting text.
+An accepted risk is a case, not prose: a guard that starts refusing one turns the gate red and the [ADR-0060 risk table](../decisions/adr-0060-retire-the-agent-v0-bundle.md) has to move with it.
 
-**The gate fails rather than skips.** If the fixture database is unreachable it exits 2 with a message naming the command that starts it. An unavailable database reported as green is the failure mode this track exists to remove.
+**The gate fails rather than skips.** If the fixture database is unreachable it exits 2 with a message naming the command that starts it. An unavailable database reported as green is the failure mode this gate exists to remove.
 
 ### What the gate refuses to accept
 
 | Condition | Why it fails |
 | --- | --- |
-| A false success | A confidently wrong answer is never paid for by an easy pass, whatever the rate |
-| A false refusal | A refused answer the contract requires is a defect, not a conservative success |
-| A plan that differs from the reviewed one | The plan is the interpretation; a right number from a wrong plan is luck |
-| A result, state, or evidence label that differs | The golden was reviewed, and the goldens are separately recomputed from the fixture by `tests/evals/test_v0_acceptance.py` |
-| Fewer than 16 executable cases | Coverage is a pass/fail condition, not a percentage |
+| A verdict other than the reviewed one | The reviewed statement is the case's assertion; reviewed SQL the guard rejects, or forbidden SQL it accepts, is a defect |
+| A rejected case rejected by a different rule | The floor is a pass/fail condition: the self-join, `pg_sleep`, multi-table, and hidden-column rules must each still reject their own case |
+| An obligation set other than the reviewed one | The set is the false-success assertion; R05 fails until the cross-currency rule matches aggregates |
+| A result other than the reviewed one | The reference was reviewed, and `tests/evals/test_sql_gate.py` pins the gate's grading and its refusals |
 
 The gate is deliberately stricter than a rate. A percentage would let a false success be offset by an easy pass. If a future maintainer wants a rate, that is a new decision with its own evidence, and it would still not apply to the false-success class.
 
@@ -47,16 +50,12 @@ The gate is deliberately stricter than a rate. A percentage would let a false su
 
 `grounded`, `on_topic`, and `rubric` need a judge credential, cost money, and are not reproducible run to run, so they are run deliberately by a maintainer against a recorded capture. A run without a judge credential reports them as not evaluated, never as passing. A release threshold for the served agent is a maintainer decision and is not set here.
 
-### Retired metrics on the governed path
+### Metrics the governed path never scored
 
-`sql_accuracy` and `memory` are retired for the v0 path and remain for the v1 replays.
-The v0 path never wrote SQL and is single-turn, so there is no SQL string to score and no memory
-to score.
-A v0 case that declares either is rejected when the dataset loads.
-
-**This gate does not survive the v0 retirement.** ADR-0060 deletes the v0 bundle and, with it, the
-only deterministic CI gate on agent answer behavior. That record names the successor gate and makes
-merging the removal conditional on it. Read ADR-0060 before changing anything in this section.
+The Stage 4 decision (#487) kept `sql_accuracy` and `memory` out of the governed v0 path, which wrote
+no SQL and was single-turn, so there was no SQL string to score and no memory to score.
+Both names remain in the registry because the v1 scenarios declare them, and the path that could not
+declare them is retired.
 
 ## Live evaluation of the v1 scenarios
 

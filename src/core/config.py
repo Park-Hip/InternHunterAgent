@@ -392,8 +392,8 @@ def _no_duplicate_keys(loader: yaml.SafeLoader, node: yaml.Node, deep: bool = Fa
     """Build a mapping, refusing a key that is already present.
 
     ``yaml.safe_load`` is last-wins on a repeated key, so a duplicated entry in
-    a config file is silently discarded and the file still loads. That is how
-    ``system_prompt_v0`` was declared twice in ``prompts.yaml`` and served
+    a config file is silently discarded and the file still loads. That is how a
+    managed prompt was once declared twice in ``prompts.yaml`` and served
     correctly by accident. A config file is a declaration, and a declaration
     that contradicts itself should stop the process rather than pick a winner.
     """

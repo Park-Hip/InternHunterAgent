@@ -10,7 +10,6 @@ harness that only ever replays cannot see it.
 from __future__ import annotations
 
 import asyncio
-import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -23,7 +22,7 @@ from evals.__main__ import _exit_code, main
 
 
 CAPTURE = Path("evals/replays/t0025.9-committed.json")
-LIVE_SCENARIO_ID = "V0-LIST-ROLE-CITY"
+LIVE_SCENARIO_ID = "HLP-LIST-1"
 
 
 def scenario(scenario_id: str) -> dict:
@@ -31,8 +30,8 @@ def scenario(scenario_id: str) -> dict:
 
 
 def live_scenario() -> dict:
-    """A governed v0 case, so the live path runs against the bundle under test."""
-    return next(item for item in dataset("v0").scenarios() if item["id"] == LIVE_SCENARIO_ID)
+    """A reviewed replay case, so the live path runs against the served bundle."""
+    return scenario(LIVE_SCENARIO_ID)
 
 
 def test_offline_only_scores_captured_scenarios(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -304,21 +303,6 @@ def test_quota_halts_and_marks_remaining_unrun(monkeypatch: pytest.MonkeyPatch) 
 # trace wait are stubbed, so the tests need no credential and no network.
 
 
-def set_agent_v0(monkeypatch: pytest.MonkeyPatch, value: bool) -> None:
-    """Flip `agent.agent_v0` in the cached settings, without touching the file.
-
-    `v0_agent_enabled` and `create_job_mcp_server` read this one key, so the
-    discovered surface follows the switch exactly as it does in serving. The
-    checked-in file is left alone and the original mapping is restored by
-    monkeypatch, so the rest of the suite is unaffected.
-    """
-    from src.core.config import settings
-
-    config = copy.deepcopy(settings.config_yaml)
-    config["agent"]["agent_v0"] = value
-    monkeypatch.setattr(settings, "config_yaml", config)
-
-
 def drive_live_capture(monkeypatch: pytest.MonkeyPatch, scenario_case: dict) -> dict[str, Any]:
     """Run the live capture path and record what it actually bound.
 
@@ -367,27 +351,6 @@ def test_live_capture_path_awaits_the_factory_and_binds_the_discovered_tools(mon
     assert not asyncio.iscoroutine(record["agent"])
     assert record["bound_tool_names"] == ["get_job_details", "query_clean_jobs"]
     assert len(record["turns"]) == 1
-
-
-@pytest.mark.parametrize(
-    ("agent_v0", "expected"),
-    [
-        (True, ["query_jobs"]),
-        (False, ["get_job_details", "query_clean_jobs"]),
-    ],
-)
-def test_live_capture_path_tool_surface_follows_the_bundle_switch(monkeypatch: pytest.MonkeyPatch, agent_v0: bool, expected: list[str]) -> None:
-    """The same fix serves both bundle positions, so the rollback is rehearsed here too.
-
-    Discovery is the only source of the tool list, so asserting it under both
-    switch positions is what keeps the eval agent and its system prompt from
-    diverging the way the served agent is prevented from diverging.
-    """
-    set_agent_v0(monkeypatch, agent_v0)
-
-    record = drive_live_capture(monkeypatch, live_scenario())
-
-    assert record["bound_tool_names"] == expected
 
 
 def test_live_capture_path_without_a_credential_fails_on_the_secret_not_the_graph(monkeypatch: pytest.MonkeyPatch) -> None:

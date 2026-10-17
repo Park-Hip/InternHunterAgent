@@ -1,11 +1,12 @@
 # `evals/` - The Evaluation Instrument
 
-> **Last verified:** 2026-10-01.
+> **Last verified:** 2026-10-17.
 
 > **Eviction:** This hub leaves when the evaluation layout, commands, metric contract, or result terms change.
 
 This directory measures the agent against the frozen fixture and the behavior contract.
-The rebuilt harness (#476) has one CLI, `python -m evals`, and two declarative datasets.
+The rebuilt harness (#476) has one CLI, `python -m evals`: the scenario dataset for capture and
+scoring, and the credential-free SQL guard gate.
 [`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md) is the canonical step-by-step for running it.
 This hub is the navigation map and the full command and module reference.
 
@@ -24,8 +25,8 @@ This hub is the navigation map and the full command and module reference.
 docker compose up -d postgres
 uv run python -m evals.fixtures.loader
 
-# Credential-free v0 acceptance gate (the CI gate)
-uv run python -m evals --deterministic --dataset v0
+# Credential-free SQL guard gate (the CI gate)
+uv run python -m evals --gate
 
 # Live capture + scoring of the v1 scenarios (needs the serving-model credential)
 uv run python -m evals --dataset default --out evals/runs/local-report.json
@@ -44,10 +45,13 @@ The default output lands in the gitignored `evals/runs/` directory.
 | Dataset | File | What it describes | How it runs |
 |---|---|---|---|
 | `default` | [`datasets/scenarios.yaml`](datasets/scenarios.yaml) | 50 v1 scenarios (34 single-turn, 16 conversational) | A live capture against the serving agent, or a retained capture |
-| `v0` | [`datasets/v0_acceptance.yaml`](datasets/v0_acceptance.yaml) | 19 governed v0 acceptance cases (16 with a request, 3 absent-capability cases with no request) | The credential-free gate, which calls the query core directly |
 
 The registry and its validation live in [`datasets.py`](datasets.py).
-The two datasets never mix: a new version is a new entry, never an edit to an existing registry.
+Datasets never mix: a new version is a new entry, never an edit to an existing registry.
+
+The SQL guard gate reads its own reviewed corpus, [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml),
+through [`sql_gate.py`](sql_gate.py) rather than the registry: the gate cases are reviewed SQL
+statements and obligations, not capture scenarios.
 
 ## Metrics
 
@@ -61,10 +65,13 @@ Metrics are declared in [`metrics.py`](metrics.py) and selected per scenario by 
 | `on_topic` | judge | no | Answer responds to the question and its constraints |
 | `memory` | judge | no | Answer uses the previous conversation turns and their constraints |
 | `rubric` | judge | no | Answer satisfies the scenario's own rubric |
-| `plan_correctness` | deterministic | yes | The v0 core applied the reviewed filters |
-| `result_equivalence` | deterministic | yes | The v0 result matches the reviewed golden |
 
-The v0 dataset may not declare `sql_accuracy` or `memory`: those two are retired for the governed path and remain only for the v1 replays (#487).
+`sql_accuracy` and `memory` were kept off the governed v0 path by the Stage 4 decision (#487): that
+path wrote no SQL and was single-turn. Both stay in the registry because the v1 scenarios declare
+them.
+
+The SQL guard gate declares its own three metrics in [`sql_gate.py`](sql_gate.py):
+`guard_correctness`, `obligation_correctness`, and `result_equivalence`.
 
 ## Test-to-module mapping
 
@@ -79,8 +86,7 @@ Tests live in [`tests/evals/`](../tests/evals/).
 | `test_report.py` | [`report.py`](report.py) | Result grouping and table rendering |
 | `test_run.py` | [`run.py`](run.py) | Capture and scoring with the database boundary stubbed |
 | `test_sql_check.py` | [`sql_check.py`](sql_check.py) | SQL comparison modes with query results stubbed |
-| `test_v0_acceptance.py` | [`datasets/v0_acceptance.yaml`](datasets/v0_acceptance.yaml) | Dataset structure and goldens recomputed against the fixture |
-| `test_v0_gate.py` | [`v0_gate.py`](v0_gate.py) | Gate refusals: wrong plan, wrong golden, missing label, unavailable database |
+| `test_sql_gate.py` | [`sql_gate.py`](sql_gate.py) + [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml) | Dataset grammar, guard/obligation/result grading, gate refusals |
 | `test_holdout_judge.py` | [`judge.py`](judge.py) + [`calibration_v8.yaml`](calibration_v8.yaml) | Opt-in judge-versus-human check over the retained v8 holdout |
 
 ## The map
@@ -95,13 +101,13 @@ evals/
 ├── judge.py                      Shared DeepEval judge (provider arms)
 ├── sql_check.py                  Generated-SQL vs reference-result comparison
 ├── report.py                     Result grouping and table rendering
-├── v0_gate.py                    Credential-free v0 acceptance gate
+├── sql_gate.py                   Credential-free SQL guard gate
 ├── env.py                        Fixture database binding before any src import
 ├── _paths.py                     Shared path constants
 │
 ├── datasets/
 │   ├── scenarios.yaml            The v1 scenario registry (50 scenarios)
-│   └── v0_acceptance.yaml        The governed v0 acceptance dataset (19 cases)
+│   └── sql_guard.yaml            The reviewed SQL guard corpus (15 cases)
 │
 ├── fixtures/
 │   ├── loader.py                 Fixture database build/reset

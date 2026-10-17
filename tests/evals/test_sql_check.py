@@ -47,3 +47,39 @@ def test_count_contract(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_zero_results(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sql_check, "execute_query", lambda *_: [])
     assert sql_check.compare_result_sets("SELECT id FROM clean_jobs", "SELECT id FROM clean_jobs", mode="zero_results")["status"] == "PASS"
+
+
+def test_rows_equal_compares_full_rows_order_insensitively(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sql_check,
+        "execute_query",
+        lambda sql, _: [{"location": "Hanoi", "count": 11}, {"location": "Da Nang", "count": 4}]
+        if "generated" in sql
+        else [{"count": 4, "location": "Da Nang"}, {"count": 11, "location": "Hanoi"}],
+    )
+    assert (
+        sql_check.compare_result_sets(
+            "SELECT location, count(*) AS count FROM generated GROUP BY location",
+            "SELECT * FROM reviewed",
+            mode="rows_equal",
+        )["status"]
+        == "PASS"
+    )
+
+
+def test_rows_equal_reports_the_rows_that_moved(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sql_check,
+        "execute_query",
+        lambda sql, _: [{"location": "Hanoi", "count": 11}]
+        if "generated" in sql
+        else [{"location": "Hanoi", "count": 12}],
+    )
+    result = sql_check.compare_result_sets(
+        "SELECT location, count(*) AS count FROM generated GROUP BY location",
+        "SELECT * FROM reviewed",
+        mode="rows_equal",
+    )
+    assert result["status"] == "FAIL"
+    assert result["missing_rows"] == [{"count": 12, "location": "Hanoi"}]
+    assert result["unexpected_rows"] == [{"count": 11, "location": "Hanoi"}]

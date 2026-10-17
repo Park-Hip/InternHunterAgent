@@ -43,12 +43,12 @@ def compare_result_sets(
     mode: str = "ids_only", expected_count: int | None = None,
     display_limit: int | None = None,
 ) -> dict[str, Any]:
-    """Compare row identity, a count-only aggregate, or an empty result.
+    """Compare row identity, a count-only aggregate, an empty result, or full row sets.
 
     An id-less generated query must never pass on two empty results. SQL errors
     are infrastructure failures, not bad model answers.
     """
-    if mode not in {"ids_only", "aggregate_count", "zero_results"}:
+    if mode not in {"ids_only", "aggregate_count", "zero_results", "rows_equal"}:
         raise ValueError(f"Unknown SQL comparison mode: {mode}")
     if mode in {"ids_only", "zero_results"} and "id" not in (projected_columns(reference_sql) or []):
         raise ValueError("Reference SQL must project id")
@@ -79,6 +79,18 @@ def compare_result_sets(
         if reference:
             raise ValueError("Zero-results reference returned rows")
         return {**details, "status": "PASS" if not generated else "FAIL"}
+    if mode == "rows_equal":
+        # Grouped and two-figure results carry no single identity column, so the
+        # full row set is compared order-insensitively, with values compared as
+        # their string form (the same normalization the id modes use).
+        actual = Counter(json.dumps(row, default=str, sort_keys=True) for row in generated)
+        expected_rows = Counter(json.dumps(row, default=str, sort_keys=True) for row in reference)
+        return {
+            **details,
+            "status": "PASS" if actual == expected_rows else "FAIL",
+            "missing_rows": [json.loads(key) for key in (expected_rows - actual).elements()],
+            "unexpected_rows": [json.loads(key) for key in (actual - expected_rows).elements()],
+        }
     if "id" not in (projected_columns(generated_sql) or []):
         return {**details, "status": "FAIL", "reason": "Generated SQL does not project id"}
     if any("id" not in row for row in generated + reference):

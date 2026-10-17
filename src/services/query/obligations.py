@@ -52,7 +52,10 @@ def detect_obligations(sql: str, table: TableArtifact) -> list[HedgeObligation]:
         tokens.append(_RULE_TOKENS["created_on"])
     if re.search(r"\bdescription\s+(?:not\s+)?ilike\b", normalized_sql):
         tokens.append(_RULE_TOKENS["free_text"])
-    if re.search(r"\b(?:order\s+by\s+|max\s*\(|min\s*\()salary_(?:min|max)\b", normalized_sql):
+    if re.search(
+        r"\b(?:order\s+by\s+|max\s*\(|min\s*\(|avg\s*\(|sum\s*\()salary_(?:min|max)\b",
+        normalized_sql,
+    ):
         tokens.append(_RULE_TOKENS["cross_currency"])
     if _uses_for_lifecycle_answer(normalized_sql, "listing_expires_on"):
         tokens.append(_RULE_TOKENS["listing_expiry"])

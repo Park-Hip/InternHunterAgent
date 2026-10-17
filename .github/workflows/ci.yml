@@ -149,14 +149,17 @@ jobs:
       - name: Run migration round-trip test
         run: uv run pytest tests/migrations/test_baseline_roundtrip.py -q
 
-  v0-gate:
-    name: Governed v0 acceptance gate
+  sql-guard-gate:
+    name: SQL guard gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # The governed v0 gate calls the query core directly, so it needs the fixture
+    # The successor to the v0 acceptance gate (ADR-0060). It runs the reviewed
+    # SQL statements through the guard and grades the verdict, the obligation
+    # set, and the reviewed result on the pinned fixture, so it needs the
     # database and nothing else: no serving model, no judge, no secret. It lives
-    # in its own job because an unreachable database must fail it loudly, which is
-    # different from how the credential-free unit suite treats the same database.
+    # in its own job because an unreachable database must fail it loudly, which
+    # is different from how the credential-free unit suite treats the same
+    # database.
     services:
       postgres:
         image: postgres:16
@@ -189,6 +192,6 @@ jobs:
       - name: Load the pinned fixture
         run: uv run python -m evals.fixtures.loader
 
-      - name: Gate the v0 dataset
-        run: uv run python -m evals --deterministic --dataset v0
+      - name: Gate the reviewed SQL guard cases
+        run: uv run python -m evals --gate
 

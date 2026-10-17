@@ -4,6 +4,16 @@ from src.services.query.models import ValidationResult
 
 ALLOWED_TABLE = "clean_jobs"
 
+# Ingestion bookkeeping and lifecycle columns that exist on the physical table but
+# are outside the agent-visible contract declared by `prompts.sql_generation`
+# ("Reference only real columns"). The model is never told about them, so naming
+# one is a silent contract break: the query executes and the answer looks fine.
+# The test suite asserts this set plus the prompt's declared columns partition
+# `src.api.schema_guard.EXPECTED_COLUMNS`.
+HIDDEN_COLUMNS = frozenset(
+    {"source", "external_id", "posted_date", "first_seen_at", "last_seen_at"}
+)
+
 # Write / DDL / procedure verbs that must never appear as a bare word (token) in a
 # query. Matched case-insensitively against whole words only (see TOKEN_PATTERN), so
 # `UPDATE` is caught but `updated_at` is not.
@@ -141,7 +151,8 @@ def validate_sql(sql: str) -> ValidationResult:
       5. No write/DDL/procedure verbs (DENYLISTED_KEYWORDS).
       6. No server-side file, network, or blocking function calls.
       7. No Postgres system/catalog tables (SYSTEM_TABLE_PATTERN).
-      8. Single-table allowlist: every table referenced must be `clean_jobs`.
+      8. No hidden ingestion/lifecycle columns (HIDDEN_COLUMNS).
+      9. Single-table allowlist: every table referenced must be `clean_jobs`.
 
     Read-only enforcement at execution time is handled separately by the executor's
     `SET TRANSACTION READ ONLY`; this layer restricts *scope* (which statements and
@@ -189,6 +200,16 @@ def validate_sql(sql: str) -> ValidationResult:
     # Block access to Postgres catalog/metadata tables.
     if SYSTEM_TABLE_PATTERN.search(masked):
         return _invalid(statement, "Access to system tables is not allowed")
+
+    # Block the physical-but-hidden ingestion/lifecycle columns. Tokens come from
+    # `masked` (not the delimited-identifier-flattened copy), so a quoted identifier
+    # such as "external_id" is caught as well, while string-literal contents are
+    # already blanked.
+    hidden = sorted({token.lower() for token in TOKEN_PATTERN.findall(masked)} & HIDDEN_COLUMNS)
+    if hidden:
+        return _invalid(
+            statement, f"Hidden column(s) are not allowed: {', '.join(hidden)}"
+        )
 
     # Reject old-style comma joins (`FROM clean_jobs, raw_jobs`).
     if FROM_CLAUSE_LIST_PATTERN.search(masked):

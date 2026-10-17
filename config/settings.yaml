@@ -37,15 +37,6 @@ observability:
       entry_points: ["api:chat", "api:chat-stream", "eval:driver", "eval:spike"]
 
 agent:
-  # The governed v0 bundle switch. ADR-0060 has fired: the served bundle is the
-  # v1 system prompt with the v1 tool pair. This one switch moves the system
-  # prompt and the tool registration together, so a prompt can never run against
-  # the other bundle's tools. The rollback during ADR-0060's observation window
-  # is this key set back to true, which restores the v0 prompt and the v0 tool;
-  # step 3 removes the key and the v0 bundle with it. See
-  # docs/decisions/adr-0060-retire-the-agent-v0-bundle.md.
-  agent_v0: false
-
   # Named deployments are the serving allowlist. Model names must use LiteLLM's
   # lowercase provider-qualified form; the provider is read from that prefix, so
   # there is no separate provider key to keep in sync. `api_key_env` names a
@@ -95,35 +86,14 @@ agent:
   query:
     max_rows: 20
     max_detail_ids: 3
-    # Governed query core, shared by search and analytics. The limits live here
-    # rather than in the query package so the display cap above stays the one
-    # cap: the core never invents a second number for how many rows may show.
-    # The behavior these limits serve was the v0 contract, which ADR-0060 retired
-    # with the core that reads them; all six go at step 3.
-    max_filters: 4
-    max_values_per_filter: 4
-    max_group_values: 20
-    max_top_n: 20
-    max_free_text_terms: 3
-    # Every compiled statement runs inside a read-only transaction on the
+    # Every generated statement runs inside a read-only transaction on the
     # least-privilege agent role, with a server-side statement timeout and a
     # byte budget on the returned rows. Neither replaces the other.
-    # These two are read ONLY by the v0 BoundedExecutor today; ADR-0060 requires
-    # them to migrate to the v1 executor in the step that deletes it, because
-    # they are otherwise the only execution budget in the codebase and would be
-    # deleted with their sole reader.
+    # These two are read by the v1 executor (src/services/query/executor.py),
+    # which is the only execution path; the v0 core that first owned them was
+    # deleted with the rest of the bundle (ADR-0060, step 3).
     statement_timeout_ms: 2000
     max_result_bytes: 262144
-    # User-side city synonyms that the ingestion alias map does not carry. The
-    # canonical city names, the role aliases, and the technology aliases are
-    # NOT repeated here: config/ingestion.yaml and config/tech_vocabulary.yaml
-    # are the single source for those, so a change to them reaches the query
-    # core without a second edit.
-    user_city_synonyms:
-      saigon: Ho Chi Minh City
-      "sai gon": Ho Chi Minh City
-      "sài gòn": Ho Chi Minh City
-      sg: Ho Chi Minh City
     obligations:
       enabled: true
       zero_results: true

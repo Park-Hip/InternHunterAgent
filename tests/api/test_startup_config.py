@@ -96,14 +96,6 @@ class StartupConfigTests(unittest.TestCase):
         self.assertIn("DEEPSEEK_API_KEY is unset or empty", str(ctx.exception))
         build_pool.assert_not_called()
 
-    def test_served_profiles_follow_the_v0_switch(self) -> None:
-        with patch("src.serving.composition.v0_agent_enabled", return_value=True):
-            self.assertEqual(composition._served_profiles(), ("react",))
-        with patch("src.serving.composition.v0_agent_enabled", return_value=False):
-            self.assertEqual(
-                composition._served_profiles(), ("react", "sql_generation")
-            )
-
     def test_lifespan_preserves_dependency_lifecycle_order(self) -> None:
         events: list[str] = []
         pool = MagicMock()

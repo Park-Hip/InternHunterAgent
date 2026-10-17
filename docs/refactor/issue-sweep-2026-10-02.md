@@ -89,7 +89,7 @@ A cheap user-visible defect outranks an architectural proposal regardless of age
 
 User-visible, on the served path, and one function.
 
-`_row_lines` in `src/agents/tools/v0_query_jobs.py:221` renders every column as `key=value`,
+`_row_lines` in `src/agents/tools/v0_query_jobs.py:221` <!-- lint-allow-link-path --> renders every column as `key=value`,
 including the surrogate `id`. Measured by calling it:
 
 ```

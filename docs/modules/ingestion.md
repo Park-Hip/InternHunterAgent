@@ -1,6 +1,6 @@
 # Ingestion module guide
 
-> **Last verified:** 2026-10-12
+> **Last verified:** 2026-10-17
 
 > **Eviction:** Rewritten whenever the ingestion module changes; removed when the module is retired.
 
@@ -219,8 +219,9 @@ Two records show the pairing; they do not measure how often it holds live.
 
 - `source`, `external_id`, `posted_date` are bookkeeping or always NULL; `first_seen_at` and
   `last_seen_at` are lifecycle data that ADR-0021 hides until honest presentation is measured.
-- The boundary is `VISIBLE_COLUMNS` in `src/services/query/compiler.py` and the projection in
-  `src/services/query/job_details.py` → `fetch_job_details`, not a database grant.
+- The boundary is `HIDDEN_COLUMNS` in `src/services/query/sql_validator.py`, which rejects any
+  statement naming them, plus the projection in `src/services/query/job_details.py` →
+  `fetch_job_details` and the prompt's own column list - not a database grant.
 
 **Deletion.**
 
@@ -299,7 +300,8 @@ Coupled: the timing keys to the workflow timeout; the role and city maps to serv
   `tests/services/ingestion/test_normalize_vietnamworks.py` or `test_transform.py`.
 - Existing rows change only when the posting is next returned by search and passes the gates;
   no rebuild-from-`raw_jobs` script exists.
-  If a canonical role or city name changes, check `config/prompts.yaml` and the serving vocabulary.
+  If a canonical role or city name changes, check the canonical values the `sql_generation`
+  prompt in `config/prompts.yaml` states.
 
 **Add a `clean_jobs` column.**
 
@@ -307,9 +309,10 @@ Coupled: the timing keys to the workflow timeout; the role and city maps to serv
   `NormalizedJob` in `models.py`, the normalizer, both dicts in `upsert_clean_jobs`, and
   `EXPECTED_COLUMNS` in `src/api/schema_guard.py`.
 - If the agent should see it, also update the prompt surfaces in `config/prompts.yaml`,
-  `VISIBLE_COLUMNS`, `fetch_job_details`, [the schema reference](../reference/schema.md), and
+  `fetch_job_details`, [the schema reference](../reference/schema.md), and
   `evals/fixtures/seed_eval_db.sql`.
-  If hidden, add it to `NON_AGENT_VISIBLE_COLUMNS` in `tests/test_prompt_consistency.py`.
+  If hidden, add it to `HIDDEN_COLUMNS` in `src/services/query/sql_validator.py` and to
+  `NON_AGENT_VISIBLE_COLUMNS` in `tests/test_prompt_consistency.py`.
 - Both guards demand an exact column match, Render deploys `main` on merge, and production is
   migrated by hand, so no single order keeps both green.
   Use a temporary tolerance in two steps, as #624 did.

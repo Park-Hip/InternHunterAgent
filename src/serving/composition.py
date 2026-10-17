@@ -7,12 +7,12 @@ from contextlib import asynccontextmanager
 from src.core.config import load_settings
 
 # Configuration is the import-time contract (#640). The imports below read
-# settings while they run (the MCP server reads `agent.agent_v0`), so loading here
-# first makes the refusal explicit instead of accidental: a missing DATABASE_URL or
-# AGENT_DATABASE_URL, bad YAML, or an invalid agent section raises ConfigLoadError
-# and uvicorn exits 1 before the MCP server, the app object, or the lifespan
-# exists, and before LangChain, LiteLLM, and FastMCP are imported. The lifespan
-# therefore trusts the cached settings and never reloads them.
+# settings while they run, so loading here first makes the refusal explicit
+# instead of accidental: a missing DATABASE_URL or AGENT_DATABASE_URL, bad YAML,
+# or an invalid agent section raises ConfigLoadError and uvicorn exits 1 before
+# the MCP server, the app object, or the lifespan exists, and before LangChain,
+# LiteLLM, and FastMCP are imported. The lifespan therefore trusts the cached
+# settings and never reloads them.
 load_settings()
 
 # The remaining imports follow the configuration load on purpose, so the
@@ -27,7 +27,6 @@ from src.agents.mcp.job_server import (
     create_job_mcp_server,
     mcp_endpoint_enabled,
 )
-from src.agents.runtime.prompts import v0_agent_enabled
 from src.agents.runtime.provider import assert_profile_credential
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing.langfuse import (
@@ -56,12 +55,9 @@ _mcp_asgi = _mcp_server.http_app(path=MCP_ENDPOINT_PATH)
 def _served_profiles() -> tuple[str, ...]:
     """The profiles the served tool surface can invoke, in refusal order.
 
-    The react loop is always reachable. The nested sql_generation call exists
-    only while the v1 query_clean_jobs tool is registered; the v0 query_jobs
-    tool answers from the governed query core and never calls a model.
+    The react loop is always reachable, and the nested sql_generation call is
+    reachable because the query_clean_jobs tool always registers the SQL path.
     """
-    if v0_agent_enabled():
-        return ("react",)
     return ("react", "sql_generation")
 
 

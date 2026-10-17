@@ -6,14 +6,12 @@ from evals.metrics import LEGACY_METRICS, METRICS, NO_JUDGE, ToolExpectation, Me
 
 
 def test_registry() -> None:
-    # Four capture-time metrics and two v0-gate metrics, plus the pair retired for
-    # the governed path by the Stage 4 decision.
-    assert len(METRICS) == 8
+    # The registry declares all six metrics; LEGACY_METRICS names the pair the
+    # Stage 4 decision (#487) kept off the governed path ADR-0060 retired.
+    assert len(METRICS) == 6
     assert {m.name for m in METRICS if m.kind == MetricKind.DETERMINISTIC} == {
         "tool_correctness",
         "sql_accuracy",
-        "plan_correctness",
-        "result_equivalence",
     }
     assert LEGACY_METRICS == {"sql_accuracy", "memory"}
     assert LEGACY_METRICS <= {m.name for m in METRICS}

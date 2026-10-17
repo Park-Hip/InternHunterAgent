@@ -36,7 +36,7 @@ class FakeLangfuse:
 
 
 def test_load_prompt_definitions_registers_each_model_visible_prompt() -> None:
-    """Every managed prompt surface is registered, including the v0 system prompt.
+    """Every managed prompt surface is registered.
 
     The list comes from the prompt registry rather than a local copy, so a new
     surface cannot be added without a published version of its own.
@@ -47,9 +47,6 @@ def test_load_prompt_definitions_registers_each_model_visible_prompt() -> None:
 
     assert [(item.yaml_key, item.name) for item in definitions] == [
         (definition.yaml_key, definition.name) for definition in PROMPT_DEFINITIONS
-    ]
-    assert ("system_prompt_v0", "resumi-system-v0") in [
-        (item.yaml_key, item.name) for item in definitions
     ]
     assert all(item.content for item in definitions)
 

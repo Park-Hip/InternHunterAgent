@@ -1,22 +1,25 @@
 # Evaluation Pipeline
 
-> **Last verified:** 2026-10-01.
+> **Last verified:** 2026-10-17.
 
 > **Eviction:** This document leaves when the harness commands, metric contract, or result terms change.
 
-> **Source:** `evals/__main__.py`, `evals/run.py`, `evals/metrics.py`, `evals/sql_check.py`, `evals/v0_gate.py`
+> **Source:** `evals/__main__.py`, `evals/run.py`, `evals/metrics.py`, `evals/sql_check.py`, `evals/sql_gate.py`
 
-The rebuilt harness has one CLI and two ways to run it.
+The rebuilt harness has one CLI and three ways to run it.
 [`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md) is the canonical how-to; this document is the reference for what the pipeline does under the hood.
 
-## The two run modes
+## The three run modes
 
 | Mode | Command | Needs | What it does |
 |---|---|---|---|
-| v0 gate | `python -m evals --deterministic --dataset v0` | Fixture database only | Calls the query core directly and grades the 19 governed cases with no model, judge, or network |
+| SQL guard gate | `python -m evals --gate` | Fixture database only | Runs the reviewed SQL statements through the guard and grades the guard verdict, the obligation set, and the reviewed result. No model, judge, network, or credential |
 | Capture + score | `python -m evals --dataset default` | Serving model (and judge for judge metrics) | Captures each scenario live and scores every declared metric |
+| Offline capture scoring | `python -m evals --capture <replay>` | Fixture database when the scenario has reference SQL | Scores a retained replay and admits only deterministic metrics |
 
-A third form, `--capture`, scores a retained replay offline and admits only deterministic metrics.
+The gate's corpus is [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml), read by
+[`sql_gate.py`](sql_gate.py) rather than the scenario registry: its cases are reviewed SQL
+statements, obligations, and results, not capture scenarios.
 
 ## Capture-and-score pipeline
 
@@ -45,11 +48,16 @@ Metrics are declared in [`metrics.py`](metrics.py) and carry a kind.
 | `on_topic` | judge | Question and answer |
 | `memory` | judge | Question, answer, and `conversation_history` |
 | `rubric` | judge | Question, answer, and the scenario's own `rubric` |
-| `plan_correctness` | deterministic | The v0 core's applied plan against the case's reviewed filters |
-| `result_equivalence` | deterministic | The v0 result against the case's golden |
 
 Deterministic metrics are credential-free and are the gate.
 Judge metrics need a judge credential, are continuous in `[0, 1]`, and are reported-only: no judge threshold is configured yet.
+
+`sql_accuracy` and `memory` were kept off the governed v0 path by the Stage 4 decision (#487); that
+path is retired (ADR-0060), and the v1 scenarios still declare both.
+
+The SQL guard gate declares its own metrics in [`sql_gate.py`](sql_gate.py):
+`guard_correctness` (the validator verdict and the pinned rejection rule), `obligation_correctness`
+(the reviewed obligation set), and `result_equivalence` (the reviewed result on the fixture).
 
 ## Deterministic scoring
 
@@ -61,22 +69,29 @@ A scenario with `tool_order` demands an exact tool-sequence match.
 
 ### `sql_accuracy`
 
-Compares the generated SQL against the reference in [`sql_check.py`](sql_check.py), one of three modes:
+Compares the generated SQL against the reference in [`sql_check.py`](sql_check.py), one of four modes:
 
 | Mode | What it checks |
 |---|---|
-| `ids_only` | Generated row ids match the reference ids |
+| `ids_only` | Generated row ids match the reference ids, optionally within a display cap |
 | `aggregate_count` | A `COUNT(*) AS count` aggregate equals the reference |
 | `zero_results` | Both the generated and reference query return nothing |
+| `rows_equal` | Both queries return the same full rows, order-insensitively |
 
 An id-less generated query can never pass on two empty results, and a SQL error is an infrastructure failure, not a bad answer.
 `--capture` offline scoring is limited to `tool_correctness` and `sql_accuracy`.
+The gate reuses `rows_equal` for group-shaped reviewed results.
 
-## The v0 gate
+## The SQL guard gate
 
-The `--deterministic` flag routes to [`v0_gate.py`](v0_gate.py), which calls the governed query core directly against the fixture.
+The `--gate` flag routes to [`sql_gate.py`](sql_gate.py), which runs every reviewed statement in
+[`datasets/sql_guard.yaml`](datasets/sql_guard.yaml) through the same pipeline the tool uses
+(`validate_sql` → `resolve_bounds` → the fixture) and grades the guard verdict, the obligation set,
+and the reviewed result.
 No capture, no serving model, no judge, no network.
-It grades two deterministic metrics over every case, and fails rather than skips: an unreachable fixture database is a failed gate that exits 2 and names the command to start it.
+It fails rather than skips: an unreachable fixture database is a failed gate that exits 2 and names
+the command to start it.
+`--gate` scores its own reviewed corpus, so it rejects a non-default `--dataset` with exit 2.
 
 ## Result terms
 
@@ -99,7 +114,7 @@ The table renders a scenario as `PASS` only when every scored metric is exactly 
 |---|---|
 | `0` | Every deterministic metric scored exactly `1.0` |
 | `1` | A metric could not be evaluated, or a deterministic metric scored below `1.0` without `--allow-fail` |
-| `2` | The v0 gate could not run (unreachable fixture), or `--deterministic` was given a non-v0 dataset |
+| `2` | The SQL guard gate could not run (unreachable fixture), or `--gate` was given a non-default dataset |
 
 A judge score never produces a below-threshold failure because no judge threshold is configured.
 `--allow-fail` turns a below-threshold deterministic score into a printed finding for exploratory runs, but it never excuses an unevaluated metric.
@@ -111,8 +126,8 @@ A judge score never produces a below-threshold failure because no judge threshol
 docker compose up -d postgres
 uv run python -m evals.fixtures.loader
 
-# v0 gate
-uv run python -m evals --deterministic --dataset v0
+# SQL guard gate
+uv run python -m evals --gate
 
 # Live capture + full scoring (default dataset)
 uv run python -m evals --dataset default --out evals/runs/local-report.json

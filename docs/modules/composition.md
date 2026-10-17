@@ -1,6 +1,6 @@
 # Composition module guide
 
-> **Last verified:** 2026-10-16
+> **Last verified:** 2026-10-17
 
 > **Eviction:** Rewritten whenever `src/serving/` changes; removed when the module is retired.
 
@@ -55,7 +55,7 @@ once the pool exists.
 flowchart TD
     subgraph IMPORT["Import: uvicorn loads src.serving.composition:app"]
         direction TB
-        I0{{"Load settings: DATABASE_URL, AGENT_DATABASE_URL, YAML"}} --> I2{{"Build MCP server: reads agent.agent_v0"}}
+        I0{{"Load settings: DATABASE_URL, AGENT_DATABASE_URL, YAML"}} --> I2{{"Build MCP server: registers the v1 tool pair"}}
         I2 --> I3["Build the /mcp ASGI app"]
         I3 --> I4{"MCP_ENABLED?"}
         I4 -->|no| A1["create_app(lifespan)"]
@@ -87,7 +87,7 @@ flowchart TD
 | Stage | What it does | Code | On failure |
 |---|---|---|---|
 | Settings | Loads and validates `Settings` and every YAML file, before any other import | `src/core/config.py` → `load_settings` (called at composition import) | Import fails, uvicorn exits 1, in under two seconds |
-| MCP server | Registers `query_jobs` (v0) or `query_clean_jobs` + `get_job_details` (v1) | `src/agents/mcp/job_server.py` → `create_job_mcp_server` | Import fails, uvicorn exits 1 |
+| MCP server | Registers the v1 tool pair, `query_clean_jobs` and `get_job_details` | `src/agents/mcp/job_server.py` → `create_job_mcp_server` | Import fails, uvicorn exits 1 |
 | App | Builds FastAPI with the lifespan, and `/mcp` before the static catch-all if enabled | `src/api/app.py` → `create_app` | Import fails |
 | Schema guard | Live `clean_jobs` columns must equal `EXPECTED_COLUMNS` exactly | `src/api/schema_guard.py` → `assert_serving_schema` | `SchemaGuardError`; uvicorn exits 3 |
 | Privilege guard | Agent role reads the 16 visible columns and is refused a write | `src/api/privilege_guard.py` → `assert_agent_privileges` | `AgentPrivilegeError`; skipped with a warning if the DSNs name different databases |
@@ -118,7 +118,8 @@ carries (#642).
 LiteLLM, and FastMCP imports, so a bad configuration refuses boot in about two seconds instead of
 after a fifteen-second import chain, and the traceback names `composition.py` rather than a symptom
 further down.
-The import needs settings anyway: the MCP server reads `agent.agent_v0` while it is built.
+The process parses configuration once, here: the lifespan, the runtime, and every tool read the
+cached settings later, so a bad file refuses boot at import instead of at the first request.
 The Langfuse client reads its keys later, when the lifespan initializes tracing.
 The lifespan therefore reloads nothing, and the test that pins this imports the entrypoint in a
 fresh interpreter with no database configured (`test_import_fails_fast_when_config_load_fails`)
@@ -129,8 +130,9 @@ The agent and the optional `/mcp` endpoint must expose the same tools, so there 
 server, `_mcp_server`.
 It is built at import, not in the lifespan, because `create_app` needs the `/mcp` routes when the
 app object is constructed, which is before any lifespan runs.
-The tool set follows `agent.agent_v0`, the same switch the system prompt reads, so the prompt and
-the tools cannot disagree.
+There is no switch left to follow: `create_job_mcp_server` registers the v1 tool pair
+unconditionally, and there is exactly one system prompt, so the prompt and the tools cannot
+disagree (ADR-0060).
 
 **Tool discovery happens once, and all or nothing.**
 `list_job_tools` connects to the in-process server object directly: no socket, no URL.
@@ -207,8 +209,8 @@ or after it, because the diagnostic is not awaited.
   checkpointer pool carry `database.connect_timeout_seconds` (10 s), so an unreachable database
   refuses boot with `SchemaGuardError` within the bound whatever the DSN string carries (#642).
 - **Served deployments carry their keys at boot.** The credential guard checks the deployments the
-  served tool surface can invoke, `react` always and `sql_generation` while the v1 tool set is
-  registered, so a checkout needs only each served deployment's key (#641).
+  served tool surface can invoke, `react` and `sql_generation`, so a checkout needs only each served
+  deployment's key (#641).
 - **Tracing never blocks boot.** Langfuse is optional: prompts fall back to the reviewed YAML text,
   the client is created locally with no network round trip, and the credential check is
   fire-and-track so boot never waits on a response.

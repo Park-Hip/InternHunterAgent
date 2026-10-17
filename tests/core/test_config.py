@@ -514,8 +514,12 @@ class DuplicateKeyTests(unittest.TestCase):
         return path
 
     def test_duplicate_key_in_the_same_mapping_is_refused(self) -> None:
-        path = self._write("prompts:\n  system_prompt_v0: |\n  system_prompt_v0: |\n    first\n    second\n")
-        with self.assertRaisesRegex(config_module.ConfigLoadError, "duplicate key 'system_prompt_v0'"):
+        path = self._write(
+            "prompts:\n  sql_generation: |\n  sql_generation: |\n    first\n    second\n"
+        )
+        with self.assertRaisesRegex(
+            config_module.ConfigLoadError, "duplicate key 'sql_generation'"
+        ):
             config_module._load_yaml_file(path)
 
     def test_duplicate_key_names_the_line_it_appears_on(self) -> None:
@@ -529,7 +533,9 @@ class DuplicateKeyTests(unittest.TestCase):
             config_module._load_yaml_file(path)
 
     def test_repeated_value_under_distinct_keys_is_fine(self) -> None:
-        path = self._write("prompts:\n  system: |\n    same text\n  system_prompt_v0: |\n    same text\n")
+        path = self._write(
+            "prompts:\n  system: |\n    same text\n  sql_generation: |\n    same text\n"
+        )
         self.assertEqual(config_module._load_yaml_file(path)["prompts"]["system"], "same text\n")
 
     def test_shipped_config_files_have_no_duplicate_keys(self) -> None:

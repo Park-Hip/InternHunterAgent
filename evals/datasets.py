@@ -1,10 +1,8 @@
 """Dataset registry and the validation the evaluation harness relies on.
 
 Each dataset is keyed by a short name and points at one YAML file of
-scenarios. ``default`` is the v1 registry; ``v0`` is the v0 acceptance set
-whose contract was retired by docs/decisions/adr-0060-retire-the-agent-v0-bundle.md
-along with the v0 bundle it graded. The two never mix: a new version is a new
-entry, never an edit to the registry that is already selectable.
+scenarios. ``default`` is the replay registry: captured v1 turns whose tool
+contract and goldens are re-checked offline.
 """
 
 from __future__ import annotations
@@ -21,14 +19,6 @@ _DEFAULT_DATASET = "default"
 
 _TOOL_KEYS = frozenset({"expected_tools", "tool_expectation", "turn_tool_expectations", "tool_order"})
 _TOOL_FIELDS = frozenset({"required", "allowed"})
-#: The keys that declare a tool contract. ``tool_order`` refines one, so it is
-#: not a declaration on its own.
-_TOOL_DECLARATIONS = frozenset({"expected_tools", "tool_expectation", "turn_tool_expectations"})
-
-
-def _declares_tool_contract(scenario: dict[str, Any]) -> bool:
-    """Whether the scenario states which tools a turn may and must call."""
-    return any(scenario.get(key) for key in _TOOL_DECLARATIONS)
 
 
 def _validate_tool_expectations(sid: str, scenario: dict[str, Any]) -> None:
@@ -55,16 +45,11 @@ class DatasetSpec:
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    @property
-    def is_v0(self) -> bool:
-        """Whether this dataset describes the governed v0 path rather than a replay."""
-        return self.path.name.startswith("v0_")
-
     def scenarios(self) -> list[dict[str, Any]]:
         payload = yaml.safe_load(self.path.read_text(encoding="utf-8"))
         if not isinstance(payload, list):
             raise ValueError(f"Dataset {self.path} must be a YAML list of scenarios")
-        from evals.metrics import LEGACY_METRICS, METRIC_BY_NAME
+        from evals.metrics import METRIC_BY_NAME
 
         seen: set[str] = set()
         for scenario in payload:
@@ -81,29 +66,11 @@ class DatasetSpec:
             names = scenario.get("metrics")
             if not isinstance(names, list) or not names or set(names) - METRIC_BY_NAME.keys():
                 raise ValueError(f"Scenario {sid} has invalid metrics: {names}")
-            if self.is_v0 and set(names) & LEGACY_METRICS:
-                # #487 decided a no-go on the SQL path, and v0 is single-turn, so a
-                # governed case may not ask for a metric that scores either one.
-                raise ValueError(
-                    f"Scenario {sid} declares retired metrics {sorted(set(names) & LEGACY_METRICS)}; "
-                    "the v0 dataset may not score the SQL path or multi-turn memory"
-                )
             if "sql_accuracy" in names and not scenario.get("reference_sql"):
                 raise ValueError(f"Scenario {sid} has no reference SQL")
             if "rubric" in names and not scenario.get("rubric"):
                 raise ValueError(f"Scenario {sid} has no rubric")
             _validate_tool_expectations(sid, scenario)
-            if self.is_v0 and "tool_correctness" in names and not _declares_tool_contract(scenario):
-                # #585: an absent declaration resolves to "nothing is required and
-                # nothing is allowed", which scores a correct tool call 0.0 and a
-                # turn that called nothing 1.0. The metric cannot discriminate on a
-                # contract nobody wrote, so the governed dataset refuses to load.
-                raise ValueError(
-                    f"Scenario {sid} declares no tool contract. A governed case must state "
-                    f"one of {sorted(_TOOL_DECLARATIONS)}: an absent contract resolves to an "
-                    "empty one and inverts tool_correctness. Use "
-                    "{required: [], allowed: []} for a turn that must call nothing."
-                )
         return payload
 
 
@@ -113,7 +80,6 @@ class DatasetSpec:
 
 _REGISTRY: dict[str, DatasetSpec] = {
     "default": DatasetSpec(DATASETS_DIR / "scenarios.yaml"),
-    "v0": DatasetSpec(DATASETS_DIR / "v0_acceptance.yaml"),
 }
 
 

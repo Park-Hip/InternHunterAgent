@@ -122,7 +122,8 @@ def create_langfuse_client() -> Langfuse:
     if not settings.LANGFUSE_BASE_URL:
         raise ValueError(
             "LANGFUSE_BASE_URL is not set. Set it to the Langfuse Cloud host from "
-            "D-029; the SDK's own default would export somewhere nobody reads."
+            "ADR-0029 (docs/decisions/adr-0029-langfuse-cloud-hobby-japan.md); the "
+            "SDK's own default would export somewhere nobody reads."
         )
     return Langfuse(
         public_key=settings.LANGFUSE_PUBLIC_KEY,

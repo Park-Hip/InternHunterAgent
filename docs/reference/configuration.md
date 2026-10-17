@@ -212,7 +212,7 @@ operation, see [how-to/operate.md](../how-to/operate.md).
 ### 5 Provider quotas and cost
 
 The serving agent is metered and the judge is on a free tier, which keeps evaluation work off the
-serving provider's account (D-017).
+serving provider's account ([ADR-0017](../decisions/adr-0017-judge-provider-separate-from-serving.md)).
 
 DeepSeek has no free tier and publishes no per-minute or per-day token limit, only account
 concurrency.

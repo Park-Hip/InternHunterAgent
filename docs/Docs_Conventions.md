@@ -60,8 +60,9 @@ inside a backticked code span or add `<!-- lint-allow-encoding -->` on that line
   correction. Git retains the superseded version.
 
 Both rules are conventions an author applies, not checks. The `amendment` check that used to
-flag correction-on-correction phrasing was retired by **D-047**, along with the
-`<!-- lint-allow-amendment -->` marker that suppressed it.
+flag correction-on-correction phrasing was retired with the ticket workflow (D-047, listed in the
+[decision records](decisions/README.md)), along with the `<!-- lint-allow-amendment -->` marker
+that suppressed it.
 
 The `change-proposal` skill (`.agents/skills/change-proposal/SKILL.md`) applies these conventions
 when it prepares a change proposal.

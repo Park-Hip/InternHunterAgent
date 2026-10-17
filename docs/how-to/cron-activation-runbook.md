@@ -571,7 +571,7 @@ runbook stops contradicting the decision it is gated by.
 | 4b concurrency queues rather than overlaps | ☑ | runs `…994528` / `…997054` | 2026-08-13 |
 | `schedule:` re-enabled (LAST step) | ☑ | this branch, pending merge to `main` | 2026-08-13 |
 | First scheduled run confirmed | ☐ | | |
-| D10 decision recorded | ☑ | maintainer (D-038) | 2026-08-12 |
+| D10 decision recorded | ☑ | maintainer ([ADR-0038](../decisions/adr-0038-scheduled-ingestion-required.md)) | 2026-08-12 |
 
 **P1/P2 verification notes (2026-08-09):** P1 — `git ls-tree -r main .github/` lists
 `ingestion.yml`. P2 — the

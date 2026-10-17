@@ -18,9 +18,10 @@ services:
         value: "1"
       - key: PORT
         value: "8000"
-      # DEEPSEEK_API_KEY serves the agent (D-045) and is required at boot: the
-      # deployment each served profile selects is validated before the service
-      # starts.
+      # DEEPSEEK_API_KEY serves the agent (ADR-0045,
+      # docs/decisions/adr-0045-deepseek-serves-the-agent.md) and is required at
+      # boot: the deployment each served profile selects is validated before the
+      # service starts.
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: DATABASE_URL

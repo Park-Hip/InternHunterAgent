@@ -224,11 +224,8 @@ Each item below was observed on 2026-10-16 and is tracked by an issue.
    Retries stay on LangChain's layer; LiteLLM's `num_retries` was rejected because it also retries 4xx responses and, by default, retries immediately instead of backing off.
 3. **The unused Groq deployment.**
    Resolved by #655: the serving allowlist now holds only deployments a profile selects, and the Groq option contract went with the deployment; `Settings.GROQ_API_KEY` stays for the eval judge's branch.
-
-*Still open.*
-
-1. **Pointers to a deleted decision log** (#657).
-   `render.yaml`, the operate how-to, and the architecture document cite "D-045", an entry of the decision log deleted in `d83dc97`; they should cite ADR-0045, as the `Settings` comment now does.
+4. **Pointers to a deleted decision log** (#657).
+   Resolved by #657: `render.yaml`, the operate how-to, and the architecture document now cite ADR-0045, as the `Settings` comment does.
 
 ## 8. Changing it safely
 

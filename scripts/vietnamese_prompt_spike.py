@@ -222,7 +222,7 @@ def _auto_checks(probe: Probe, answer: str, tools: list[str], sql: list[str], ou
 async def run_arm(arm: Arm, runs: int) -> list[dict[str, Any]]:
     from langchain.agents import create_agent
     from langchain.messages import HumanMessage
-    from src.agents.runtime.provider import AgentProvider
+    from src.agents.runtime.provider import build_model
     from src.agents.tools.get_job_details import get_job_details
     from src.agents.tools.query_clean_jobs import query_clean_jobs
     from src.agents.tools.time import get_current_time
@@ -239,7 +239,7 @@ async def run_arm(arm: Arm, runs: int) -> list[dict[str, Any]]:
     query_module.generate_sql = capture_sql
     try:
         agent = create_agent(
-            model=AgentProvider().build_model("react"),
+            model=build_model("react"),
             tools=[get_current_time, query_clean_jobs, get_job_details],
             system_prompt=arm["prompt"],
         )

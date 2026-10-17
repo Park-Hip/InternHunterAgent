@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import inspect
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -303,10 +304,14 @@ def test_record_agent_response_failure_updates_the_active_span_with_safe_metadat
 def test_build_langfuse_tags_use_the_configured_provider_and_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setitem(
-        langfuse.settings.config_yaml["agent"]["providers"]["deepseek_flash"],
-        "model",
-        "deepseek/deepseek-v4.1-flash",
+    from src.core import config as config_module
+
+    config = copy.deepcopy(langfuse.settings.config_yaml)
+    config["agent"]["providers"]["deepseek_flash"]["model"] = (
+        "deepseek/deepseek-v4.1-flash"
+    )
+    monkeypatch.setattr(
+        langfuse.settings, "agent", config_module._build_agent_settings(config)
     )
 
     monkeypatch.setenv("DEEPSEEK_API_KEY", "must-not-appear-in-traces")

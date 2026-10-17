@@ -4,6 +4,7 @@ import importlib
 import os
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -88,10 +89,16 @@ class ConfigLoadTests(unittest.TestCase):
         with patch.dict(os.environ, selected_provider_env, clear=True):
             settings = config_module.load_settings(force_reload=True)
 
-        self.assertEqual(settings.DEEPSEEK_API_KEY, "deepseek-test-key")
         self.assertIsNone(settings.GROQ_API_KEY)
         self.assertIsNone(settings.GOOGLE_API_KEY)
         self.assertIsNone(settings.OPENROUTER_API_KEY)
+        agent = settings.agent
+        assert agent is not None
+        react = agent.deployment_for("react")
+        self.assertEqual(react.name, "deepseek_flash")
+        self.assertEqual(react.model, "deepseek/deepseek-flash")
+        self.assertEqual(react.api_key_env, "DEEPSEEK_API_KEY")
+        self.assertEqual(agent.stream_turn_timeout_seconds, 120)
 
     def test_load_settings_allows_missing_langfuse_credentials(self) -> None:
         required_env = {
@@ -194,6 +201,273 @@ class ConfigLoadTests(unittest.TestCase):
                     config_module._validate_database_config(
                         {"database": {"connect_timeout_seconds": value}}
                     )
+
+
+def _agent_section() -> dict:
+    """A minimal valid agent section that tests mutate one field at a time."""
+
+    return {
+        "agent": {
+            "providers": {
+                "deepseek_flash": {
+                    "model": "deepseek/deepseek-flash",
+                    "api_key_env": "DEEPSEEK_API_KEY",
+                },
+            },
+            "stream_turn_timeout_seconds": 120,
+            "react": {
+                "deployment": "deepseek_flash",
+                "temperature": 0.2,
+                "max_tokens": 2048,
+                "timeout": 30,
+                "max_attempts": 2,
+                "streaming": True,
+                "provider_options": {"thinking": "disabled"},
+            },
+            "sql_generation": {
+                "deployment": "deepseek_flash",
+                "temperature": 0.0,
+                "max_tokens": 1024,
+                "timeout": 30,
+                "max_attempts": 2,
+                "streaming": False,
+                "provider_options": {"thinking": "disabled"},
+            },
+        }
+    }
+
+
+class AgentSectionTests(unittest.TestCase):
+    """The agent section is validated and resolved once, at load (#656)."""
+
+    def test_resolves_one_typed_deployment_per_profile(self) -> None:
+        agent = config_module._build_agent_settings(_agent_section())
+
+        react = agent.deployment_for("react")
+        self.assertEqual(react.name, "deepseek_flash")
+        self.assertEqual(react.provider, "deepseek")
+        self.assertEqual(react.model, "deepseek/deepseek-flash")
+        self.assertEqual(react.api_key_env, "DEEPSEEK_API_KEY")
+        self.assertIsInstance(react.options, config_module.DeepSeekOptions)
+        self.assertEqual(
+            react.options.to_model_kwargs(),
+            {"extra_body": {"thinking": {"type": "disabled"}}},
+        )
+        self.assertEqual(react.profile.max_tokens, 2048)
+        self.assertEqual(agent.stream_turn_timeout_seconds, 120)
+        self.assertEqual(set(agent.deployments), {"react", "sql_generation"})
+
+    def test_provider_is_derived_from_the_model_prefix(self) -> None:
+        config = _agent_section()
+        config["agent"]["react"]["provider_options"] = {}
+        config["agent"]["sql_generation"]["provider_options"] = {}
+        config["agent"]["providers"]["deepseek_flash"]["model"] = (
+            "anthropic/claude-sonnet-4-5"
+        )
+
+        agent = config_module._build_agent_settings(config)
+
+        deployment = agent.deployment_for("react")
+        self.assertEqual(deployment.provider, "anthropic")
+        self.assertEqual(deployment.model, "anthropic/claude-sonnet-4-5")
+
+    def test_uncontracted_provider_accepts_only_empty_options(self) -> None:
+        config = _agent_section()
+        config["agent"]["providers"]["deepseek_flash"]["model"] = "openai/gpt-5"
+        config["agent"]["react"]["provider_options"] = {}
+        config["agent"]["sql_generation"]["provider_options"] = {}
+
+        agent = config_module._build_agent_settings(config)
+        deployment = agent.deployment_for("react")
+        self.assertEqual(deployment.provider, "openai")
+        self.assertEqual(deployment.options.to_model_kwargs(), {})
+
+        config["agent"]["react"]["provider_options"] = {"reasoning_effort": "low"}
+        with self.assertRaisesRegex(
+            config_module.ConfigLoadError, "not supported for provider 'openai'"
+        ):
+            config_module._build_agent_settings(config)
+
+    def test_missing_agent_section_is_refused(self) -> None:
+        with self.assertRaisesRegex(
+            config_module.ConfigLoadError, "missing 'agent' section"
+        ):
+            config_module._build_agent_settings({})
+
+    def test_empty_provider_allowlist_is_refused(self) -> None:
+        config = _agent_section()
+        config["agent"]["providers"] = {}
+
+        with self.assertRaisesRegex(
+            config_module.ConfigLoadError, "nonempty mapping"
+        ):
+            config_module._build_agent_settings(config)
+
+    def test_stream_turn_timeout_refuses_missing_or_invalid_values(self) -> None:
+        for value in ("missing", None, 0, -5, True, "120", 120.5):
+            with self.subTest(value=value):
+                config = _agent_section()
+                if value == "missing":
+                    del config["agent"]["stream_turn_timeout_seconds"]
+                else:
+                    config["agent"]["stream_turn_timeout_seconds"] = value
+                with self.assertRaises(config_module.ConfigLoadError) as ctx:
+                    config_module._build_agent_settings(config)
+                self.assertIn(
+                    "agent.stream_turn_timeout_seconds", str(ctx.exception)
+                )
+
+    def test_malformed_agent_sections_refuse_with_the_yaml_path(self) -> None:
+        cases: list[tuple[str, Callable[[dict], None], list[str]]] = [
+            (
+                "unknown deployment",
+                lambda config: config["agent"]["react"].update(
+                    {"deployment": "missing"}
+                ),
+                ["agent.react.deployment", "unknown deployment"],
+            ),
+            (
+                "unqualified model",
+                lambda config: config["agent"]["providers"][
+                    "deepseek_flash"
+                ].update({"model": "deepseek-flash"}),
+                ["agent.providers.deepseek_flash.model", "provider-qualified"],
+            ),
+            (
+                "mis-cased provider prefix",
+                lambda config: config["agent"]["providers"][
+                    "deepseek_flash"
+                ].update({"model": "DeepSeek/deepseek-flash"}),
+                ["agent.providers.deepseek_flash.model", "provider-qualified"],
+            ),
+            (
+                "secret pasted as the key reference",
+                lambda config: config["agent"]["providers"][
+                    "deepseek_flash"
+                ].update({"api_key_env": "sk-secret"}),
+                [
+                    "agent.providers.deepseek_flash.api_key_env",
+                    "must name an environment variable",
+                ],
+            ),
+            (
+                "removed provider key",
+                lambda config: config["agent"]["providers"][
+                    "deepseek_flash"
+                ].update({"provider": "deepseek"}),
+                [
+                    "agent.providers.deepseek_flash.provider",
+                    "Extra inputs are not permitted",
+                ],
+            ),
+            (
+                "unknown profile knob",
+                lambda config: config["agent"]["react"].update({"rety": 1}),
+                ["agent.react.rety", "Extra inputs are not permitted"],
+            ),
+            (
+                "boolean temperature",
+                lambda config: config["agent"]["react"].update(
+                    {"temperature": True}
+                ),
+                ["agent.react.temperature", "must be a number"],
+            ),
+            (
+                "string temperature",
+                lambda config: config["agent"]["react"].update(
+                    {"temperature": "0.2"}
+                ),
+                ["agent.react.temperature", "must be a number"],
+            ),
+            (
+                "negative temperature",
+                lambda config: config["agent"]["react"].update(
+                    {"temperature": -0.1}
+                ),
+                ["agent.react.temperature", "greater than or equal to 0"],
+            ),
+            (
+                "infinite temperature",
+                lambda config: config["agent"]["react"].update(
+                    {"temperature": float("inf")}
+                ),
+                ["agent.react.temperature", "finite"],
+            ),
+            (
+                "boolean max_tokens",
+                lambda config: config["agent"]["react"].update({"max_tokens": True}),
+                ["agent.react.max_tokens", "valid integer"],
+            ),
+            (
+                "zero max_tokens",
+                lambda config: config["agent"]["react"].update({"max_tokens": 0}),
+                ["agent.react.max_tokens", "greater than 0"],
+            ),
+            (
+                "missing timeout",
+                lambda config: config["agent"]["react"].pop("timeout"),
+                ["agent.react.timeout", "Field required"],
+            ),
+            (
+                "boolean timeout",
+                lambda config: config["agent"]["react"].update({"timeout": True}),
+                ["agent.react.timeout", "must be a number"],
+            ),
+            (
+                "missing max_attempts",
+                lambda config: config["agent"]["react"].pop("max_attempts"),
+                ["agent.react.max_attempts", "Field required"],
+            ),
+            (
+                "zero max_attempts",
+                lambda config: config["agent"]["react"].update(
+                    {"max_attempts": 0}
+                ),
+                ["agent.react.max_attempts", "greater than 0"],
+            ),
+            (
+                "negative max_attempts",
+                lambda config: config["agent"]["react"].update(
+                    {"max_attempts": -1}
+                ),
+                ["agent.react.max_attempts", "greater than 0"],
+            ),
+            (
+                "boolean max_attempts",
+                lambda config: config["agent"]["react"].update(
+                    {"max_attempts": True}
+                ),
+                ["agent.react.max_attempts", "valid integer"],
+            ),
+            (
+                "string streaming",
+                lambda config: config["agent"]["react"].update({"streaming": "true"}),
+                ["agent.react.streaming", "valid boolean"],
+            ),
+            (
+                "non-mapping provider options",
+                lambda config: config["agent"]["react"].update(
+                    {"provider_options": ["thinking"]}
+                ),
+                ["agent.react.provider_options", "valid dictionary"],
+            ),
+            (
+                "unsupported DeepSeek option",
+                lambda config: config["agent"]["react"].update(
+                    {"provider_options": {"reasoning_effort": "low"}}
+                ),
+                ["agent.react.provider_options", "unsupported DeepSeek options"],
+            ),
+        ]
+        for name, mutate, fragments in cases:
+            with self.subTest(case=name):
+                config = _agent_section()
+                mutate(config)
+                with self.assertRaises(config_module.ConfigLoadError) as ctx:
+                    config_module._build_agent_settings(config)
+                message = str(ctx.exception)
+                for fragment in fragments:
+                    self.assertIn(fragment, message)
 
 
 class DuplicateKeyTests(unittest.TestCase):

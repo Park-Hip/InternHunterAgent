@@ -8,7 +8,7 @@ from src.agents.tracing.stream import (
     StreamObservationFactory,
     create_noop_stream_observation,
 )
-from src.core.config import get_stream_turn_timeout_seconds, settings
+from src.core.config import settings
 from src.core.errors import (
     BUSY_MESSAGE,
     GENERIC_ERROR_MESSAGE,
@@ -96,7 +96,7 @@ async def stream_agent_response(
     metadata_emitted = False
 
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + get_stream_turn_timeout_seconds(settings.config_yaml)
+    deadline = loop.time() + settings.agent.stream_turn_timeout_seconds
     completion_event = asyncio.Event()
     runtime_stream = runtime.astream(
         query=query,

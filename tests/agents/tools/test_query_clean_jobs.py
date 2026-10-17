@@ -265,13 +265,13 @@ class _RecordingLangfuseClient:
 
 
 class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
-    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
+    @patch("src.agents.tools.query_clean_jobs.build_model")
     @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution_async")
     @patch(
         "src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async"
     )
     async def test_generate_sql_uses_managed_text_and_links_generation(
-        self, sql_prompt, schema_prompt, mock_provider
+        self, sql_prompt, schema_prompt, mock_build_model
     ) -> None:
         from src.agents.tools.query_clean_jobs import generate_sql
         from src.agents.tracing.prompt_registry import ResolvedPrompt
@@ -294,11 +294,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         )
         fake_model = MagicMock()
         fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 1"))
-        fake_provider = mock_provider.return_value
-        fake_provider.build_model.return_value = fake_model
-        fake_provider.deployment_for.return_value = SimpleNamespace(
-            model="deepseek/deepseek-flash"
-        )
+        mock_build_model.return_value = fake_model
         fake_client = _RecordingLangfuseClient()
 
         with patch(
@@ -311,8 +307,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
             fake_model.ainvoke.call_args.args[0][0].content,
             "REMOTE SQL\n\nREMOTE SCHEMA\n\nQuestion: any question",
         )
-        fake_provider.build_model.assert_called_once_with("sql_generation")
-        fake_provider.deployment_for.assert_called_once_with("sql_generation")
+        mock_build_model.assert_called_once_with("sql_generation")
         self.assertEqual(fake_client.observation_kwargs["as_type"], "generation")
         self.assertEqual(
             fake_client.observation_kwargs["name"], SQL_GENERATION_OBSERVATION_NAME
@@ -325,13 +320,13 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
             sql_prompt.return_value.prompt_client,
         )
 
-    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
+    @patch("src.agents.tools.query_clean_jobs.build_model")
     @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution_async")
     @patch(
         "src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async"
     )
     async def test_generate_sql_forwards_ambient_callbacks_to_nested_model(
-        self, sql_prompt, schema_prompt, mock_provider
+        self, sql_prompt, schema_prompt, mock_build_model
     ) -> None:
         from src.agents.tools.query_clean_jobs import generate_sql
         from src.agents.tracing.prompt_registry import ResolvedPrompt
@@ -351,10 +346,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         )
         fake_model = MagicMock()
         fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 7"))
-        mock_provider.return_value.build_model.return_value = fake_model
-        mock_provider.return_value.deployment_for.return_value = SimpleNamespace(
-            model="m"
-        )
+        mock_build_model.return_value = fake_model
 
         tracer = TracerProvider().get_tracer(__name__)
         token = var_child_runnable_config.set({"callbacks": [handler]})
@@ -377,13 +369,13 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         )
         langfuse_client.assert_not_called()
 
-    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
+    @patch("src.agents.tools.query_clean_jobs.build_model")
     @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution_async")
     @patch(
         "src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async"
     )
     async def test_generate_sql_flattens_list_content(
-        self, sql_prompt, schema_prompt, mock_provider
+        self, sql_prompt, schema_prompt, mock_build_model
     ) -> None:
         from src.agents.tools.query_clean_jobs import generate_sql
         from src.agents.tracing.prompt_registry import ResolvedPrompt
@@ -397,22 +389,20 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         fake_model.ainvoke = AsyncMock(
             return_value=SimpleNamespace(content=[{"text": "SELECT "}, {"text": "1"}])
         )
-        fake_provider = mock_provider.return_value
-        fake_provider.build_model.return_value = fake_model
-        fake_provider.deployment_for.return_value = SimpleNamespace(model="m")
+        mock_build_model.return_value = fake_model
 
         with patch(
             "src.agents.tools.query_clean_jobs.get_langfuse_client", return_value=None
         ):
             self.assertEqual(await generate_sql("any question"), "SELECT 1")
 
-    @patch("src.agents.tools.query_clean_jobs.AgentProvider")
+    @patch("src.agents.tools.query_clean_jobs.build_model")
     @patch("src.agents.tools.query_clean_jobs.load_schema_context_resolution_async")
     @patch(
         "src.agents.tools.query_clean_jobs.load_sql_generation_prompt_resolution_async"
     )
     async def test_generate_sql_runs_model_without_langfuse_when_tracing_disabled(
-        self, sql_prompt, schema_prompt, mock_provider
+        self, sql_prompt, schema_prompt, mock_build_model
     ) -> None:
         from src.agents.tools.query_clean_jobs import generate_sql
         from src.agents.tracing.prompt_registry import ResolvedPrompt
@@ -425,10 +415,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         )
         fake_model = MagicMock()
         fake_model.ainvoke = AsyncMock(return_value=SimpleNamespace(content="SELECT 2"))
-        mock_provider.return_value.build_model.return_value = fake_model
-        mock_provider.return_value.deployment_for.return_value = SimpleNamespace(
-            model="m"
-        )
+        mock_build_model.return_value = fake_model
 
         with patch(
             "src.agents.tools.query_clean_jobs.get_langfuse_client", return_value=None

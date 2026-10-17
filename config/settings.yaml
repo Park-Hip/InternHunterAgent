@@ -47,16 +47,17 @@ agent:
   agent_v0: false
 
   # Named deployments are the serving allowlist. Model names must use LiteLLM's
-  # provider-qualified form, and each profile selects only one deployment.
-  # `api_key_env` names a deployment environment variable. It never contains a secret.
+  # lowercase provider-qualified form; the provider is read from that prefix, so
+  # there is no separate provider key to keep in sync. `api_key_env` names a
+  # deployment environment variable. It never contains a secret.
   providers:
     deepseek_flash:
-      provider: deepseek
       model: deepseek/deepseek-flash
       api_key_env: DEEPSEEK_API_KEY
 
-  # End-to-end serving deadline for one SSE turn. Invalid or omitted values fall
-  # back to 120 seconds so one blocked stream cannot occupy the sole web worker.
+  # End-to-end serving deadline for one SSE turn. Required: a missing,
+  # non-integer, boolean, or non-positive value refuses boot (ADR-0048, amended
+  # by #656), so one blocked stream cannot occupy the sole web worker unbounded.
   stream_turn_timeout_seconds: 120
   prompts:
     # Fetch one explicit deployment label, never mutable `latest`. The checked-in

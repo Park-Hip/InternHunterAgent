@@ -28,7 +28,7 @@ from src.agents.mcp.job_server import (
     mcp_endpoint_enabled,
 )
 from src.agents.runtime.prompts import v0_agent_enabled
-from src.agents.runtime.provider import AgentProvider
+from src.agents.runtime.provider import assert_profile_credential
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing.langfuse import (
     create_langfuse_stream_observation,
@@ -73,10 +73,9 @@ def _assert_served_profile_credentials() -> None:
     that names the variable. Deployments no served profile selects stay
     optional, so a checkout needs only the selected provider's key.
     """
-    provider = AgentProvider()
     profiles = _served_profiles()
     for profile in profiles:
-        provider.assert_profile_credential(profile)
+        assert_profile_credential(profile)
     logger.info("api.provider_credentials_ok", profiles=list(profiles))
 
 

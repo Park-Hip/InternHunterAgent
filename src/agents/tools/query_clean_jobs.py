@@ -25,7 +25,7 @@ from src.agents.runtime.prompts import (
     load_schema_context_resolution_async,
     load_sql_generation_prompt_resolution_async,
 )
-from src.agents.runtime.provider import AgentProvider
+from src.agents.runtime.provider import build_model
 from src.agents.runtime.tool_events import publish_tool_result
 from src.agents.tracing.langfuse import get_langfuse_client, langfuse_prompt_attributes
 from src.core.config import settings
@@ -82,10 +82,9 @@ def _content_to_text(content: str | list[Any]) -> str:
 
 async def generate_sql(question: str) -> str:
     """Generate SQL for one question with an explicit traceable generation."""
-    provider = AgentProvider()
     schema_context = await load_schema_context_resolution_async()
     sql_generation_prompt = await load_sql_generation_prompt_resolution_async()
-    model = provider.build_model("sql_generation")
+    model = build_model("sql_generation")
     messages = [
         HumanMessage(
             content=(
@@ -115,7 +114,7 @@ async def generate_sql(question: str) -> str:
     with client.start_as_current_observation(
         as_type="generation",
         name=SQL_GENERATION_OBSERVATION_NAME,
-        model=provider.deployment_for("sql_generation").model,
+        model=settings.agent.deployment_for("sql_generation").model,
         input={"question": question},
         prompt=sql_generation_prompt.prompt_client,
     ) as generation:

@@ -36,13 +36,15 @@ backed by a separate PostgreSQL role with `SELECT` only on `clean_jobs`. The wri
 to `DATABASE_URL`.
 
 **Tunable parameters** live in `config/settings.yaml`, read through `src/core/config.py`.
-`agent.providers.*` is the trusted serving-deployment allowlist, with a provider-qualified LiteLLM model and an API-key environment-variable name only.
+`agent.providers.*` is the trusted serving-deployment allowlist; each entry is a lowercase provider-qualified LiteLLM model and an API-key environment-variable name only.
+The provider is derived from the model prefix, so no separate `provider` key exists to disagree with it.
 `agent.react.*` and `agent.sql_generation.*` select a deployment and configure portable generation settings plus explicit validated provider options.
 `agent.<profile>.max_attempts` counts attempts, not retries: `2` means the request is made twice when the first attempt fails.
 A request timeout, a connection failure, a rate limit, and LiteLLM's generic API error are retried, with waits that start at 4 seconds and cap at 10; provider 5xx and 4xx responses are not retried, because a retry cannot fix a 4xx and provider pressure is already reported to the client as a retryable `provider_busy` error.
 The worst case per call is `timeout x max_attempts` plus those waits: 64 seconds at the shipped 30-second timeout and two attempts, 98 seconds at three, against the 120-second `agent.stream_turn_timeout_seconds` turn deadline.
 `agent.prompts.*` configures the managed-prompt deployment label and cache lifetime (see the [Langfuse prompt management guide](../how-to/manage-langfuse-prompts.md)).
-`agent.stream_turn_timeout_seconds` is the end-to-end SSE serving deadline and falls back to 120 seconds when omitted or invalid.
+`agent.stream_turn_timeout_seconds` is the end-to-end SSE serving deadline.
+It is required, and a missing, non-integer, boolean, or non-positive value refuses boot (ADR-0048, amended by #656) instead of falling back.
 `database.connect_timeout_seconds` bounds every connection attempt (TCP, TLS, and authentication) so an unreachable database refuses boot within the bound; the configured value overrides any `connect_timeout` in a DSN.
 `agent.memory.*` controls the memory window, `agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence (validated during settings load and application startup).
 `ingestion.*` configures the pipeline.
@@ -67,7 +69,8 @@ process from the same FastMCP server the agent uses (`src/agents/mcp/job_server.
 ### Serving deployment migration
 
 The prior `agent.provider` and per-profile `provider` plus `model` fields are replaced by named `agent.providers` deployments.
-Each deployment must contain a LiteLLM provider-qualified model and an `api_key_env` name, and each profile must select it through `deployment`.
+Each deployment is a lowercase provider-qualified LiteLLM model plus an `api_key_env` name, and each profile selects it through `deployment`.
+The provider is derived from the model prefix, so the earlier per-deployment `provider` key is now refused rather than kept in sync.
 The bundled deployment references `DEEPSEEK_API_KEY`; the optional eval-judge Groq branch still reads `GROQ_API_KEY` from `.env`.
 Do not place an API key value in YAML, documentation, a Langfuse tag, or a log message.
 
@@ -75,7 +78,6 @@ Do not place an API key value in YAML, documentation, a Langfuse tag, or a log m
 agent:
   providers:
     approved_deployment:
-      provider: deepseek
       model: deepseek/deepseek-flash
       api_key_env: DEEPSEEK_API_KEY
   react:
@@ -85,7 +87,7 @@ agent:
 ```
 
 DeepSeek accepts only the explicit `thinking` option in the serving contract.
-All other provider options, unqualified models, unknown deployments, and unavailable selected credentials fail before model construction.
+All other provider options, unqualified models, missing sections, and unknown deployments refuse settings load, and an unavailable selected credential refuses boot before model construction.
 To roll back, revert the deployment contract and LiteLLM runtime together with the dependency change, then restore the native adapter configuration while retaining the existing environment variables through the rollback window.
 
 

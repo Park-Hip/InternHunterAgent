@@ -91,7 +91,7 @@ flowchart TD
 | App | Builds FastAPI with the lifespan, and `/mcp` before the static catch-all if enabled | `src/api/app.py` → `create_app` | Import fails |
 | Schema guard | Live `clean_jobs` columns must equal `EXPECTED_COLUMNS` exactly | `src/api/schema_guard.py` → `assert_serving_schema` | `SchemaGuardError`; uvicorn exits 3 |
 | Privilege guard | Agent role reads the 16 visible columns and is refused a write | `src/api/privilege_guard.py` → `assert_agent_privileges` | `AgentPrivilegeError`; skipped with a warning if the DSNs name different databases |
-| Credential guard | Each served profile's selected deployment has a nonempty API key | `src/agents/runtime/provider.py` → `AgentProvider.assert_profile_credential` | `ProviderCredentialError`; uvicorn exits 3 |
+| Credential guard | Each served profile's selected deployment has a nonempty API key | `src/agents/runtime/provider.py` → `assert_profile_credential` | `ProviderCredentialError`; uvicorn exits 3 |
 | Pool | Creates and opens the checkpointer pool without waiting for a connection | `src/core/checkpointer.py` → `build_checkpointer_pool` | - |
 | Langfuse init | Creates the client and callback handler when both keys are set and `LANGFUSE_ENABLED` is not false; never raises | `src/agents/tracing/langfuse.py` → `init_langfuse` | Logged; tracing disabled; boot continues |
 | Checkpointer | Creates or migrates LangGraph's checkpoint tables on `DATABASE_URL` | `src/core/checkpointer.py` → `build_checkpointer` | Raises; pool closed |
@@ -254,7 +254,7 @@ that import `src.serving.composition` all name it; move them in one pull request
 | `src/api/app.py` → `create_app`, `_register_mcp_before_static` | How the lifespan and `/mcp` are attached |
 | `src/api/schema_guard.py` → `assert_serving_schema`, `EXPECTED_COLUMNS` | Schema guard |
 | `src/api/privilege_guard.py` → `assert_agent_privileges` | Privilege guard |
-| `src/agents/runtime/provider.py` → `AgentProvider.assert_profile_credential`, `build_model` | Credential guard and model construction |
+| `src/agents/runtime/provider.py` → `assert_profile_credential`, `build_model` | Credential guard and model construction |
 | `src/core/checkpointer.py` → `build_checkpointer_pool`, `build_checkpointer` | Pool and checkpoint tables |
 | `src/core/db.py` → `connect_timeout_seconds` | The service-owned connect bound carried by both engines and the checkpointer pool |
 | `src/core/config.py` → `load_settings`, `ConfigLoadError` | The import-time configuration contract |

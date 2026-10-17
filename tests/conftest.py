@@ -2,6 +2,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 
 os.environ.setdefault(
     "DATABASE_URL",
@@ -33,3 +35,18 @@ if os.environ.get("INTERN_HUNTER_ALLOW_LIVE_TRACING") != "1":
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+
+@pytest.fixture(autouse=True)
+def _reset_built_models():
+    """No test may inherit a model another test built through the profile cache.
+
+    `src/agents/runtime/provider.py` builds each profile's model once per
+    process; between tests that cache must reset, or a patched `ChatLiteLLM`
+    or a replaced settings object would leak into the next case (issue #656).
+    """
+    from src.agents.runtime.provider import reset_built_models
+
+    reset_built_models()
+    yield
+    reset_built_models()

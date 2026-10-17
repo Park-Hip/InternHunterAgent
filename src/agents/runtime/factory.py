@@ -21,7 +21,7 @@ from src.agents.runtime.middleware import (
     load_max_turns,
 )
 from src.agents.runtime.prompts import load_system_prompt
-from src.agents.runtime.provider import AgentProvider
+from src.agents.runtime.provider import build_model
 
 
 async def agent_factory(
@@ -30,7 +30,7 @@ async def agent_factory(
     tools: collections.abc.Sequence[BaseTool] | None = None,
 ):
     """Build one agent with the discovered MCP tools and the present config."""
-    model = AgentProvider().build_model("react")
+    model = build_model("react")
     trigger_messages, keep_messages = load_compaction_message_limits()
 
     return create_agent(

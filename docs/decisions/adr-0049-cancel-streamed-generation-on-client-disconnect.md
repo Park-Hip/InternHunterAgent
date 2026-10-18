@@ -1,12 +1,13 @@
 # Streamed generation stops when its client disconnects
 
-> **Status:** Active · **Decided:** 2026-08-27
+> **Status:** Active · **Decided:** 2026-08-27 · **Amended:** 2026-10-18
 
 ## Decision
 
 The SSE route polls the request disconnect state while awaiting each service-stream event. On a
 disconnect it cancels and closes the service generator; that cleanup propagates cancellation to the
-runtime producer and closes its tracing scope before flushing. The route emits one
+runtime producer and closes its tracing scope (the per-turn flush this record originally named was
+removed by #699; export is left to the SDK's background span processor). The route emits one
 `stream.client_disconnected` operational log and sends no further SSE event.
 
 ## Consequences

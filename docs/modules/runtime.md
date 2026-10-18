@@ -69,11 +69,11 @@ flowchart TD
 |---|---|---|
 | Route | Rejecting a blank query with 400; the per-IP rate limit (`api.rate_limit`); SSE encoding with `type` in every payload; a `: ping` comment after 15 s of silence (ADR-0050); noticing a disconnect and closing the service generator (ADR-0049) | Agents, prompts, models |
 | Service | Minting a `session_id` when the request has none; the event order; the deadline; the fallback token; mapping exceptions to an in-band `error` event; folding that stream into the JSON body for `/chat` | LangChain, Langfuse, the graph |
-| Runtime | Resolving the prompt bundle once per turn; the per-prompt agent cache; the answer-only filter; binding the turn's tool-event emitter; the Langfuse span and flush | HTTP, SSE, the deadline |
+| Runtime | Resolving the prompt bundle once per turn; the per-prompt agent cache; the answer-only filter; binding the turn's tool-event emitter; the Langfuse span | HTTP, SSE, the deadline |
 
 **Where the split leaks today.**
 
-1. The runtime calls five functions from `src/agents/tracing/langfuse.py` and the Langfuse client's `flush` and `get_trace_url` directly, while the service reaches tracing only through the vendor-neutral `StreamObservation` port.
+1. The runtime calls four functions from `src/agents/tracing/langfuse.py`, while the service reaches tracing only through the vendor-neutral `StreamObservation` port.
    Whether the runtime should sit behind a port too is decided in the tracing guide (row 6).
 2. The route imports `src.agents.tracing.stream` for its no-op default observation.
 3. Events are untyped dicts.
@@ -111,7 +111,7 @@ sequenceDiagram
     RT-->>S: metadata, then waits
     S-->>B: metadata (5.52 s), done (5.53 s)
     S->>RT: completion event set
-    RT->>RT: close span, flush Langfuse
+    RT->>RT: close span
 ```
 
 The question was "Có việc thực tập Python nào ở Hà Nội không?".
@@ -180,7 +180,8 @@ flowchart TD
 | Completion handshake (`completion_event`) | The runtime yields `metadata`, then keeps the Langfuse span open until the service has sent `done` | The span would close before the stream finished, and the recorded completion latency would be wrong |
 | Queues of size 1 | Backpressure: the model is never read faster than the browser receives | A slow or vanished client could leave a backlog of events in memory |
 
-The span's completion is recorded on the service's side of `done`, and the Langfuse flush runs after it, so the user's `done` never waits for tracing.
+The span's completion is recorded on the service's side of `done`, and the turn does no Langfuse I/O after that (#699).
+The trace URL is composed from the project id resolved once at startup, and export is left to the SDK's background span processor; the process drains whatever is left through `shutdown_langfuse` at shutdown.
 
 `astream` also has a second mode, used only by tests, in which `completion_event` is omitted and the runtime completes the observation itself (#678 removes it).
 
@@ -249,7 +250,7 @@ The last column is the one that matters: does the conversation still work afterw
   That exit cancels and detaches the runtime task too, so no path awaits a runtime that can be blocked on the full queue.
   A slow-consumer test pins that the generator finishes right after `done` (#688).
 - **Disconnect.** The route polls `request.is_disconnected` every 50 ms while it waits for each event, then closes the service generator.
-  The service records the outcome as cancelled, sets the handshake, cancels the runtime task, and awaits it; the runtime cancels its producer and flushes Langfuse.
+  The service records the outcome as cancelled, sets the handshake, cancels the runtime task, and awaits it; the runtime cancels its producer and closes its span without any Langfuse I/O (#699).
   It logs `stream.client_disconnected` once, naming the session id the service issued, and only when the client left before `done` (#674).
 - **A tool call interrupted mid-flight.**
   LangGraph checkpoints after the model asks for a tool and before the tool answers, so a stopped turn leaves a call with no result.

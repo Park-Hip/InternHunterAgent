@@ -13,9 +13,9 @@ from src.agents.runtime.prompts import (
 )
 from src.agents.tracing.langfuse import (
     build_langfuse_config,
-    get_langfuse_client,
     langfuse_prompt_attributes,
     langfuse_request_trace,
+    langfuse_trace_url,
 )
 from src.agents.tracing.stream import StreamObservation
 from src.agents.runtime.tool_events import (
@@ -96,7 +96,6 @@ class AgentRuntime:
             except Exception as exc:
                 await events.put(exc)
 
-        client = get_langfuse_client()
         async with langfuse_request_trace(
             entry_point="api:chat-stream",
             trace_name="agent-chat-stream",
@@ -135,13 +134,10 @@ class AgentRuntime:
                     yield cast(dict[str, object], event)
 
                 if completion_event is not None and not provider_failed:
-                    trace_url = None
-                    if trace_id is not None and client is not None:
-                        trace_url = client.get_trace_url(trace_id=trace_id)
                     yield {
                         "type": "metadata",
                         "trace_id": trace_id,
-                        "trace_url": trace_url,
+                        "trace_url": langfuse_trace_url(trace_id=trace_id),
                     }
                     await completion_event.wait()
                     stream_completed = True
@@ -155,18 +151,12 @@ class AgentRuntime:
                         await completion_event.wait()
                     elif observation is not None:
                         observation.complete("cancelled")
-                if client is not None:
-                    await asyncio.to_thread(client.flush)
 
         if completion_event is None:
-            trace_url = None
-            if trace_id is not None and client is not None:
-                trace_url = client.get_trace_url(trace_id=trace_id)
-
             yield {
                 "type": "metadata",
                 "trace_id": trace_id,
-                "trace_url": trace_url,
+                "trace_url": langfuse_trace_url(trace_id=trace_id),
             }
 
     def _build_messages(self, query: str) -> dict[str, list[HumanMessage]]:

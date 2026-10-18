@@ -119,9 +119,6 @@ class _LangfuseRecorder:
             flush_interval=0.05,
         )
         self.handler = CallbackHandler(public_key=public_key)
-        # `get_trace_url` resolves the project id over the network before it can
-        # build a trace link. Seed it so a recorded turn never leaves the process.
-        self.client._project_id = "project-native-prompt"
 
     def get_prompt(
         self, name: str, *, is_fallback: bool, drifted: bool = False
@@ -181,6 +178,9 @@ class _ChatHarness:
         )
 
     def generations(self) -> list[tuple[Any, Any]]:
+        # The runtime no longer forces a per-turn flush (#699), so drain the
+        # exporter here before reading the recorded spans back.
+        self.recorder.client.flush()
         links = self.recorder.prompt_links(GENERATION_TYPE)
         assert links, "the model must run and produce a Langfuse generation"
         return links

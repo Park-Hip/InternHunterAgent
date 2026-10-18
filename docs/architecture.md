@@ -524,8 +524,9 @@ Internal richness must collapse to a plain string before crossing the API bounda
 When a request omits it the service generates one and returns it, so the client can continue the
 thread, and the response carries the id actually used rather than a blind echo.
 
-`trace_url` is populated from the Langfuse trace when tracing is configured, and is null only when
-tracing is disabled.
+`trace_url` is populated from the Langfuse trace when tracing is configured and the project id was
+resolved at startup, and is null when tracing is disabled, the credentials failed to resolve it, or
+the turn has no trace id (#699).
 
 The answer-only shape is an MVP choice, not a permanent law.
 A future charting capability is not a string, and revisiting the shape is what that would require.
@@ -596,8 +597,10 @@ Trace identity is available while the request span is active, but the runtime em
 after it has finished producing answer tokens.
 For a successful stream, the event order is therefore fixed: tokens first, then one trailing
 metadata event, then a terminal done event.
-Latency completion and the Langfuse flush happen after that final done boundary, so the completed
+Latency completion and the span close happen after that final done boundary, so the completed
 span includes the full user-visible stream lifecycle.
+The turn does no Langfuse network I/O after `done` (#699), so the trace link never depends on the
+tracing backend being reachable at the end of a turn.
 The UI shows the answer immediately and the trace link appears a beat later.
 `session_id`, by contrast, is known before the run and is emitted as the **first** event so the
 client can pin the conversation key immediately.

@@ -1,4 +1,12 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+#: What a validated SELECT's result rows represent, as classified by
+#: ``result_shape.classify_result_shape``. ``rows`` enumerates matching records,
+#: ``match_count`` is a single count of them, and ``summary`` is any other
+#: aggregation whose rows are figures rather than matches.
+ResultShape = Literal["rows", "match_count", "summary"]
 
 
 class TableArtifact(BaseModel):

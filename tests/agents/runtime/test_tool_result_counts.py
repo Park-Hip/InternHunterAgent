@@ -7,11 +7,15 @@ Two failure modes this guards, both of which would be invisible:
 2. A refused or failed query publishes `0` and the interface shows "no results"
    for a question that was never asked of the database. Absent and zero are
    different facts, and only the tool knows which it has.
+3. An aggregate result publishes the result table's row count as a match count,
+   so a count query's card reads "1 kết quả" while the answer says 11 (#677).
+   A count publishes the number it counted; any other summary publishes nothing.
 """
 
 from __future__ import annotations
 
 import unittest
+from contextlib import ExitStack
 from unittest.mock import patch
 
 from src.agents.runtime.tool_events import (
@@ -119,6 +123,100 @@ class NoFakeZeroTests(unittest.IsolatedAsyncioTestCase):
         facts = self.holder
         self.assertTrue(facts.published)
         self.assertIsNone(facts.row_count)
+
+
+class AggregateResultPublishingTests(unittest.IsolatedAsyncioTestCase):
+    """An aggregate publishes a total or nothing, never its result row count."""
+
+    def _holder(self) -> None:
+        self.holder = new_result_facts()
+        token = set_result_holder(self.holder)
+        self.addCleanup(reset_result_holder, token)
+
+    async def _run_query(
+        self, sql: str, rows: list[dict], *, max_rows: int | None = None
+    ) -> None:
+        validation = type("V", (), {"valid": True, "reason": "", "sql": sql})()
+        patchers = [
+            patch.object(qcj, "generate_sql", return_value=sql),
+            patch.object(qcj, "validate_sql", return_value=validation),
+            patch.object(qcj, "execute_validated_sql", return_value=rows),
+        ]
+        if max_rows is not None:
+            patchers.append(patch.object(qcj, "load_max_rows", return_value=max_rows))
+
+        with ExitStack() as stack:
+            for patcher in patchers:
+                stack.enter_context(patcher)
+            await qcj.run_query_clean_jobs("có bao nhiêu tin tuyển dụng ở Hà Nội?")
+
+    async def test_count_query_publishes_the_counted_total(self) -> None:
+        """The issue's case: a count of 11 must not reach the card as 1."""
+        self._holder()
+
+        await self._run_query(
+            "SELECT COUNT(*) AS count FROM clean_jobs WHERE location ILIKE '%Hanoi%'",
+            [{"count": 11}],
+        )
+
+        self.assertEqual(self.holder.row_count, 11)
+        self.assertFalse(self.holder.truncated)
+
+    async def test_count_query_that_counted_zero_publishes_zero(self) -> None:
+        """A zero count is a real zero, so the no-answer state can fire."""
+        self._holder()
+
+        await self._run_query(
+            "SELECT COUNT(*) AS count FROM clean_jobs WHERE location ILIKE '%Nope%'",
+            [{"count": 0}],
+        )
+
+        self.assertEqual(self.holder.row_count, 0)
+
+    async def test_other_aggregate_publishes_no_count(self) -> None:
+        self._holder()
+
+        await self._run_query(
+            "SELECT AVG(salary_min) AS average FROM clean_jobs",
+            [{"average": 17500625}],
+        )
+
+        self.assertTrue(self.holder.published)
+        self.assertIsNone(self.holder.row_count)
+
+    async def test_grouped_count_publishes_no_count(self) -> None:
+        self._holder()
+
+        await self._run_query(
+            "SELECT location, COUNT(*) AS count FROM clean_jobs GROUP BY location",
+            [{"location": "Hanoi", "count": 4}, {"location": "Da Nang", "count": 2}],
+        )
+
+        self.assertTrue(self.holder.published)
+        self.assertIsNone(self.holder.row_count)
+
+    async def test_listing_still_publishes_its_row_count(self) -> None:
+        self._holder()
+
+        await self._run_query(
+            "SELECT id, title FROM clean_jobs",
+            [{"id": 1, "title": "Intern A"}, {"id": 2, "title": "Intern B"}],
+        )
+
+        self.assertEqual(self.holder.row_count, 2)
+        self.assertFalse(self.holder.truncated)
+
+    async def test_capped_listing_still_reports_truncation(self) -> None:
+        self._holder()
+
+        await self._run_query(
+            "SELECT id FROM clean_jobs",
+            [{"id": 1}, {"id": 2}, {"id": 3}],
+            max_rows=2,
+        )
+
+        self.assertEqual(self.holder.row_count, 2)
+        self.assertTrue(self.holder.truncated)
 
 
 class ResultFactsTests(unittest.IsolatedAsyncioTestCase):

@@ -219,8 +219,9 @@ It holds no LangChain or database knowledge of its own.
 The only place permitted to construct the LangChain agent.
 `src/agents/runtime/factory.py` assembles the agent with the registered tool list,
 `src/agents/runtime/provider.py` wraps the configured chat models,
-`src/agents/runtime/prompts.py` resolves one deployment-labelled managed prompt bundle, with
-`config/prompts.yaml` as the reviewed release-pinned fallback, and
+`src/agents/runtime/prompts.py` serves one prompt bundle from the release pins in
+`config/prompts.yaml`, with the tracing layer attaching a deployment-labelled Langfuse prompt
+as a trace link only while its text equals the release text, and
 `src/agents/runtime/react_agent.py` runs the loop and extracts the final answer.
 Two responsibilities are owned here and nowhere else: **tool registration**, since no other layer
 may add a tool, and **conversation memory**, since the API and service layers pass a session
@@ -363,10 +364,10 @@ The agent runs a ReAct-style loop.
 The model reasons about the user's question, decides whether to call a tool, consumes the tool's
 result, and produces a final natural-language answer.
 
-The versioned system prompt is resolved by `src/agents/runtime/prompts.py` from the configured Langfuse deployment label, falling back to `config/prompts.yaml` when Langfuse is unavailable.
+The versioned system prompt is served by `src/agents/runtime/prompts.py` from `config/prompts.yaml`; the tracing layer links the generation to the matching deployment-labelled Langfuse prompt when it is reachable and its text agrees, and logs drift otherwise.
 One resolved bundle supplies the system, schema-context, and SQL-generation prompts for each request.
 It steers the model to use the job-data tool for any question that depends on stored postings, rather than answering from its own parameters.
-Prompt deployment, candidate evaluation, promotion, and rollback are owned by the [Langfuse prompt management guide](how-to/manage-langfuse-prompts.md).
+Prompt change (edit, merge, deploy, register), candidate evaluation, and rollback are owned by the [Langfuse prompt management guide](how-to/manage-langfuse-prompts.md).
 The runtime extracts the final answer from the last message and returns it as a plain string.
 
 The behavior glossary is loaded separately rather than pasted into the system prompt, so the

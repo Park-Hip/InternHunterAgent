@@ -34,8 +34,8 @@ It never contains secret values.
 | `GOOGLE_API_KEY` | `.env` only | Deliberately undeclared | Not used | Active eval-judge key (`gemma-4-31b-it` via Google AI Studio); not declared for Render. |
 | `DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | GitHub `DATABASE_URL` secret | Cron and migrations use Neon's direct, non-pooled host. |
 | `AGENT_DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Agent-facing SQL reads use a dedicated least-privilege credential. Ingestion validates its presence but does not read it. Absence must fail closed. Do not fall back to `DATABASE_URL`. |
-| `LANGFUSE_SECRET_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Optional. With the public key, enables managed prompts and tracing; not read by ingestion. |
-| `LANGFUSE_PUBLIC_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Optional. With the secret key, enables managed prompts and tracing; not read by ingestion. |
+| `LANGFUSE_SECRET_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Optional. With the public key, enables tracing and native prompt trace links; not read by ingestion. |
+| `LANGFUSE_PUBLIC_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Optional. With the secret key, enables tracing and native prompt trace links; not read by ingestion. |
 | `LANGFUSE_BASE_URL` | `.env`; Render dashboard | Dashboard value, `sync: false` | Not used | Optional Langfuse endpoint. Without it, Langfuse is disabled rather than targeting a local default. |
 | `LANGFUSE_TRACING_ENVIRONMENT` | `.env`; `render.yaml` | Tracked `production` value | Not used | Defaults to `local`; allowed values are `local`, `production`, and `evaluation`. |
 | `LANGFUSE_RELEASE` | Optional `.env`; eval driver | Deliberately undeclared | Eval driver supplies its current git SHA | Optional local release override; Render's automatic `RENDER_GIT_COMMIT` takes precedence. |
@@ -49,7 +49,7 @@ It does not synchronize or store the value in the repository.
 The provider key for each served profile's selected deployment is required to boot.
 `src/core/config.py` still requires only the database URLs; `src/serving/composition.py` then validates those deployments before the checkpointer pool opens, refusing startup with the missing variable named.
 That is `DEEPSEEK_API_KEY` today, while both profiles select `deepseek_flash`; a declared but unselected deployment stays optional.
-Without Langfuse credentials, the service uses its reviewed prompt fallbacks and disables tracing.
+Without Langfuse credentials, the service serves its reviewed release-pinned prompt text unlinked and disables tracing.
 
 ## Deploy flow
 
@@ -93,8 +93,8 @@ Run provisioning deliberately after confirming the pricing source and the target
 
 ## Langfuse prompt registry
 
-Follow the [Langfuse prompt management guide](manage-langfuse-prompts.md) to seed, evaluate,
-promote, and roll back immutable prompt versions.
+Follow the [Langfuse prompt management guide](manage-langfuse-prompts.md) to ship, evaluate,
+and roll back a prompt change; the checked-in YAML is the serving source, and Langfuse holds the trace links.
 
 ## Database operations
 
@@ -295,7 +295,7 @@ external host, credential, or healthcheck from this document; provisioning is a 
 ## Operational gotchas
 
 - Runtime settings require `DATABASE_URL` and `AGENT_DATABASE_URL` before the API can start.
-  The served profiles' selected provider key is validated at boot: unset or empty refuses startup, and absent Langfuse credentials leave serving on the reviewed prompt fallbacks with tracing disabled.
+  The served profiles' selected provider key is validated at boot: unset or empty refuses startup, and absent Langfuse credentials leave serving on the reviewed release-pinned prompt text with tracing and prompt linking disabled.
 - The ingestion workflow deliberately supplies literal unused `AGENT_DATABASE_URL`, provider, and
   tracing placeholders because ingestion needs configuration validation but makes no database,
   provider, or tracing call.

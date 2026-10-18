@@ -32,10 +32,12 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from src.agents.runtime.prompts import load_prompt_versions
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing import langfuse
 from src.agents.tracing.prompt_registry import PROMPT_DEFINITIONS
 from src.api.app import create_app
+from src.core.config import settings
 from tests.langfuse_prompts import native_prompt_client, prompt_link
 
 ANSWER = "There are 3 roles."
@@ -52,6 +54,19 @@ NATIVE_VERSIONS_BY_NAME = {
 # The one system prompt the served bundle resolves, so the link a generation
 # carries is the reviewed surface rather than whichever bundle happened to run.
 EXPECTED_SYSTEM_LINK = {("resumi-system", NATIVE_VERSIONS["system"])}
+
+# The released text of each surface, the text the served bundle must use.
+RELEASE_TEXT = {
+    definition.name: settings.prompts_yaml["prompts"][definition.yaml_key].strip()
+    for definition in PROMPT_DEFINITIONS
+}
+
+
+def _release_prompt_tags() -> set[str]:
+    return {
+        f"prompt:{surface}:{version}"
+        for surface, version in load_prompt_versions().items()
+    }
 
 
 def _parse_sse_events(body: str) -> list[tuple[str, dict[str, Any]]]:
@@ -108,17 +123,27 @@ class _LangfuseRecorder:
         # build a trace link. Seed it so a recorded turn never leaves the process.
         self.client._project_id = "project-native-prompt"
 
-    def get_prompt(self, name: str, *, is_fallback: bool) -> TextPromptClient:
-        """Answer a managed prompt lookup the way Langfuse would."""
+    def get_prompt(
+        self, name: str, *, is_fallback: bool, drifted: bool = False
+    ) -> TextPromptClient:
+        """Answer a managed prompt lookup with the released or a drifted text."""
         return native_prompt_client(
             name,
             NATIVE_VERSIONS_BY_NAME[name],
-            text=f"managed text for {name}",
+            text=f"managed text for {name}" if drifted else RELEASE_TEXT[name],
             is_fallback=is_fallback,
         )
 
     def shutdown(self) -> None:
         self.client.shutdown()
+
+    def trace_tags(self) -> set[str]:
+        """Every trace tag the exported root observation carries."""
+        for span in self.exporter.get_finished_spans():
+            tags = span.attributes.get("langfuse.trace.tags")
+            if tags:
+                return {str(tag) for tag in tags}
+        return set()
 
     def prompt_links(self, observation_type: str) -> list[tuple[Any, Any]]:
         """Every exported observation of a type, paired with its prompt link."""
@@ -135,6 +160,7 @@ class _ChatHarness:
     def __init__(self) -> None:
         self.recorder = _LangfuseRecorder()
         self.serve_fallbacks = False
+        self.serve_drifted_text = False
         self.app = create_app(rate_limit="1000/minute", docs_enabled=False)
         self.client = TestClient(self.app)
 
@@ -173,7 +199,9 @@ def chat(monkeypatch: pytest.MonkeyPatch) -> Iterator[_ChatHarness]:
         harness.recorder.client,
         "get_prompt",
         lambda name, **_kwargs: harness.recorder.get_prompt(
-            name, is_fallback=harness.serve_fallbacks
+            name,
+            is_fallback=harness.serve_fallbacks,
+            drifted=harness.serve_drifted_text,
         ),
     )
     monkeypatch.setattr("src.agents.runtime.factory.build_model", _build_model)
@@ -200,6 +228,24 @@ def test_streaming_chat_links_the_generation_to_the_managed_prompt(
     assert metadata["trace_id"]
 
     assert set(chat.generations()) == EXPECTED_SYSTEM_LINK
+    assert _release_prompt_tags() <= chat.recorder.trace_tags()
+
+
+def test_streaming_chat_serves_the_release_text_when_the_managed_text_drifted(
+    chat: _ChatHarness,
+) -> None:
+    """A drifted managed text never reaches the model and never links."""
+    chat.serve_drifted_text = True
+
+    response = chat.stream("session-471")
+
+    assert response.status_code == 200
+    events = _parse_sse_events(response.text)
+    assert "error" not in [event_type for event_type, _ in events]
+    assert _streamed_answer(events) == ANSWER
+    assert _release_prompt_tags() <= chat.recorder.trace_tags()
+
+    assert set(chat.generations()) == {(None, None)}
 
 
 def test_one_shot_chat_links_the_generation_to_the_managed_prompt(
@@ -213,6 +259,7 @@ def test_one_shot_chat_links_the_generation_to_the_managed_prompt(
     assert body["trace_id"]
 
     assert set(chat.generations()) == EXPECTED_SYSTEM_LINK
+    assert _release_prompt_tags() <= chat.recorder.trace_tags()
 
 
 def test_streaming_chat_answers_with_release_fallback_prompts(

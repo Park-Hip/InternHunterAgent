@@ -32,7 +32,7 @@ Procedures for setting keys and pricing in Langfuse stay in [the operate how-to]
 
 What it deliberately is not:
 
-- **Not prompts.** The text sent to the model is the prompts module's (`config/prompts.yaml`, the Langfuse label).
+- **Not prompts.** The text sent to the model is the release pin in `config/prompts.yaml`; the Langfuse deployment label contributes only the trace link.
 - **Not the agent loop.** It builds a model; the runtime decides when to call it, and the service enforces the turn deadline (section 5).
 - **Not a gateway.** No routing, no fallback, no per-request choice.
   The deployment is fixed by reviewed config.

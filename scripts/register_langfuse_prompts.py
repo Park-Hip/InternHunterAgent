@@ -1,4 +1,4 @@
-"""Seed candidate Langfuse prompt versions from release-pinned YAML fallbacks."""
+"""Register the release-pinned YAML prompt text with Langfuse."""
 
 from __future__ import annotations
 
@@ -28,7 +28,8 @@ def create_langfuse_client():
 
 PROMPTS_PATH = ROOT / "config" / "prompts.yaml"
 PROMPT_LABEL = "candidate"
-PERMITTED_SEED_LABELS = frozenset({"candidate"})
+PRODUCTION_LABEL = "production"
+PERMITTED_PROMPT_LABELS = frozenset({PROMPT_LABEL, PRODUCTION_LABEL})
 
 
 class PromptClient(Protocol):
@@ -111,9 +112,17 @@ def synchronize_prompts(
     label: str = PROMPT_LABEL,
     commit_message: str | None,
 ) -> tuple[int, int]:
-    if label not in PERMITTED_SEED_LABELS:
-        raise ValueError("Prompt seeding may target candidate, never production")
-    """Create versions only when the registered text differs from YAML."""
+    """Create versions only when the registered text differs from YAML.
+
+    With `--label production` this is the deploy step: the released text
+    becomes a version and the label moves to it, which restores the trace
+    link. Unknown labels are refused so `latest` can never be written.
+    """
+    if label not in PERMITTED_PROMPT_LABELS:
+        raise ValueError(
+            "Prompt registration may target only: "
+            + ", ".join(sorted(PERMITTED_PROMPT_LABELS))
+        )
     created = 0
     unchanged = 0
     for definition in definitions:
@@ -128,7 +137,7 @@ def synchronize_prompts(
         except NotFoundError:  # A missing prompt is the normal first-run condition.
             existing = None
 
-        if existing is not None and existing.prompt == definition.content:
+        if existing is not None and existing.prompt.strip() == definition.content:
             unchanged += 1
             print(f"unchanged {definition.name}")
             continue
@@ -145,12 +154,73 @@ def synchronize_prompts(
     return created, unchanged
 
 
+def check_prompt_drift(
+    client: LangfusePromptClient,
+    definitions: list[PromptDefinition],
+    *,
+    label: str = PRODUCTION_LABEL,
+) -> int:
+    """Compare each labelled version with the checked-in YAML text.
+
+    Returns the number of surfaces whose text is missing or different, so a
+    deployment can gate on a non-zero exit. A failed lookup also counts: the
+    drift cannot be ruled out.
+    """
+    drifted = 0
+    for definition in definitions:
+        try:
+            existing = client.get_prompt(
+                definition.name,
+                label=label,
+                type="text",
+                cache_ttl_seconds=0,
+                max_retries=0,
+            )
+        except NotFoundError:
+            print(
+                f"drift {definition.name}: no '{label}' version is registered",
+                file=sys.stderr,
+            )
+            drifted += 1
+            continue
+        except Exception as exc:
+            print(
+                f"drift {definition.name}: unable to read '{label}': {exc}",
+                file=sys.stderr,
+            )
+            drifted += 1
+            continue
+
+        if existing.prompt.strip() != definition.content:
+            print(
+                f"drift {definition.name}: '{label}' text differs from "
+                f"prompts.{definition.yaml_key}",
+                file=sys.stderr,
+            )
+            drifted += 1
+        else:
+            print(
+                f"ok {definition.name}: '{label}' text matches "
+                f"prompts.{definition.yaml_key}"
+            )
+    return drifted
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--dry-run",
         action="store_true",
         help="Validate and list the YAML prompts without contacting Langfuse.",
+    )
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            f"Compare each '{PRODUCTION_LABEL}' version with the checked-in text; "
+            "exit non-zero on drift."
+        ),
     )
     parser.add_argument(
         "--commit-message",
@@ -159,8 +229,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--label",
         default=PROMPT_LABEL,
-        choices=sorted(PERMITTED_SEED_LABELS),
-        help="Deployment label for seeded candidate versions. Production promotion is manual.",
+        choices=sorted(PERMITTED_PROMPT_LABELS),
+        help=(
+            "Deployment label to register: candidate for an evaluation "
+            "environment, production for a release."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -182,6 +255,20 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(f"prompt registration: {exc}", file=sys.stderr)
         return 1
+
+    if args.check:
+        drifted = check_prompt_drift(client, definitions)
+        if drifted:
+            print(
+                f"prompt check failed: {drifted} of {len(definitions)} surfaces drifted",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"prompt check passed: all {len(definitions)} surfaces match "
+            f"'{PRODUCTION_LABEL}'"
+        )
+        return 0
 
     commit_message = args.commit_message or git_commit()
     created, unchanged = synchronize_prompts(

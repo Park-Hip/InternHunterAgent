@@ -95,7 +95,7 @@ flowchart TD
 | Pool | Creates and opens the checkpointer pool without waiting for a connection | `src/core/checkpointer.py` → `build_checkpointer_pool` | - |
 | Langfuse init | Creates the client and callback handler when both keys are set and `LANGFUSE_ENABLED` is not false; never raises | `src/agents/tracing/langfuse.py` → `init_langfuse` | Logged; tracing disabled; boot continues |
 | Checkpointer | Creates or migrates LangGraph's checkpoint tables on `DATABASE_URL` | `src/core/checkpointer.py` → `build_checkpointer` | Raises; pool closed |
-| Prompts | Resolves every prompt the served bundle uses, Langfuse first, YAML fallback | `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup` | Langfuse errors fall back; a missing YAML prompt raises |
+| Prompts | Serves every prompt from the checked-in YAML and links the Langfuse version when its text agrees | `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup` | Langfuse errors leave the surface unlinked; a missing YAML prompt raises |
 | Tools | Lists the MCP server's tools as LangChain tools, in process | `src/agents/mcp/adapter.py` → `list_job_tools` | Raises before the runtime exists |
 | Runtime | `AgentRuntime(checkpointer, tools)` on `app.state.runtime` | `src/agents/runtime/react_agent.py` → `AgentRuntime` | - |
 | Diagnostic | Checks Langfuse credentials in a background task | `src/agents/tracing/langfuse.py` → `diagnose_langfuse_startup` | Logged only |
@@ -182,7 +182,8 @@ one pool, one runtime, and one MCP server per deploy.
 
 A healthy boot logs, in order: `api.schema_ok`, `api.agent_privileges_ok`,
 `api.provider_credentials_ok` (with the profiles checked), and `langfuse.prompts_prefetched` (with
-each prompt's version and the served system surface).
+each prompt's release version and the served system surface).
+During the prefetch, a labelled version that resolves logs `prompt.linked` or `prompt.drift` for that surface; a version that cannot be read leaves the surface unlinked.
 The Langfuse authentication result lands near uvicorn's `Application startup complete`, before
 or after it, because the diagnostic is not awaited.
 
@@ -211,9 +212,9 @@ or after it, because the diagnostic is not awaited.
 - **Served deployments carry their keys at boot.** The credential guard checks the deployments the
   served tool surface can invoke, `react` and `sql_generation`, so a checkout needs only each served
   deployment's key (#641).
-- **Tracing never blocks boot.** Langfuse is optional: prompts fall back to the reviewed YAML text,
-  the client is created locally with no network round trip, and the credential check is
-  fire-and-track so boot never waits on a response.
+- **Tracing never blocks boot.** Langfuse is optional: prompts serve the reviewed YAML text and
+  link a managed version only when its text agrees, the client is created locally with no network
+  round trip, and the credential check is fire-and-track so boot never waits on a response.
 - **The API layer takes a lifespan instead of building one.** That keeps direct LangChain,
   Langfuse, and checkpointer imports out of `src/api/`, as `AGENTS.md` requires.
 

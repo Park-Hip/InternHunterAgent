@@ -37,14 +37,16 @@ class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
     @patch("src.agents.runtime.factory.settings")
     @patch("src.agents.runtime.factory.build_tool_observation_middleware")
     @patch("src.agents.runtime.factory.build_trim_middleware")
+    @patch("src.agents.runtime.factory.build_interrupted_tool_call_repair_middleware")
     @patch("src.agents.runtime.factory.create_agent")
     @patch("src.agents.runtime.factory.load_system_prompt")
     @patch("src.agents.runtime.factory.build_model")
-    async def test_agent_factory_trims_to_the_configured_turn_cap(
+    async def test_agent_factory_registers_middlewares_in_order(
         self,
         mock_build_model,
         mock_load_system_prompt,
         mock_create_agent,
+        mock_build_repair_middleware,
         mock_build_trim_middleware,
         mock_build_tool_observation_middleware,
         mock_settings,
@@ -58,6 +60,7 @@ class AgentFactoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             kwargs["middleware"],
             [
+                mock_build_repair_middleware.return_value,
                 mock_build_trim_middleware.return_value,
                 mock_build_tool_observation_middleware.return_value,
             ],

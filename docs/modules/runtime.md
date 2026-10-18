@@ -1,6 +1,6 @@
 # Runtime module guide
 
-> **Last verified:** 2026-10-17
+> **Last verified:** 2026-10-18
 
 > **Eviction:** Rewritten whenever `src/agents/service.py`, `src/agents/runtime/react_agent.py`, `src/agents/runtime/middleware.py`, `src/agents/runtime/tool_events.py`, `src/agents/runtime/factory.py`, or `agent.memory` changes; removed when the module is retired.
 
@@ -21,7 +21,7 @@ It does not own what the prompts say (row 4 of #617), what the tools do (row 5),
 - **Checkpoint.** A saved copy of the thread's state, its message list, written to Postgres by `AsyncPostgresSaver` after every graph step.
   A two-turn session wrote 22 checkpoint rows.
 - **Middleware.** A hook that LangChain's `create_agent` runs around each model or tool call.
-  There are two: turn trimming and tool observation.
+  There are three: interrupted-tool-call repair, turn trimming, and tool observation.
 
 **What it owns.**
 
@@ -53,7 +53,7 @@ flowchart TD
     R["Route: src/api/routes/query.py<br/>blank query 400, rate limit, SSE framing,<br/>15 s heartbeat, disconnect polling"]
     S["Service: src/agents/service.py<br/>event order, turn deadline,<br/>empty-answer fallback, error mapping"]
     RT["Runtime: src/agents/runtime/react_agent.py<br/>prompt bundle, cached agent per prompt,<br/>answer-only filter, tool events, trace span"]
-    G["LangGraph agent from create_agent<br/>model node, tools node, two middlewares"]
+    G["LangGraph agent from create_agent<br/>model node, tools node, three middlewares"]
     PG[("Postgres checkpoints<br/>DATABASE_URL")]
     TR["Tracing: src/agents/tracing/"]
     B -->|"POST /api/v1/agent/chat/stream"| R
@@ -195,7 +195,7 @@ agent:
 ```
 
 - **Stored.** `AsyncPostgresSaver` keeps the whole thread in the application database, through `DATABASE_URL` (the owner role, not the read-only agent role).
-  The stored thread is never rewritten.
+  The stored thread is never rewritten, except to answer an interrupted tool call (section 6).
   Each turn replays the stored messages; there is no other memory code, and refining a question is the model reading its own earlier turns.
 - **Seen.** `TrimTurnsMiddleware` wraps each model call and cuts its input to the last 6 complete turns, counting a turn from each `HumanMessage`.
   It changes only the request, never storage.
@@ -223,7 +223,7 @@ A demo session rarely exceeds 6 tool turns, so #672 removed it rather than gover
   A browser reload starts a new session, and the old thread stays in Postgres (#673).
 - A turn stopped after its first token keeps the tool calls and results but not the partial answer, so the model does not know what the user saw.
   ADR-0049 accepts that: no partial-response persistence.
-- A turn stopped while a tool runs keeps a tool call with no result, which breaks the session (section 6, #671).
+- A turn stopped while a tool runs keeps a tool call with no result; before the next model call a synthetic tool message answers it, so the session keeps working (section 6, #671).
 
 ## 6. Failure paths
 
@@ -233,8 +233,8 @@ The last column is the one that matters: does the conversation still work afterw
 | Situation | The user sees | Stored afterwards | Next turn in that session |
 |---|---|---|---|
 | Normal turn | `session`, `tool` events, tokens, `metadata`, `done` | The whole exchange | Works |
-| Dừng, or the tab closes, while a tool runs | Nothing more; the tool card keeps "đang chạy…" (#675) | Question and tool call, no tool result | **Fails every time** with `internal_error` (#671) |
-| Deadline expires while a tool runs | `provider_busy`, "Bản thử nghiệm đang bận - vui lòng thử lại sau một lát.", `retryable: true` | Question and tool call, no tool result | **Fails every time**; the promised retry cannot succeed (#671) |
+| Dừng, or the tab closes, while a tool runs | Nothing more; the tool card keeps "đang chạy…" (#675) | Question and tool call, no tool result | Works; the repair answers the call before the model sees it (#671) |
+| Deadline expires while a tool runs | `provider_busy`, "Bản thử nghiệm đang bận - vui lòng thử lại sau một lát.", `retryable: true` | Question and tool call, no tool result | Works; the promised retry goes through (#671) |
 | Deadline expires after the tool returned | `provider_busy`, `retryable: true` | Question, tool call, result | Works |
 | Dừng after the first tokens | The partial answer as painted; only screen readers hear "Đã dừng." | Tool calls and results, no answer | Works |
 | Two turns at once on one session | Both answered | Only the later turn's exchange | Works, but one exchange is silently lost |
@@ -250,11 +250,11 @@ The last column is the one that matters: does the conversation still work afterw
 - **Disconnect.** The route polls `request.is_disconnected` every 50 ms while it waits for each event, then closes the service generator.
   The service records the outcome as cancelled, sets the handshake, cancels the runtime task, and awaits it; the runtime cancels its producer and flushes Langfuse.
   It logs `stream.client_disconnected` once, but today it also logs that line for every completed turn (#674).
-- **Why an interrupted tool call is fatal.**
-  LangGraph checkpoints after the model asks for a tool and before the tool answers.
-  Every later turn replays that history, and DeepSeek rejects an assistant tool call with no matching tool message with a 400, which the service maps to `internal_error`.
-  The browser keeps the same `session_id` until a reload, and each failed attempt appends another unanswered question to the thread.
-  #671 repairs the history before each model call.
+- **A tool call interrupted mid-flight.**
+  LangGraph checkpoints after the model asks for a tool and before the tool answers, so a stopped turn leaves a call with no result.
+  Before each model call, `InterruptedToolCallRepairMiddleware` inserts one synthetic error `ToolMessage` per unanswered id, directly after the call, and writes the repaired list to storage.
+  The model can retry the call or move on from a valid sequence, so the Dừng button, a disconnect, the deadline, and a worker crash all leave the session working (#671).
+  A thread a previous interruption already damaged is repaired the same way on its next model call, so no migration is needed.
 
 **The non-streaming route.**
 `POST /api/v1/agent/chat` goes through `generate_agent_response` and `AgentRuntime.ainvoke`.
@@ -264,24 +264,22 @@ It is still a second code path beside the stream, with its own answer extraction
 
 ## 7. Behaviours that surprise a new developer
 
-1. **One press of Dừng while a tool runs ends the conversation** (section 6, #671).
-   The same happens when the tab closes or the deadline expires at that moment.
+1. **A repaired thread carries a tool message the tool never produced.**
+   After a turn is interrupted mid-tool, the next turn stores one synthetic error `ToolMessage` per unanswered call, so the sequence a provider validates stays complete (section 6, #671).
 2. **The first request after a prompt change is slower.**
    `AgentRuntime._active_agent` compiles one agent per system prompt version and content and caches it for the process lifetime; the cache is never evicted.
 3. **The empty-answer fallback is a `token`, not an `error`.**
    A turn whose model writes nothing still succeeds, with one Vietnamese fallback sentence as its answer (ADR-0061).
 4. **A failed turn has no trace link.**
    The `error` path skips `metadata`, although the trace exists.
-5. **`retryable: true` after a deadline is not always true.**
-   If the deadline cut a tool call, the retry fails (#671).
-6. **Two turns at once on one session lose an exchange.**
+5. **Two turns at once on one session lose an exchange.**
    Both read the same checkpoint and the later write wins.
    The web UI cannot trigger this: the composer is locked during a turn, and each page has its own session.
    An API client can, and that is recorded as a known limit (section 8).
-7. **Every completed stream is logged as a client disconnect** (#674), and a first turn's disconnect carries `session_id: null`, because the log names the request's id, not the one the service minted.
-8. **The tool card's count is the number of result rows.**
+6. **Every completed stream is logged as a client disconnect** (#674), and a first turn's disconnect carries `session_id: null`, because the log names the request's id, not the one the service minted.
+7. **The tool card's count is the number of result rows.**
    A count query returns one row, so the card reads "1 kết quả" while the answer says 11 (#677).
-9. **The heartbeat is not an event.**
+8. **The heartbeat is not an event.**
    `: ping` is an SSE comment, so clients and the event order never see it (ADR-0050).
 
 ## 8. Trade-offs, and what would now be decided differently
@@ -306,21 +304,19 @@ It is still a second code path beside the stream, with its own answer extraction
 **Would now be decided differently.**
 Each item was found while preparing this guide and is tracked by an issue.
 
-1. **Interrupted tool calls are not repaired** (#671, high).
-   A `before_model` middleware that answers every dangling tool call with a synthetic tool message covers every cause, including a worker crash, without a cleanup path that must run during cancellation.
-2. **Thread storage has no bound** (#673).
+1. **Thread storage has no bound** (#673).
    Removing compaction (#672) left the 6-turn trim as the only memory bound, which limits what the model sees but not what is stored; retention deletes old threads.
-3. **Two entry points** (#689).
+2. **Two entry points** (#689).
    #659 gave `/chat` its own copy of the deadline rather than implementing it by collecting the stream, so `ainvoke`, `generate_agent_response`, and about 100 lines of extraction and trace wiring remain beside the streamed path.
    #689 implements `/chat` by collecting the stream, leaving one path.
-4. **Test-only surface in the runtime** (#678).
+3. **Test-only surface in the runtime** (#678).
    The second mode of `astream`, the `agent=` injection, and two wrappers go; the tool middleware's holder reset moves into a `finally`.
-5. **Untyped events** (#679).
+4. **Untyped events** (#679).
    The event models move into the agents package, the API imports them for its schema, and internal signals get their own types.
-6. **The runtime imports tracing directly.**
+5. **The runtime imports tracing directly.**
    Not decided here: the tracing guide (row 6) decides whether the runtime goes behind a port like the service.
 
-The order is #671 first, then #689, #678, and #679, which edit the same code in that order; #673 and #688 are independent.
+The order is #689, then #678 and #679, which edit the same code in that order; #673 and #688 are independent.
 The user-facing follow-ups are #675 (a stopped turn keeps "đang chạy…") and #677 (the tool card's count, row 5).
 
 ## 9. Changing it safely
@@ -331,8 +327,8 @@ Change `src/api/schemas.py` (`StreamEvent`), the service or runtime that emits i
 A new internal signal must never reach the route.
 
 **Add a middleware.**
-Order matters: `agent_factory` lists trimming, then tool observation, which stays innermost so it reports the call as actually issued.
-A middleware that returns state from `before_model` changes storage; one that wraps the model call, such as trimming, changes only what the model sees.
+Order matters: `agent_factory` lists interrupted-tool-call repair, then trimming, then tool observation, which stays innermost so it reports the call as actually issued.
+A middleware that returns state from `before_model`, such as the repair, changes storage; one that wraps the model call, such as trimming, changes only what the model sees.
 Per-turn state must come through a `ContextVar` bound by the runtime, never a middleware attribute, because the agent is shared across turns.
 
 **Change a memory bound.**
@@ -348,7 +344,7 @@ Re-confirm three things the runtime assumes: the answer comes from a node named 
 The leak test, `test_astream_does_not_leak_tool_calls_sql_or_raw_tool_output` in `tests/agents/runtime/test_react_agent.py`, feeds the filter fake node names, so it does not catch a rename; confirm the tool-call gate with one live turn whose tokens contain no SQL and no tool name.
 
 **Touch the stream machinery.**
-Run `uv run pytest tests/agents tests/api`, then stop a turn in the web UI while a tool runs and ask again; expected a normal answer once #671 is fixed.
+Run `uv run pytest tests/agents tests/api`, then stop a turn in the web UI while a tool runs and ask again; expected a normal answer.
 
 ## 10. Code map
 
@@ -359,7 +355,7 @@ Run `uv run pytest tests/agents tests/api`, then stop a turn in the web UI while
 | `src/agents/service.py` → `generate_agent_response` | The non-streaming route's path and its deadline |
 | `src/agents/runtime/react_agent.py` → `AgentRuntime.astream`, `_active_agent` | The answer-only filter, the agent cache, the handshake |
 | `src/agents/runtime/factory.py` → `agent_factory` | How the agent and its middleware are assembled |
-| `src/agents/runtime/middleware.py` → `TrimTurnsMiddleware`, `ToolObservationMiddleware` | The memory bound and tool events |
+| `src/agents/runtime/middleware.py` → `InterruptedToolCallRepairMiddleware`, `TrimTurnsMiddleware`, `ToolObservationMiddleware` | The interrupted-call repair, the memory bound, and tool events |
 | `src/agents/runtime/tool_events.py` → `bind_tool_event_emitter`, `emit_tool_event`, `publish_tool_result` | The tool-event seam |
 | `src/core/checkpointer.py` → `build_checkpointer` | Where memory is stored |
 | `src/core/errors.py` → `classify_provider_busy_error`, `BUSY_MESSAGE`, `GENERIC_ERROR_MESSAGE` | What a failure becomes |

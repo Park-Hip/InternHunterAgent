@@ -1,4 +1,4 @@
-"""Prompt accessors backed by managed Langfuse versions or release fallbacks."""
+"""Prompt accessors for the release text and its optional Langfuse link."""
 
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -22,7 +22,7 @@ from src.core.config import settings
 
 @dataclass(frozen=True)
 class ResolvedPromptBundle:
-    """One request's immutable view of every managed prompt surface."""
+    """One request's immutable view of every prompt surface."""
 
     system: ResolvedPrompt
     schema_context: ResolvedPrompt
@@ -57,14 +57,14 @@ def active_prompt_bundle() -> ResolvedPromptBundle | None:
 
 
 def resolve_prompt(surface: str) -> ResolvedPrompt:
-    """Return the configured managed version, or the checked-in release fallback."""
+    """Return the checked-in release text and its Langfuse link when linked."""
     if surface not in PROMPT_SURFACES:
         raise ValueError(f"Unsupported prompt surface: {surface}")
     return get_prompt_registry().resolve(surface)
 
 
 async def resolve_prompt_async(surface: str) -> ResolvedPrompt:
-    """Resolve a managed prompt without blocking the request event loop."""
+    """Serve a prompt surface without blocking the request event loop."""
     if surface not in PROMPT_SURFACES:
         raise ValueError(f"Unsupported prompt surface: {surface}")
     return await get_prompt_registry().resolve_async(cast(PromptSurface, surface))
@@ -97,7 +97,7 @@ def _load_release_fallback(yaml_key: str) -> str:
 
 
 def load_system_prompt() -> SystemMessage:
-    """Return the reviewed release fallback for offline callers and tests."""
+    """Return the reviewed release text for offline callers and tests."""
     return SystemMessage(content=_load_release_fallback("system_prompt"))
 
 
@@ -123,7 +123,7 @@ async def load_schema_context_resolution_async() -> ResolvedPrompt:
 
 
 def load_schema_context() -> str:
-    """Return the reviewed release fallback for offline callers and tests."""
+    """Return the reviewed release text for offline callers and tests."""
     return _load_release_fallback("schema_context")
 
 
@@ -141,12 +141,12 @@ async def load_sql_generation_prompt_resolution_async() -> ResolvedPrompt:
 
 
 def load_sql_generation_prompt() -> str:
-    """Return the reviewed release fallback for offline callers and tests."""
+    """Return the reviewed release text for offline callers and tests."""
     return _load_release_fallback("sql_generation")
 
 
 def load_prompt_versions() -> dict[str, str]:
-    """Return release-pinned lineage for offline artifacts and fallback operation."""
+    """Return release-pinned lineage for offline artifacts."""
     prompt_versions = settings.prompts_yaml.get("prompt_versions")
     if not isinstance(prompt_versions, dict) or not set(PROMPT_SURFACES) <= set(
         prompt_versions
@@ -164,14 +164,14 @@ def load_prompt_versions() -> dict[str, str]:
 
 
 def load_resolved_prompt_versions() -> dict[str, str]:
-    """Return exact remote versions when native prompts are available."""
+    """Return the release-pinned lineage of the prompts that serve."""
     return {
         surface: resolve_prompt(surface).version for surface in PROMPT_SURFACES
     }
 
 
 async def load_resolved_prompt_versions_async() -> dict[str, str]:
-    """Return managed prompt lineage without blocking an asynchronous request loop."""
+    """Resolve prompt lineage without blocking an asynchronous request loop."""
     bundle = active_prompt_bundle() or await resolve_prompt_bundle_async()
     return bundle.versions()
 

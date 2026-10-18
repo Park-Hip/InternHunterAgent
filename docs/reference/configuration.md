@@ -24,8 +24,8 @@ Those stores have separate owners, lifecycles, and schemas, and no overlap.
 
 **Required environment.**
 The database URL and the agent-read database URL are required at boot.
-The Langfuse keys are optional and enable tracing plus managed prompt resolution when present.
-Without them, the service uses its reviewed release-pinned prompt fallbacks and disables tracing.
+The Langfuse keys are optional and enable tracing plus native prompt trace links when present.
+Without them, the service serves its reviewed release-pinned prompt text unlinked and disables tracing.
 The provider key for every deployment a served profile selects is required at boot: the serving lifespan refuses to start when it is unset or empty, naming the variable.
 Declared but unselected deployments stay optional, so a checkout runs with only the selected provider's key.
 
@@ -42,7 +42,7 @@ The provider is derived from the model prefix, so no separate `provider` key exi
 `agent.<profile>.max_attempts` counts attempts, not retries: `2` means the request is made twice when the first attempt fails.
 A request timeout, a connection failure, a rate limit, and LiteLLM's generic API error are retried, with waits that start at 4 seconds and cap at 10; provider 5xx and 4xx responses are not retried, because a retry cannot fix a 4xx and provider pressure is already reported to the client as a retryable `provider_busy` error.
 The worst case per call is `timeout x max_attempts` plus those waits: 64 seconds at the shipped 30-second timeout and two attempts, 98 seconds at three, against the 120-second `agent.stream_turn_timeout_seconds` turn deadline.
-`agent.prompts.*` configures the managed-prompt deployment label and cache lifetime (see the [Langfuse prompt management guide](../how-to/manage-langfuse-prompts.md)).
+`agent.prompts.*` configures the Langfuse deployment label that links traces to registered prompt versions and its SDK cache lifetime (see the [Langfuse prompt management guide](../how-to/manage-langfuse-prompts.md)).
 `agent.stream_turn_timeout_seconds` is the end-to-end serving deadline for one agent turn: both the streamed `/api/v1/agent/chat/stream` and the non-streaming `/api/v1/agent/chat` stop at it and report the expiry as a retryable `provider_busy`.
 It is required, and a missing, non-integer, boolean, or non-positive value refuses boot (ADR-0048, amended by #656) instead of falling back.
 `database.connect_timeout_seconds` bounds every connection attempt (TCP, TLS, and authentication) so an unreachable database refuses boot within the bound; the configured value overrides any `connect_timeout` in a DSN.

@@ -1,8 +1,9 @@
-"""Native Langfuse prompt resolution with release-pinned YAML fallbacks."""
+"""Release-pinned prompt text with a native Langfuse link when the texts agree."""
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from dataclasses import dataclass
 from typing import Any, Callable, Final, Literal
 
@@ -48,7 +49,15 @@ ALLOWED_PROMPT_DEPLOYMENT_LABELS: Final = frozenset({"candidate", "production"})
 
 @dataclass(frozen=True)
 class ResolvedPrompt:
-    """Prompt text and the exact Langfuse object eligible for trace linkage."""
+    """The release text that serves and the optional Langfuse trace link.
+
+    `content` and `version` always come from the release pin in
+    `config/prompts.yaml`; a managed Langfuse text never reaches the model.
+    `prompt_client` carries the managed prompt only while its text equals the
+    release text, so a linked generation can never claim a version the model
+    did not read. `is_fallback` is True whenever no managed prompt is linked:
+    missing credentials, a failed fetch, or drift.
+    """
 
     surface: PromptSurface
     name: str
@@ -59,17 +68,20 @@ class ResolvedPrompt:
 
 
 class PromptRegistry:
-    """Resolve managed prompts while retaining a reviewed fallback in the release."""
+    """Serve the release text and link Langfuse only while the texts agree."""
 
     def __init__(self, client_provider: Callable[[], Any | None]) -> None:
         self._client_provider = client_provider
+        # The last (state, managed version) reported per surface, so a drift or
+        # a link is logged once per transition instead of once per request.
+        self._reported: dict[PromptSurface, tuple[str, str]] = {}
 
     def resolve(self, surface: PromptSurface) -> ResolvedPrompt:
         definition = PROMPT_DEFINITIONS_BY_SURFACE[surface]
-        fallback = self._fallback(definition)
+        release = self._release(definition)
         client = self._client_provider()
         if client is None:
-            return fallback
+            return release
 
         config = self._configuration()
         try:
@@ -77,7 +89,7 @@ class PromptRegistry:
                 definition.name,
                 label=config["deployment_label"],
                 type="text",
-                fallback=fallback.content,
+                fallback=release.content,
                 cache_ttl_seconds=config["cache_ttl_seconds"],
             )
         except Exception as exc:
@@ -87,7 +99,7 @@ class PromptRegistry:
                 label=config["deployment_label"],
                 error=str(exc),
             )
-            return fallback
+            return release
 
         content = getattr(prompt, "prompt", None)
         version = getattr(prompt, "version", None)
@@ -97,19 +109,48 @@ class PromptRegistry:
             or not content.strip()
             or not isinstance(version, int)
         ):
-            return fallback
+            return release
 
+        managed_content = content.strip()
+        if managed_content != release.content:
+            if self._record("drift", definition.surface, version):
+                logger.warning(
+                    "prompt.drift",
+                    surface=definition.surface,
+                    prompt_name=definition.name,
+                    label=config["deployment_label"],
+                    release_version=release.version,
+                    managed_version=str(version),
+                    release_hash=_text_hash(release.content),
+                    managed_hash=_text_hash(managed_content),
+                )
+            return release
+
+        if self._record("linked", definition.surface, version):
+            logger.info(
+                "prompt.linked",
+                surface=definition.surface,
+                prompt_name=definition.name,
+                label=config["deployment_label"],
+                release_version=release.version,
+                managed_version=str(version),
+            )
         return ResolvedPrompt(
             surface=surface,
             name=definition.name,
-            content=content.strip(),
-            version=str(version),
+            content=release.content,
+            version=release.version,
             prompt_client=prompt,
             is_fallback=False,
         )
 
     def prefetch(self) -> dict[PromptSurface, ResolvedPrompt]:
-        """Warm every prompt before serving so startup has managed text or its fallback."""
+        """Resolve every prompt surface before serving.
+
+        Each surface resolves once, so startup records the release versions
+        and, with credentials, either a link or `prompt.drift` per surface
+        before the first request.
+        """
         return {surface: self.resolve(surface) for surface in PROMPT_SURFACES}
 
     async def resolve_async(self, surface: PromptSurface) -> ResolvedPrompt:
@@ -122,6 +163,14 @@ class PromptRegistry:
             *(self.resolve_async(surface) for surface in PROMPT_SURFACES)
         )
         return dict(zip(PROMPT_SURFACES, resolved, strict=True))
+
+    def _record(self, state: str, surface: PromptSurface, version: int) -> bool:
+        """Report a link state once per transition and managed version."""
+        key = (state, str(version))
+        if self._reported.get(surface) == key:
+            return False
+        self._reported[surface] = key
+        return True
 
     @staticmethod
     def _configuration() -> dict[str, str | int]:
@@ -148,7 +197,8 @@ class PromptRegistry:
         return {"deployment_label": label, "cache_ttl_seconds": cache_ttl_seconds}
 
     @staticmethod
-    def _fallback(definition: PromptDefinition) -> ResolvedPrompt:
+    def _release(definition: PromptDefinition) -> ResolvedPrompt:
+        """Read the release-pinned text and version from config/prompts.yaml."""
         prompts_root = settings.prompts_yaml.get("prompts")
         if not isinstance(prompts_root, dict):
             raise ValueError("Missing 'prompts' section in config/prompts.yaml")
@@ -174,6 +224,11 @@ class PromptRegistry:
             prompt_client=None,
             is_fallback=True,
         )
+
+
+def _text_hash(text: str) -> str:
+    """The hash both sides of a drift comparison are reported with."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _langfuse_client() -> Any | None:

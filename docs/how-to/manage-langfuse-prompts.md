@@ -1,41 +1,59 @@
 # Manage Langfuse prompts
 
-The serving agent resolves `resumi-system`, `resumi-schema-context`, and `resumi-sql-generation` through the explicit `agent.prompts.deployment_label` in `config/settings.yaml`.
-The default label is `production`.
+> **Last verified:** 2026-10-18
+
+> **Eviction:** This guide leaves when the serving text stops coming from `config/prompts.yaml`.
+
+The text the model reads is always the release pin in `config/prompts.yaml`.
+Langfuse holds registered prompt versions that traces can link to; it never supplies the serving text.
+For that link, the tracing layer reads the prompt names `resumi-system`, `resumi-schema-context`, and `resumi-sql-generation` at the explicit `agent.prompts.deployment_label` in `config/settings.yaml`, whose allowed values are `candidate` and `production`.
 The service never requests `latest`.
 
-Each released image retains the reviewed text in `config/prompts.yaml` as its release-pinned fallback.
-On startup, the service prefetches every required prompt before it creates the runtime.
-If Langfuse is unavailable or credentials are intentionally absent, the service serves that fallback instead of failing a healthy request.
-Fallback generations are intentionally not linked as native Langfuse prompt versions.
+## What serves
 
-A managed prompt is linked to its generations by propagating the resolved Langfuse
-prompt client around the model call.
-The Langfuse Python SDK therefore carries a serving requirement, not a preference:
-`propagate_attributes(prompt=...)` exists from SDK 4.14.0, and `pyproject.toml` and
-`uv.lock` pin the floor.
-`tests/agents/test_langfuse_tracing.py` and `tests/api/test_native_prompt_chat.py`
-assert the installed SDK against the real propagation function, so a lockfile that
-cannot link prompts fails the suite instead of answering a live request with an
-in-band `error` event.
+Every surface serves the checked-in YAML text (`prompts.system_prompt`, `prompts.schema_context`, `prompts.sql_generation`) with its release pin `prompt_versions.<surface>` (`v13`, `v12`, and `v14` today), whatever Langfuse holds and whatever the label points to.
+Resolution never changes the text and never fails a request: absent credentials, a failed fetch, an SDK fallback, a version that was never registered, or a version whose text differs all leave the surface unlinked on the release text.
 
-## Create a candidate
+The registry reads the labelled version through the SDK on each resolve (server-cached for `agent.prompts.cache_ttl_seconds`) so a trace can link to it.
+When the managed text equals the release text, the resolved prompt client is propagated around the model call, so the generation links to that immutable Langfuse version, while trace tags keep reading the release pin (`prompt:system:v13`).
+When the two texts differ, the release text keeps serving and the registry logs `prompt.drift` once per transition with `surface`, `prompt_name`, `label`, `release_version`, `managed_version`, `release_hash`, and `managed_hash`.
+A formed link logs `prompt.linked` once per transition with the same identifying fields minus the hashes.
+A link means the registered version and the deployed YAML agree; drift means they moved apart, and the fix is the register step below, not an edit in the running service.
 
-Run `uv run python scripts/register_langfuse_prompts.py --label candidate` to seed only candidate versions from the checked-in fallback text.
-The command cannot assign the `production` label.
-Use `--dry-run` to validate the source without contacting Langfuse.
+On startup the service prefetches every surface before it creates the runtime, so a boot with credentials logs a link or drift line for every surface whose labelled version resolves, and `langfuse.prompts_prefetched` reports the release versions that serve.
+A lookup that raises is logged as `langfuse.prompt_resolution_failed`, and the surface stays unlinked.
+`LANGFUSE_ENABLED=false` or absent keys only disable tracing and prompt linking; the release text still serves.
 
-In an isolated evaluation environment, set `agent.prompts.deployment_label: candidate` before running the existing scenario suite.
-Record the resulting capture manifest, dataset run, and scores as review evidence.
-The manifest records the exact resolved versions and content hashes for the system, schema-context, and SQL-generation prompts.
-The capture cannot resume if that prompt lineage changes, and scoring refuses a capture whose recorded schema prompt no longer resolves.
-See [the evaluation pipeline](../../evals/pipeline.md) for the capture and scoring commands.
-The retired semantic release gate is not a promotion control; follow its current status in [the release certification guide](release-gate.md).
-After review, a Langfuse project administrator moves `production` to the evaluated immutable version in the Langfuse UI.
-Do not create a new production version merely to promote a candidate.
+## Why the SDK version matters
+
+A linked generation depends on `propagate_attributes(prompt=...)`, which exists from Langfuse SDK 4.14.0, so `pyproject.toml` and `uv.lock` pin the floor.
+`tests/agents/test_langfuse_tracing.py` and `tests/api/test_native_prompt_chat.py` assert the installed SDK against the real propagation function, so a lockfile that cannot link prompts fails the suite instead of answering a live request with an in-band `error` event.
+
+## Ship a prompt change
+
+1. Edit the YAML text in `config/prompts.yaml` and bump `prompt_versions.<surface>` in the same commit, so the trace lineage changes with the text.
+2. Review, merge to `main`, and let Render deploy the release.
+   Until the register step below runs, the deployed release serves the new text unlinked and logs `prompt.drift`; that window is expected and does not affect answers.
+3. Register the release with Langfuse: `uv run python scripts/register_langfuse_prompts.py --label production`.
+   The command needs `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL` in the environment.
+   It creates an immutable version from the checked-in text when the `production` version differs and moves the label to it in the same call; when the texts already match it creates nothing.
+4. Verify: `uv run python scripts/register_langfuse_prompts.py --check` compares every `production` version with the checked-in YAML and exits non-zero on drift, a missing version, or an unreadable lookup, so a deployment job can gate on it.
+
+`--dry-run` validates and lists the checked-in prompts without contacting Langfuse.
+The retired semantic release gate is not a promotion control; its current status is in [the release certification guide](release-gate.md).
 
 ## Roll back
 
-Move `production` back to the previously approved immutable version in the Langfuse UI.
-After the client cache TTL, new requests resolve the restored version without an application deployment.
-If remote prompt resolution remains unavailable, the deployed release keeps serving its checked-in fallback.
+Revert the prompt commit so the text and its `prompt_versions` pin return together, deploy the revert, then register the restored text with `--label production`.
+Git keeps the reverted text as history, and Langfuse keeps every immutable version, so the trace link restores on the first resolve after the register run and the SDK cache TTL.
+Move labels only through the script: a hand-moved `production` label on text that differs from the deployed YAML only produces drift, and on text that matches it is exactly what the script produces.
+If remote resolution is unavailable, the deployed release keeps serving its checked-in text unlinked.
+
+## Evaluate a candidate
+
+The evaluation harness resolves prompts through the same registry, so a candidate run serves the branch's `config/prompts.yaml` text, exactly as serving would.
+Put the proposed text and the `prompt_versions.<surface>` bump on a branch and run the scenario suite there; treat the report and its traces as review evidence.
+In an isolated evaluation environment with its own Langfuse credentials, set `agent.prompts.deployment_label: candidate` and seed the branch's text with `uv run python scripts/register_langfuse_prompts.py --label candidate`.
+The `candidate` label shapes only the trace link: the suite still serves the branch's checked-in text, and the label names the version its traces linked to.
+The script refuses any label other than `candidate` or `production`, so a candidate run can never rewrite the `production` lineage or the serving text.
+Promotion is the merge-and-deploy procedure above; nothing is promoted by moving labels in the Langfuse UI.

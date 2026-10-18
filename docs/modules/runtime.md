@@ -250,7 +250,7 @@ The last column is the one that matters: does the conversation still work afterw
   A slow-consumer test pins that the generator finishes right after `done` (#688).
 - **Disconnect.** The route polls `request.is_disconnected` every 50 ms while it waits for each event, then closes the service generator.
   The service records the outcome as cancelled, sets the handshake, cancels the runtime task, and awaits it; the runtime cancels its producer and flushes Langfuse.
-  It logs `stream.client_disconnected` once, but today it also logs that line for every completed turn (#674).
+  It logs `stream.client_disconnected` once, naming the session id the service issued, and only when the client left before `done` (#674).
 - **A tool call interrupted mid-flight.**
   LangGraph checkpoints after the model asks for a tool and before the tool answers, so a stopped turn leaves a call with no result.
   Before each model call, `InterruptedToolCallRepairMiddleware` inserts one synthetic error `ToolMessage` per unanswered id, directly after the call, and writes the repaired list to storage.

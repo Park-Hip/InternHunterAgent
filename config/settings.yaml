@@ -79,10 +79,14 @@ agent:
       thinking: disabled
 
   memory:
-    # The one bound on short-term conversation memory, measured in complete
-    # turns. Each model call is trimmed to the most recent max_turns turns, and
-    # the stored thread is never rewritten. Validated once at load (#672).
+    # The model's window: each model call is trimmed to the most recent
+    # max_turns complete turns, and the stored thread is never rewritten.
+    # Validated once at load (#672).
     max_turns: 6
+    # Storage bound: the serving process deletes every thread whose newest
+    # checkpoint is older than this many days, with its blobs and writes
+    # (once at boot, then daily). Validated once at load (#673).
+    retention_days: 30
   query:
     max_rows: 20
     max_detail_ids: 3

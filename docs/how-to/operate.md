@@ -201,6 +201,32 @@ For breaking-schema changes that require an incompatible type or semantic shift,
 That procedure must complete before any destructive migration or contraction step; it ensures
 the frozen agent-visible contract stays consistent across prompts, fixtures, and evaluations.
 
+### Conversation retention
+
+Conversation threads live in the `checkpoints`, `checkpoint_blobs`, and `checkpoint_writes`
+tables of the application database, written by LangGraph after every graph step.
+Serving bounds them: once at boot and then once a day, the API process deletes every thread whose
+newest checkpoint is older than `agent.memory.retention_days` in `config/settings.yaml`
+(30 days by default), with all of that thread's blob and write rows.
+Deletion goes through `AsyncPostgresSaver.adelete_thread`.
+
+- The age is read from the checkpoint's own `ts`; the tables have no timestamp column.
+- A deleted thread is not recoverable.
+  A client that keeps its `session_id` across an idle period longer than the retention starts from
+  empty memory; the web client forgets its session on reload, so this affects API clients only.
+- To change the retention, edit `agent.memory.retention_days` and redeploy.
+  The value is validated at load, and the next boot sweeps with the new value.
+- A failed sweep is logged as `checkpointer.retention_sweep_failed` and retried at the next daily
+  pass; serving never waits on retention and is unaffected by a failure.
+- A sleeping Render instance sweeps when it next boots, so the cadence in practice is
+  "at most daily while awake, always once per boot".
+
+Count the threads before and after a sweep to verify, for example:
+
+```sql
+SELECT count(DISTINCT thread_id) FROM checkpoints;
+```
+
 ## Ingestion cron
 
 The scheduled trigger of `.github/workflows/ingestion.yml` runs nightly at 02:00 UTC (ADR-0057),

@@ -123,6 +123,9 @@ class StartupConfigTests(unittest.TestCase):
         async def diagnose() -> None:
             events.append("langfuse diagnostic")
 
+        async def sweep(_checkpointer: object) -> None:
+            events.append("retention sweep")
+
         def init() -> None:
             events.append("langfuse init")
 
@@ -173,6 +176,10 @@ class StartupConfigTests(unittest.TestCase):
                 new=AsyncMock(side_effect=diagnose),
             ),
             patch(
+                "src.serving.composition._sweep_checkpoint_threads",
+                new=sweep,
+            ),
+            patch(
                 "src.serving.composition.shutdown_langfuse",
                 new=AsyncMock(side_effect=shutdown),
             ),
@@ -195,6 +202,7 @@ class StartupConfigTests(unittest.TestCase):
                 "tool discovery",
                 "runtime construction",
                 "langfuse diagnostic",
+                "retention sweep",
                 "langfuse shutdown",
                 "pool close",
             ],

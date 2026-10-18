@@ -484,8 +484,9 @@ It is not the whole agent, and it is deliberately scoped.
   the model's context, and the model uses that context to reformulate its next tool call, so "only
   the Python ones" becomes a refined query. There is no special memory-reasoning code: refinement
   quality is a function of the model and prompt, not a bespoke feature.
-- **Bound.** `agent.memory.max_turns` is the one memory bound: each model call is trimmed to the most recent complete turns, and the stored thread is never rewritten.
-  A thread that keeps growing is bounded by checkpoint retention, not by this cap.
+- **Bounds.** Two, both under `agent.memory` in `config/settings.yaml` and validated at load.
+  `max_turns` bounds what the model sees: each model call is trimmed to the most recent complete turns, and the stored thread is never rewritten.
+  `retention_days` bounds what is stored: once at boot and then daily, the serving process deletes every thread whose newest checkpoint is older than that age (30 days by default, #673).
 - **Boundary.** This is short-term within-conversation memory only. Cross-session recall, user
   profiles, and resume or embedding retrieval are long-term memory: a distinct mechanism and an
   explicit future phase, which must not be bolted onto the thread checkpointer.

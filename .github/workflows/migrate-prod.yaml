@@ -1,0 +1,76 @@
+name: One-off production migration (drop is_active / expired_count)
+
+# EPHEMERAL. This workflow exists only to apply migration 1d032eb356bf to the
+# production Neon database from the ops branch, using the existing DATABASE_URL
+# secret (the direct, non-pooled host). It runs ONLY on workflow_dispatch — no
+# push/schedule trigger — and must be deleted after the migration completes.
+#
+# The schema drift it corrects: clean_jobs still carries is_active and
+# ingestion_runs still carries expired_count, both dropped by 1d032eb356bf.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # ALEMBIC_DATABASE_URL is set explicitly so alembic/env.py never falls back
+      # to settings.DATABASE_URL (localhost). Both point at production Neon.
+      ALEMBIC_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Settings requires AGENT_DATABASE_URL at load; placeholder, never a real
+      # credential. Groq/Langfuse keys are optional but mirrored from the
+      # ingestion workflow for parity.
+      AGENT_DATABASE_URL: "unused-by-migration"
+      GROQ_API_KEY: "unused-by-migration"
+      LANGFUSE_SECRET_KEY: "unused-by-migration"
+      LANGFUSE_PUBLIC_KEY: "unused-by-migration"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.8.15"
+
+      - run: uv sync --frozen --no-dev
+
+      # Hard stop: production must be exactly one revision behind head. If this
+      # is not true, do NOT upgrade — stop and investigate before writing DDL.
+      - name: Pre-flight — current revision must be f4b91860ea32
+        run: |
+          uv run alembic current > /tmp/current.txt 2>&1
+          cat /tmp/current.txt
+          grep -q "f4b91860ea32" /tmp/current.txt
+
+      - name: Apply migration to head
+        run: uv run alembic upgrade head
+
+      - name: Verify head and dropped columns are gone
+        run: |
+          uv run alembic current
+          uv run python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as conn:
+              is_active = conn.execute(text(
+                  "SELECT count(*) FROM information_schema.columns "
+                  "WHERE table_name='clean_jobs' AND table_schema='public' "
+                  "AND column_name='is_active'"
+              )).scalar()
+              expired_count = conn.execute(text(
+                  "SELECT count(*) FROM information_schema.columns "
+                  "WHERE table_name='ingestion_runs' AND table_schema='public' "
+                  "AND column_name='expired_count'"
+              )).scalar()
+              print(f"clean_jobs.is_active remaining: {is_active}")
+              print(f"ingestion_runs.expired_count remaining: {expired_count}")
+              if is_active or expired_count:
+                  raise SystemExit("migration incomplete: dropped columns still present")
+          PY

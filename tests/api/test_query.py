@@ -6,7 +6,7 @@ from unittest.mock import ANY, AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from src.agents.service import FALLBACK_ANSWER, generate_agent_response
+from src.agents.service import FALLBACK_ANSWER
 from src.serving.composition import app
 from src.api.routes.query import _server_sent_event, _with_heartbeats
 from src.api.schemas import DEFAULT_MAX_QUERY_CHARS
@@ -29,7 +29,7 @@ class QueryRouteTests(unittest.TestCase):
         }
 
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(return_value=fake_response),
         ) as mock_generate:
             response = self.client.post(
@@ -56,6 +56,7 @@ class QueryRouteTests(unittest.TestCase):
             session_id="session-123",
             user_id="user-123",
             runtime=ANY,
+            stream_observation_factory=ANY,
         )
 
     def test_query_route_returns_structured_response_for_job_data_question(self) -> None:
@@ -67,7 +68,7 @@ class QueryRouteTests(unittest.TestCase):
         }
 
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(return_value=fake_response),
         ) as mock_generate:
             response = self.client.post(
@@ -98,6 +99,7 @@ class QueryRouteTests(unittest.TestCase):
             session_id="session-123",
             user_id="user-123",
             runtime=ANY,
+            stream_observation_factory=ANY,
         )
 
     def test_query_route_returns_generated_session_id_when_omitted(self) -> None:
@@ -109,7 +111,7 @@ class QueryRouteTests(unittest.TestCase):
         }
 
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(return_value=fake_response),
         ) as mock_generate:
             response = self.client.post(
@@ -125,11 +127,12 @@ class QueryRouteTests(unittest.TestCase):
             session_id=None,
             user_id=None,
             runtime=ANY,
+            stream_observation_factory=ANY,
         )
 
     def test_query_route_returns_500_when_service_fails(self) -> None:
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ):
             response = self.client.post(
@@ -142,7 +145,7 @@ class QueryRouteTests(unittest.TestCase):
 
     def test_query_route_returns_friendly_429_when_provider_is_rate_limited(self) -> None:
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(side_effect=ProviderBusyError(status_code=429)),
         ):
             response = self.client.post(
@@ -155,7 +158,7 @@ class QueryRouteTests(unittest.TestCase):
 
     def test_query_route_returns_retryable_503_when_the_turn_deadline_expires(self) -> None:
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(side_effect=ProviderBusyError()),
         ):
             response = self.client.post(
@@ -168,7 +171,7 @@ class QueryRouteTests(unittest.TestCase):
 
     def test_query_route_returns_400_for_blank_query(self) -> None:
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(),
         ) as mock_generate:
             response = self.client.post(
@@ -190,7 +193,7 @@ class QueryRouteTests(unittest.TestCase):
         capped_query = "x" * DEFAULT_MAX_QUERY_CHARS
 
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(return_value=fake_response),
         ) as mock_generate:
             response = self.client.post(
@@ -205,13 +208,14 @@ class QueryRouteTests(unittest.TestCase):
             session_id="session-123",
             user_id=None,
             runtime=ANY,
+            stream_observation_factory=ANY,
         )
 
     def test_query_route_rejects_over_limit_query_before_service_call(self) -> None:
         over_limit_query = "x" * (DEFAULT_MAX_QUERY_CHARS + 1)
 
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(),
         ) as mock_generate:
             response = self.client.post(
@@ -235,7 +239,7 @@ class QueryRouteTests(unittest.TestCase):
         }
 
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(return_value=fake_response),
         ):
             response = self.client.post(
@@ -245,6 +249,93 @@ class QueryRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["answer"], FALLBACK_ANSWER)
+
+
+class _CollectableRuntime:
+    """A fake runtime whose streamed turn yields fixed events, blocks, or raises."""
+
+    def __init__(self) -> None:
+        self.events: list[dict[str, str | bool | None]] = []
+        self.error: Exception | None = None
+        self.block = False
+
+    async def astream(
+        self,
+        query: str,
+        session_id: str,
+        user_id: str | None = None,
+        observation=None,
+        completion_event: asyncio.Event | None = None,
+    ):
+        if self.block:
+            await asyncio.Event().wait()
+        if self.error is not None:
+            raise self.error
+            yield  # pragma: no cover - keeps this an async generator
+        for event in self.events:
+            yield event
+
+
+class CollectingQueryRouteTests(unittest.TestCase):
+    """The JSON route driven by the real service and a fake runtime (#689)."""
+
+    def setUp(self) -> None:
+        self.runtime = _CollectableRuntime()
+        # Lifespan is not triggered, so app.state.runtime would otherwise be unset.
+        app.state.runtime = self.runtime
+        self.client = TestClient(app)
+
+    def test_returns_the_collected_stream_as_the_response_body(self) -> None:
+        self.runtime.events = [
+            {"type": "token", "text": "There are "},
+            {"type": "token", "text": "3 roles."},
+            {
+                "type": "metadata",
+                "trace_id": "trace-1",
+                "trace_url": "https://traces/trace-1",
+            },
+        ]
+
+        response = self.client.post(
+            "/api/v1/agent/chat",
+            json={"query": "how many roles?", "session_id": "session-123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "answer": "There are 3 roles.",
+                "session_id": "session-123",
+                "trace_id": "trace-1",
+                "trace_url": "https://traces/trace-1",
+            },
+        )
+
+    def test_maps_a_rate_limited_provider_to_the_429_the_event_carries(self) -> None:
+        self.runtime.error = RuntimeError("provider rate limit exceeded")
+
+        response = self.client.post(
+            "/api/v1/agent/chat", json={"query": "how many roles?"}
+        )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json(), {"detail": BUSY_MESSAGE})
+
+    @patch("src.agents.service.settings")
+    def test_maps_the_streamed_turn_deadline_to_a_retryable_503(
+        self, mock_settings
+    ) -> None:
+        mock_settings.agent.stream_turn_timeout_seconds = 0.01
+        self.runtime.block = True
+
+        response = self.client.post(
+            "/api/v1/agent/chat", json={"query": "how many roles?"}
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"detail": BUSY_MESSAGE})
+
 
 
 class StreamHeartbeatTests(unittest.IsolatedAsyncioTestCase):
@@ -285,60 +376,3 @@ class StreamHeartbeatTests(unittest.IsolatedAsyncioTestCase):
             'event: metadata\ndata: {"trace_id": null, "trace_url": null}\n\n',
             "event: done\ndata: {}\n\n",
         ])
-
-
-class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
-    async def test_none_runtime_answer_coerces_to_fallback(self) -> None:
-        runtime = AsyncMock()
-        runtime.ainvoke = AsyncMock(
-            return_value={"answer": None, "trace_id": "trace-1", "trace_url": None}
-        )
-
-        result = await generate_agent_response(
-            query="what time is it?",
-            runtime=runtime,
-            session_id="session-123",
-        )
-
-        self.assertEqual(result["answer"], FALLBACK_ANSWER)
-        self.assertEqual(result["session_id"], "session-123")
-        self.assertEqual(result["trace_id"], "trace-1")
-        self.assertIsNone(result["trace_url"])
-
-    async def test_blank_runtime_answer_coerces_to_fallback(self) -> None:
-        runtime = AsyncMock()
-        runtime.ainvoke = AsyncMock(
-            return_value={"answer": "   ", "trace_id": None, "trace_url": None}
-        )
-
-        result = await generate_agent_response(
-            query="what time is it?",
-            runtime=runtime,
-        )
-
-        self.assertEqual(result["answer"], FALLBACK_ANSWER)
-
-    async def test_normal_runtime_answer_passes_through(self) -> None:
-        runtime = AsyncMock()
-        runtime.ainvoke = AsyncMock(
-            return_value={"answer": "The current time is 14:01:52.", "trace_id": None, "trace_url": None}
-        )
-
-        result = await generate_agent_response(
-            query="what time is it?",
-            runtime=runtime,
-        )
-
-        self.assertEqual(result["answer"], "The current time is 14:01:52.")
-
-    async def test_provider_timeout_maps_to_provider_busy_error(self) -> None:
-        runtime = AsyncMock()
-        runtime.ainvoke = AsyncMock(side_effect=TimeoutError("request timed out"))
-
-        with self.assertRaises(ProviderBusyError) as ctx:
-            await generate_agent_response(
-                query="what time is it?",
-                runtime=runtime,
-            )
-
-        self.assertEqual(ctx.exception.status_code, 503)

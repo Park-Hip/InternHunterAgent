@@ -1,6 +1,6 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
@@ -20,11 +20,26 @@ from src.core.errors import (
 )
 from src.core.config import settings
 from src.core.logger import logger
-from src.agents.service import generate_agent_response, stream_agent_response
-from src.agents.tracing.stream import create_noop_stream_observation
+from src.agents.service import (
+    StreamEventPayload,
+    collect_agent_response,
+    stream_agent_response,
+)
+from src.agents.tracing.stream import (
+    StreamObservationFactory,
+    create_noop_stream_observation,
+)
 
 
 _DISCONNECT_POLL_INTERVAL_SECONDS = 0.05
+
+
+def _stream_observation_factory(request: Request) -> StreamObservationFactory:
+    return getattr(
+        request.app.state,
+        "stream_observation_factory",
+        create_noop_stream_observation,
+    )
 
 
 class _DisconnectLoggingEventSourceResponse(EventSourceResponse):
@@ -68,11 +83,12 @@ async def query_agent(payload: QueryRequest, request: Request):
             query_length=len(payload.query),
         )
 
-        response = await generate_agent_response(
+        response = await collect_agent_response(
             query=payload.query,
             session_id=payload.session_id,
             user_id=payload.user_id,
             runtime=request.app.state.runtime,
+            stream_observation_factory=_stream_observation_factory(request),
         )
 
         logger.info(
@@ -126,11 +142,7 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
             session_id=payload.session_id,
             user_id=payload.user_id,
             runtime=request.app.state.runtime,
-            stream_observation_factory=getattr(
-                request.app.state,
-                "stream_observation_factory",
-                create_noop_stream_observation,
-            ),
+            stream_observation_factory=_stream_observation_factory(request),
         )
         try:
             async for item in _with_heartbeats(
@@ -153,7 +165,17 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
                 # already parse by key.
                 data = dict(item)
                 if event_type == "error":
-                    data = StreamErrorEvent(**data).model_dump()
+                    # The service's error event may carry internal-only keys,
+                    # such as the status code the collected JSON path reads
+                    # (#689). Only the published StreamErrorEvent fields cross
+                    # the wire.
+                    data = StreamErrorEvent(
+                        **{
+                            key: value
+                            for key, value in data.items()
+                            if key in StreamErrorEvent.model_fields
+                        }
+                    ).model_dump()
                 yield _server_sent_event(event=event_type, data=data)
         finally:
             await stream.aclose()
@@ -166,20 +188,20 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
 
 
 async def _next_stream_event(
-    events: AsyncIterator[Mapping[str, str | bool | None]],
-) -> Mapping[str, str | bool | None]:
+    events: AsyncIterator[StreamEventPayload],
+) -> StreamEventPayload:
     return await events.__anext__()
 
 
 async def _with_heartbeats(
-    events: AsyncIterator[Mapping[str, str | bool | None]],
+    events: AsyncIterator[StreamEventPayload],
     *,
     heartbeat_seconds: float,
     is_disconnected: Callable[[], Awaitable[bool]] | None = None,
     on_disconnect: Callable[[], None] | None = None,
-) -> AsyncIterator[Mapping[str, str | bool | None] | str]:
+) -> AsyncIterator[StreamEventPayload | str]:
     """Pass events through while polling disconnects and commenting during idle periods."""
-    next_event: asyncio.Task[Mapping[str, str | bool | None]] | None = None
+    next_event: asyncio.Task[StreamEventPayload] | None = None
     try:
         while True:
             if is_disconnected is not None and await is_disconnected():
@@ -218,9 +240,7 @@ async def _with_heartbeats(
             await asyncio.gather(next_event, return_exceptions=True)
 
 
-def _server_sent_event(
-    *, event: str, data: Mapping[str, str | bool | None]
-) -> str:
+def _server_sent_event(*, event: str, data: StreamEventPayload) -> str:
     payload = ServerSentEvent(event=event, data=data)
     encoded_data = json.dumps(payload.data)
     return f"event: {payload.event}\ndata: {encoded_data}\n\n"

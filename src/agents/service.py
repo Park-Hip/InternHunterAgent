@@ -29,6 +29,11 @@ FALLBACK_ANSWER = "Chưa thể trả lời câu hỏi này - vui lòng thử di�
 
 _T = TypeVar("_T")
 
+# One stream event as it travels inside the process. The payload is still an
+# untyped dict (#679); the union covers what the service and the runtime
+# actually put on it: text, flags, counts, and internal-only extras.
+StreamEventPayload = Mapping[str, str | bool | int | None]
+
 
 def _consume_background_task_result(task: asyncio.Future[_T]) -> None:
     """Retrieve a cancelled runtime task's result after detached cleanup."""
@@ -51,71 +56,65 @@ class AgentResponse(TypedDict):
     trace_url: str | None
 
 
-async def generate_agent_response(
+async def collect_agent_response(
     query: str,
     runtime: AgentRuntime,
     session_id: str | None = None,
     user_id: str | None = None,
+    stream_observation_factory: StreamObservationFactory = create_noop_stream_observation,
 ) -> AgentResponse:
-    session_id = session_id or str(uuid.uuid4())
+    """Collect one streamed turn into the finished body the JSON route returns.
 
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + settings.agent.stream_turn_timeout_seconds
-    runtime_task = asyncio.create_task(
-        runtime.ainvoke(
-            query=query,
-            session_id=session_id,
-            user_id=user_id,
-        )
+    `/agent/chat` is no longer a second implementation beside the stream: it
+    drives `stream_agent_response` and folds its events back into the response
+    body, so the deadline, the empty-answer fallback, the error mapping, and the
+    tracing are written once. An in-band `error` event is re-raised as the same
+    failure the streamed path reports: a `ProviderBusyError` carrying the status
+    the service computed (429 for a rate limit, 503 otherwise), anything else
+    as a failure the route maps to its generic 500.
+    """
+    answer_parts: list[str] = []
+    resolved_session_id: str | None = session_id
+    trace_id: str | None = None
+    trace_url: str | None = None
+    error_event: StreamEventPayload | None = None
+
+    events = stream_agent_response(
+        query=query,
+        runtime=runtime,
+        session_id=session_id,
+        user_id=user_id,
+        stream_observation_factory=stream_observation_factory,
     )
-    detach_runtime_task = False
-    try:
-        await asyncio.wait(
-            {runtime_task},
-            timeout=max(0.0, deadline - loop.time()),
-        )
-        if not runtime_task.done():
-            # Cancel without awaiting cleanup: a slow cancellation must not
-            # extend the serving deadline, exactly as on the streamed route.
-            _cancel_and_detach_task(runtime_task)
-            detach_runtime_task = True
-            raise AgentTurnDeadlineExceededError(
-                "Non-streamed agent turn exceeded its serving deadline."
-            )
-        response = runtime_task.result()
-    except AgentTurnDeadlineExceededError as exc:
-        logger.error(
-            "generate_agent_response.failed",
-            session_id=session_id,
-            error=str(exc),
-            reclassified_busy=False,
-            deadline_exceeded=True,
-        )
-        raise ProviderBusyError() from exc
-    except Exception as exc:
-        provider_busy = classify_provider_busy_error(exc)
-        if provider_busy is not None:
-            raise provider_busy from exc
-        raise
-    finally:
-        if not detach_runtime_task and not runtime_task.done():
-            runtime_task.cancel()
-            await asyncio.gather(runtime_task, return_exceptions=True)
+    async for event in events:
+        event_type = event["type"]
+        if event_type == "session":
+            resolved_session_id = cast(str, event["session_id"])
+        elif event_type == "token":
+            answer_parts.append(cast(str, event["text"]))
+        elif event_type == "metadata":
+            trace_id = cast(str | None, event["trace_id"])
+            trace_url = cast(str | None, event["trace_url"])
+        elif event_type == "error":
+            # Keep reading to the terminal `done` before raising, so the
+            # generator's observation and cleanup finish as a completed turn.
+            error_event = event
 
-    answer = response["answer"]
-    if answer is None or not answer.strip():
-        logger.warning(
-            "generate_agent_response.empty_answer_fallback",
-            session_id=session_id,
-            failure_category=response.get("failure_category"),
-        )
-        answer = FALLBACK_ANSWER
+    if error_event is not None:
+        if error_event["code"] == PROVIDER_BUSY_ERROR_CODE:
+            raise ProviderBusyError(
+                status_code=cast(int, error_event.get("status_code", 503))
+            )
+        raise RuntimeError(GENERIC_ERROR_MESSAGE)
+
+    if resolved_session_id is None:
+        raise RuntimeError("Streamed turn completed without a session id")
 
     return {
-        "answer": answer,
-        "session_id": session_id,
-        "trace_id": response["trace_id"],
-        "trace_url": response["trace_url"],
+        "answer": "".join(answer_parts),
+        "session_id": resolved_session_id,
+        "trace_id": trace_id,
+        "trace_url": trace_url,
     }
 
 
@@ -125,13 +124,13 @@ async def stream_agent_response(
     session_id: str | None = None,
     user_id: str | None = None,
     stream_observation_factory: StreamObservationFactory = create_noop_stream_observation,
-) -> AsyncGenerator[Mapping[str, str | bool | None], None]:
+) -> AsyncGenerator[StreamEventPayload, None]:
     session_id = session_id or str(uuid.uuid4())
     observation = stream_observation_factory()
     yield {"type": "session", "session_id": session_id}
 
     saw_token = False
-    metadata_event: Mapping[str, str | bool | None] = {
+    metadata_event: StreamEventPayload = {
         "type": "metadata",
         "trace_id": None,
         "trace_url": None,
@@ -200,7 +199,7 @@ async def stream_agent_response(
                     raise RuntimeError("Runtime failed without an exception")
                 raise exception
             if event["type"] == "metadata":
-                metadata_event = cast(Mapping[str, str | bool | None], event)
+                metadata_event = cast(StreamEventPayload, event)
                 if not saw_token:
                     logger.warning(
                         "stream_agent_response.empty_answer_fallback",
@@ -217,7 +216,7 @@ async def stream_agent_response(
                 observation.mark_user_visible()
                 saw_token = True
 
-            yield cast(Mapping[str, str | bool | None], event)
+            yield cast(StreamEventPayload, event)
         if not saw_token:
             logger.warning(
                 "stream_agent_response.empty_answer_fallback",
@@ -245,6 +244,10 @@ async def stream_agent_response(
             "message": BUSY_MESSAGE,
             "code": PROVIDER_BUSY_ERROR_CODE,
             "retryable": True,
+            # Internal-only: the HTTP status the collected JSON route returns,
+            # read by `collect_agent_response` and stripped by the SSE route
+            # (#689). This is not part of the published event contract.
+            "status_code": 503,
         }
         done_emitted = True
         yield {"type": "done"}
@@ -264,6 +267,8 @@ async def stream_agent_response(
                 "message": BUSY_MESSAGE,
                 "code": provider_busy.code,
                 "retryable": provider_busy.retryable,
+                # Internal-only (#689); see the deadline branch above.
+                "status_code": provider_busy.status_code,
             }
         else:
             yield {

@@ -34,7 +34,7 @@ observability:
     # These are the only dimensions allowed to become Langfuse tags. Keep this
     # vocabulary intentionally small so trace filtering remains usable.
     tag_taxonomy:
-      entry_points: ["api:chat", "api:chat-stream", "eval:driver", "eval:spike"]
+      entry_points: ["api:chat-stream", "eval:driver", "eval:spike"]
 
 agent:
   # Named deployments are the serving allowlist. Model names must use LiteLLM's

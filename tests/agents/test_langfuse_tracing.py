@@ -74,11 +74,11 @@ def test_fallback_prompt_leaves_a_span_unlinked_with_the_real_sdk() -> None:
 
 def test_build_langfuse_config_validates_the_closed_api_tag_taxonomy() -> None:
     with patch.object(langfuse, "validate_langfuse_trace_context") as validate:
-        config = langfuse.build_langfuse_config(entry_point="api:chat")
+        config = langfuse.build_langfuse_config(entry_point="api:chat-stream")
 
     assert "metadata" not in config
     validate.assert_called_once_with(
-        entry_point="api:chat",
+        entry_point="api:chat-stream",
         scenario_id=None,
         repeat=None,
     )
@@ -147,19 +147,19 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
         propagate.return_value.__exit__.return_value = None
 
         async with langfuse.langfuse_request_trace(
-            entry_point="api:chat",
-            trace_name="agent-chat",
+            entry_point="api:chat-stream",
+            trace_name="agent-chat-stream",
             session_id="session-1",
             user_id="user-1",
         ) as trace_id:
             assert trace_id == "trace-123"
 
     propagate.assert_called_once_with(
-        trace_name="agent-chat",
+        trace_name="agent-chat-stream",
         session_id="session-1",
         user_id="user-1",
         tags=[
-            "api:chat",
+            "api:chat-stream",
             "prompt:system:v13",
             "prompt:schema_context:v12",
             "prompt:sql_generation:v14",
@@ -175,7 +175,7 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
         },
     )
     client.start_as_current_observation.assert_called_once_with(
-        as_type="span", name="agent-chat"
+        as_type="span", name="agent-chat-stream"
     )
     client.get_current_trace_id.assert_called_once_with()
 
@@ -245,8 +245,8 @@ async def test_request_trace_is_a_no_op_when_tracing_is_disabled() -> None:
         patch.object(langfuse, "get_langfuse_client") as get_client,
     ):
         async with langfuse.langfuse_request_trace(
-            entry_point="api:chat",
-            trace_name="agent-chat",
+            entry_point="api:chat-stream",
+            trace_name="agent-chat-stream",
         ) as trace_id:
             assert trace_id is None
 
@@ -287,20 +287,6 @@ def test_stream_latency_has_no_tracing_side_effects() -> None:
     assert latency.outcome == "success"
 
 
-def test_record_agent_response_failure_updates_the_active_span_with_safe_metadata() -> (
-    None
-):
-    client = MagicMock()
-
-    with patch.object(langfuse, "get_langfuse_client", return_value=client):
-        langfuse.record_agent_response_failure(category="messages_empty")
-
-    client.update_current_span.assert_called_once_with(
-        metadata={"agent_response_failure_category": "messages_empty"},
-        level="WARNING",
-    )
-
-
 def test_build_langfuse_tags_use_the_configured_provider_and_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -315,7 +301,7 @@ def test_build_langfuse_tags_use_the_configured_provider_and_model(
     )
 
     monkeypatch.setenv("DEEPSEEK_API_KEY", "must-not-appear-in-traces")
-    tags = langfuse.build_langfuse_tags(entry_point="api:chat")
+    tags = langfuse.build_langfuse_tags(entry_point="api:chat-stream")
 
     assert tags[-1] == "model:deepseek/deepseek-v4.1-flash"
     assert all("must-not-appear-in-traces" not in tag for tag in tags)

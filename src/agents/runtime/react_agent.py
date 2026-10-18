@@ -16,14 +16,12 @@ from src.agents.tracing.langfuse import (
     get_langfuse_client,
     langfuse_prompt_attributes,
     langfuse_request_trace,
-    record_agent_response_failure,
 )
 from src.agents.tracing.stream import StreamObservation
 from src.agents.runtime.tool_events import (
     bind_tool_event_emitter,
     reset_tool_event_emitter,
 )
-from src.core.logger import logger
 
 
 class AgentRuntime:
@@ -51,58 +49,6 @@ class AgentRuntime:
             )
             self._managed_agents[key] = agent
         return agent, prompt
-
-    async def ainvoke(
-        self,
-        query: str,
-        user_id: str | None = None,
-        session_id: str | None = None,
-    ) -> dict[str, str | None]:
-        config = build_langfuse_config(
-            entry_point="api:chat",
-        )
-        if session_id:
-            config = {**config, "configurable": {"thread_id": session_id}}
-        messages = self._build_messages(query)
-        prompts = await resolve_prompt_bundle_async()
-        agent, system_prompt = await self._active_agent(prompts)
-
-        with prompt_bundle_context(prompts):
-            async with langfuse_request_trace(
-                entry_point="api:chat",
-                trace_name="agent-chat",
-                session_id=session_id,
-                user_id=user_id,
-                prompts=prompts,
-            ) as trace_id:
-                with langfuse_prompt_attributes(system_prompt):
-                    response = await agent.ainvoke(messages, config=config or None)
-                answer, failure_category = self._extract_answer_with_failure_category(
-                    response
-                )
-                if failure_category is not None:
-                    logger.warning(
-                        "agent_runtime.response_extraction_failed",
-                        failure_category=failure_category,
-                    )
-                    record_agent_response_failure(category=failure_category)
-
-        client = get_langfuse_client()
-        if client is not None:
-            await asyncio.to_thread(client.flush)
-
-        trace_url = None
-        if trace_id is not None and client is not None:
-            trace_url = client.get_trace_url(trace_id=trace_id)
-
-        result: dict[str, str | None] = {
-            "answer": answer,
-            "trace_id": trace_id,
-            "trace_url": trace_url,
-        }
-        if failure_category is not None:
-            result["failure_category"] = failure_category
-        return result
 
     async def astream(
         self,
@@ -225,32 +171,3 @@ class AgentRuntime:
 
     def _build_messages(self, query: str) -> dict[str, list[HumanMessage]]:
         return {"messages": [HumanMessage(content=query)]}
-
-    def _extract_answer(self, response: Any) -> str:
-        answer, _ = self._extract_answer_with_failure_category(response)
-        return answer
-
-    def _extract_answer_with_failure_category(
-        self, response: Any
-    ) -> tuple[str, str | None]:
-        if not isinstance(response, dict):
-            return "", "response_not_dict"
-
-        if "messages" not in response:
-            return "", "messages_missing"
-
-        messages = response["messages"]
-        if not isinstance(messages, list):
-            return "", "messages_not_list"
-        if not messages:
-            return "", "messages_empty"
-
-        last_message = messages[-1]
-        content = getattr(last_message, "content", None)
-
-        if not isinstance(content, str):
-            return "", "message_content_not_text"
-        if not content.strip():
-            return "", "message_content_empty"
-
-        return content.strip(), None

@@ -180,7 +180,9 @@ class ConfigLoadTests(unittest.TestCase):
             "observability": {
                 "langfuse": {
                     "environments": {"default": "local", "allowed": ["local"]},
-                    "tag_taxonomy": {"entry_points": ["api:chat", "api:chat"]},
+                    "tag_taxonomy": {
+                        "entry_points": ["api:chat-stream", "api:chat-stream"]
+                    },
                 }
             }
         }

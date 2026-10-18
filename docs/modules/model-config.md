@@ -141,7 +141,7 @@ Each row was measured on 2026-10-16 by pointing `DEEPSEEK_API_BASE` at a local s
 |---|---|---|---|
 | Request timeout | `timeout: 30`, passed as `request_timeout` | Time without data from the provider, not the length of a call | A provider that never answers raises `litellm.Timeout` at 30 s. A stream that sends a token every 5 s ran 50 s and completed |
 | Retries | `max_attempts: 2`, passed to LangChain's retry decorator as `max_retries` | Total **attempts**, not retries: tenacity's `stop_after_attempt(max_retries)`, so the name now says it | 429: two attempts, about 4 s apart. A hung provider: two attempts, 64.8 s in total. 500 and 503: one attempt |
-| Turn deadline | `agent.stream_turn_timeout_seconds: 120` | One whole agent turn, streamed or not, every model and tool call included | Enforced by `stream_agent_response` and `generate_agent_response`; both report expiry as `provider_busy` (#659) |
+| Turn deadline | `agent.stream_turn_timeout_seconds: 120` | One whole agent turn, streamed or not, every model and tool call included | Enforced once, by `stream_agent_response`, which both routes drive; expiry is a `provider_busy` event, an in-band `error` on the stream and a retryable `503` from `/chat` (#659, #689) |
 
 **What each protects against.**
 
@@ -259,7 +259,7 @@ Only behind an eval comparison, and only for `react` (section 7).
 | `src/serving/composition.py` → `_assert_served_profile_credentials`, `_served_profiles` | The boot key check, and which profiles count as served |
 | `src/agents/runtime/factory.py` → `agent_factory` | The `react` caller |
 | `src/agents/tools/query_clean_jobs.py` → `generate_sql` | The `sql_generation` caller |
-| `src/agents/service.py` → `generate_agent_response`, `stream_agent_response`; `src/core/errors.py` → `classify_provider_busy_error` | The turn deadline and how failures reach the user |
+| `src/agents/service.py` → `collect_agent_response`, `stream_agent_response`; `src/core/errors.py` → `classify_provider_busy_error` | The turn deadline and how failures reach the user |
 | `src/agents/tracing/langfuse.py` → `_base_langfuse_tags`, `_react_model_name` | Trace attribution |
 | `config/langfuse_models.yaml`, `scripts/provision_langfuse_models.py` | Cost pricing |
 | `tests/agents/runtime/test_provider.py`, `tests/core/test_config.py` | The behaviour pinned by tests |

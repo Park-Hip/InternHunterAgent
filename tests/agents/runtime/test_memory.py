@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import unittest
 import uuid
-from unittest.mock import AsyncMock
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -14,7 +13,8 @@ from langchain.agents import create_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
 from src.agents.runtime.middleware import build_trim_middleware
-from src.agents.service import generate_agent_response
+from src.agents.runtime.react_agent import AgentRuntime
+from src.agents.service import collect_agent_response
 
 
 class RecordingChatModel(BaseChatModel):
@@ -147,20 +147,24 @@ class SessionIsolationTests(unittest.IsolatedAsyncioTestCase):
 
 
 class GeneratedSessionIdTests(unittest.IsolatedAsyncioTestCase):
-    async def test_generated_session_id_returned_when_client_omits_it(self) -> None:
-        runtime = AsyncMock()
-        runtime.ainvoke.return_value = {"answer": "ok", "trace_id": None, "trace_url": None}
+    async def test_generated_session_id_opens_a_fresh_thread_per_request(self) -> None:
+        model = RecordingChatModel()
+        runtime = AgentRuntime(agent=_build_agent(model, InMemorySaver()))
 
-        result = await generate_agent_response(query="hi", runtime=runtime)
+        first = await collect_agent_response(
+            query="secret-from-first-turn", runtime=runtime
+        )
+        await collect_agent_response(query="second-turn", runtime=runtime)
 
         # A real UUID is generated and returned so the client can continue
         # the thread; it is also the id handed to the runtime as the thread key.
-        returned_id = result["session_id"]
-        self.assertIsNotNone(returned_id)
-        uuid.UUID(returned_id)  # raises if not a valid UUID
-        runtime.ainvoke.assert_awaited_once_with(
-            query="hi", session_id=returned_id, user_id=None
-        )
+        uuid.UUID(first["session_id"])  # raises if not a valid UUID
+
+        # No id was supplied on either turn, so the second turn must not see
+        # the first turn's exchange.
+        second_turn_input = _contents(model.seen[-1])
+        self.assertIn("second-turn", second_turn_input)
+        self.assertNotIn("secret-from-first-turn", second_turn_input)
 
 
 class PersistenceAcrossRestartTests(unittest.IsolatedAsyncioTestCase):

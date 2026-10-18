@@ -96,6 +96,47 @@ class StaticServingTests(unittest.TestCase):
         self.assertNotIn("endTurn(", handler)
         self.assertNotIn("showErrorBubble", app)
 
+    def test_a_stopped_turn_reads_as_stopped_for_the_eye_and_the_screen_reader(
+        self,
+    ) -> None:
+        """A stop must end the turn visibly, not only for a screen reader.
+
+        `stopTurn` replaces the pending placeholder (or sits above a partial
+        answer), flips every running tool card out of "đang chạy…", and
+        publishes the same words once. It never renders the no-answer card,
+        even when a zero-row tool completed before the press: the reader asked
+        to stop, and the turn did not conclude. CI has no client-side DOM
+        harness, so this pins the source shape; the stopped-turn captures in
+        `scripts/ui_screenshots.py` check the rendered result.
+        """
+        app = self.client.get("/app.js").text
+        styles = self.client.get("/styles.css").text
+
+        stopped = app[
+            app.index("function stopTurn(ctx)") : app.index("function scrollToEnd")
+        ]
+        self.assertNotIn("endTurn(", stopped)
+        self.assertNotIn("showNoAnswerCard", stopped)
+        self.assertIn('card.dataset.status = "stopped"', stopped)
+        self.assertIn('"đã dừng"', stopped)
+        self.assertIn('const STOPPED_TEXT = "Đã dừng.";', app)
+        self.assertIn("publishAnswer(ctx, STOPPED_TEXT)", stopped)
+
+        # The abort path ends through the one stopped-turn path, and `endTurn`
+        # no longer carries a stopped branch of its own.
+        abort = app[app.index('err.name === "AbortError"') : app.index("Network drop")]
+        self.assertIn("stopTurn(ctx)", abort)
+        self.assertNotIn("endTurn(", abort)
+        self.assertNotIn("endTurn(ctx, {", app)
+
+        # The line has its own rule and consumes existing tokens only, and it
+        # is not set in the italic register the pending placeholder owns.
+        start = styles.index(".turn__stopped")
+        rule = styles[start : styles.index("}", start)]
+        self.assertIn("var(--muted)", rule)
+        self.assertIn("var(--text-sm)", rule)
+        self.assertNotIn("font-style", rule)
+
     def test_turn_status_announces_the_state_and_silences_the_counter(self) -> None:
         """A turn can run for two minutes, so the state is stated, not implied.
 

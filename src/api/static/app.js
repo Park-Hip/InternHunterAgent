@@ -389,7 +389,7 @@ function publishAnswer(ctx, finalText) {
 }
 
 // Finish a turn: drop the streaming cursor, publish, and hand the composer back.
-function endTurn(ctx, { stopped = false } = {}) {
+function endTurn(ctx) {
   flushPaint(ctx);
   ctx.agent.classList.remove("is-streaming");
 
@@ -403,8 +403,51 @@ function endTurn(ctx, { stopped = false } = {}) {
   }
 
   renderMarkdown(ctx);
-  const published = stopped ? `Đã dừng. ${ctx.rawAnswer.trim()}` : ctx.rawAnswer.trim();
-  publishAnswer(ctx, published || "Câu trả lời rỗng.");
+  publishAnswer(ctx, ctx.rawAnswer.trim() || "Câu trả lời rỗng.");
+}
+
+// What a stopped turn says, in the same words to the eye and to the published
+// (screen-reader) copy. One constant, so the two can never drift.
+const STOPPED_TEXT = "Đã dừng.";
+
+// Stop a turn the reader abandoned. A stop is not an outcome: it must never be
+// rendered as the no-answer card, even when a zero-row tool completed before
+// the press, because the reader asked to stop and the turn never concluded.
+// Everything that could still read as working stops reading as working, and
+// the same words are published once.
+function stopTurn(ctx) {
+  flushPaint(ctx);
+  ctx.agent.classList.remove("is-streaming");
+
+  // Every tool call the stop abandoned is left showing "đang chạy…". The card
+  // keeps its name and arguments as evidence, and loses only the claim that
+  // the call is still in flight.
+  for (const card of ctx.toolCards.values()) {
+    if (card.dataset.status !== "running") continue;
+    card.dataset.status = "stopped";
+    card.querySelector(".toolcard__status").textContent = "đã dừng";
+  }
+
+  const line = document.createElement("p");
+  line.className = "turn__stopped";
+  line.textContent = STOPPED_TEXT;
+  // The published copy is the accessible one, exactly as the answer node's
+  // aria-hidden text is: one message, for whichever sense is in use.
+  line.setAttribute("aria-hidden", "true");
+
+  if (ctx.gotToken) {
+    // Keep the partial answer exactly as painted, in plain text: a
+    // half-streamed answer is not valid Markdown yet. The stopped line goes
+    // above it, in the same order the published copy speaks.
+    ctx.answer.parentNode.insertBefore(line, ctx.answer);
+    publishAnswer(ctx, `${STOPPED_TEXT} ${ctx.rawAnswer.trim()}`);
+    return;
+  }
+
+  // Nothing streamed: the pending placeholder is replaced outright, so the
+  // answer area does not keep reading as busy.
+  ctx.answer.replaceWith(line);
+  publishAnswer(ctx, STOPPED_TEXT);
 }
 
 function scrollToEnd() {
@@ -516,7 +559,6 @@ async function ask(query) {
   // cancel endpoint is needed.
   controller = new AbortController();
   const signal = controller.signal;
-  let stopped = false;
 
   try {
     const body = { query: text };
@@ -575,21 +617,12 @@ async function ask(query) {
       }
     }
     // Stream closed without an explicit `done` (unexpected) — tidy up.
-    endTurn(ctx, { stopped });
+    endTurn(ctx);
   } catch (err) {
-    // A deliberate Stop is not a failure: keep whatever arrived on screen and
-    // hand the composer back.
+    // A deliberate Stop is not a failure: the turn is ended visibly, in the
+    // same words the screen reader hears.
     if (err && err.name === "AbortError") {
-      stopped = true;
-      ctx.agent.classList.remove("is-streaming");
-      if (ctx.gotToken) {
-        // Keep the partial answer exactly as painted, in plain text: a
-        // half-streamed answer is not valid Markdown yet.
-        flushPaint(ctx);
-        publishAnswer(ctx, `Đã dừng. ${ctx.rawAnswer.trim()}`);
-      } else {
-        endTurn(ctx, { stopped });
-      }
+      stopTurn(ctx);
       return;
     }
     // Network drop mid-stream: degrade to a friendly bubble, never a crash.

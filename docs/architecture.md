@@ -193,10 +193,9 @@ QueryRequest
 The route knows nothing about LangChain, the service owns request-level orchestration, and the
 runtime is the only place the agent is constructed and executed.
 
-There are two delivery paths over the same layering, not two architectures.
-The one-shot path drives `AgentRuntime.ainvoke` and returns a finished body.
-The streaming path drives the agent's streamed extraction and yields typed events (section 4.2).
-Both share every agent internal; only delivery differs.
+There is one delivery mechanism. Every request drives `AgentRuntime.astream`; the streaming route
+yields its events (section 4.2) and the JSON route collects them into a finished body (#689), so both
+share every agent internal and there is no second implementation to keep in step.
 
 Design philosophy: every layer must be replaceable in isolation without forcing a rewrite of its
 neighbors.
@@ -547,7 +546,7 @@ back into one-shot, silently, while still passing a naive test.
 
 Each layer keeps its existing responsibility.
 
-- **Runtime** gains a streaming method beside `ainvoke`. It drives the agent's streamed extraction
+- **Runtime** exposes a single streaming method. It drives the agent's streamed extraction
   and yields small transport-agnostic event dicts, not HTTP or SSE constructs, so the runtime still
   knows nothing about the wire.
 - **Service** gains a streaming sibling that mints the `session_id` up front, passes runtime events
@@ -678,9 +677,9 @@ immediately, so the model call and any provider-busy it raises are always after 
   before the generator starts, so it still returns a clean `400`. The per-IP rate limiter also
   rejects with `429` before the route body runs, but that is middleware, not this path.
 - **Provider-busy cannot be a pre-stream status.** It can only be known once the model runs, which
-  is after the session event has committed the `200`. So, unlike the one-shot path, which maps
-  provider-busy to a status code (`429` for a rate limit, `503` for an expired turn deadline), under
-  streaming it is delivered in-band. This is a deliberate
+  is after the session event has committed the `200`. So, unlike the JSON route, which collects the
+  busy event and maps it to a status code (`429` for a rate limit, `503` for an expired turn
+  deadline), a streaming client reads provider-busy in-band. This is a deliberate
   consequence of session-first ordering, not an oversight.
 - **All runtime failures are in-band error events.** Once the stream has started, a provider hiccup
   or internal failure is delivered as an error event with a safe message, followed by done. Every

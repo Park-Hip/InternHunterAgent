@@ -358,24 +358,6 @@ def get_langfuse_client() -> Langfuse | None:
     return _langfuse
 
 
-def record_agent_response_failure(*, category: str) -> None:
-    """Attach a safe extraction-failure category to the active request span."""
-    client = get_langfuse_client()
-    if client is None:
-        return
-
-    try:
-        client.update_current_span(
-            metadata={"agent_response_failure_category": category},
-            level="WARNING",
-        )
-    except Exception:
-        logger.warning(
-            "langfuse.agent_response_failure_diagnostic_failed",
-            failure_category=category,
-        )
-
-
 @contextmanager
 def langfuse_prompt_attributes(prompt: ResolvedPrompt) -> Iterator[None]:
     """Attach a native PromptClient to generations made by the LangChain callback.

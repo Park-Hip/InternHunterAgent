@@ -68,7 +68,7 @@ flowchart TD
 | Layer | Owns | Knows nothing about |
 |---|---|---|
 | Route | Rejecting a blank query with 400; the per-IP rate limit (`api.rate_limit`); SSE encoding with `type` in every payload; a `: ping` comment after 15 s of silence (ADR-0050); noticing a disconnect and closing the service generator (ADR-0049) | Agents, prompts, models |
-| Service | Minting a `session_id` when the request has none; the event order; the deadline; the fallback token; mapping exceptions to an in-band `error` event | LangChain, Langfuse, the graph |
+| Service | Minting a `session_id` when the request has none; the event order; the deadline; the fallback token; mapping exceptions to an in-band `error` event; folding that stream into the JSON body for `/chat` | LangChain, Langfuse, the graph |
 | Runtime | Resolving the prompt bundle once per turn; the per-prompt agent cache; the answer-only filter; binding the turn's tool-event emitter; the Langfuse span and flush | HTTP, SSE, the deadline |
 
 **Where the split leaks today.**
@@ -77,7 +77,7 @@ flowchart TD
    Whether the runtime should sit behind a port too is decided in the tracing guide (row 6).
 2. The route imports `src.agents.tracing.stream` for its no-op default observation.
 3. Events are untyped dicts.
-   The typed public models already exist in `src/api/schemas.py`, but the service and runtime cannot import from the API layer, so they build dicts and need `cast` in three places, two in the service and one in the runtime (#679).
+   The typed public models already exist in `src/api/schemas.py`, but the service and runtime cannot import from the API layer, so they build dicts and need a `cast` at each internal boundary (#679).
 
 ## 3. One turn, measured
 
@@ -258,10 +258,10 @@ The last column is the one that matters: does the conversation still work afterw
   A thread a previous interruption already damaged is repaired the same way on its next model call, so no migration is needed.
 
 **The non-streaming route.**
-`POST /api/v1/agent/chat` goes through `generate_agent_response` and `AgentRuntime.ainvoke`.
-Since #659 it is bounded by the same `agent.stream_turn_timeout_seconds`: on expiry the service cancels the runtime call, detaches its cleanup as the stream does, and the route returns a retryable `503` with the busy message (ADR-0048, amended).
-The web client and the eval driver do not use it.
-It is still a second code path beside the stream, with its own answer extraction and trace wiring (section 8).
+`POST /api/v1/agent/chat` is not a second path: `collect_agent_response` drives `stream_agent_response` and folds its events into the JSON body (#689).
+It is bounded by the same `agent.stream_turn_timeout_seconds`, and the `error` event decides the status: a `provider_busy` event becomes the route's retryable `503` with the busy message, `429` when the provider rate-limited the turn, and any other failure becomes its generic `500`.
+The status the JSON route needs rides the internal `status_code` field on the event, which the SSE route strips, so the published payload is unchanged.
+The web client and the eval driver do not use the route; the API contract keeps it for clients that need a finished JSON body.
 
 ## 7. Behaviours that surprise a new developer
 
@@ -289,6 +289,8 @@ It is still a second code path beside the stream, with its own answer extraction
 
 - **Three layers for one request.**
   The route can change transport and the runtime can change framework without touching the service, and the service's deadline and error policy are tested with a fake runtime.
+- **One serving path** (#689).
+  `/chat` folds the stream instead of reimplementing it, so the deadline, the fallback, and the error mapping exist once; the JSON body is a view of the same events.
 - **`session` first.**
   The client pins the conversation before the agent runs, at the cost that every failure after it must be in-band, since the 200 is already sent.
 - **Tasks and queues instead of cancelling the generator** (section 4, ADR-0048).
@@ -307,17 +309,14 @@ Each item was found while preparing this guide and is tracked by an issue.
 
 1. **Thread storage has no bound** (#673).
    Removing compaction (#672) left the 6-turn trim as the only memory bound, which limits what the model sees but not what is stored; retention deletes old threads.
-2. **Two entry points** (#689).
-   #659 gave `/chat` its own copy of the deadline rather than implementing it by collecting the stream, so `ainvoke`, `generate_agent_response`, and about 100 lines of extraction and trace wiring remain beside the streamed path.
-   #689 implements `/chat` by collecting the stream, leaving one path.
-3. **Test-only surface in the runtime** (#678).
+2. **Test-only surface in the runtime** (#678).
    The second mode of `astream`, the `agent=` injection, and two wrappers go; the tool middleware's holder reset moves into a `finally`.
-4. **Untyped events** (#679).
+3. **Untyped events** (#679).
    The event models move into the agents package, the API imports them for its schema, and internal signals get their own types.
-5. **The runtime imports tracing directly.**
+4. **The runtime imports tracing directly.**
    Not decided here: the tracing guide (row 6) decides whether the runtime goes behind a port like the service.
 
-The order is #689, then #678 and #679, which edit the same code in that order; #673 and #688 are independent.
+The order is #678, then #679, which edit the same code in that order; #673 is independent.
 The user-facing follow-ups are #677 (the tool card's count, row 5).
 
 ## 9. Changing it safely
@@ -325,7 +324,7 @@ The user-facing follow-ups are #677 (the tool card's count, row 5).
 **Add or change a stream event.**
 The SSE wire format is a public contract: event names, payload fields including `type`, and order.
 Change `src/api/schemas.py` (`StreamEvent`), the service or runtime that emits it, and `src/api/static/app.js` together, and extend `tests/api/test_stream.py`, whose schema tests check every frame against `STREAM_EVENT_SCHEMA`.
-A new internal signal must never reach the route.
+A new internal signal must never reach the route: an `error` event may carry extra keys its consumers need, such as the `status_code` the JSON route maps to an HTTP status, but the route rebuilds the payload from `StreamErrorEvent` before writing the frame (#689).
 
 **Add a middleware.**
 Order matters: `agent_factory` lists interrupted-tool-call repair, then trimming, then tool observation, which stays innermost so it reports the call as actually issued.
@@ -353,7 +352,7 @@ Run `uv run pytest tests/agents tests/api`, then stop a turn in the web UI while
 |---|---|
 | `src/api/routes/query.py` → `stream_query_agent`, `_with_heartbeats`, `_DisconnectLoggingEventSourceResponse` | SSE framing, heartbeats, disconnects |
 | `src/agents/service.py` → `stream_agent_response` | Event order, deadline, fallback, error mapping |
-| `src/agents/service.py` → `generate_agent_response` | The non-streaming route's path and its deadline |
+| `src/agents/service.py` → `collect_agent_response` | Folding that stream into the JSON route's body |
 | `src/agents/runtime/react_agent.py` → `AgentRuntime.astream`, `_active_agent` | The answer-only filter, the agent cache, the handshake |
 | `src/agents/runtime/factory.py` → `agent_factory` | How the agent and its middleware are assembled |
 | `src/agents/runtime/middleware.py` → `InterruptedToolCallRepairMiddleware`, `TrimTurnsMiddleware`, `ToolObservationMiddleware` | The interrupted-call repair, the memory bound, and tool events |

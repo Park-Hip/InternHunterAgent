@@ -24,7 +24,7 @@ class RateLimitTests(unittest.TestCase):
         }
 
         with patch(
-            "src.api.routes.query.generate_agent_response",
+            "src.api.routes.query.collect_agent_response",
             new=AsyncMock(return_value=fake_response),
         ):
             first = self.client.post("/api/v1/agent/chat", json={"query": "one"})

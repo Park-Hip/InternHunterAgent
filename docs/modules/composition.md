@@ -159,7 +159,7 @@ A failure in the guards happens before the pool exists, so there is nothing to t
 | `app` | ASGI app, `src.serving.composition:app` | `docker/Dockerfile` `CMD`, README, `tests/api/test_query.py` |
 | `lifespan` | async context manager | `tests/api/test_startup_config.py` builds its own app around it |
 | `app.state.runtime` | `AgentRuntime` | `src/api/routes/query.py` → `query_agent`, `stream_query_agent` |
-| `app.state.stream_observation_factory` | callable returning a stream observation | `stream_query_agent`; falls back to a no-op if absent |
+| `app.state.stream_observation_factory` | callable returning a stream observation | `query_agent`, `stream_query_agent`; falls back to a no-op if absent |
 | `MCP_ENABLED` | environment variable | read once at import |
 
 `app.state` is a temporary seam from #442: routes reach the runtime through it, instead of

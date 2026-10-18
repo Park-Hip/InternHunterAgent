@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio
 import uuid
 import unittest
-from unittest.mock import ANY, MagicMock, AsyncMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 from src.agents.service import (
     BUSY_MESSAGE,
     GENERIC_ERROR_MESSAGE,
-    generate_agent_response,
+    collect_agent_response,
     stream_agent_response,
 )
 from src.core.errors import (
@@ -18,74 +18,84 @@ from src.core.errors import (
 )
 
 
-class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
-    async def test_generate_agent_response_uses_injected_runtime(self) -> None:
-        runtime = AsyncMock()
-        runtime.ainvoke.return_value = {
-            "answer": "The current time is 14:01:52.",
-            "trace_id": "trace-123",
-            "trace_url": "https://cloud.langfuse.com/project/p/traces/trace-123",
-        }
+class CollectAgentResponseTests(unittest.IsolatedAsyncioTestCase):
+    async def test_collects_tokens_and_trace_link_from_one_streamed_turn(self) -> None:
+        runtime = MagicMock()
+        observation = MagicMock()
+        observation_factory = MagicMock(return_value=observation)
 
-        result = await generate_agent_response(
-            query="what time is it?",
+        async def token_stream(**_kwargs):
+            yield {"type": "token", "text": "There are "}
+            yield {"type": "token", "text": "3 roles."}
+            yield {
+                "type": "metadata",
+                "trace_id": "trace-123",
+                "trace_url": "https://cloud.langfuse.com/project/p/traces/trace-123",
+            }
+
+        runtime.astream = MagicMock(side_effect=token_stream)
+
+        result = await collect_agent_response(
+            query="list 3 data engineer jobs",
             runtime=runtime,
             session_id="session-1",
             user_id="user-1",
+            stream_observation_factory=observation_factory,
         )
 
-        runtime.ainvoke.assert_awaited_once_with(
-            query="what time is it?",
-            session_id="session-1",
-            user_id="user-1",
-        )
         self.assertEqual(
             result,
             {
-                "answer": "The current time is 14:01:52.",
+                "answer": "There are 3 roles.",
                 "session_id": "session-1",
                 "trace_id": "trace-123",
                 "trace_url": "https://cloud.langfuse.com/project/p/traces/trace-123",
             },
         )
-
-    async def test_generate_agent_response_generates_session_id_when_omitted(
-        self,
-    ) -> None:
-        runtime = AsyncMock()
-        runtime.ainvoke.return_value = {
-            "answer": "The current time is 14:01:52.",
-            "trace_id": "trace-123",
-            "trace_url": None,
-        }
-
-        result = await generate_agent_response(
-            query="what time is it?",
-            runtime=runtime,
+        runtime.astream.assert_called_once_with(
+            query="list 3 data engineer jobs",
+            session_id="session-1",
+            user_id="user-1",
+            observation=observation,
+            completion_event=ANY,
         )
+        observation.complete.assert_called_once_with("success")
 
-        self.assertIsNotNone(result["session_id"])
-        self.assertEqual(uuid.UUID(result["session_id"]).version, 4)
-        self.assertIsNone(result["trace_url"])
-        runtime.ainvoke.assert_awaited_once_with(
-            query="what time is it?",
-            session_id=result["session_id"],
+    async def test_generates_session_id_when_omitted(self) -> None:
+        async def token_stream(**_kwargs):
+            yield {"type": "token", "text": "ok"}
+            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=token_stream)
+
+        result = await collect_agent_response(query="hi", runtime=runtime)
+
+        # A real UUID is generated and returned so the client can continue
+        # the thread; it is also the id handed to the runtime as the thread key.
+        returned_id = result["session_id"]
+        self.assertEqual(uuid.UUID(returned_id).version, 4)
+        runtime.astream.assert_called_once_with(
+            query="hi",
+            session_id=returned_id,
             user_id=None,
+            observation=ANY,
+            completion_event=ANY,
         )
 
     @patch("src.agents.service.logger")
-    async def test_empty_answer_fallback_is_logged(self, mock_logger) -> None:
-        runtime = AsyncMock()
-        runtime.ainvoke.return_value = {
-            "answer": "   ",
-            "trace_id": None,
-            "trace_url": None,
-        }
+    async def test_empty_answer_fallback_is_logged_once(self, mock_logger) -> None:
+        async def empty_stream(**_kwargs):
+            if False:  # pragma: no cover - keeps this an async generator
+                yield {}
 
-        result = await generate_agent_response(
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=empty_stream)
+
+        result = await collect_agent_response(
             query="what time is it?",
             runtime=runtime,
-            session_id="session-empty-sync",
+            session_id="session-empty",
         )
 
         # Literal on purpose: the server owns the user-facing copy (ADR-0061),
@@ -95,62 +105,68 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             "Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại.",
         )
         mock_logger.warning.assert_called_once_with(
-            "generate_agent_response.empty_answer_fallback",
-            session_id="session-empty-sync",
-            failure_category=None,
+            "stream_agent_response.empty_answer_fallback",
+            session_id="session-empty",
         )
 
-    @patch("src.agents.service.settings")
-    @patch("src.agents.service.logger")
-    async def test_turn_deadline_returns_provider_busy_without_waiting_for_cleanup(
-        self, mock_logger, mock_settings
+    async def test_rate_limited_provider_event_becomes_a_busy_error_with_429(
+        self,
     ) -> None:
-        mock_settings.agent.stream_turn_timeout_seconds = 0.01
-        cancellation_received = asyncio.Event()
-        cleaned_up = asyncio.Event()
-
-        async def blocked_invoke(**_kwargs):
-            try:
-                await asyncio.Event().wait()
-            except asyncio.CancelledError:
-                cancellation_received.set()
-                await asyncio.sleep(0.2)
-                raise
-            finally:
-                cleaned_up.set()
+        async def rate_limited_stream(**_kwargs):
+            raise RuntimeError("provider quota exhausted")
+            yield  # pragma: no cover - keeps this an async generator
 
         runtime = MagicMock()
-        runtime.ainvoke = MagicMock(side_effect=blocked_invoke)
+        runtime.astream = MagicMock(side_effect=rate_limited_stream)
 
-        started_at = asyncio.get_running_loop().time()
         with self.assertRaises(ProviderBusyError) as ctx:
-            await generate_agent_response(
-                query="what internships are available?",
+            await collect_agent_response(
+                query="what time is it?",
+                runtime=runtime,
+                session_id="session-rate-limited",
+            )
+
+        self.assertEqual(ctx.exception.status_code, 429)
+        self.assertTrue(ctx.exception.retryable)
+
+    @patch("src.agents.service.settings")
+    async def test_deadline_becomes_a_retryable_503(self, mock_settings) -> None:
+        mock_settings.agent.stream_turn_timeout_seconds = 0.01
+
+        async def blocked_stream(**_kwargs):
+            await asyncio.Event().wait()
+            yield  # pragma: no cover - keeps this an async generator
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=blocked_stream)
+
+        with self.assertRaises(ProviderBusyError) as ctx:
+            await collect_agent_response(
+                query="what time is it?",
                 runtime=runtime,
                 session_id="session-chat-timeout",
             )
 
-        self.assertLess(asyncio.get_running_loop().time() - started_at, 0.1)
         self.assertEqual(ctx.exception.status_code, 503)
         self.assertTrue(ctx.exception.retryable)
-        runtime.ainvoke.assert_called_once_with(
-            query="what internships are available?",
-            session_id="session-chat-timeout",
-            user_id=None,
-        )
-        await asyncio.wait_for(cancellation_received.wait(), timeout=0.1)
-        self.assertFalse(cleaned_up.is_set())
 
-        mock_logger.error.assert_called_once()
-        self.assertEqual(
-            mock_logger.error.call_args.args[0], "generate_agent_response.failed"
-        )
-        kwargs = mock_logger.error.call_args.kwargs
-        self.assertEqual(kwargs["session_id"], "session-chat-timeout")
-        self.assertFalse(kwargs["reclassified_busy"])
-        self.assertTrue(kwargs["deadline_exceeded"])
+    async def test_internal_error_event_becomes_a_generic_failure(self) -> None:
+        async def failing_stream(**_kwargs):
+            raise RuntimeError("db is down")
+            yield  # pragma: no cover - keeps this an async generator
 
-        await asyncio.wait_for(cleaned_up.wait(), timeout=0.3)
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=failing_stream)
+
+        with self.assertRaises(RuntimeError) as ctx:
+            await collect_agent_response(
+                query="what time is it?",
+                runtime=runtime,
+                session_id="session-internal",
+            )
+
+        self.assertEqual(str(ctx.exception), GENERIC_ERROR_MESSAGE)
+        self.assertNotIn("db is down", str(ctx.exception))
 
 
 class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
@@ -313,6 +329,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
                     "message": BUSY_MESSAGE,
                     "code": PROVIDER_BUSY_ERROR_CODE,
                     "retryable": True,
+                    "status_code": 503,
                 },
                 {"type": "done"},
             ],
@@ -487,6 +504,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
                     "message": BUSY_MESSAGE,
                     "code": PROVIDER_BUSY_ERROR_CODE,
                     "retryable": True,
+                    "status_code": 503,
                 }
             ],
         )

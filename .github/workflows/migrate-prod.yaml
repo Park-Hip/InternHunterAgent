@@ -1,12 +1,23 @@
 name: One-off production migration (drop is_active / expired_count)
 
-# EPHEMERAL. This workflow exists only to apply migration 1d032eb356bf to the
-# production Neon database from the ops branch, using the existing DATABASE_URL
-# secret (the direct, non-pooled host). It runs ONLY on workflow_dispatch — no
-# push/schedule trigger — and must be deleted after the migration completes.
+# EPHEMERAL. This workflow exists only to apply the migrations between the
+# production Neon database's current revision (c9d3e6f7a2b1) and the Alembic
+# head (1d032eb356bf), using the existing DATABASE_URL secret (the direct,
+# non-pooled host). It runs ONLY on workflow_dispatch — no push/schedule
+# trigger — and must be deleted after the migration completes.
 #
 # The schema drift it corrects: clean_jobs still carries is_active and
 # ingestion_runs still carries expired_count, both dropped by 1d032eb356bf.
+#
+# Alembic current on production (observed 2026-10-18): c9d3e6f7a2b1.
+# Pending, in order, from there to head 1d032eb356bf:
+#   e51a8c07d942  create shadow-evidence tables (7) + trigger fn
+#   a41d7c93be05  create 2 more evidence tables + triggers
+#   9d4e7f1a2b60  replace normalization_results check constraint
+#   f4b91860ea32  drop the 9 empty evidence tables + trigger fn (emptiness guard)
+#   1d032eb356bf  drop clean_jobs.is_active, ingestion_runs.expired_count
+# The first four are transient create-then-drop of empty tables; only the last
+# one changes retained tables.
 
 on:
   workflow_dispatch: {}
@@ -39,15 +50,38 @@ jobs:
 
       - run: uv sync --frozen --no-dev
 
-      # Hard stop: production must be exactly one revision behind head. If this
-      # is not true, do NOT upgrade — stop and investigate before writing DDL.
-      - name: Pre-flight — current revision must be f4b91860ea32
+      # Hard stop: production must be exactly at c9d3e6f7a2b1 with the columns
+      # this run is about to change present. If any of this is not true, do NOT
+      # upgrade — stop and investigate before writing DDL.
+      - name: Pre-flight — revision and column state
         run: |
           uv run alembic current > /tmp/current.txt 2>&1
           cat /tmp/current.txt
-          grep -q "f4b91860ea32" /tmp/current.txt
+          grep -q "c9d3e6f7a2b1" /tmp/current.txt
 
-      - name: Apply migration to head
+          uv run alembic heads
+
+          uv run python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+
+          def count(table, column):
+              with engine.connect() as conn:
+                  return conn.execute(text(
+                      "SELECT count(*) FROM information_schema.columns "
+                      "WHERE table_name=:t AND table_schema='public' AND column_name=:c"
+                  ), {"t": table, "c": column}).scalar()
+
+          assert count("clean_jobs", "is_active") == 1, "clean_jobs.is_active absent"
+          assert count("clean_jobs", "first_seen_at") == 1, "clean_jobs.first_seen_at absent"
+          assert count("clean_jobs", "last_seen_at") == 1, "clean_jobs.last_seen_at absent"
+          assert count("ingestion_runs", "expired_count") == 1, "ingestion_runs.expired_count absent"
+          print("pre-flight column state OK")
+          PY
+
+      - name: Apply migrations to head
         run: uv run alembic upgrade head
 
       - name: Verify head and dropped columns are gone
@@ -58,19 +92,22 @@ jobs:
           from sqlalchemy import create_engine, text
 
           engine = create_engine(os.environ["DATABASE_URL"])
-          with engine.connect() as conn:
-              is_active = conn.execute(text(
-                  "SELECT count(*) FROM information_schema.columns "
-                  "WHERE table_name='clean_jobs' AND table_schema='public' "
-                  "AND column_name='is_active'"
-              )).scalar()
-              expired_count = conn.execute(text(
-                  "SELECT count(*) FROM information_schema.columns "
-                  "WHERE table_name='ingestion_runs' AND table_schema='public' "
-                  "AND column_name='expired_count'"
-              )).scalar()
-              print(f"clean_jobs.is_active remaining: {is_active}")
-              print(f"ingestion_runs.expired_count remaining: {expired_count}")
-              if is_active or expired_count:
-                  raise SystemExit("migration incomplete: dropped columns still present")
+
+          def count(table, column):
+              with engine.connect() as conn:
+                  return conn.execute(text(
+                      "SELECT count(*) FROM information_schema.columns "
+                      "WHERE table_name=:t AND table_schema='public' AND column_name=:c"
+                  ), {"t": table, "c": column}).scalar()
+
+          is_active = count("clean_jobs", "is_active")
+          expired_count = count("ingestion_runs", "expired_count")
+          first_seen = count("clean_jobs", "first_seen_at")
+          last_seen = count("clean_jobs", "last_seen_at")
+          print(f"clean_jobs.is_active remaining: {is_active}")
+          print(f"ingestion_runs.expired_count remaining: {expired_count}")
+          print(f"clean_jobs.first_seen_at: {first_seen}; last_seen_at: {last_seen}")
+          assert is_active == 0, "clean_jobs.is_active still present"
+          assert expired_count == 0, "ingestion_runs.expired_count still present"
+          assert first_seen == 1 and last_seen == 1, "lifecycle columns lost"
           PY

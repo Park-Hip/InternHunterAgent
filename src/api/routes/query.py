@@ -1,6 +1,7 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import cast
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
@@ -129,14 +130,26 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
         raise HTTPException(status_code=400, detail="Query must not be empty.")
 
     disconnect_logged = False
+    # The service mints a session id when the caller omits one (a first turn),
+    # so the route learns the id the turn belongs to from the `session` event
+    # rather than from the request (#674).
+    session_id: str | None = payload.session_id
+    # `done` is the terminal event. A client that goes away after it is ending a
+    # completed SSE stream, which the transport reports the same way as a client
+    # that leaves mid-turn: once the response is complete, the ASGI receive
+    # channel answers with `http.disconnect`. The route is the only layer that
+    # knows the turn finished, so it suppresses the log from here (#674).
+    done_emitted = False
 
     def _log_client_disconnected() -> None:
         nonlocal disconnect_logged
-        if not disconnect_logged:
-            logger.info("stream.client_disconnected", session_id=payload.session_id)
-            disconnect_logged = True
+        if disconnect_logged or done_emitted:
+            return
+        logger.info("stream.client_disconnected", session_id=session_id)
+        disconnect_logged = True
 
     async def _event_source():
+        nonlocal done_emitted, session_id
         stream = stream_agent_response(
             query=payload.query,
             session_id=payload.session_id,
@@ -157,6 +170,8 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
                     yield item
                     continue
                 event_type = item["type"]
+                if event_type == "session":
+                    session_id = cast(str, item["session_id"])
                 # The payload must carry `type`, not drop it. The published
                 # STREAM_EVENT_SCHEMA is a union discriminated on `type`, so every
                 # variant lists it as required; a client that builds a validator from
@@ -176,6 +191,8 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
                             if key in StreamErrorEvent.model_fields
                         }
                     ).model_dump()
+                if event_type == "done":
+                    done_emitted = True
                 yield _server_sent_event(event=event_type, data=data)
         finally:
             await stream.aclose()

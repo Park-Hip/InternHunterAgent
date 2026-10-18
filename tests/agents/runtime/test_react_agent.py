@@ -13,11 +13,30 @@ from src.agents.service import stream_agent_response
 from src.agents.tracing.prompt_registry import ResolvedPrompt
 
 
+def _agent_factory_for(agent):
+    """A factory the runtime can call to obtain this test's fake agent."""
+
+    async def build(**_kwargs):
+        return agent
+
+    return build
+
+
 class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
     @staticmethod
     @asynccontextmanager
     async def _trace_context(trace_id: str | None):
         yield trace_id
+
+    @staticmethod
+    async def _drive(stream, completion_event: asyncio.Event) -> list[dict]:
+        """Consume a runtime stream, completing the handshake as the service does."""
+        events: list[dict] = []
+        async for event in stream:
+            events.append(event)
+            if event["type"] == "metadata":
+                completion_event.set()
+        return events
 
     @staticmethod
     def _chunk(
@@ -83,21 +102,19 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         mock_langfuse_request_trace.side_effect = lambda **_kwargs: self._trace_context(
             None
         )
-        with (
-            patch(
-                "src.agents.runtime.react_agent.resolve_prompt_bundle_async",
-                resolve_prompts,
-            ),
-            patch("src.agents.runtime.react_agent.agent_factory", build_agent),
+        with patch(
+            "src.agents.runtime.react_agent.resolve_prompt_bundle_async",
+            resolve_prompts,
         ):
-            runtime = AgentRuntime()
+            runtime = AgentRuntime(agent_factory=build_agent)
 
             async def collect() -> list[str]:
-                return [
-                    event["text"]
-                    async for event in runtime.astream("question")
-                    if event["type"] == "token"
-                ]
+                completion_event = asyncio.Event()
+                events = await self._drive(
+                    runtime.astream("question", completion_event=completion_event),
+                    completion_event,
+                )
+                return [event["text"] for event in events if event["type"] == "token"]
 
             first, second = await asyncio.gather(collect(), collect())
 
@@ -135,18 +152,20 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         mock_langfuse_trace_url.return_value = (
             "https://cloud.langfuse.com/project/p/traces/trace-123"
         )
-        runtime = AgentRuntime(agent=fake_agent)
+        runtime = AgentRuntime(agent_factory=_agent_factory_for(fake_agent))
         latency = MagicMock()
+        completion_event = asyncio.Event()
 
-        events = [
-            event
-            async for event in runtime.astream(
+        events = await self._drive(
+            runtime.astream(
                 "list 3 data engineer jobs",
                 session_id="session-1",
                 user_id="user-1",
                 observation=latency,
-            )
-        ]
+                completion_event=completion_event,
+            ),
+            completion_event,
+        )
 
         self.assertEqual(
             events,
@@ -172,7 +191,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             prompts=ANY,
         )
         mock_langfuse_trace_url.assert_called_once_with(trace_id="trace-123")
-        latency.complete.assert_called_once_with("success")
+        # The service owns the observation's completion; the runtime only
+        # attaches the trace to it.
+        latency.complete.assert_not_called()
 
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
@@ -194,17 +215,21 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         fake_agent = AsyncMock()
         fake_agent.astream = _fake_stream
         latency = MagicMock()
-        runtime = AgentRuntime(agent=fake_agent)
+        runtime = AgentRuntime(agent_factory=_agent_factory_for(fake_agent))
+        completion_event = asyncio.Event()
 
-        events = [
-            event async for event in runtime.astream("hello", observation=latency)
-        ]
+        events = await self._drive(
+            runtime.astream(
+                "hello", observation=latency, completion_event=completion_event
+            ),
+            completion_event,
+        )
 
         self.assertEqual(
             events, [{"type": "metadata", "trace_id": None, "trace_url": None}]
         )
         latency.mark_user_visible.assert_not_called()
-        latency.complete.assert_called_once_with("success")
+        latency.complete.assert_not_called()
 
     @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
     async def test_streaming_never_calls_the_langfuse_client(
@@ -238,7 +263,8 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         propagate = MagicMock()
         propagate.return_value.__enter__.return_value = None
         propagate.return_value.__exit__.return_value = None
-        runtime = AgentRuntime(agent=fake_agent)
+        runtime = AgentRuntime(agent_factory=_agent_factory_for(fake_agent))
+        completion_event = asyncio.Event()
 
         with (
             patch(
@@ -253,7 +279,10 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             patch("src.agents.tracing.langfuse.propagate_attributes", propagate),
             patch("src.agents.tracing.langfuse._project_id", None),
         ):
-            events = [event async for event in runtime.astream("hello")]
+            events = await self._drive(
+                runtime.astream("hello", completion_event=completion_event),
+                completion_event,
+            )
 
         self.assertEqual(
             events,
@@ -294,7 +323,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         fake_agent.astream = _fake_stream
         mock_build_langfuse_config.return_value = {"callbacks": ["handler"]}
         mock_langfuse_request_trace.side_effect = _request_trace
-        runtime = AgentRuntime(agent=fake_agent)
+        runtime = AgentRuntime(agent_factory=_agent_factory_for(fake_agent))
 
         events = [
             event async for event in stream_agent_response("hello", runtime=runtime)
@@ -306,14 +335,15 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
 
     @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
-    async def test_astream_disconnect_completes_the_observation_without_flushing(
+    async def test_astream_disconnect_does_no_client_io(
         self,
         _mock_build_langfuse_config,
     ) -> None:
-        """Closing the stream mid-flight ends the span as cancelled, with no client I/O.
+        """Closing the stream mid-flight does no client I/O.
 
         The flush that used to drain the trace on disconnect is gone (#699); the
-        client is rigged to raise if `flush` is called.
+        client is rigged to raise if `flush` is called. The service owns the
+        observation's completion, so the runtime leaves it to the service.
         """
 
         async def _fake_stream(*_args, **_kwargs):
@@ -333,8 +363,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         propagate = MagicMock()
         propagate.return_value.__enter__.return_value = None
         propagate.return_value.__exit__.return_value = None
-        runtime = AgentRuntime(agent=fake_agent)
+        runtime = AgentRuntime(agent_factory=_agent_factory_for(fake_agent))
         latency = MagicMock()
+        completion_event = asyncio.Event()
 
         with (
             patch(
@@ -349,15 +380,21 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             patch("src.agents.tracing.langfuse.propagate_attributes", propagate),
         ):
             stream = runtime.astream(
-                "disconnect", session_id="session-disconnect", observation=latency
+                "disconnect",
+                session_id="session-disconnect",
+                observation=latency,
+                completion_event=completion_event,
             )
             self.assertEqual(
                 await anext(stream), {"type": "token", "text": "first token"}
             )
+            # The service sets the handshake before the client leaves, so the
+            # runtime's cleanup can finish.
+            completion_event.set()
             await stream.aclose()
 
         client.flush.assert_not_called()
-        latency.complete.assert_called_once_with("cancelled")
+        latency.complete.assert_not_called()
 
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config")
@@ -387,9 +424,15 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         fake_agent.astream = _fake_stream
         mock_build_langfuse_config.return_value = {}
         mock_langfuse_request_trace.return_value = self._trace_context(None)
-        runtime = AgentRuntime(agent=fake_agent)
+        runtime = AgentRuntime(agent_factory=_agent_factory_for(fake_agent))
+        completion_event = asyncio.Event()
 
-        events = [event async for event in runtime.astream("list 3 data engineer jobs")]
+        events = await self._drive(
+            runtime.astream(
+                "list 3 data engineer jobs", completion_event=completion_event
+            ),
+            completion_event,
+        )
         streamed_text = "".join(
             event["text"] for event in events if event["type"] == "token"
         )
@@ -440,10 +483,16 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         mock_langfuse_trace_url.side_effect = lambda *, trace_id: (
             f"https://traces/{trace_id}"
         )
-        runtime = AgentRuntime(agent=fake_agent)
+        runtime = AgentRuntime(agent_factory=_agent_factory_for(fake_agent))
 
-        async def _collect(query: str) -> dict[str, str | None]:
-            events = [event async for event in runtime.astream(query, session_id=query)]
+        async def _collect(query: str) -> dict:
+            completion_event = asyncio.Event()
+            events = await self._drive(
+                runtime.astream(
+                    query, session_id=query, completion_event=completion_event
+                ),
+                completion_event,
+            )
             return events[-1]
 
         first, second = await asyncio.gather(_collect("first"), _collect("second"))
@@ -485,10 +534,16 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         fake_agent.astream = _fake_stream
         mock_build_langfuse_config.return_value = {"callbacks": ["handler"]}
         mock_langfuse_request_trace.side_effect = _request_trace
-        runtime = AgentRuntime(agent=fake_agent)
+        runtime = AgentRuntime(agent_factory=_agent_factory_for(fake_agent))
+        completion_event = asyncio.Event()
 
-        stream = runtime.astream("disconnect", session_id="session-disconnect")
+        stream = runtime.astream(
+            "disconnect",
+            session_id="session-disconnect",
+            completion_event=completion_event,
+        )
         self.assertEqual(await anext(stream), {"type": "token", "text": "first token"})
+        completion_event.set()
         await stream.aclose()
 
         self.assertTrue(producer_cancelled.is_set())

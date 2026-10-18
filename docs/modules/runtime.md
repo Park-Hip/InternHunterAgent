@@ -183,7 +183,7 @@ flowchart TD
 The span's completion is recorded on the service's side of `done`, and the turn does no Langfuse I/O after that (#699).
 The trace URL is composed from the project id resolved once at startup, and export is left to the SDK's background span processor; the process drains whatever is left through `shutdown_langfuse` at shutdown.
 
-`astream` also has a second mode, used only by tests, in which `completion_event` is omitted and the runtime completes the observation itself (#678 removes it).
+The handshake is the only way to drive `astream`: `completion_event` is required, and the runtime never completes an observation itself.
 
 ## 5. Memory: what is stored, and what the model sees
 
@@ -310,14 +310,12 @@ Each item was found while preparing this guide and is tracked by an issue.
 
 1. **Thread storage has no bound** (#673).
    Removing compaction (#672) left the 6-turn trim as the only memory bound, which limits what the model sees but not what is stored; retention deletes old threads.
-2. **Test-only surface in the runtime** (#678).
-   The second mode of `astream`, the `agent=` injection, and two wrappers go; the tool middleware's holder reset moves into a `finally`.
-3. **Untyped events** (#679).
+2. **Untyped events** (#679).
    The event models move into the agents package, the API imports them for its schema, and internal signals get their own types.
-4. **The runtime imports tracing directly.**
+3. **The runtime imports tracing directly.**
    Not decided here: the tracing guide (row 6) decides whether the runtime goes behind a port like the service.
 
-The order is #678, then #679, which edit the same code in that order; #673 is independent.
+The next change in the same code is #679; #673 is independent.
 The follow-up in the same area is #706 (the count as the model reads it, row 5).
 
 ## 9. Changing it safely

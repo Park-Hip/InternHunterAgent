@@ -6,6 +6,7 @@ These assert the three things that matter and are easy to get wrong:
    returns the handler's result untouched.
 2. A failing tool still reports, and still propagates unchanged.
 3. Arguments are bounded, because they reach the browser.
+4. A failed call leaves no result holder bound behind it.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ from src.agents.runtime.tool_events import (
     MAX_ARGUMENTS,
     emit_tool_event,
     format_arguments,
+    publish_tool_result,
+    published_facts,
 )
 
 
@@ -83,6 +86,24 @@ class ToolObservationMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(raised.exception, boom, "the original exception must propagate")
         self.assertEqual([e["status"] for e in self.collector.events], ["running", "error"])
         self.assertIn("tool exploded", self.collector.events[1]["error"])
+
+    async def test_a_failing_tool_leaves_no_result_holder_bound(self) -> None:
+        """A released holder, so nothing later in this context reads stale facts."""
+
+        async def handler(_request):
+            raise RuntimeError("tool exploded")
+
+        middleware = ToolObservationMiddleware()
+        with self.assertRaises(RuntimeError):
+            await middleware.awrap_tool_call(_request("query_clean_jobs", {}), handler)
+
+        # With a leaked binding this publish would land in the failed call's
+        # holder and be readable here.
+        publish_tool_result(row_count=5)
+        self.assertIsNone(
+            published_facts(),
+            "a failed call must not leave its result holder bound",
+        )
 
     async def test_no_emitter_bound_is_a_no_op_not_an_error(self) -> None:
         """Telemetry must never be able to break a turn."""

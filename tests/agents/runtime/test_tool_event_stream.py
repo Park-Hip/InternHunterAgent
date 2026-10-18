@@ -11,6 +11,7 @@ No network, no credentials, no database.
 
 from __future__ import annotations
 
+import asyncio
 import unittest
 from unittest.mock import patch
 
@@ -22,6 +23,15 @@ from langchain_core.tools import tool
 
 from src.agents.runtime.middleware import build_tool_observation_middleware
 from src.agents.runtime.react_agent import AgentRuntime
+
+
+def _fixed_agent_factory(agent):
+    """A factory the runtime can call to obtain this test's prebuilt agent."""
+
+    async def build(**_kwargs):
+        return agent
+
+    return build
 
 
 @tool
@@ -96,9 +106,12 @@ class ToolEventStreamTests(unittest.IsolatedAsyncioTestCase):
             tools=[query_clean_jobs],
             middleware=[build_tool_observation_middleware()],
         )
-        runtime = AgentRuntime(agent=agent)
+        runtime = AgentRuntime(agent_factory=_fixed_agent_factory(agent))
+        completion_event = asyncio.Event()
 
-        with patch("src.agents.runtime.react_agent.langfuse_request_trace") as trace, patch(
+        with patch(
+            "src.agents.runtime.react_agent.langfuse_request_trace"
+        ) as trace, patch(
             "src.agents.runtime.react_agent.build_langfuse_config", return_value={}
         ):
             from contextlib import asynccontextmanager
@@ -108,7 +121,14 @@ class ToolEventStreamTests(unittest.IsolatedAsyncioTestCase):
                 yield None
 
             trace.return_value = _null_trace()
-            return [event async for event in runtime.astream("xin chào")]
+            events = []
+            async for event in runtime.astream(
+                "xin chào", completion_event=completion_event
+            ):
+                events.append(event)
+                if event.get("type") == "metadata":
+                    completion_event.set()
+            return events
 
     async def test_tool_lifecycle_reaches_the_stream(self) -> None:
         events = await self._collect()

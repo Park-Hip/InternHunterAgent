@@ -25,8 +25,8 @@ class TrimTurnsMiddleware(AgentMiddleware):
 
     A turn begins with a human message and includes every later message up to the next
     human message. Only the inbound model request is trimmed, leaving stored checkpoint
-    history untouched. Both sync and async hooks are implemented because the runtime
-    drives the agent through ``ainvoke``.
+    history untouched. Both sync and async hooks are implemented so the trim applies
+    however the agent is driven.
     """
 
     def __init__(self, max_turns: int) -> None:
@@ -128,7 +128,8 @@ class ToolObservationMiddleware(AgentMiddleware):
     This observes and reports. It never alters the call, the arguments, the
     result, or the control flow: a failure here degrades to no telemetry rather
     than to a failed turn, because an interface that reports on the agent must
-    not be able to break it.
+    not be able to break it. The per-call result holder is released in a
+    `finally`, so a tool that raises leaves nothing bound behind it.
     """
 
     async def awrap_tool_call(self, request, handler):
@@ -158,19 +159,22 @@ class ToolObservationMiddleware(AgentMiddleware):
                 error=str(error)[:200],
             )
             raise
-        # Fold in whatever the tool published about its own result, so one event
-        # carries both the call and the count.
-        facts = published_facts()
-        await emit_tool_event(
-            name=name,
-            status="ok",
-            call_id=call_id,
-            arguments=arguments,
-            duration_ms=elapsed_ms(started),
-            facts=facts,
-        )
-        reset_result_holder(holder_token)
-        return result
+        else:
+            # Fold in whatever the tool published about its own result, so one
+            # event carries both the call and the count.
+            facts = published_facts()
+            await emit_tool_event(
+                name=name,
+                status="ok",
+                call_id=call_id,
+                arguments=arguments,
+                duration_ms=elapsed_ms(started),
+                facts=facts,
+            )
+            return result
+        finally:
+            # Success and failure alike: the next call gets its own holder.
+            reset_result_holder(holder_token)
 
 
 def build_tool_observation_middleware() -> AgentMiddleware:

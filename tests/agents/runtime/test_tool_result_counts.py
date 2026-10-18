@@ -14,6 +14,7 @@ Two failure modes this guards, both of which would be invisible:
 
 from __future__ import annotations
 
+import asyncio
 import unittest
 from contextlib import ExitStack
 from unittest.mock import patch
@@ -45,7 +46,10 @@ class ToolResultFactsTests(unittest.IsolatedAsyncioTestCase):
 
         from src.agents.runtime.middleware import build_tool_observation_middleware
         from src.agents.runtime.react_agent import AgentRuntime
-        from tests.agents.runtime.test_tool_event_stream import _ScriptedToolCallingModel
+        from tests.agents.runtime.test_tool_event_stream import (
+            _fixed_agent_factory,
+            _ScriptedToolCallingModel,
+        )
 
         @tool
         def counted(question: str) -> str:
@@ -58,7 +62,7 @@ class ToolResultFactsTests(unittest.IsolatedAsyncioTestCase):
             tools=[counted],
             middleware=[build_tool_observation_middleware()],
         )
-        runtime = AgentRuntime(agent=agent)
+        runtime = AgentRuntime(agent_factory=_fixed_agent_factory(agent))
 
         collector = _Collector()
         token = bind_tool_event_emitter(collector)
@@ -75,7 +79,14 @@ class ToolResultFactsTests(unittest.IsolatedAsyncioTestCase):
                     yield None
 
                 trace.return_value = _null_trace()
-                events = [e async for e in runtime.astream("xin chào")]
+                completion_event = asyncio.Event()
+                events = []
+                async for event in runtime.astream(
+                    "xin chào", completion_event=completion_event
+                ):
+                    events.append(event)
+                    if event.get("type") == "metadata":
+                        completion_event.set()
         finally:
             reset_tool_event_emitter(token)
 

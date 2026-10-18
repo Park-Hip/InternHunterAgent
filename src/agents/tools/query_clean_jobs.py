@@ -35,11 +35,12 @@ from src.services.query.executor import (
     UndefinedColumnError,
     execute_validated_sql,
 )
-from src.services.query.models import QueryRefusal, QueryToolResult
+from src.services.query.models import QueryRefusal, QueryToolResult, TableArtifact
 from src.services.query.obligations import (
     detect_obligations,
     filter_enabled_obligations,
 )
+from src.services.query.result_shape import classify_result_shape, counted_total
 from src.services.query.row_bound import resolve_bounds
 from src.services.query.sql_validator import validate_sql
 from src.services.query.table_formatter import format_rows, render_tool_result
@@ -136,6 +137,30 @@ def _ambient_langchain_config() -> RunnableConfig | None:
     return {"callbacks": callbacks}
 
 
+def _publish_result_facts(sql: str, table: TableArtifact) -> None:
+    # A comment rather than a docstring, because every function docstring in a
+    # tool module is a model-visible string under the prompt-surface inventory.
+    #
+    # Publish what this tool knows about its result, and nothing it does not. The
+    # result table is a list of matches only when its rows are matches. A count
+    # query's single row holds the total, so publish that total; any other
+    # summary publishes no count, so the interface cannot state a figure the
+    # answer does not (#677).
+    #
+    # The row count of a listing survives only inside a sentence once the table
+    # is rendered for the model, so it is published as a fact too, letting the
+    # interface show the real number instead of leaving the reader to infer it
+    # from prose.
+    shape = classify_result_shape(sql)
+    if shape == "match_count":
+        publish_tool_result(row_count=counted_total(table), truncated=False)
+    elif shape == "rows":
+        publish_tool_result(row_count=table.row_count, truncated=table.truncated)
+    else:
+        # Absent, not zero: the query ran, but it has no match count to state.
+        publish_tool_result(row_count=None)
+
+
 async def run_query_clean_jobs(question: str) -> str:
     """Return safe Vietnamese clean_jobs search results for one question."""
     sql = await generate_sql(question)
@@ -171,10 +196,7 @@ async def run_query_clean_jobs(question: str) -> str:
         return "Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau."
 
     table = format_rows(rows, bounds.display_cap)
-    # The row count survives only inside a sentence once the table is rendered for
-    # the model. Publish it as a fact too, so the interface can show the real number
-    # instead of leaving the reader to infer it from prose.
-    publish_tool_result(row_count=table.row_count, truncated=table.truncated)
+    _publish_result_facts(validation.sql, table)
     obligations = filter_enabled_obligations(detect_obligations(validation.sql, table))
     return render_tool_result(
         QueryToolResult(table=table, obligations=obligations),

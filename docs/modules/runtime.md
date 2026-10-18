@@ -278,8 +278,8 @@ The web client and the eval driver do not use the route; the API contract keeps 
    The web UI cannot trigger this: the composer is locked during a turn, and each page has its own session.
    An API client can, and that is recorded as a known limit (section 8).
 6. **Every completed stream is logged as a client disconnect** (#674), and a first turn's disconnect carries `session_id: null`, because the log names the request's id, not the one the service minted.
-7. **The tool card's count is the number of result rows.**
-   A count query returns one row, so the card reads "1 kết quả" while the answer says 11 (#677).
+7. **The tool card's count is a number of matching records, and only when one exists.**
+   A count query publishes the number it counted, so the card and the answer agree; every other aggregate result, such as an average or a per-group count, publishes no count at all and the card shows only the duration (#677).
 8. **The heartbeat is not an event.**
    `: ping` is an SSE comment, so clients and the event order never see it (ADR-0050).
 
@@ -317,7 +317,7 @@ Each item was found while preparing this guide and is tracked by an issue.
    Not decided here: the tracing guide (row 6) decides whether the runtime goes behind a port like the service.
 
 The order is #678, then #679, which edit the same code in that order; #673 is independent.
-The user-facing follow-ups are #677 (the tool card's count, row 5).
+The follow-up in the same area is #706 (the count as the model reads it, row 5).
 
 ## 9. Changing it safely
 

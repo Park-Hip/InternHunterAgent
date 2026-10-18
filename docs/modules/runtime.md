@@ -26,6 +26,7 @@ It does not own what the prompts say (row 4 of #617), what the tools do (row 5),
 **What it owns.**
 
 - The six public stream events and their order: `session` first, `done` last, always.
+- The typed event contract: the six public models in `src/agents/models.py`, which the runtime and the service yield and the API publishes as `STREAM_EVENT_SCHEMA` (#679).
 - The 120 s turn deadline (ADR-0048) and the empty-answer fallback.
 - Mapping a failure to `provider_busy` or `internal_error`; the classification itself is described in [the model config guide](model-config.md), section 5.
 - Compiling one agent per system prompt version and caching it.
@@ -76,8 +77,6 @@ flowchart TD
 1. The runtime calls four functions from `src/agents/tracing/langfuse.py`, while the service reaches tracing only through the vendor-neutral `StreamObservation` port.
    Whether the runtime should sit behind a port too is decided in the tracing guide (row 6).
 2. The route imports `src.agents.tracing.stream` for its no-op default observation.
-3. Events are untyped dicts.
-   The typed public models already exist in `src/api/schemas.py`, but the service and runtime cannot import from the API layer, so they build dicts and need a `cast` at each internal boundary (#679).
 
 ## 3. One turn, measured
 
@@ -136,7 +135,7 @@ A listing question costs more: in one run on `778becc`, "Liệt kê chi tiết t
 
 A successful turn is `session`, any `tool` and `token` events, `metadata`, `done`.
 A failed turn is `session`, whatever arrived before the failure, `error`, `done`.
-The published schema is `STREAM_EVENT_SCHEMA` in `src/api/schemas.py`; [the architecture document](../architecture.md), section 4.2, records why SSE and why `session` comes first.
+The published schema is `STREAM_EVENT_SCHEMA` in `src/api/schemas.py`, built from the models in `src/agents/models.py`; [the architecture document](../architecture.md), section 4.2, records why SSE and why `session` comes first.
 
 **The answer-only filter.**
 The runtime streams with `stream_mode="messages"` and keeps a chunk only if it comes from the `model` node, has non-empty string content, and carries no tool-call chunks.
@@ -156,7 +155,7 @@ flowchart TD
         P["Producer task<br/>agent.astream, messages mode,<br/>answer-only filter"]
         M["ToolObservationMiddleware<br/>through the ContextVar emitter"]
         Q1[("events<br/>size 1")]
-        P -->|"token, complete,<br/>exception"| Q1
+        P -->|"token, RuntimeCompleted,<br/>RuntimeFailed"| Q1
         M -->|"tool"| Q1
     end
     subgraph SERVICE["Service: stream_agent_response"]
@@ -174,6 +173,7 @@ flowchart TD
 | Part | Why it exists | What breaks without it |
 |---|---|---|
 | Producer task and queue in the runtime | Tool events come from middleware deep inside the graph, while tokens come from the stream; both must reach the user in real time and in order | Tool cards would arrive after the answer |
+| Internal signals (`RuntimeCompleted`, `RuntimeFailed`) | The producer's end-of-stream marker and its failure channel share the queue with tokens so a turn stays in one order, but they are not public events: the service consumes them and never forwards one | A finished turn and a failed one would look the same to the service, and a failure would have to be smuggled into a public frame (#679) |
 | `ContextVar` emitter (`bind_tool_event_emitter`) | The compiled agent is cached and shared across turns, so its middleware cannot hold per-turn state; the binding is copied into the producer task when it is created | A concurrent turn could receive another turn's tool events |
 | Result holder (`ToolResultFacts`) | A tool may run in a copied context, where a `ContextVar` rebinding is invisible to the middleware; a shared mutable holder survives that | The tool card would lose its `row_count` |
 | Consume task and queue in the service | The deadline waits on a queue, not on the generator; cancelling a wait on a queue is safe, cancelling an async generator mid-step is not | An expired deadline could hang in generator cleanup, which ADR-0048 forbids |
@@ -246,7 +246,7 @@ The last column is the one that matters: does the conversation still work afterw
 
 **How each path ends.**
 
-- **Error.** An exception in the producer becomes an internal `runtime_error` event; the runtime then waits on the completion handshake while the service maps the exception, yields `error` and `done`, and skips `metadata`.
+- **Error.** An exception in the producer becomes an internal `RuntimeFailed` signal, which the service consumes and never forwards; the runtime then waits on the completion handshake while the service classifies the exception, yields `error` and `done`, and skips `metadata`.
 - **Deadline.** The service waits for each event with `asyncio.wait_for` and the time left.
   On expiry it cancels the runtime task and detaches it instead of awaiting its cleanup, then yields `provider_busy` and `done`.
   The deadline can also pass while the route is suspended at a `yield`, that is, while it is still sending the previous event, which a slow consumer makes likelier.
@@ -295,6 +295,8 @@ The web client and the eval driver do not use the route; the API contract keeps 
   The route can change transport and the runtime can change framework without touching the service, and the service's deadline and error policy are tested with a fake runtime.
 - **One serving path** (#689).
   `/chat` folds the stream instead of reimplementing it, so the deadline, the fallback, and the error mapping exist once; the JSON body is a view of the same events.
+- **Typed events end to end** (#679).
+  The six public models live in `src/agents/models.py`, the runtime and the service yield them, and the route serialises them, so no layer builds its own dict and mypy checks the stream from the producer to the frame.
 - **`session` first.**
   The client pins the conversation before the agent runs, at the cost that every failure after it must be in-band, since the 200 is already sent.
 - **Tasks and queues instead of cancelling the generator** (section 4, ADR-0048).
@@ -313,20 +315,17 @@ The web client and the eval driver do not use the route; the API contract keeps 
 **Would now be decided differently.**
 Each item was found while preparing this guide and is tracked by an issue.
 
-1. **Untyped events** (#679).
-   The event models move into the agents package, the API imports them for its schema, and internal signals get their own types.
-2. **The runtime imports tracing directly.**
+1. **The runtime imports tracing directly.**
    Not decided here: the tracing guide (row 6) decides whether the runtime goes behind a port like the service.
 
-The next change in the same code is #679.
-The follow-up in the same area is #706 (the count as the model reads it, row 5).
+#706 (the count as the model reads it, row 5) is the remaining item in this area.
 
 ## 9. Changing it safely
 
 **Add or change a stream event.**
 The SSE wire format is a public contract: event names, payload fields including `type`, and order.
-Change `src/api/schemas.py` (`StreamEvent`), the service or runtime that emits it, and `src/api/static/app.js` together, and extend `tests/api/test_stream.py`, whose schema tests check every frame against `STREAM_EVENT_SCHEMA`.
-A new internal signal must never reach the route: an `error` event may carry extra keys its consumers need, such as the `status_code` the JSON route maps to an HTTP status, but the route rebuilds the payload from `StreamErrorEvent` before writing the frame (#689).
+Change `src/agents/models.py` (the six models and the `StreamEvent` union), the service or runtime that emits it, and `src/api/static/app.js` together, and extend `tests/api/test_stream.py`, whose schema tests check every frame against `STREAM_EVENT_SCHEMA` and whose recorded-turn test pins the frames a real turn writes.
+A new internal signal must never reach the route: an internal event may carry extra fields its consumers need, such as the `status_code` the JSON route maps to an HTTP status, but the route writes the public projection (`InternalStreamError.as_public_event()`) before encoding the frame (#689).
 
 **Add a middleware.**
 Order matters: `agent_factory` lists interrupted-tool-call repair, then trimming, then tool observation, which stays innermost so it reports the call as actually issued.
@@ -362,6 +361,7 @@ Run `uv run pytest tests/agents tests/api`, then stop a turn in the web UI while
 | `src/core/checkpointer.py` → `build_checkpointer` | Where memory is stored |
 | `src/core/errors.py` → `classify_provider_busy_error`, `BUSY_MESSAGE`, `GENERIC_ERROR_MESSAGE` | What a failure becomes |
 | `src/agents/tracing/stream.py` → `StreamObservation` | The service's only view of tracing |
-| `src/api/schemas.py` → `StreamEvent`, `STREAM_EVENT_SCHEMA` | The published event contract |
+| `src/agents/models.py` → `StreamEvent`, `RuntimeCompleted`, `RuntimeFailed` | The six public event models, the union the API publishes, and the internal signals |
+| `src/api/schemas.py` → `STREAM_EVENT_SCHEMA` | The published event contract, built from that union |
 | `tests/agents/test_service.py`, `tests/agents/runtime/test_react_agent.py`, `tests/agents/runtime/test_tool_event_stream.py`, `tests/api/test_stream.py`, `tests/api/test_stream_disconnect.py`, `tests/api/test_conversation.py` | The behaviour pinned by tests |
 | [ADR-0048](../decisions/adr-0048-streamed-agent-turn-serving-deadline.md), [ADR-0049](../decisions/adr-0049-cancel-streamed-generation-on-client-disconnect.md), [ADR-0050](../decisions/adr-0050-sse-comments-keep-silent-streams-alive.md) | Why the deadline, the disconnect cancellation, and the heartbeat |

@@ -1,17 +1,22 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import cast
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from starlette.types import Receive
 
+from src.agents.models import (
+    InternalStreamError,
+    StreamDoneEvent,
+    StreamEvent,
+    StreamSessionEvent,
+)
 from src.api.schemas import (
     STREAM_EVENT_SCHEMA,
     QueryRequest,
     QueryResponse,
-    StreamErrorEvent,
 )
 from src.core.errors import (
     BUSY_MESSAGE,
@@ -22,7 +27,6 @@ from src.core.errors import (
 from src.core.config import settings
 from src.core.logger import logger
 from src.agents.service import (
-    StreamEventPayload,
     collect_agent_response,
     stream_agent_response,
 )
@@ -169,31 +173,22 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
                 if isinstance(item, str):
                     yield item
                     continue
-                event_type = item["type"]
-                if event_type == "session":
-                    session_id = cast(str, item["session_id"])
-                # The payload must carry `type`, not drop it. The published
-                # STREAM_EVENT_SCHEMA is a union discriminated on `type`, so every
-                # variant lists it as required; a client that builds a validator from
-                # /openapi.json rejects a frame without it. The SSE `event:` line
-                # stays the authoritative name, so this is additive for readers that
-                # already parse by key.
-                data = dict(item)
-                if event_type == "error":
-                    # The service's error event may carry internal-only keys,
-                    # such as the status code the collected JSON path reads
-                    # (#689). Only the published StreamErrorEvent fields cross
-                    # the wire.
-                    data = StreamErrorEvent(
-                        **{
-                            key: value
-                            for key, value in data.items()
-                            if key in StreamErrorEvent.model_fields
-                        }
-                    ).model_dump()
-                if event_type == "done":
+                if isinstance(item, StreamSessionEvent):
+                    session_id = item.session_id
+                if isinstance(item, StreamDoneEvent):
                     done_emitted = True
-                yield _server_sent_event(event=event_type, data=data)
+                # Every public frame carries `type`, including the terminal ones.
+                # The published STREAM_EVENT_SCHEMA is a union discriminated on
+                # `type`, so every variant lists it as required; a client that
+                # builds a validator from /openapi.json rejects a frame without it.
+                # The SSE `event:` line stays the authoritative name, so this is
+                # additive for readers that already parse by key.
+                frame = (
+                    item.as_public_event()
+                    if isinstance(item, InternalStreamError)
+                    else item
+                )
+                yield _server_sent_event(event=frame.type, data=frame.model_dump())
         finally:
             await stream.aclose()
 
@@ -204,21 +199,19 @@ async def stream_query_agent(payload: QueryRequest, request: Request):
     )
 
 
-async def _next_stream_event(
-    events: AsyncIterator[StreamEventPayload],
-) -> StreamEventPayload:
+async def _next_stream_event(events: AsyncIterator[StreamEvent]) -> StreamEvent:
     return await events.__anext__()
 
 
 async def _with_heartbeats(
-    events: AsyncIterator[StreamEventPayload],
+    events: AsyncIterator[StreamEvent],
     *,
     heartbeat_seconds: float,
     is_disconnected: Callable[[], Awaitable[bool]] | None = None,
     on_disconnect: Callable[[], None] | None = None,
-) -> AsyncIterator[StreamEventPayload | str]:
+) -> AsyncIterator[StreamEvent | str]:
     """Pass events through while polling disconnects and commenting during idle periods."""
-    next_event: asyncio.Task[StreamEventPayload] | None = None
+    next_event: asyncio.Task[StreamEvent] | None = None
     try:
         while True:
             if is_disconnected is not None and await is_disconnected():
@@ -257,7 +250,7 @@ async def _with_heartbeats(
             await asyncio.gather(next_event, return_exceptions=True)
 
 
-def _server_sent_event(*, event: str, data: StreamEventPayload) -> str:
+def _server_sent_event(*, event: str, data: dict[str, Any]) -> str:
     payload = ServerSentEvent(event=event, data=data)
     encoded_data = json.dumps(payload.data)
     return f"event: {payload.event}\ndata: {encoded_data}\n\n"

@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
+from src.agents.models import StreamMetadataEvent, StreamTokenEvent
 from src.api.app import create_app
 from src.api.routes.query import stream_query_agent
 from src.api.schemas import QueryRequest
@@ -50,7 +51,7 @@ class StreamDisconnectTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.Event().wait()
             finally:
                 producer_cancelled.set()
-            yield {"type": "token", "text": "unreachable"}
+            yield StreamTokenEvent(type="token", text="unreachable")
 
         runtime = MagicMock()
         runtime.astream.side_effect = slow_stream
@@ -105,7 +106,7 @@ class StreamDisconnectTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.Event().wait()
             finally:
                 producer_cancelled.set()
-            yield {"type": "token", "text": "unreachable"}
+            yield StreamTokenEvent(type="token", text="unreachable")
 
         runtime = MagicMock()
         runtime.astream.side_effect = slow_stream
@@ -156,8 +157,8 @@ class CompletedStreamDisconnectTests(unittest.TestCase):
         app.state.runtime = AsyncMock()
 
         async def _fake_astream(**_kwargs):
-            yield {"type": "token", "text": "There are 3 roles."}
-            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+            yield StreamTokenEvent(type="token", text="There are 3 roles.")
+            yield StreamMetadataEvent(type="metadata", trace_id=None, trace_url=None)
 
         app.state.runtime.astream = _fake_astream
 

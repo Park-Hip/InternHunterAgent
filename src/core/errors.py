@@ -1,3 +1,6 @@
+from typing import Literal
+
+
 class InvalidQueryError(ValueError):
     """Raised when the client sends input that cannot be processed (4xx)."""
 
@@ -8,9 +11,12 @@ GENERIC_ERROR_MESSAGE = "Hiện chưa thể hoàn tất yêu cầu này. Vui lò
 # Stable machine-readable values for in-band streaming failures. The messages
 # above remain the only human-facing error text at the public boundary, and the
 # server owns them like every other user-facing string: the client renders
-# `message` verbatim in Vietnamese (ADR-0061).
-PROVIDER_BUSY_ERROR_CODE = "provider_busy"
-INTERNAL_ERROR_CODE = "internal_error"
+# `message` verbatim in Vietnamese (ADR-0061). The literals are the same ones
+# the `error` stream event accepts, so a mistyped code is a type error rather
+# than a frame no client can classify (#679).
+ErrorCode = Literal["provider_busy", "internal_error"]
+PROVIDER_BUSY_ERROR_CODE: ErrorCode = "provider_busy"
+INTERNAL_ERROR_CODE: ErrorCode = "internal_error"
 
 
 class AgentTurnDeadlineExceededError(TimeoutError):
@@ -22,7 +28,7 @@ class ProviderBusyError(RuntimeError):
 
     def __init__(self, *, status_code: int = 503) -> None:
         self.status_code = status_code
-        self.code = PROVIDER_BUSY_ERROR_CODE
+        self.code: ErrorCode = PROVIDER_BUSY_ERROR_CODE
         self.retryable = True
         super().__init__(BUSY_MESSAGE)
 

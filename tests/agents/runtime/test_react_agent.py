@@ -7,6 +7,11 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
+from src.agents.models import (
+    RuntimeOutput,
+    StreamMetadataEvent,
+    StreamTokenEvent,
+)
 from src.agents.runtime.prompts import ResolvedPromptBundle
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.service import stream_agent_response
@@ -29,12 +34,14 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         yield trace_id
 
     @staticmethod
-    async def _drive(stream, completion_event: asyncio.Event) -> list[dict]:
+    async def _drive(
+        stream, completion_event: asyncio.Event
+    ) -> list[RuntimeOutput]:
         """Consume a runtime stream, completing the handshake as the service does."""
-        events: list[dict] = []
+        events: list[RuntimeOutput] = []
         async for event in stream:
             events.append(event)
-            if event["type"] == "metadata":
+            if isinstance(event, StreamMetadataEvent):
                 completion_event.set()
         return events
 
@@ -114,7 +121,11 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
                     runtime.astream("question", completion_event=completion_event),
                     completion_event,
                 )
-                return [event["text"] for event in events if event["type"] == "token"]
+                return [
+                    event.text
+                    for event in events
+                    if isinstance(event, StreamTokenEvent)
+                ]
 
             first, second = await asyncio.gather(collect(), collect())
 
@@ -168,7 +179,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(
-            events,
+            [event.model_dump() for event in events],
             [
                 {"type": "token", "text": "There are "},
                 {"type": "token", "text": "3 roles."},
@@ -226,7 +237,8 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(
-            events, [{"type": "metadata", "trace_id": None, "trace_url": None}]
+            [event.model_dump() for event in events],
+            [{"type": "metadata", "trace_id": None, "trace_url": None}],
         )
         latency.mark_user_visible.assert_not_called()
         latency.complete.assert_not_called()
@@ -285,7 +297,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(
-            events,
+            [event.model_dump() for event in events],
             [
                 {"type": "token", "text": "answer"},
                 {"type": "metadata", "trace_id": "trace-699", "trace_url": None},
@@ -330,9 +342,45 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         ]
 
         self.assertEqual(
-            [event["type"] for event in events],
+            [event.type for event in events],
             ["session", "token", "token", "metadata", "done"],
         )
+
+    @patch("src.agents.runtime.react_agent.langfuse_trace_url")
+    @patch("src.agents.runtime.react_agent.langfuse_request_trace")
+    @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
+    async def test_astream_surfaces_a_post_loop_failure_without_the_service_signal(
+        self,
+        _mock_build_langfuse_config,
+        mock_langfuse_request_trace,
+        mock_langfuse_trace_url,
+    ) -> None:
+        """A failure after the last token never waits for the completion signal.
+
+        The service sets that signal only after it has read the failure, so a
+        runtime that waited for it here would hold the turn open until the
+        serving deadline and report a provider outage instead of the fault.
+        """
+        mock_langfuse_request_trace.return_value = self._trace_context("trace-stream")
+        mock_langfuse_trace_url.side_effect = RuntimeError("trace lookup failed")
+
+        async def _fake_stream(*_args, **_kwargs):
+            yield (self._chunk(content="answer"), {"langgraph_node": "model"})
+
+        fake_agent = AsyncMock()
+        fake_agent.astream = _fake_stream
+        runtime = AgentRuntime(agent_factory=_agent_factory_for(fake_agent))
+        completion_event = asyncio.Event()
+
+        stream = runtime.astream("hello", completion_event=completion_event)
+        self.assertEqual(
+            await anext(stream), StreamTokenEvent(type="token", text="answer")
+        )
+        with self.assertRaises(RuntimeError):
+            await asyncio.wait_for(anext(stream), timeout=1.0)
+
+        # The handshake stays unset: only the failing lookup can end this turn.
+        self.assertFalse(completion_event.is_set())
 
     @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
     async def test_astream_disconnect_does_no_client_io(
@@ -386,7 +434,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 completion_event=completion_event,
             )
             self.assertEqual(
-                await anext(stream), {"type": "token", "text": "first token"}
+                await anext(stream), StreamTokenEvent(type="token", text="first token")
             )
             # The service sets the handshake before the client leaves, so the
             # runtime's cleanup can finish.
@@ -434,7 +482,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             completion_event,
         )
         streamed_text = "".join(
-            event["text"] for event in events if event["type"] == "token"
+            event.text for event in events if isinstance(event, StreamTokenEvent)
         )
 
         self.assertEqual(streamed_text, "There are 3 roles.")
@@ -485,7 +533,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
         runtime = AgentRuntime(agent_factory=_agent_factory_for(fake_agent))
 
-        async def _collect(query: str) -> dict:
+        async def _collect(query: str) -> StreamMetadataEvent:
             completion_event = asyncio.Event()
             events = await self._drive(
                 runtime.astream(
@@ -493,7 +541,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 ),
                 completion_event,
             )
-            return events[-1]
+            last = events[-1]
+            assert isinstance(last, StreamMetadataEvent)
+            return last
 
         first, second = await asyncio.gather(_collect("first"), _collect("second"))
 
@@ -501,10 +551,10 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             observed_contexts, {"first": "trace-first", "second": "trace-second"}
         )
         self.assertEqual(closed_trace_ids, {"trace-first", "trace-second"})
-        self.assertEqual(first["trace_id"], "trace-first")
-        self.assertEqual(second["trace_id"], "trace-second")
-        self.assertEqual(first["trace_url"], "https://traces/trace-first")
-        self.assertEqual(second["trace_url"], "https://traces/trace-second")
+        self.assertEqual(first.trace_id, "trace-first")
+        self.assertEqual(second.trace_id, "trace-second")
+        self.assertEqual(first.trace_url, "https://traces/trace-first")
+        self.assertEqual(second.trace_url, "https://traces/trace-second")
 
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config")
@@ -542,7 +592,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             session_id="session-disconnect",
             completion_event=completion_event,
         )
-        self.assertEqual(await anext(stream), {"type": "token", "text": "first token"})
+        self.assertEqual(
+            await anext(stream), StreamTokenEvent(type="token", text="first token")
+        )
         completion_event.set()
         await stream.aclose()
 

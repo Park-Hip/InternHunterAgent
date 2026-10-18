@@ -21,6 +21,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from langchain_core.tools import tool
 
+from src.agents.models import RuntimeOutput, StreamMetadataEvent, StreamToolEvent
 from src.agents.runtime.middleware import build_tool_observation_middleware
 from src.agents.runtime.react_agent import AgentRuntime
 
@@ -100,7 +101,7 @@ class _ScriptedToolCallingModel(GenericFakeChatModel):
 
 
 class ToolEventStreamTests(unittest.IsolatedAsyncioTestCase):
-    async def _collect(self) -> list[dict]:
+    async def _collect(self) -> list[RuntimeOutput]:
         agent = create_agent(
             model=_ScriptedToolCallingModel(),
             tools=[query_clean_jobs],
@@ -121,33 +122,33 @@ class ToolEventStreamTests(unittest.IsolatedAsyncioTestCase):
                 yield None
 
             trace.return_value = _null_trace()
-            events = []
+            events: list[RuntimeOutput] = []
             async for event in runtime.astream(
                 "xin chào", completion_event=completion_event
             ):
                 events.append(event)
-                if event.get("type") == "metadata":
+                if isinstance(event, StreamMetadataEvent):
                     completion_event.set()
             return events
 
     async def test_tool_lifecycle_reaches_the_stream(self) -> None:
         events = await self._collect()
-        tool_events = [e for e in events if e.get("type") == "tool"]
+        tool_events = [e for e in events if isinstance(e, StreamToolEvent)]
 
         self.assertTrue(tool_events, f"no tool event reached the stream: {events}")
-        self.assertEqual([e["status"] for e in tool_events], ["running", "ok"])
-        self.assertEqual(tool_events[0]["name"], "query_clean_jobs")
-        self.assertEqual(tool_events[0]["call_id"], "call_1")
+        self.assertEqual([e.status for e in tool_events], ["running", "ok"])
+        self.assertEqual(tool_events[0].name, "query_clean_jobs")
+        self.assertEqual(tool_events[0].call_id, "call_1")
         self.assertEqual(
-            tool_events[0]["arguments"], {"question": "AI Engineer ở Đà Nẵng"}
+            tool_events[0].arguments, {"question": "AI Engineer ở Đà Nẵng"}
         )
-        self.assertIsInstance(tool_events[-1]["duration_ms"], int)
+        self.assertIsInstance(tool_events[-1].duration_ms, int)
 
     async def test_tool_events_arrive_before_the_answer(self) -> None:
         """A card is only useful while the agent is still working, so the tool
         event must precede the first token."""
         events = await self._collect()
-        types = [e.get("type") for e in events]
+        types = [e.type for e in events]
         self.assertIn("tool", types)
         self.assertIn("token", types)
         self.assertLess(

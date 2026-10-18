@@ -23,13 +23,15 @@ import time
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
+
+from src.agents.models import StreamToolEvent
 
 #: Arguments reach the browser. Keep them short, flat, and stringly typed.
 MAX_ARGUMENT_LENGTH = 120
 MAX_ARGUMENTS = 6
 
-ToolEventEmitter = Callable[[dict[str, Any]], Awaitable[None]]
+ToolEventEmitter = Callable[[StreamToolEvent], Awaitable[None]]
 ToolEventToken = Token["ToolEventEmitter | None"]
 ResultFactsToken = Token["ToolResultFacts | None"]
 
@@ -123,7 +125,7 @@ def published_facts() -> ToolResultFacts | None:
 async def emit_tool_event(
     *,
     name: str,
-    status: str,
+    status: Literal["running", "ok", "error"],
     call_id: str | None = None,
     arguments: dict[str, str] | None = None,
     duration_ms: int | None = None,
@@ -135,17 +137,17 @@ async def emit_tool_event(
     if emitter is None:
         return
     await emitter(
-        {
-            "type": "tool",
-            "name": name,
-            "status": status,
-            "call_id": call_id,
-            "arguments": arguments or {},
-            "duration_ms": duration_ms,
-            "error": error,
-            "row_count": facts.row_count if facts else None,
-            "truncated": bool(facts.truncated) if facts else False,
-        }
+        StreamToolEvent(
+            type="tool",
+            name=name,
+            status=status,
+            call_id=call_id,
+            arguments=arguments or {},
+            duration_ms=duration_ms,
+            error=error,
+            row_count=facts.row_count if facts else None,
+            truncated=bool(facts.truncated) if facts else False,
+        )
     )
 
 

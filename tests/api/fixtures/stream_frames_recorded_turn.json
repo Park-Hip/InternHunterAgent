@@ -1,0 +1,71 @@
+[
+  [
+    "session",
+    {
+      "type": "session",
+      "session_id": "recorded-turn-session"
+    }
+  ],
+  [
+    "tool",
+    {
+      "type": "tool",
+      "name": "query_clean_jobs",
+      "status": "running",
+      "call_id": "recorded-call-1",
+      "arguments": {
+        "city": "Đà Nẵng",
+        "limit": "10"
+      },
+      "duration_ms": null,
+      "error": null,
+      "row_count": null,
+      "truncated": false
+    }
+  ],
+  [
+    "tool",
+    {
+      "type": "tool",
+      "name": "query_clean_jobs",
+      "status": "ok",
+      "call_id": "recorded-call-1",
+      "arguments": {
+        "city": "Đà Nẵng",
+        "limit": "10"
+      },
+      "duration_ms": 42,
+      "error": null,
+      "row_count": 7,
+      "truncated": false
+    }
+  ],
+  [
+    "token",
+    {
+      "type": "token",
+      "text": "Ở Đà Nẵng hiện có "
+    }
+  ],
+  [
+    "token",
+    {
+      "type": "token",
+      "text": "7 tin tuyển dụng."
+    }
+  ],
+  [
+    "metadata",
+    {
+      "type": "metadata",
+      "trace_id": "recorded-trace-id",
+      "trace_url": "https://cloud.langfuse.com/project/recorded/traces/recorded-trace-id"
+    }
+  ],
+  [
+    "done",
+    {
+      "type": "done"
+    }
+  ]
+]

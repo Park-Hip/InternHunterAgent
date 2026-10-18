@@ -7,6 +7,11 @@ import uuid
 
 from fastapi.testclient import TestClient
 
+from src.agents.models import (
+    StreamEvent,
+    StreamMetadataEvent,
+    StreamTokenEvent,
+)
 from src.api.app import create_app
 from src.core.errors import (
     BUSY_MESSAGE,
@@ -37,11 +42,11 @@ class _ConversationRuntime:
     def __init__(self) -> None:
         self.call_count = 0
         self.calls: list[tuple[str, str, str | None]] = []
-        self._events_per_turn: list[list[dict[str, str | bool | None]]] = []
+        self._events_per_turn: list[list[StreamEvent]] = []
         self._raise_during_turn: bool = False
         self._sensitive_data: str = ""
 
-    def set_turn_events(self, events: list[dict[str, str | bool | None]]) -> None:
+    def set_turn_events(self, events: list[StreamEvent]) -> None:
         self._events_per_turn.append(events)
 
     def set_raise_during_turn(self) -> None:
@@ -71,11 +76,11 @@ class _ConversationRuntime:
                     raise RuntimeError("database password leaked")
             return
         if self.call_count == 1:
-            yield {"type": "token", "text": "First answer"}
-            yield {"type": "metadata", "trace_id": "t-1", "trace_url": None}
+            yield StreamTokenEvent(type="token", text="First answer")
+            yield StreamMetadataEvent(type="metadata", trace_id="t-1", trace_url=None)
         else:
-            yield {"type": "token", "text": "Second answer"}
-            yield {"type": "metadata", "trace_id": "t-2", "trace_url": None}
+            yield StreamTokenEvent(type="token", text="Second answer")
+            yield StreamMetadataEvent(type="metadata", trace_id="t-2", trace_url=None)
 
 
 class TestMultiTurnSessionContinuity(unittest.TestCase):
@@ -159,14 +164,18 @@ class TestMultiTurnTokenFiltering(unittest.TestCase):
         self.runtime.set_sensitive_data("postgresql://admin:secret@localhost/db")
         self.runtime.set_turn_events(
             [
-                {"type": "token", "text": "Here are the Python jobs."},
-                {"type": "metadata", "trace_id": "t-filter-1", "trace_url": None},
+                StreamTokenEvent(type="token", text="Here are the Python jobs."),
+                StreamMetadataEvent(
+                    type="metadata", trace_id="t-filter-1", trace_url=None
+                ),
             ]
         )
         self.runtime.set_turn_events(
             [
-                {"type": "token", "text": "And here are the SQL jobs."},
-                {"type": "metadata", "trace_id": "t-filter-2", "trace_url": None},
+                StreamTokenEvent(type="token", text="And here are the SQL jobs."),
+                StreamMetadataEvent(
+                    type="metadata", trace_id="t-filter-2", trace_url=None
+                ),
             ]
         )
 
@@ -188,7 +197,9 @@ class TestMultiTurnTokenFiltering(unittest.TestCase):
     def test_error_body_does_not_leak_credentials(self) -> None:
         """When an error is raised mid-stream, the error response does not contain credentials."""
         self.runtime.set_sensitive_data("api_key=sk-abc123")
-        self.runtime.set_turn_events([{"type": "token", "text": "Partial answer"}])
+        self.runtime.set_turn_events(
+            [StreamTokenEvent(type="token", text="Partial answer")]
+        )
         self.runtime.set_raise_during_turn()
 
         response = self.client.post(
@@ -215,7 +226,9 @@ class TestMultiTurnErrorBubble(unittest.TestCase):
 
     def test_error_mid_stream_emits_error_then_done(self) -> None:
         """A stream that fails mid-run emits an error event followed by done."""
-        self.runtime.set_turn_events([{"type": "token", "text": "Partial answer"}])
+        self.runtime.set_turn_events(
+            [StreamTokenEvent(type="token", text="Partial answer")]
+        )
         self.runtime.set_raise_during_turn()
 
         response = self.client.post(
@@ -236,7 +249,7 @@ class TestMultiTurnErrorBubble(unittest.TestCase):
         """A normal first turn succeeds; a subsequent turn returns a retryable provider-busy error."""
 
         async def _refusal_astream(**kwargs):
-            yield {"type": "token", "text": "partial"}
+            yield StreamTokenEvent(type="token", text="partial")
             raise RuntimeError("provider quota exhausted")
 
         # First request uses the default runtime (normal response)
@@ -269,14 +282,14 @@ class TestMultiTurnErrorBubble(unittest.TestCase):
         """A stream that yields tokens and metadata across multiple turns terminates with done."""
         self.runtime.set_turn_events(
             [
-                {"type": "token", "text": "First turn answer"},
-                {"type": "metadata", "trace_id": "t-e1", "trace_url": None},
+                StreamTokenEvent(type="token", text="First turn answer"),
+                StreamMetadataEvent(type="metadata", trace_id="t-e1", trace_url=None),
             ]
         )
         self.runtime.set_turn_events(
             [
-                {"type": "token", "text": "Second turn answer"},
-                {"type": "metadata", "trace_id": "t-e2", "trace_url": None},
+                StreamTokenEvent(type="token", text="Second turn answer"),
+                StreamMetadataEvent(type="metadata", trace_id="t-e2", trace_url=None),
             ]
         )
 

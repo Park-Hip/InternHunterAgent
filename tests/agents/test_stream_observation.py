@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.agents.models import StreamTokenEvent
 from src.agents.service import FALLBACK_ANSWER, stream_agent_response
 from src.agents.tracing import langfuse
 
@@ -14,7 +15,7 @@ async def test_langfuse_observation_records_fallback_as_the_first_visible_token(
 ):
     async def empty_stream(**_kwargs):
         if False:  # pragma: no cover - keeps this an async generator
-            yield {}
+            yield StreamTokenEvent(type="token", text="")
 
     client = MagicMock()
     runtime = MagicMock()
@@ -31,7 +32,7 @@ async def test_langfuse_observation_records_fallback_as_the_first_visible_token(
             )
         ]
 
-    assert {"type": "token", "text": FALLBACK_ANSWER} in events
+    assert StreamTokenEvent(type="token", text=FALLBACK_ANSWER) in events
     metadata = client.update_current_span.call_args.kwargs["metadata"]
     assert metadata["user_visible_ttft_ms"] is not None
     assert metadata["outcome"] == "success"

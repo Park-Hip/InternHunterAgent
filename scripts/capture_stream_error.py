@@ -41,6 +41,7 @@ if sys.platform == "win32":
 
 from src.agents.mcp.adapter import list_job_tools  # noqa: E402
 from src.agents.mcp.job_server import create_job_mcp_server  # noqa: E402
+from src.agents.models import InternalStreamError  # noqa: E402
 from src.agents.runtime.react_agent import AgentRuntime  # noqa: E402
 from src.agents.service import stream_agent_response  # noqa: E402
 from src.core.checkpointer import build_checkpointer, build_checkpointer_pool  # noqa: E402
@@ -66,7 +67,14 @@ async def capture(query: str) -> dict[str, Any]:
             runtime=runtime,
             session_id="diagnostic-580",
         ):
-            recorded = dict(event)
+            # The route strips the service's internal status before a frame
+            # reaches a client, so the capture shows the payload a client gets.
+            frame = (
+                event.as_public_event()
+                if isinstance(event, InternalStreamError)
+                else event
+            )
+            recorded = frame.model_dump()
             if recorded.get("type") == "token":
                 recorded["text"] = "<token>"
                 token_count += 1

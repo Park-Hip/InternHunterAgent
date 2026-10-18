@@ -212,7 +212,7 @@ build a tracing client.
 **Service layer** (`src/agents/service.py`).
 The sole caller of the agent runtime.
 Owns request-level orchestration: invoking the runtime, translating runtime and tool failures into a
-safe public response, and shaping the dict the API layer serializes.
+safe public response, and yielding the typed events the API layer serializes.
 It holds no LangChain or database knowledge of its own.
 
 **Agent runtime layer** (`src/agents/runtime/`).
@@ -550,8 +550,8 @@ back into one-shot, silently, while still passing a naive test.
 Each layer keeps its existing responsibility.
 
 - **Runtime** exposes a single streaming method. It drives the agent's streamed extraction
-  and yields small transport-agnostic event dicts, not HTTP or SSE constructs, so the runtime still
-  knows nothing about the wire.
+  and yields the typed stream events from `src/agents/models.py`, not HTTP or SSE constructs, so the
+  runtime still knows nothing about the wire.
 - **Service** gains a streaming sibling that mints the `session_id` up front, passes runtime events
   through, and owns fallback and error *policy*, delivered as yielded events rather than raised
   exceptions.
@@ -614,7 +614,8 @@ in-band error, so it grows an ad-hoc protocol anyway.
 WebSocket is a bidirectional persistent connection and is overkill for a one-directional
 server-to-client token stream.
 
-The event vocabulary:
+The event vocabulary, defined as typed models in `src/agents/models.py` and serialized by the API
+layer:
 
 | Event | Payload | When |
 |---|---|---|

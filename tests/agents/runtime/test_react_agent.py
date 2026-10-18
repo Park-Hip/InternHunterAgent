@@ -45,14 +45,12 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
-    @patch("src.agents.runtime.react_agent.get_langfuse_client", return_value=None)
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
     async def test_concurrent_streams_keep_their_resolved_system_agents(
         self,
         _mock_build_langfuse_config,
         mock_langfuse_request_trace,
-        _mock_get_langfuse_client,
     ) -> None:
         first_prompts = self._prompts("system-44")
         second_prompts = self._prompts("system-45")
@@ -106,14 +104,14 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first, ["system-44"])
         self.assertEqual(second, ["system-45"])
 
-    @patch("src.agents.runtime.react_agent.get_langfuse_client")
+    @patch("src.agents.runtime.react_agent.langfuse_trace_url")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config")
     async def test_astream_yields_filtered_tokens_then_metadata(
         self,
         mock_build_langfuse_config,
         mock_langfuse_request_trace,
-        mock_get_langfuse_client,
+        mock_langfuse_trace_url,
     ) -> None:
         async def _fake_stream(*_args, **_kwargs):
             yield (
@@ -134,8 +132,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         fake_agent.astream = _fake_stream
         mock_build_langfuse_config.return_value = {"callbacks": ["handler"]}
         mock_langfuse_request_trace.return_value = self._trace_context("trace-123")
-        mock_client = mock_get_langfuse_client.return_value
-        mock_client.get_trace_url.return_value = (
+        mock_langfuse_trace_url.return_value = (
             "https://cloud.langfuse.com/project/p/traces/trace-123"
         )
         runtime = AgentRuntime(agent=fake_agent)
@@ -174,18 +171,15 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             on_span_started=latency.attach_trace,
             prompts=ANY,
         )
-        mock_client.flush.assert_called_once()
-        mock_client.get_trace_url.assert_called_once_with(trace_id="trace-123")
+        mock_langfuse_trace_url.assert_called_once_with(trace_id="trace-123")
         latency.complete.assert_called_once_with("success")
 
-    @patch("src.agents.runtime.react_agent.get_langfuse_client", return_value=None)
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
     async def test_astream_leaves_empty_stream_ttft_for_the_visible_fallback(
         self,
         _mock_build_langfuse_config,
         mock_langfuse_request_trace,
-        _mock_get_langfuse_client,
     ) -> None:
         # The tracing seam is stubbed exactly as its sibling tests stub it. Without
         # this the runtime opens a real Langfuse trace, so the assertion about a
@@ -212,53 +206,71 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         latency.mark_user_visible.assert_not_called()
         latency.complete.assert_called_once_with("success")
 
-    @patch("src.agents.runtime.react_agent.get_langfuse_client")
-    @patch("src.agents.runtime.react_agent.langfuse_request_trace")
-    @patch("src.agents.runtime.react_agent.build_langfuse_config")
-    async def test_streaming_flushes_exports_after_the_done_event(
+    @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
+    async def test_streaming_never_calls_the_langfuse_client(
         self,
-        mock_build_langfuse_config,
-        mock_langfuse_request_trace,
-        mock_get_langfuse_client,
+        _mock_build_langfuse_config,
     ) -> None:
-        call_order: list[str] = []
+        """A finished turn does no client I/O: no trace URL lookup, no flush (#699).
+
+        The request trace runs against a client whose `get_trace_url` and
+        `flush` raise, and the project id stays unresolved, so an unreachable
+        Langfuse cannot fail or delay the turn; the metadata still arrives with
+        the trace id and a null trace URL.
+        """
 
         async def _fake_stream(*_args, **_kwargs):
             yield (self._chunk(content="answer"), {"langgraph_node": "model"})
 
+        async def resolve_prompts() -> ResolvedPromptBundle:
+            return self._prompts("system-699")
+
         fake_agent = AsyncMock()
         fake_agent.astream = _fake_stream
-        mock_build_langfuse_config.return_value = {"callbacks": ["handler"]}
-        mock_langfuse_request_trace.return_value = self._trace_context("trace-123")
-        mock_client = mock_get_langfuse_client.return_value
-        mock_client.flush.side_effect = lambda: call_order.append("flush")
-        mock_client.get_trace_url.return_value = "https://traces/trace-123"
+        client = MagicMock()
+        client.get_current_trace_id.return_value = "trace-699"
+        client.start_as_current_observation.return_value.__enter__.return_value = None
+        client.start_as_current_observation.return_value.__exit__.return_value = None
+        client.get_trace_url.side_effect = AssertionError(
+            "get_trace_url is request-path I/O"
+        )
+        client.flush.side_effect = AssertionError("flush is request-path I/O")
+        propagate = MagicMock()
+        propagate.return_value.__enter__.return_value = None
+        propagate.return_value.__exit__.return_value = None
         runtime = AgentRuntime(agent=fake_agent)
 
-        stream = stream_agent_response("hello", runtime=runtime, session_id="session-1")
-        async for event in stream:
-            call_order.append(f"event:{event['type']}")
+        with (
+            patch(
+                "src.agents.runtime.react_agent.resolve_prompt_bundle_async",
+                resolve_prompts,
+            ),
+            patch("src.agents.tracing.langfuse._langfuse_handler", object()),
+            patch(
+                "src.agents.tracing.langfuse.get_langfuse_client",
+                return_value=client,
+            ),
+            patch("src.agents.tracing.langfuse.propagate_attributes", propagate),
+            patch("src.agents.tracing.langfuse._project_id", None),
+        ):
+            events = [event async for event in runtime.astream("hello")]
 
         self.assertEqual(
-            call_order,
+            events,
             [
-                "event:session",
-                "event:token",
-                "event:metadata",
-                "event:done",
-                "flush",
+                {"type": "token", "text": "answer"},
+                {"type": "metadata", "trace_id": "trace-699", "trace_url": None},
             ],
         )
-        mock_client.flush.assert_called_once()
+        client.get_trace_url.assert_not_called()
+        client.flush.assert_not_called()
 
-    @patch("src.agents.runtime.react_agent.get_langfuse_client")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config")
     async def test_streaming_keeps_the_request_trace_in_one_runtime_task(
         self,
         mock_build_langfuse_config,
         mock_langfuse_request_trace,
-        mock_get_langfuse_client,
     ) -> None:
         current_trace: ContextVar[str | None] = ContextVar(
             "current_trace", default=None
@@ -282,7 +294,6 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         fake_agent.astream = _fake_stream
         mock_build_langfuse_config.return_value = {"callbacks": ["handler"]}
         mock_langfuse_request_trace.side_effect = _request_trace
-        mock_client = mock_get_langfuse_client.return_value
         runtime = AgentRuntime(agent=fake_agent)
 
         events = [
@@ -293,52 +304,67 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             [event["type"] for event in events],
             ["session", "token", "token", "metadata", "done"],
         )
-        mock_client.flush.assert_called_once()
 
-    @patch("src.agents.runtime.react_agent.get_langfuse_client")
-    @patch("src.agents.runtime.react_agent.langfuse_request_trace")
-    @patch("src.agents.runtime.react_agent.build_langfuse_config")
-    async def test_astream_flushes_exports_when_the_consumer_disconnects(
+    @patch("src.agents.runtime.react_agent.build_langfuse_config", return_value={})
+    async def test_astream_disconnect_completes_the_observation_without_flushing(
         self,
-        mock_build_langfuse_config,
-        mock_langfuse_request_trace,
-        mock_get_langfuse_client,
+        _mock_build_langfuse_config,
     ) -> None:
-        """Closing the stream mid-flight still drains the trace to Langfuse."""
+        """Closing the stream mid-flight ends the span as cancelled, with no client I/O.
 
-        @asynccontextmanager
-        async def _request_trace(**_kwargs):
-            yield "trace-disconnect"
+        The flush that used to drain the trace on disconnect is gone (#699); the
+        client is rigged to raise if `flush` is called.
+        """
 
         async def _fake_stream(*_args, **_kwargs):
             yield (self._chunk(content="first token"), {"langgraph_node": "model"})
             await asyncio.Event().wait()
 
+        async def resolve_prompts() -> ResolvedPromptBundle:
+            return self._prompts("system-699")
+
         fake_agent = AsyncMock()
         fake_agent.astream = _fake_stream
-        mock_build_langfuse_config.return_value = {"callbacks": ["handler"]}
-        mock_langfuse_request_trace.side_effect = _request_trace
-        mock_client = mock_get_langfuse_client.return_value
+        client = MagicMock()
+        client.get_current_trace_id.return_value = "trace-disconnect"
+        client.start_as_current_observation.return_value.__enter__.return_value = None
+        client.start_as_current_observation.return_value.__exit__.return_value = None
+        client.flush.side_effect = AssertionError("flush is request-path I/O")
+        propagate = MagicMock()
+        propagate.return_value.__enter__.return_value = None
+        propagate.return_value.__exit__.return_value = None
         runtime = AgentRuntime(agent=fake_agent)
         latency = MagicMock()
 
-        stream = runtime.astream(
-            "disconnect", session_id="session-disconnect", observation=latency
-        )
-        self.assertEqual(await anext(stream), {"type": "token", "text": "first token"})
-        await stream.aclose()
+        with (
+            patch(
+                "src.agents.runtime.react_agent.resolve_prompt_bundle_async",
+                resolve_prompts,
+            ),
+            patch("src.agents.tracing.langfuse._langfuse_handler", object()),
+            patch(
+                "src.agents.tracing.langfuse.get_langfuse_client",
+                return_value=client,
+            ),
+            patch("src.agents.tracing.langfuse.propagate_attributes", propagate),
+        ):
+            stream = runtime.astream(
+                "disconnect", session_id="session-disconnect", observation=latency
+            )
+            self.assertEqual(
+                await anext(stream), {"type": "token", "text": "first token"}
+            )
+            await stream.aclose()
 
-        mock_client.flush.assert_called_once()
+        client.flush.assert_not_called()
         latency.complete.assert_called_once_with("cancelled")
 
-    @patch("src.agents.runtime.react_agent.get_langfuse_client")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config")
     async def test_astream_does_not_leak_tool_calls_sql_or_raw_tool_output(
         self,
         mock_build_langfuse_config,
         mock_langfuse_request_trace,
-        _mock_get_langfuse_client,
     ) -> None:
         async def _fake_stream(*_args, **_kwargs):
             yield (
@@ -374,14 +400,14 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("query_clean_jobs", streamed_text)
         self.assertNotIn("list 3 data engineer jobs", streamed_text)
 
-    @patch("src.agents.runtime.react_agent.get_langfuse_client")
+    @patch("src.agents.runtime.react_agent.langfuse_trace_url")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config")
     async def test_astream_concurrent_requests_keep_their_context_and_trace_ids(
         self,
         mock_build_langfuse_config,
         mock_langfuse_request_trace,
-        mock_get_langfuse_client,
+        mock_langfuse_trace_url,
     ) -> None:
         """Suspended streams retain independent Langfuse context and trace URLs."""
         current_trace_id: ContextVar[str | None] = ContextVar(
@@ -411,8 +437,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         fake_agent.astream = _fake_stream
         mock_build_langfuse_config.return_value = {"callbacks": ["handler"]}
         mock_langfuse_request_trace.side_effect = _request_trace
-        mock_client = mock_get_langfuse_client.return_value
-        mock_client.get_trace_url.side_effect = lambda *, trace_id: (
+        mock_langfuse_trace_url.side_effect = lambda *, trace_id: (
             f"https://traces/{trace_id}"
         )
         runtime = AgentRuntime(agent=fake_agent)
@@ -432,14 +457,12 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["trace_url"], "https://traces/trace-first")
         self.assertEqual(second["trace_url"], "https://traces/trace-second")
 
-    @patch("src.agents.runtime.react_agent.get_langfuse_client")
     @patch("src.agents.runtime.react_agent.langfuse_request_trace")
     @patch("src.agents.runtime.react_agent.build_langfuse_config")
     async def test_astream_cancels_the_producer_and_closes_its_trace_on_disconnect(
         self,
         mock_build_langfuse_config,
         mock_langfuse_request_trace,
-        _mock_get_langfuse_client,
     ) -> None:
         producer_cancelled = asyncio.Event()
         trace_closed = asyncio.Event()

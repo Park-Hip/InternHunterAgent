@@ -98,9 +98,7 @@ class ToolEventStreamTests(unittest.IsolatedAsyncioTestCase):
         )
         runtime = AgentRuntime(agent=agent)
 
-        with patch(
-            "src.agents.runtime.react_agent.get_langfuse_client", return_value=None
-        ), patch("src.agents.runtime.react_agent.langfuse_request_trace") as trace, patch(
+        with patch("src.agents.runtime.react_agent.langfuse_request_trace") as trace, patch(
             "src.agents.runtime.react_agent.build_langfuse_config", return_value={}
         ):
             from contextlib import asynccontextmanager

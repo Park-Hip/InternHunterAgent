@@ -103,17 +103,68 @@ class LangfuseInitTests(unittest.TestCase):
 class LangfuseLifecycleTests(unittest.IsolatedAsyncioTestCase):
     async def test_startup_authentication_failure_is_non_fatal(self) -> None:
         client = MagicMock()
-        client.auth_check.side_effect = RuntimeError("invalid credentials")
 
         with (
             patch.object(langfuse, "get_langfuse_client", return_value=client),
+            patch.object(
+                langfuse,
+                "_fetch_project_id",
+                side_effect=RuntimeError("invalid credentials"),
+            ),
             patch.object(langfuse.logger, "warning") as warning,
         ):
             await langfuse.diagnose_langfuse_startup()
 
-        client.auth_check.assert_called_once()
         warning.assert_called_once_with(
             "Langfuse startup authentication failed", error="invalid credentials"
+        )
+
+    async def test_startup_resolution_caches_the_project_id(self) -> None:
+        client = MagicMock()
+
+        with (
+            patch.object(langfuse, "_project_id", None),
+            patch.object(langfuse, "get_langfuse_client", return_value=client),
+            patch.object(
+                langfuse, "_fetch_project_id", return_value="project-1"
+            ) as fetch,
+            patch.object(langfuse.logger, "info") as info,
+        ):
+            await langfuse.diagnose_langfuse_startup()
+
+            self.assertEqual(langfuse._project_id, "project-1")
+
+        fetch.assert_called_once_with(client)
+        info.assert_called_once_with("Langfuse startup authentication succeeded")
+
+    async def test_startup_resolution_without_a_project_id_warns(self) -> None:
+        client = MagicMock()
+
+        with (
+            patch.object(langfuse, "_project_id", None),
+            patch.object(langfuse, "get_langfuse_client", return_value=client),
+            patch.object(langfuse, "_fetch_project_id", return_value=None),
+            patch.object(langfuse.logger, "warning") as warning,
+        ):
+            await langfuse.diagnose_langfuse_startup()
+
+            self.assertIsNone(langfuse._project_id)
+
+        warning.assert_called_once_with("Langfuse startup authentication failed")
+
+    async def test_startup_resolution_is_skipped_when_tracing_is_disabled(
+        self,
+    ) -> None:
+        with (
+            patch.object(langfuse, "get_langfuse_client", return_value=None),
+            patch.object(langfuse, "_fetch_project_id") as fetch,
+            patch.object(langfuse.logger, "info") as info,
+        ):
+            await langfuse.diagnose_langfuse_startup()
+
+        fetch.assert_not_called()
+        info.assert_called_once_with(
+            "Langfuse startup authentication skipped: tracing disabled"
         )
 
     async def test_shutdown_drains_the_initialized_client(self) -> None:
@@ -125,8 +176,13 @@ class LangfuseLifecycleTests(unittest.IsolatedAsyncioTestCase):
         client.shutdown.assert_called_once()
 
     async def test_shutdown_is_a_noop_when_tracing_is_disabled(self) -> None:
-        with patch.object(langfuse, "get_langfuse_client", return_value=None):
+        with (
+            patch.object(langfuse, "get_langfuse_client", return_value=None),
+            patch.object(langfuse, "_project_id", "project-1"),
+        ):
             await langfuse.shutdown_langfuse()
+
+            self.assertIsNone(langfuse._project_id)
 
     async def test_shutdown_clears_state_so_a_later_init_starts_fresh(self) -> None:
         client = MagicMock()
@@ -134,12 +190,14 @@ class LangfuseLifecycleTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(langfuse, "_langfuse", client),
             patch.object(langfuse, "_langfuse_handler", MagicMock()),
+            patch.object(langfuse, "_project_id", "project-1"),
         ):
             await langfuse.shutdown_langfuse()
 
             client.shutdown.assert_called_once_with()
             self.assertIsNone(langfuse.get_langfuse_client())
             self.assertIsNone(langfuse.get_langfuse_handler())
+            self.assertIsNone(langfuse._project_id)
 
     async def test_shutdown_clears_state_even_when_draining_fails(self) -> None:
         client = MagicMock()
@@ -148,16 +206,99 @@ class LangfuseLifecycleTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(langfuse, "_langfuse", client),
             patch.object(langfuse, "_langfuse_handler", MagicMock()),
+            patch.object(langfuse, "_project_id", "project-1"),
             patch.object(langfuse.logger, "warning") as warning,
         ):
             await langfuse.shutdown_langfuse()
 
             self.assertIsNone(langfuse.get_langfuse_client())
             self.assertIsNone(langfuse.get_langfuse_handler())
+            self.assertIsNone(langfuse._project_id)
 
         warning.assert_called_once_with(
             "Langfuse shutdown failed", error="drain failed"
         )
+
+
+class LangfuseTraceUrlTests(unittest.TestCase):
+    """#699: the trace URL comes from cached state, never from request-path I/O."""
+
+    def test_returns_none_without_a_trace_id(self) -> None:
+        with (
+            patch.object(langfuse, "_project_id", "project-1"),
+            patch.object(
+                langfuse,
+                "settings",
+                SimpleNamespace(LANGFUSE_BASE_URL="https://langfuse.example"),
+            ),
+        ):
+            self.assertIsNone(langfuse.langfuse_trace_url(trace_id=None))
+
+    def test_returns_none_without_a_resolved_project_id(self) -> None:
+        with (
+            patch.object(langfuse, "_project_id", None),
+            patch.object(
+                langfuse,
+                "settings",
+                SimpleNamespace(LANGFUSE_BASE_URL="https://langfuse.example"),
+            ),
+        ):
+            self.assertIsNone(langfuse.langfuse_trace_url(trace_id="trace-1"))
+
+    def test_returns_none_without_a_base_url(self) -> None:
+        with (
+            patch.object(langfuse, "_project_id", "project-1"),
+            patch.object(
+                langfuse, "settings", SimpleNamespace(LANGFUSE_BASE_URL=None)
+            ),
+        ):
+            self.assertIsNone(langfuse.langfuse_trace_url(trace_id="trace-1"))
+
+    def test_builds_the_url_from_config_without_touching_the_client(self) -> None:
+        with (
+            patch.object(langfuse, "_project_id", "project-1"),
+            patch.object(
+                langfuse,
+                "settings",
+                SimpleNamespace(LANGFUSE_BASE_URL="https://langfuse.example"),
+            ),
+            patch.object(langfuse, "get_langfuse_client") as get_client,
+        ):
+            url = langfuse.langfuse_trace_url(trace_id="trace-1")
+
+        self.assertEqual(
+            url, "https://langfuse.example/project/project-1/traces/trace-1"
+        )
+        get_client.assert_not_called()
+
+    def test_matches_the_sdk_url_for_the_same_configuration(self) -> None:
+        """The literal string is what the SDK's `get_trace_url` produced before #699."""
+        settings = SimpleNamespace(
+            LANGFUSE_PUBLIC_KEY="pk-lf-trace-url-parity",
+            LANGFUSE_SECRET_KEY="sk-lf-trace-url-parity",
+            LANGFUSE_BASE_URL="https://langfuse.example",
+        )
+        with (
+            patch.object(langfuse, "settings", settings),
+            patch.object(langfuse, "get_langfuse_environment", return_value="test"),
+            patch.object(langfuse, "get_langfuse_release", return_value=None),
+        ):
+            client = langfuse.create_langfuse_client()
+
+        try:
+            # A seeded project id keeps the SDK's own lookup network-free.
+            client._project_id = "project-1"
+            sdk_url = client.get_trace_url(trace_id="trace-1")
+
+            with (
+                patch.object(langfuse, "_project_id", "project-1"),
+                patch.object(langfuse, "settings", settings),
+            ):
+                url = langfuse.langfuse_trace_url(trace_id="trace-1")
+
+            self.assertEqual(url, sdk_url)
+        finally:
+            client.shutdown()
 
 
 class ImportSideEffectTests(unittest.TestCase):

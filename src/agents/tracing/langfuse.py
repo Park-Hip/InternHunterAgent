@@ -25,6 +25,7 @@ from src.core.logger import logger
 
 _langfuse_handler: CallbackHandler | None = None
 _langfuse: Langfuse | None = None
+_project_id: str | None = None
 
 
 class LangfuseStreamObservation:
@@ -358,6 +359,20 @@ def get_langfuse_client() -> Langfuse | None:
     return _langfuse
 
 
+def langfuse_trace_url(*, trace_id: str | None) -> str | None:
+    """Build the trace URL from the boot-resolved project id, without any I/O.
+
+    The URL is pure string composition, so an unreachable Langfuse can never
+    block or fail a finished turn (#699). Null when the turn has no trace id,
+    when the project id was not resolved at startup, or when the base URL is
+    missing. The string matches what the SDK's `get_trace_url` produced for
+    the same host and project.
+    """
+    if not trace_id or _project_id is None or not settings.LANGFUSE_BASE_URL:
+        return None
+    return f"{settings.LANGFUSE_BASE_URL}/project/{_project_id}/traces/{trace_id}"
+
+
 @contextmanager
 def langfuse_prompt_attributes(prompt: ResolvedPrompt) -> Iterator[None]:
     """Attach a native PromptClient to generations made by the LangChain callback.
@@ -388,20 +403,40 @@ async def prepare_native_prompts_startup() -> None:
     )
 
 
+def _fetch_project_id(client: Langfuse) -> str | None:
+    """Return the project id the credentials resolve to, or None.
+
+    The same `api.projects.get` call the SDK's `auth_check` makes, kept here
+    so the response is available for caching instead of a bare boolean.
+    """
+    projects = client.api.projects.get()
+    if not projects.data or not projects.data[0].id:
+        return None
+    return projects.data[0].id
+
+
 async def diagnose_langfuse_startup() -> None:
-    """Log non-fatal credential diagnostics after the application starts."""
+    """Log non-fatal credential diagnostics and resolve the project id once.
+
+    The project id is what the request path needs to build a trace URL without
+    network I/O (#699). It is fetched here, on a worker thread, once per
+    process: boot does not wait on Langfuse, and no request ever resolves it.
+    A failure is only a diagnostic; requests keep serving, with a null trace
+    URL, until the next process start.
+    """
+    global _project_id
     client = get_langfuse_client()
     if client is None:
         logger.info("Langfuse startup authentication skipped: tracing disabled")
         return
 
     try:
-        authenticated = await asyncio.to_thread(client.auth_check)
+        _project_id = await asyncio.to_thread(_fetch_project_id, client)
     except Exception as exc:
         logger.warning("Langfuse startup authentication failed", error=str(exc))
         return
 
-    if authenticated:
+    if _project_id is not None:
         logger.info("Langfuse startup authentication succeeded")
     else:
         logger.warning("Langfuse startup authentication failed")
@@ -412,10 +447,12 @@ async def shutdown_langfuse() -> None:
 
     The module state is cleared even when draining fails, so the getters report
     "tracing disabled" after shutdown and a later `init_langfuse` creates a
-    fresh client instead of reusing a drained one.
+    fresh client instead of reusing a drained one. The resolved project id is
+    dropped with it, so a new lifespan resolves it again.
     """
-    global _langfuse, _langfuse_handler
+    global _langfuse, _langfuse_handler, _project_id
     client = get_langfuse_client()
+    _project_id = None
     if client is None:
         return
 

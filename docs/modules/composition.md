@@ -98,7 +98,7 @@ flowchart TD
 | Prompts | Serves every prompt from the checked-in YAML and links the Langfuse version when its text agrees | `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup` | Langfuse errors leave the surface unlinked; a missing YAML prompt raises |
 | Tools | Lists the MCP server's tools as LangChain tools, in process | `src/agents/mcp/adapter.py` → `list_job_tools` | Raises before the runtime exists |
 | Runtime | `AgentRuntime(checkpointer, tools)` on `app.state.runtime` | `src/agents/runtime/react_agent.py` → `AgentRuntime` | - |
-| Diagnostic | Checks Langfuse credentials in a background task | `src/agents/tracing/langfuse.py` → `diagnose_langfuse_startup` | Logged only |
+| Diagnostic | Resolves the Langfuse project id and logs credential diagnostics in a background task | `src/agents/tracing/langfuse.py` → `diagnose_langfuse_startup` | Logged only; the trace link stays null until the next process start |
 
 **Why the guards run first.**
 uvicorn accepts no request until the lifespan finishes, so a guard that raises means the process
@@ -196,7 +196,7 @@ or after it, because the diagnostic is not awaited.
 | `api.agent_privilege_check_skipped` | Lifespan | The two DSNs name different databases; nothing was checked |
 | `ProviderCredentialError` naming the variable and the operate how-to | Lifespan | A deployment a served profile selects has no key; set it in the Render dashboard and redeploy |
 | `SchemaGuardError` naming `connection timeout expired`, `Application startup failed`, exit 3 | Lifespan | The database is unreachable; the connect attempt is bounded by `database.connect_timeout_seconds`, see section 6 |
-| `Langfuse startup authentication failed` | After boot | Tracing keys are wrong; serving is unaffected |
+| `Langfuse startup authentication failed` | After boot | Tracing keys are wrong; serving is unaffected, and turns serve a null `trace_url` |
 
 ## 6. Trade-offs, and what would now be decided differently
 

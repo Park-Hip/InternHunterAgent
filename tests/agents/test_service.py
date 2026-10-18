@@ -367,6 +367,54 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             await anext(stream)
         observation.complete.assert_called_once_with("error")
 
+    @patch("src.agents.service.settings")
+    async def test_deadline_between_events_finishes_after_done_with_slow_consumer(
+        self, mock_settings
+    ) -> None:
+        mock_settings.agent.stream_turn_timeout_seconds = 0.05
+        third_token_requested = asyncio.Event()
+        runtime_cancelled = asyncio.Event()
+
+        async def buffering_stream(**_kwargs):
+            try:
+                yield {"type": "token", "text": "first"}
+                yield {"type": "token", "text": "second"}
+                third_token_requested.set()
+                yield {"type": "token", "text": "third"}
+                await asyncio.Event().wait()
+            finally:
+                runtime_cancelled.set()
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=buffering_stream)
+        observation = MagicMock()
+        stream = stream_agent_response(
+            query="what internships are available?",
+            runtime=runtime,
+            session_id="session-deadline-between-events",
+            stream_observation_factory=MagicMock(return_value=observation),
+        )
+
+        self.assertEqual((await anext(stream))["type"], "session")
+
+        # A slow consumer: the service yields the first token and then stalls,
+        # so the producer buffers the second event and blocks putting the third
+        # into the full size-1 queue.
+        self.assertEqual((await anext(stream))["text"], "first")
+        await asyncio.wait_for(third_token_requested.wait(), timeout=0.1)
+        await asyncio.sleep(0.15)  # let the deadline expire while we idle
+
+        self.assertEqual((await anext(stream))["type"], "error")
+        self.assertEqual((await anext(stream))["type"], "done")
+        observation.complete.assert_not_called()
+
+        # The finally must not await the runtime task, which is blocked on the
+        # full queue, so the generator finishes right after done.
+        with self.assertRaises(StopAsyncIteration):
+            await asyncio.wait_for(anext(stream), timeout=0.2)
+        observation.complete.assert_called_once_with("error")
+        await asyncio.wait_for(runtime_cancelled.wait(), timeout=0.1)
+
     @patch("src.agents.service.logger")
     async def test_stream_failure_logs_and_yields_generic_message(
         self, mock_logger

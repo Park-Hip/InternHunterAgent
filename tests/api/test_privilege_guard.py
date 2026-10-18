@@ -11,6 +11,8 @@ because the role does not exist on a fresh database.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from sqlalchemy import create_engine, text
 from src.api.privilege_guard import AgentPrivilegeError, assert_agent_privileges
@@ -63,15 +65,6 @@ def revoke_read(engine) -> None:
         conn.execute(text(f"REVOKE SELECT ON clean_jobs FROM {ROLE}"))
 
 
-def drop_role(engine) -> None:
-    """Remove the role the way an operator would: revoke its grants first."""
-    with engine.begin() as conn:
-        conn.execute(text(f"REVOKE ALL ON clean_jobs FROM {ROLE}"))
-        conn.execute(text(f"REVOKE USAGE ON SCHEMA public FROM {ROLE}"))
-        conn.execute(text(f"REVOKE CONNECT ON DATABASE internhunter_eval FROM {ROLE}"))
-        conn.execute(text(f"DROP ROLE IF EXISTS {ROLE}"))
-
-
 @pytest.fixture
 def agent_dsn(monkeypatch, engine):
     """Point the agent DSN at a role whose privileges the test controls."""
@@ -88,21 +81,25 @@ def agent_dsn(monkeypatch, engine):
     settings.__dict__["AGENT_DATABASE_URL"] = url.render_as_string(hide_password=False)
     settings.__dict__["DATABASE_URL"] = fixture_database_url()
 
-    # Provisioned on the way in as well as on the way out, so a test that drops or
-    # revokes cannot leak into the next one.
+    # Provisioned on the way in as well as on the way out, so a test that revokes
+    # cannot leak into the next one.
     grant(engine)
 
-    # The guard uses the module-level proxy, which resolves the engine lazily.
+    # The guard uses module-level proxies that cache both the engine and the
+    # session factory, so both need clearing for this DSN to be the one it uses.
     from src.core import db as db_module
 
     original_agent_engine = db_module.__dict__.get("_agent_engine")
+    original_agent_session_factory = db_module.__dict__.get("_agent_session_factory")
     db_module.__dict__["_agent_engine"] = None
+    db_module.__dict__["_agent_session_factory"] = None
     try:
         yield
     finally:
         settings.__dict__["AGENT_DATABASE_URL"] = original_agent
         settings.__dict__["DATABASE_URL"] = original_serving
         db_module.__dict__["_agent_engine"] = original_agent_engine
+        db_module.__dict__["_agent_session_factory"] = original_agent_session_factory
         grant(engine)
 
 
@@ -137,14 +134,23 @@ class TestTheCheck:
         )
         assert assert_agent_privileges() is False
 
-    def test_a_role_that_does_not_exist_fails_rather_than_skips(self, engine, agent_dsn) -> None:
+    def test_a_role_that_does_not_exist_fails_rather_than_skips(
+        self, agent_dsn
+    ) -> None:
+        """Point the DSN at a role no run ever creates, rather than dropping the probe.
+
+        ``DROP ROLE`` is cluster-wide, so dropping the shared probe role fails when a
+        parallel worktree leaves it a grant in another database on the container. A
+        never-created name proves the same thing - an absent role fails the boot
+        instead of skipping - without depending on cluster state.
+        """
         from sqlalchemy.engine import make_url
 
         from src.core.config import settings
 
-        drop_role(engine)
+        absent_role = f"iha_privilege_absent_{uuid.uuid4().hex}"
         settings.__dict__["AGENT_DATABASE_URL"] = make_url(fixture_database_url()).set(
-            username=ROLE, password=PASSWORD
+            username=absent_role, password=PASSWORD
         ).render_as_string(hide_password=False)
         with pytest.raises(AgentPrivilegeError):
             assert_agent_privileges()

@@ -37,6 +37,13 @@ uv run python -m evals --only tool_correctness,sql_accuracy \
   --ids SAF-DESTRUCTIVE-REFUSAL-1,HLP-CONTEXT-1
 ```
 
+```sh
+# Baseline text-to-SQL run (#708): one model call per question, then offline scoring.
+# The snapshot is a local copy of production clean_jobs; see the module docstring.
+uv run python -m evals.baseline_sql generate --out evals/runs/baseline/<name>.json
+uv run python -m evals.baseline_sql score evals/runs/baseline/<name>.json --database-url <snapshot URL>
+```
+
 Use `--out` to write the JSON report elsewhere.
 The default output lands in the gitignored `evals/runs/` directory.
 
@@ -45,6 +52,7 @@ The default output lands in the gitignored `evals/runs/` directory.
 | Dataset | File | What it describes | How it runs |
 |---|---|---|---|
 | `default` | [`datasets/scenarios.yaml`](datasets/scenarios.yaml) | 50 v1 scenarios (34 single-turn, 16 conversational) | A live capture against the serving agent, or a retained capture |
+| baseline | [`datasets/baseline.yaml`](datasets/baseline.yaml) | 36 MVP baseline questions (#708), 24 dev and 12 held-out, with reference SQL for a production snapshot | [`baseline_sql.py`](baseline_sql.py): `generate` once, then `score` offline |
 
 The registry and its validation live in [`datasets.py`](datasets.py).
 Datasets never mix: a new version is a new entry, never an edit to an existing registry.
@@ -87,6 +95,7 @@ Tests live in [`tests/evals/`](../tests/evals/).
 | `test_run.py` | [`run.py`](run.py) | Capture and scoring with the database boundary stubbed |
 | `test_sql_check.py` | [`sql_check.py`](sql_check.py) | SQL comparison modes with query results stubbed |
 | `test_sql_gate.py` | [`sql_gate.py`](sql_gate.py) + [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml) | Dataset grammar, guard/obligation/result grading, gate refusals |
+| `test_baseline_sql.py` | [`baseline_sql.py`](baseline_sql.py) + [`datasets/baseline.yaml`](datasets/baseline.yaml) | Baseline dataset grammar, offline scoring with execution stubbed |
 | `test_holdout_judge.py` | [`judge.py`](judge.py) + [`calibration_v8.yaml`](calibration_v8.yaml) | Opt-in judge-versus-human check over the retained v8 holdout |
 
 ## The map

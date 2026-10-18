@@ -14,6 +14,7 @@ from langchain.messages import SystemMessage
 from langchain_core.tools import BaseTool
 
 from src.agents.runtime.middleware import (
+    build_interrupted_tool_call_repair_middleware,
     build_tool_observation_middleware,
     build_trim_middleware,
 )
@@ -36,6 +37,8 @@ async def agent_factory(
         system_prompt=system_prompt or load_system_prompt(),
         checkpointer=checkpointer,
         middleware=[
+            # First, so the repair is the graph entry before the first model call.
+            build_interrupted_tool_call_repair_middleware(),
             build_trim_middleware(settings.agent.max_turns),
             # Innermost, so the reported call is the one as actually issued.
             build_tool_observation_middleware(),

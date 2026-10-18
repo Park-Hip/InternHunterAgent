@@ -6,7 +6,8 @@ from langchain.agents.middleware import (
     AgentMiddleware,
     ModelRequest,
 )
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langgraph.types import Overwrite
 
 from src.agents.runtime.tool_events import (
     elapsed_ms,
@@ -53,6 +54,72 @@ class TrimTurnsMiddleware(AgentMiddleware):
 
 def build_trim_middleware(max_turns: int) -> AgentMiddleware:
     return TrimTurnsMiddleware(max_turns)
+
+
+INTERRUPTED_TOOL_CALL_CONTENT = (
+    "The tool call was interrupted before it returned a result, so no result "
+    "is available. Retry the call if its result is still needed."
+)
+
+
+class InterruptedToolCallRepairMiddleware(AgentMiddleware):
+    """Answer dangling tool calls before a model call, so a thread stays valid.
+
+    A turn can be cancelled or die between the model asking for a tool and the
+    tool answering: the Dừng button, a client disconnect, the turn deadline, or
+    a worker crash. LangGraph checkpoints that half-finished step, and a
+    provider rejects the replay, because an assistant ``tool_calls`` id with no
+    matching tool message is an invalid sequence. This middleware inserts one
+    synthetic error ``ToolMessage`` per unanswered id, directly after the call
+    that made it, before each model call. The model can then retry the call or
+    move on from a valid sequence.
+
+    The repaired list replaces the ``messages`` channel (``Overwrite``) because
+    that channel only appends, and a repair must land directly after the call
+    it answers. The middleware is stateless, as the compiled agent is shared
+    across turns, and a healthy thread produces no update at all.
+    """
+
+    def before_model(self, state, runtime):
+        return self._repair(state)
+
+    async def abefore_model(self, state, runtime):
+        return self._repair(state)
+
+    def _repair(self, state):
+        messages = state.get("messages") or []
+        answered_ids = {
+            message.tool_call_id
+            for message in messages
+            if isinstance(message, ToolMessage)
+        }
+        repaired: list = []
+        inserted = False
+        for message in messages:
+            repaired.append(message)
+            if not isinstance(message, AIMessage):
+                continue
+            for call in message.tool_calls:
+                call_id = call.get("id")
+                if not call_id or call_id in answered_ids:
+                    continue
+                repaired.append(
+                    ToolMessage(
+                        content=INTERRUPTED_TOOL_CALL_CONTENT,
+                        tool_call_id=call_id,
+                        name=call.get("name"),
+                        status="error",
+                    )
+                )
+                answered_ids.add(call_id)
+                inserted = True
+        if not inserted:
+            return None
+        return {"messages": Overwrite(repaired)}
+
+
+def build_interrupted_tool_call_repair_middleware() -> AgentMiddleware:
+    return InterruptedToolCallRepairMiddleware()
 
 
 class ToolObservationMiddleware(AgentMiddleware):

@@ -37,6 +37,13 @@ def _consume_background_task_result(task: asyncio.Future[_T]) -> None:
         task.exception()
 
 
+def _cancel_and_detach_task(task: asyncio.Future[_T]) -> None:
+    """Cancel a runtime task and consume its result without awaiting cleanup."""
+
+    task.cancel()
+    task.add_done_callback(_consume_background_task_result)
+
+
 class AgentResponse(TypedDict):
     answer: str
     session_id: str
@@ -70,8 +77,7 @@ async def generate_agent_response(
         if not runtime_task.done():
             # Cancel without awaiting cleanup: a slow cancellation must not
             # extend the serving deadline, exactly as on the streamed route.
-            runtime_task.cancel()
-            runtime_task.add_done_callback(_consume_background_task_result)
+            _cancel_and_detach_task(runtime_task)
             detach_runtime_task = True
             raise AgentTurnDeadlineExceededError(
                 "Non-streamed agent turn exceeded its serving deadline."
@@ -169,6 +175,8 @@ async def stream_agent_response(
 
             remaining = deadline - loop.time()
             if remaining <= 0:
+                _cancel_and_detach_task(runtime_task)
+                detach_runtime_task = True
                 raise AgentTurnDeadlineExceededError(
                     "Streamed agent turn exceeded its serving deadline."
                 )
@@ -176,8 +184,7 @@ async def stream_agent_response(
             try:
                 event = await asyncio.wait_for(runtime_events.get(), timeout=remaining)
             except TimeoutError as exc:
-                runtime_task.cancel()
-                runtime_task.add_done_callback(_consume_background_task_result)
+                _cancel_and_detach_task(runtime_task)
                 detach_runtime_task = True
                 raise AgentTurnDeadlineExceededError(
                     "Streamed agent turn exceeded its serving deadline."

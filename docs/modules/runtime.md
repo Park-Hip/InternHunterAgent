@@ -245,8 +245,9 @@ The last column is the one that matters: does the conversation still work afterw
 - **Error.** An exception in the producer becomes an internal `runtime_error` event; the runtime then waits on the completion handshake while the service maps the exception, yields `error` and `done`, and skips `metadata`.
 - **Deadline.** The service waits for each event with `asyncio.wait_for` and the time left.
   On expiry it cancels the runtime task and detaches it instead of awaiting its cleanup, then yields `provider_busy` and `done`.
-  A narrower path, found by reading and reproduced only with a slow consumer: if the deadline passes while the route is still sending an event, the next loop check raises without cancelling the runtime task, and the service's cleanup waits on it after `done`.
-  Three live runs with a fast client, where the deadline expired mid-answer, all closed cleanly (#688).
+  The deadline can also pass while the route is suspended at a `yield`, that is, while it is still sending the previous event, which a slow consumer makes likelier.
+  That exit cancels and detaches the runtime task too, so no path awaits a runtime that can be blocked on the full queue.
+  A slow-consumer test pins that the generator finishes right after `done` (#688).
 - **Disconnect.** The route polls `request.is_disconnected` every 50 ms while it waits for each event, then closes the service generator.
   The service records the outcome as cancelled, sets the handshake, cancels the runtime task, and awaits it; the runtime cancels its producer and flushes Langfuse.
   It logs `stream.client_disconnected` once, but today it also logs that line for every completed turn (#674).

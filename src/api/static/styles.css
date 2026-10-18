@@ -372,6 +372,17 @@ textarea { font: inherit; color: inherit; }
   font-style: italic;
 }
 
+/* a stopped turn. It takes the pending placeholder's single line, or sits
+   above the partial answer that was painted. Deliberately not italic: muted
+   italic is the "still working" register, and the one thing a stop may not
+   read as is still working. */
+.turn__stopped {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* an error answer reads plainly, no alarm colour */
 .turn__agent.is-error { border-left-color: var(--hairline); }
 .turn__agent.is-error .turn__label { color: var(--muted); }

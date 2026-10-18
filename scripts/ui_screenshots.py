@@ -12,10 +12,11 @@ what you look at.
     uv run python scripts/ui_screenshots.py http://127.0.0.1:8000
 
 A second phase replays one canned server sequence per fixture through the real
-page and the real app.js, with fetch() stubbed, so the error turn and the
-empty-answer turn - states that need a failing server to produce - are captured
-for review as well. The fixture payloads are built from the server's own
-constants, so they cannot drift from the copy the wire carries.
+page and the real app.js, with fetch() stubbed, so the stopped turn, the error
+turn, and the empty-answer turn - states a static page cannot reach on its own -
+are captured for review as well. The stopped fixture presses Dừng mid-turn; the
+error and empty-answer payloads are built from the server's own constants, so
+they cannot drift from the copy the wire carries.
 
 Writes PNGs to `.playwright-cli/ui/` and prints one path per line, so an agent
 can `read` them back and critique the result.
@@ -48,6 +49,16 @@ HARNESS_QUESTION = "Vị trí thực tập AI Engineer ở Đà Nẵng có mức
 
 ASSET_REF = re.compile(r'(?P<attribute>href|src)="\./(?P<asset>[^"]+)"')
 APP_SCRIPT = '<script src="./app.js"></script>'
+
+# The stopped turn has rendered only when nothing in it still claims to be
+# running: the stopped line is up, the abandoned tool card is out of
+# "đang chạy…", and no card is left mid-call. A capture that waited for less
+# would pass on the very bug #675 reports.
+STOPPED_SELECTOR = (
+    "article.turn:has(.turn__stopped)"
+    ':has(.toolcard[data-status="stopped"])'
+    ':not(:has(.toolcard[data-status="running"]))'
+)
 
 
 @dataclass(frozen=True)
@@ -106,13 +117,36 @@ def capture(
 
 
 def build_harnesses() -> list[Harness]:
-    """The error and empty-answer turns, replayed from the server's own copy."""
+    """The stopped, error, and empty-answer turns.
+
+    The error and empty-answer payloads are built from the server's own
+    constants, so they cannot drift from the copy the wire carries.
+    """
     sys.path.insert(0, str(ROOT))
     from src.agents.service import FALLBACK_ANSWER
     from src.core.errors import BUSY_MESSAGE, PROVIDER_BUSY_ERROR_CODE
 
     session = {"session_id": "screenshot-harness"}
     return [
+        Harness(
+            name="stopped-turn",
+            selector=STOPPED_SELECTOR,
+            html=_harness_html(
+                [
+                    ("session", session),
+                    (
+                        "tool",
+                        {
+                            "name": "query_clean_jobs",
+                            "status": "running",
+                            "call_id": "screenshot-stopped",
+                            "arguments": {"question": HARNESS_QUESTION},
+                        },
+                    ),
+                ],
+                stopped=True,
+            ),
+        ),
         Harness(
             name="error-turn",
             selector=".turn__agent.is-error",
@@ -146,11 +180,13 @@ def build_harnesses() -> list[Harness]:
     ]
 
 
-def _harness_html(events: list[tuple[str, dict[str, object]]]) -> str:
+def _harness_html(
+    events: list[tuple[str, dict[str, object]]], *, stopped: bool = False
+) -> str:
     page = INDEX.read_text(encoding="utf-8")
     if APP_SCRIPT not in page:
         raise SystemExit("index.html no longer loads ./app.js as expected")
-    stub = _stub_script(_sse(events))
+    stub = _stub_script(_sse(events), stopped=stopped)
     page = page.replace(APP_SCRIPT, f"{stub}\n    {APP_SCRIPT}")
     # The harness page lives outside the static directory, so every relative
     # asset reference becomes an absolute file:// URI.
@@ -171,32 +207,72 @@ def _sse(events: list[tuple[str, dict[str, object]]]) -> str:
     return "".join(blocks)
 
 
-def _stub_script(sse: str) -> str:
+def _stub_script(sse: str, *, stopped: bool = False) -> str:
+    """Build the fixture page's stub script.
+
+    `stopped` replays the one state that needs a live client: the stream holds
+    open after a running tool event, the page presses Dừng, and the pending
+    read rejects with an AbortError, exactly as a real fetch does when the
+    reader abandons the turn.
+    """
     question = json.dumps(HARNESS_QUESTION)
+    if stopped:
+        # What the second read does: wait for the abort.
+        held_read = [
+            "      if (sent) {",
+            "        return new Promise((_, reject) => {",
+            "          const stop = () => {",
+            '            const abort = new Error("aborted");',
+            '            abort.name = "AbortError";',
+            "            reject(abort);",
+            "          };",
+            "          if (signal.aborted) return stop();",
+            '          signal.addEventListener("abort", stop, { once: true });',
+            "        });",
+            "      }",
+        ]
+        # The reader's press, as soon as the tool call is running.
+        press_stop = [
+            "  const stopWhenRunning = () => {",
+            "    const running = '.toolcard[data-status=\"running\"]';",
+            "    if (document.querySelector(running)) {",
+            '      document.getElementById("stop").click();',
+            "      return;",
+            "    }",
+            "    requestAnimationFrame(stopWhenRunning);",
+            "  };",
+            "  stopWhenRunning();",
+        ]
+    else:
+        # What the second read does: end the body.
+        held_read = ["      if (sent) return { done: true };"]
+        press_stop = []
     return "\n".join(
         [
             "<script>",
             "// Screenshot harness from scripts/ui_screenshots.py: fetch() is",
-            "// stubbed to replay one canned server sequence, so a rendered error",
-            "// or empty-answer turn can be reviewed as an image without a server.",
+            "// stubbed to replay one canned server sequence, so a rendered stop,",
+            "// error, or empty-answer turn can be reviewed as an image without a",
+            "// server.",
             f"const FIXTURE_SSE = {json.dumps(sse)};",
-            "const fixtureResponse = () => {",
+            "const fixtureResponse = (signal) => {",
             "  const bytes = new TextEncoder().encode(FIXTURE_SSE);",
             "  let sent = false;",
             "  return {",
             "    ok: true,",
             "    body: { getReader: () => ({ read: async () => {",
-            "      if (sent) return { done: true };",
+            *held_read,
             "      sent = true;",
             "      return { done: false, value: bytes };",
             "    } }) },",
             "  };",
             "};",
-            "window.fetch = async (url) =>",
-            '  String(url).includes("/ready") ? { ok: false } : fixtureResponse();',
+            "window.fetch = async (url, options = {}) =>",
+            '  String(url).includes("/ready") ? { ok: false } : fixtureResponse(options.signal);',
             'window.addEventListener("load", () => {',
             f'  document.getElementById("query").value = {question};',
             '  document.getElementById("composer").requestSubmit();',
+            *press_stop,
             "});",
             "</script>",
         ]

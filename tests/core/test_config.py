@@ -235,7 +235,7 @@ def _agent_section() -> dict:
                 "streaming": False,
                 "provider_options": {"thinking": "disabled"},
             },
-            "memory": {"max_turns": 6},
+            "memory": {"max_turns": 6, "retention_days": 30},
         }
     }
 
@@ -259,6 +259,7 @@ class AgentSectionTests(unittest.TestCase):
         self.assertEqual(react.profile.max_tokens, 2048)
         self.assertEqual(agent.stream_turn_timeout_seconds, 120)
         self.assertEqual(agent.max_turns, 6)
+        self.assertEqual(agent.retention_days, 30)
         self.assertEqual(set(agent.deployments), {"react", "sql_generation"})
 
     def test_provider_is_derived_from_the_model_prefix(self) -> None:
@@ -332,6 +333,18 @@ class AgentSectionTests(unittest.TestCase):
                 with self.assertRaises(config_module.ConfigLoadError) as ctx:
                     config_module._build_agent_settings(config)
                 self.assertIn("agent.memory.max_turns", str(ctx.exception))
+
+    def test_memory_retention_refuses_missing_or_invalid_values(self) -> None:
+        for value in ("missing", None, 0, -1, True, "30", 30.0):
+            with self.subTest(value=value):
+                config = _agent_section()
+                if value == "missing":
+                    del config["agent"]["memory"]["retention_days"]
+                else:
+                    config["agent"]["memory"]["retention_days"] = value
+                with self.assertRaises(config_module.ConfigLoadError) as ctx:
+                    config_module._build_agent_settings(config)
+                self.assertIn("agent.memory.retention_days", str(ctx.exception))
 
     def test_memory_rejects_a_leftover_compaction_section(self) -> None:
         config = _agent_section()

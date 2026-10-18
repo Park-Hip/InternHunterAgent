@@ -46,7 +46,8 @@ The worst case per call is `timeout x max_attempts` plus those waits: 64 seconds
 `agent.stream_turn_timeout_seconds` is the end-to-end serving deadline for one agent turn: both the streamed `/api/v1/agent/chat/stream` and the non-streaming `/api/v1/agent/chat` stop at it and report the expiry as a retryable `provider_busy`.
 It is required, and a missing, non-integer, boolean, or non-positive value refuses boot (ADR-0048, amended by #656) instead of falling back.
 `database.connect_timeout_seconds` bounds every connection attempt (TCP, TLS, and authentication) so an unreachable database refuses boot within the bound; the configured value overrides any `connect_timeout` in a DSN.
-`agent.memory.max_turns` controls the memory window, `agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence (validated during settings load and application startup).
+`agent.memory.max_turns` bounds the model's window, counted in complete turns, and `agent.memory.retention_days` bounds storage: the serving process deletes every thread whose newest checkpoint is older than that age, once at boot and then daily.
+`agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence (validated during settings load and application startup).
 `ingestion.*` configures the pipeline.
 Per project convention, parameters are configured here rather than hard-coded.
 

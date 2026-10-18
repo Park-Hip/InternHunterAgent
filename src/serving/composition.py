@@ -20,6 +20,7 @@ load_settings()
 # E402 is waived for this module in pyproject.toml.
 from fastapi import FastAPI
 from fastmcp.utilities.lifespan import combine_lifespans
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from src.agents.mcp.adapter import list_job_tools
 from src.agents.mcp.job_server import (
@@ -39,7 +40,12 @@ from src.agents.tracing.langfuse import (
 from src.api.app import create_app
 from src.api.privilege_guard import assert_agent_privileges
 from src.api.schema_guard import assert_serving_schema
-from src.core.checkpointer import build_checkpointer, build_checkpointer_pool
+from src.core.checkpointer import (
+    build_checkpointer,
+    build_checkpointer_pool,
+    delete_stale_threads,
+)
+from src.core.config import settings
 from src.core.logger import logger
 
 # The shared FastMCP server backs both the in-process agent adapter and, when
@@ -75,6 +81,32 @@ def _assert_served_profile_credentials() -> None:
     logger.info("api.provider_credentials_ok", profiles=list(profiles))
 
 
+# The retention sweep's cadence. The configured age is measured in days, so the
+# sweep runs daily; a sleeping Render instance sweeps when it next boots (#673).
+_RETENTION_SWEEP_INTERVAL_SECONDS = 24 * 60 * 60
+
+
+async def _sweep_checkpoint_threads(checkpointer: AsyncPostgresSaver) -> None:
+    """Delete stale conversation threads once now, then once a day.
+
+    A failed sweep is logged and the loop continues: retention is housekeeping,
+    so a database hiccup must not silently end it for the process's lifetime.
+    """
+    while True:
+        try:
+            deleted = await delete_stale_threads(
+                checkpointer, retention_days=settings.agent.retention_days
+            )
+            logger.info(
+                "checkpointer.retention_swept",
+                deleted_threads=len(deleted),
+                retention_days=settings.agent.retention_days,
+            )
+        except Exception:
+            logger.exception("checkpointer.retention_sweep_failed")
+        await asyncio.sleep(_RETENTION_SWEEP_INTERVAL_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Assemble and tear down dependencies needed by the HTTP service."""
@@ -93,6 +125,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     pool = build_checkpointer_pool()
     await pool.open()
     diagnostic_task: asyncio.Task[None] | None = None
+    retention_task: asyncio.Task[None] | None = None
     try:
         # Both ends of the Langfuse client's life are here: created after the
         # guards and before prompt warming so the registry resolves against it,
@@ -110,14 +143,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Fire-and-track: this is a non-fatal diagnostic, so boot does not wait for
         # a network round trip to Langfuse.
         diagnostic_task = asyncio.create_task(diagnose_langfuse_startup())
+        # Fire-and-track: retention is housekeeping too, so boot does not wait
+        # for the sweep. It sweeps once now, then daily (#673).
+        retention_task = asyncio.create_task(_sweep_checkpoint_threads(checkpointer))
         yield
     finally:
         try:
-            if diagnostic_task is not None:
-                if not diagnostic_task.done():
-                    diagnostic_task.cancel()
+            # Both background tasks stop before the pool they use closes; each
+            # step runs even if an earlier one raised.
+            for task in (diagnostic_task, retention_task):
+                if task is not None and not task.done():
+                    task.cancel()
+            for task in (diagnostic_task, retention_task):
+                if task is None:
+                    continue
                 try:
-                    await diagnostic_task
+                    await task
                 except asyncio.CancelledError:
                     pass
         finally:

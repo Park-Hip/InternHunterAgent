@@ -1,6 +1,6 @@
 # Composition module guide
 
-> **Last verified:** 2026-10-17
+> **Last verified:** 2026-10-18
 
 > **Eviction:** Rewritten whenever `src/serving/` changes; removed when the module is retired.
 
@@ -27,8 +27,9 @@ paid here and nowhere else.
 
 - The process's single FastMCP job-query server, built once and shared by the agent and `/mcp`.
 - The boot order: two database guards, the served-credential guard, the checkpointer pool, the
-  Langfuse client, prompt warming, tool discovery, the runtime, and a non-fatal Langfuse check.
-- The teardown order: the diagnostic task, then Langfuse, then the pool.
+  Langfuse client, prompt warming, tool discovery, the runtime, and two fire-and-track tasks: the
+  non-fatal Langfuse check and the daily checkpoint-retention sweep.
+- The teardown order: both background tasks, then Langfuse, then the pool.
 - Both ends of the Langfuse client's life: `init_langfuse` creates it after the guards, and the
   teardown chain drains it. Importing the tracing module has no side effect.
 - The ASGI `app`, with or without the `/mcp` endpoint, chosen by `MCP_ENABLED`.
@@ -73,10 +74,11 @@ flowchart TD
         L7 --> L8{{"Discover MCP tools"}}
         L8 --> L9["app.state.runtime, stream observation factory"]
         L9 --> L10["Start Langfuse auth diagnostic, not awaited"]
-        L10 --> SERVE(["Serve requests"])
+        L10 --> L11["Start retention sweep: boot, then daily, not awaited"]
+        L11 --> SERVE(["Serve requests"])
     end
     IMPORT -->|"uvicorn starts the lifespan"| LIFESPAN
-    SERVE -.->|shutdown| T1["Cancel and await diagnostic"]
+    SERVE -.->|shutdown| T1["Cancel and await the background tasks"]
     T1 -.-> T2["Shut down Langfuse"]
     T2 -.-> T3["Close pool"]
     L6 & L7 & L8 -.->|raise| T2
@@ -99,6 +101,7 @@ flowchart TD
 | Tools | Lists the MCP server's tools as LangChain tools, in process | `src/agents/mcp/adapter.py` → `list_job_tools` | Raises before the runtime exists |
 | Runtime | `AgentRuntime(checkpointer, tools)` on `app.state.runtime` | `src/agents/runtime/react_agent.py` → `AgentRuntime` | - |
 | Diagnostic | Resolves the Langfuse project id and logs credential diagnostics in a background task | `src/agents/tracing/langfuse.py` → `diagnose_langfuse_startup` | Logged only; the trace link stays null until the next process start |
+| Retention | Deletes threads whose newest checkpoint is older than `agent.memory.retention_days`, once at boot and then daily, in a background task | `src/serving/composition.py` → `_sweep_checkpoint_threads`; `src/core/checkpointer.py` → `delete_stale_threads` | Logged; the loop retries at the next interval (#673) |
 
 **Why the guards run first.**
 uvicorn accepts no request until the lifespan finishes, so a guard that raises means the process
@@ -197,6 +200,8 @@ or after it, because the diagnostic is not awaited.
 | `ProviderCredentialError` naming the variable and the operate how-to | Lifespan | A deployment a served profile selects has no key; set it in the Render dashboard and redeploy |
 | `SchemaGuardError` naming `connection timeout expired`, `Application startup failed`, exit 3 | Lifespan | The database is unreachable; the connect attempt is bounded by `database.connect_timeout_seconds`, see section 6 |
 | `Langfuse startup authentication failed` | After boot | Tracing keys are wrong; serving is unaffected, and turns serve a null `trace_url` |
+| `checkpointer.retention_swept`, with `deleted_threads` and `retention_days` | After boot, then daily | The sweep ran; compare `SELECT count(DISTINCT thread_id) FROM checkpoints` before and after a short-retention run |
+| `checkpointer.retention_sweep_failed`, with a traceback | After boot, or later | A sweep failed; serving is unaffected and the loop retries at the next interval (#673) |
 
 ## 6. Trade-offs, and what would now be decided differently
 
@@ -215,6 +220,9 @@ or after it, because the diagnostic is not awaited.
 - **Tracing never blocks boot.** Langfuse is optional: prompts serve the reviewed YAML text and
   link a managed version only when its text agrees, the client is created locally with no network
   round trip, and the credential check is fire-and-track so boot never waits on a response.
+- **Retention never gates boot or a request.** The sweep is a fire-and-track task like the Langfuse
+  diagnostic; a failed sweep is logged and retried at the next interval, so housekeeping cannot
+  turn a healthy service into a failed deploy (#673).
 - **The API layer takes a lifespan instead of building one.** That keeps direct LangChain,
   Langfuse, and checkpointer imports out of `src/api/`, as `AGENTS.md` requires.
 
@@ -258,10 +266,10 @@ that import `src.serving.composition` all name it; move them in one pull request
 | `src/api/schema_guard.py` → `assert_serving_schema`, `EXPECTED_COLUMNS` | Schema guard |
 | `src/api/privilege_guard.py` → `assert_agent_privileges` | Privilege guard |
 | `src/agents/runtime/provider.py` → `assert_profile_credential`, `build_model` | Credential guard and model construction |
-| `src/core/checkpointer.py` → `build_checkpointer_pool`, `build_checkpointer` | Pool and checkpoint tables |
+| `src/core/checkpointer.py` → `build_checkpointer_pool`, `build_checkpointer`, `delete_stale_threads` | Pool, checkpoint tables, and the retention sweep's deletion |
 | `src/core/db.py` → `connect_timeout_seconds` | The service-owned connect bound carried by both engines and the checkpointer pool |
 | `src/core/config.py` → `load_settings`, `ConfigLoadError` | The import-time configuration contract |
 | `src/agents/mcp/job_server.py` → `create_job_mcp_server`, `mcp_endpoint_enabled` | Tool surface, endpoint switch |
 | `src/agents/mcp/adapter.py` → `list_job_tools` | Tool discovery |
 | `src/agents/tracing/langfuse.py` → `init_langfuse`, `prepare_native_prompts_startup`, `diagnose_langfuse_startup`, `shutdown_langfuse` | Tracing lifecycle |
-| `tests/api/test_startup_config.py`, `tests/api/test_mcp.py`, `tests/api/test_privilege_guard.py` | The behaviour pinned by tests |
+| `tests/api/test_startup_config.py`, `tests/api/test_mcp.py`, `tests/api/test_privilege_guard.py`, `tests/api/test_retention.py` | The behaviour pinned by tests |

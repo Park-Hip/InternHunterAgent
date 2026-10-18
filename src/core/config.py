@@ -176,11 +176,16 @@ class ResolvedDeployment(BaseModel):
 
 
 class MemorySettings(BaseModel):
-    """The session memory bound: one cap measured in complete turns."""
+    """The session memory bounds: what the model sees, and what is stored.
+
+    ``max_turns`` caps the model's window, counted in complete turns;
+    ``retention_days`` caps storage, deleting a thread idle for longer.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     max_turns: StrictInt = Field(gt=0)
+    retention_days: StrictInt = Field(gt=0)
 
 
 class AgentSettings(BaseModel):
@@ -196,6 +201,7 @@ class AgentSettings(BaseModel):
     deployments: dict[str, ResolvedDeployment]
     stream_turn_timeout_seconds: StrictInt = Field(gt=0)
     max_turns: StrictInt = Field(gt=0)
+    retention_days: StrictInt = Field(gt=0)
 
     def deployment_for(self, profile: str) -> ResolvedDeployment:
         """Return the profile's deployment, refusing an unknown profile."""
@@ -376,6 +382,7 @@ def _build_agent_settings(config: dict[str, Any]) -> AgentSettings:
     raw_agent_settings: dict[str, Any] = {
         "deployments": resolved,
         "max_turns": memory_settings.max_turns,
+        "retention_days": memory_settings.retention_days,
     }
     if "stream_turn_timeout_seconds" in agent:
         raw_agent_settings["stream_turn_timeout_seconds"] = agent[

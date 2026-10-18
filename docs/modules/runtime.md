@@ -187,12 +187,13 @@ The handshake is the only way to drive `astream`: `completion_event` is required
 
 ## 5. Memory: what is stored, and what the model sees
 
-One bound, measured in turns, configured under `agent.memory` in `config/settings.yaml` and validated once at load into `settings.agent.max_turns`:
+Two bounds, configured under `agent.memory` in `config/settings.yaml` and validated once at load into `settings.agent`:
 
 ```yaml
 agent:
   memory:
     max_turns: 6
+    retention_days: 30
 ```
 
 - **Stored.** `AsyncPostgresSaver` keeps the whole thread in the application database, through `DATABASE_URL` (the owner role, not the read-only agent role).
@@ -200,6 +201,8 @@ agent:
   Each turn replays the stored messages; there is no other memory code, and refining a question is the model reading its own earlier turns.
 - **Seen.** `TrimTurnsMiddleware` wraps each model call and cuts its input to the last 6 complete turns, counting a turn from each `HumanMessage`.
   It changes only the request, never storage.
+- **Kept.** The serving process deletes every thread whose newest checkpoint is older than `retention_days`, with its blobs and writes, once at boot and then daily (#673).
+  Deletion is the only storage bound, and it is by age, never by rewriting what a thread holds.
 
 Driving the real middleware stack with a recording model that calls one tool per turn:
 
@@ -208,7 +211,7 @@ Driving the real middleware stack with a recording model that calls one tool per
 | 1 to 6 | 4 to 24 | Every turn so far |
 | 7 to 16 | 28 to 64 | The last 6 turns |
 
-So the model's memory is a sliding window of 6 turns, and storage grows by at least 4 messages per tool-using turn with no cap; only checkpoint retention can bound it (#673).
+So the model's memory is a sliding window of 6 turns, and a live thread grows by at least 4 messages per tool-using turn with no cap; the retention sweep is what bounds how long that thread is kept (#673).
 A thread compacted before #672 keeps its summary message, which now counts as one turn and ages out of the window.
 
 **Why there is no compaction.**
@@ -220,8 +223,8 @@ A demo session rarely exceeds 6 tool turns, so #672 removed it rather than gover
 
 **What else is true of the stored thread.**
 
-- Nothing deletes a thread.
-  A browser reload starts a new session, and the old thread stays in Postgres (#673).
+- Only the retention sweep deletes a thread.
+  A browser reload starts a new session, and the abandoned thread is deleted by the sweep once its newest checkpoint is older than `retention_days` (#673).
 - A turn stopped after its first token keeps the tool calls and results but not the partial answer, so the model does not know what the user saw.
   ADR-0049 accepts that: no partial-response persistence.
 - A turn stopped while a tool runs keeps a tool call with no result; before the next model call a synthetic tool message answers it, so the session keeps working (section 6, #671).
@@ -300,22 +303,22 @@ The web client and the eval driver do not use the route; the API contract keeps 
 - **No partial-answer persistence** (ADR-0049).
   A stopped answer is not stored, so a stop never writes half a sentence into memory.
 - **Memory in the application database**, so a conversation survives a restart and works across instances, never in Langfuse's database.
-- **One memory bound, counted in turns** (#672).
+- **One bound on what the model sees, counted in turns** (#672).
   A turn is the unit a follow-up refers to, so the window never splits a question from its answer, and no unmanaged prompt rewrites a user's history.
+- **Storage is bounded by deleting threads, not by rewriting them** (#673).
+  A thread whose newest checkpoint is older than `agent.memory.retention_days` loses all its rows, so removal is a whole-conversation operation a live thread never notices.
 - **No per-session serialisation.**
   A per-session lock would be cheap with one web worker but would do nothing across instances, and the only client that matters cannot send two turns at once.
 
 **Would now be decided differently.**
 Each item was found while preparing this guide and is tracked by an issue.
 
-1. **Thread storage has no bound** (#673).
-   Removing compaction (#672) left the 6-turn trim as the only memory bound, which limits what the model sees but not what is stored; retention deletes old threads.
-2. **Untyped events** (#679).
+1. **Untyped events** (#679).
    The event models move into the agents package, the API imports them for its schema, and internal signals get their own types.
-3. **The runtime imports tracing directly.**
+2. **The runtime imports tracing directly.**
    Not decided here: the tracing guide (row 6) decides whether the runtime goes behind a port like the service.
 
-The next change in the same code is #679; #673 is independent.
+The next change in the same code is #679.
 The follow-up in the same area is #706 (the count as the model reads it, row 5).
 
 ## 9. Changing it safely

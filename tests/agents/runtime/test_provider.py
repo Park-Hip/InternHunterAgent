@@ -43,7 +43,7 @@ def _agent_config(
                 "streaming": False,
                 "provider_options": {"thinking": "disabled"},
             },
-            "memory": {"max_turns": 6},
+            "memory": {"max_turns": 6, "retention_days": 30},
         }
     }
 

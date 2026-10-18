@@ -1,6 +1,17 @@
+import re
 import unittest
+from pathlib import Path
 
-from src.services.query.sql_validator import validate_sql
+import yaml
+
+from src.services.query.sql_validator import HIDDEN_COLUMNS, validate_sql
+
+PROMPTS_PATH = Path(__file__).resolve().parents[3] / "config" / "prompts.yaml"
+# The one line in `sql_generation` that declares the agent-visible columns. The
+# audit script (`scripts/audit_sql_prompt_columns.py`) gates the same wording.
+DECLARED_PATTERN = re.compile(
+    r"Reference only real columns:\s*(.+?)\.\s+Never invent a column", re.DOTALL
+)
 
 
 class ValidateSqlTests(unittest.TestCase):
@@ -355,6 +366,69 @@ class ValidateSqlTests(unittest.TestCase):
 
         self.assertTrue(result.valid)
         self.assertEqual(result.reason, "")
+
+
+class HiddenColumnTests(unittest.TestCase):
+    def test_rejects_each_hidden_column(self) -> None:
+        for column in sorted(HIDDEN_COLUMNS):
+            with self.subTest(column=column):
+                result = validate_sql(f"SELECT {column} FROM clean_jobs")
+
+                self.assertFalse(result.valid)
+                self.assertIn("Hidden column", result.reason)
+
+    def test_rejects_hidden_column_in_filter(self) -> None:
+        result = validate_sql("SELECT title FROM clean_jobs WHERE source = 'linkedin'")
+
+        self.assertFalse(result.valid)
+        self.assertIn("Hidden column", result.reason)
+
+    def test_rejects_hidden_column_case_insensitively(self) -> None:
+        result = validate_sql("SELECT EXTERNAL_ID FROM clean_jobs")
+
+        self.assertFalse(result.valid)
+        self.assertIn("Hidden column", result.reason)
+
+    def test_rejects_quoted_hidden_column(self) -> None:
+        result = validate_sql('SELECT "external_id" FROM clean_jobs')
+
+        self.assertFalse(result.valid)
+        self.assertIn("Hidden column", result.reason)
+
+    def test_rejects_unicode_escaped_hidden_column(self) -> None:
+        result = validate_sql('SELECT U&"external\\005fid" FROM clean_jobs')
+
+        self.assertFalse(result.valid)
+        self.assertIn("Hidden column", result.reason)
+
+    def test_allows_hidden_column_name_inside_string_literal(self) -> None:
+        result = validate_sql(
+            "SELECT title FROM clean_jobs WHERE description ILIKE '%external_id%'"
+        )
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.reason, "")
+
+    def test_allows_visible_column_sharing_a_hidden_prefix(self) -> None:
+        result = validate_sql("SELECT source_url FROM clean_jobs")
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.reason, "")
+
+
+class HiddenColumnContractTests(unittest.TestCase):
+    def test_hidden_columns_partition_the_physical_contract(self) -> None:
+        from src.api.schema_guard import EXPECTED_COLUMNS
+
+        prompt = yaml.safe_load(PROMPTS_PATH.read_text(encoding="utf-8"))["prompts"][
+            "sql_generation"
+        ]
+        match = DECLARED_PATTERN.search(prompt)
+        self.assertIsNotNone(match)
+        declared = {column.strip() for column in match.group(1).split(",") if column.strip()}
+
+        self.assertEqual(HIDDEN_COLUMNS & declared, frozenset())
+        self.assertEqual(HIDDEN_COLUMNS | declared, frozenset(EXPECTED_COLUMNS))
 
 
 if __name__ == "__main__":

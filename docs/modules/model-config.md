@@ -102,7 +102,7 @@ Only the first two moments below can stop the process.
 | Moment | What happens | Code | On failure |
 |---|---|---|---|
 | Import | `load_settings` validates and resolves the whole `agent` section: model strings are provider-qualified, key names look like environment variable names, profile numbers are in range, provider options are known, and the turn deadline is a positive integer | `src/core/config.py` → `_build_agent_settings` | `ConfigLoadError` naming the YAML path, boot refused in about two seconds |
-| Boot, in the lifespan | After the database guards and before the checkpointer pool opens, each served profile's deployment must have a non-empty key: `react` always, and `sql_generation` only while the v1 `query_clean_jobs` tool is registered | `src/serving/composition.py` → `_assert_served_profile_credentials`; `src/agents/runtime/provider.py` → `assert_profile_credential` | `ProviderCredentialError` naming the variable, uvicorn exits 3 |
+| Boot, in the lifespan | After the database guards and before the checkpointer pool opens, each served profile's deployment must have a non-empty key: `react` always, and `sql_generation` because the registered `query_clean_jobs` tool always reaches the SQL path | `src/serving/composition.py` → `_assert_served_profile_credentials`; `src/agents/runtime/provider.py` → `assert_profile_credential` | `ProviderCredentialError` naming the variable, uvicorn exits 3 |
 | First request per system prompt | `AgentRuntime` compiles one agent per system prompt version and content; the first such compile builds the `react` model (once per process) and reads its key again | `src/agents/runtime/factory.py` → `agent_factory` | The same `ProviderCredentialError`, from the same resolver as the boot check, if the key disappeared after boot |
 | Every `query_clean_jobs` call | The `sql_generation` model is built on the first call and reused after | `src/agents/tools/query_clean_jobs.py` → `generate_sql` | Same as above, inside the tool |
 | Every trace | Tracing reads the `react` deployment from the typed settings for the `provider:` and `model:` tags and the stream latency metadata | `src/agents/tracing/langfuse.py` → `_base_langfuse_tags`, `_react_model_name` | Raises if the `react` deployment is missing; there is no fallback |
@@ -110,8 +110,8 @@ Only the first two moments below can stop the process.
 The runtime never re-parses YAML: every row below Import reads the typed settings built at load.
 The key check deliberately stays in the lifespan rather than in settings loading, so offline commands such as ingestion do not need a provider key.
 
-While `agent.agent_v0` is `true`, the v0 bundle serves and `query_clean_jobs` is not registered, so the `sql_generation` profile is validated and required but never called in production.
-ADR-0060 retires v0: #648 flips the switch and #649 removes the bundle, after which `sql_generation` is the permanent query path.
+`sql_generation` is the permanent query path: the v0 bundle and its switch are retired
+(ADR-0060), so both profiles are always served and both keys are required at boot.
 
 ## 4. Why two profiles
 
@@ -206,7 +206,8 @@ Mechanically it is one line, `agent.react.provider_options.thinking: enabled`, w
   This is read from the source, not verified live.
 - *What it would cost:* the runtime streams only non-empty string content, so the user sees an empty answer while the model reasons, and time to first token rises.
   Reasoning is billed as output, may count against `max_tokens: 2048`, spends the 120 s turn deadline, and lands in the checkpointed history.
-- *Why after #649:* retiring v0 changes the `react` agent's job, so a measurement taken now measures the system about to be removed.
+- *Why it waited for #649:* retiring v0 changed the `react` agent's job; a measurement taken before
+  the removal would have measured the system now deleted.
 
 The right shape is a research-led issue after #649 that runs the eval suite with thinking on and off for `react` only, comparing pass rate, time to first token, tokens per turn, and tool-loop errors.
 

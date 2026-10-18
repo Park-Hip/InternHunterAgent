@@ -1,10 +1,10 @@
 # Authoring Scenarios
 
-> **Last verified:** 2026-10-01.
+> **Last verified:** 2026-10-17.
 
 > **Eviction:** This document leaves when the scenario grammar, metric contract, or authoring commands change.
 
-> **Source:** `evals/datasets.py`, `evals/datasets/scenarios.yaml`, `evals/metrics.py`
+> **Source:** `evals/datasets.py`, `evals/datasets/scenarios.yaml`, `evals/metrics.py`, `evals/sql_gate.py`
 
 Scenarios are declarative YAML, validated by [`datasets.py`](../datasets.py) when the harness loads them.
 There is no separate registry loader: `DatasetSpec.scenarios()` is the single validator, and it rejects a scenario the harness would otherwise silently misread.
@@ -14,10 +14,13 @@ There is no separate registry loader: `DatasetSpec.scenarios()` is the single va
 | Dataset | File | Select with |
 |---|---|---|
 | v1 scenarios | [`../datasets/scenarios.yaml`](../datasets/scenarios.yaml) | `--dataset default` |
-| v0 acceptance cases | [`../datasets/v0_acceptance.yaml`](../datasets/v0_acceptance.yaml) | `--dataset v0` |
 
 A new version is a new dataset entry, never an edit to an existing registry.
 The same id must be unique within its dataset.
+
+The SQL guard gate's corpus, [`../datasets/sql_guard.yaml`](../datasets/sql_guard.yaml), is not a
+scenario dataset: it is read by `SqlGuardDataset` in [`../sql_gate.py`](../sql_gate.py) and its cases
+are reviewed SQL statements, obligations, and results.
 
 ## Enforced grammar
 
@@ -28,10 +31,9 @@ The same id must be unique within its dataset.
 3. A scenario with neither `input` nor `turns`.
 4. A scenario without a string `expected`.
 5. A `metrics` list that is empty, missing, or names an unknown metric.
-6. A v0 case that declares `sql_accuracy` or `memory` (retired for the governed path by #487).
-7. A scenario declaring `sql_accuracy` without `reference_sql`.
-8. A scenario declaring `rubric` without a `rubric`.
-9. A tool key the harness does not read, or a malformed tool expectation.
+6. A scenario declaring `sql_accuracy` without `reference_sql`.
+7. A scenario declaring `rubric` without a `rubric`.
+8. A tool key the harness does not read, or a malformed tool expectation.
 
 The loader reads only four tool keys: `expected_tools`, `tool_expectation`, `turn_tool_expectations`, and `tool_order`.
 Any other key containing `tool` is an explicit error.

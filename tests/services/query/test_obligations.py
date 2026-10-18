@@ -107,3 +107,29 @@ class DetectObligationsTests(unittest.TestCase):
             [obligation.glossary_token for obligation in obligations],
             ["NEGOTIABLE_SALARY"],
         )
+
+    def test_aggregates_over_salary_require_cross_currency_caveat(self) -> None:
+        table = TableArtifact(columns=["aggregate"], rows=[[17500625]], row_count=1)
+
+        for expression in (
+            "avg(salary_min)",
+            "sum(salary_max)",
+            "max(salary_min)",
+            "min(salary_max)",
+        ):
+            with self.subTest(expression=expression):
+                obligations = detect_obligations(
+                    f"SELECT {expression} FROM clean_jobs", table
+                )
+
+                self.assertEqual(
+                    [obligation.glossary_token for obligation in obligations],
+                    ["CROSS_CURRENCY"],
+                )
+
+    def test_count_does_not_require_cross_currency_caveat(self) -> None:
+        table = TableArtifact(columns=["count"], rows=[[24]], row_count=1)
+
+        obligations = detect_obligations("SELECT count(*) FROM clean_jobs", table)
+
+        self.assertEqual(obligations, [])

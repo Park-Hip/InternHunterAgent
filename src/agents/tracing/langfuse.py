@@ -13,12 +13,9 @@ from src.agents.runtime.prompts import (
     ResolvedPromptBundle,
     load_resolved_prompt_versions,
     load_resolved_prompt_versions_async,
-    resolve_prompt_async,
-    v0_agent_enabled,
 )
 from src.agents.tracing.prompt_registry import (
     SYSTEM_PROMPT_SURFACE,
-    V0_SYSTEM_PROMPT_SURFACE,
     ResolvedPrompt,
     get_prompt_registry,
 )
@@ -394,27 +391,18 @@ def langfuse_prompt_attributes(prompt: ResolvedPrompt) -> Iterator[None]:
 
 
 async def prepare_native_prompts_startup() -> None:
-    """Warm every prompt the served bundle can resolve, before requests can.
+    """Warm every prompt the served bundle resolves, before requests can.
 
-    The v1 tuple alone was not enough: the governed v0 bundle resolves its own
-    system surface, so warming only the v1 surfaces left the v0 prompt resolved
-    lazily on the first request. A v0 prompt that was never registered in
-    Langfuse then degraded to the checked-in text silently - which is defensible
-    behaviour with a much smaller blast radius than a mixed bundle, but an
-    operator still needs to see which version is actually live.
+    A prompt that was never registered in Langfuse degrades to the checked-in
+    text silently, which is defensible behaviour but an operator still needs to
+    see which version is actually live.
     """
     resolved = await get_prompt_registry().prefetch_async()
-    surfaces = tuple(resolved)
-    if v0_agent_enabled():
-        v0_prompt = await resolve_prompt_async(V0_SYSTEM_PROMPT_SURFACE)
-        resolved = {**resolved, V0_SYSTEM_PROMPT_SURFACE: v0_prompt}
     logger.info(
         "langfuse.prompts_prefetched",
         prompts={surface: prompt.version for surface, prompt in resolved.items()},
-        served_system_surface=(
-            V0_SYSTEM_PROMPT_SURFACE if v0_agent_enabled() else SYSTEM_PROMPT_SURFACE
-        ),
-        warmed=tuple(surfaces) + ((V0_SYSTEM_PROMPT_SURFACE,) if v0_agent_enabled() else ()),
+        served_system_surface=SYSTEM_PROMPT_SURFACE,
+        warmed=tuple(resolved),
     )
 
 

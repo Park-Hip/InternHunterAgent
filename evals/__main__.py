@@ -1,4 +1,4 @@
-"""Run the evaluation dataset live, score a retained capture offline, or gate v0."""
+"""Run the evaluation dataset live, score a retained capture offline, or gate the SQL guard."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from evals.datasets import dataset, default_dataset_name, list_datasets
 from evals.metrics import METRIC_BY_NAME, MetricKind, metric
 from evals.report import print_table, to_table_rows
 from evals.run import run_dataset, write_report
-from evals.v0_gate import GateUnavailable, failed_cases, run_v0_gate
+from evals.sql_gate import GateUnavailable, SqlGuardDataset, failed_cases, run_sql_gate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -30,14 +30,15 @@ def main(argv: list[str] | None = None) -> int:
         "run must never read as a pass.",
     )
     parser.add_argument(
-        "--deterministic",
+        "--gate",
         action="store_true",
-        help="Gate the governed v0 dataset: no capture, no model, no judge. Fails when the "
-        "fixture database is unreachable rather than skipping it.",
+        help="Run the credential-free SQL guard gate: reviewed SQL statements, no "
+        "capture, no model, no judge. Fails when the fixture database is unreachable "
+        "rather than skipping it.",
     )
     args = parser.parse_args(argv)
 
-    if args.deterministic:
+    if args.gate:
         return _run_gate(args)
     names = args.only.split(",") if args.only else list(METRIC_BY_NAME)
     ids = args.ids.split(",") if args.ids else None
@@ -80,21 +81,22 @@ def _exit_code(by_metric: dict[str, list[dict[str, Any]]], allow_fail: bool) -> 
 
 
 def _run_gate(args: argparse.Namespace) -> int:
-    """The credential-free v0 gate: the core is called directly, not captured."""
-    spec = dataset(args.dataset)
-    if not spec.is_v0:
-        parser_error = "--deterministic only applies to the governed v0 dataset"
-        print(parser_error, file=sys.stderr)
+    """The credential-free SQL guard gate: the reviewed statements are called directly."""
+    if args.dataset != default_dataset_name():
+        print(
+            "--gate scores its own reviewed dataset; --dataset does not apply",
+            file=sys.stderr,
+        )
         return 2
     ids = args.ids.split(",") if args.ids else None
     try:
-        report = run_v0_gate(spec, ids=ids)
+        report = run_sql_gate(SqlGuardDataset(), ids=ids)
     except GateUnavailable as exc:
         # An unavailable database is a failed gate. Reporting it as a pass is the
         # failure mode this gate exists to remove.
         print(f"GATE FAILED: {exc}", file=sys.stderr)
         return 2
-    from evals.v0_gate import write_report as write_gate_report
+    from evals.sql_gate import write_report as write_gate_report
 
     write_gate_report(report, args.out)
     print_table(to_table_rows(report["by_metric"]))

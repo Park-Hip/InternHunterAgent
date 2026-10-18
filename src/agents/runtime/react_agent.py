@@ -4,7 +4,7 @@ from typing import Any, cast
 
 from langchain.messages import HumanMessage, SystemMessage
 
-from src.agents.runtime.factory import agent_factory
+from src.agents.runtime.factory import agent_factory as default_agent_factory
 from src.agents.runtime.prompts import (
     ResolvedPrompt,
     ResolvedPromptBundle,
@@ -25,11 +25,10 @@ from src.agents.runtime.tool_events import (
 
 
 class AgentRuntime:
-    def __init__(self, agent=None, checkpointer=None, tools=None):
+    def __init__(self, agent_factory=None, checkpointer=None, tools=None):
         self._checkpointer = checkpointer
         self._tools = tools
-        self._managed_agent = agent is None
-        self.agent = agent
+        self._agent_factory = agent_factory or default_agent_factory
         self._managed_agents: dict[tuple[str, str], Any] = {}
 
     async def _active_agent(
@@ -37,12 +36,10 @@ class AgentRuntime:
     ) -> tuple[Any, ResolvedPrompt]:
         """Return the agent compiled for this request's immutable system prompt."""
         prompt = prompts.system
-        if not self._managed_agent:
-            return self.agent, prompt
         key = (prompt.version, prompt.content)
         agent = self._managed_agents.get(key)
         if agent is None:
-            agent = await agent_factory(
+            agent = await self._agent_factory(
                 checkpointer=self._checkpointer,
                 system_prompt=SystemMessage(content=prompt.content),
                 tools=self._tools,
@@ -56,14 +53,20 @@ class AgentRuntime:
         user_id: str | None = None,
         session_id: str | None = None,
         observation: StreamObservation | None = None,
-        completion_event: asyncio.Event | None = None,
+        *,
+        completion_event: asyncio.Event,
     ) -> AsyncGenerator[dict[str, object], None]:
+        """Stream the answer, keeping the trace span open until the service is done.
+
+        The service owns the turn's end: it completes the observation, sends
+        `done`, and only then sets `completion_event`, which is what keeps the
+        span covering the whole stream.
+        """
         config = build_langfuse_config(
             entry_point="api:chat-stream",
         )
         if session_id:
             config = {**config, "configurable": {"thread_id": session_id}}
-        messages = self._build_messages(query)
         prompts = await resolve_prompt_bundle_async()
         agent, system_prompt = await self._active_agent(prompts)
 
@@ -81,7 +84,7 @@ class AgentRuntime:
         async def _produce_stream() -> None:
             try:
                 async for chunk, metadata in agent.astream(
-                    messages,
+                    {"messages": [HumanMessage(content=query)]},
                     config=config or None,
                     stream_mode="messages",
                 ):
@@ -115,25 +118,20 @@ class AgentRuntime:
                 while True:
                     event = await events.get()
                     if isinstance(event, Exception):
-                        if completion_event is None:
-                            if observation is not None:
-                                observation.complete("error")
-                            stream_completed = True
-                            raise event
+                        # A provider failure is reported as an event, not
+                        # raised: the service classifies it and owns the error
+                        # payload, and the span stays open until it has sent
+                        # `done`.
                         provider_failed = True
                         yield {"type": "runtime_error", "exception": event}
                         await completion_event.wait()
                         stream_completed = True
                         break
                     if event["type"] == "complete":
-                        if completion_event is None:
-                            if observation is not None:
-                                observation.complete("success")
-                            stream_completed = True
                         break
                     yield cast(dict[str, object], event)
 
-                if completion_event is not None and not provider_failed:
+                if not provider_failed:
                     yield {
                         "type": "metadata",
                         "trace_id": trace_id,
@@ -147,17 +145,5 @@ class AgentRuntime:
                     producer.cancel()
                 await asyncio.gather(producer, return_exceptions=True)
                 if not stream_completed:
-                    if completion_event is not None:
-                        await completion_event.wait()
-                    elif observation is not None:
-                        observation.complete("cancelled")
+                    await completion_event.wait()
 
-        if completion_event is None:
-            yield {
-                "type": "metadata",
-                "trace_id": trace_id,
-                "trace_url": langfuse_trace_url(trace_id=trace_id),
-            }
-
-    def _build_messages(self, query: str) -> dict[str, list[HumanMessage]]:
-        return {"messages": [HumanMessage(content=query)]}

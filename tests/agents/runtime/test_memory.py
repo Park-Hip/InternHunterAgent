@@ -104,6 +104,15 @@ def _contents(messages) -> list:
     return [getattr(m, "content", None) for m in messages]
 
 
+def _agent_factory_for(agent):
+    """A factory the runtime can call to obtain this test's prebuilt agent."""
+
+    async def build(**_kwargs):
+        return agent
+
+    return build
+
+
 class MultiTurnRefinementTests(unittest.IsolatedAsyncioTestCase):
     async def test_second_turn_sees_first_turn_context(self) -> None:
         model = RecordingChatModel()
@@ -149,7 +158,8 @@ class SessionIsolationTests(unittest.IsolatedAsyncioTestCase):
 class GeneratedSessionIdTests(unittest.IsolatedAsyncioTestCase):
     async def test_generated_session_id_opens_a_fresh_thread_per_request(self) -> None:
         model = RecordingChatModel()
-        runtime = AgentRuntime(agent=_build_agent(model, InMemorySaver()))
+        agent = _build_agent(model, InMemorySaver())
+        runtime = AgentRuntime(agent_factory=_agent_factory_for(agent))
 
         first = await collect_agent_response(
             query="secret-from-first-turn", runtime=runtime

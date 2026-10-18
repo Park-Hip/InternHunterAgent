@@ -5,6 +5,12 @@ import uuid
 import unittest
 from unittest.mock import ANY, MagicMock, patch
 
+from src.agents.models import (
+    InternalStreamError,
+    RuntimeFailed,
+    StreamMetadataEvent,
+    StreamTokenEvent,
+)
 from src.agents.service import (
     BUSY_MESSAGE,
     GENERIC_ERROR_MESSAGE,
@@ -25,13 +31,13 @@ class CollectAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         observation_factory = MagicMock(return_value=observation)
 
         async def token_stream(**_kwargs):
-            yield {"type": "token", "text": "There are "}
-            yield {"type": "token", "text": "3 roles."}
-            yield {
-                "type": "metadata",
-                "trace_id": "trace-123",
-                "trace_url": "https://cloud.langfuse.com/project/p/traces/trace-123",
-            }
+            yield StreamTokenEvent(type="token", text="There are ")
+            yield StreamTokenEvent(type="token", text="3 roles.")
+            yield StreamMetadataEvent(
+                type="metadata",
+                trace_id="trace-123",
+                trace_url="https://cloud.langfuse.com/project/p/traces/trace-123",
+            )
 
         runtime.astream = MagicMock(side_effect=token_stream)
 
@@ -63,8 +69,8 @@ class CollectAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_generates_session_id_when_omitted(self) -> None:
         async def token_stream(**_kwargs):
-            yield {"type": "token", "text": "ok"}
-            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+            yield StreamTokenEvent(type="token", text="ok")
+            yield StreamMetadataEvent(type="metadata", trace_id=None, trace_url=None)
 
         runtime = MagicMock()
         runtime.astream = MagicMock(side_effect=token_stream)
@@ -87,7 +93,7 @@ class CollectAgentResponseTests(unittest.IsolatedAsyncioTestCase):
     async def test_empty_answer_fallback_is_logged_once(self, mock_logger) -> None:
         async def empty_stream(**_kwargs):
             if False:  # pragma: no cover - keeps this an async generator
-                yield {}
+                yield StreamTokenEvent(type="token", text="")
 
         runtime = MagicMock()
         runtime.astream = MagicMock(side_effect=empty_stream)
@@ -174,8 +180,8 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         self,
     ) -> None:
         async def token_stream(**_kwargs):
-            yield {"type": "token", "text": "Visible answer"}
-            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+            yield StreamTokenEvent(type="token", text="Visible answer")
+            yield StreamMetadataEvent(type="metadata", trace_id=None, trace_url=None)
 
         runtime = MagicMock()
         runtime.astream = MagicMock(side_effect=token_stream)
@@ -192,7 +198,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         ]
 
         self.assertEqual(
-            [event["type"] for event in events],
+            [event.type for event in events],
             ["session", "token", "metadata", "done"],
         )
         observation_factory.assert_called_once_with()
@@ -225,7 +231,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         ]
 
         self.assertEqual(
-            [event["type"] for event in events], ["session", "error", "done"]
+            [event.type for event in events], ["session", "error", "done"]
         )
         observation.mark_user_visible.assert_not_called()
 
@@ -233,10 +239,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         self,
     ) -> None:
         async def failing_stream(*, completion_event, **_kwargs):
-            yield {
-                "type": "runtime_error",
-                "exception": RuntimeError("provider failed"),
-            }
+            yield RuntimeFailed(RuntimeError("provider failed"))
             await completion_event.wait()
 
         runtime = MagicMock()
@@ -249,9 +252,9 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             stream_observation_factory=MagicMock(return_value=observation),
         )
 
-        self.assertEqual((await anext(stream))["type"], "session")
-        self.assertEqual((await anext(stream))["type"], "error")
-        self.assertEqual((await anext(stream))["type"], "done")
+        self.assertEqual((await anext(stream)).type, "session")
+        self.assertEqual((await anext(stream)).type, "error")
+        self.assertEqual((await anext(stream)).type, "done")
         observation.complete.assert_not_called()
         with self.assertRaises(StopAsyncIteration):
             await anext(stream)
@@ -263,8 +266,8 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
         async def buffered_stream(**_kwargs):
             try:
-                yield {"type": "token", "text": "first"}
-                yield {"type": "token", "text": "second"}
+                yield StreamTokenEvent(type="token", text="first")
+                yield StreamTokenEvent(type="token", text="second")
                 second_event_buffered.set()
                 await asyncio.Event().wait()
             finally:
@@ -278,8 +281,8 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             session_id="session-buffered-disconnect",
         )
 
-        self.assertEqual((await anext(stream))["type"], "session")
-        self.assertEqual((await anext(stream))["text"], "first")
+        self.assertEqual((await anext(stream)).type, "session")
+        self.assertEqual((await anext(stream)).text, "first")
         await asyncio.wait_for(second_event_buffered.wait(), timeout=0.1)
         await asyncio.wait_for(stream.aclose(), timeout=0.1)
         self.assertTrue(runtime_cancelled.is_set())
@@ -321,7 +324,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(cancellation_received.wait(), timeout=0.1)
         self.assertFalse(cleaned_up.is_set())
         self.assertEqual(
-            events,
+            [event.model_dump() for event in events],
             [
                 {"type": "session", "session_id": "session-timeout"},
                 {
@@ -337,8 +340,8 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(mock_logger.error.call_args.kwargs["deadline_exceeded"])
 
         async def completed_stream(**_kwargs):
-            yield {"type": "token", "text": "A subsequent turn succeeds."}
-            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+            yield StreamTokenEvent(type="token", text="A subsequent turn succeeds.")
+            yield StreamMetadataEvent(type="metadata", trace_id=None, trace_url=None)
 
         mock_settings.agent.stream_turn_timeout_seconds = 1
         runtime.astream = MagicMock(side_effect=completed_stream)
@@ -352,7 +355,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         ]
 
         self.assertEqual(
-            [event["type"] for event in follow_up_events],
+            [event.type for event in follow_up_events],
             ["session", "token", "metadata", "done"],
         )
 
@@ -376,9 +379,9 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             stream_observation_factory=MagicMock(return_value=observation),
         )
 
-        self.assertEqual((await anext(stream))["type"], "session")
-        self.assertEqual((await anext(stream))["type"], "error")
-        self.assertEqual((await anext(stream))["type"], "done")
+        self.assertEqual((await anext(stream)).type, "session")
+        self.assertEqual((await anext(stream)).type, "error")
+        self.assertEqual((await anext(stream)).type, "done")
         observation.complete.assert_not_called()
         with self.assertRaises(StopAsyncIteration):
             await anext(stream)
@@ -394,10 +397,10 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
         async def buffering_stream(**_kwargs):
             try:
-                yield {"type": "token", "text": "first"}
-                yield {"type": "token", "text": "second"}
+                yield StreamTokenEvent(type="token", text="first")
+                yield StreamTokenEvent(type="token", text="second")
                 third_token_requested.set()
-                yield {"type": "token", "text": "third"}
+                yield StreamTokenEvent(type="token", text="third")
                 await asyncio.Event().wait()
             finally:
                 runtime_cancelled.set()
@@ -412,17 +415,17 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             stream_observation_factory=MagicMock(return_value=observation),
         )
 
-        self.assertEqual((await anext(stream))["type"], "session")
+        self.assertEqual((await anext(stream)).type, "session")
 
         # A slow consumer: the service yields the first token and then stalls,
         # so the producer buffers the second event and blocks putting the third
         # into the full size-1 queue.
-        self.assertEqual((await anext(stream))["text"], "first")
+        self.assertEqual((await anext(stream)).text, "first")
         await asyncio.wait_for(third_token_requested.wait(), timeout=0.1)
         await asyncio.sleep(0.15)  # let the deadline expire while we idle
 
-        self.assertEqual((await anext(stream))["type"], "error")
-        self.assertEqual((await anext(stream))["type"], "done")
+        self.assertEqual((await anext(stream)).type, "error")
+        self.assertEqual((await anext(stream)).type, "done")
         observation.complete.assert_not_called()
 
         # The finally must not await the runtime task, which is blocked on the
@@ -452,20 +455,21 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             )
         ]
 
-        error_events = [e for e in events if e["type"] == "error"]
+        error_events = [e for e in events if isinstance(e, InternalStreamError)]
         self.assertEqual(
-            error_events,
+            [event.model_dump() for event in error_events],
             [
                 {
                     "type": "error",
                     "message": GENERIC_ERROR_MESSAGE,
                     "code": INTERNAL_ERROR_CODE,
                     "retryable": False,
+                    "status_code": 500,
                 }
             ],
         )
         self.assertNotIn("db is down", str(error_events))
-        self.assertEqual(events[-1], {"type": "done"})
+        self.assertEqual(events[-1].model_dump(), {"type": "done"})
 
         mock_logger.error.assert_called_once()
         self.assertEqual(
@@ -495,9 +499,9 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             )
         ]
 
-        error_events = [event for event in events if event["type"] == "error"]
+        error_events = [event for event in events if isinstance(event, InternalStreamError)]
         self.assertEqual(
-            error_events,
+            [event.model_dump() for event in error_events],
             [
                 {
                     "type": "error",
@@ -515,7 +519,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
     async def test_empty_stream_fallback_is_logged(self, mock_logger) -> None:
         async def empty_stream(**_kwargs):
             if False:  # pragma: no cover - keeps this an async generator
-                yield {}
+                yield StreamTokenEvent(type="token", text="")
 
         runtime = MagicMock()
         runtime.astream = MagicMock(side_effect=empty_stream)
@@ -532,10 +536,10 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(
             # Literal on purpose: the server owns the user-facing copy
             # (ADR-0061), so a wording change must be a deliberate test edit.
-            {
-                "type": "token",
-                "text": "Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại.",
-            },
+            StreamTokenEvent(
+                type="token",
+                text="Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại.",
+            ),
             events,
         )
         mock_logger.warning.assert_called_once_with(

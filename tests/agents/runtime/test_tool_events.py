@@ -15,6 +15,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+from src.agents.models import StreamToolEvent
 from src.agents.runtime.middleware import ToolObservationMiddleware
 from src.agents.runtime.tool_events import (
     MAX_ARGUMENT_LENGTH,
@@ -34,9 +35,9 @@ class _Collector:
     """Collects emitted events for assertions, simulating a bound emitter."""
 
     def __init__(self) -> None:
-        self.events: list[dict] = []
+        self.events: list[StreamToolEvent] = []
 
-    async def __call__(self, payload: dict) -> None:
+    async def __call__(self, payload: StreamToolEvent) -> None:
         self.events.append(payload)
 
 
@@ -64,13 +65,13 @@ class ToolObservationMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIs(result, sentinel, "the tool result must pass through unchanged")
-        self.assertEqual([e["status"] for e in self.collector.events], ["running", "ok"])
-        self.assertEqual(self.collector.events[0]["name"], "query_clean_jobs")
-        self.assertEqual(self.collector.events[0]["type"], "tool")
-        self.assertIsNone(self.collector.events[0]["duration_ms"])
-        self.assertIsInstance(self.collector.events[1]["duration_ms"], int)
+        self.assertEqual([e.status for e in self.collector.events], ["running", "ok"])
+        self.assertEqual(self.collector.events[0].name, "query_clean_jobs")
+        self.assertEqual(self.collector.events[0].type, "tool")
+        self.assertIsNone(self.collector.events[0].duration_ms)
+        self.assertIsInstance(self.collector.events[1].duration_ms, int)
         self.assertEqual(
-            self.collector.events[0]["arguments"], {"question": "AI Engineer in Da Nang"}
+            self.collector.events[0].arguments, {"question": "AI Engineer in Da Nang"}
         )
 
     async def test_a_failing_tool_reports_then_propagates_unchanged(self) -> None:
@@ -84,8 +85,12 @@ class ToolObservationMiddlewareTests(unittest.IsolatedAsyncioTestCase):
             await middleware.awrap_tool_call(_request("query_clean_jobs", {}), handler)
 
         self.assertIs(raised.exception, boom, "the original exception must propagate")
-        self.assertEqual([e["status"] for e in self.collector.events], ["running", "error"])
-        self.assertIn("tool exploded", self.collector.events[1]["error"])
+        self.assertEqual(
+            [e.status for e in self.collector.events], ["running", "error"]
+        )
+        error = self.collector.events[1].error
+        self.assertIsNotNone(error, "the failing call must report why it failed")
+        self.assertIn("tool exploded", error)
 
     async def test_a_failing_tool_leaves_no_result_holder_bound(self) -> None:
         """A released holder, so nothing later in this context reads stale facts."""

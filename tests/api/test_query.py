@@ -6,6 +6,13 @@ from unittest.mock import ANY, AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from src.agents.models import (
+    StreamDoneEvent,
+    StreamEvent,
+    StreamMetadataEvent,
+    StreamSessionEvent,
+    StreamTokenEvent,
+)
 from src.agents.service import FALLBACK_ANSWER
 from src.serving.composition import app
 from src.api.routes.query import _server_sent_event, _with_heartbeats
@@ -255,7 +262,7 @@ class _CollectableRuntime:
     """A fake runtime whose streamed turn yields fixed events, blocks, or raises."""
 
     def __init__(self) -> None:
-        self.events: list[dict[str, str | bool | None]] = []
+        self.events: list[StreamEvent] = []
         self.error: Exception | None = None
         self.block = False
 
@@ -287,13 +294,13 @@ class CollectingQueryRouteTests(unittest.TestCase):
 
     def test_returns_the_collected_stream_as_the_response_body(self) -> None:
         self.runtime.events = [
-            {"type": "token", "text": "There are "},
-            {"type": "token", "text": "3 roles."},
-            {
-                "type": "metadata",
-                "trace_id": "trace-1",
-                "trace_url": "https://traces/trace-1",
-            },
+            StreamTokenEvent(type="token", text="There are "),
+            StreamTokenEvent(type="token", text="3 roles."),
+            StreamMetadataEvent(
+                type="metadata",
+                trace_id="trace-1",
+                trace_url="https://traces/trace-1",
+            ),
         ]
 
         response = self.client.post(
@@ -343,14 +350,19 @@ class StreamHeartbeatTests(unittest.IsolatedAsyncioTestCase):
         release_token = asyncio.Event()
 
         async def events():
-            yield {"type": "session", "session_id": "session-123"}
+            yield StreamSessionEvent(type="session", session_id="session-123")
             await release_token.wait()
-            yield {"type": "token", "text": "Hello"}
-            yield {"type": "metadata", "trace_id": None, "trace_url": None}
-            yield {"type": "done"}
+            yield StreamTokenEvent(type="token", text="Hello")
+            yield StreamMetadataEvent(type="metadata", trace_id=None, trace_url=None)
+            yield StreamDoneEvent(type="done")
 
         stream = _with_heartbeats(events(), heartbeat_seconds=0.001)
-        frames = [_server_sent_event(event=(await anext(stream))["type"], data={"session_id": "session-123"})]
+        first = await anext(stream)
+        frames = [
+            _server_sent_event(
+                event=first.type, data=first.model_dump(exclude={"type"})
+            )
+        ]
         frames.append(await anext(stream))
         frames.append(await anext(stream))
         release_token.set()
@@ -361,8 +373,8 @@ class StreamHeartbeatTests(unittest.IsolatedAsyncioTestCase):
                 continue
             frames.append(
                 _server_sent_event(
-                    event=item["type"],
-                    data={key: value for key, value in item.items() if key != "type"},
+                    event=item.type,
+                    data=item.model_dump(exclude={"type"}),
                 )
             )
 

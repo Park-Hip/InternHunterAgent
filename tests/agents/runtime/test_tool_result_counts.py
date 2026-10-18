@@ -19,6 +19,7 @@ import unittest
 from contextlib import ExitStack
 from unittest.mock import patch
 
+from src.agents.models import RuntimeOutput, StreamMetadataEvent, StreamToolEvent
 from src.agents.runtime.tool_events import (
     bind_tool_event_emitter,
     new_result_facts,
@@ -32,9 +33,9 @@ from src.agents.tools import query_clean_jobs as qcj
 
 class _Collector:
     def __init__(self) -> None:
-        self.events: list[dict] = []
+        self.events: list[StreamToolEvent] = []
 
-    async def __call__(self, payload: dict) -> None:
+    async def __call__(self, payload: StreamToolEvent) -> None:
         self.events.append(payload)
 
 
@@ -80,20 +81,20 @@ class ToolResultFactsTests(unittest.IsolatedAsyncioTestCase):
 
                 trace.return_value = _null_trace()
                 completion_event = asyncio.Event()
-                events = []
+                events: list[RuntimeOutput] = []
                 async for event in runtime.astream(
                     "xin chào", completion_event=completion_event
                 ):
                     events.append(event)
-                    if event.get("type") == "metadata":
+                    if isinstance(event, StreamMetadataEvent):
                         completion_event.set()
         finally:
             reset_tool_event_emitter(token)
 
-        ok = [e for e in events if e.get("type") == "tool" and e.get("status") == "ok"]
+        ok = [e for e in events if isinstance(e, StreamToolEvent) and e.status == "ok"]
         self.assertTrue(ok, f"no ok tool event: {events}")
-        self.assertEqual(ok[0]["row_count"], 214)
-        self.assertFalse(ok[0]["truncated"])
+        self.assertEqual(ok[0].row_count, 214)
+        self.assertFalse(ok[0].truncated)
 
 
 class NoFakeZeroTests(unittest.IsolatedAsyncioTestCase):

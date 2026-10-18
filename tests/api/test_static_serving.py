@@ -231,7 +231,7 @@ class StaticServingTests(unittest.TestCase):
     def test_tool_event_rejects_statuses_outside_the_contract(self) -> None:
         import pydantic
 
-        from src.api.schemas import StreamToolEvent
+        from src.agents.models import StreamToolEvent
 
         with self.assertRaises(pydantic.ValidationError):
             StreamToolEvent(type="tool", name="x", status="exploded")

@@ -1,9 +1,17 @@
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import Any, cast
+from typing import Any
 
 from langchain.messages import HumanMessage, SystemMessage
 
+from src.agents.models import (
+    RuntimeCompleted,
+    RuntimeFailed,
+    RuntimeOutput,
+    RuntimeStreamItem,
+    StreamMetadataEvent,
+    StreamTokenEvent,
+)
 from src.agents.runtime.factory import agent_factory as default_agent_factory
 from src.agents.runtime.prompts import (
     ResolvedPrompt,
@@ -55,7 +63,7 @@ class AgentRuntime:
         observation: StreamObservation | None = None,
         *,
         completion_event: asyncio.Event,
-    ) -> AsyncGenerator[dict[str, object], None]:
+    ) -> AsyncGenerator[RuntimeOutput, None]:
         """Stream the answer, keeping the trace span open until the service is done.
 
         The service owns the turn's end: it completes the observation, sends
@@ -70,9 +78,7 @@ class AgentRuntime:
         prompts = await resolve_prompt_bundle_async()
         agent, system_prompt = await self._active_agent(prompts)
 
-        events: asyncio.Queue[dict[str, object] | Exception] = asyncio.Queue(
-            maxsize=1
-        )
+        events: asyncio.Queue[RuntimeStreamItem] = asyncio.Queue(maxsize=1)
 
         # Tool events are published straight into this turn's queue by the
         # observation middleware, so they interleave with tokens in real time
@@ -94,10 +100,10 @@ class AgentRuntime:
                     tool_call_chunks = getattr(chunk, "tool_call_chunks", None)
                     if not isinstance(content, str) or not content or tool_call_chunks:
                         continue
-                    await events.put({"type": "token", "text": content})
-                await events.put({"type": "complete"})
+                    await events.put(StreamTokenEvent(type="token", text=content))
+                await events.put(RuntimeCompleted())
             except Exception as exc:
-                await events.put(exc)
+                await events.put(RuntimeFailed(exc))
 
         async with langfuse_request_trace(
             entry_point="api:chat-stream",
@@ -117,28 +123,36 @@ class AgentRuntime:
             try:
                 while True:
                     event = await events.get()
-                    if isinstance(event, Exception):
+                    if isinstance(event, RuntimeFailed):
                         # A provider failure is reported as an event, not
                         # raised: the service classifies it and owns the error
                         # payload, and the span stays open until it has sent
                         # `done`.
                         provider_failed = True
-                        yield {"type": "runtime_error", "exception": event}
+                        yield event
                         await completion_event.wait()
                         stream_completed = True
                         break
-                    if event["type"] == "complete":
+                    if isinstance(event, RuntimeCompleted):
                         break
-                    yield cast(dict[str, object], event)
+                    yield event
 
                 if not provider_failed:
-                    yield {
-                        "type": "metadata",
-                        "trace_id": trace_id,
-                        "trace_url": langfuse_trace_url(trace_id=trace_id),
-                    }
+                    yield StreamMetadataEvent(
+                        type="metadata",
+                        trace_id=trace_id,
+                        trace_url=langfuse_trace_url(trace_id=trace_id),
+                    )
                     await completion_event.wait()
                     stream_completed = True
+            except Exception:
+                # A failure escaped after the loop: no public event will follow,
+                # and the exception is already on its way to the service. The
+                # service sets the completion signal only after it has read that
+                # failure, so waiting for it here would stall the turn until its
+                # deadline. Let the turn end as it failed.
+                stream_completed = True
+                raise
             finally:
                 reset_tool_event_emitter(emitter_token)
                 if not producer.done():
@@ -146,4 +160,3 @@ class AgentRuntime:
                 await asyncio.gather(producer, return_exceptions=True)
                 if not stream_completed:
                     await completion_event.wait()
-

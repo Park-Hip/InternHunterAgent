@@ -2,12 +2,24 @@ from __future__ import annotations
 
 import asyncio
 import json
-import uuid
 import unittest
-from unittest.mock import AsyncMock
+import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from src.agents.models import (
+    StreamErrorEvent,
+    StreamEvent,
+    StreamMetadataEvent,
+    StreamTokenEvent,
+    StreamToolEvent,
+)
+from src.agents.runtime.react_agent import AgentRuntime
+from src.agents.runtime.tool_events import emit_tool_event, new_result_facts
 from src.api.app import create_app
 from src.api.routes.query import _server_sent_event
 from src.api.schemas import STREAM_EVENT_SCHEMA
@@ -22,8 +34,8 @@ from src.core.errors import (
 # as a deliberate test edit instead of passing invisibly through a shared name.
 
 
-def _parse_sse_events(body: str) -> list[tuple[str, dict[str, str | None]]]:
-    events: list[tuple[str, dict[str, str | None]]] = []
+def _parse_sse_events(body: str) -> list[tuple[str, dict[str, object]]]:
+    events: list[tuple[str, dict[str, object]]] = []
     for block in body.strip().split("\n\n"):
         event_type = None
         data = "{}"
@@ -45,13 +57,13 @@ class StreamQueryRouteTests(unittest.TestCase):
 
     def test_stream_route_returns_session_tokens_metadata_and_done(self) -> None:
         async def _fake_astream(**kwargs):
-            yield {"type": "token", "text": "There are "}
-            yield {"type": "token", "text": "3 roles."}
-            yield {
-                "type": "metadata",
-                "trace_id": "t-1",
-                "trace_url": "https://cloud.langfuse.com/project/p/traces/t-1",
-            }
+            yield StreamTokenEvent(type="token", text="There are ")
+            yield StreamTokenEvent(type="token", text="3 roles.")
+            yield StreamMetadataEvent(
+                type="metadata",
+                trace_id="t-1",
+                trace_url="https://cloud.langfuse.com/project/p/traces/t-1",
+            )
 
         self.app.state.runtime.astream = _fake_astream
 
@@ -90,7 +102,7 @@ class StreamQueryRouteTests(unittest.TestCase):
 
     def test_stream_route_returns_fallback_before_metadata_when_no_tokens(self) -> None:
         async def _fake_astream(**kwargs):
-            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+            yield StreamMetadataEvent(type="metadata", trace_id=None, trace_url=None)
 
         self.app.state.runtime.astream = _fake_astream
 
@@ -120,7 +132,7 @@ class StreamQueryRouteTests(unittest.TestCase):
         self,
     ) -> None:
         async def _fake_astream(**kwargs):
-            yield {"type": "token", "text": "Partial answer"}
+            yield StreamTokenEvent(type="token", text="Partial answer")
             raise RuntimeError("database password leaked")
 
         self.app.state.runtime.astream = _fake_astream
@@ -178,7 +190,7 @@ class StreamQueryRouteTests(unittest.TestCase):
 
     def test_stream_route_returns_uuid4_session_when_omitted(self) -> None:
         async def _fake_astream(**kwargs):
-            yield {"type": "metadata", "trace_id": None, "trace_url": None}
+            yield StreamMetadataEvent(type="metadata", trace_id=None, trace_url=None)
 
         self.app.state.runtime.astream = _fake_astream
 
@@ -245,12 +257,10 @@ class StreamPublishedContractTests(unittest.TestCase):
     """The bytes on the wire must satisfy the schema published at /openapi.json.
 
     The published ``STREAM_EVENT_SCHEMA`` is a union discriminated on ``type``,
-    so every variant lists ``type`` among its required properties. A client that
-    generates a validator from ``/openapi.json`` therefore rejects every frame the
-    server actually sends, because the route strips ``type`` before writing the
-    payload. These tests assert the contract rather than the implementation: they
-    check the streamed frames against the published schema, not against the route's
-    own copy of it.
+    so every variant lists ``type`` among its required properties, and every
+    frame must carry it (#689). These tests assert the contract rather than the
+    implementation: they check the streamed frames against the published schema,
+    not against the route's own copy of it.
     """
 
     def setUp(self) -> None:
@@ -266,23 +276,23 @@ class StreamPublishedContractTests(unittest.TestCase):
 
     def test_every_streamed_frame_satisfies_the_published_schema(self) -> None:
         async def _fake_astream(**kwargs):
-            yield {"type": "token", "text": "There are "}
-            yield {
-                "type": "tool",
-                "name": "query_jobs",
-                "status": "ok",
-                "call_id": "call-1",
-                "arguments": {"technology": "python"},
-                "duration_ms": 12,
-                "error": None,
-                "row_count": 7,
-                "truncated": False,
-            }
-            yield {
-                "type": "metadata",
-                "trace_id": "t-1",
-                "trace_url": "https://cloud.langfuse.com/project/p/traces/t-1",
-            }
+            yield StreamTokenEvent(type="token", text="There are ")
+            yield StreamToolEvent(
+                type="tool",
+                name="query_jobs",
+                status="ok",
+                call_id="call-1",
+                arguments={"technology": "python"},
+                duration_ms=12,
+                error=None,
+                row_count=7,
+                truncated=False,
+            )
+            yield StreamMetadataEvent(
+                type="metadata",
+                trace_id="t-1",
+                trace_url="https://cloud.langfuse.com/project/p/traces/t-1",
+            )
 
         self.app.state.runtime.astream = _fake_astream
 
@@ -309,12 +319,12 @@ class StreamPublishedContractTests(unittest.TestCase):
 
     def test_the_error_frame_satisfies_the_published_schema(self) -> None:
         async def _fake_astream(**kwargs):
-            yield {
-                "type": "error",
-                "message": GENERIC_ERROR_MESSAGE,
-                "code": INTERNAL_ERROR_CODE,
-                "retryable": False,
-            }
+            yield StreamErrorEvent(
+                type="error",
+                message=GENERIC_ERROR_MESSAGE,
+                code=INTERNAL_ERROR_CODE,
+                retryable=False,
+            )
 
         self.app.state.runtime.astream = _fake_astream
 
@@ -341,10 +351,10 @@ class _MultiTurnRuntime:
     def __init__(self) -> None:
         self.call_count = 0
         self.calls: list[tuple[str, str, str | None]] = []
-        self._events_per_turn: list[list[dict[str, str | bool | None]]] = []
+        self._events_per_turn: list[list[StreamEvent]] = []
         self._raise_during_turn: bool = False
 
-    def set_turn_events(self, events: list[dict[str, str | bool | None]]) -> None:
+    def set_turn_events(self, events: list[StreamEvent]) -> None:
         self._events_per_turn.append(events)
 
     def set_raise_during_turn(self) -> None:
@@ -369,11 +379,11 @@ class _MultiTurnRuntime:
                     raise RuntimeError("database password leaked")
             return
         if self.call_count == 1:
-            yield {"type": "token", "text": "First answer"}
-            yield {"type": "metadata", "trace_id": "t-1", "trace_url": None}
+            yield StreamTokenEvent(type="token", text="First answer")
+            yield StreamMetadataEvent(type="metadata", trace_id="t-1", trace_url=None)
         else:
-            yield {"type": "token", "text": "Second answer"}
-            yield {"type": "metadata", "trace_id": "t-2", "trace_url": None}
+            yield StreamTokenEvent(type="token", text="Second answer")
+            yield StreamMetadataEvent(type="metadata", trace_id="t-2", trace_url=None)
 
 
 class StreamMultiTurnTests(unittest.TestCase):
@@ -432,14 +442,14 @@ class StreamMultiTurnTests(unittest.TestCase):
         """Turn 2 yields a response that semantically references turn 1 content."""
         self.runtime.set_turn_events(
             [
-                {"type": "token", "text": "Acme uses Python"},
-                {"type": "metadata", "trace_id": "t-c1", "trace_url": None},
+                StreamTokenEvent(type="token", text="Acme uses Python"),
+                StreamMetadataEvent(type="metadata", trace_id="t-c1", trace_url=None),
             ]
         )
         self.runtime.set_turn_events(
             [
-                {"type": "token", "text": "Acme also uses SQL"},
-                {"type": "metadata", "trace_id": "t-c2", "trace_url": None},
+                StreamTokenEvent(type="token", text="Acme also uses SQL"),
+                StreamMetadataEvent(type="metadata", trace_id="t-c2", trace_url=None),
             ]
         )
         session_id = "referent-session"
@@ -466,14 +476,14 @@ class StreamMultiTurnTests(unittest.TestCase):
         """A normal first turn succeeds; a subsequent turn returns an in-band error before done."""
         self.runtime.set_turn_events(
             [
-                {"type": "token", "text": "ok"},
-                {"type": "metadata", "trace_id": None, "trace_url": None},
+                StreamTokenEvent(type="token", text="ok"),
+                StreamMetadataEvent(type="metadata", trace_id=None, trace_url=None),
             ]
         )
 
         # Second turn: yield nothing, then raise provider-busy error
         async def _refusal_astream(**kwargs):
-            yield {"type": "token", "text": "partial"}
+            yield StreamTokenEvent(type="token", text="partial")
             raise RuntimeError("provider quota exhausted")
 
         self.runtime.astream = _refusal_astream
@@ -518,7 +528,7 @@ class StreamMultiTurnTests(unittest.TestCase):
         """A stream that fails mid-run emits an error event followed by done."""
         self.runtime.set_turn_events(
             [
-                {"type": "token", "text": "Partial answer"},
+                StreamTokenEvent(type="token", text="Partial answer"),
             ]
         )
         self.runtime.set_raise_during_turn()
@@ -536,3 +546,122 @@ class StreamMultiTurnTests(unittest.TestCase):
         self.assertEqual(error_event[1]["code"], INTERNAL_ERROR_CODE)
         self.assertFalse(error_event[1]["retryable"])
         self.assertEqual(events[-1][0], "done")
+
+
+#: The recorded turn behind the wire-format contract test: the manual check
+#: question from #679, answered from one tool call.
+RECORDED_TURN_QUESTION = "Có bao nhiêu tin tuyển dụng ở Đà Nẵng?"
+RECORDED_TURN_SESSION = "recorded-turn-session"
+RECORDED_TRACE_ID = "recorded-trace-id"
+RECORDED_TRACE_URL = (
+    "https://cloud.langfuse.com/project/recorded/traces/recorded-trace-id"
+)
+RECORDED_TOOL_ARGUMENTS = {"city": "Đà Nẵng", "limit": "10"}
+
+
+def _recorded_chunk(
+    content: str,
+    tool_call_chunks: list[dict[str, str]] | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(content=content, tool_call_chunks=tool_call_chunks or [])
+
+
+async def _recorded_turn_agent_stream(*_args, **_kwargs):
+    """The agent's output for one recorded turn: a tool call, then the answer.
+
+    The tool frames come from the same public seam the observation middleware
+    uses, so the replay exercises the real runtime queue and not a shortcut.
+    """
+    yield (
+        _recorded_chunk(
+            "",
+            [
+                {
+                    "name": "query_clean_jobs",
+                    "args": json.dumps(RECORDED_TOOL_ARGUMENTS, ensure_ascii=False),
+                }
+            ],
+        ),
+        {"langgraph_node": "model"},
+    )
+    await emit_tool_event(
+        name="query_clean_jobs",
+        status="running",
+        call_id="recorded-call-1",
+        arguments=RECORDED_TOOL_ARGUMENTS,
+    )
+    yield (
+        _recorded_chunk("SELECT count(*) FROM clean_jobs"),
+        {"langgraph_node": "tools"},
+    )
+    facts = new_result_facts()
+    facts.row_count = 7
+    facts.truncated = False
+    await emit_tool_event(
+        name="query_clean_jobs",
+        status="ok",
+        call_id="recorded-call-1",
+        arguments=RECORDED_TOOL_ARGUMENTS,
+        duration_ms=42,
+        facts=facts,
+    )
+    yield (_recorded_chunk("Ở Đà Nẵng hiện có "), {"langgraph_node": "model"})
+    yield (_recorded_chunk("7 tin tuyển dụng."), {"langgraph_node": "model"})
+
+
+class StreamWireFormatContractTests(unittest.TestCase):
+    """The frames of a recorded turn must stay the same across the refactor.
+
+    ``fixtures/stream_frames_recorded_turn.json`` holds the frames the route
+    wrote before the runtime, service, and route started passing typed events:
+    the event name, the payload, and the order for a turn that calls one tool
+    and streams its answer. The frames are compared after parsing, because
+    JSON key order and whitespace are not part of the contract; the event
+    names, the payload fields including ``type``, and the frame order are.
+    """
+
+    fixture = (
+        Path(__file__).parent / "fixtures" / "stream_frames_recorded_turn.json"
+    )
+
+    def test_the_recorded_turn_writes_the_same_frames(self) -> None:
+        app = create_app(rate_limit="1000/minute", docs_enabled=False)
+
+        async def _agent_factory(**_kwargs):
+            return SimpleNamespace(astream=_recorded_turn_agent_stream)
+
+        app.state.runtime = AgentRuntime(agent_factory=_agent_factory)
+
+        @asynccontextmanager
+        async def _request_trace(**_kwargs):
+            yield RECORDED_TRACE_ID
+
+        with (
+            patch(
+                "src.agents.runtime.react_agent.build_langfuse_config",
+                return_value={"callbacks": ["handler"]},
+            ),
+            patch(
+                "src.agents.runtime.react_agent.langfuse_request_trace",
+                side_effect=_request_trace,
+            ),
+            patch(
+                "src.agents.runtime.react_agent.langfuse_trace_url",
+                return_value=RECORDED_TRACE_URL,
+            ),
+        ):
+            response = TestClient(app).post(
+                "/api/v1/agent/chat/stream",
+                json={
+                    "query": RECORDED_TURN_QUESTION,
+                    "session_id": RECORDED_TURN_SESSION,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        frames = [
+            [event_type, payload]
+            for event_type, payload in _parse_sse_events(response.text)
+        ]
+        expected = json.loads(self.fixture.read_text(encoding="utf-8"))
+        self.assertEqual(frames, expected)

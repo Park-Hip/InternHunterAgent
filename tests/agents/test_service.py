@@ -7,7 +7,6 @@ from unittest.mock import ANY, MagicMock, AsyncMock, patch
 
 from src.agents.service import (
     BUSY_MESSAGE,
-    FALLBACK_ANSWER,
     GENERIC_ERROR_MESSAGE,
     generate_agent_response,
     stream_agent_response,
@@ -89,7 +88,12 @@ class GenerateAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             session_id="session-empty-sync",
         )
 
-        self.assertEqual(result["answer"], FALLBACK_ANSWER)
+        # Literal on purpose: the server owns the user-facing copy (ADR-0061),
+        # so a wording change must be a deliberate test edit.
+        self.assertEqual(
+            result["answer"],
+            "Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại.",
+        )
         mock_logger.warning.assert_called_once_with(
             "generate_agent_response.empty_answer_fallback",
             session_id="session-empty-sync",
@@ -460,7 +464,12 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         ]
 
         self.assertIn(
-            {"type": "token", "text": FALLBACK_ANSWER},
+            # Literal on purpose: the server owns the user-facing copy
+            # (ADR-0061), so a wording change must be a deliberate test edit.
+            {
+                "type": "token",
+                "text": "Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại.",
+            },
             events,
         )
         mock_logger.warning.assert_called_once_with(

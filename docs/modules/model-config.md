@@ -154,7 +154,7 @@ Each row was measured on 2026-10-16 by pointing `DEEPSEEK_API_BASE` at a local s
 
 **How a failure reaches the user.**
 `classify_provider_busy_error` walks the exception chain.
-A 429, a 408, 503, or 504, or an error whose text says rate limit, quota, or timeout becomes `provider_busy` with `retryable: true` and the "demo is busy" message.
+A 429, a 408, 503, or 504, or an error whose text says rate limit, quota, or timeout becomes `provider_busy` with `retryable: true` and the Vietnamese busy message ([ADR-0061](../decisions/adr-0061-user-facing-copy-is-server-owned-vietnamese.md)).
 An expired turn deadline becomes the same `provider_busy` result: an in-band `error` event on `/api/v1/agent/chat/stream`, and a `503` on `/api/v1/agent/chat`.
 Anything else, including a 500, becomes `internal_error` with `retryable: false`.
 

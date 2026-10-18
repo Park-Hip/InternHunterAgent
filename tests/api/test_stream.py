@@ -8,16 +8,18 @@ from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
-from src.agents.service import FALLBACK_ANSWER
 from src.api.app import create_app
 from src.api.routes.query import _server_sent_event
 from src.api.schemas import STREAM_EVENT_SCHEMA
 from src.core.errors import (
-    BUSY_MESSAGE,
     GENERIC_ERROR_MESSAGE,
     INTERNAL_ERROR_CODE,
     PROVIDER_BUSY_ERROR_CODE,
 )
+
+# The user-facing strings are written out rather than read from the constants:
+# ADR-0061 makes the server the owner of the copy, so changing it must show up
+# as a deliberate test edit instead of passing invisibly through a shared name.
 
 
 def _parse_sse_events(body: str) -> list[tuple[str, dict[str, str | None]]]:
@@ -103,7 +105,13 @@ class StreamQueryRouteTests(unittest.TestCase):
             [event_type for event_type, _ in events],
             ["session", "token", "metadata", "done"],
         )
-        self.assertEqual(events[1][1], {"type": "token", "text": FALLBACK_ANSWER})
+        self.assertEqual(
+            events[1][1],
+            {
+                "type": "token",
+                "text": "Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại.",
+            },
+        )
         self.assertEqual(
             events[2][1], {"type": "metadata", "trace_id": None, "trace_url": None}
         )
@@ -133,7 +141,7 @@ class StreamQueryRouteTests(unittest.TestCase):
             events[2][1],
             {
                 "type": "error",
-                "message": GENERIC_ERROR_MESSAGE,
+                "message": "Hiện chưa thể hoàn tất yêu cầu này. Vui lòng thử lại sau.",
                 "code": INTERNAL_ERROR_CODE,
                 "retryable": False,
             },
@@ -162,7 +170,7 @@ class StreamQueryRouteTests(unittest.TestCase):
             events[1][1],
             {
                 "type": "error",
-                "message": BUSY_MESSAGE,
+                "message": "Bản thử nghiệm đang bận - vui lòng thử lại sau một lát.",
                 "code": PROVIDER_BUSY_ERROR_CODE,
                 "retryable": True,
             },

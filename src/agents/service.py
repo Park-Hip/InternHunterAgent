@@ -20,7 +20,11 @@ from src.core.errors import (
 )
 from src.core.logger import logger
 
-FALLBACK_ANSWER = "I couldn't produce an answer for that — please try rephrasing."
+# The sentence a turn whose model wrote nothing shows the reader. It is sent as
+# a `token`, not an `error`, so there is no `code` for a client to map from: the
+# server owns the copy, and it is Vietnamese like every other user-facing string
+# (ADR-0061). The web client mirrors it only to recognise the empty-answer turn.
+FALLBACK_ANSWER = "Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại."
 
 
 _T = TypeVar("_T")

@@ -204,6 +204,27 @@ class ConfigLoadTests(unittest.TestCase):
                         {"database": {"connect_timeout_seconds": value}}
                     )
 
+    def test_prompt_config_requires_bounded_fetch_and_refresh(self) -> None:
+        """#698's two bounds refuse boot when missing or malformed."""
+        configured = {"deployment_label": "production", "cache_ttl_seconds": 60}
+        valid = {"fetch_timeout_seconds": 2, "refresh_interval_seconds": 300}
+        for key in valid:
+            for value in ("missing", 0, -1, True, "5", 2.5):
+                with self.subTest(key=key, value=value):
+                    prompts = {**configured, **valid}
+                    if value == "missing":
+                        prompts.pop(key)
+                    else:
+                        prompts[key] = value
+                    with self.assertRaisesRegex(config_module.ConfigLoadError, key):
+                        config_module._validate_prompt_config(
+                            {"agent": {"prompts": prompts}}
+                        )
+
+        config_module._validate_prompt_config(
+            {"agent": {"prompts": {**configured, **valid}}}
+        )
+
 
 def _agent_section() -> dict:
     """A minimal valid agent section that tests mutate one field at a time."""

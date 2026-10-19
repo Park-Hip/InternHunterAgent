@@ -18,6 +18,7 @@ from src.agents.tracing.prompt_registry import (
     SYSTEM_PROMPT_SURFACE,
     ResolvedPrompt,
     get_prompt_registry,
+    prompt_refresh_interval_seconds,
 )
 from src.agents.tracing.stream import StreamLatency, StreamObservation, StreamOutcome
 from src.core.config import settings
@@ -388,19 +389,48 @@ def langfuse_prompt_attributes(prompt: ResolvedPrompt) -> Iterator[None]:
 
 
 async def prepare_native_prompts_startup() -> None:
-    """Warm every prompt the served bundle resolves, before requests can.
+    """Resolve every prompt the served bundle runs on, before requests can.
+
+    This is the one resolution the serving process does on the request path's
+    behalf: it is bounded by `agent.prompts.fetch_timeout_seconds`, is never
+    retried, and the registry keeps what it resolves in memory from here on
+    (#698). Every turn after it is a memory read, so an unreachable Langfuse
+    delays boot once instead of every question.
 
     A prompt that was never registered in Langfuse degrades to the checked-in
-    text silently, which is defensible behaviour but an operator still needs to
-    see which version is actually live.
+    text, which is defensible behaviour but an operator still needs to see which
+    version is actually live, so the boot line reports the link per surface and
+    not only the release version.
     """
-    resolved = await get_prompt_registry().prefetch_async()
+    resolved = await get_prompt_registry().refresh_async()
     logger.info(
         "langfuse.prompts_prefetched",
         prompts={surface: prompt.version for surface, prompt in resolved.items()},
+        linked={
+            surface: prompt.prompt_client is not None
+            for surface, prompt in resolved.items()
+        },
         served_system_surface=SYSTEM_PROMPT_SURFACE,
         warmed=tuple(resolved),
     )
+
+
+async def refresh_prompt_links_forever() -> None:
+    """Keep the in-memory prompt links fresh for the life of the process (#698).
+
+    The wait comes first because boot has already resolved once, so the first
+    refresh lands a full interval later instead of repeating the boot lookup. A
+    refresh moves the link and never the text (#669), and a refresh that fails
+    is one logged line per surface: the release text keeps serving, the next
+    interval is the retry, and a turn is never waiting on any of it.
+    """
+    interval = prompt_refresh_interval_seconds()
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await get_prompt_registry().refresh_async()
+        except Exception:
+            logger.exception("langfuse.prompt_refresh_failed")
 
 
 def _fetch_project_id(client: Langfuse) -> str | None:

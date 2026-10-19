@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.agents.tracing import langfuse
+from src.agents.tracing.prompt_registry import (
+    PROMPT_SURFACES,
+    PromptSurface,
+    ResolvedPrompt,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -218,6 +224,97 @@ class LangfuseLifecycleTests(unittest.IsolatedAsyncioTestCase):
         warning.assert_called_once_with(
             "Langfuse shutdown failed", error="drain failed"
         )
+
+
+class NativePromptLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    """#698: boot resolves once, a background task refreshes, a turn reads memory."""
+
+    @staticmethod
+    def _resolved(surface: PromptSurface, *, linked: bool) -> ResolvedPrompt:
+        return ResolvedPrompt(
+            surface=surface,
+            name=f"resumi-{surface}",
+            content="text",
+            version=f"v-{surface}",
+            prompt_client=object() if linked else None,
+            is_fallback=not linked,
+        )
+
+    async def test_startup_resolution_reports_the_link_per_surface(self) -> None:
+        prompts = {
+            surface: self._resolved(surface, linked=surface == "system")
+            for surface in PROMPT_SURFACES
+        }
+        registry = MagicMock()
+        registry.refresh_async = AsyncMock(return_value=prompts)
+
+        with (
+            patch.object(langfuse, "get_prompt_registry", return_value=registry),
+            patch.object(langfuse.logger, "info") as info,
+        ):
+            await langfuse.prepare_native_prompts_startup()
+
+        info.assert_called_once_with(
+            "langfuse.prompts_prefetched",
+            prompts={
+                "system": "v-system",
+                "schema_context": "v-schema_context",
+                "sql_generation": "v-sql_generation",
+            },
+            linked={"system": True, "schema_context": False, "sql_generation": False},
+            served_system_surface="system",
+            warmed=("system", "schema_context", "sql_generation"),
+        )
+
+    async def test_refresh_loop_refreshes_after_each_interval(self) -> None:
+        registry = MagicMock()
+        refreshed = asyncio.Event()
+
+        async def refresh() -> None:
+            refreshed.set()
+
+        registry.refresh_async = AsyncMock(side_effect=refresh)
+
+        with (
+            patch.object(langfuse, "get_prompt_registry", return_value=registry),
+            patch.object(langfuse, "prompt_refresh_interval_seconds", return_value=0),
+        ):
+            task = asyncio.create_task(langfuse.refresh_prompt_links_forever())
+            try:
+                await asyncio.wait_for(refreshed.wait(), timeout=5)
+            finally:
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+
+        registry.refresh_async.assert_awaited()
+
+    async def test_refresh_loop_logs_a_failure_and_keeps_going(self) -> None:
+        registry = MagicMock()
+        attempted = asyncio.Event()
+
+        async def refresh() -> None:
+            attempted.set()
+            raise RuntimeError("langfuse down")
+
+        registry.refresh_async = AsyncMock(side_effect=refresh)
+
+        with (
+            patch.object(langfuse, "get_prompt_registry", return_value=registry),
+            patch.object(langfuse, "prompt_refresh_interval_seconds", return_value=0),
+            patch.object(langfuse.logger, "exception") as logged,
+        ):
+            task = asyncio.create_task(langfuse.refresh_prompt_links_forever())
+            try:
+                await asyncio.wait_for(attempted.wait(), timeout=5)
+                # A refresh that failed must not end the loop.
+                self.assertFalse(task.done())
+            finally:
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+
+        logged.assert_called_with("langfuse.prompt_refresh_failed")
 
 
 class LangfuseTraceUrlTests(unittest.TestCase):

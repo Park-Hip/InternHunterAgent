@@ -3,7 +3,7 @@
 from contextvars import ContextVar
 from dataclasses import dataclass
 from contextlib import contextmanager
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from typing import cast
 
 from langchain.messages import SystemMessage
@@ -60,24 +60,42 @@ def resolve_prompt(surface: str) -> ResolvedPrompt:
     """Return the checked-in release text and its Langfuse link when linked."""
     if surface not in PROMPT_SURFACES:
         raise ValueError(f"Unsupported prompt surface: {surface}")
-    return get_prompt_registry().resolve(surface)
+    return get_prompt_registry().resolve(cast(PromptSurface, surface))
 
 
 async def resolve_prompt_async(surface: str) -> ResolvedPrompt:
-    """Serve a prompt surface without blocking the request event loop."""
+    """Serve a prompt surface from memory, without blocking the request loop."""
     if surface not in PROMPT_SURFACES:
         raise ValueError(f"Unsupported prompt surface: {surface}")
     return await get_prompt_registry().resolve_async(cast(PromptSurface, surface))
 
 
-async def resolve_prompt_bundle_async() -> ResolvedPromptBundle:
-    """Resolve every prompt once for a request or evaluation capture."""
-    prompts = await get_prompt_registry().prefetch_async()
+def _bundle(prompts: Mapping[PromptSurface, ResolvedPrompt]) -> ResolvedPromptBundle:
     return ResolvedPromptBundle(
         system=prompts[SYSTEM_PROMPT_SURFACE],
         schema_context=prompts[SCHEMA_CONTEXT_PROMPT_SURFACE],
         sql_generation=prompts[SQL_GENERATION_PROMPT_SURFACE],
     )
+
+
+async def resolve_prompt_bundle_async() -> ResolvedPromptBundle:
+    """Return the bundle one request or evaluation capture runs on.
+
+    The registry resolved every surface at boot and a background task keeps the
+    link fresh, so this is a memory read: a request can neither wait on Langfuse
+    nor pay again for a fetch that failed (#698).
+    """
+    return _bundle(get_prompt_registry().resolved())
+
+
+async def refresh_prompt_bundle_async() -> ResolvedPromptBundle:
+    """Resolve every surface once, the way boot does, and return the bundle.
+
+    For a process that has no background refresh to fill memory: the evaluation
+    driver is one invocation, so it resolves its own links rather than serving
+    a bundle nothing has warmed.
+    """
+    return _bundle(await get_prompt_registry().refresh_async())
 
 
 def load_system_prompt_resolution() -> ResolvedPrompt:

@@ -55,6 +55,12 @@ agent:
     # config/prompts.yaml text is a release-pinned fallback for an unavailable client.
     deployment_label: production
     cache_ttl_seconds: 60
+    # Boot resolves every surface once and a background task refreshes the link
+    # afterwards; a turn only reads memory, so Langfuse being slow or down cannot
+    # delay it (#698). One fetch is bounded by fetch_timeout_seconds and is never
+    # retried: the next refresh interval is the retry.
+    fetch_timeout_seconds: 2
+    refresh_interval_seconds: 300
 
   react:
     deployment: deepseek_flash

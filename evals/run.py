@@ -270,15 +270,17 @@ async def run_dataset(spec: DatasetSpec, *, metric_names: list[str] | None = Non
     try:
         prompts: Any = None
         if offline is None:
-            from src.agents.runtime.prompts import resolve_prompt_bundle_async
+            from src.agents.runtime.prompts import refresh_prompt_bundle_async
             from src.agents.tracing.langfuse import init_langfuse
 
             # The driver owns the Langfuse client for its own process, the same
             # way the serving lifespan does: created before prompts resolve so
             # the registry can link traces to the registered versions, released
             # in the finally below so traces flush before the process exits.
+            # There is no background refresh in a one-shot process, so the
+            # driver resolves the bundle itself (#698).
             init_langfuse()
-            prompts = await resolve_prompt_bundle_async()
+            prompts = await refresh_prompt_bundle_async()
         results: list[dict[str, Any]] = []
         captures: dict[str, list[dict[str, Any]]] = {}
         consecutive_quota_failures = 0

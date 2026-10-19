@@ -69,7 +69,7 @@ flowchart TD
 |---|---|---|
 | Route | Rejecting a blank query with 400; the per-IP rate limit (`api.rate_limit`); SSE encoding with `type` in every payload; a `: ping` comment after 15 s of silence (ADR-0050); noticing a disconnect and closing the service generator (ADR-0049) | Agents, prompts, models |
 | Service | Minting a `session_id` when the request has none; the event order; the deadline; the fallback token; mapping exceptions to an in-band `error` event; folding that stream into the JSON body for `/chat` | LangChain, Langfuse, the graph |
-| Runtime | Resolving the prompt bundle once per turn; the per-prompt agent cache; the answer-only filter; binding the turn's tool-event emitter; the Langfuse span | HTTP, SSE, the deadline |
+| Runtime | Reading the turn's prompt bundle from memory (resolved once at boot and refreshed in the background, #698); the per-prompt agent cache; the answer-only filter; binding the turn's tool-event emitter; the Langfuse span | HTTP, SSE, the deadline |
 
 **Where the split leaks today.**
 
@@ -96,7 +96,7 @@ sequenceDiagram
     B->>S: POST question, session_id omitted
     S-->>B: session (0.89 s)
     S->>RT: astream with a completion event
-    RT->>RT: resolve prompt bundle, fetch cached agent
+    RT->>RT: read prompt bundle from memory, fetch cached agent
     RT->>G: astream, thread_id = session_id
     G->>G: load checkpoint, trim to the last 6 turns
     G->>DS: react call: decide

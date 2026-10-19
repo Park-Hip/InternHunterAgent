@@ -287,7 +287,9 @@ def test_quota_halts_and_marks_remaining_unrun(monkeypatch: pytest.MonkeyPatch) 
     async def quota(*_args):
         raise run.QuotaError("429")
 
-    monkeypatch.setattr("src.agents.runtime.prompts.resolve_prompt_bundle_async", prompts)
+    monkeypatch.setattr(
+        "src.agents.runtime.prompts.refresh_prompt_bundle_async", prompts
+    )
     monkeypatch.setattr(run, "capture_scenario", quota)
     report = asyncio.run(run.run_dataset(FixtureDataset(), metric_names=["tool_correctness"]))
     rows = report["by_metric"]["tool_correctness"]

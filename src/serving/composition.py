@@ -35,6 +35,7 @@ from src.agents.tracing.langfuse import (
     diagnose_langfuse_startup,
     init_langfuse,
     prepare_native_prompts_startup,
+    refresh_prompt_links_forever,
     shutdown_langfuse,
 )
 from src.api.app import create_app
@@ -126,6 +127,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await pool.open()
     diagnostic_task: asyncio.Task[None] | None = None
     retention_task: asyncio.Task[None] | None = None
+    prompt_refresh_task: asyncio.Task[None] | None = None
     try:
         # Both ends of the Langfuse client's life are here: created after the
         # guards and before prompt warming so the registry resolves against it,
@@ -134,6 +136,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         init_langfuse()
         checkpointer = await build_checkpointer(pool)
         await prepare_native_prompts_startup()
+        # Fire-and-track: the prompt links are refreshed from memory's next
+        # interval on, so a turn only ever reads what boot resolved (#698). The
+        # loop waits before its first refresh, so this does not repeat the boot
+        # lookup.
+        prompt_refresh_task = asyncio.create_task(refresh_prompt_links_forever())
         # Tool discovery is awaited exactly once at startup. A failure here
         # raises before app.state.runtime is set, so the service never publishes
         # an agent with a partial tool surface.
@@ -149,12 +156,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         try:
-            # Both background tasks stop before the pool they use closes; each
+            # The background tasks stop before the pool they use closes; each
             # step runs even if an earlier one raised.
-            for task in (diagnostic_task, retention_task):
+            for task in (diagnostic_task, retention_task, prompt_refresh_task):
                 if task is not None and not task.done():
                     task.cancel()
-            for task in (diagnostic_task, retention_task):
+            for task in (diagnostic_task, retention_task, prompt_refresh_task):
                 if task is None:
                     continue
                 try:

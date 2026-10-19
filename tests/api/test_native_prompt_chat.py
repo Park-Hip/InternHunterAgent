@@ -35,7 +35,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from src.agents.runtime.prompts import load_prompt_versions
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing import langfuse
-from src.agents.tracing.prompt_registry import PROMPT_DEFINITIONS
+from src.agents.tracing.prompt_registry import PROMPT_DEFINITIONS, get_prompt_registry
 from src.api.app import create_app
 from src.core.config import settings
 from tests.langfuse_prompts import native_prompt_client, prompt_link
@@ -165,6 +165,10 @@ class _ChatHarness:
         """Attach the real runtime once the provider is under test control."""
         self.app.state.runtime = AgentRuntime()
 
+    def warm_prompts(self) -> None:
+        """Resolve the in-memory links the way the serving boot does (#698)."""
+        get_prompt_registry().refresh()
+
     def stream(self, session_id: str) -> Any:
         return self.client.post(
             "/api/v1/agent/chat/stream",
@@ -213,6 +217,7 @@ def chat(monkeypatch: pytest.MonkeyPatch) -> Iterator[_ChatHarness]:
 def test_streaming_chat_links_the_generation_to_the_managed_prompt(
     chat: _ChatHarness,
 ) -> None:
+    chat.warm_prompts()
     response = chat.stream("session-471")
 
     assert response.status_code == 200
@@ -236,6 +241,7 @@ def test_streaming_chat_serves_the_release_text_when_the_managed_text_drifted(
 ) -> None:
     """A drifted managed text never reaches the model and never links."""
     chat.serve_drifted_text = True
+    chat.warm_prompts()
 
     response = chat.stream("session-471")
 
@@ -251,6 +257,7 @@ def test_streaming_chat_serves_the_release_text_when_the_managed_text_drifted(
 def test_one_shot_chat_links_the_generation_to_the_managed_prompt(
     chat: _ChatHarness,
 ) -> None:
+    chat.warm_prompts()
     response = chat.one_shot("session-471")
 
     assert response.status_code == 200
@@ -267,6 +274,7 @@ def test_streaming_chat_answers_with_release_fallback_prompts(
 ) -> None:
     """A fallback prompt is served, and is deliberately not linked as a version."""
     chat.serve_fallbacks = True
+    chat.warm_prompts()
 
     response = chat.stream("session-471")
 

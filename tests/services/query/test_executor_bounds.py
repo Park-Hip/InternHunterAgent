@@ -11,6 +11,10 @@ using the database:
 - **A write is impossible.** The agent role holds ``SELECT`` only, and the
   bounded read also marks its transaction read-only. Both are tested, because
   either one alone is a single point of failure.
+- **A star, whole-row, or off-contract read is impossible.** The role holds
+  column-level ``SELECT`` on the 16 contract columns and no table-level
+  ``SELECT`` (#722), so the database, not the validator, refuses the forms a
+  hidden-column token check cannot see.
 
 The write case goes through ``_bounded_session`` rather than
 ``execute_bounded_select``: the executor appends a trailing ``LIMIT``, so
@@ -32,12 +36,14 @@ from sqlalchemy.exc import DBAPIError, OperationalError
 
 from src.services.query.executor import (
     ExecutorError,
+    PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
     UndefinedColumnError,
     _bounded_session,
     execute_bounded_select,
 )
+from src.services.query.sql_validator import validate_sql
 from evals.fixtures.loader import (
     fixture_database_endpoint,
     fixture_database_reachable,
@@ -49,6 +55,28 @@ READER_ROLE = "iha_query_reader_test"
 READER_PASSWORD = "reader_test_password"
 
 FIXTURE_ROWS = 24
+
+# The 16 contract columns and the five hidden ones, in the same order as
+# src/api/privilege_guard.py and the grant migration.
+VISIBLE_COLUMNS = (
+    "id",
+    "title",
+    "company",
+    "role",
+    "description",
+    "tech_stack",
+    "location",
+    "source_url",
+    "job_level",
+    "listing_expires_on",
+    "created_on",
+    "is_internship",
+    "salary_min",
+    "salary_max",
+    "salary_currency",
+    "is_salary_negotiable",
+)
+HIDDEN_COLUMNS = ("source", "external_id", "posted_date", "first_seen_at", "last_seen_at")
 
 INSERT_STATEMENT = (
     "INSERT INTO clean_jobs (source, external_id, title, company, role) "
@@ -78,9 +106,9 @@ def engine():
 def provision_reader_role(engine) -> str:
     """Create the documented read-only role, idempotently.
 
-    This mirrors the sequence in docs/how-to/operate.md. The role exists so the
-    test can prove the write boundary is enforced by PostgreSQL rather than by
-    anything in this repository.
+    This mirrors the sequence in docs/how-to/operate.md after #722. The role
+    exists so the test can prove the write and column boundaries are enforced
+    by PostgreSQL rather than by anything in this repository.
     """
     with engine.begin() as conn:
         conn.execute(
@@ -91,7 +119,19 @@ def provision_reader_role(engine) -> str:
         )
         conn.execute(text(f"GRANT CONNECT ON DATABASE internhunter_eval TO {READER_ROLE}"))
         conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {READER_ROLE}"))
-        conn.execute(text(f"GRANT SELECT ON clean_jobs TO {READER_ROLE}"))
+        conn.execute(text(f"REVOKE ALL PRIVILEGES ON clean_jobs FROM {READER_ROLE}"))
+        conn.execute(
+            text(
+                f"REVOKE SELECT ({', '.join(HIDDEN_COLUMNS)})"
+                f" ON clean_jobs FROM {READER_ROLE}"
+            )
+        )
+        conn.execute(
+            text(
+                f"GRANT SELECT ({', '.join(VISIBLE_COLUMNS)})"
+                f" ON clean_jobs TO {READER_ROLE}"
+            )
+        )
         conn.execute(text(f"REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON clean_jobs FROM {READER_ROLE}"))
     return READER_ROLE
 
@@ -235,3 +275,58 @@ class TestErrorMapping:
             execute_bounded_select("SELECT remote FROM clean_jobs", 20)
 
         assert raised.value.message_primary == 'column "remote" does not exist'
+
+
+class TestTheColumnBoundary:
+    """#722: the grant, not the validator, refuses star and whole-row reads.
+
+    The validator rejects a hidden column by name; it cannot see through a
+    star, an alias, a subquery, a CTE, or a whole-row reference. These cases
+    pin that the database refuses all of them for the role the agent uses.
+    """
+
+    @pytest.mark.parametrize(
+        "statement",
+        [
+            "SELECT * FROM clean_jobs",
+            "SELECT c.* FROM clean_jobs AS c",
+            "SELECT id FROM (SELECT * FROM clean_jobs) AS q",
+            "WITH x AS (SELECT * FROM clean_jobs) SELECT id FROM x",
+            "SELECT clean_jobs FROM clean_jobs",
+            "SELECT to_jsonb(clean_jobs) FROM clean_jobs",
+        ],
+    )
+    def test_a_star_or_whole_row_read_is_refused_by_the_grant(
+        self, reader_engine, statement
+    ) -> None:
+        with pytest.raises(PermissionDeniedError):
+            execute_bounded_select(statement, 20)
+
+    def test_explicit_contract_columns_still_return_rows(self, reader_engine) -> None:
+        columns = ", ".join(VISIBLE_COLUMNS)
+
+        bounded = execute_bounded_select(
+            f"SELECT {columns} FROM clean_jobs ORDER BY id", 1
+        )
+
+        assert list(bounded.columns) == list(VISIBLE_COLUMNS)
+        assert len(bounded.rows) == 1
+        assert len(bounded.rows[0]) == len(VISIBLE_COLUMNS)
+
+    def test_a_star_over_a_projected_subquery_still_works(self, reader_engine) -> None:
+        bounded = execute_bounded_select(
+            "SELECT * FROM (SELECT id, title FROM clean_jobs ORDER BY id) AS q", 20
+        )
+
+        assert list(bounded.columns) == ["id", "title"]
+
+    def test_the_validator_accepts_star_and_the_grant_refuses_it(
+        self, reader_engine
+    ) -> None:
+        """The acceptance pin: the validator stays a SQL-shape filter, the grant
+        is the column boundary, and the end-to-end result is a visible refusal."""
+        validation = validate_sql("SELECT * FROM clean_jobs")
+
+        assert validation.valid is True
+        with pytest.raises(PermissionDeniedError):
+            execute_bounded_select(validation.sql, 20)

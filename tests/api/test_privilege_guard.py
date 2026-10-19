@@ -26,6 +26,28 @@ from evals.fixtures.loader import (
 ROLE = "iha_privilege_probe"
 PASSWORD = "privilege_probe_password"
 
+# The 16 contract columns and the five hidden ones, in the same order as
+# src/api/privilege_guard.py and the grant migration.
+VISIBLE_COLUMNS = (
+    "id",
+    "title",
+    "company",
+    "role",
+    "description",
+    "tech_stack",
+    "location",
+    "source_url",
+    "job_level",
+    "listing_expires_on",
+    "created_on",
+    "is_internship",
+    "salary_min",
+    "salary_max",
+    "salary_currency",
+    "is_salary_negotiable",
+)
+HIDDEN_COLUMNS = ("source", "external_id", "posted_date", "first_seen_at", "last_seen_at")
+
 
 @pytest.fixture(scope="module")
 def engine():
@@ -41,7 +63,20 @@ def engine():
     eng.dispose()
 
 
-def grant(engine, *, writable: bool = False) -> None:
+def grant(
+    engine,
+    *,
+    table_level: bool = False,
+    hidden: tuple[str, ...] = (),
+    writable: bool = False,
+) -> None:
+    """Provision the probe role in the serving shape, or in a drifted one.
+
+    The default is what ``docs/how-to/operate.md`` documents after #722:
+    column-level ``SELECT`` on the 16 visible columns and no table-level
+    ``SELECT``. ``table_level`` and ``hidden`` exist so the tests can prove the
+    boot guard refuses each way that shape can drift.
+    """
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -51,7 +86,18 @@ def grant(engine, *, writable: bool = False) -> None:
         )
         conn.execute(text(f"GRANT CONNECT ON DATABASE internhunter_eval TO {ROLE}"))
         conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {ROLE}"))
-        conn.execute(text(f"GRANT SELECT ON clean_jobs TO {ROLE}"))
+        conn.execute(text(f"REVOKE ALL PRIVILEGES ON clean_jobs FROM {ROLE}"))
+        conn.execute(
+            text(
+                f"REVOKE SELECT ({', '.join(HIDDEN_COLUMNS)})"
+                f" ON clean_jobs FROM {ROLE}"
+            )
+        )
+        if table_level:
+            conn.execute(text(f"GRANT SELECT ON clean_jobs TO {ROLE}"))
+        else:
+            columns = ", ".join(VISIBLE_COLUMNS + hidden)
+            conn.execute(text(f"GRANT SELECT ({columns}) ON clean_jobs TO {ROLE}"))
         for privilege in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
             # GRANT takes TO and REVOKE takes FROM; both name the grantee.
             if writable:
@@ -62,7 +108,13 @@ def grant(engine, *, writable: bool = False) -> None:
 
 def revoke_read(engine) -> None:
     with engine.begin() as conn:
-        conn.execute(text(f"REVOKE SELECT ON clean_jobs FROM {ROLE}"))
+        conn.execute(text(f"REVOKE ALL PRIVILEGES ON clean_jobs FROM {ROLE}"))
+        conn.execute(
+            text(
+                f"REVOKE SELECT ({', '.join(VISIBLE_COLUMNS + HIDDEN_COLUMNS)})"
+                f" ON clean_jobs FROM {ROLE}"
+            )
+        )
 
 
 @pytest.fixture
@@ -112,6 +164,18 @@ class TestTheCheck:
         grant(engine, writable=False)
         revoke_read(engine)
         with pytest.raises(AgentPrivilegeError, match="cannot read clean_jobs"):
+            assert_agent_privileges()
+
+    def test_a_hidden_column_grant_fails_the_boot(self, engine, agent_dsn) -> None:
+        """A column grant on one hidden column is the leak this check exists for."""
+        grant(engine, hidden=("source",))
+        with pytest.raises(AgentPrivilegeError, match="can read a hidden column"):
+            assert_agent_privileges()
+
+    def test_a_table_level_grant_fails_the_boot(self, engine, agent_dsn) -> None:
+        """Table-level SELECT is the drift that lets SELECT * return 21 columns."""
+        grant(engine, table_level=True)
+        with pytest.raises(AgentPrivilegeError, match="can read a hidden column"):
             assert_agent_privileges()
 
     def test_a_writable_agent_role_fails_the_boot(self, engine, agent_dsn) -> None:

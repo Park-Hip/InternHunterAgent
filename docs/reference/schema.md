@@ -108,10 +108,10 @@ columns and hidden-column exclusions across the prompt surfaces.
 The schema grew from an original four-column sample into the real job-posting shape along a
 deliberate cheap-growth path.
 
-- **Adding a column is free in code.** The SQL validator allowlists the *table*, not its columns,
-  and the executor and formatter are key-driven, so a new column reaches the answer with no code
-  change. Only the schema description the model reads and, where relevant, the honesty rules need an
-  edit.
+- **Adding a physical column is hidden by default.** The agent role holds column-level `SELECT` on
+  the 16 contract columns only (#722, ADR-0063), so a new column does not reach an answer until a
+  migration grants it. Making it visible also updates the prompt's schema context, the fixture
+  projection, and this reference; the executor and formatter stay key-driven.
 - **Adding tables, joins, or renames is the boundary** where this stops being free, because it
   crosses the validator's single-table allowlist. Staying single-table is the design choice that
   keeps evolution cheap.

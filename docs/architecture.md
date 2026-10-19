@@ -338,7 +338,8 @@ or tracing.
   answer collapses to a plain string by the time it crosses the API boundary.
 - **Schema growth is column-cheap, table-costly.** Answer honesty is derived from the documented
   schema, never a hardcoded field list, so growing the schema never silently turns an honesty rule
-  into a falsehood. See the schema-evolution section.
+  into a falsehood. A new column stays out of answers until the grant and the documented schema
+  change together (#722). See the schema-evolution section.
 
 
 ## 3. Agent runtime
@@ -399,8 +400,9 @@ Two tools ship.
 
 1. The resolved schema-context prompt supplies the table shape to the model.
 2. A dedicated model call turns the request into a candidate `SELECT`.
-3. `src/services/query/sql_validator.py` is the **security boundary**: a deterministic, hand-rolled
-   read-only validator with `SELECT`-only enforcement and allowlist and denylist checks.
+3. `src/services/query/sql_validator.py` is the **SQL-shape boundary**: a deterministic, hand-rolled
+   read-only validator with `SELECT`-only enforcement and allowlist and denylist checks. It rejects
+   a hidden column named directly; the database grant is the column boundary (#722, ADR-0063).
 4. Only validated SQL reaches `src/services/query/executor.py`, run in one read-only, repeatable-read
    transaction off the event loop that also holds the counting statement.
 5. Rows are shaped by `src/services/query/table_formatter.py` into JSON-native values, and the tool
@@ -415,8 +417,8 @@ execution capability.
 
 An earlier draft specified parameterized tools exposing typed arguments such as `title` and
 `tech_stack`.
-The shipped design uses natural language to validated SQL because the validator, not the tool
-signature, is the trust boundary.
+The shipped design uses natural language to validated SQL because the validator and the database
+grants, not the tool signature, are the trust boundary.
 
 **Bounded retrieval: structured query versus detail fetch.**
 Real ingestion turned the corpus into verbose rows each carrying a large merged `description` blob.
@@ -859,10 +861,10 @@ thin client sufficient.
 The schema grew from an original four-column sample into the real job-posting shape along a
 deliberate cheap-growth path.
 
-- **Adding a column is free in code.** The SQL validator allowlists the *table*, not its columns,
-  and the executor and formatter are key-driven, so a new column reaches the answer with no code
-  change. Only the schema description the model reads and, where relevant, the honesty rules need an
-  edit.
+- **Adding a physical column is hidden until granted.** The executor and formatter are key-driven,
+  but the agent role holds column-level `SELECT` on the 16 contract columns only (#722, ADR-0063),
+  so a new column is denied until a migration grants it and the schema description the model reads,
+  plus the honesty rules where relevant, are updated.
 - **Adding tables, joins, or renames is the boundary** where this stops being free, because it
   crosses the validator's single-table allowlist. Staying single-table is the design choice that
   keeps evolution cheap.

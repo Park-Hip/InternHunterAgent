@@ -28,7 +28,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session
-from psycopg.errors import UndefinedColumn
+from psycopg.errors import InsufficientPrivilege, UndefinedColumn
 
 from src.core.config import settings
 from src.core.db import agent_session_factory
@@ -50,6 +50,19 @@ class UndefinedColumnError(ExecutorError):
     def __init__(self, message_primary: str) -> None:
         super().__init__(message_primary)
         self.message_primary = message_primary
+
+
+class PermissionDeniedError(ExecutorError):
+    """Raised when PostgreSQL refuses the agent role access to clean_jobs.
+
+    The role holds column-level ``SELECT`` on the 16 contract columns only, so
+    a statement that reads a hidden column, a whole row, or a table-level star
+    fails with SQLSTATE 42501 (#722). The message is fixed and safe: the driver
+    message and any host detail never travel to the model.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("permission denied for clean_jobs")
 
 
 class QueryTimeoutError(ExecutorError):
@@ -150,9 +163,26 @@ def _map_db_error(exc: OperationalError | DBAPIError, timeout_ms: int) -> Execut
     if isinstance(orig, UndefinedColumn):
         message_primary = getattr(getattr(orig, "diag", None), "message_primary", None)
         return UndefinedColumnError(message_primary or "unknown column")
+    if _is_clean_jobs_privilege_denial(orig):
+        return PermissionDeniedError()
     if _is_timeout(exc):
         return QueryTimeoutError(timeout_ms)
     return ExecutorError(f"Failed to execute query: {exc}")
+
+
+def _is_clean_jobs_privilege_denial(orig: object) -> bool:
+    """Whether the driver refused clean_jobs access for lack of privilege.
+
+    Only SQLSTATE 42501 that names the table counts. A denial on another
+    object stays a generic executor failure, so a misclassified error cannot
+    tell the model to rewrite a query that was never about the column set.
+    """
+    if not isinstance(orig, InsufficientPrivilege):
+        return False
+    table_name = getattr(getattr(orig, "diag", None), "table_name", None)
+    if table_name == "clean_jobs":
+        return True
+    return "clean_jobs" in str(orig)
 
 
 def row_bytes(rows: list[Any]) -> int:

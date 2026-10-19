@@ -146,8 +146,8 @@ jobs:
         run: uv run alembic check
 
       # G3: Prove the downgrade path and re-upgrade both succeed.
-      - name: Run migration round-trip test
-        run: uv run pytest tests/migrations/test_baseline_roundtrip.py -q
+      - name: Run migration round-trip tests
+        run: uv run pytest tests/migrations -q
 
   sql-guard-gate:
     name: SQL guard gate

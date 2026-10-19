@@ -179,10 +179,15 @@ async def run_query_clean_jobs(request: str) -> QueryResult:
     max_rows = load_max_rows()
     bounds = resolve_bounds(validation.sql, max_rows)
     bounded_sql = f"{bounds.base_sql} LIMIT {bounds.limit}"
+    if bounds.offset:
+        bounded_sql += f" OFFSET {bounds.offset}"
 
     try:
         bounded = await asyncio.to_thread(
-            execute_bounded_select, bounds.base_sql, bounds.limit
+            execute_bounded_select,
+            bounds.base_sql,
+            bounds.limit,
+            bounds.offset,
         )
     except UndefinedColumnError as exc:
         logger.warning("query_clean_jobs.unknown_column", error=str(exc))

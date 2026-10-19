@@ -108,23 +108,28 @@ def _bounded_session() -> Iterator[Session]:
         raise _map_db_error(exc, limits["statement_timeout_ms"]) from exc
 
 
-def execute_bounded_select(base_sql: str, limit: int) -> BoundedRows:
+def execute_bounded_select(base_sql: str, limit: int, offset: int = 0) -> BoundedRows:
     """Run ``base_sql`` under a hard row limit and report the real match total.
 
     ``base_sql`` is a validated SELECT with any trailing LIMIT/OFFSET already
     removed; ``resolve_bounds`` produces one in that shape. The statement that
-    runs is ``base_sql LIMIT <limit>``.
+    runs is ``base_sql LIMIT <limit>``, followed by ``OFFSET <offset>`` when the
+    page starts after the first row.
 
-    When the fetch fills its limit, a companion
-    ``SELECT count(*) FROM (base_sql) AS q`` runs in the same transaction, so
-    both statements see one snapshot and the total is the number of rows the
-    query matches without any LIMIT ("20 of 161"). The byte budget is checked
+    The companion ``SELECT count(*) FROM (base_sql) AS q`` always counts the
+    base query without LIMIT or OFFSET. It runs when the offset is non-zero or
+    the fetch fills its limit, so a short last page and an empty page past the
+    end both state the whole match set ("20 of 161"). Both statements run in
+    one transaction, so they see one snapshot. The byte budget is checked
     before that count runs, and both statements are bounded by the session's
     statement timeout.
     """
     limits = execution_limits()
     with _bounded_session() as session:
-        result = session.execute(text(f"{base_sql} LIMIT {limit}"))
+        statement = f"{base_sql} LIMIT {limit}"
+        if offset:
+            statement += f" OFFSET {offset}"
+        result = session.execute(text(statement))
         # Columns come from the result itself, so an empty result still names
         # the columns it would have returned.
         columns = list(result.keys())
@@ -133,7 +138,7 @@ def execute_bounded_select(base_sql: str, limit: int) -> BoundedRows:
             raise ResultTooLargeError(
                 "The query returned more data than this agent is allowed to read."
             )
-        if len(rows) == limit:
+        if offset > 0 or len(rows) == limit:
             total_rows = int(
                 session.execute(
                     text(f"SELECT count(*) FROM ({base_sql}) AS q")

@@ -124,6 +124,39 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
         self.assertEqual(bounded.total_rows, 2)
 
     @patch("src.services.query.executor.agent_session_factory")
+    def test_applies_the_page_offset_after_the_limit(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.return_value = _result(
+            ["id"], [[index] for index in range(21, 26)], total=161
+        )
+
+        bounded = execute_bounded_select(BASE_SQL, 5, 20)
+
+        statements = _statements(session)
+        self.assertEqual(statements[2], f"{BASE_SQL} LIMIT 5 OFFSET 20")
+        self.assertEqual(bounded.rows, [[index] for index in range(21, 26)])
+        self.assertEqual(bounded.total_rows, 161)
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_counts_when_the_offset_is_non_zero_even_if_the_page_is_short(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        # A last page has fewer rows than the limit, but its total is still the
+        # whole match set, not the page length. The count must run.
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.return_value = _result(["id"], [[21], [22], [23]], total=23)
+
+        bounded = execute_bounded_select(BASE_SQL, 20, 20)
+
+        statements = _statements(session)
+        self.assertEqual(len(statements), 4)
+        self.assertEqual(statements[3], f"SELECT count(*) FROM ({BASE_SQL}) AS q")
+        self.assertEqual(bounded.rows, [[21], [22], [23]])
+        self.assertEqual(bounded.total_rows, 23)
+
+    @patch("src.services.query.executor.agent_session_factory")
     def test_keeps_the_columns_of_an_empty_result(
         self, mock_agent_session_factory: MagicMock
     ) -> None:

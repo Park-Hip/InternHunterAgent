@@ -43,7 +43,8 @@ QUERY_CLEAN_JOBS_DESCRIPTION = (
     "filter from earlier turns that still applies. Returns JSON: `sql` (the "
     "query that ran; internal, never shown to the user), `columns`, `rows`, "
     "`row_count` (rows returned), and `total_rows` (rows the query matches "
-    "without any LIMIT). A count or summary returns its figures in `rows`."
+    "without any LIMIT or OFFSET). A count or summary returns its figures in "
+    "`rows`."
 )
 REQUEST_ARGUMENT_DESCRIPTION = (
     "One standalone request in the user's language that restates every filter "

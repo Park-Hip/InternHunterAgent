@@ -47,7 +47,8 @@ Code guarantees, held by unit tests whatever the model says:
 - Read-only: least-privilege database role, read-only transaction, and the SQL validator.
 - No secrets in the model's context.
 - Row cap, statement timeout, and result byte budget.
-- Facts come from code, not from the model: rows returned, total matched, and the SQL that ran
+- Facts come from code, not from the model: rows returned, total matched, and the SQL that ran,
+  including any page offset
   ([ADR-0062](../decisions/adr-0062-tools-return-facts-the-prompt-owns-wording.md)).
 
 The tools return facts and the system prompt owns all wording. The prompts are

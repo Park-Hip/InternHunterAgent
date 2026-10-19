@@ -22,12 +22,11 @@ uv run python -m evals.fixtures.loader
 uv run python -m evals --gate
 ```
 
-It runs every reviewed case in [`evals/datasets/sql_guard.yaml`](../../evals/datasets/sql_guard.yaml) through the same pipeline the tool uses - `validate_sql`, `resolve_bounds`, then the fixture - and scores three deterministic metrics:
+It runs every reviewed case in [`evals/datasets/sql_guard.yaml`](../../evals/datasets/sql_guard.yaml) through the same pipeline the tool uses - `validate_sql`, `resolve_bounds`, then the fixture - and scores two deterministic metrics:
 
 | Metric | Grades |
 | --- | --- |
 | `guard_correctness` | The `validate_sql` verdict against the reviewed one. A rejected case also pins the rule that must reject it, so widening the validator cannot quietly drop the guard's floor |
-| `obligation_correctness` | The obligation set `detect_obligations` emits, against the reviewed one. This is where the false-success class is graded: R05 is a salary average over two currencies, so it fails until the cross-currency rule matches aggregates |
 | `result_equivalence` | The rows the reviewed SQL returns on the fixture, against a reviewer-written reference, through `evals/sql_check.py` |
 
 The corpus has 15 cases in five classes: `reviewed` questions the guard must accept, the guard's floor (`hidden` and `cost` statements that must stay rejected), `ambiguous` accepted risks (A01-A03) that pin today's behavior and name the risk, and one injection carried by posting text.
@@ -41,10 +40,12 @@ An accepted risk is a case, not prose: a guard that starts refusing one turns th
 | --- | --- |
 | A verdict other than the reviewed one | The reviewed statement is the case's assertion; reviewed SQL the guard rejects, or forbidden SQL it accepts, is a defect |
 | A rejected case rejected by a different rule | The floor is a pass/fail condition: the self-join, `pg_sleep`, multi-table, and hidden-column rules must each still reject their own case |
-| An obligation set other than the reviewed one | The set is the false-success assertion; R05 fails until the cross-currency rule matches aggregates |
 | A result other than the reviewed one | The reference was reviewed, and `tests/evals/test_sql_gate.py` pins the gate's grading and its refusals |
 
-The gate is deliberately stricter than a rate. A percentage would let a false success be offset by an easy pass. If a future maintainer wants a rate, that is a new decision with its own evidence, and it would still not apply to the false-success class.
+The gate is deliberately stricter than a rate. A percentage would let a false success be offset by an easy pass. If a future maintainer wants a rate, that is a new decision with its own evidence.
+
+The cross-currency false-success class used to be graded here through the obligation detector, which [#702](https://github.com/Park-Hip/InternHunterAgent/issues/702) deleted with the caveat machinery.
+That risk now belongs to the `sql_generation` rule that every salary aggregate groups by `salary_currency`, and the Layer 1 baseline measures it; R05, R06, and A02 keep the statement shapes visible.
 
 ### The judge metrics are not the gate
 

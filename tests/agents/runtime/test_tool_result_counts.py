@@ -1,12 +1,13 @@
 """Prove a real row count reaches the stream, and that zero is not faked.
 
-Two failure modes this guards, both of which would be invisible:
+Three failure modes this guards, all of which would be invisible:
 
-1. The count is lost on the way from `TableArtifact` to the browser, which is the
-   whole point of the change.
+1. The count is lost on the way from the typed query result to the browser,
+   which is the whole point of the change.
 2. A refused or failed query publishes `0` and the interface shows "no results"
    for a question that was never asked of the database. Absent and zero are
-   different facts, and only the tool knows which it has.
+   different facts, and only the tool knows which it has. A failure publishes
+   nothing at all (#702): the tool raises, and the card reports the error.
 3. An aggregate result publishes the result table's row count as a match count,
    so a count query's card reads "1 kết quả" while the answer says 11 (#677).
    A count publishes the number it counted; any other summary publishes nothing.
@@ -29,6 +30,9 @@ from src.agents.runtime.tool_events import (
     set_result_holder,
 )
 from src.agents.tools import query_clean_jobs as qcj
+from src.agents.tools.failures import ToolFailure
+from src.services.query.executor import ExecutorError
+from src.services.query.models import BoundedRows, ValidationResult
 
 
 class _Collector:
@@ -53,13 +57,13 @@ class ToolResultFactsTests(unittest.IsolatedAsyncioTestCase):
         )
 
         @tool
-        def counted(question: str) -> str:
+        def counted(request: str) -> str:
             """A tool that knows its row count."""
             publish_tool_result(row_count=214, truncated=False)
             return "Tìm thấy 214 kết quả."
 
         agent = create_agent(
-            model=_ScriptedToolCallingModel(tool_name="counted", tool_arg="question"),
+            model=_ScriptedToolCallingModel(tool_name="counted", tool_arg="request"),
             tools=[counted],
             middleware=[build_tool_observation_middleware()],
         )
@@ -107,32 +111,37 @@ class NoFakeZeroTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_rejected_sql_publishes_no_count(self) -> None:
         self._token()
-        invalid = type("V", (), {"valid": False, "reason": "denied", "sql": ""})()
+        rejected = ValidationResult(
+            valid=False, sql="DROP TABLE x", reason="denied"
+        )
         with patch.object(qcj, "generate_sql", return_value="DROP TABLE x"), patch.object(
-            qcj, "validate_sql", return_value=invalid
+            qcj, "validate_sql", return_value=rejected
         ):
-            await qcj.run_query_clean_jobs("x")
+            with self.assertRaises(ToolFailure) as raised:
+                await qcj.run_query_clean_jobs("x")
 
-        facts = self.holder
-        self.assertTrue(facts.published)
-        self.assertIsNone(
-            facts.row_count,
-            "a rejected query must not publish zero; zero means 'searched, found nothing'",
+        self.assertEqual(raised.exception.kind, "rejected")
+        self.assertFalse(
+            self.holder.published,
+            "a rejected query must publish nothing; zero means 'searched, found nothing'",
         )
 
     async def test_database_error_publishes_no_count(self) -> None:
         self._token()
-        valid = type("V", (), {"valid": True, "reason": "", "sql": "SELECT 1"})()
+        valid = ValidationResult(valid=True, sql="SELECT 1")
         with patch.object(qcj, "generate_sql", return_value="SELECT 1"), patch.object(
             qcj, "validate_sql", return_value=valid
         ), patch.object(
-            qcj, "execute_validated_sql", side_effect=qcj.ExecutorError("down")
+            qcj, "execute_bounded_select", side_effect=ExecutorError("down")
         ):
-            await qcj.run_query_clean_jobs("x")
+            with self.assertRaises(ToolFailure) as raised:
+                await qcj.run_query_clean_jobs("x")
 
-        facts = self.holder
-        self.assertTrue(facts.published)
-        self.assertIsNone(facts.row_count)
+        self.assertEqual(raised.exception.kind, "unavailable")
+        self.assertFalse(
+            self.holder.published,
+            "a failed query must publish nothing; the card reports the error instead",
+        )
 
 
 class AggregateResultPublishingTests(unittest.IsolatedAsyncioTestCase):
@@ -144,20 +153,32 @@ class AggregateResultPublishingTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(reset_result_holder, token)
 
     async def _run_query(
-        self, sql: str, rows: list[dict], *, max_rows: int | None = None
+        self,
+        sql: str,
+        columns: list[str],
+        rows: list[list[object]],
+        *,
+        total_rows: int,
+        max_rows: int = 20,
     ) -> None:
-        validation = type("V", (), {"valid": True, "reason": "", "sql": sql})()
-        patchers = [
-            patch.object(qcj, "generate_sql", return_value=sql),
-            patch.object(qcj, "validate_sql", return_value=validation),
-            patch.object(qcj, "execute_validated_sql", return_value=rows),
-        ]
-        if max_rows is not None:
-            patchers.append(patch.object(qcj, "load_max_rows", return_value=max_rows))
-
+        validation = ValidationResult(valid=True, sql=sql)
         with ExitStack() as stack:
-            for patcher in patchers:
-                stack.enter_context(patcher)
+            stack.enter_context(patch.object(qcj, "generate_sql", return_value=sql))
+            stack.enter_context(
+                patch.object(qcj, "validate_sql", return_value=validation)
+            )
+            stack.enter_context(
+                patch.object(
+                    qcj,
+                    "execute_bounded_select",
+                    return_value=BoundedRows(
+                        columns=columns, rows=rows, total_rows=total_rows
+                    ),
+                )
+            )
+            stack.enter_context(
+                patch.object(qcj, "load_max_rows", return_value=max_rows)
+            )
             await qcj.run_query_clean_jobs("có bao nhiêu tin tuyển dụng ở Hà Nội?")
 
     async def test_count_query_publishes_the_counted_total(self) -> None:
@@ -166,7 +187,9 @@ class AggregateResultPublishingTests(unittest.IsolatedAsyncioTestCase):
 
         await self._run_query(
             "SELECT COUNT(*) AS count FROM clean_jobs WHERE location ILIKE '%Hanoi%'",
-            [{"count": 11}],
+            ["count"],
+            [[11]],
+            total_rows=1,
         )
 
         self.assertEqual(self.holder.row_count, 11)
@@ -178,7 +201,9 @@ class AggregateResultPublishingTests(unittest.IsolatedAsyncioTestCase):
 
         await self._run_query(
             "SELECT COUNT(*) AS count FROM clean_jobs WHERE location ILIKE '%Nope%'",
-            [{"count": 0}],
+            ["count"],
+            [[0]],
+            total_rows=1,
         )
 
         self.assertEqual(self.holder.row_count, 0)
@@ -188,7 +213,9 @@ class AggregateResultPublishingTests(unittest.IsolatedAsyncioTestCase):
 
         await self._run_query(
             "SELECT AVG(salary_min) AS average FROM clean_jobs",
-            [{"average": 17500625}],
+            ["average"],
+            [[17500625.5]],
+            total_rows=1,
         )
 
         self.assertTrue(self.holder.published)
@@ -199,34 +226,40 @@ class AggregateResultPublishingTests(unittest.IsolatedAsyncioTestCase):
 
         await self._run_query(
             "SELECT location, COUNT(*) AS count FROM clean_jobs GROUP BY location",
-            [{"location": "Hanoi", "count": 4}, {"location": "Da Nang", "count": 2}],
+            ["location", "count"],
+            [["Hanoi", 4], ["Da Nang", 2]],
+            total_rows=2,
         )
 
         self.assertTrue(self.holder.published)
         self.assertIsNone(self.holder.row_count)
 
-    async def test_listing_still_publishes_its_row_count(self) -> None:
+    async def test_a_capped_listing_publishes_the_real_match_total(self) -> None:
+        """The card says "20 of 161", so the count is the match total, not the page."""
         self._holder()
 
         await self._run_query(
             "SELECT id, title FROM clean_jobs",
-            [{"id": 1, "title": "Intern A"}, {"id": 2, "title": "Intern B"}],
+            ["id", "title"],
+            [[index, f"Intern {index}"] for index in range(1, 21)],
+            total_rows=161,
+        )
+
+        self.assertEqual(self.holder.row_count, 161)
+        self.assertTrue(self.holder.truncated)
+
+    async def test_an_uncapped_listing_publishes_its_own_count(self) -> None:
+        self._holder()
+
+        await self._run_query(
+            "SELECT id, title FROM clean_jobs WHERE location ILIKE '%Hue%'",
+            ["id", "title"],
+            [[1, "Intern A"], [2, "Intern B"]],
+            total_rows=2,
         )
 
         self.assertEqual(self.holder.row_count, 2)
         self.assertFalse(self.holder.truncated)
-
-    async def test_capped_listing_still_reports_truncation(self) -> None:
-        self._holder()
-
-        await self._run_query(
-            "SELECT id FROM clean_jobs",
-            [{"id": 1}, {"id": 2}, {"id": 3}],
-            max_rows=2,
-        )
-
-        self.assertEqual(self.holder.row_count, 2)
-        self.assertTrue(self.holder.truncated)
 
 
 class ResultFactsTests(unittest.IsolatedAsyncioTestCase):

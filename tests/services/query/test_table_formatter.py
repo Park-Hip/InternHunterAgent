@@ -1,85 +1,71 @@
+"""Unit tests for the JSON shaping boundary the tools return (#702)."""
+
 from __future__ import annotations
 
+import datetime as dt
+import decimal
 import unittest
 
-from src.services.query.table_formatter import format_rows
+from src.services.query.table_formatter import json_value, shape_rows
 
 
-class FormatRowsTests(unittest.TestCase):
-    def test_empty_input_returns_empty_table_artifact(self) -> None:
-        table = format_rows([], max_rows=20)
+class JsonValueTests(unittest.TestCase):
+    def test_json_native_values_pass_through(self) -> None:
+        for value in (None, True, False, 7, -3, 1.5, 0.0, "Data Analyst", ""):
+            with self.subTest(value=value):
+                self.assertIs(json_value(value), value)
 
-        self.assertEqual(table.columns, [])
-        self.assertEqual(table.rows, [])
-        self.assertEqual(table.row_count, 0)
-        self.assertFalse(table.truncated)
+    def test_an_integral_decimal_becomes_an_int(self) -> None:
+        self.assertEqual(json_value(decimal.Decimal("17500625")), 17500625)
+        self.assertIsInstance(json_value(decimal.Decimal("17500625")), int)
 
-    def test_single_row_formats_columns_and_row(self) -> None:
-        table = format_rows([{"title": "Data Analyst", "company": "Acme"}], max_rows=20)
+    def test_a_fractional_decimal_becomes_a_float(self) -> None:
+        self.assertEqual(json_value(decimal.Decimal("17500625.5")), 17500625.5)
+        self.assertIsInstance(json_value(decimal.Decimal("17500625.5")), float)
 
-        self.assertEqual(table.columns, ["title", "company"])
-        self.assertEqual(table.rows, [["Data Analyst", "Acme"]])
-        self.assertEqual(table.row_count, 1)
-        self.assertFalse(table.truncated)
-
-    def test_multi_row_preserves_column_order_from_first_row(self) -> None:
-        rows = [
-            {"title": "Data Analyst", "company": "Acme"},
-            {"title": "ML Intern", "company": "Globex"},
-        ]
-
-        table = format_rows(rows, max_rows=20)
-
-        self.assertEqual(table.columns, ["title", "company"])
+    def test_dates_and_times_become_iso_strings(self) -> None:
+        self.assertEqual(json_value(dt.date(2026, 10, 18)), "2026-10-18")
         self.assertEqual(
-            table.rows,
-            [["Data Analyst", "Acme"], ["ML Intern", "Globex"]],
+            json_value(dt.datetime(2026, 10, 18, 9, 30, 15)),
+            "2026-10-18T09:30:15",
         )
-        self.assertEqual(table.row_count, 2)
-        self.assertFalse(table.truncated)
+        self.assertEqual(json_value(dt.time(9, 30, 15)), "09:30:15")
 
-    def test_missing_key_in_later_row_renders_as_none(self) -> None:
-        rows = [
-            {"title": "Data Analyst", "company": "Acme"},
-            {"title": "ML Intern"},
-        ]
+    def test_anything_else_becomes_its_string_form(self) -> None:
+        self.assertEqual(json_value(b"bytes"), "b'bytes'")
 
-        table = format_rows(rows, max_rows=20)
 
-        self.assertEqual(table.columns, ["title", "company"])
-        self.assertEqual(
-            table.rows,
-            [["Data Analyst", "Acme"], ["ML Intern", None]],
+class ShapeRowsTests(unittest.TestCase):
+    def test_keeps_the_columns_and_rows_it_is_given(self) -> None:
+        columns, rows = shape_rows(
+            ["id", "title"], [[1, "Data Analyst"], [2, "ML Intern"]]
         )
-        self.assertEqual(table.row_count, 2)
-        self.assertFalse(table.truncated)
 
-    def test_description_column_is_dropped_even_when_present(self) -> None:
-        rows = [
-            {"title": "Data Analyst", "company": "Acme", "description": "a very long blob"},
-        ]
+        self.assertEqual(columns, ["id", "title"])
+        self.assertEqual(rows, [[1, "Data Analyst"], [2, "ML Intern"]])
 
-        table = format_rows(rows, max_rows=20)
+    def test_drops_the_description_column_case_insensitively(self) -> None:
+        for column in ("description", "Description", "DESCRIPTION"):
+            with self.subTest(column=column):
+                columns, rows = shape_rows(
+                    ["id", column, "title"], [[1, "a very long blob", "Data Analyst"]]
+                )
 
-        self.assertEqual(table.columns, ["title", "company"])
-        self.assertEqual(table.rows, [["Data Analyst", "Acme"]])
-        self.assertEqual(table.row_count, 1)
-        self.assertFalse(table.truncated)
+                self.assertEqual(columns, ["id", "title"])
+                self.assertEqual(rows, [[1, "Data Analyst"]])
 
-    def test_over_cap_input_marks_truncated(self) -> None:
-        rows = [{"title": f"Intern {i}", "company": "Acme"} for i in range(25)]
+    def test_shapes_every_kept_value(self) -> None:
+        columns, rows = shape_rows(
+            ["posted", "salary_min", "unused"],
+            [[dt.date(2026, 10, 18), decimal.Decimal("17500625"), "x"]],
+        )
 
-        table = format_rows(rows, max_rows=20)
+        self.assertEqual(columns, ["posted", "salary_min", "unused"])
+        self.assertEqual(rows, [["2026-10-18", 17500625, "x"]])
 
-        self.assertEqual(len(table.rows), 20)
-        self.assertEqual(table.row_count, 20)
-        self.assertTrue(table.truncated)
+    def test_empty_input_stays_empty(self) -> None:
+        self.assertEqual(shape_rows([], []), ([], []))
 
-    def test_exact_cap_input_is_not_truncated(self) -> None:
-        rows = [{"title": f"Intern {i}", "company": "Acme"} for i in range(20)]
 
-        table = format_rows(rows, max_rows=20)
-
-        self.assertEqual(len(table.rows), 20)
-        self.assertEqual(table.row_count, 20)
-        self.assertFalse(table.truncated)
+if __name__ == "__main__":
+    unittest.main()

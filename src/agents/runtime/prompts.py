@@ -192,20 +192,3 @@ async def load_resolved_prompt_versions_async() -> dict[str, str]:
     """Resolve prompt lineage without blocking an asynchronous request loop."""
     bundle = active_prompt_bundle() or await resolve_prompt_bundle_async()
     return bundle.versions()
-
-
-def load_behavior_glossary() -> dict[str, str]:
-    """Canonical hedge and refusal phrasings, keyed by token."""
-    glossary = settings.prompts_yaml.get("behavior_glossary")
-    if not isinstance(glossary, dict) or not glossary:
-        raise ValueError("Missing or empty 'behavior_glossary' in config/prompts.yaml")
-
-    for token, phrasing in glossary.items():
-        if not isinstance(token, str) or not token.strip():
-            raise ValueError(
-                "Every 'behavior_glossary' token must be a non-empty string"
-            )
-        if not isinstance(phrasing, str) or not phrasing.strip():
-            raise ValueError(f"Empty 'behavior_glossary' phrasing for token: {token}")
-
-    return {token: phrasing.strip() for token, phrasing in glossary.items()}

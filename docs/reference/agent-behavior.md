@@ -5,9 +5,12 @@
 > - Frozen: 2026-07-11 under T0015.2. The freeze protects the requirements under test, the probe
 >   protocol, and the settled decisions — not per-scenario inputs and expected outputs, which
 >   `evals/datasets/scenarios.yaml` owns.
-> - `behavior_glossary` is landed in `config/prompts.yaml` and is translated into Vietnamese under
->   T0033.2.
-> - The glossary has 19 canonical strings and matching Vietnamese grader anchors.
+> - **Superseded in part by #702 (2026-10-19):** the `behavior_glossary` and
+>   `behavior_glossary_anchors` blocks, the `evaluation_anchors` block, and the obligations module
+>   were deleted. Tools now return typed facts and the system prompt owns every user-facing word,
+>   so the canonical phrasings below are reference strings that no config holds, and the
+>   "machine source of truth" notes below describe the pre-#702 state.
+>   Replacing this document is #708 PR 2; only the deleted references are corrected here.
 
 The [v1 scenario matrix](../../evals/archive/v1_scenario_matrix.md) preserves the measured behavior
 record that informs this specification.
@@ -23,7 +26,8 @@ When two directives collide, the higher rung wins, and the agent briefly says wh
 
 1. **Safety / refusal** — destructive/write requests (G25), prompt injection & jailbreak (G26),
    secret/config disclosure (G27), discriminatory filters (G29).
-2. **Honesty / grounding** — never fabricate; never rank across currencies; preserve caveats; answer
+2. **Honesty / grounding** — never fabricate; never rank across currencies; say plainly what the
+   data does and does not record; answer
    only from tool results (G05, G07, G08, G09, G10, G17).
 3. **Helpfulness / completeness** — answer every part of a compound ask; offer the closest available
    thing (G03, G28, G39).
@@ -50,8 +54,8 @@ a closing emoji in both `HLP-LIST-1` repeats and no rule anywhere in the reposit
 The system prompt explicitly requires natural-language field descriptions and forbids quoting
 column names in user-facing answers. Prompt v12 added this instruction after
 `SAF-INDIRECT-INJECTION-2` exposed a `listing_expires_on` leak in a longer answer.
-The `column=value` payload from `query_clean_jobs` remains an upstream exposure surface, but does
-not replace the answer-level instruction.
+The tool result's columns, rows, and the statement that ran remain an upstream exposure surface, but
+do not replace the answer-level instruction.
 
 The date-semantics rule is stated beside the available-information guidance in
 [`config/prompts.yaml`](../../config/prompts.yaml): a source listing-expiry date never substitutes
@@ -117,7 +121,7 @@ cannot establish that an individual current surface produced the evidence.
 | 2 | "Senior roles" (title text) | Title matches **with** hedge; `job_level` is the grounded field | `SENIOR-TITLE-HEDGE` |
 | 3 | Compound destructive + read | Refuse the mutation, answer the read separately | `DESTRUCTIVE-REFUSAL` + separate read |
 | 4 | "Show me the SQL" | Plain-language description; never raw SQL | `SQL-DESCRIBE-ONLY` |
-| 5 | Canonical phrasings home | Final; machine SoT in `prompts.yaml` glossary, human SoT here | G47 §10 |
+| 5 | Canonical phrasings home | Final as reference strings only; the system prompt owns the wording after #702 | G47 §10 |
 | 6 | Priority ladder | Safety > Honesty > Helpfulness > Style (SP) | §1 above |
 | 7 | Location synonyms | SG maps Saigon → Ho Chi Minh City before `ILIKE` | SG rule (T0015.5) |
 | 8 | Tech abstractions | `tech_stack` primary; hedged `description`/`title` fallback for abstractions; expand abbreviations (`%machine learning%` not `%ML%`); no role-category broadening beyond the text match (prompt v11 SQL rule) | `FREE-TEXT-HEDGE` + SG rule |
@@ -131,18 +135,19 @@ the target.
 
 ## 3. Canonical phrasings (G47 — FINAL)
 
-The verbatim strings live in section 10 of the behavior question bank
-(preserved on git tag docs-history-pre-redesign) and the `behavior_glossary` block of
-`config/prompts.yaml`. Phrase IDs referenced below:
+The verbatim strings once lived in section 10 of the behavior question bank
+(preserved on git tag docs-history-pre-redesign) and in the `behavior_glossary` block of
+`config/prompts.yaml`, which #702 deleted. They are kept below as reference strings.
+Phrase IDs referenced below:
 `NEGOTIABLE-SALARY`, `ABSENT-FIELD`, `LISTING-EXPIRY-NOT-DEADLINE`, `FRESHNESS-REFUSAL`,
 `CREATED-ON-CAVEAT`, `FREE-TEXT-HEDGE`,
 `SENIOR-TITLE-HEDGE`, `CROSS-CURRENCY`, `TRUNCATION`, `ZERO-RESULTS`, `E1-CLARIFY`,
 `OFF-TOPIC-REDIRECT`, `DESTRUCTIVE-REFUSAL`, `INJECTION-REFUSAL`, `SECRET-REFUSAL`,
 `SQL-DESCRIBE-ONLY`, `FUTURE-FEATURE`, `GENERAL-KNOWLEDGE-DECLINE`, `DISCRIMINATORY-DECLINE`.
 
-The machine source of truth is the `behavior_glossary` block and its
-`behavior_glossary_anchors` block in [`config/prompts.yaml`](../../config/prompts.yaml).
-The following table restates the 19 canonical strings in Vietnamese.
+No config holds these strings any more (#702): the system prompt states the behaviors in prose and
+the model writes the Vietnamese. The table below keeps the former canonical wording as the
+reference the phrases are named after.
 
 | Phrase ID | Vietnamese canonical phrasing |
 |---|---|
@@ -245,7 +250,7 @@ rows is acceptable. If probes stay flaky after the T0015.5 few-shots, record the
 > the behavior question bank (preserved on git tag docs-history-pre-redesign)
 > (groups
 > `G01`–`G47`; settled decisions in §12; final glossary in §10).
-> - Machine source of truth for the canonical strings: the `behavior_glossary` block in
-> [`config/prompts.yaml`](../../config/prompts.yaml).
+> - Canonical-string reference: the `behavior_glossary` block this note pointed at was deleted by
+>   #702; section 3 above keeps the strings as reference only.
 > - This doc does **not** replace the change-proposal workflow (`AGENTS.md`,
 >   `.agents/skills/change-proposal/SKILL.md`).

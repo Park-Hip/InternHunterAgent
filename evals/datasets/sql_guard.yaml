@@ -7,11 +7,6 @@
 #                         also pins `expected_reason_contains`, the rule that
 #                         must reject it, so a widening cannot quietly drop the
 #                         guard's floor and still leave the case green.
-#   expected_obligations: the reviewed obligation set `detect_obligations` must
-#                         emit. This is where the false-success class is
-#                         graded: R05 is a salary average over two currencies
-#                         and must be hedged, and the case fails until the
-#                         cross-currency rule matches aggregates.
 #   result:               the reviewed result, compared with evals/sql_check.py
 #                         against a reviewer-written reference on the fixture.
 #                         A case with no result block is one whose SQL is not
@@ -32,7 +27,6 @@ cases:
     question: Có tin tuyển dụng AI Engineer nào ở Hà Nội không?
     reviewed_sql: SELECT id FROM clean_jobs WHERE role ILIKE '%AI Engineer%' AND location ILIKE '%Hanoi%' ORDER BY id
     guard: valid
-    expected_obligations: []
     result:
       mode: ids_only
       reference_sql: SELECT id FROM clean_jobs WHERE id IN (1, 2, 5) ORDER BY id
@@ -43,7 +37,6 @@ cases:
     question: Có bao nhiêu tin tuyển dụng trong dữ liệu?
     reviewed_sql: SELECT count(*) AS count FROM clean_jobs
     guard: valid
-    expected_obligations: []
     result:
       mode: aggregate_count
       reference_sql: SELECT count(*) AS count FROM clean_jobs
@@ -55,7 +48,6 @@ cases:
     question: Ở mỗi thành phố có bao nhiêu tin tuyển dụng?
     reviewed_sql: SELECT location, count(*) AS count FROM clean_jobs GROUP BY location ORDER BY count DESC
     guard: valid
-    expected_obligations: []
     result:
       mode: rows_equal
       reference_sql: SELECT * FROM (VALUES ('Hanoi', 11), ('Ho Chi Minh City', 9), ('Da Nang', 4)) AS reviewed(location, count)
@@ -66,23 +58,23 @@ cases:
     question: Mức lương trung bình cho Data Scientist là bao nhiêu?
     reviewed_sql: SELECT avg(salary_min) AS count FROM clean_jobs WHERE role ILIKE '%Data Scientist%'
     guard: valid
-    expected_obligations: [CROSS_CURRENCY]
     note: >-
       The one-currency figure this statement returns is the number the contract
-      forbids. The reviewed obligation set is the assertion: it stays empty
-      until detect_obligations matches avg() and sum() over the salary columns,
-      so this case is the gate for the false-success class.
+      forbids: the sql_generation rule requires every salary aggregate to group
+      by salary_currency. The rule is graded by the Layer 1 baseline (#708),
+      not by this gate. This case pins the reviewed statement only.
 
   - id: R06-top5-usd
     class: reviewed
     question: 5 tin có mức lương tối thiểu cao nhất, tính bằng USD?
     reviewed_sql: SELECT id FROM clean_jobs WHERE salary_currency = 'USD' ORDER BY salary_min DESC LIMIT 5
     guard: valid
-    expected_obligations: [CROSS_CURRENCY]
     result:
       mode: ids_only
       reference_sql: SELECT id FROM clean_jobs WHERE id IN (1, 6, 14, 3, 10) ORDER BY id
-    note: The five highest USD postings; ranking on a salary column keeps the cross-currency caveat.
+    note: >-
+      The five highest USD postings. The statement ranks inside one currency,
+      which is the shape the sql_generation currency rule requires.
 
   - id: R07-compare-python-city
     class: reviewed
@@ -92,7 +84,6 @@ cases:
       count(*) FILTER (WHERE location ILIKE '%Ho Chi Minh%') AS hcmc
       FROM clean_jobs WHERE tech_stack ILIKE '%Python%'
     guard: valid
-    expected_obligations: []
     result:
       mode: rows_equal
       reference_sql: SELECT * FROM (VALUES (7, 3)) AS reviewed(hanoi, hcmc)
@@ -145,7 +136,6 @@ cases:
     question: Phân tích thị trường việc làm AI cho tôi.
     reviewed_sql: SELECT count(*) AS count FROM clean_jobs WHERE role ILIKE '%AI%'
     guard: valid
-    expected_obligations: []
     risk: >-
       No supported shape expresses the question, and the guard cannot see that:
       a plausible reduction answers a different question. Accepted by ADR-0060
@@ -156,18 +146,17 @@ cases:
     question: Cho tôi xin danh sách việc làm tốt.
     reviewed_sql: SELECT id FROM clean_jobs WHERE salary_max >= (SELECT avg(salary_max) FROM clean_jobs)
     guard: valid
-    expected_obligations: [CROSS_CURRENCY]
     risk: >-
       "Good" has no defensible mapping and the SQL chooses one silently.
-      Accepted by ADR-0060 (silent definitions). The cross-currency caveat
-      fires because the average blends currencies.
+      Accepted by ADR-0060 (silent definitions). The average blends currencies,
+      which the sql_generation currency rule owns and the Layer 1 baseline (#708)
+      measures.
 
   - id: A03-threshold-no-currency
     class: ambiguous
     question: Có bao nhiêu việc lương trên 20 triệu?
     reviewed_sql: SELECT count(*) AS count FROM clean_jobs WHERE salary_min >= 20000000
     guard: valid
-    expected_obligations: []
     risk: >-
       A bare threshold across currencies invents a period. The comparison is
       not an aggregate and no rule can see the ambiguity; accepted by ADR-0060
@@ -179,7 +168,6 @@ cases:
     question: Tóm tắt tin số 23.
     reviewed_sql: SELECT description FROM clean_jobs WHERE id = 23
     guard: valid
-    expected_obligations: []
     result:
       mode: rows_equal
       reference_sql: >-

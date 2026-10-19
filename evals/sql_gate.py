@@ -3,17 +3,14 @@
 The v0 gate graded a deterministic function: the typed core's plan and result.
 The v1 path has no such function - the model writes the SQL - so this gate grades
 what the guard itself decides. Each case carries a question, the reviewed SQL a
-correct answer must be equivalent to on the pinned fixture, the reviewed
-obligation set, and (where a mode can express it) the reviewed result. The gate
-runs the reviewed SQL through the same pipeline the tool uses - ``validate_sql``
-→ ``resolve_bounds`` → the fixture - and fails when:
+correct answer must be equivalent to on the pinned fixture, and (where a mode can
+express it) the reviewed result. The gate runs the reviewed SQL through the same
+pipeline the tool uses - ``validate_sql`` → ``resolve_bounds`` → the fixture -
+and fails when:
 
 - the validator verdict differs from the reviewed one, or a rejected case is
   rejected by a different rule than the one the case pins (the guard's floor:
   self-join, ``pg_sleep``, multi-table references, hidden columns);
-- the obligation set the guard emits differs from the reviewed set, which is how
-  the false-success class is graded: R05's reviewed set is non-empty, so the
-  case fails until the cross-currency rule matches aggregates;
 - the reviewed result is not what the reviewed SQL returns on the pinned
   fixture (compared with ``evals/sql_check.py``).
 
@@ -23,14 +20,16 @@ today's behaviour and name the risk, so a change that starts refusing them turns
 the gate red and the risk table has to be updated rather than forgotten. They
 are deliberately not blessed with a reviewed result.
 
+The cross-currency false-success class used to be graded here through the
+obligation detector, which #702 deleted together with the caveat machinery.
+The ``sql_generation`` rule that every salary aggregate groups by
+``salary_currency`` owns that risk now: R05, R06, and A02 pin the SQL that
+exercises it, and the #708 baseline measures whether the rule holds.
+
 Two things this module does **not** do, for the same reasons the v0 gate did
 not: it never skips (an unreachable fixture raises, because an unavailable
 database is a failed gate and never a pass), and it never asks a model (nothing
 here reads a credential or traffic).
-
-The obligation set graded here is the detector's output. Which detected caveats
-are rendered is ``agent.query.obligations`` in ``config/settings.yaml``; the
-gate pins the detection, and the config gate is covered by the unit suite.
 """
 
 from __future__ import annotations
@@ -45,7 +44,6 @@ from evals._paths import EVALS_ROOT
 from evals.report import group_by_metric
 
 GUARD_METRIC = "guard_correctness"
-OBLIGATION_METRIC = "obligation_correctness"
 RESULT_METRIC = "result_equivalence"
 
 SQL_GUARD_DATASET = EVALS_ROOT / "datasets" / "sql_guard.yaml"
@@ -62,7 +60,6 @@ _CASE_KEYS = frozenset(
         "question",
         "reviewed_sql",
         "guard",
-        "expected_obligations",
         "expected_reason_contains",
         "result",
         "risk",
@@ -130,14 +127,10 @@ class SqlGuardDataset:
             reason = case.get("expected_reason_contains")
             if not isinstance(reason, str) or not reason.strip():
                 raise _fail(f"{sid} is rejected and must pin the rule in expected_reason_contains")
-            for forbidden in ("expected_obligations", "result"):
-                if case.get(forbidden) is not None:
-                    raise _fail(f"{sid} is rejected, so {forbidden} cannot be graded")
+            if case.get("result") is not None:
+                raise _fail(f"{sid} is rejected, so result cannot be graded")
             return
 
-        obligations = case.get("expected_obligations")
-        if not isinstance(obligations, list) or not all(isinstance(token, str) for token in obligations):
-            raise _fail(f"{sid} must declare its reviewed obligation set as a list of tokens")
         if case["class"] == "ambiguous" and not case.get("risk"):
             raise _fail(f"{sid} is an accepted risk and must name it in `risk`")
         result = case.get("result")
@@ -193,16 +186,6 @@ def _require_fixture() -> None:
         )
 
 
-def _max_rows() -> int:
-    from src.core.config import settings
-
-    query = settings.config_yaml.get("agent", {}).get("query")
-    value = query.get("max_rows") if isinstance(query, dict) else None
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise ValueError("agent.query.max_rows must be a positive integer in config/settings.yaml")
-    return value
-
-
 def _grade_guard(case: dict[str, Any], verdict: Any) -> tuple[float, str]:
     if case["guard"] == "valid":
         if not verdict.valid:
@@ -214,21 +197,6 @@ def _grade_guard(case: dict[str, Any], verdict: Any) -> tuple[float, str]:
     if expected not in verdict.reason:
         return FAIL, f"rejected by {verdict.reason!r}, not by the reviewed rule {expected!r}"
     return PASS, f"rejected by the reviewed rule: {verdict.reason}"
-
-
-def _grade_obligations(case: dict[str, Any]) -> tuple[float, str]:
-    from evals.sql_check import execute_query
-    from src.services.query.obligations import detect_obligations
-    from src.services.query.row_bound import resolve_bounds
-    from src.services.query.table_formatter import format_rows
-
-    bounds = resolve_bounds(case["reviewed_sql"], _max_rows())
-    table = format_rows(execute_query(bounds.sql), bounds.display_cap)
-    observed = {obligation.glossary_token for obligation in detect_obligations(case["reviewed_sql"], table)}
-    expected = set(case["expected_obligations"])
-    if observed != expected:
-        return FAIL, f"obligations {sorted(observed)} are not the reviewed {sorted(expected)}"
-    return PASS, f"the reviewed obligation set is emitted: {sorted(expected)}"
 
 
 def _grade_result(case: dict[str, Any]) -> tuple[float, str]:
@@ -295,19 +263,14 @@ def run_sql_gate(spec: SqlGuardDataset, *, ids: list[str] | None = None) -> dict
 
         if guard_score != PASS:
             # Nothing below is gradable: the reviewed SQL is not the statement
-            # this case reviewed, so its obligations and result cannot be.
-            if case["guard"] == "valid":
+            # this case reviewed, so its result cannot be either.
+            if case["guard"] == "valid" and case.get("result") is not None:
                 not_graded = "not graded: the guard verdict is not the reviewed one"
-                results.append(_row(case, OBLIGATION_METRIC, FAIL, not_graded))
-                if case.get("result") is not None:
-                    results.append(_row(case, RESULT_METRIC, FAIL, not_graded))
+                results.append(_row(case, RESULT_METRIC, FAIL, not_graded))
             continue
 
         if case["guard"] == "rejected":
             continue
-
-        obligation_score, obligation_reason = _grade_obligations(case)
-        results.append(_row(case, OBLIGATION_METRIC, obligation_score, obligation_reason))
 
         if case.get("result") is not None:
             result_score, result_reason = _grade_result(case)
@@ -317,7 +280,7 @@ def run_sql_gate(spec: SqlGuardDataset, *, ids: list[str] | None = None) -> dict
         "dataset": str(spec.path),
         "mode": "gate",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "metrics": [GUARD_METRIC, OBLIGATION_METRIC, RESULT_METRIC],
+        "metrics": [GUARD_METRIC, RESULT_METRIC],
         "cases": [case["id"] for case in cases],
         "by_metric": group_by_metric(results),
     }

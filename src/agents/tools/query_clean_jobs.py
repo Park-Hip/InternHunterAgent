@@ -1,10 +1,15 @@
 """Framework-neutral implementation of the read-only clean-jobs search ability.
 
 This module owns the single source of truth for natural-language-to-SQL
-generation, validation, execution, formatting, and the safe Vietnamese error
-policy. The MCP tool wrapper (see src/agents/mcp/job_server.py) calls
-``run_query_clean_jobs`` directly; the LangChain agent reaches the same
-implementation through the in-process MCP adapter.
+generation, validation, execution, and the typed result. The MCP tool wrapper
+(see src/agents/mcp/job_server.py) calls ``run_query_clean_jobs`` directly; the
+LangChain agent reaches the same implementation through the in-process MCP
+adapter.
+
+The tool returns facts, never sentences (#702): the SQL that ran, the columns,
+the rows, and the real match total. The system prompt owns every user-facing
+word. Failures are raised as :class:`ToolFailure` and reach the model as
+error-status tool messages.
 
 Nothing here depends on LangChain tool decoration or a transportable
 ``RunnableConfig``. The SQL generation reads LangChain's ambient config when
@@ -21,29 +26,27 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.runnables.config import var_child_runnable_config
 
 from src.agents.runtime.prompts import (
-    load_behavior_glossary,
     load_schema_context_resolution_async,
     load_sql_generation_prompt_resolution_async,
 )
 from src.agents.runtime.provider import build_model
 from src.agents.runtime.tool_events import publish_tool_result
+from src.agents.tools.failures import ToolFailure
 from src.agents.tracing.langfuse import get_langfuse_client, langfuse_prompt_attributes
 from src.core.config import settings
 from src.core.logger import logger
 from src.services.query.executor import (
     ExecutorError,
+    QueryTimeoutError,
+    ResultTooLargeError,
     UndefinedColumnError,
-    execute_validated_sql,
+    execute_bounded_select,
 )
-from src.services.query.models import QueryRefusal, QueryToolResult, TableArtifact
-from src.services.query.obligations import (
-    detect_obligations,
-    filter_enabled_obligations,
-)
+from src.services.query.models import QueryResult
 from src.services.query.result_shape import classify_result_shape, counted_total
 from src.services.query.row_bound import resolve_bounds
 from src.services.query.sql_validator import validate_sql
-from src.services.query.table_formatter import format_rows, render_tool_result
+from src.services.query.table_formatter import shape_rows
 
 SQL_GENERATION_OBSERVATION_NAME = "sql_generation"
 
@@ -137,68 +140,74 @@ def _ambient_langchain_config() -> RunnableConfig | None:
     return {"callbacks": callbacks}
 
 
-def _publish_result_facts(sql: str, table: TableArtifact) -> None:
-    # A comment rather than a docstring, because every function docstring in a
-    # tool module is a model-visible string under the prompt-surface inventory.
-    #
-    # Publish what this tool knows about its result, and nothing it does not. The
-    # result table is a list of matches only when its rows are matches. A count
-    # query's single row holds the total, so publish that total; any other
-    # summary publishes no count, so the interface cannot state a figure the
-    # answer does not (#677).
-    #
-    # The row count of a listing survives only inside a sentence once the table
-    # is rendered for the model, so it is published as a fact too, letting the
-    # interface show the real number instead of leaving the reader to infer it
-    # from prose.
+def _publish_result_facts(sql: str, result: QueryResult) -> None:
+    # Publish what this tool knows about its result, and nothing it does not.
+    # A listing's count is the real match total, so the interface shows "20 of
+    # 161" rather than the shown rows only. A count query's single row holds
+    # the total, so publish that total; any other summary publishes no count,
+    # so the interface cannot state a figure the answer does not (#677).
     shape = classify_result_shape(sql)
     if shape == "match_count":
-        publish_tool_result(row_count=counted_total(table), truncated=False)
+        publish_tool_result(
+            row_count=counted_total(result.columns, result.rows), truncated=False
+        )
     elif shape == "rows":
-        publish_tool_result(row_count=table.row_count, truncated=table.truncated)
+        publish_tool_result(
+            row_count=result.total_rows,
+            truncated=result.row_count < result.total_rows,
+        )
     else:
         # Absent, not zero: the query ran, but it has no match count to state.
         publish_tool_result(row_count=None)
 
 
-async def run_query_clean_jobs(question: str) -> str:
-    """Return safe Vietnamese clean_jobs search results for one question."""
-    sql = await generate_sql(question)
+async def run_query_clean_jobs(request: str) -> QueryResult:
+    """Return typed clean_jobs facts for one standalone request.
+
+    The request is generated by the agent: one standalone statement that
+    restates every filter from earlier turns that still applies.
+    """
+    sql = await generate_sql(request)
     validation = validate_sql(sql)
 
     if not validation.valid:
         logger.warning("query_clean_jobs.sql_rejected", reason=validation.reason)
-        # A rejected query is not a search that matched nothing. Publishing zero
-        # here would show the reader "no results" for a question never asked of
-        # the database.
-        publish_tool_result(row_count=None)
-        return f"Tôi không thể chạy truy vấn đó: {validation.reason}"
+        # A rejection is not a search that matched nothing, so no count is
+        # published: the tool raises and the card reports the error instead.
+        raise ToolFailure("rejected", validation.reason)
 
     max_rows = load_max_rows()
     bounds = resolve_bounds(validation.sql, max_rows)
+    bounded_sql = f"{bounds.base_sql} LIMIT {bounds.limit}"
 
     try:
-        rows = await asyncio.to_thread(execute_validated_sql, bounds.sql)
+        bounded = await asyncio.to_thread(
+            execute_bounded_select, bounds.base_sql, bounds.limit
+        )
     except UndefinedColumnError as exc:
         logger.warning("query_clean_jobs.unknown_column", error=str(exc))
-        # A refused query matched nothing, but it is a refusal rather than an
-        # empty result, so publish no count rather than a misleading zero.
-        publish_tool_result(row_count=None)
-        return render_tool_result(
-            QueryToolResult(
-                refusal=QueryRefusal(reason="", glossary_token="ABSENT_FIELD")
-            ),
-            load_behavior_glossary(),
-        )
+        raise ToolFailure("unknown_column", exc.message_primary) from exc
+    except QueryTimeoutError as exc:
+        logger.warning("query_clean_jobs.timeout", error=str(exc))
+        raise ToolFailure("timeout", str(exc)) from exc
+    except ResultTooLargeError as exc:
+        logger.warning("query_clean_jobs.too_large", error=str(exc))
+        raise ToolFailure(
+            "too_large", "result exceeds the byte budget; select fewer columns"
+        ) from exc
     except ExecutorError as exc:
         logger.error("query_clean_jobs.db_error", error=str(exc))
-        publish_tool_result(row_count=None)
-        return "Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau."
+        raise ToolFailure(
+            "unavailable", "the database could not run the query"
+        ) from exc
 
-    table = format_rows(rows, bounds.display_cap)
-    _publish_result_facts(validation.sql, table)
-    obligations = filter_enabled_obligations(detect_obligations(validation.sql, table))
-    return render_tool_result(
-        QueryToolResult(table=table, obligations=obligations),
-        load_behavior_glossary(),
+    columns, rows = shape_rows(bounded.columns, bounded.rows)
+    result = QueryResult(
+        sql=bounded_sql,
+        columns=columns,
+        rows=rows,
+        row_count=len(rows),
+        total_rows=bounded.total_rows,
     )
+    _publish_result_facts(bounded_sql, result)
+    return result

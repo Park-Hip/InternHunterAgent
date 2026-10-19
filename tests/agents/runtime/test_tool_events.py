@@ -5,8 +5,10 @@ These assert the three things that matter and are easy to get wrong:
 1. The middleware emits a running event and an ok event around a real call, and
    returns the handler's result untouched.
 2. A failing tool still reports, and still propagates unchanged.
-3. Arguments are bounded, because they reach the browser.
-4. A failed call leaves no result holder bound behind it.
+3. A failure that arrives as an error-status tool message reports an error with
+   no detail, and no result facts (#702).
+4. Arguments are bounded, because they reach the browser.
+5. A failed call leaves no result holder bound behind it.
 """
 
 from __future__ import annotations
@@ -14,6 +16,8 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+
+from langchain_core.messages import ToolMessage
 
 from src.agents.models import StreamToolEvent
 from src.agents.runtime.middleware import ToolObservationMiddleware
@@ -60,7 +64,7 @@ class ToolObservationMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         middleware = ToolObservationMiddleware()
 
         result = await middleware.awrap_tool_call(
-            _request("query_clean_jobs", {"question": "AI Engineer in Da Nang"}),
+            _request("query_clean_jobs", {"request": "AI Engineer in Da Nang"}),
             handler,
         )
 
@@ -71,7 +75,7 @@ class ToolObservationMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.collector.events[0].duration_ms)
         self.assertIsInstance(self.collector.events[1].duration_ms, int)
         self.assertEqual(
-            self.collector.events[0].arguments, {"question": "AI Engineer in Da Nang"}
+            self.collector.events[0].arguments, {"request": "AI Engineer in Da Nang"}
         )
 
     async def test_a_failing_tool_reports_then_propagates_unchanged(self) -> None:
@@ -91,6 +95,44 @@ class ToolObservationMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         error = self.collector.events[1].error
         self.assertIsNotNone(error, "the failing call must report why it failed")
         self.assertIn("tool exploded", error)
+
+    async def test_an_error_status_tool_message_reports_an_error_with_no_detail(
+        self,
+    ) -> None:
+        """The MCP boundary delivers a tool failure as an error-status message.
+
+        The model reads the kind and the detail inside the message; the card
+        shows the server-owned Vietnamese copy instead, so the event carries no
+        error text and folds in no result facts (#702).
+        """
+        failure_message = ToolMessage(
+            content='unknown_column: column "remote" does not exist',
+            tool_call_id="call-1",
+            name="query_clean_jobs",
+            status="error",
+        )
+
+        async def handler(_request):
+            # A behavior that published before failing must not leak its facts
+            # into an error event.
+            publish_tool_result(row_count=3)
+            return failure_message
+
+        returned = await ToolObservationMiddleware().awrap_tool_call(
+            _request("query_clean_jobs", {"request": "what does remote hold?"}), handler
+        )
+
+        self.assertIs(returned, failure_message, "the message must pass through")
+        self.assertEqual(
+            [e.status for e in self.collector.events], ["running", "error"]
+        )
+        error_event = self.collector.events[1]
+        self.assertIsNone(
+            error_event.error,
+            "the card owns the error copy, so the event carries no detail",
+        )
+        self.assertIsNone(error_event.row_count)
+        self.assertFalse(error_event.truncated)
 
     async def test_a_failing_tool_leaves_no_result_holder_bound(self) -> None:
         """A released holder, so nothing later in this context reads stale facts."""

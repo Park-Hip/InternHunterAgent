@@ -1,14 +1,45 @@
+"""Guard the model-facing text surface, which is now only the prompt and the tools.
+
+Since #702 a tool returns typed facts and raises a kind with a detail, so the
+only places a written sentence reaches the model are:
+
+1. the three prompt surfaces declared in ``config/prompts.yaml``, and
+2. the four descriptions the MCP server advertises for its two tools.
+
+The inventory below is that closed list. The first test compares it against the
+text the real server actually serves, so a new tool, a renamed argument, or a
+changed description cannot reach the model unrecorded. The last tests guard the
+other half of the change: a behavior module must not return a written sentence,
+and the deleted caveat machinery must not creep back into the config.
+"""
+
 from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
 import yaml
+from fastmcp import Client
+
+from src.agents.mcp.job_server import (
+    GET_JOB_DETAILS_TOOL,
+    IDS_ARGUMENT_DESCRIPTION,
+    QUERY_CLEAN_JOBS_DESCRIPTION,
+    QUERY_CLEAN_JOBS_TOOL,
+    REQUEST_ARGUMENT_DESCRIPTION,
+    create_job_mcp_server,
+    job_details_description,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIRECTORY = ROOT / "src" / "agents" / "tools"
+JOB_SERVER_PATH = "src/agents/mcp/job_server.py"
+
+#: The behavior modules. They return facts or raise, never a sentence.
+BEHAVIOR_MODULES = ("query_clean_jobs.py", "get_job_details.py")
 
 
 @dataclass(frozen=True)
@@ -40,146 +71,148 @@ INVENTORY = frozenset(
             visibility="model-visible",
         ),
         PromptSurface(
-            path="config/prompts.yaml",
-            symbol="behavior_glossary",
-            text="",
+            path=JOB_SERVER_PATH,
+            symbol="QUERY_CLEAN_JOBS_DESCRIPTION",
+            text=QUERY_CLEAN_JOBS_DESCRIPTION,
             visibility="model-visible",
         ),
         PromptSurface(
-            path="src/agents/tools/get_job_details.py",
-            symbol="run_get_job_details.__doc__",
-            text="Return safe Vietnamese job details for the given posting ids.",
+            path=JOB_SERVER_PATH,
+            symbol="REQUEST_ARGUMENT_DESCRIPTION",
+            text=REQUEST_ARGUMENT_DESCRIPTION,
             visibility="model-visible",
         ),
         PromptSurface(
-            path="src/agents/tools/query_clean_jobs.py",
-            symbol="run_query_clean_jobs.__doc__",
-            text="Return safe Vietnamese clean_jobs search results for one question.",
+            path=JOB_SERVER_PATH,
+            symbol="GET_JOB_DETAILS_DESCRIPTION",
+            text=job_details_description(),
             visibility="model-visible",
         ),
         PromptSurface(
-            path="src/agents/tools/query_clean_jobs.py",
-            symbol="generate_sql.__doc__",
-            text="Generate SQL for one question with an explicit traceable generation.",
-            visibility="model-visible",
-        ),
-        PromptSurface(
-            path="src/agents/tools/get_job_details.py",
-            symbol="run_get_job_details",
-            text=(
-                "Vui lòng chỉ định mã tin tuyển dụng bạn muốn xem chi tiết hoặc tìm kiếm "
-                "trước bằng query_clean_jobs."
-            ),
-            visibility="model-visible",
-        ),
-        PromptSurface(
-            path="src/agents/tools/get_job_details.py",
-            symbol="run_get_job_details",
-            text="Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau.",
-            visibility="model-visible",
-        ),
-        PromptSurface(
-            path="src/agents/tools/query_clean_jobs.py",
-            symbol="run_query_clean_jobs",
-            text='f"Tôi không thể chạy truy vấn đó: {validation.reason}"',
-            visibility="model-visible",
-        ),
-        PromptSurface(
-            path="src/agents/tools/query_clean_jobs.py",
-            symbol="run_query_clean_jobs",
-            text="Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau.",
+            path=JOB_SERVER_PATH,
+            symbol="IDS_ARGUMENT_DESCRIPTION",
+            text=IDS_ARGUMENT_DESCRIPTION,
             visibility="model-visible",
         ),
     }
 )
 
 
-def tool_surfaces(path: Path) -> set[PromptSurface]:
-    source = path.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(path))
-    relative_path = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else path.name
-    surfaces: set[PromptSurface] = set()
-
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-            continue
-
-        docstring = ast.get_docstring(node, clean=True)
-        if docstring is not None:
-            surfaces.add(
-                PromptSurface(
-                    path=relative_path,
-                    symbol=f"{node.name}.__doc__",
-                    text=docstring,
-                    visibility="model-visible",
-                )
-            )
-
-        for descendant in ast.walk(node):
-            if not isinstance(descendant, ast.Return):
-                continue
-            returned = descendant.value
-            if isinstance(returned, ast.Constant) and isinstance(returned.value, str):
-                text = returned.value
-            elif isinstance(returned, ast.JoinedStr):
-                text = ast.get_source_segment(source, returned)
-                if text is None:
-                    raise AssertionError(f"Could not locate f-string in {relative_path}")
-            else:
-                continue
-            surfaces.add(
-                PromptSurface(
-                    path=relative_path,
-                    symbol=node.name,
-                    text=text,
-                    visibility="model-visible",
-                )
-            )
-
-    return surfaces
+def load_prompts_config() -> dict:
+    return yaml.safe_load((ROOT / "config" / "prompts.yaml").read_text(encoding="utf-8"))
 
 
 def config_surfaces() -> set[PromptSurface]:
-    config_path = ROOT / "config" / "prompts.yaml"
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    prompts = config["prompts"]
+    prompts = load_prompts_config()["prompts"]
 
     assert set(prompts) == {
         "system_prompt",
         "schema_context",
         "sql_generation",
     }
-    assert all(isinstance(prompts[name], str) for name in prompts)
-    assert isinstance(config["behavior_glossary"], dict)
 
     return {
-        PromptSurface("config/prompts.yaml", "prompts.system_prompt", "", "model-visible"),
-        PromptSurface("config/prompts.yaml", "prompts.schema_context", "", "model-visible"),
-        PromptSurface("config/prompts.yaml", "prompts.sql_generation", "", "model-visible"),
-        PromptSurface("config/prompts.yaml", "behavior_glossary", "", "model-visible"),
+        PromptSurface("config/prompts.yaml", f"prompts.{name}", "", "model-visible")
+        for name in prompts
     }
 
 
-def discovered_surfaces() -> set[PromptSurface]:
-    tool_surfaces_found = set().union(
-        *(tool_surfaces(path) for path in sorted(TOOLS_DIRECTORY.glob("*.py")))
+async def advertised_surfaces() -> set[PromptSurface]:
+    """The descriptions the MCP server serves, as a client reads them."""
+    async with Client(create_job_mcp_server()) as client:
+        by_name = {tool.name: tool for tool in await client.list_tools()}
+
+    query = by_name[QUERY_CLEAN_JOBS_TOOL]
+    details = by_name[GET_JOB_DETAILS_TOOL]
+    return {
+        PromptSurface(
+            JOB_SERVER_PATH,
+            "QUERY_CLEAN_JOBS_DESCRIPTION",
+            str(query.description),
+            "model-visible",
+        ),
+        PromptSurface(
+            JOB_SERVER_PATH,
+            "REQUEST_ARGUMENT_DESCRIPTION",
+            query.input_schema["properties"]["request"]["description"],
+            "model-visible",
+        ),
+        PromptSurface(
+            JOB_SERVER_PATH,
+            "GET_JOB_DETAILS_DESCRIPTION",
+            str(details.description),
+            "model-visible",
+        ),
+        PromptSurface(
+            JOB_SERVER_PATH,
+            "IDS_ARGUMENT_DESCRIPTION",
+            details.input_schema["properties"]["ids"]["description"],
+            "model-visible",
+        ),
+    }
+
+
+@pytest.mark.asyncio
+async def test_the_inventory_gathers_every_model_facing_string() -> None:
+    discovered = config_surfaces() | await advertised_surfaces()
+
+    assert discovered == INVENTORY
+
+
+def test_the_deleted_caveat_machinery_does_not_come_back() -> None:
+    """#702 deleted the glossary, its anchors, and the obligation config."""
+    config = load_prompts_config()
+
+    assert "behavior_glossary" not in config
+    assert "behavior_glossary_anchors" not in config
+    assert "evaluation_anchors" not in config
+
+    settings = yaml.safe_load(
+        (ROOT / "config" / "settings.yaml").read_text(encoding="utf-8")
     )
-    return config_surfaces() | tool_surfaces_found
+
+    assert "obligations" not in settings["agent"]["query"]
 
 
-def test_inventory_matches_every_model_facing_tool_string() -> None:
-    assert discovered_surfaces() == INVENTORY
+def returned_sentences(path: Path) -> list[str]:
+    """The source of every string or f-string one module's functions return."""
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    offenders: list[str] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Return) or node.value is None:
+            continue
+        is_string = isinstance(node.value, ast.Constant) and isinstance(
+            node.value.value, str
+        )
+        if is_string or isinstance(node.value, ast.JoinedStr):
+            offenders.append(
+                f"{path.name}:{node.lineno}: "
+                f"{ast.get_source_segment(source, node.value)}"
+            )
+
+    return offenders
 
 
-def test_unrecorded_return_literal_is_detected(tmp_path: Path) -> None:
+def test_behavior_modules_return_facts_not_a_written_sentence() -> None:
+    offenders = [
+        offender
+        for name in BEHAVIOR_MODULES
+        for offender in returned_sentences(TOOLS_DIRECTORY / name)
+    ]
+
+    assert offenders == [], (
+        "a behavior returns a written sentence; tools return typed facts and the "
+        "system prompt owns the wording (#702): " + "; ".join(offenders)
+    )
+
+
+def test_a_returned_sentence_is_detected(tmp_path: Path) -> None:
     tool_path = tmp_path / "tool.py"
-    tool_path.write_text('def example():\n    return "test string"\n', encoding="utf-8")
+    tool_path.write_text(
+        'def hits() -> str:\n    return "Tìm thấy 214 kết quả."\n',
+        encoding="utf-8",
+    )
 
-    found = tool_surfaces(tool_path)
-
-    assert PromptSurface(
-        path="tool.py",
-        symbol="example",
-        text="test string",
-        visibility="model-visible",
-    ) in found
+    assert returned_sentences(tool_path) == ['tool.py:2: "Tìm thấy 214 kết quả."']

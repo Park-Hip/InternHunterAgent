@@ -228,10 +228,12 @@ may add a tool, and **conversation memory**, since the API and service layers pa
 identity through but never manage memory themselves.
 
 **Tools layer** (`src/agents/tools/`).
-Each tool is a self-contained adapter registered in the factory.
+Each tool is a self-contained adapter declared by the MCP job server and registered in the factory.
 Tools may call internal services freely, but the model never receives a raw execution primitive: no
-SQL string, no database session, no internal DTO.
-A tool's only public surface is natural language in, bounded plain string out.
+database session and no connection handle.
+A tool's public surface is one standalone request or a bounded list of ids in, typed JSON facts
+out, as decided in
+[ADR-0062](decisions/adr-0062-tools-return-facts-the-prompt-owns-wording.md).
 A tool may accept a model-supplied *opaque handle*, such as a job id carried over from a previous
 result, because a handle is not an execution primitive.
 
@@ -263,9 +265,11 @@ It treats the agent as a black box through its public entrypoint plus an injecte
 
 Some types are permitted inside a layer but must never cross out of it.
 
-- **Raw SQL and tool-internal data structures stop at the tools layer.** Internal DTOs such as the
-  ones in `src/services/query/models.py` may be used freely inside tools and services but must
-  collapse to a plain string before the result leaves the tool.
+- **Tool internals stop at the tools layer, except the facts the model needs.** A tool returns
+  typed JSON facts, the models in `src/services/query/models.py` (`QueryResult` and
+  `JobDetailsResult`). The statement that ran is deliberately one of those facts, as `sql`: it is
+  what lets the model describe how a search matched, and the prompt forbids showing or quoting it.
+  No execution primitive crosses, and raw SQL and table rows still never reach the API response.
 - **Langfuse SDK objects stop at the tracing layer.** No route, service, or tool touches a Langfuse
   client directly.
 - **LangChain types** (messages, runnables, agent objects) **stop at the runtime layer.**
@@ -275,8 +279,8 @@ Some types are permitted inside a layer but must never cross out of it.
   are capped deterministically inside the tool; a tool never emits an unbounded, model-sized payload
   into the agent loop. Large free-text fields are never returned in bulk: they may be filtered on
   server-side, but their full text is retrieved only through an explicit, bounded, id-based lookup.
-  This law exists because a payload can be perfectly valid, a plain string with no leaked internals,
-  and still be too large to serve.
+  This law exists because a payload can be perfectly valid, well-formed JSON facts with no leaked
+  internals, and still be too large to serve.
 - **Session memory is short-term and session-scoped**, although it may persist across restarts.
 - **The request path never imports the ingestion or evaluation packages.**
 
@@ -326,12 +330,12 @@ or tracing.
   return few rows is a helpful nudge, never the safeguard.
 - **One model provider abstraction**, with a per-profile provider key and no provider-swap matrix
   built in advance of needing one.
-- **No post-tool narration.** A tool returns a single deterministic answer string; there is no
+- **No post-tool narration.** A tool returns one deterministic set of facts; there is no
   second model call to summarize or re-narrate what a tool already produced. This is distinct from
   the SQL-generation call *inside* the tool, which produces the query, not the answer.
 - **Internal richness, external simplicity.** Tools and services may use structured data freely for
-  efficiency and traceability, but that richness must collapse to a plain string by the time it
-  crosses the API boundary.
+  efficiency and traceability, but a tool returns only the typed facts the model needs, and the
+  answer collapses to a plain string by the time it crosses the API boundary.
 - **Schema growth is column-cheap, table-costly.** Answer honesty is derived from the documented
   schema, never a hardcoded field list, so growing the schema never silently turns an honesty rule
   into a falsehood. See the schema-evolution section.
@@ -370,16 +374,18 @@ It steers the model to use the job-data tool for any question that depends on st
 Prompt change (edit, merge, deploy, register), candidate evaluation, and rollback are owned by the [Langfuse prompt management guide](how-to/manage-langfuse-prompts.md).
 The runtime extracts the final answer from the last message and returns it as a plain string.
 
-The behavior glossary is loaded separately rather than pasted into the system prompt, so the
-evaluation grader and the prompt resolve the same phrasings from one source.
+The system prompt owns every user-facing word about a tool result; the tools return facts and no
+sentences, as decided in
+[ADR-0062](decisions/adr-0062-tools-return-facts-the-prompt-owns-wording.md).
 The frozen behavior requirements themselves are owned by
 [agent behavior reference](reference/agent-behavior.md).
 
 ### 3 Tools
 
-Tools are how the agent acts on the world, under one contract: **natural language in, bounded plain
-string out**.
-Tools are registered exclusively in the factory.
+Tools are how the agent acts on the world, under one contract: **one standalone request or a
+bounded id list in, typed JSON facts out**.
+Tools are registered exclusively in the factory, and the two public tools are declared by the
+purpose-built MCP server in `src/agents/mcp/job_server.py`.
 
 Two tools ship.
 
@@ -392,17 +398,18 @@ Two tools ship.
 `query_clean_jobs` runs a fixed, deterministic pipeline rather than handing SQL power to the model.
 
 1. The resolved schema-context prompt supplies the table shape to the model.
-2. A dedicated model call turns the question into a candidate `SELECT`.
+2. A dedicated model call turns the request into a candidate `SELECT`.
 3. `src/services/query/sql_validator.py` is the **security boundary**: a deterministic, hand-rolled
    read-only validator with `SELECT`-only enforcement and allowlist and denylist checks.
-4. Only validated SQL reaches `src/services/query/executor.py`, run in a read-only transaction off
-   the event loop.
-5. Rows are shaped by `src/services/query/table_formatter.py` into an internal artifact, then
-   collapsed to a plain answer string before returning.
+4. Only validated SQL reaches `src/services/query/executor.py`, run in one read-only, repeatable-read
+   transaction off the event loop that also holds the counting statement.
+5. Rows are shaped by `src/services/query/table_formatter.py` into JSON-native values, and the tool
+   returns the typed facts: the statement that ran, the columns, the rows, the row count, and the
+   real match total.
 
-Read-only invariants: `SELECT` only; any non-`SELECT` or unsafe SQL is refused before execution with
-a natural-language message; database errors including timeouts are caught and returned as a safe
-message, never crashing the process.
+Read-only invariants: `SELECT` only; any non-`SELECT` or unsafe SQL is refused before execution and
+raised as a failure kind; database errors including timeouts are caught and raised as a kind and a
+detail, never crashing the process.
 The model only *proposes* SQL, which is why a generation step is acceptable without granting raw
 execution capability.
 
@@ -424,12 +431,12 @@ has.
   not model-owned: `src/services/query/row_bound.py` inspects any trailing `LIMIT` the model wrote
   and treats it as a signal of *explicit user intent*, because the SQL-generation prompt only asks
   for a `LIMIT` when the user requested a specific count. If that `LIMIT` is within the safety cap
-  it is honored exactly, fetching and displaying exactly that many rows with no truncation notice.
-  Otherwise - no `LIMIT`, or one above the cap - the tool fetches `max_rows + 1` rows as a
-  truncation sentinel and displays `max_rows`, so broad queries still get an honest "there are more
-  matches, narrow your search" notice. It deliberately does **not** compute an exact total for list
-  queries, since a precise count would require a separate `COUNT(*)` and was rejected as unnecessary
-  complexity. Scalar and aggregate results pass through untouched, with no truncation notice.
+  it is honored exactly; otherwise the tool fetches `max_rows`.
+  When the fetch fills its limit, one companion `SELECT count(*) FROM (<base_sql>) AS q` runs in
+  the same repeatable-read transaction, so the result states the real match total ("20 of 161")
+  rather than inferring a total from the page. A result shorter than its limit is its own total,
+  and a count or other aggregate carries its figures in `rows` with no match count attached, so the
+  card can never state a number the answer does not.
 - `get_job_details(ids)` is a **deterministic, parameterized** fetch by id with no model call and no
   SQL generation, because ids carry no natural-language ambiguity. It returns the full
   `description` for a few postings, bounded by `agent.query.max_detail_ids`. This is the *only* path
@@ -459,8 +466,8 @@ The honest behavior there is to answer literal keywords and say plainly that the
 search postings by meaning.
 
 **Attributes not backed by a column** such as remote work, mentorship, and visa sponsorship are
-answered by keyword-matching the `description` text, with an honesty hedge that the match is based
-on posting wording and may be imperfect.
+answered by keyword-matching the `description` text, and the system prompt requires the model to
+say for that term that the match came from the posting text and may be imperfect.
 Promoting hot text into a real column at ingestion - the path that produced `role`, `location`, and
 `tech_stack` - is the escalation when one becomes a common filter.
 
@@ -518,7 +525,7 @@ The API exchanges two Pydantic models defined in `src/api/schemas.py`.
 
 The response is **answer-only**: no SQL, table rows, or tool internals ever appear, regardless of
 which tools run.
-Internal richness must collapse to a plain string before crossing the API boundary.
+Internal richness must collapse to a plain answer string before crossing the API boundary.
 
 **Session lifecycle.**
 `session_id` is the conversation key.

@@ -20,7 +20,7 @@ The same id must be unique within its dataset.
 
 The SQL guard gate's corpus, [`../datasets/sql_guard.yaml`](../datasets/sql_guard.yaml), is not a
 scenario dataset: it is read by `SqlGuardDataset` in [`../sql_gate.py`](../sql_gate.py) and its cases
-are reviewed SQL statements, obligations, and results.
+are reviewed SQL statements and results.
 
 ## Enforced grammar
 

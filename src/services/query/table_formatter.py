@@ -1,60 +1,43 @@
-from src.services.query.models import QueryToolResult, TableArtifact
+"""Shape database values into JSON-native facts for the tools.
+
+The listing result drops the ``description`` blob (it is fetched only by
+``get_job_details``), and every value becomes JSON-native: ``Decimal`` stays an
+``int`` when integral and becomes a ``float`` otherwise, dates and datetimes
+become ISO strings, and ``NULL`` stays ``null``.
+"""
+
+from __future__ import annotations
+
+import datetime
+import decimal
+from typing import Any
+
+from src.services.query.models import JsonValue
 
 
-def format_rows(rows: list[dict], max_rows: int) -> TableArtifact:
-    if not rows:
-        return TableArtifact(columns=[], rows=[], row_count=0, truncated=False)
-
-    truncated = len(rows) > max_rows
-    capped = rows[:max_rows]
-    columns = [column for column in capped[0].keys() if column.lower() != "description"]
-    formatted_rows = [[row.get(col) for col in columns] for row in capped]
-    return TableArtifact(
-        columns=columns,
-        rows=formatted_rows,
-        row_count=len(formatted_rows),
-        truncated=truncated,
-    )
+def json_value(value: Any) -> JsonValue:
+    """Convert one database value to its JSON-native form."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, decimal.Decimal):
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
+    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        return value.isoformat()
+    return str(value)
 
 
-def render_tool_result(result: QueryToolResult, glossary: dict[str, str]) -> str:
-    """Render a structured query result for the model-facing tool contract."""
-    if result.refusal is not None:
-        token = result.refusal.glossary_token
-        return glossary[token] if token is not None else result.refusal.reason
+def shape_rows(
+    columns: list[str], rows: list[list[Any]]
+) -> tuple[list[str], list[list[JsonValue]]]:
+    """Return the listing columns and rows, without ``description``.
 
-    if result.table is None:
-        return result.answer
-
-    table = result.table
-    if table.row_count == 0:
-        return glossary["ZERO_RESULTS"]
-
-    if table.truncated:
-        header = (
-            f"{glossary['TRUNCATION']} Các cột: {', '.join(table.columns)}."
-        )
-    else:
-        header = f"Tìm thấy {table.row_count} kết quả với các cột: {', '.join(table.columns)}."
-
-    lines = [header]
-    for row in table.rows:
-        pairs = ", ".join(f"{column}={value}" for column, value in zip(table.columns, row))
-        lines.append(f"- {pairs}")
-
-    if result.obligations:
-        lines.append("MANDATORY CAVEATS:")
-        lines.extend(
-            f"[{obligation.glossary_token}] {glossary[obligation.glossary_token]}"
-            for obligation in result.obligations
-            if obligation.glossary_token != "ZERO_RESULTS"
-        )
-
-    return "\n".join(lines)
-
-
-def render_obligations(answer: str, obligations: list[str], glossary: dict[str, str]) -> str:
-    if not obligations:
-        return answer
-    caveats = "\n".join(f"[{token}] {glossary[token]}" for token in obligations)
-    return f"{answer}\nMANDATORY CAVEATS:\n{caveats}"
+    ``description`` is never projected by the SQL rules, but a listing that
+    asked for it explicitly is still dropped here: this is the boundary that
+    guarantees the blob never reaches the model in bulk.
+    """
+    kept = [index for index, column in enumerate(columns) if column.lower() != "description"]
+    shaped_columns = [columns[index] for index in kept]
+    shaped_rows = [[json_value(row[index]) for index in kept] for row in rows]
+    return shaped_columns, shaped_rows

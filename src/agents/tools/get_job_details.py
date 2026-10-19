@@ -1,18 +1,23 @@
-"""Framework-neutral implementation of the bounded job-details lookup ability."""
+"""Framework-neutral implementation of the bounded job-details lookup ability.
+
+The tool returns typed facts or raises ``ToolFailure``; no user-facing sentence
+is written here (#702). The system prompt owns all wording.
+"""
 
 import asyncio
 
-from src.agents.runtime.prompts import load_behavior_glossary
+from src.agents.tools.failures import ToolFailure
 from src.core.config import settings
 from src.core.logger import logger
-from src.services.query.executor import ExecutorError
-from src.services.query.job_details import fetch_job_details
-from src.services.query.models import TableArtifact
-from src.services.query.obligations import (
-    detect_row_obligations,
-    filter_enabled_obligations,
+from src.services.query.executor import (
+    ExecutorError,
+    QueryTimeoutError,
+    ResultTooLargeError,
+    UndefinedColumnError,
 )
-from src.services.query.table_formatter import render_obligations
+from src.services.query.job_details import fetch_job_details
+from src.services.query.models import JobDetailsResult
+from src.services.query.table_formatter import json_value
 
 
 def load_max_detail_ids() -> int:
@@ -37,77 +42,42 @@ def load_max_detail_ids() -> int:
     return max_detail_ids
 
 
-#: Columns kept out of the rendered detail pairs.
-#:
-#: `id` is a surrogate key within one data load, not a business field. The v0
-#: contract permits it for chaining a detail request to a listed posting and
-#: forbids describing it as a durable identifier, so echoing it back as one more
-#: `column=value` pair teaches the model that a machine column exists on the
-#: posting and invites it to repeat the raw key to the reader, which is the
-#: `no_schema_identifier_leak` rule in docs/reference/agent-behavior.md.
-#:
-#: Dropping it from the text costs nothing: the model supplied these ids as the
-#: tool argument, and the structured TableArtifact handed to the obligations
-#: pass keeps the key, so capping, lookup and chaining are untouched.
-_UNRENDERED_COLUMNS = frozenset({"id"})
+def _unique_ids(ids: list[int]) -> list[int]:
+    """Drop duplicate ids, keeping the first occurrence of each."""
+    return list(dict.fromkeys(ids))
 
 
-def _build_answer(ids: list[int], capped_ids: list[int], rows: list[dict]) -> str:
-    lines = []
-    if len(capped_ids) < len(ids):
-        lines.append(
-            f"Đang hiển thị thông tin chi tiết của {len(capped_ids)} trong số {len(ids)} tin tuyển dụng được yêu cầu."
-        )
-
-    rows_by_id = {row.get("id"): row for row in rows}
-    for job_id in capped_ids:
-        row = rows_by_id.get(job_id)
-        if row is None:
-            lines.append(f"Không tìm thấy tin tuyển dụng nào với mã {job_id}.")
-            continue
-        pairs = ", ".join(
-            f"{column}={value}"
-            for column, value in row.items()
-            if column not in _UNRENDERED_COLUMNS
-        )
-        lines.append(f"- {pairs}")
-
-    return "\n".join(lines)
-
-
-def _table_from_detail_rows(rows: list[dict]) -> TableArtifact:
-    if not rows:
-        return TableArtifact(columns=[], rows=[], row_count=0)
-    columns = list(rows[0])
-    return TableArtifact(
-        columns=columns,
-        rows=[[row.get(column) for column in columns] for row in rows],
-        row_count=len(rows),
-    )
-
-
-async def run_get_job_details(ids: list[int]) -> str:
-    """Return safe Vietnamese job details for the given posting ids."""
-    if not ids:
-        return (
-            "Vui lòng chỉ định mã tin tuyển dụng bạn muốn xem chi tiết hoặc tìm kiếm "
-            "trước bằng query_clean_jobs."
-        )
-
+async def run_get_job_details(ids: list[int]) -> JobDetailsResult:
+    """Fetch full posting details for the given posting ids as typed facts."""
     max_detail_ids = load_max_detail_ids()
-    capped_ids = ids[:max_detail_ids]
+    unique_ids = _unique_ids(ids)
+    fetched_ids = unique_ids[:max_detail_ids]
+    not_fetched = unique_ids[max_detail_ids:]
 
     try:
-        rows = await asyncio.to_thread(fetch_job_details, capped_ids)
+        rows = await asyncio.to_thread(fetch_job_details, fetched_ids)
+    except UndefinedColumnError as exc:
+        logger.warning("get_job_details.unknown_column", error=str(exc))
+        raise ToolFailure("unknown_column", exc.message_primary) from exc
+    except QueryTimeoutError as exc:
+        logger.warning("get_job_details.timeout", error=str(exc))
+        raise ToolFailure(
+            "timeout", f"statement exceeded the {exc.timeout_ms} ms limit"
+        ) from exc
+    except ResultTooLargeError as exc:
+        logger.warning("get_job_details.too_large", error=str(exc))
+        raise ToolFailure(
+            "too_large", "result exceeds the byte budget; select fewer columns"
+        ) from exc
     except ExecutorError as exc:
         logger.error("get_job_details.db_error", error=str(exc))
-        return "Tôi không thể truy xuất dữ liệu do lỗi cơ sở dữ liệu. Vui lòng thử lại sau."
+        raise ToolFailure("unavailable", "the database could not run the query") from exc
 
-    obligations = filter_enabled_obligations(
-        detect_row_obligations(_table_from_detail_rows(rows))
-    )
-    return render_obligations(
-        _build_answer(ids, capped_ids, rows),
-        [obligation.glossary_token for obligation in obligations],
-        load_behavior_glossary(),
-    )
+    rows_by_id = {row.get("id"): row for row in rows}
+    jobs = [
+        {column: json_value(value) for column, value in rows_by_id[job_id].items()}
+        for job_id in fetched_ids
+        if job_id in rows_by_id
+    ]
+    not_found = [job_id for job_id in fetched_ids if job_id not in rows_by_id]
+    return JobDetailsResult(jobs=jobs, not_found=not_found, not_fetched=not_fetched)

@@ -1,10 +1,10 @@
 """The SQL guard gate, and what it refuses to let pass.
 
 A gate is only worth having if it fails when it should. Most of this module
-exists to prove that: a wrong golden, a moved group count, a missing or invented
-obligation, a floor case that stops being rejected, and a rejection by a
-different rule each have to turn the gate red, and an unreachable database has
-to be a failure rather than a quiet pass.
+exists to prove that: a wrong golden, a moved group count, a floor case that
+stops being rejected, and a rejection by a different rule each have to turn the
+gate red, and an unreachable database has to be a failure rather than a quiet
+pass.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ import yaml
 
 from evals.sql_gate import (
     GUARD_METRIC,
-    OBLIGATION_METRIC,
     RESULT_METRIC,
     GateUnavailable,
     SqlGuardDataset,
@@ -24,7 +23,7 @@ from evals.sql_gate import (
     run_sql_gate,
 )
 
-FALSE_SUCCESS_CASE = "R05-salary-by-currency"
+CURRENCY_RISK_CASE = "R05-salary-by-currency"
 
 
 def cases() -> list[dict]:
@@ -68,13 +67,18 @@ class TestDatasetShape:
         assert "Server-side function calls are not allowed" in pinned
         assert "may only reference the clean_jobs table" in pinned
 
-    def test_the_false_success_case_reviews_a_non_empty_obligation_set(self) -> None:
-        case = case_named(FALSE_SUCCESS_CASE)
+    def test_the_currency_risk_case_stays_accepted(self) -> None:
+        case = case_named(CURRENCY_RISK_CASE)
         assert case["guard"] == "valid"
-        assert case["expected_obligations"], (
-            "R05 is the false-success case; its reviewed obligation set is the assertion"
-        )
         assert "avg(" in case["reviewed_sql"]
+
+    def test_the_deleted_obligation_grammar_is_rejected(self, tmp_path) -> None:
+        """#702 deleted the caveat machinery, so `expected_obligations` is unread."""
+        doctored = cases()
+        target = next(case for case in doctored if case["id"] == CURRENCY_RISK_CASE)
+        target["expected_obligations"] = ["CROSS_CURRENCY"]
+        with pytest.raises(ValueError, match="unread keys"):
+            spec_for(doctored, tmp_path).cases()
 
     def test_an_accepted_risk_names_its_risk_and_blesses_no_result(self) -> None:
         risks = [case for case in cases() if case["class"] == "ambiguous"]
@@ -154,26 +158,6 @@ class TestTheGateFailsWhenItShould:
         failures = failed_cases(run_sql_gate(spec_for(doctored, tmp_path)))
         assert any(scenario == "R02-count-corpus" and metric == RESULT_METRIC for scenario, metric, _ in failures)
 
-    def test_a_missing_reviewed_obligation_fails(self, tmp_path, fixture_available) -> None:
-        if not fixture_available:
-            pytest.skip("the gate needs the evaluation fixture")
-        doctored = cases()
-        target = case_named(FALSE_SUCCESS_CASE)
-        next(case for case in doctored if case["id"] == target["id"])["expected_obligations"] = []
-        failures = failed_cases(run_sql_gate(spec_for(doctored, tmp_path)))
-        assert any(
-            scenario == FALSE_SUCCESS_CASE and metric == OBLIGATION_METRIC for scenario, metric, _ in failures
-        )
-
-    def test_an_invented_obligation_fails(self, tmp_path, fixture_available) -> None:
-        if not fixture_available:
-            pytest.skip("the gate needs the evaluation fixture")
-        doctored = cases()
-        target = next(case for case in doctored if case["id"] == "R01-list-role-city")
-        target["expected_obligations"] = ["CROSS_CURRENCY"]
-        failures = failed_cases(run_sql_gate(spec_for(doctored, tmp_path)))
-        assert any(scenario == "R01-list-role-city" and metric == OBLIGATION_METRIC for scenario, metric, _ in failures)
-
     def test_a_floor_case_that_is_no_longer_rejected_fails(self, tmp_path, fixture_available) -> None:
         if not fixture_available:
             pytest.skip("the gate needs the evaluation fixture")
@@ -219,18 +203,11 @@ class TestTheGatePasses:
             pytest.skip("the gate needs the evaluation fixture")
         report = run_sql_gate(SqlGuardDataset())
         assert failed_cases(report) == []
-        assert set(report["metrics"]) == {GUARD_METRIC, OBLIGATION_METRIC, RESULT_METRIC}
+        assert set(report["metrics"]) == {GUARD_METRIC, RESULT_METRIC}
         # Coverage is a pass/fail condition, so the gate runs every case the
         # dataset declares and the count is read rather than hard-coded.
         assert len(report["cases"]) == len(cases())
         assert len(report["cases"]) >= 15
-
-    def test_the_false_success_case_emits_its_reviewed_obligation(self, fixture_available) -> None:
-        if not fixture_available:
-            pytest.skip("the gate needs the evaluation fixture")
-        report = run_sql_gate(SqlGuardDataset(), ids=[FALSE_SUCCESS_CASE])
-        rows = report["by_metric"][OBLIGATION_METRIC]
-        assert [(row["scenario_id"], row["score"]) for row in rows] == [(FALSE_SUCCESS_CASE, 1.0)]
 
     def test_a_subset_can_be_selected(self, fixture_available) -> None:
         if not fixture_available:

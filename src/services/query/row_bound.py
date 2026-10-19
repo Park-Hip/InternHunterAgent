@@ -6,18 +6,18 @@ _TRAILING_LIMIT = re.compile(r"\s+LIMIT\s+(\d+)(?:\s+OFFSET\s+\d+)?\s*$", re.IGN
 
 
 class FetchBounds(NamedTuple):
-    sql: str          # SQL to execute — always ends in a LIMIT (TPM/display ceiling)
-    display_cap: int  # max rows format_rows should display
+    base_sql: str  # validated SELECT with any trailing LIMIT/OFFSET removed
+    limit: int     # rows to fetch; the user's count when at most max_rows
 
 
 def resolve_bounds(sql: str, max_rows: int) -> FetchBounds:
-    """Decide how many rows to fetch/display for a validated SELECT.
+    """Decide how many rows one validated SELECT may fetch.
 
-    A trailing LIMIT is treated as an explicit user-requested count: if it is within
-    the safety cap (<= max_rows) it is honored exactly. Otherwise (no LIMIT, or a LIMIT
-    above the cap) the system fetches max_rows+1 as a truncation sentinel and displays
-    max_rows, so an over-cap or unbounded result is reported honestly ("there are more").
-    The returned SQL always ends in a LIMIT, so the executor never runs unbounded.
+    A trailing LIMIT is treated as an explicit user-requested count: if it is
+    within the safety cap (<= max_rows) it is honored exactly, otherwise the
+    system fetches ``max_rows``. The caller states the real match total
+    separately (``execute_bounded_select`` counts the base query), so no
+    sentinel row and no display cap are needed.
     """
     text = sql.rstrip()
     match = _TRAILING_LIMIT.search(text)
@@ -25,5 +25,5 @@ def resolve_bounds(sql: str, max_rows: int) -> FetchBounds:
     stripped = _TRAILING_LIMIT.sub("", text)
 
     if user_limit is not None and user_limit <= max_rows:
-        return FetchBounds(sql=f"{stripped} LIMIT {user_limit}", display_cap=user_limit)
-    return FetchBounds(sql=f"{stripped} LIMIT {max_rows + 1}", display_cap=max_rows)
+        return FetchBounds(base_sql=stripped, limit=user_limit)
+    return FetchBounds(base_sql=stripped, limit=max_rows)

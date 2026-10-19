@@ -13,13 +13,13 @@ The rebuilt harness has one CLI and three ways to run it.
 
 | Mode | Command | Needs | What it does |
 |---|---|---|---|
-| SQL guard gate | `python -m evals --gate` | Fixture database only | Runs the reviewed SQL statements through the guard and grades the guard verdict, the obligation set, and the reviewed result. No model, judge, network, or credential |
+| SQL guard gate | `python -m evals --gate` | Fixture database only | Runs the reviewed SQL statements through the guard and grades the guard verdict and the reviewed result. No model, judge, network, or credential |
 | Capture + score | `python -m evals --dataset default` | Serving model (and judge for judge metrics) | Captures each scenario live and scores every declared metric |
 | Offline capture scoring | `python -m evals --capture <replay>` | Fixture database when the scenario has reference SQL | Scores a retained replay and admits only deterministic metrics |
 
 The gate's corpus is [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml), read by
 [`sql_gate.py`](sql_gate.py) rather than the scenario registry: its cases are reviewed SQL
-statements, obligations, and results, not capture scenarios.
+statements and results, not capture scenarios.
 
 ## Capture-and-score pipeline
 
@@ -56,8 +56,8 @@ Judge metrics need a judge credential, are continuous in `[0, 1]`, and are repor
 path is retired (ADR-0060), and the v1 scenarios still declare both.
 
 The SQL guard gate declares its own metrics in [`sql_gate.py`](sql_gate.py):
-`guard_correctness` (the validator verdict and the pinned rejection rule), `obligation_correctness`
-(the reviewed obligation set), and `result_equivalence` (the reviewed result on the fixture).
+`guard_correctness` (the validator verdict and the pinned rejection rule) and
+`result_equivalence` (the reviewed result on the fixture).
 
 ## Deterministic scoring
 
@@ -86,8 +86,8 @@ The gate reuses `rows_equal` for group-shaped reviewed results.
 
 The `--gate` flag routes to [`sql_gate.py`](sql_gate.py), which runs every reviewed statement in
 [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml) through the same pipeline the tool uses
-(`validate_sql` → `resolve_bounds` → the fixture) and grades the guard verdict, the obligation set,
-and the reviewed result.
+(`validate_sql` → `resolve_bounds` → the fixture) and grades the guard verdict and the reviewed
+result.
 No capture, no serving model, no judge, no network.
 It fails rather than skips: an unreachable fixture database is a failed gate that exits 2 and names
 the command to start it.

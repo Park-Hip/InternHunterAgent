@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import unittest
 
-from src.services.query.models import TableArtifact
 from src.services.query.result_shape import classify_result_shape, counted_total
 
 
@@ -61,14 +60,10 @@ class ClassifyResultShapeTests(unittest.TestCase):
 
 class CountedTotalTests(unittest.TestCase):
     def test_a_single_count_column_holds_the_total(self) -> None:
-        table = TableArtifact(columns=["count"], rows=[[11]], row_count=1)
-
-        self.assertEqual(counted_total(table), 11)
+        self.assertEqual(counted_total(["count"], [[11]]), 11)
 
     def test_a_counted_zero_is_a_total(self) -> None:
-        table = TableArtifact(columns=["count"], rows=[[0]], row_count=1)
-
-        self.assertEqual(counted_total(table), 0)
+        self.assertEqual(counted_total(["count"], [[0]]), 0)
 
     def test_a_value_that_is_not_a_count_is_not_a_total(self) -> None:
         for columns, rows in (
@@ -81,9 +76,7 @@ class CountedTotalTests(unittest.TestCase):
             ([], []),
         ):
             with self.subTest(columns=columns, rows=rows):
-                table = TableArtifact(columns=columns, rows=rows, row_count=len(rows))
-
-                self.assertIsNone(counted_total(table))
+                self.assertIsNone(counted_total(columns, rows))
 
 
 if __name__ == "__main__":

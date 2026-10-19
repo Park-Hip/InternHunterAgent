@@ -160,17 +160,32 @@ class ToolObservationMiddleware(AgentMiddleware):
             )
             raise
         else:
-            # Fold in whatever the tool published about its own result, so one
-            # event carries both the call and the count.
-            facts = published_facts()
-            await emit_tool_event(
-                name=name,
-                status="ok",
-                call_id=call_id,
-                arguments=arguments,
-                duration_ms=elapsed_ms(started),
-                facts=facts,
-            )
+            if getattr(result, "status", None) == "error":
+                # The tool failed through the MCP boundary: the model receives
+                # a status="error" ToolMessage carrying the detail, so the card
+                # reports an error instead of "ok". error=None keeps the card's
+                # own copy in server-owned Vietnamese (ADR-0061); the model
+                # still gets the full detail in the tool message.
+                await emit_tool_event(
+                    name=name,
+                    status="error",
+                    call_id=call_id,
+                    arguments=arguments,
+                    duration_ms=elapsed_ms(started),
+                    error=None,
+                )
+            else:
+                # Fold in whatever the tool published about its own result, so
+                # one event carries both the call and the count.
+                facts = published_facts()
+                await emit_tool_event(
+                    name=name,
+                    status="ok",
+                    call_id=call_id,
+                    arguments=arguments,
+                    duration_ms=elapsed_ms(started),
+                    facts=facts,
+                )
             return result
         finally:
             # Success and failure alike: the next call gets its own holder.

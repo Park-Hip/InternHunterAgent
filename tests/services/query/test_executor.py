@@ -11,11 +11,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from psycopg.errors import UndefinedColumn
+from psycopg.errors import InsufficientPrivilege, UndefinedColumn
 from sqlalchemy.exc import DBAPIError, OperationalError
 
 from src.services.query.executor import (
     ExecutorError,
+    PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
     UndefinedColumnError,
@@ -36,6 +37,26 @@ class _UndefinedColumnWithPrimary(UndefinedColumn):
 
 class _UndefinedColumnWithoutPrimary(UndefinedColumn):
     """A driver error with no server diagnostic attached."""
+
+    diag = None
+
+
+class _PrivilegeDeniedOnCleanJobs(InsufficientPrivilege):
+    """SQLSTATE 42501 whose diagnostic names the table, as on the wire."""
+
+    @property
+    def diag(self) -> SimpleNamespace:
+        return SimpleNamespace(table_name="clean_jobs")
+
+
+class _PrivilegeDeniedByMessage(InsufficientPrivilege):
+    """SQLSTATE 42501 with no diagnostic; only the message names the table."""
+
+    diag = None
+
+
+class _PrivilegeDeniedElsewhere(InsufficientPrivilege):
+    """SQLSTATE 42501 about another object, which must stay unavailable."""
 
     diag = None
 
@@ -231,6 +252,66 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
             execute_bounded_select(BASE_SQL, 20)
 
         self.assertEqual(raised.exception.message_primary, "unknown column")
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_maps_a_clean_jobs_privilege_denial_to_permission_denied_error(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.side_effect = [
+            _result([], []),
+            _result([], []),
+            DBAPIError(
+                "SELECT * FROM clean_jobs",
+                {},
+                _PrivilegeDeniedOnCleanJobs(
+                    "permission denied for table clean_jobs"
+                ),
+            ),
+        ]
+
+        with self.assertRaises(PermissionDeniedError):
+            execute_bounded_select(BASE_SQL, 20)
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_maps_a_privilege_denial_named_only_by_its_message(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.side_effect = [
+            _result([], []),
+            _result([], []),
+            DBAPIError(
+                "SELECT source FROM clean_jobs",
+                {},
+                _PrivilegeDeniedByMessage(
+                    "permission denied for table clean_jobs"
+                ),
+            ),
+        ]
+
+        with self.assertRaises(PermissionDeniedError):
+            execute_bounded_select(BASE_SQL, 20)
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_leaves_a_privilege_denial_on_another_object_unavailable(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.side_effect = [
+            _result([], []),
+            _result([], []),
+            DBAPIError(
+                "SELECT 1",
+                {},
+                _PrivilegeDeniedElsewhere("permission denied for schema public"),
+            ),
+        ]
+
+        with self.assertRaises(ExecutorError) as raised:
+            execute_bounded_select(BASE_SQL, 20)
+
+        self.assertNotIsInstance(raised.exception, PermissionDeniedError)
 
     @patch("src.services.query.executor.agent_session_factory")
     def test_maps_statement_timeout_to_query_timeout_error(

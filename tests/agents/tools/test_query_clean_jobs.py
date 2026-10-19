@@ -27,6 +27,7 @@ from src.agents.runtime.tool_events import (
 from src.agents.tools.failures import ToolFailure
 from src.services.query.executor import (
     ExecutorError,
+    PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
     UndefinedColumnError,
@@ -354,6 +355,34 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(holder.published)
         mock_logger.warning.assert_called_once_with(
             "query_clean_jobs.unknown_column", error='column "remote" does not exist'
+        )
+
+    @patch("src.agents.tools.query_clean_jobs.logger")
+    @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_a_star_or_whole_row_read_maps_to_rejected(
+        self, mock_generate_sql, mock_validate_sql, mock_execute, mock_logger
+    ) -> None:
+        """#722: the database refusal is a deterministic rejection, not unavailable."""
+        from src.agents.tools.query_clean_jobs import run_query_clean_jobs
+
+        sql = "SELECT * FROM clean_jobs"
+        mock_generate_sql.return_value = sql
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql=sql)
+        mock_execute.side_effect = PermissionDeniedError()
+
+        with _bound_holder() as holder:
+            with self.assertRaises(ToolFailure) as raised:
+                await run_query_clean_jobs("show me everything")
+
+        self.assertEqual(raised.exception.kind, "rejected")
+        self.assertIn("16 declared columns", raised.exception.detail)
+        self.assertIn("explicitly", raised.exception.detail)
+        self.assertFalse(holder.published)
+        mock_logger.warning.assert_called_once_with(
+            "query_clean_jobs.column_denied",
+            error="permission denied for clean_jobs",
         )
 
     @patch("src.agents.tools.query_clean_jobs.logger")

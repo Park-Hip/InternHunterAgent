@@ -37,6 +37,7 @@ from src.core.config import settings
 from src.core.logger import logger
 from src.services.query.executor import (
     ExecutorError,
+    PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
     UndefinedColumnError,
@@ -199,6 +200,17 @@ async def run_query_clean_jobs(request: str) -> QueryResult:
         logger.warning("query_clean_jobs.too_large", error=str(exc))
         raise ToolFailure(
             "too_large", "result exceeds the byte budget; select fewer columns"
+        ) from exc
+    except PermissionDeniedError as exc:
+        # The database refused a star, whole-row, or off-contract read (#722).
+        # `rejected` is the honest kind: the refusal is deterministic and the
+        # detail names the action, unlike `unavailable` (transient) or
+        # `unknown_column` (a name the schema does not have).
+        logger.warning("query_clean_jobs.column_denied", error=str(exc))
+        raise ToolFailure(
+            "rejected",
+            "the query reads beyond the 16 declared columns; select those "
+            "columns explicitly instead of using * or a whole-row expression",
         ) from exc
     except ExecutorError as exc:
         logger.error("query_clean_jobs.db_error", error=str(exc))

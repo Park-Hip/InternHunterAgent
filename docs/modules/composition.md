@@ -92,7 +92,7 @@ flowchart TD
 | MCP server | Registers the v1 tool pair, `query_clean_jobs` and `get_job_details` | `src/agents/mcp/job_server.py` → `create_job_mcp_server` | Import fails, uvicorn exits 1 |
 | App | Builds FastAPI with the lifespan, and `/mcp` before the static catch-all if enabled | `src/api/app.py` → `create_app` | Import fails |
 | Schema guard | Live `clean_jobs` columns must equal `EXPECTED_COLUMNS` exactly | `src/api/schema_guard.py` → `assert_serving_schema` | `SchemaGuardError`; uvicorn exits 3 |
-| Privilege guard | Agent role reads the 16 visible columns and is refused a write | `src/api/privilege_guard.py` → `assert_agent_privileges` | `AgentPrivilegeError`; skipped with a warning if the DSNs name different databases |
+| Privilege guard | Agent role reads the 16 visible columns, cannot read a hidden column, and is refused a write | `src/api/privilege_guard.py` → `assert_agent_privileges` | `AgentPrivilegeError`; skipped with a warning if the DSNs name different databases |
 | Credential guard | Each served profile's selected deployment has a nonempty API key | `src/agents/runtime/provider.py` → `assert_profile_credential` | `ProviderCredentialError`; uvicorn exits 3 |
 | Pool | Creates and opens the checkpointer pool without waiting for a connection | `src/core/checkpointer.py` → `build_checkpointer_pool` | - |
 | Langfuse init | Creates the client and callback handler when both keys are set and `LANGFUSE_ENABLED` is not false; never raises | `src/agents/tracing/langfuse.py` → `init_langfuse` | Logged; tracing disabled; boot continues |
@@ -108,8 +108,8 @@ flowchart TD
 uvicorn accepts no request until the lifespan finishes, so a guard that raises means the process
 never answers, and a deploy never passes Render's `/api/v1/health` check.
 That is the point: the schema guard turns a renamed column into a refused boot instead of a 500 on
-the first question, the privilege guard does the same for a lost `GRANT` after a table rebuild
-(#509), and the credential guard does the same for a missing provider key that would otherwise fail
+the first question, the privilege guard does the same for a lost or broadened `GRANT` after a table
+rebuild (#509, #722), and the credential guard does the same for a missing provider key that would otherwise fail
 every question (#641).
 The database guards run in a worker thread (`asyncio.to_thread`) because they use synchronous
 SQLAlchemy; the credential guard only reads settings, so it runs inline.

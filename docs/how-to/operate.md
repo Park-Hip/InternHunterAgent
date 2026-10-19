@@ -15,7 +15,7 @@ The production image is slim, non-root, and auto-deployed to Render on every pus
 | Surface | Current operation | Configuration / check |
 |---|---|---|
 | API | Render web service, Docker runtime, Singapore, Free plan | Deploys `main`; `WEB_CONCURRENCY=1`; health: `/api/v1/health` |
-| Database | Neon PostgreSQL 17 | Alembic head `1d032eb356bf`; use the direct host for migrations and cron |
+| Database | Neon PostgreSQL 17 | Alembic head `ee7a6592db2a`; use the direct host for migrations and cron |
 | Tracing | Langfuse Cloud Hobby, JP | Render receives the Langfuse credentials as dashboard secrets |
 | Public URL | `https://internhunteragent.onrender.com` | `/api/v1/health` for liveness; `/api/v1/ready` for database readiness |
 
@@ -125,15 +125,16 @@ script with no schema DDL) and then applies `uv run alembic upgrade head`.
 ### Create the agent-read least-privilege role
 
 The serving path reads `clean_jobs` through `AGENT_DATABASE_URL`, a dedicated PostgreSQL role with
-`SELECT` only. The writer role (`DATABASE_URL`) retains its existing privileges.
-Never grant write access to the agent-read role.
+column-level `SELECT` on the 16 visible columns only. The writer role (`DATABASE_URL`) retains its
+existing privileges.
+Never grant the agent-read role write access or table-level `SELECT`.
 
 Run the following against the production Neon database using the writer DSN (the one set as
 `DATABASE_URL`):
 
 ```sql
 -- 1. Create the reader role with a strong password.
-CREATE ROLE internhunter_agent NOLOGIN;
+CREATE ROLE internhunter_agent LOGIN PASSWORD '<password>';
 
 -- 2. Grant CONNECT on the database.
 GRANT CONNECT ON DATABASE internhunter TO internhunter_agent;
@@ -141,12 +142,21 @@ GRANT CONNECT ON DATABASE internhunter TO internhunter_agent;
 -- 3. Grant USAGE on the public schema.
 GRANT USAGE ON SCHEMA public TO internhunter_agent;
 
--- 4. Grant SELECT only on clean_jobs — nothing else.
-GRANT SELECT ON clean_jobs TO internhunter_agent;
+-- 4. Grant column-level SELECT on the 16 visible columns, and nothing else.
+REVOKE ALL PRIVILEGES ON TABLE clean_jobs FROM internhunter_agent;
+GRANT SELECT (
+  id, title, company, role, description, tech_stack, location, source_url,
+  job_level, listing_expires_on, created_on, is_internship,
+  salary_min, salary_max, salary_currency, is_salary_negotiable
+) ON TABLE clean_jobs TO internhunter_agent;
 ```
 
-After creating the role, generate a password and set it as `AGENT_DATABASE_URL` in the Render
-dashboard (key: `AGENT_DATABASE_URL`, sync: false). The connection string format is:
+If the role already exists, run steps 2 to 4 with the existing role instead of recreating it.
+Table-level `SELECT` must be revoked first: it implies every column, including the five hidden
+ones, so revoking only the hidden columns has no effect.
+
+Use the same password in the role and in `AGENT_DATABASE_URL`, set in the Render dashboard
+(key: `AGENT_DATABASE_URL`, sync: false). The connection string format is:
 
 ```
 postgresql+psycopg://internhunter_agent:<password>@<host>:5432/internhunter
@@ -158,12 +168,12 @@ value wins over one in the DSN. An unreachable database therefore fails boot wit
 `SchemaGuardError` within the bound instead of leaving uvicorn at
 `Waiting for application startup.`
 
-**A rebuilt table drops the grant.** A `GRANT` belongs to the table object, so anything that
-recreates `clean_jobs` — the evaluation fixture loader, or a migration that recreates the table —
-drops the reader role's `SELECT` while leaving the role able to authenticate and connect. The
-service refuses to start in that state: `src/api/privilege_guard.py` runs at boot, checks that the
-role can read the 16 visible columns and is refused a write, and raises rather than serving. The
-error names this section. Re-apply steps 1 to 4 above.
+**A rebuilt table drops the grants.** A `GRANT` belongs to the table object, so anything that
+recreates `clean_jobs` - the evaluation fixture loader, or a migration that recreates the table -
+drops every grant while leaving the role able to authenticate and connect. The service refuses to
+start in that state: `src/api/privilege_guard.py` runs at boot, checks that the role can read the 16
+visible columns, is refused every hidden column and every write, and raises rather than serving. The
+error names this section. Re-apply steps 2 to 4 above.
 
 The check is skipped, with a warning, when `AGENT_DATABASE_URL` names a different database from
 `DATABASE_URL`, because that arrangement has nothing for the check to inspect.
@@ -189,7 +199,7 @@ uv run alembic current
 uv run alembic upgrade head
 ```
 
-The repository migration head is `1d032eb356bf`.
+The repository migration head is `ee7a6592db2a`.
 For Neon, set `ALEMBIC_DATABASE_URL` to the direct, non-pooled Neon connection URL before
 running Alembic.
 Do not use a `-pooler` host for migrations.
@@ -334,7 +344,9 @@ external host, credential, or healthcheck from this document; provisioning is a 
 - The VietnamWorks preflight is the per-run access gate; the 2026-07-16 human review is
   point-in-time evidence and must be repeated if source behavior or terms change materially.
 - Serving and ingestion deliberately maintain separate exact `clean_jobs` column lists to preserve
-  layer isolation; update both with every migration or the startup guard will fail safely.
+  layer isolation; update both with every migration or the startup guard will fail safely. A new
+  visible column also needs a grant to `internhunter_agent`, and the boot guard refuses to serve if
+  a hidden column is readable (#722).
 - `render.yaml` is the tracked deployment record, while the existing Render service remains
   dashboard-managed unless the maintainer deliberately performs a Blueprint sync.
 - A failed Langfuse initialization logs a startup warning and disables tracing for that process;

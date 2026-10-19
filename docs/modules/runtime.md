@@ -129,12 +129,14 @@ A listing question costs more: in one run on `778becc`, "Liệt kê chi tiết t
 | `session` | `session_id` | First, before the agent runs |
 | `tool` | `name`, `status` (`running`, `ok`, `error`), `call_id`, `arguments`, `duration_ms`, `error`, `row_count`, `truncated` | When each tool call starts and ends, interleaved with tokens |
 | `token` | `text` | Each chunk of answer text, many |
-| `metadata` | `trace_id`, `trace_url` | Once, after the last token; never on a failed turn |
+| `metadata` | `trace_id`, `trace_url`, `answer_source` (`model` or `fallback`) | Once, after the last token; never on a failed turn |
 | `error` | `message`, `code`, `retryable` | In place of further tokens when the turn fails |
 | `done` | nothing | Always last |
 
 A successful turn is `session`, any `tool` and `token` events, `metadata`, `done`.
 A failed turn is `session`, whatever arrived before the failure, `error`, `done`.
+`metadata.answer_source` is `fallback` when the service injected the empty-answer sentence, and `model` otherwise.
+The web client keys the no-answer card on that field, never on the fallback text.
 The published schema is `STREAM_EVENT_SCHEMA` in `src/api/schemas.py`, built from the models in `src/agents/models.py`; [the architecture document](../architecture.md), section 4.2, records why SSE and why `session` comes first.
 
 **The answer-only filter.**
@@ -242,7 +244,7 @@ The last column is the one that matters: does the conversation still work afterw
 | Deadline expires after the tool returned | `provider_busy`, `retryable: true` | Question, tool call, result | Works |
 | Dừng after the first tokens | The partial answer as painted, with "Đã dừng." above it, shown and announced alike | Tool calls and results, no answer | Works |
 | Two turns at once on one session | Both answered | Only the later turn's exchange | Works, but one exchange is silently lost |
-| The model answers nothing | One Vietnamese fallback sentence ([ADR-0061](../decisions/adr-0061-user-facing-copy-is-server-owned-vietnamese.md)) | Whatever the model wrote | Works |
+| The model answers nothing | One Vietnamese fallback sentence ([ADR-0061](../decisions/adr-0061-user-facing-copy-is-server-owned-vietnamese.md)), and `metadata.answer_source` is `fallback` | Whatever the model wrote | Works |
 
 **How each path ends.**
 
@@ -275,6 +277,7 @@ The web client and the eval driver do not use the route; the API contract keeps 
    `AgentRuntime._active_agent` compiles one agent per system prompt version and content and caches it for the process lifetime; the cache is never evicted.
 3. **The empty-answer fallback is a `token`, not an `error`.**
    A turn whose model writes nothing still succeeds, with one Vietnamese fallback sentence as its answer (ADR-0061).
+   The following `metadata` frame carries `answer_source: "fallback"`, which is the machine-readable signal clients use to show the designed no-answer card instead of matching the sentence.
 4. **A failed turn has no trace link.**
    The `error` path skips `metadata`, although the trace exists.
 5. **Two turns at once on one session lose an exchange.**
@@ -325,6 +328,7 @@ Each item was found while preparing this guide and is tracked by an issue.
 **Add or change a stream event.**
 The SSE wire format is a public contract: event names, payload fields including `type`, and order.
 Change `src/agents/models.py` (the six models and the `StreamEvent` union), the service or runtime that emits it, and `src/api/static/app.js` together, and extend `tests/api/test_stream.py`, whose schema tests check every frame against `STREAM_EVENT_SCHEMA` and whose recorded-turn test pins the frames a real turn writes.
+The empty-answer outcome is `metadata.answer_source`; the client must not match `FALLBACK_ANSWER`, and a change to that field updates the model, the service, the client, and the tests together (#693).
 A new internal signal must never reach the route: an internal event may carry extra fields its consumers need, such as the `status_code` the JSON route maps to an HTTP status, but the route writes the public projection (`InternalStreamError.as_public_event()`) before encoding the frame (#689).
 
 **Add a middleware.**

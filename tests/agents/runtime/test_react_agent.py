@@ -187,6 +187,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
                     "type": "metadata",
                     "trace_id": "trace-123",
                     "trace_url": "https://cloud.langfuse.com/project/p/traces/trace-123",
+                    "answer_source": "model",
                 },
             ],
         )
@@ -238,7 +239,14 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             [event.model_dump() for event in events],
-            [{"type": "metadata", "trace_id": None, "trace_url": None}],
+            [
+                {
+                    "type": "metadata",
+                    "trace_id": None,
+                    "trace_url": None,
+                    "answer_source": "model",
+                }
+            ],
         )
         latency.mark_user_visible.assert_not_called()
         latency.complete.assert_not_called()
@@ -300,7 +308,12 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
             [event.model_dump() for event in events],
             [
                 {"type": "token", "text": "answer"},
-                {"type": "metadata", "trace_id": "trace-699", "trace_url": None},
+                {
+                    "type": "metadata",
+                    "trace_id": "trace-699",
+                    "trace_url": None,
+                    "answer_source": "model",
+                },
             ],
         )
         client.get_trace_url.assert_not_called()

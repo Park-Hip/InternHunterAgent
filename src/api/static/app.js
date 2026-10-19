@@ -10,7 +10,9 @@
 //   token    { text }         (0+)     -> append word-by-word to the answer
 //   tool     { name, status, arguments, duration_ms }
 //                                       -> a card showing what the agent ran
-//   metadata { trace_id, trace_url }   -> show a "view trace" link if trace_url
+//   metadata { trace_id, trace_url, answer_source }
+//                                       -> show a "view trace" link if trace_url;
+//                                          answer_source marks the empty answer
 //   error    { message }               -> friendly error bubble; stop
 //   done     {}                        -> terminal; stop reading, no reconnect
 //
@@ -40,17 +42,6 @@ const statusElapsed = document.getElementById("stream-status-elapsed");
 
 const markdownRenderer = new window.marked.Renderer();
 markdownRenderer.html = () => "";
-
-// The server's own "I have nothing for you" constant, from
-// src/agents/service.py. Matching it is a documented contract rather than a
-// guess at phrasing; tests/api/test_static_serving.py pins the two together so
-// they cannot drift. Since ADR-0061 the server owns every user-facing string
-// and sends this one in Vietnamese too; the exact-text mirror is still the only
-// way to recognise the empty-answer turn, because that turn carries a `token`
-// and no `code`. Telling "no answer" apart from a real answer needs a richer
-// signal - a tool event carrying the row count - which is deliberately out of
-// scope here.
-const NO_ANSWER_TEXT = "Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại.";
 
 // Re-render at most this often while tokens arrive. Rewriting the whole answer
 // node per token is quadratic and thrashes layout; the stream itself is
@@ -160,6 +151,8 @@ function startTurn(query) {
     pendingPaint: null,
     toolCards: new Map(),
     zeroResult: false,
+    answerSource: null,
+    noAnswerDetail: "",
   };
 }
 
@@ -307,17 +300,19 @@ function showTraceLink(ctx, traceUrl) {
   ctx.agent.appendChild(p);
 }
 
-// True when the agent answered, but the search genuinely matched nothing. The
-// FALLBACK_ANSWER case is different: that is the agent producing no output at
-// all, and it is handled separately as a fallback.
+// True when the agent answered but the search genuinely matched nothing, or
+// when the service injected the fallback because the model wrote no output.
+// The two facts need different copy: a zero row count means a query ran, while
+// answer_source="fallback" means there is no model answer to reason from.
 function isNoAnswer(ctx) {
-  return ctx.zeroResult === true || ctx.rawAnswer.trim() === NO_ANSWER_TEXT;
+  return ctx.zeroResult === true || ctx.answerSource === "fallback";
 }
 
 // A "no answer" outcome is a designed state, not an apology paragraph. It says
-// what was searched and when the corpus was captured, and offers reformulations.
-// It deliberately does not claim a row count or a date range: the stream does
-// not carry either, and a dataset-bounded agent must not invent one.
+// what actually happened and when the corpus was captured, and offers
+// reformulations. It deliberately does not claim a row count or a date range:
+// the stream does not carry either, and a dataset-bounded agent must not invent
+// one.
 function showNoAnswerCard(ctx, query) {
   ctx.agent.classList.add("is-nodata");
   ctx.answer.classList.remove("turn__answer--pending");
@@ -333,11 +328,17 @@ function showNoAnswerCard(ctx, query) {
 
   const detail = document.createElement("p");
   detail.className = "turn__nodata-detail";
-  detail.textContent = ctx.zeroResult
-    ? `Truy vấn đã chạy và không tìm thấy tin nào phù hợp${snapshotDate ? ` trong kho chụp ngày ${snapshotDate}` : " trong kho dữ liệu đã thu thập"}. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.`
-    : snapshotDate
-      ? `Đã tìm trong kho dữ liệu lịch sử chụp ngày ${snapshotDate}. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.`
-      : "Đã tìm trong kho dữ liệu lịch sử đã thu thập. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.";
+  if (ctx.zeroResult) {
+    // The query ran and matched nothing. This is a fact about the corpus, so
+    // naming the snapshot date is honest.
+    detail.textContent = `Truy vấn đã chạy và không tìm thấy tin nào phù hợp${snapshotDate ? ` trong kho chụp ngày ${snapshotDate}` : " trong kho dữ liệu đã thu thập"}. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.`;
+  } else {
+    // The model wrote nothing, so no query result supports a claim about the
+    // corpus. Say that plainly instead of implying that a search ran.
+    detail.textContent =
+      "Lượt này mô hình không viết ra câu trả lời nào, nên chưa thể kết luận kho có tin phù hợp hay không. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.";
+  }
+  ctx.noAnswerDetail = detail.textContent;
   card.appendChild(detail);
 
   const asked = document.createElement("p");
@@ -397,7 +398,7 @@ function endTurn(ctx) {
     showNoAnswerCard(ctx, ctx.query || "");
     publishAnswer(
       ctx,
-      "Không có câu trả lời cho câu hỏi này trong kho dữ liệu đã thu thập.",
+      `Không có câu trả lời cho câu hỏi này. ${ctx.noAnswerDetail}`,
     );
     return;
   }
@@ -605,6 +606,9 @@ async function ask(query) {
         } else if (ev === "tool") {
           upsertToolCard(ctx, data);
         } else if (ev === "metadata") {
+          // The server marks the model-wrote-nothing turn here. Never infer it
+          // from the fallback text: the server owns that copy.
+          ctx.answerSource = data.answer_source || "model";
           if (data.trace_url) showTraceLink(ctx, data.trace_url);
         } else if (ev === "error") {
           setState("error");

@@ -198,17 +198,25 @@ class StaticServingTests(unittest.TestCase):
 
         self.assertIn("e.isComposing", app)
 
-    def test_client_no_answer_constant_matches_the_server_constant(self) -> None:
-        """The no-answer card is triggered by matching the server's own constant.
+    def test_client_keys_the_no_answer_card_on_the_stream_signal(self) -> None:
+        """The card must not depend on the server's fallback copy (#693).
 
-        If the two drift, the card silently stops appearing. Pin them together.
+        `metadata.answer_source` is the machine-readable empty-answer outcome, so
+        a copy change cannot silently stop the card appearing. The client must
+        also carry both truthful detail lines (#694): one for a query that ran
+        and matched nothing, one for a model that wrote nothing.
         """
         from src.agents.service import FALLBACK_ANSWER
 
         app = self.client.get("/app.js").text
 
-        self.assertIn("NO_ANSWER_TEXT", app)
-        self.assertIn(FALLBACK_ANSWER, app)
+        self.assertNotIn("NO_ANSWER_TEXT", app)
+        self.assertNotIn(FALLBACK_ANSWER, app)
+        self.assertIn('ctx.answerSource = data.answer_source || "model"', app)
+        self.assertIn('ctx.answerSource === "fallback"', app)
+        self.assertIn("Truy vấn đã chạy và không tìm thấy tin nào phù hợp", app)
+        self.assertIn("Lượt này mô hình không viết ra câu trả lời nào", app)
+        self.assertIn("ctx.noAnswerDetail", app)
 
     def test_client_handles_the_tool_event(self) -> None:
         """A `tool` event must reach a card. An unhandled event type would be

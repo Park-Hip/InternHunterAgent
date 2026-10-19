@@ -7,9 +7,9 @@ produce them, and a service must not import from the API layer; the API imports
 them from here to publish ``STREAM_EVENT_SCHEMA`` (#679).
 
 Streaming chat emits SSE events in this order: ``session {session_id}``, ``token
-{text}`` zero or more times, ``metadata {trace_id, trace_url}``, then ``done
-{}``. On mid-run failure, ``error {message, code, retryable}`` replaces further
-token/metadata events before ``done``.
+{text}`` zero or more times, ``metadata {trace_id, trace_url, answer_source}``,
+then ``done {}``. On mid-run failure, ``error {message, code, retryable}``
+replaces further token/metadata events before ``done``.
 
 The internal signals are not part of that contract. The runtime publishes them
 through the same per-turn queue as its public events, because a turn's frames
@@ -40,15 +40,22 @@ class StreamTokenEvent(BaseModel):
 
 
 class StreamMetadataEvent(BaseModel):
-    """The trace link, once, after the last token; never on a failed turn.
+    """The turn summary, once, after the last token; never on a failed turn.
 
     The runtime emits it while its Langfuse span is still open, so the recorded
     completion latency covers the whole stream rather than the model call.
+
+    ``answer_source`` is the machine-readable empty-answer signal: ``model``
+    when at least one token came from the model, ``fallback`` when the service
+    injected ``FALLBACK_ANSWER`` because the model wrote nothing. Clients must
+    key the empty-answer outcome on this field rather than on the copy of the
+    fallback sentence.
     """
 
     type: Literal["metadata"]
     trace_id: str | None
     trace_url: str | None
+    answer_source: Literal["model", "fallback"] = "model"
 
 
 class StreamErrorEvent(BaseModel):

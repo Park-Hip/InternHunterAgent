@@ -201,6 +201,10 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             [event.type for event in events],
             ["session", "token", "metadata", "done"],
         )
+        metadata = next(
+            event for event in events if isinstance(event, StreamMetadataEvent)
+        )
+        self.assertEqual(metadata.answer_source, "model")
         observation_factory.assert_called_once_with()
         observation.mark_user_visible.assert_called_once_with()
         observation.complete.assert_called_once_with("success")
@@ -542,10 +546,49 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             ),
             events,
         )
+        metadata = next(
+            event for event in events if isinstance(event, StreamMetadataEvent)
+        )
+        self.assertEqual(metadata.answer_source, "fallback")
         mock_logger.warning.assert_called_once_with(
             "stream_agent_response.empty_answer_fallback",
             session_id="session-empty-stream",
         )
+
+    @patch("src.agents.service.logger")
+    async def test_metadata_marks_the_early_fallback_as_fallback(
+        self, _mock_logger
+    ) -> None:
+        async def metadata_only_stream(**_kwargs):
+            yield StreamMetadataEvent(
+                type="metadata",
+                trace_id="trace-fallback",
+                trace_url=None,
+            )
+
+        runtime = MagicMock()
+        runtime.astream = MagicMock(side_effect=metadata_only_stream)
+
+        events = [
+            event
+            async for event in stream_agent_response(
+                query="what internships are available?",
+                runtime=runtime,
+                session_id="session-fallback-metadata",
+            )
+        ]
+
+        fallback_tokens = [
+            event.text
+            for event in events
+            if isinstance(event, StreamTokenEvent)
+            and event.text == "Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại."
+        ]
+        self.assertEqual(len(fallback_tokens), 1)
+        metadata = next(
+            event for event in events if isinstance(event, StreamMetadataEvent)
+        )
+        self.assertEqual(metadata.answer_source, "fallback")
 
 
 if __name__ == "__main__":

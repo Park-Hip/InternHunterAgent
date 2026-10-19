@@ -96,6 +96,7 @@ class StreamQueryRouteTests(unittest.TestCase):
                 "type": "metadata",
                 "trace_id": "t-1",
                 "trace_url": "https://cloud.langfuse.com/project/p/traces/t-1",
+                "answer_source": "model",
             },
         )
         self.assertEqual(events[4][1], {"type": "done"})
@@ -125,7 +126,13 @@ class StreamQueryRouteTests(unittest.TestCase):
             },
         )
         self.assertEqual(
-            events[2][1], {"type": "metadata", "trace_id": None, "trace_url": None}
+            events[2][1],
+            {
+                "type": "metadata",
+                "trace_id": None,
+                "trace_url": None,
+                "answer_source": "fallback",
+            },
         )
 
     def test_stream_route_returns_in_band_error_and_done_for_mid_run_failure(
@@ -245,6 +252,12 @@ class StreamOpenAPITests(unittest.TestCase):
         self.assertTrue(
             {"message", "code", "retryable"}.issubset(error_schema["properties"])
         )
+
+        metadata_ref = discriminator["mapping"]["metadata"]
+        metadata_schema = event_schema["$defs"][
+            metadata_ref.rsplit("/", maxsplit=1)[-1]
+        ]
+        self.assertIn("answer_source", metadata_schema["properties"])
 
     def test_server_sent_event_uses_exact_sse_framing(self) -> None:
         self.assertEqual(

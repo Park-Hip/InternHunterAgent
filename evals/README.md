@@ -59,7 +59,7 @@ Datasets never mix: a new version is a new entry, never an edit to an existing r
 
 The SQL guard gate reads its own reviewed corpus, [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml),
 through [`sql_gate.py`](sql_gate.py) rather than the registry: the gate cases are reviewed SQL
-statements and obligations, not capture scenarios.
+statements, not capture scenarios.
 
 ## Metrics
 
@@ -78,8 +78,8 @@ Metrics are declared in [`metrics.py`](metrics.py) and selected per scenario by 
 path wrote no SQL and was single-turn. Both stay in the registry because the v1 scenarios declare
 them.
 
-The SQL guard gate declares its own three metrics in [`sql_gate.py`](sql_gate.py):
-`guard_correctness`, `obligation_correctness`, and `result_equivalence`.
+The SQL guard gate declares its own two metrics in [`sql_gate.py`](sql_gate.py):
+`guard_correctness` and `result_equivalence`.
 
 ## Test-to-module mapping
 
@@ -94,7 +94,7 @@ Tests live in [`tests/evals/`](../tests/evals/).
 | `test_report.py` | [`report.py`](report.py) | Result grouping and table rendering |
 | `test_run.py` | [`run.py`](run.py) | Capture and scoring with the database boundary stubbed |
 | `test_sql_check.py` | [`sql_check.py`](sql_check.py) | SQL comparison modes with query results stubbed |
-| `test_sql_gate.py` | [`sql_gate.py`](sql_gate.py) + [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml) | Dataset grammar, guard/obligation/result grading, gate refusals |
+| `test_sql_gate.py` | [`sql_gate.py`](sql_gate.py) + [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml) | Dataset grammar, guard/result grading, gate refusals |
 | `test_baseline_sql.py` | [`baseline_sql.py`](baseline_sql.py) + [`datasets/baseline.yaml`](datasets/baseline.yaml) | Baseline dataset grammar, offline scoring with execution stubbed |
 | `test_holdout_judge.py` | [`judge.py`](judge.py) + [`calibration_v8.yaml`](calibration_v8.yaml) | Opt-in judge-versus-human check over the retained v8 holdout |
 

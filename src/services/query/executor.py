@@ -10,21 +10,29 @@ Two independent bounds, both read from ``agent.query`` in
   about to hand back and refuses rather than letting an unbounded result
   travel into the agent's memory.
 
-Read-only enforcement stays here too: the transaction is marked read-only so a
+Read-only enforcement stays here too: the transaction is marked read-only, at
+repeatable read so a companion count sees the same snapshot as the fetch, so a
 write that ever slipped past ``validate_sql`` is refused by PostgreSQL itself.
+
+One bounded session serves every read, including the detail fetch, so the
+timeout and the byte budget cannot be forgotten by a second caller (#702 E6).
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError
+from sqlalchemy.orm import Session
 from psycopg.errors import UndefinedColumn
 
 from src.core.config import settings
 from src.core.db import agent_session_factory
+from src.services.query.models import BoundedRows
 
 
 class ExecutorError(Exception):
@@ -32,11 +40,24 @@ class ExecutorError(Exception):
 
 
 class UndefinedColumnError(ExecutorError):
-    """Raised when the generated query refers to a column outside the contract."""
+    """Raised when the generated query refers to a column outside the contract.
+
+    Carries PostgreSQL's own primary message (``column "remote" does not
+    exist``) so the tool can name the missing column to the model, which the
+    old fixed refusal sentence never did (#702).
+    """
+
+    def __init__(self, message_primary: str) -> None:
+        super().__init__(message_primary)
+        self.message_primary = message_primary
 
 
 class QueryTimeoutError(ExecutorError):
     """Raised when the server cancelled a statement that ran past its budget."""
+
+    def __init__(self, timeout_ms: int) -> None:
+        super().__init__(f"statement exceeded the {timeout_ms} ms limit")
+        self.timeout_ms = timeout_ms
 
 
 class ResultTooLargeError(ExecutorError):
@@ -62,35 +83,79 @@ def execution_limits() -> dict[str, int]:
     }
 
 
-def execute_validated_sql(sql: str) -> list[dict[str, Any]]:
+@contextmanager
+def _bounded_session() -> Iterator[Session]:
+    """One agent-role session with the read-only and timeout bounds applied.
+
+    ``SET TRANSACTION`` must be the first statement of the transaction: it is
+    read-only at repeatable read, so every statement in the session sees one
+    snapshot and a write is refused by PostgreSQL itself.
+    """
     limits = execution_limits()
     try:
         with agent_session_factory() as session:
-            session.execute(text("SET TRANSACTION READ ONLY"))
+            session.execute(
+                text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            )
             session.execute(
                 text("SELECT set_config('statement_timeout', :ms, true)"),
                 {"ms": str(limits["statement_timeout_ms"])},
             ).scalar()
-            result = session.execute(text(sql))
-            rows = [dict(row) for row in result.mappings().all()]
-            if _row_bytes(rows) > limits["max_result_bytes"]:
-                raise ResultTooLargeError(
-                    "The query returned more data than this agent is allowed to read."
-                )
-            return rows
+            yield session
     except ExecutorError:
         raise
     except (OperationalError, DBAPIError) as exc:
-        if isinstance(getattr(exc, "orig", None), UndefinedColumn):
-            raise UndefinedColumnError("Query referenced an unavailable column") from exc
-        if _is_timeout(exc):
-            raise QueryTimeoutError(
-                "The query took too long and was stopped."
-            ) from exc
-        raise ExecutorError(f"Failed to execute query: {exc}") from exc
+        raise _map_db_error(exc, limits["statement_timeout_ms"]) from exc
 
 
-def _row_bytes(rows: list[dict[str, Any]]) -> int:
+def execute_bounded_select(base_sql: str, limit: int) -> BoundedRows:
+    """Run ``base_sql`` under a hard row limit and report the real match total.
+
+    ``base_sql`` is a validated SELECT with any trailing LIMIT/OFFSET already
+    removed; ``resolve_bounds`` produces one in that shape. The statement that
+    runs is ``base_sql LIMIT <limit>``.
+
+    When the fetch fills its limit, a companion
+    ``SELECT count(*) FROM (base_sql) AS q`` runs in the same transaction, so
+    both statements see one snapshot and the total is the number of rows the
+    query matches without any LIMIT ("20 of 161"). The byte budget is checked
+    before that count runs, and both statements are bounded by the session's
+    statement timeout.
+    """
+    limits = execution_limits()
+    with _bounded_session() as session:
+        result = session.execute(text(f"{base_sql} LIMIT {limit}"))
+        # Columns come from the result itself, so an empty result still names
+        # the columns it would have returned.
+        columns = list(result.keys())
+        rows = [list(row) for row in result.all()]
+        if row_bytes(rows) > limits["max_result_bytes"]:
+            raise ResultTooLargeError(
+                "The query returned more data than this agent is allowed to read."
+            )
+        if len(rows) == limit:
+            total_rows = int(
+                session.execute(
+                    text(f"SELECT count(*) FROM ({base_sql}) AS q")
+                ).scalar_one()
+            )
+        else:
+            total_rows = len(rows)
+    return BoundedRows(columns=columns, rows=rows, total_rows=total_rows)
+
+
+def _map_db_error(exc: OperationalError | DBAPIError, timeout_ms: int) -> ExecutorError:
+    """Translate one driver failure into the executor's error vocabulary."""
+    orig = getattr(exc, "orig", None)
+    if isinstance(orig, UndefinedColumn):
+        message_primary = getattr(getattr(orig, "diag", None), "message_primary", None)
+        return UndefinedColumnError(message_primary or "unknown column")
+    if _is_timeout(exc):
+        return QueryTimeoutError(timeout_ms)
+    return ExecutorError(f"Failed to execute query: {exc}")
+
+
+def row_bytes(rows: list[Any]) -> int:
     """A stable, cheap size measure for a result set."""
     if not rows:
         return 0

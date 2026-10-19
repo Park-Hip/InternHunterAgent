@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 
-from src.services.query.models import ResultShape, TableArtifact
+from src.services.query.models import JsonValue, ResultShape
 
 # The select list of the outermost query: everything between its SELECT and its
 # FROM. A nested SELECT inside the list leaves this capture unterminated, which
@@ -60,12 +60,12 @@ def classify_result_shape(sql: str) -> ResultShape:
     return "rows"
 
 
-def counted_total(table: TableArtifact) -> int | None:
-    """The number a match-count table holds, or None when it does not hold one."""
-    if len(table.columns) != 1 or len(table.rows) != 1:
+def counted_total(columns: list[str], rows: list[list[JsonValue]]) -> int | None:
+    """The number a match-count result holds, or None when it does not hold one."""
+    if len(columns) != 1 or len(rows) != 1:
         return None
 
-    value = table.rows[0][0]
+    value = rows[0][0]
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         return None
 

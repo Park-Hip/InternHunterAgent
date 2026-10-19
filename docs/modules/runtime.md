@@ -101,9 +101,9 @@ sequenceDiagram
     G->>DS: react call: decide
     DS-->>G: tool call
     G-->>B: tool running (2.55 s)
-    G->>T: question in Vietnamese
+    G->>T: request in Vietnamese
     T->>DS: sql_generation call, not streamed
-    T-->>G: result table
+    T-->>G: typed result facts
     G-->>B: tool ok, duration_ms 1289 (3.84 s)
     G->>DS: react call: answer, streamed
     DS-->>B: 142 tokens (4.62 s to 5.5 s)

@@ -58,7 +58,8 @@ discoverable Model Context Protocol (MCP) surface through `langchain.mcp.MCPAdap
 process from the same FastMCP server the agent uses (`src/agents/mcp/job_server.py`).
 
 - **URL and transport:** a Streamable HTTP endpoint mounts at `/mcp` when enabled; clients use POST.
-- **Tools and schemas:** `query_clean_jobs(question: string)` and `get_job_details(ids: array[integer])`.
+- **Tools and schemas:** `query_clean_jobs(request: string) -> QueryResult` and `get_job_details(ids: array[integer], at least one) -> JobDetailsResult`.
+  Both publish an `outputSchema`, and `request` replaces the earlier `question` name ([ADR-0062](../decisions/adr-0062-tools-return-facts-the-prompt-owns-wording.md)).
 - **Access policy:** internal and development-only (issue #465 access decision, option A).
   It is not an Internet-facing supported integration.
 - **Enablement:** disabled by default. Set `MCP_ENABLED=1` to mount `/mcp` for local manual tests only.

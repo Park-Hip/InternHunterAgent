@@ -4,24 +4,11 @@ import unittest
 from unittest.mock import patch
 
 from src.agents.runtime.prompts import (
-    load_behavior_glossary,
     load_prompt_versions,
     load_schema_context,
     load_sql_generation_prompt,
     load_system_prompt,
 )
-
-# The G47 token set includes the listing-expiry schema fact added by T0024.2. Recovered from
-# archive/t0015.2-behavior-glossary. Adding or removing a token is a behavior-spec change,
-# not a code change - update docs/Agent_Behavior_Spec.md first.
-FROZEN_GLOSSARY_TOKENS = frozenset({
-    "NEGOTIABLE_SALARY", "ABSENT_FIELD", "FRESHNESS_REFUSAL", "CREATED_ON_CAVEAT",
-    "LISTING_EXPIRY_NOT_DEADLINE",
-    "FREE_TEXT_HEDGE", "SENIOR_TITLE_HEDGE", "CROSS_CURRENCY", "TRUNCATION",
-    "ZERO_RESULTS", "E1_CLARIFY", "OFF_TOPIC_REDIRECT", "DESTRUCTIVE_REFUSAL",
-    "INJECTION_REFUSAL", "SECRET_REFUSAL", "SQL_DESCRIBE_ONLY", "FUTURE_FEATURE",
-    "GENERAL_KNOWLEDGE_DECLINE", "DISCRIMINATORY_DECLINE",
-})
 
 
 class LoadSqlGenerationPromptTests(unittest.TestCase):
@@ -136,13 +123,12 @@ class SystemPromptScopeTests(unittest.TestCase):
         self.assertIn("If a request is genuinely ambiguous", system_prompt)
         self.assertIn("ask exactly one clarifying question", system_prompt)
 
-    def test_system_prompt_requires_mandatory_caveats_to_survive_the_relay(self) -> None:
+    def test_system_prompt_no_longer_relays_tool_caveats(self) -> None:
+        """#702: tools return facts, so there is no caveat text left to relay."""
         system_prompt = str(load_system_prompt().content)
 
-        self.assertIn("MANDATORY CAVEATS", system_prompt)
-        self.assertIn("reflect every caveat", system_prompt)
-        self.assertIn("must not weaken or omit", system_prompt)
-        self.assertIn("the caveat wins", system_prompt)
+        self.assertNotIn("MANDATORY CAVEATS", system_prompt)
+        self.assertNotIn("reflect every caveat", system_prompt)
 
     def test_system_prompt_forbids_emoji_and_decorative_symbols(self) -> None:
         system_prompt = str(load_system_prompt().content)
@@ -194,9 +180,9 @@ class LoadPromptVersionsTests(unittest.TestCase):
 
     def test_yaml_declares_independent_prompt_versions(self) -> None:
         assert load_prompt_versions() == {
-            "system": "v13",
+            "system": "v14",
             "schema_context": "v12",
-            "sql_generation": "v14",
+            "sql_generation": "v15",
         }
 
     def test_yaml_sql_rules_carry_the_issue_243_superlative_and_salary_contract(self) -> None:
@@ -222,48 +208,74 @@ class LoadPromptVersionsTests(unittest.TestCase):
         # "MLOps" and "MLflow", so the rule must require the expanded form only.
         self.assertIn("do NOT also search the bare abbreviation", sql_generation)
 
+    def test_yaml_sql_rules_require_grouping_salary_aggregates_by_currency(self) -> None:
+        sql_generation = load_sql_generation_prompt()
 
-class LoadBehaviorGlossaryTests(unittest.TestCase):
-    @patch("src.agents.runtime.prompts.settings")
-    def test_returns_stripped_mapping(self, mock_settings) -> None:
-        mock_settings.prompts_yaml = {"behavior_glossary": {"ZERO_RESULTS": "  nothing found  "}}
+        # #702: the cross-currency rule moved out of the deleted obligation layer
+        # and into the only prompt that can act on it, before the aggregate runs.
+        self.assertIn(
+            "Every salary aggregate (AVG, MIN, MAX, SUM) groups by salary_currency",
+            sql_generation,
+        )
+        self.assertIn("Never aggregate salaries across currencies", sql_generation)
 
-        self.assertEqual(load_behavior_glossary(), {"ZERO_RESULTS": "nothing found"})
 
-    @patch("src.agents.runtime.prompts.settings")
-    def test_raises_when_missing(self, mock_settings) -> None:
-        mock_settings.prompts_yaml = {"prompts": {}}
+class ToolResultReadingTests(unittest.TestCase):
+    """v14 (#702): the tools return typed facts, so the prompt owns every word.
 
-        with self.assertRaises(ValueError):
-            load_behavior_glossary()
+    The behaviors no longer write sentences: `query_clean_jobs` returns `sql`,
+    `columns`, `rows`, `row_count`, and `total_rows`, and failures arrive as
+    error-status messages. These assertions pin the prompt rules that replaced
+    the free-text caveat machinery, so wording cannot silently vanish.
+    """
 
-    @patch("src.agents.runtime.prompts.settings")
-    def test_raises_when_empty(self, mock_settings) -> None:
-        mock_settings.prompts_yaml = {"behavior_glossary": {}}
-
-        with self.assertRaises(ValueError):
-            load_behavior_glossary()
-
-    @patch("src.agents.runtime.prompts.settings")
-    def test_raises_when_a_phrasing_is_blank(self, mock_settings) -> None:
-        mock_settings.prompts_yaml = {
-            "behavior_glossary": {"ZERO_RESULTS": "nothing found", "TRUNCATION": "   "}
-        }
-
-        with self.assertRaises(ValueError):
-            load_behavior_glossary()
-
-    def test_yaml_glossary_covers_every_frozen_token(self) -> None:
-        self.assertEqual(set(load_behavior_glossary()), set(FROZEN_GLOSSARY_TOKENS))
-
-    def test_yaml_glossary_phrasings_are_non_empty(self) -> None:
-        for token, phrasing in load_behavior_glossary().items():
-            with self.subTest(token=token):
-                self.assertTrue(phrasing.strip())
-
-    def test_glossary_is_not_pasted_into_the_system_prompt(self) -> None:
+    def test_the_reading_tool_results_section_appears_exactly_once(self) -> None:
         system_prompt = str(load_system_prompt().content)
 
-        for token, phrasing in load_behavior_glossary().items():
-            with self.subTest(token=token):
-                self.assertNotIn(phrasing, system_prompt)
+        self.assertEqual(system_prompt.count("# Reading tool results"), 1)
+
+    def test_the_sql_that_ran_is_internal_and_never_shown(self) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn("The `sql` in a query result is internal", system_prompt)
+        self.assertIn("Never show it, quote it, or name its columns", system_prompt)
+
+    def test_zero_results_and_truncation_have_plain_language(self) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn("If `total_rows` is 0, or a count in `rows` is 0", system_prompt)
+        self.assertIn("say plainly that no posting matched", system_prompt)
+        self.assertIn("say you are showing `row_count` of `total_rows` postings", system_prompt)
+
+    def test_a_summary_reports_the_figures_in_rows_not_the_row_count(self) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn(
+            "A count or summary carries its figures in `rows`. Report those figures, not `row_count`",
+            system_prompt,
+        )
+
+    def test_a_description_match_is_named_and_a_structured_match_is_not_hedged(
+        self,
+    ) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn(
+            "A term matched only through `description ILIKE` was found in the posting text",
+            system_prompt,
+        )
+        self.assertIn("Never say the data lacks a field that the query used", system_prompt)
+
+    def test_job_details_not_found_and_not_fetched_are_stated_plainly(self) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn(
+            "say plainly when a requested posting was not found", system_prompt
+        )
+        self.assertIn("Call again for `not_fetched` ids", system_prompt)
+
+    def test_a_tool_error_is_explained_without_technical_detail(self) -> None:
+        system_prompt = str(load_system_prompt().content)
+
+        self.assertIn("On a tool error, explain in Vietnamese without technical detail", system_prompt)
+        self.assertIn("For `unknown_column`, say the data does not record that information", system_prompt)

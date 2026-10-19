@@ -104,14 +104,6 @@ agent:
     # deleted with the rest of the bundle (ADR-0060, step 3).
     statement_timeout_ms: 2000
     max_result_bytes: 262144
-    obligations:
-      enabled: true
-      zero_results: true
-      created_on: true
-      free_text: true
-      cross_currency: true
-      negotiable_salary: true
-      listing_expiry: true
 
 eval:
   judge:

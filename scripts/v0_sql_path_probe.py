@@ -404,7 +404,8 @@ def sql_observation(engine, sql: str) -> dict[str, Any]:
 
     from src.services.query.row_bound import resolve_bounds
 
-    bounded = resolve_bounds(sql, 20).sql
+    bounds = resolve_bounds(sql, 20)
+    bounded = f"{bounds.base_sql} LIMIT {bounds.limit}"
     started = time.perf_counter()
     try:
         with engine.connect() as conn:

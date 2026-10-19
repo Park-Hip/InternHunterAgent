@@ -74,7 +74,7 @@ A second question is now answerable from the same place: whether a given source 
 collected from, and against which named gates.
 A third is no longer answerable from this workspace, and that is the intended consequence of
 ADR-0060: there is no longer a separate contract for what the agent may claim. The agent has one
-query path, so the rules that govern a number live in the code that produces it - the validator, the
-obligations layer, and the evaluation gate - and
+query path, so the rules that govern a number live in the code that produces it - the validator,
+the prompt that proposes the SQL, and the evaluation gate - and
 [ADR-0060](../decisions/adr-0060-retire-the-agent-v0-bundle.md)
 names the false-success risks that path accepts and the gate that must replace the retired one.

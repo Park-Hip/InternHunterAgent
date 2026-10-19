@@ -50,3 +50,19 @@ def _reset_built_models():
     reset_built_models()
     yield
     reset_built_models()
+
+
+@pytest.fixture(autouse=True)
+def _reset_prompt_registry():
+    """No test may inherit prompt links resolved against another test's client.
+
+    The registry keeps its resolved prompts in memory for the process's
+    lifetime (#698), so a test that warms a client must not leak that link, or
+    its absence, into the next case.
+    """
+    from src.agents.tracing.prompt_registry import get_prompt_registry
+
+    registry = get_prompt_registry()
+    registry.clear()
+    yield
+    registry.clear()

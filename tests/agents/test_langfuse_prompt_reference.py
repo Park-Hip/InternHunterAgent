@@ -3,19 +3,33 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import threading
+import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.agents.runtime.prompts import (
+    refresh_prompt_bundle_async,
+    resolve_prompt_bundle_async,
+)
 from src.agents.tracing.prompt_registry import (
     PROMPT_DEFINITIONS,
     PromptDefinition,
     PromptRegistry,
     ResolvedPrompt,
+    prompt_refresh_interval_seconds,
 )
 
-CONFIGURATION = {"deployment_label": "production", "cache_ttl_seconds": 60}
+CONFIGURATION = {
+    "deployment_label": "production",
+    "cache_ttl_seconds": 60,
+    "fetch_timeout_seconds": 2,
+    "refresh_interval_seconds": 300,
+}
+SURFACES_BY_NAME = {
+    definition.name: definition.surface for definition in PROMPT_DEFINITIONS
+}
 
 
 def _registry(client: MagicMock | None) -> PromptRegistry:
@@ -37,31 +51,58 @@ def _text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _matching_prompts(version: int = 4) -> dict[str, SimpleNamespace]:
+    """One managed prompt per surface whose text equals that surface's release."""
+    return {
+        name: SimpleNamespace(
+            prompt=f"release:{surface}", version=version, is_fallback=False
+        )
+        for name, surface in SURFACES_BY_NAME.items()
+    }
+
+
+def _configuration() -> patch:
+    return patch.object(PromptRegistry, "_configuration", return_value=CONFIGURATION)
+
+
+def _release() -> patch:
+    return patch.object(PromptRegistry, "_release", side_effect=_controlled_release)
+
+
 def test_registry_links_the_managed_prompt_when_its_text_matches_the_release() -> None:
     client = MagicMock()
-    native = SimpleNamespace(
-        prompt="release:sql_generation", version=4, is_fallback=False
-    )
-    client.get_prompt.return_value = native
+    client.get_prompt.side_effect = lambda name, **_kwargs: _matching_prompts()[name]
 
     with (
-        patch.object(PromptRegistry, "_configuration", return_value=CONFIGURATION),
-        patch.object(PromptRegistry, "_release", side_effect=_controlled_release),
+        _configuration(),
+        _release(),
         patch("src.agents.tracing.prompt_registry.logger") as log,
     ):
-        resolved = _registry(client).resolve("sql_generation")
+        registry = _registry(client)
+        refreshed = registry.refresh()
+        # The served read is a memory read: the refresh was the only SDK caller.
+        resolved = registry.resolve("sql_generation")
 
+    assert resolved is refreshed["sql_generation"]
     assert resolved.content == "release:sql_generation"
     assert resolved.version == "v-sql_generation"
-    assert resolved.prompt_client is native
+    assert resolved.prompt_client is not None
     assert resolved.is_fallback is False
-    args, kwargs = client.get_prompt.call_args
-    assert args == ("resumi-sql-generation",)
-    assert kwargs["label"] == "production"
-    assert kwargs["type"] == "text"
-    assert kwargs["cache_ttl_seconds"] == 60
-    assert kwargs["fallback"] == "release:sql_generation"
-    log.info.assert_called_once_with(
+    assert client.get_prompt.call_count == 3
+    args, kwargs = next(
+        fetched
+        for fetched in client.get_prompt.call_args_list
+        if fetched.args == ("resumi-sql-generation",)
+    )
+    assert kwargs == {
+        "label": "production",
+        "type": "text",
+        "fallback": "release:sql_generation",
+        "cache_ttl_seconds": 60,
+        "max_retries": 0,
+        "fetch_timeout_seconds": 2,
+    }
+    log.info.assert_any_call(
         "prompt.linked",
         surface="sql_generation",
         prompt_name="resumi-sql-generation",
@@ -78,11 +119,13 @@ def test_registry_serves_the_release_text_and_reports_drift_once() -> None:
     )
 
     with (
-        patch.object(PromptRegistry, "_configuration", return_value=CONFIGURATION),
-        patch.object(PromptRegistry, "_release", side_effect=_controlled_release),
+        _configuration(),
+        _release(),
         patch("src.agents.tracing.prompt_registry.logger") as log,
     ):
         registry = _registry(client)
+        registry.refresh()
+        registry.refresh()
         first = registry.resolve("system")
         second = registry.resolve("system")
 
@@ -91,7 +134,7 @@ def test_registry_serves_the_release_text_and_reports_drift_once() -> None:
         assert resolved.version == "v-system"
         assert resolved.prompt_client is None
         assert resolved.is_fallback is True
-    log.warning.assert_called_once_with(
+    log.warning.assert_any_call(
         "prompt.drift",
         surface="system",
         prompt_name="resumi-system",
@@ -101,16 +144,27 @@ def test_registry_serves_the_release_text_and_reports_drift_once() -> None:
         release_hash=_text_hash("release:system"),
         managed_hash=_text_hash("stale managed text"),
     )
+    # One drift line per surface in total, however many refreshes happen.
+    drift_surfaces = [
+        logged.kwargs["surface"]
+        for logged in log.warning.call_args_list
+        if logged.args == ("prompt.drift",)
+    ]
+    assert drift_surfaces == ["system", "schema_context", "sql_generation"]
 
 
 def test_registry_uses_the_release_text_when_the_client_is_unavailable() -> None:
-    with patch.object(PromptRegistry, "_release", side_effect=_controlled_release):
-        resolved = _registry(None).resolve("system")
+    with _release():
+        registry = _registry(None)
+        before_any_refresh = registry.resolve("system")
+        refreshed = registry.refresh()
 
-    assert resolved.is_fallback is True
-    assert resolved.prompt_client is None
-    assert resolved.version == "v-system"
-    assert resolved.content == "release:system"
+    assert before_any_refresh.is_fallback is True
+    assert before_any_refresh.prompt_client is None
+    assert before_any_refresh.version == "v-system"
+    assert before_any_refresh.content == "release:system"
+    assert refreshed["system"].is_fallback is True
+    assert refreshed["system"].prompt_client is None
 
 
 def test_registry_uses_the_release_text_when_langfuse_returns_a_fallback() -> None:
@@ -119,11 +173,8 @@ def test_registry_uses_the_release_text_when_langfuse_returns_a_fallback() -> No
         prompt="stale fallback", version=None, is_fallback=True
     )
 
-    with (
-        patch.object(PromptRegistry, "_configuration", return_value=CONFIGURATION),
-        patch.object(PromptRegistry, "_release", side_effect=_controlled_release),
-    ):
-        resolved = _registry(client).resolve("sql_generation")
+    with _configuration(), _release():
+        resolved = _registry(client).refresh()["sql_generation"]
 
     assert resolved.is_fallback is True
     assert resolved.prompt_client is None
@@ -131,41 +182,103 @@ def test_registry_uses_the_release_text_when_langfuse_returns_a_fallback() -> No
     assert resolved.version == "v-sql_generation"
 
 
-def test_registry_prefetches_every_required_surface() -> None:
+def test_registry_refreshes_every_required_surface_and_turns_read_memory() -> None:
     client = MagicMock()
-    surfaces_by_name = {
-        definition.name: definition.surface for definition in PROMPT_DEFINITIONS
-    }
+    client.get_prompt.side_effect = (
+        lambda name, **_kwargs: _matching_prompts(version=7)[name]
+    )
 
-    def get_prompt(name: str, **_kwargs: object) -> SimpleNamespace:
-        return SimpleNamespace(
-            prompt=f"release:{surfaces_by_name[name]}", version=2, is_fallback=False
-        )
+    with _configuration(), _release():
+        registry = _registry(client)
+        refreshed = registry.refresh()
+        served = registry.resolved()
+        single = registry.resolve("system")
 
-    client.get_prompt.side_effect = get_prompt
-
-    with (
-        patch.object(PromptRegistry, "_configuration", return_value=CONFIGURATION),
-        patch.object(PromptRegistry, "_release", side_effect=_controlled_release),
-    ):
-        prompts = _registry(client).prefetch()
-
-    assert set(prompts) == {"system", "schema_context", "sql_generation"}
-    assert client.get_prompt.call_count == 3
-    assert all(prompt.prompt_client is not None for prompt in prompts.values())
+    assert tuple(refreshed) == ("system", "schema_context", "sql_generation")
+    assert all(prompt.prompt_client is not None for prompt in refreshed.values())
     assert {
-        surface: prompt.version for surface, prompt in prompts.items()
+        surface: prompt.version for surface, prompt in refreshed.items()
     } == {
         "system": "v-system",
         "schema_context": "v-schema_context",
         "sql_generation": "v-sql_generation",
     }
+    assert served == refreshed
+    assert single is refreshed["system"]
+    assert client.get_prompt.call_count == 3
+
+
+def test_failed_refresh_keeps_the_last_confirmed_prompt_link() -> None:
+    client = MagicMock()
+    client.get_prompt.side_effect = lambda name, **_kwargs: _matching_prompts()[name]
+
+    with (
+        _configuration(),
+        _release(),
+        patch("src.agents.tracing.prompt_registry.logger") as log,
+    ):
+        registry = _registry(client)
+        linked = registry.refresh()
+        client.get_prompt.side_effect = RuntimeError("langfuse down")
+        after_failure = registry.refresh()
+
+    assert after_failure["system"] is linked["system"]
+    assert after_failure["system"].prompt_client is not None
+    assert after_failure["system"].content == "release:system"
+    assert after_failure["system"].is_fallback is False
+    resolution_failures = [
+        logged
+        for logged in log.warning.call_args_list
+        if logged.args == ("langfuse.prompt_resolution_failed",)
+    ]
+    assert len(resolution_failures) == 3
+
+
+def test_refresh_interval_comes_from_the_configured_lifecycle() -> None:
+    with _configuration():
+        assert prompt_refresh_interval_seconds() == 300
 
 
 @pytest.mark.asyncio
-async def test_registry_resolves_without_blocking_the_event_loop() -> None:
+async def test_a_turn_never_waits_on_a_hanging_langfuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#698: the request path is a memory read even while a fetch never returns."""
     started = threading.Event()
-    release = threading.Event()
+    released = threading.Event()
+    client = MagicMock()
+
+    def get_prompt(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        started.set()
+        released.wait(5)
+        return SimpleNamespace(prompt="release:system", version=2, is_fallback=False)
+
+    client.get_prompt.side_effect = get_prompt
+    registry = _registry(client)
+    monkeypatch.setattr(
+        "src.agents.runtime.prompts.get_prompt_registry", lambda: registry
+    )
+
+    with _configuration(), _release():
+        refresh = asyncio.create_task(registry.refresh_async())
+        try:
+            await asyncio.to_thread(started.wait, 5)
+            began = time.monotonic()
+            bundle = await asyncio.wait_for(resolve_prompt_bundle_async(), 1)
+            elapsed = time.monotonic() - began
+        finally:
+            released.set()
+            await refresh
+
+    assert elapsed < 0.5
+    assert bundle.system.content == "release:system"
+    assert bundle.system.is_fallback is True
+
+
+@pytest.mark.asyncio
+async def test_registry_refresh_does_not_block_the_event_loop() -> None:
+    started = threading.Event()
+    released = threading.Event()
     loop_progressed = threading.Event()
     observed: dict[str, bool] = {}
     loop = asyncio.get_running_loop()
@@ -173,29 +286,42 @@ async def test_registry_resolves_without_blocking_the_event_loop() -> None:
 
     def get_prompt(*_args: object, **_kwargs: object) -> SimpleNamespace:
         started.set()
-        release.wait()
+        released.wait(5)
         observed["loop_progressed"] = loop_progressed.is_set()
-        return SimpleNamespace(
-            prompt="release:system", version=2, is_fallback=False
-        )
+        return SimpleNamespace(prompt="release:system", version=2, is_fallback=False)
 
     client.get_prompt.side_effect = get_prompt
     registry = _registry(client)
 
-    with (
-        patch.object(PromptRegistry, "_configuration", return_value=CONFIGURATION),
-        patch.object(PromptRegistry, "_release", side_effect=_controlled_release),
-    ):
-        timer = threading.Timer(0.1, release.set)
-        timer.start()
-        resolution = asyncio.create_task(registry.resolve_async("system"))
-        await asyncio.to_thread(started.wait)
-        loop.call_soon(loop_progressed.set)
-        await asyncio.sleep(0)
-        release.set()
-        resolved = await resolution
-        timer.cancel()
+    with _configuration(), _release():
+        refresh = asyncio.create_task(registry.refresh_async())
+        try:
+            await asyncio.to_thread(started.wait, 5)
+            loop.call_soon(loop_progressed.set)
+            await asyncio.sleep(0)
+        finally:
+            released.set()
+        refreshed = await refresh
 
     assert observed["loop_progressed"] is True
-    assert resolved.content == "release:system"
-    assert resolved.prompt_client is not None
+    assert refreshed["system"].prompt_client is not None
+
+
+@pytest.mark.asyncio
+async def test_evaluation_capture_resolves_its_own_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The one-shot eval driver has no background refresh, so it resolves once."""
+    client = MagicMock()
+    client.get_prompt.side_effect = lambda name, **_kwargs: _matching_prompts()[name]
+    registry = _registry(client)
+    monkeypatch.setattr(
+        "src.agents.runtime.prompts.get_prompt_registry", lambda: registry
+    )
+
+    with _configuration(), _release():
+        bundle = await refresh_prompt_bundle_async()
+
+    assert client.get_prompt.call_count == 3
+    assert bundle.system.prompt_client is not None
+    assert bundle.system.is_fallback is False

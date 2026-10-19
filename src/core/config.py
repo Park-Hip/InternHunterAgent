@@ -475,6 +475,16 @@ def _validate_prompt_config(config: dict[str, Any]) -> None:
         raise ConfigLoadError(
             "agent.prompts.cache_ttl_seconds must be a non-negative integer"
         )
+    # Boot is the one place a request would otherwise wait on Langfuse, so both
+    # the bounded fetch and the background refresh cadence are required: a
+    # missing or malformed value must refuse boot instead of falling back to the
+    # SDK's 5 s x 3 retry default (#698).
+    for key in ("fetch_timeout_seconds", "refresh_interval_seconds"):
+        value = prompts.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ConfigLoadError(
+                f"agent.prompts.{key} must be a positive integer"
+            )
 
 
 def _validate_database_config(config: dict[str, Any]) -> None:

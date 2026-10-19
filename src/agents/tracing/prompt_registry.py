@@ -1,4 +1,11 @@
-"""Release-pinned prompt text with a native Langfuse link when the texts agree."""
+"""Release-pinned prompt text with a native Langfuse link when the texts agree.
+
+A request never calls Langfuse. The registry resolves every surface once at
+boot, keeps the result in memory, and a background task refreshes the link on
+its own cadence (#698), so an unreachable Langfuse costs boot a bounded wait and
+a turn nothing at all. Under the decision on #669 a refresh moves the link and
+never the text.
+"""
 
 from __future__ import annotations
 
@@ -45,6 +52,11 @@ LANGFUSE_PROMPT_NAMES: Final = {
 }
 SQL_GENERATION_PROMPT_NAME: Final = LANGFUSE_PROMPT_NAMES["sql_generation"]
 ALLOWED_PROMPT_DEPLOYMENT_LABELS: Final = frozenset({"candidate", "production"})
+# A refresh is the only Langfuse call left in the process, so it is never retried:
+# boot waits at most one fetch timeout, and the refresh an interval later is the
+# retry. A retried fetch would put the SDK's own 5 s x 3 back on the boot path,
+# which is the 16 s every turn paid while resolution ran per request (#698).
+PROMPT_FETCH_MAX_RETRIES: Final = 0
 
 
 @dataclass(frozen=True)
@@ -68,15 +80,83 @@ class ResolvedPrompt:
 
 
 class PromptRegistry:
-    """Serve the release text and link Langfuse only while the texts agree."""
+    """Serve the release text from memory and link Langfuse off the request path.
+
+    Two entry points, and they never overlap. `resolve` is what a turn calls: it
+    reads memory and cannot wait on Langfuse (#698). `refresh` is the only
+    caller of the SDK, run once at boot and then from a background task, and it
+    publishes a whole new snapshot so a reader never sees a partial one.
+    """
 
     def __init__(self, client_provider: Callable[[], Any | None]) -> None:
         self._client_provider = client_provider
         # The last (state, managed version) reported per surface, so a drift or
-        # a link is logged once per transition instead of once per request.
+        # a link is logged once per transition instead of once per refresh.
         self._reported: dict[PromptSurface, tuple[str, str]] = {}
+        # What a request reads. A refresh rebinds this to a new mapping instead
+        # of mutating the published one, so a concurrent reader keeps a whole
+        # snapshot and never a half-updated one.
+        self._resolved: dict[PromptSurface, ResolvedPrompt] = {}
 
     def resolve(self, surface: PromptSurface) -> ResolvedPrompt:
+        """Return the prompt as it serves right now, without any Langfuse call."""
+        prompt = self._resolved.get(surface)
+        if prompt is None:
+            # Nothing has resolved this surface yet, so it serves the release
+            # text unlinked until the boot refresh, or a refresh after one,
+            # publishes what Langfuse holds.
+            prompt = self._release(PROMPT_DEFINITIONS_BY_SURFACE[surface])
+            self._resolved.setdefault(surface, prompt)
+        return prompt
+
+    async def resolve_async(self, surface: PromptSurface) -> ResolvedPrompt:
+        """Read the in-memory prompt from an asynchronous request loop.
+
+        The await survives so the request path keeps one shape, but nothing is
+        dispatched: a turn cannot be delayed by Langfuse (#698).
+        """
+        return self.resolve(surface)
+
+    def resolved(self) -> dict[PromptSurface, ResolvedPrompt]:
+        """Every surface as it serves right now, without any Langfuse call."""
+        return {surface: self.resolve(surface) for surface in PROMPT_SURFACES}
+
+    def clear(self) -> None:
+        """Drop the in-memory snapshot so the next resolve serves the release text.
+
+        The snapshot belongs to one client's lifetime; a process that replaces
+        its client (or a test that patches one) starts from the release text and
+        repopulates through a refresh.
+        """
+        self._resolved = {}
+        self._reported = {}
+
+    def refresh(self) -> dict[PromptSurface, ResolvedPrompt]:
+        """Resolve every surface once and publish the result to memory."""
+        return self._publish(
+            {surface: self._refresh_surface(surface) for surface in PROMPT_SURFACES}
+        )
+
+    async def refresh_async(self) -> dict[PromptSurface, ResolvedPrompt]:
+        """Refresh every surface without blocking the caller's event loop."""
+        refreshed = await asyncio.gather(
+            *(
+                asyncio.to_thread(self._refresh_surface, surface)
+                for surface in PROMPT_SURFACES
+            )
+        )
+        return self._publish(dict(zip(PROMPT_SURFACES, refreshed, strict=True)))
+
+    def _publish(
+        self, refreshed: dict[PromptSurface, ResolvedPrompt]
+    ) -> dict[PromptSurface, ResolvedPrompt]:
+        """Swap in a new snapshot and return it."""
+        published = {**self._resolved, **refreshed}
+        self._resolved = published
+        return published
+
+    def _refresh_surface(self, surface: PromptSurface) -> ResolvedPrompt:
+        """One bounded, un-retried lookup that updates the link, never the text."""
         definition = PROMPT_DEFINITIONS_BY_SURFACE[surface]
         release = self._release(definition)
         client = self._client_provider()
@@ -91,15 +171,22 @@ class PromptRegistry:
                 type="text",
                 fallback=release.content,
                 cache_ttl_seconds=config["cache_ttl_seconds"],
+                max_retries=PROMPT_FETCH_MAX_RETRIES,
+                fetch_timeout_seconds=config["fetch_timeout_seconds"],
             )
         except Exception as exc:
+            # One line per refresh, per surface, so an unreachable Langfuse is
+            # visible in the log without a failing refresh flooding it.
             logger.warning(
                 "langfuse.prompt_resolution_failed",
                 prompt_name=definition.name,
                 label=config["deployment_label"],
                 error=str(exc),
             )
-            return release
+            # The text did not move, so the last link Langfuse confirmed is
+            # still true; keeping it is what lets a transient outage leave the
+            # trace lineage intact.
+            return self._resolved.get(surface, release)
 
         content = getattr(prompt, "prompt", None)
         version = getattr(prompt, "version", None)
@@ -144,26 +231,6 @@ class PromptRegistry:
             is_fallback=False,
         )
 
-    def prefetch(self) -> dict[PromptSurface, ResolvedPrompt]:
-        """Resolve every prompt surface before serving.
-
-        Each surface resolves once, so startup records the release versions
-        and, with credentials, either a link or `prompt.drift` per surface
-        before the first request.
-        """
-        return {surface: self.resolve(surface) for surface in PROMPT_SURFACES}
-
-    async def resolve_async(self, surface: PromptSurface) -> ResolvedPrompt:
-        """Resolve a prompt without blocking an asynchronous request loop."""
-        return await asyncio.to_thread(self.resolve, surface)
-
-    async def prefetch_async(self) -> dict[PromptSurface, ResolvedPrompt]:
-        """Warm every prompt without blocking application startup's event loop."""
-        resolved = await asyncio.gather(
-            *(self.resolve_async(surface) for surface in PROMPT_SURFACES)
-        )
-        return dict(zip(PROMPT_SURFACES, resolved, strict=True))
-
     def _record(self, state: str, surface: PromptSurface, version: int) -> bool:
         """Report a link state once per transition and managed version."""
         key = (state, str(version))
@@ -194,7 +261,16 @@ class PromptRegistry:
             raise ValueError(
                 "agent.prompts.cache_ttl_seconds must be a non-negative integer"
             )
-        return {"deployment_label": label, "cache_ttl_seconds": cache_ttl_seconds}
+        return {
+            "deployment_label": label,
+            "cache_ttl_seconds": cache_ttl_seconds,
+            "fetch_timeout_seconds": _positive_seconds(
+                prompts, "fetch_timeout_seconds"
+            ),
+            "refresh_interval_seconds": _positive_seconds(
+                prompts, "refresh_interval_seconds"
+            ),
+        }
 
     @staticmethod
     def _release(definition: PromptDefinition) -> ResolvedPrompt:
@@ -226,6 +302,18 @@ class PromptRegistry:
         )
 
 
+def _positive_seconds(prompts: dict[str, Any], key: str) -> int:
+    """Read one bounded, positive second count, refusing anything else."""
+    value = prompts.get(key)
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value <= 0
+    ):
+        raise ValueError(f"agent.prompts.{key} must be a positive integer")
+    return value
+
+
 def _text_hash(text: str) -> str:
     """The hash both sides of a drift comparison are reported with."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -243,3 +331,8 @@ _registry = PromptRegistry(_langfuse_client)
 
 def get_prompt_registry() -> PromptRegistry:
     return _registry
+
+
+def prompt_refresh_interval_seconds() -> int:
+    """How often the background task refreshes the in-memory prompt links."""
+    return int(PromptRegistry._configuration()["refresh_interval_seconds"])

@@ -97,10 +97,11 @@ flowchart TD
 | Pool | Creates and opens the checkpointer pool without waiting for a connection | `src/core/checkpointer.py` → `build_checkpointer_pool` | - |
 | Langfuse init | Creates the client and callback handler when both keys are set and `LANGFUSE_ENABLED` is not false; never raises | `src/agents/tracing/langfuse.py` → `init_langfuse` | Logged; tracing disabled; boot continues |
 | Checkpointer | Creates or migrates LangGraph's checkpoint tables on `DATABASE_URL` | `src/core/checkpointer.py` → `build_checkpointer` | Raises; pool closed |
-| Prompts | Serves every prompt from the checked-in YAML and links the Langfuse version when its text agrees | `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup` | Langfuse errors leave the surface unlinked; a missing YAML prompt raises |
+| Prompts | Resolves every prompt from the checked-in YAML once and links the Langfuse version when its text agrees; each lookup is bounded by `agent.prompts.fetch_timeout_seconds` and never retried | `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup`; `src/agents/tracing/prompt_registry.py` → `PromptRegistry.refresh` | Langfuse errors leave the surface unlinked on the release text; a missing YAML prompt raises (#698) |
 | Tools | Lists the MCP server's tools as LangChain tools, in process | `src/agents/mcp/adapter.py` → `list_job_tools` | Raises before the runtime exists |
 | Runtime | `AgentRuntime(checkpointer, tools)` on `app.state.runtime` | `src/agents/runtime/react_agent.py` → `AgentRuntime` | - |
 | Diagnostic | Resolves the Langfuse project id and logs credential diagnostics in a background task | `src/agents/tracing/langfuse.py` → `diagnose_langfuse_startup` | Logged only; the trace link stays null until the next process start |
+| Prompts live | Refreshes the in-memory prompt links every `agent.prompts.refresh_interval_seconds`, first wait included, in a background task; a turn reads only memory | `src/agents/tracing/langfuse.py` → `refresh_prompt_links_forever`; `src/agents/tracing/prompt_registry.py` → `PromptRegistry.refresh_async` | Logged per surface; the loop retries at the next interval; a turn is never waiting on it (#698) |
 | Retention | Deletes threads whose newest checkpoint is older than `agent.memory.retention_days`, once at boot and then daily, in a background task | `src/serving/composition.py` → `_sweep_checkpoint_threads`; `src/core/checkpointer.py` → `delete_stale_threads` | Logged; the loop retries at the next interval (#673) |
 
 **Why the guards run first.**
@@ -185,8 +186,8 @@ one pool, one runtime, and one MCP server per deploy.
 
 A healthy boot logs, in order: `api.schema_ok`, `api.agent_privileges_ok`,
 `api.provider_credentials_ok` (with the profiles checked), and `langfuse.prompts_prefetched` (with
-each prompt's release version and the served system surface).
-During the prefetch, a labelled version that resolves logs `prompt.linked` or `prompt.drift` for that surface; a version that cannot be read leaves the surface unlinked.
+each prompt's release version, a `linked` flag per surface, and the served system surface).
+During the boot resolution, a labelled version that resolves logs `prompt.linked` or `prompt.drift` for that surface; a version that cannot be read leaves the surface unlinked, which `linked` makes visible instead of printing a release version that reads as success (#698).
 The Langfuse authentication result lands near uvicorn's `Application startup complete`, before
 or after it, because the diagnostic is not awaited.
 
@@ -200,6 +201,7 @@ or after it, because the diagnostic is not awaited.
 | `ProviderCredentialError` naming the variable and the operate how-to | Lifespan | A deployment a served profile selects has no key; set it in the Render dashboard and redeploy |
 | `SchemaGuardError` naming `connection timeout expired`, `Application startup failed`, exit 3 | Lifespan | The database is unreachable; the connect attempt is bounded by `database.connect_timeout_seconds`, see section 6 |
 | `Langfuse startup authentication failed` | After boot | Tracing keys are wrong; serving is unaffected, and turns serve a null `trace_url` |
+| `langfuse.prompt_resolution_failed` per surface | Boot, then every `agent.prompts.refresh_interval_seconds` | A labelled version could not be read within `agent.prompts.fetch_timeout_seconds`; the release text serves unlinked and the next refresh retries (#698) |
 | `checkpointer.retention_swept`, with `deleted_threads` and `retention_days` | After boot, then daily | The sweep ran; compare `SELECT count(DISTINCT thread_id) FROM checkpoints` before and after a short-retention run |
 | `checkpointer.retention_sweep_failed`, with a traceback | After boot, or later | A sweep failed; serving is unaffected and the loop retries at the next interval (#673) |
 
@@ -271,5 +273,5 @@ that import `src.serving.composition` all name it; move them in one pull request
 | `src/core/config.py` → `load_settings`, `ConfigLoadError` | The import-time configuration contract |
 | `src/agents/mcp/job_server.py` → `create_job_mcp_server`, `mcp_endpoint_enabled` | Tool surface, endpoint switch |
 | `src/agents/mcp/adapter.py` → `list_job_tools` | Tool discovery |
-| `src/agents/tracing/langfuse.py` → `init_langfuse`, `prepare_native_prompts_startup`, `diagnose_langfuse_startup`, `shutdown_langfuse` | Tracing lifecycle |
+| `src/agents/tracing/langfuse.py` → `init_langfuse`, `prepare_native_prompts_startup`, `refresh_prompt_links_forever`, `diagnose_langfuse_startup`, `shutdown_langfuse` | Tracing lifecycle |
 | `tests/api/test_startup_config.py`, `tests/api/test_mcp.py`, `tests/api/test_privilege_guard.py`, `tests/api/test_retention.py` | The behaviour pinned by tests |

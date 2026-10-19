@@ -1,6 +1,6 @@
 # Manage Langfuse prompts
 
-> **Last verified:** 2026-10-18
+> **Last verified:** 2026-10-19
 
 > **Eviction:** This guide leaves when the serving text stops coming from `config/prompts.yaml`.
 
@@ -12,16 +12,18 @@ The service never requests `latest`.
 ## What serves
 
 Every surface serves the checked-in YAML text (`prompts.system_prompt`, `prompts.schema_context`, `prompts.sql_generation`) with its release pin `prompt_versions.<surface>` (`v13`, `v12`, and `v14` today), whatever Langfuse holds and whatever the label points to.
-Resolution never changes the text and never fails a request: absent credentials, a failed fetch, an SDK fallback, a version that was never registered, or a version whose text differs all leave the surface unlinked on the release text.
+A refresh never changes the text and never fails a request: absent credentials, a failed fetch, an SDK fallback, a version that was never registered, or a version whose text differs all leave the surface unlinked on the release text.
 
-The registry reads the labelled version through the SDK on each resolve (server-cached for `agent.prompts.cache_ttl_seconds`) so a trace can link to it.
+The registry reads each labelled version once at boot and a background task refreshes it every `agent.prompts.refresh_interval_seconds`, so no turn ever calls Langfuse (#698).
+Each lookup is bounded by `agent.prompts.fetch_timeout_seconds` and is never retried: boot waits at most one timeout for a surface, and the next refresh interval is the retry.
+Both bounds are required, and a missing or malformed value refuses boot.
 When the managed text equals the release text, the resolved prompt client is propagated around the model call, so the generation links to that immutable Langfuse version, while trace tags keep reading the release pin (`prompt:system:v13`).
 When the two texts differ, the release text keeps serving and the registry logs `prompt.drift` once per transition with `surface`, `prompt_name`, `label`, `release_version`, `managed_version`, `release_hash`, and `managed_hash`.
 A formed link logs `prompt.linked` once per transition with the same identifying fields minus the hashes.
 A link means the registered version and the deployed YAML agree; drift means they moved apart, and the fix is the register step below, not an edit in the running service.
 
-On startup the service prefetches every surface before it creates the runtime, so a boot with credentials logs a link or drift line for every surface whose labelled version resolves, and `langfuse.prompts_prefetched` reports the release versions that serve.
-A lookup that raises is logged as `langfuse.prompt_resolution_failed`, and the surface stays unlinked.
+On startup the service resolves every surface before it creates the runtime, so a boot with credentials logs a link or drift line for every surface whose labelled version resolves, and `langfuse.prompts_prefetched` reports the release versions that serve together with a `linked` flag per surface.
+A lookup that raises is logged as `langfuse.prompt_resolution_failed`, the surface keeps serving the release text and its last confirmed link, and the next refresh is the retry; a failed refresh is logged and never ends the background loop.
 `LANGFUSE_ENABLED=false` or absent keys only disable tracing and prompt linking; the release text still serves.
 
 ## Why the SDK version matters
@@ -45,13 +47,14 @@ The retired semantic release gate is not a promotion control; its current status
 ## Roll back
 
 Revert the prompt commit so the text and its `prompt_versions` pin return together, deploy the revert, then register the restored text with `--label production`.
-Git keeps the reverted text as history, and Langfuse keeps every immutable version, so the trace link restores on the first resolve after the register run and the SDK cache TTL.
+Git keeps the reverted text as history, and Langfuse keeps every immutable version, so the trace link restores on the first refresh after the register run, within `agent.prompts.refresh_interval_seconds`.
 Move labels only through the script: a hand-moved `production` label on text that differs from the deployed YAML only produces drift, and on text that matches it is exactly what the script produces.
-If remote resolution is unavailable, the deployed release keeps serving its checked-in text unlinked.
+If remote resolution is unavailable, the deployed release keeps serving its checked-in text unlinked, and no turn waits on the outage (#698).
 
 ## Evaluate a candidate
 
-The evaluation harness resolves prompts through the same registry, so a candidate run serves the branch's `config/prompts.yaml` text, exactly as serving would.
+The evaluation harness resolves the prompt bundle once through the same registry, so a candidate run serves the branch's `config/prompts.yaml` text, exactly as serving would.
+The one-shot driver has no background refresh, so it resolves its own links at startup.
 Put the proposed text and the `prompt_versions.<surface>` bump on a branch and run the scenario suite there; treat the report and its traces as review evidence.
 In an isolated evaluation environment with its own Langfuse credentials, set `agent.prompts.deployment_label: candidate` and seed the branch's text with `uv run python scripts/register_langfuse_prompts.py --label candidate`.
 The `candidate` label shapes only the trace link: the suite still serves the branch's checked-in text, and the label names the version its traces linked to.

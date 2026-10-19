@@ -24,7 +24,7 @@ from typing import Any
 import yaml
 
 from evals.sql_check import compare_result_sets
-from src.agents.runtime.prompts import load_prompt_versions
+from src.agents.runtime.prompts import load_resolved_prompt_versions
 from src.agents.tools.query_clean_jobs import generate_sql
 from src.core.config import settings
 from src.services.query.sql_validator import validate_sql
@@ -55,7 +55,7 @@ async def generate(out: Path) -> None:
     run = {
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "model": model,
-        "prompt_versions": load_prompt_versions(),
+        "prompt_versions": load_resolved_prompt_versions(),
         "records": records,
     }
     out.parent.mkdir(parents=True, exist_ok=True)

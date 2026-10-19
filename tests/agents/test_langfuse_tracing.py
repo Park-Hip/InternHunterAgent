@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import inspect
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -11,8 +13,35 @@ from opentelemetry.sdk.trace import TracerProvider
 
 from src.agents.tracing import langfuse
 from src.agents.tracing.stream import StreamLatency
-from src.agents.tracing.prompt_registry import ResolvedPrompt
+from src.agents.tracing.prompt_registry import PROMPT_DEFINITIONS, ResolvedPrompt
+from src.core.config import settings
 from tests.langfuse_prompts import native_prompt_client, prompt_link
+
+
+def _release_prompt_versions() -> dict[str, str]:
+    """The expected versions, hashed independently of the release loader."""
+    prompts = settings.prompts_yaml["prompts"]
+    return {
+        definition.surface: hashlib.sha256(
+            prompts[definition.yaml_key].strip().encode("utf-8")
+        ).hexdigest()[:12]
+        for definition in PROMPT_DEFINITIONS
+    }
+
+
+def _expected_prompt_tags() -> list[str]:
+    return [
+        f"prompt:{surface}:{version}"
+        for surface, version in _release_prompt_versions().items()
+    ]
+
+
+def _expected_metadata() -> dict[str, str]:
+    return {
+        "prompt_versions": json.dumps(
+            _release_prompt_versions(), sort_keys=True, separators=(",", ":")
+        )
+    }
 
 
 def test_installed_sdk_propagates_native_prompts() -> None:
@@ -72,6 +101,21 @@ def test_fallback_prompt_leaves_a_span_unlinked_with_the_real_sdk() -> None:
     assert prompt_link(span.attributes) == (None, None)
 
 
+def test_prompt_versions_metadata_arrives_as_parseable_json_with_the_real_sdk() -> None:
+    """Langfuse's read path JSON-parses metadata values; a repr would not parse."""
+    tracer = TracerProvider().get_tracer(__name__)
+
+    with tracer.start_as_current_span("agent-chat") as span:
+        with langfuse.langfuse_trace_attributes(
+            entry_point="api:chat-stream", trace_name="agent-chat-stream"
+        ):
+            pass
+
+    stored = span.attributes["langfuse.trace.metadata.prompt_versions"]
+    assert isinstance(stored, str)
+    assert json.loads(stored) == _release_prompt_versions()
+
+
 def test_build_langfuse_config_validates_the_closed_api_tag_taxonomy() -> None:
     with patch.object(langfuse, "validate_langfuse_trace_context") as validate:
         config = langfuse.build_langfuse_config(entry_point="api:chat-stream")
@@ -113,19 +157,11 @@ def test_trace_attributes_propagate_request_metadata_and_closed_tags() -> None:
         user_id="user-1",
         tags=[
             "api:chat-stream",
-            "prompt:system:v2",
-            "prompt:schema_context:v1",
-            "prompt:sql_generation:v2",
+            *_expected_prompt_tags(),
             "provider:deepseek",
             "model:deepseek/deepseek-flash",
         ],
-        metadata={
-            "prompt_versions": {
-                "system": "v2",
-                "schema_context": "v1",
-                "sql_generation": "v2",
-            }
-        },
+        metadata=_expected_metadata(),
     )
 
 
@@ -160,19 +196,11 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
         user_id="user-1",
         tags=[
             "api:chat-stream",
-            "prompt:system:v2",
-            "prompt:schema_context:v1",
-            "prompt:sql_generation:v2",
+            *_expected_prompt_tags(),
             "provider:deepseek",
             "model:deepseek/deepseek-flash",
         ],
-        metadata={
-            "prompt_versions": {
-                "system": "v2",
-                "schema_context": "v1",
-                "sql_generation": "v2",
-            }
-        },
+        metadata=_expected_metadata(),
     )
     client.start_as_current_observation.assert_called_once_with(
         as_type="span", name="agent-chat-stream"

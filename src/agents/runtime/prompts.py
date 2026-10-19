@@ -163,26 +163,8 @@ def load_sql_generation_prompt() -> str:
     return _load_release_fallback("sql_generation")
 
 
-def load_prompt_versions() -> dict[str, str]:
-    """Return release-pinned lineage for offline artifacts."""
-    prompt_versions = settings.prompts_yaml.get("prompt_versions")
-    if not isinstance(prompt_versions, dict) or not set(PROMPT_SURFACES) <= set(
-        prompt_versions
-    ):
-        raise ValueError(
-            "config/prompts.yaml must declare these prompt_versions: "
-            + ", ".join(PROMPT_SURFACES)
-        )
-    if not all(
-        isinstance(prompt_versions[surface], str) and prompt_versions[surface].strip()
-        for surface in PROMPT_SURFACES
-    ):
-        raise ValueError("Every prompt_versions value must be a non-empty string")
-    return {surface: prompt_versions[surface].strip() for surface in PROMPT_SURFACES}
-
-
 def load_resolved_prompt_versions() -> dict[str, str]:
-    """Return the release-pinned lineage of the prompts that serve."""
+    """Return the content-hash lineage of the prompts that serve."""
     return {
         surface: resolve_prompt(surface).version for surface in PROMPT_SURFACES
     }

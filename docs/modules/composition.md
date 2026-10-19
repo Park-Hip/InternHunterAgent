@@ -186,7 +186,7 @@ one pool, one runtime, and one MCP server per deploy.
 
 A healthy boot logs, in order: `api.schema_ok`, `api.agent_privileges_ok`,
 `api.provider_credentials_ok` (with the profiles checked), and `langfuse.prompts_prefetched` (with
-each prompt's release version, a `linked` flag per surface, and the served system surface).
+each prompt's version, the content hash of the text that serves, a `linked` flag per surface, and the served system surface).
 During the boot resolution, a labelled version that resolves logs `prompt.linked` or `prompt.drift` for that surface; a version that cannot be read leaves the surface unlinked, which `linked` makes visible instead of printing a release version that reads as success (#698).
 The Langfuse authentication result lands near uvicorn's `Application startup complete`, before
 or after it, because the diagnostic is not awaited.

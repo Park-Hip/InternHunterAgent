@@ -6,7 +6,6 @@ from typing import get_args
 from unittest.mock import patch
 
 from src.agents.runtime.prompts import (
-    load_prompt_versions,
     load_schema_context,
     load_sql_generation_prompt,
     load_system_prompt,
@@ -127,47 +126,3 @@ class SystemPromptContractTests(unittest.TestCase):
 
         self.assertNotIn("MANDATORY CAVEATS", system_prompt)
         self.assertNotIn("reflect every caveat", system_prompt)
-
-
-class LoadPromptVersionsTests(unittest.TestCase):
-    @patch("src.agents.runtime.prompts.settings")
-    def test_returns_stripped_named_versions(self, mock_settings) -> None:
-        mock_settings.prompts_yaml = {
-            "prompt_versions": {
-                "system": "  v2  ",
-                "schema_context": "v3",
-                "sql_generation": "v4",
-            }
-        }
-
-        self.assertEqual(
-            load_prompt_versions(),
-            {"system": "v2", "schema_context": "v3", "sql_generation": "v4"},
-        )
-
-    @patch("src.agents.runtime.prompts.settings")
-    def test_raises_when_missing(self, mock_settings) -> None:
-        mock_settings.prompts_yaml = {"prompts": {}}
-
-        with self.assertRaises(ValueError):
-            load_prompt_versions()
-
-    @patch("src.agents.runtime.prompts.settings")
-    def test_raises_when_blank(self, mock_settings) -> None:
-        mock_settings.prompts_yaml = {
-            "prompt_versions": {
-                "system": "v2",
-                "schema_context": "v3",
-                "sql_generation": "   ",
-            }
-        }
-
-        with self.assertRaises(ValueError):
-            load_prompt_versions()
-
-    def test_yaml_declares_independent_prompt_versions(self) -> None:
-        assert load_prompt_versions() == {
-            "system": "v2",
-            "schema_context": "v1",
-            "sql_generation": "v2",
-        }

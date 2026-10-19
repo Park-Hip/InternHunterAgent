@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
@@ -225,6 +226,18 @@ def validate_langfuse_trace_context(
     )
 
 
+def _prompt_versions_metadata(versions: dict[str, str]) -> dict[str, str]:
+    """Encode per-surface prompt lineage as JSON for Langfuse metadata.
+
+    ``propagate_attributes`` coerces every non-string metadata value with
+    ``str()``, which would store a Python repr that the read path cannot parse;
+    a compact JSON string parses back into the object.
+    """
+    return {
+        "prompt_versions": json.dumps(versions, sort_keys=True, separators=(",", ":"))
+    }
+
+
 @contextmanager
 def langfuse_trace_attributes(
     *,
@@ -243,7 +256,7 @@ def langfuse_trace_attributes(
     )
     attributes: dict[str, Any] = {
         "tags": tags,
-        "metadata": {"prompt_versions": load_resolved_prompt_versions()},
+        "metadata": _prompt_versions_metadata(load_resolved_prompt_versions()),
     }
     if trace_name is not None:
         attributes["trace_name"] = trace_name
@@ -281,13 +294,11 @@ async def langfuse_request_trace(
     )
     attributes: dict[str, Any] = {
         "tags": tags,
-        "metadata": {
-            "prompt_versions": (
-                prompts.versions()
-                if prompts is not None
-                else await load_resolved_prompt_versions_async()
-            )
-        },
+        "metadata": _prompt_versions_metadata(
+            prompts.versions()
+            if prompts is not None
+            else await load_resolved_prompt_versions_async()
+        ),
         "trace_name": trace_name,
     }
     if session_id is not None:

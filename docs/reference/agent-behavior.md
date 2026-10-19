@@ -52,7 +52,8 @@ Code guarantees, held by unit tests whatever the model says:
   ([ADR-0062](../decisions/adr-0062-tools-return-facts-the-prompt-owns-wording.md)).
 
 The tools return facts and the system prompt owns all wording. The prompts are
-`config/prompts.yaml` `system_prompt`, `schema_context`, and `sql_generation`, at `v1`.
+`config/prompts.yaml` `system_prompt`, `schema_context`, and `sql_generation`; traces identify each
+by the first 12 hex of the SHA-256 of its text.
 
 ## How it is measured
 

@@ -39,7 +39,7 @@ def test_native_prompt_attributes_pass_the_resolved_prompt_client_through() -> N
 
 
 def test_fallback_prompt_is_not_linked_as_a_native_version() -> None:
-    prompt = ResolvedPrompt("system", "resumi-system", "FALLBACK", "v14", None, True)
+    prompt = ResolvedPrompt("system", "resumi-system", "FALLBACK", "v1", None, True)
 
     with patch.object(langfuse, "propagate_attributes") as propagate:
         with langfuse.langfuse_prompt_attributes(prompt):
@@ -63,7 +63,7 @@ def test_native_prompt_attributes_link_a_recording_span_with_the_real_sdk() -> N
 
 def test_fallback_prompt_leaves_a_span_unlinked_with_the_real_sdk() -> None:
     tracer = TracerProvider().get_tracer(__name__)
-    prompt = ResolvedPrompt("system", "resumi-system", "FALLBACK", "v14", None, True)
+    prompt = ResolvedPrompt("system", "resumi-system", "FALLBACK", "v1", None, True)
 
     with tracer.start_as_current_span("agent-chat") as span:
         with langfuse.langfuse_prompt_attributes(prompt):
@@ -113,17 +113,17 @@ def test_trace_attributes_propagate_request_metadata_and_closed_tags() -> None:
         user_id="user-1",
         tags=[
             "api:chat-stream",
-            "prompt:system:v14",
-            "prompt:schema_context:v12",
-            "prompt:sql_generation:v15",
+            "prompt:system:v1",
+            "prompt:schema_context:v1",
+            "prompt:sql_generation:v1",
             "provider:deepseek",
             "model:deepseek/deepseek-flash",
         ],
         metadata={
             "prompt_versions": {
-                "system": "v14",
-                "schema_context": "v12",
-                "sql_generation": "v15",
+                "system": "v1",
+                "schema_context": "v1",
+                "sql_generation": "v1",
             }
         },
     )
@@ -160,17 +160,17 @@ async def test_request_trace_creates_a_root_observation_in_the_request_context()
         user_id="user-1",
         tags=[
             "api:chat-stream",
-            "prompt:system:v14",
-            "prompt:schema_context:v12",
-            "prompt:sql_generation:v15",
+            "prompt:system:v1",
+            "prompt:schema_context:v1",
+            "prompt:sql_generation:v1",
             "provider:deepseek",
             "model:deepseek/deepseek-flash",
         ],
         metadata={
             "prompt_versions": {
-                "system": "v14",
-                "schema_context": "v12",
-                "sql_generation": "v15",
+                "system": "v1",
+                "schema_context": "v1",
+                "sql_generation": "v1",
             }
         },
     )

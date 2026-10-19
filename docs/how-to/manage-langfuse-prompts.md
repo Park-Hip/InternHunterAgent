@@ -11,13 +11,14 @@ The service never requests `latest`.
 
 ## What serves
 
-Every surface serves the checked-in YAML text (`prompts.system_prompt`, `prompts.schema_context`, `prompts.sql_generation`) with its release pin `prompt_versions.<surface>` (`v14`, `v12`, and `v15` today), whatever Langfuse holds and whatever the label points to.
+Every surface serves the checked-in YAML text (`prompts.system_prompt`, `prompts.schema_context`, `prompts.sql_generation`) with its release pin `prompt_versions.<surface>` (`v1` for all three today), whatever Langfuse holds and whatever the label points to.
 A refresh never changes the text and never fails a request: absent credentials, a failed fetch, an SDK fallback, a version that was never registered, or a version whose text differs all leave the surface unlinked on the release text.
 
 The registry reads each labelled version once at boot and a background task refreshes it every `agent.prompts.refresh_interval_seconds`, so no turn ever calls Langfuse (#698).
 Each lookup is bounded by `agent.prompts.fetch_timeout_seconds` and is never retried: boot waits at most one timeout for a surface, and the next refresh interval is the retry.
 Both bounds are required, and a missing or malformed value refuses boot.
-When the managed text equals the release text, the resolved prompt client is propagated around the model call, so the generation links to that immutable Langfuse version, while trace tags keep reading the release pin (`prompt:system:v14`).
+When the managed text equals the release text, the resolved prompt client is propagated around the model call, so the generation links to that immutable Langfuse version, while trace tags keep reading the release pin (`prompt:system:v1`).
+The count restarted at `v1` with the #708 rewrite, and the retired v0 bundle also wrote `prompt:system:v1`, so filter traces from before 2026-10-19 by date.
 When the two texts differ, the release text keeps serving and the registry logs `prompt.drift` once per transition with `surface`, `prompt_name`, `label`, `release_version`, `managed_version`, `release_hash`, and `managed_hash`.
 A formed link logs `prompt.linked` once per transition with the same identifying fields minus the hashes.
 A link means the registered version and the deployed YAML agree; drift means they moved apart, and the fix is the register step below, not an edit in the running service.

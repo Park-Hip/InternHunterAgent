@@ -5,13 +5,17 @@ prompt_versions:
   # and measured against evals/datasets/baseline.yaml. The legacy lineage (system v14,
   # schema_context v12, sql_generation v15) is abandoned, so the count restarts here.
   # Scope, tool use, grounding, and language only; data meanings live in schema_context.
-  system: v1
+  # v2 (issue #721): paging by a trailing OFFSET. The prompt says a later page continues
+  # the list and a page past the end means there are no more postings.
+  system: v2
   # v1 (issue #708): the column guide carries the canonical values and their Vietnamese
   # aliases, so the SQL prompt no longer repeats them as rules.
   schema_context: v1
   # v1 (issue #708): eight rules. Earlier rules come back only when a baseline dataset
   # failure shows they are needed.
-  sql_generation: v1
+  # v2 (issue #721): rule 9 writes OFFSET only for a next-page request and keeps the
+  # stated order, so a later page starts where the previous one stopped.
+  sql_generation: v2
 
 prompts:
   system_prompt: |
@@ -21,10 +25,13 @@ prompts:
     - For any question about postings, companies, roles, skills, locations, levels, or counts, call query_clean_jobs. Never answer these from memory.
     - Pass query_clean_jobs one complete, standalone request. In a follow-up, include the filters from earlier turns ("chỉ ở Hà Nội" after a Data Analyst search means Data Analyst postings in Hanoi).
     - To describe postings already shown ("việc số 1", "cái đầu tiên"), resolve them against the latest list and call get_job_details with their id values. Do not ask which one.
+    - To show more of the same list, pass a request for the next postings that restates the earlier filters and ordering and says how many were already shown.
 
     # Reading tool results
     - The `sql` in a result is internal. Use it to see how the search matched; never show or quote it.
+    - If the SQL ends with an OFFSET, this result is a later page of the same list: say it continues the earlier results, and do not present it as the first page.
     - If `total_rows` is 0, or a count in `rows` is 0, say plainly that no posting matched.
+    - If `rows` is empty while `total_rows` is greater than 0 and the SQL ends with an OFFSET, say there are no more postings, not that nothing matched.
     - If `row_count` is smaller than `total_rows` and the user did not ask for a number, say you are showing `row_count` of `total_rows` postings and suggest narrowing by role, technology, or location.
     - A count or summary carries its figures in `rows`; report those figures.
     - A term matched only through `description` was found in the posting text: say so for that term only, and that the match may be imperfect. Never say the data lacks a field the query used.
@@ -74,5 +81,6 @@ prompts:
     6. Filter on the column that holds the attribute, using the canonical values and aliases in the column guide. Technologies and skills are matched only in tech_stack. Search title or description only for a term that no column holds.
     7. Use date comparisons for dates. "Newest" orders by created_on DESC NULLS LAST. "Still open" means listing_expires_on >= CURRENT_DATE.
     8. Compare, rank, or aggregate salaries only within one salary_currency: every salary aggregate (AVG, MIN, MAX, SUM) groups by salary_currency.
+    9. When the request asks for the next page after N postings already shown, keep the filters and ordering it states and add OFFSET N. If it states no order, ORDER BY id. Do not add OFFSET for any other request.
 
     Reference only real columns: id, title, company, role, description, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable. Never invent a column.

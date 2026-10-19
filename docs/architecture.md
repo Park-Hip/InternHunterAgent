@@ -428,15 +428,19 @@ has.
 - `query_clean_jobs` runs the pipeline above, and the tool boundary enforces two deterministic
   guarantees the model cannot override. It **never projects the `description` blob** into its
   result, and it **caps result rows** at `agent.query.max_rows`. The fetch bound is system-owned,
-  not model-owned: `src/services/query/row_bound.py` inspects any trailing `LIMIT` the model wrote
-  and treats it as a signal of *explicit user intent*, because the SQL-generation prompt only asks
-  for a `LIMIT` when the user requested a specific count. If that `LIMIT` is within the safety cap
-  it is honored exactly; otherwise the tool fetches `max_rows`.
-  When the fetch fills its limit, one companion `SELECT count(*) FROM (<base_sql>) AS q` runs in
-  the same repeatable-read transaction, so the result states the real match total ("20 of 161")
-  rather than inferring a total from the page. A result shorter than its limit is its own total,
-  and a count or other aggregate carries its figures in `rows` with no match count attached, so the
-  card can never state a number the answer does not.
+  not model-owned: `src/services/query/row_bound.py` inspects any trailing `LIMIT` and `OFFSET` the
+  model wrote. A `LIMIT` is a signal of *explicit user intent*, because the SQL-generation prompt
+  only asks for one when the user requested a specific count. If that `LIMIT` is within the safety
+  cap it is honored exactly; otherwise the tool fetches `max_rows`. A trailing `OFFSET` is a page
+  start and is never capped: `LIMIT n OFFSET m` runs as that statement, and `OFFSET m` without a
+  limit starts at row `m` and fetches at most `max_rows`.
+  One companion `SELECT count(*) FROM (<base_sql>) AS q` runs when the fetch fills its limit or the
+  offset is non-zero, in the same repeatable-read transaction and over the base query without
+  either clause. The result therefore states the real match total ("20 of 161") even on a short
+  last page or a page past the end, rather than inferring it from the page. A short first page is
+  its own total, and a count or other aggregate carries its figures in `rows` with no match count
+  attached, so the card can never state a number the answer does not. The statement reported as
+  `sql` retains the OFFSET, so the model can say the rows continue an earlier list.
 - `get_job_details(ids)` is a **deterministic, parameterized** fetch by id with no model call and no
   SQL generation, because ids carry no natural-language ambiguity. It returns the full
   `description` for a few postings, bounded by `agent.query.max_detail_ids`. This is the *only* path

@@ -167,7 +167,7 @@ class LoadPromptVersionsTests(unittest.TestCase):
 
     def test_yaml_declares_independent_prompt_versions(self) -> None:
         assert load_prompt_versions() == {
-            "system": "v1",
+            "system": "v2",
             "schema_context": "v1",
-            "sql_generation": "v1",
+            "sql_generation": "v2",
         }

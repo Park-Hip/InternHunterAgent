@@ -43,7 +43,8 @@ class JobMcpServerContractTests(unittest.IsolatedAsyncioTestCase):
             "filter from earlier turns that still applies. Returns JSON: `sql` (the "
             "query that ran; internal, never shown to the user), `columns`, `rows`, "
             "`row_count` (rows returned), and `total_rows` (rows the query matches "
-            "without any LIMIT). A count or summary returns its figures in `rows`.",
+            "without any LIMIT or OFFSET). A count or summary returns its figures in "
+            "`rows`.",
         )
         self.assertEqual(
             REQUEST_ARGUMENT_DESCRIPTION,

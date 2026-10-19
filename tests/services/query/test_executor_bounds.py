@@ -1,6 +1,6 @@
 """PostgreSQL proofs for the bounded read, against the pinned fixture.
 
-Four properties cannot be proven by reading the SQL, so they are proven by
+Five properties cannot be proven by reading the SQL, so they are proven by
 using the database:
 
 - **A slow statement is cancelled by the server**, at the configured
@@ -8,6 +8,8 @@ using the database:
 - **An oversized result is refused** before it is handed to the agent, and that
   refusal happens before the companion count runs.
 - **The companion count reports the real match total** for the same snapshot.
+- **A later page starts at its offset**, and a page past the end returns no
+  rows with the same whole-match total (#721).
 - **A write is impossible.** The agent role holds ``SELECT`` only, and the
   bounded read also marks its transaction read-only. Both are tested, because
   either one alone is a single point of failure.
@@ -227,6 +229,39 @@ class TestBounds:
 
         assert bounded.rows == [[1], [2], [3]]
         assert bounded.total_rows == 3
+
+    def test_a_later_page_returns_its_slice_and_the_whole_match_total(
+        self, reader_engine, monkeypatch, fixture_count
+    ) -> None:
+        monkeypatch.setattr(
+            "src.services.query.executor.execution_limits",
+            lambda: {"statement_timeout_ms": 5000, "max_result_bytes": 262_144},
+        )
+
+        bounded = execute_bounded_select(
+            "SELECT id FROM clean_jobs ORDER BY id", 5, 20
+        )
+
+        # #721: the second page starts at row 21, not at row 1.
+        assert bounded.rows == [[21], [22], [23], [24]]
+        assert bounded.total_rows == fixture_count == FIXTURE_ROWS
+
+    def test_a_page_past_the_end_is_empty_and_keeps_the_whole_match_total(
+        self, reader_engine, monkeypatch, fixture_count
+    ) -> None:
+        monkeypatch.setattr(
+            "src.services.query.executor.execution_limits",
+            lambda: {"statement_timeout_ms": 5000, "max_result_bytes": 262_144},
+        )
+
+        bounded = execute_bounded_select(
+            "SELECT id FROM clean_jobs ORDER BY id", 5, 200
+        )
+
+        # The page is empty, but the query still matches every fixture row. The
+        # model can say "no more postings" instead of "nothing matched".
+        assert bounded.rows == []
+        assert bounded.total_rows == fixture_count == FIXTURE_ROWS
 
 
 class TestErrorMapping:

@@ -76,11 +76,69 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.rows[0], [1, "Intern 1"])
         self.assertEqual(result.row_count, 20)
         self.assertEqual(result.total_rows, 161)
-        mock_execute.assert_called_once_with(HAPPY_SQL, 20)
+        mock_execute.assert_called_once_with(HAPPY_SQL, 20, 0)
 
         self.assertEqual(holder.row_count, 161)
         self.assertTrue(holder.truncated)
         self.assertTrue(holder.published)
+
+    @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_a_later_page_keeps_the_offset_and_the_real_total(
+        self, mock_generate_sql, mock_validate_sql, mock_execute
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import run_query_clean_jobs
+
+        sql = f"{HAPPY_SQL} LIMIT 20 OFFSET 20"
+        mock_generate_sql.return_value = sql
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql=sql)
+        mock_execute.return_value = BoundedRows(
+            columns=["id", "title"],
+            rows=[[index, f"Intern {index}"] for index in range(21, 41)],
+            total_rows=161,
+        )
+
+        with _bound_holder() as holder:
+            result = await run_query_clean_jobs("the next 20")
+
+        # The model sees the statement that ran, including the page offset.
+        self.assertEqual(result.sql, sql)
+        self.assertEqual(result.rows[0], [21, "Intern 21"])
+        self.assertEqual(result.row_count, 20)
+        self.assertEqual(result.total_rows, 161)
+        mock_execute.assert_called_once_with(HAPPY_SQL, 20, 20)
+
+        self.assertEqual(holder.row_count, 161)
+        self.assertTrue(holder.truncated)
+
+    @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_a_page_past_the_end_returns_no_rows_and_the_real_total(
+        self, mock_generate_sql, mock_validate_sql, mock_execute
+    ) -> None:
+        from src.agents.tools.query_clean_jobs import run_query_clean_jobs
+
+        sql = f"{HAPPY_SQL} LIMIT 20 OFFSET 200"
+        mock_generate_sql.return_value = sql
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql=sql)
+        mock_execute.return_value = BoundedRows(
+            columns=["id", "title"], rows=[], total_rows=161
+        )
+
+        with _bound_holder() as holder:
+            result = await run_query_clean_jobs("the page after the end")
+
+        self.assertEqual(result.sql, sql)
+        self.assertEqual(result.rows, [])
+        self.assertEqual(result.row_count, 0)
+        self.assertEqual(result.total_rows, 161)
+        mock_execute.assert_called_once_with(HAPPY_SQL, 20, 200)
+
+        # The total is the match set, not the empty page.
+        self.assertEqual(holder.row_count, 161)
+        self.assertTrue(holder.truncated)
 
     @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
     @patch("src.agents.tools.query_clean_jobs.validate_sql")
@@ -203,6 +261,7 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
             "SELECT id, title FROM clean_jobs WHERE description ILIKE '%intern%'"
             " ORDER BY id DESC",
             5,
+            0,
         )
         payload = json.dumps(result.model_dump(), ensure_ascii=False)
         self.assertNotIn("kết quả", payload)

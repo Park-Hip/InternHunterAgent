@@ -629,7 +629,7 @@ layer:
 | `session` | `{session_id}` | first, before any token |
 | `tool` | `{name, status, call_id, arguments, duration_ms, error, row_count, truncated}` | when each tool call starts and ends |
 | `token` | `{text}` | each surviving chunk, many |
-| `metadata` | `{trace_id, trace_url}` | once, after the token stream ends |
+| `metadata` | `{trace_id, trace_url, answer_source}` (`model` or `fallback`) | once, after the token stream ends |
 | `error` | `{message, code, retryable}` | in place of further tokens on mid-run failure |
 | `done` | `{}` | terminal, always closes the stream |
 
@@ -704,6 +704,8 @@ immediately, so the model call and any provider-busy it raises are always after 
 - **The empty-answer fallback moves to stream end.** In a stream, emptiness is only known when the
   token stream closes with nothing emitted, so the fallback is decided at end-of-stream and sent as
   a single token.
+  The following `metadata` frame carries `answer_source: "fallback"`, so the client recognises the
+  outcome from the contract rather than by matching the fallback text.
 
 **What streaming does not add.**
 Resumable or replayable streams, retry-from-last-token, and multi-node progress indicators are

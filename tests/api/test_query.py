@@ -385,6 +385,6 @@ class StreamHeartbeatTests(unittest.IsolatedAsyncioTestCase):
         ])
         self.assertEqual(frames[3:], [
             'event: token\ndata: {"text": "Hello"}\n\n',
-            'event: metadata\ndata: {"trace_id": null, "trace_url": null}\n\n',
+            'event: metadata\ndata: {"trace_id": null, "trace_url": null, "answer_source": "model"}\n\n',
             "event: done\ndata: {}\n\n",
         ])

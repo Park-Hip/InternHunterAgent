@@ -59,7 +59,8 @@
     {
       "type": "metadata",
       "trace_id": "recorded-trace-id",
-      "trace_url": "https://cloud.langfuse.com/project/recorded/traces/recorded-trace-id"
+      "trace_url": "https://cloud.langfuse.com/project/recorded/traces/recorded-trace-id",
+      "answer_source": "model"
     }
   ],
   [

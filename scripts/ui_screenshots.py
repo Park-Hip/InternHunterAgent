@@ -13,10 +13,11 @@ what you look at.
 
 A second phase replays one canned server sequence per fixture through the real
 page and the real app.js, with fetch() stubbed, so the stopped turn, the error
-turn, and the empty-answer turn - states a static page cannot reach on its own -
+turn, and both no-answer turns - states a static page cannot reach on its own -
 are captured for review as well. The stopped fixture presses Dừng mid-turn; the
-error and empty-answer payloads are built from the server's own constants, so
-they cannot drift from the copy the wire carries.
+error payload is built from the server's own constants, and the no-answer
+fixtures exercise both cases the card must distinguish: a query that ran and
+matched nothing, and a model that wrote nothing.
 
 Writes PNGs to `.playwright-cli/ui/` and prints one path per line, so an agent
 can `read` them back and critique the result.
@@ -58,6 +59,13 @@ STOPPED_SELECTOR = (
     "article.turn:has(.turn__stopped)"
     ':has(.toolcard[data-status="stopped"])'
     ':not(:has(.toolcard[data-status="running"]))'
+)
+
+# The query-ran case must show both the completed tool card and the no-answer
+# card, so a fixture that loses either state fails instead of capturing a
+# misleading image.
+ZERO_RESULT_SELECTOR = (
+    "article.turn:has(.turn__nodata)" ':has(.toolcard[data-status="ok"])'
 )
 
 
@@ -117,10 +125,11 @@ def capture(
 
 
 def build_harnesses() -> list[Harness]:
-    """The stopped, error, and empty-answer turns.
+    """The stopped, error, zero-result, and empty-answer turns.
 
-    The error and empty-answer payloads are built from the server's own
-    constants, so they cannot drift from the copy the wire carries.
+    The error payload is built from the server's own constants, and the
+    no-answer fixtures carry the same `answer_source` the service emits, so
+    they cannot drift from the contract the wire carries.
     """
     sys.path.insert(0, str(ROOT))
     from src.agents.service import FALLBACK_ANSWER
@@ -166,13 +175,51 @@ def build_harnesses() -> list[Harness]:
             ),
         ),
         Harness(
+            name="zero-result",
+            selector=ZERO_RESULT_SELECTOR,
+            html=_harness_html(
+                [
+                    ("session", session),
+                    (
+                        "tool",
+                        {
+                            "name": "query_clean_jobs",
+                            "status": "ok",
+                            "call_id": "screenshot-zero",
+                            "arguments": {"question": HARNESS_QUESTION},
+                            "duration_ms": 42,
+                            "row_count": 0,
+                            "truncated": False,
+                        },
+                    ),
+                    ("token", {"text": "Không tìm thấy tin tuyển dụng phù hợp."}),
+                    (
+                        "metadata",
+                        {
+                            "trace_id": None,
+                            "trace_url": None,
+                            "answer_source": "model",
+                        },
+                    ),
+                    ("done", {}),
+                ]
+            ),
+        ),
+        Harness(
             name="empty-answer",
             selector=".turn__nodata",
             html=_harness_html(
                 [
                     ("session", session),
                     ("token", {"text": FALLBACK_ANSWER}),
-                    ("metadata", {"trace_id": None, "trace_url": None}),
+                    (
+                        "metadata",
+                        {
+                            "trace_id": None,
+                            "trace_url": None,
+                            "answer_source": "fallback",
+                        },
+                    ),
                     ("done", {}),
                 ]
             ),
@@ -252,7 +299,7 @@ def _stub_script(sse: str, *, stopped: bool = False) -> str:
             "<script>",
             "// Screenshot harness from scripts/ui_screenshots.py: fetch() is",
             "// stubbed to replay one canned server sequence, so a rendered stop,",
-            "// error, or empty-answer turn can be reviewed as an image without a",
+            "// error, or no-answer turn can be reviewed as an image without a",
             "// server.",
             f"const FIXTURE_SSE = {json.dumps(sse)};",
             "const fixtureResponse = (signal) => {",

@@ -32,7 +32,8 @@ from src.core.logger import logger
 # The sentence a turn whose model wrote nothing shows the reader. It is sent as
 # a `token`, not an `error`, so there is no `code` for a client to map from: the
 # server owns the copy, and it is Vietnamese like every other user-facing string
-# (ADR-0061). The web client mirrors it only to recognise the empty-answer turn.
+# (ADR-0061). The following `metadata` frame carries `answer_source="fallback"`,
+# so the client recognises the empty-answer outcome without mirroring this text.
 FALLBACK_ANSWER = "Chưa thể trả lời câu hỏi này - vui lòng thử diễn đạt lại."
 
 
@@ -136,6 +137,7 @@ async def stream_agent_response(
     yield StreamSessionEvent(type="session", session_id=session_id)
 
     saw_token = False
+    fallback_injected = False
     metadata_event = StreamMetadataEvent(
         type="metadata",
         trace_id=None,
@@ -207,7 +209,12 @@ async def stream_agent_response(
                     observation.mark_user_visible()
                     yield StreamTokenEvent(type="token", text=FALLBACK_ANSWER)
                     saw_token = True
-                yield metadata_event
+                    fallback_injected = True
+                yield metadata_event.model_copy(
+                    update={
+                        "answer_source": "fallback" if fallback_injected else "model"
+                    }
+                )
                 metadata_emitted = True
                 break
 
@@ -223,9 +230,12 @@ async def stream_agent_response(
             )
             observation.mark_user_visible()
             yield StreamTokenEvent(type="token", text=FALLBACK_ANSWER)
+            fallback_injected = True
 
         if not metadata_emitted:
-            yield metadata_event
+            yield metadata_event.model_copy(
+                update={"answer_source": "fallback" if fallback_injected else "model"}
+            )
         stream_outcome = "success"
         done_emitted = True
         yield StreamDoneEvent(type="done")

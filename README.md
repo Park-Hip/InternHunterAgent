@@ -111,7 +111,7 @@ and interactive API docs at `/docs`.
 | [`docs/how-to/evaluate.md`](docs/how-to/evaluate.md) | How to run, grade, freeze, and inspect evaluations |
 | [`docs/reference/configuration.md`](docs/reference/configuration.md) | Stack, dependencies, tunables, hosted services |
 | [`docs/reference/schema.md`](docs/reference/schema.md) | Frozen agent-visible `clean_jobs` columns |
-| [`docs/reference/agent-behavior.md`](docs/reference/agent-behavior.md) | Frozen agent behavior requirements |
+| [`docs/reference/agent-behavior.md`](docs/reference/agent-behavior.md) | MVP agent behavior baseline and how it is measured |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to change this repository and get it merged |
 
 ## Status

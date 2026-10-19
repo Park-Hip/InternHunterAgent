@@ -377,8 +377,8 @@ The runtime extracts the final answer from the last message and returns it as a 
 The system prompt owns every user-facing word about a tool result; the tools return facts and no
 sentences, as decided in
 [ADR-0062](decisions/adr-0062-tools-return-facts-the-prompt-owns-wording.md).
-The frozen behavior requirements themselves are owned by
-[agent behavior reference](reference/agent-behavior.md).
+The expected behaviors and how they are measured are owned by the
+[agent behavior baseline](reference/agent-behavior.md).
 
 ### 3 Tools
 

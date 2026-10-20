@@ -214,9 +214,31 @@ class StaticServingTests(unittest.TestCase):
         self.assertNotIn(FALLBACK_ANSWER, app)
         self.assertIn('ctx.answerSource = data.answer_source || "model"', app)
         self.assertIn('ctx.answerSource === "fallback"', app)
-        self.assertIn("Truy vấn đã chạy và không tìm thấy tin nào phù hợp", app)
+        self.assertIn("Lần truy vấn gần nhất đã chạy và không tìm thấy tin nào phù hợp", app)
         self.assertIn("Lượt này mô hình không viết ra câu trả lời nào", app)
         self.assertIn("ctx.noAnswerDetail", app)
+
+    def test_client_keys_the_no_answer_card_on_the_latest_retrieval_result(self) -> None:
+        """A later matching tool call must clear an earlier zero (#725).
+
+        `upsertToolCard` assigns every counted result instead of OR-ing a
+        sticky flag, so the no-answer state describes the turn's final
+        retrieval. A call that reports no count leaves the last known result
+        untouched, because absent is still different from zero. CI has no
+        client-side DOM harness, so this pins the source shape; the
+        `late-match` and `final-zero` captures in
+        `scripts/ui_screenshots.py` check the rendered result.
+        """
+        app = self.client.get("/app.js").text
+
+        self.assertNotIn("zeroResult", app)
+        self.assertIn("lastRowCount: null", app)
+        self.assertIn("ctx.lastRowCount = event.row_count", app)
+        self.assertIn("ctx.lastRowCount === 0", app)
+        self.assertIn(
+            'return ctx.lastRowCount === 0 || ctx.answerSource === "fallback"',
+            app,
+        )
 
     def test_client_handles_the_tool_event(self) -> None:
         """A `tool` event must reach a card. An unhandled event type would be

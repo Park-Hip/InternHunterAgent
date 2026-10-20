@@ -137,6 +137,7 @@ A successful turn is `session`, any `tool` and `token` events, `metadata`, `done
 A failed turn is `session`, whatever arrived before the failure, `error`, `done`.
 `metadata.answer_source` is `fallback` when the service injected the empty-answer sentence, and `model` otherwise.
 The web client keys the no-answer card on that field, never on the fallback text.
+For the query-ran case, the client keeps the latest `tool` event that carries a numeric `row_count`; a later match clears an earlier zero, and a call with `row_count: null` leaves the last known count untouched.
 The published schema is `STREAM_EVENT_SCHEMA` in `src/api/schemas.py`, built from the models in `src/agents/models.py`; [the architecture document](../architecture.md), section 4.2, records why SSE and why `session` comes first.
 
 **The answer-only filter.**

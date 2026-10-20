@@ -8,7 +8,7 @@
 // Event vocabulary (from the backend):
 //   session  { session_id }            -> pin it; send on every later turn
 //   token    { text }         (0+)     -> append word-by-word to the answer
-//   tool     { name, status, arguments, duration_ms }
+//   tool     { name, status, arguments, duration_ms, row_count, truncated }
 //                                       -> a card showing what the agent ran
 //   metadata { trace_id, trace_url, answer_source }
 //                                       -> show a "view trace" link if trace_url;
@@ -150,7 +150,9 @@ function startTurn(query) {
     rawAnswer: "",
     pendingPaint: null,
     toolCards: new Map(),
-    zeroResult: false,
+    // The latest result that actually carried a count. `null` means no tool
+    // has reported one yet; zero and absent stay different facts.
+    lastRowCount: null,
     answerSource: null,
     noAnswerDetail: "",
   };
@@ -196,10 +198,13 @@ function upsertToolCard(ctx, event) {
   }
   card.appendChild(status);
 
-  // A real zero-match is the signal the interface should key its no-answer state
-  // to, not the agent falling silent. Absent and zero are different facts.
-  if (event.status === "ok" && event.row_count === 0) {
-    ctx.zeroResult = true;
+  // The latest counted result is the turn's retrieval outcome. Assigning
+  // rather than OR-ing lets a later match clear an earlier zero, which is what
+  // keeps the no-answer card from hiding an answer the agent did find. A call
+  // that reports no count says nothing about the corpus, so it leaves the last
+  // known result untouched: absent and zero stay different facts.
+  if (event.status === "ok" && typeof event.row_count === "number") {
+    ctx.lastRowCount = event.row_count;
   }
 
   scrollToEnd();
@@ -300,12 +305,12 @@ function showTraceLink(ctx, traceUrl) {
   ctx.agent.appendChild(p);
 }
 
-// True when the agent answered but the search genuinely matched nothing, or
-// when the service injected the fallback because the model wrote no output.
-// The two facts need different copy: a zero row count means a query ran, while
+// True when the turn's final retrieval genuinely matched nothing, or when the
+// service injected the fallback because the model wrote no output. The two
+// facts need different copy: a zero row count means the last query ran, while
 // answer_source="fallback" means there is no model answer to reason from.
 function isNoAnswer(ctx) {
-  return ctx.zeroResult === true || ctx.answerSource === "fallback";
+  return ctx.lastRowCount === 0 || ctx.answerSource === "fallback";
 }
 
 // A "no answer" outcome is a designed state, not an apology paragraph. It says
@@ -328,10 +333,10 @@ function showNoAnswerCard(ctx, query) {
 
   const detail = document.createElement("p");
   detail.className = "turn__nodata-detail";
-  if (ctx.zeroResult) {
-    // The query ran and matched nothing. This is a fact about the corpus, so
-    // naming the snapshot date is honest.
-    detail.textContent = `Truy vấn đã chạy và không tìm thấy tin nào phù hợp${snapshotDate ? ` trong kho chụp ngày ${snapshotDate}` : " trong kho dữ liệu đã thu thập"}. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.`;
+  if (ctx.lastRowCount === 0) {
+    // The most recent query ran and matched nothing. Naming it as the latest
+    // keeps the line true when an earlier call in the same turn did match.
+    detail.textContent = `Lần truy vấn gần nhất đã chạy và không tìm thấy tin nào phù hợp${snapshotDate ? ` trong kho chụp ngày ${snapshotDate}` : " trong kho dữ liệu đã thu thập"}. Kho chỉ chứa tin tuyển dụng đã thu thập, không phải vị trí đang tuyển.`;
   } else {
     // The model wrote nothing, so no query result supports a claim about the
     // corpus. Say that plainly instead of implying that a search ran.

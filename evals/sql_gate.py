@@ -4,21 +4,22 @@ The v0 gate graded a deterministic function: the typed core's plan and result.
 The v1 path has no such function - the model writes the SQL - so this gate grades
 what the guard itself decides. Each case carries a question, the reviewed SQL a
 correct answer must be equivalent to on the pinned fixture, and (where a mode can
-express it) the reviewed result. The gate runs the reviewed SQL through the same
-pipeline the tool uses - ``validate_sql`` → ``resolve_bounds`` → the fixture -
-and fails when:
+express it) the reviewed result. The gate runs the reviewed SQL through the guard
+the tool uses, ``validate_sql``, and then runs the reviewed SQL as written against
+the fixture, and fails when:
 
 - the validator verdict differs from the reviewed one, or a rejected case is
   rejected by a different rule than the one the case pins (the guard's floor:
-  self-join, ``pg_sleep``, multi-table references, hidden columns);
+  self-join, ``pg_sleep``, multi-table references, hidden columns, server
+  identity functions);
 - the reviewed result is not what the reviewed SQL returns on the pinned
   fixture (compared with ``evals/sql_check.py``).
 
-Accepted risks are cases too. The guard is lexical and cannot see a silent
-definition (A01, A02) or a bare cross-currency threshold (A03); those cases pin
-today's behaviour and name the risk, so a change that starts refusing them turns
-the gate red and the risk table has to be updated rather than forgotten. They
-are deliberately not blessed with a reviewed result.
+Accepted risks are cases too. The guard reads the statement's shape, not its
+meaning, so it cannot see a silent definition (A01, A02) or a bare cross-currency
+threshold (A03); those cases pin today's behaviour and name the risk, so a change
+that starts refusing them turns the gate red and the risk table has to be updated
+rather than forgotten. They are deliberately not blessed with a reviewed result.
 
 The cross-currency false-success class used to be graded here through the
 obligation detector, which #702 deleted together with the caveat machinery.

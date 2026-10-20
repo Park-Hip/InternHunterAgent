@@ -141,10 +141,10 @@ def _bounded_session() -> Iterator[Session]:
 def execute_bounded_select(base_sql: str, limit: int, offset: int = 0) -> BoundedRows:
     """Run ``base_sql`` under a hard row limit and report the real match total.
 
-    ``base_sql`` is a validated SELECT with any trailing LIMIT/OFFSET already
-    removed; ``resolve_bounds`` produces one in that shape. The statement that
-    runs is ``base_sql LIMIT <limit>``, followed by ``OFFSET <offset>`` when the
-    page starts after the first row.
+    ``base_sql`` is a validated SELECT with its own LIMIT/OFFSET/FETCH clause
+    already removed; ``resolve_bounds`` produces one in that shape. The statement
+    that runs is ``base_sql LIMIT <limit>``, followed by ``OFFSET <offset>`` when
+    the page starts after the first row.
 
     The companion ``SELECT count(*) FROM (base_sql) AS q`` always counts the
     base query without LIMIT or OFFSET. It runs when the offset is non-zero or

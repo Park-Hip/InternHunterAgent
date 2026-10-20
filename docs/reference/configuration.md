@@ -148,6 +148,7 @@ Other documents link here rather than restating.
 |---|---|
 | `sqlalchemy` | Query construction and session management, 2.0 style. |
 | `psycopg` | PostgreSQL driver, with binary and pool extras: no local build, built-in pooling. |
+| `pglast` | PostgreSQL's own parser (`libpg_query`) for validating and bounding agent SQL against the real grammar. |
 | `alembic` | Schema migrations. |
 
 **Observability**

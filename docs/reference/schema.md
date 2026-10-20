@@ -81,6 +81,12 @@ data fixture for the v1 golden dataset. The fixture contains 24 rows. Reproducib
 comparison requires both the schema contract and the fixture data to stay stable unless a
 ticket explicitly declares a recalibration.
 
+The loader builds and seeds as the fixture owner and then provisions a separate
+`internhunter_eval_reader` role with column-level `SELECT` on the 16 contract columns
+(#730). The evaluation tool, executor, and SQL scoring read through that role, so the
+fixture exercises the same boundary production enforces through `internhunter_agent`.
+Re-running the loader rebuilds the schema and re-applies the reader grants.
+
 ## Removed `is_active`
 
 The `is_active` column was dropped by ADR-0059, along with the time-based expiry pass that wrote it, so the agent's population is every posting ever collected.

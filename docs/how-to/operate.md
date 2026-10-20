@@ -221,24 +221,29 @@ The full procedure is in
 [the schema reference](../reference/schema.md#adding-a-physical-column).
 The operational part has two cases:
 
-- **The column stays hidden.** Add the migration and update the ORM, the normalizer, and both
-  `upsert_clean_jobs` dicts in one pull request, and add the name to `HIDDEN_COLUMNS` in
-  `src/core/column_contract.py`. Apply the migration before the code deploy if convenient: boot
-  still succeeds because `src/api/schema_guard.py` checks the 16 visible names and types and
-  ignores extra columns, and the privilege guard sees no grant on the new column.
+- **The column stays hidden.**
+  Add the migration and update the ORM, the normalizer, and both `upsert_clean_jobs` dicts in one
+  pull request, and add the name to `HIDDEN_COLUMNS` in `src/core/column_contract.py`.
+  Apply the migration before the code deploy if convenient: boot still succeeds because
+  `src/api/schema_guard.py` checks the 16 visible names and types and ignores extra columns, and
+  the privilege guard sees no grant on the new column.
   Ingestion's `assert_clean_jobs_schema()` still compares the table with the ORM exactly, so a
   nightly run in the window aborts at `schema_check`; deploy the ORM update with the migration to
   avoid that failed run.
-- **The column becomes visible.** That is a contract change, not a free additive one. Update
-  `VISIBLE_COLUMNS` in the same contract module, the prompt surfaces, the fixture seed, and the
-  reference, and add a migration that grants `SELECT` on the new column to `internhunter_agent`.
+- **The column becomes visible.**
+  That is a contract change, not a free additive one.
+  Update `VISIBLE_COLUMNS` in the same contract module, the prompt surfaces, the fixture seed, and
+  the reference, and add a migration that grants `SELECT` on the new column to
+  `internhunter_agent`.
   The privilege guard requires exactly the declared grant set, so the grant migration and the
-  release that declares the column must land as one coordinated cutover. A grant without the code,
-  or code without the grant, refuses boot.
+  release that declares the column must land as one coordinated cutover.
+  A grant without the code, or code without the grant, refuses boot.
+  Keep the previous release running until the new one is healthy: a restart of the old release
+  after the grant will also refuse, because its contract does not know the new column.
 
 Never grant the agent role a hidden column, a table-level privilege, or anything on another
-relation to "make a query work". The next boot will refuse, and the correct fix is a contract
-change.
+relation to "make a query work".
+The next boot will refuse, and the correct fix is a contract change.
 
 Verify the serving contract with:
 

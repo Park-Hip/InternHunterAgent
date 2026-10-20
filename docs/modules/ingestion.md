@@ -313,17 +313,20 @@ Coupled: the timing keys to the workflow timeout; the role and city maps to serv
   in `src/core/column_contract.py`.
 - The physical table and the ORM must match exactly for `assert_clean_jobs_schema()` at
   `schema_check`, so ingestion refuses to run against a migrated table whose ORM change has not
-  deployed. That is the writer's fail-closed check, separate from the serving guard.
-- If the agent should not see it, add it to `HIDDEN_COLUMNS` in the contract module. Do not grant
-  it. The validator's `HIDDEN_COLUMNS` and the prompt audit read the same list, and the PostgreSQL
+  deployed.
+  That is the writer's fail-closed check, separate from the serving guard.
+- If the agent should not see it, add it to `HIDDEN_COLUMNS` in the contract module.
+  Do not grant it.
+  The validator's `HIDDEN_COLUMNS` and the prompt audit read the same list, and the PostgreSQL
   grant is the boundary for star or whole-row reads.
 - If the agent should see it, add it to `VISIBLE_COLUMNS` in the contract module and update the
   prompt surfaces, [the schema reference](../reference/schema.md), and
-  `evals/fixtures/seed_eval_db.sql`. Add a migration that grants `SELECT` on the new column to
-  `internhunter_agent`; the grant and the code release that declares the column are one
-  coordinated cutover.
+  `evals/fixtures/seed_eval_db.sql`.
+  Add a migration that grants `SELECT` on the new column to `internhunter_agent`; the grant and the
+  code release that declares the column are one coordinated cutover.
 - The serving schema guard tolerates an un-granted physical column, so applying a hidden addition's
-  migration before the code deploy no longer causes an outage. The full ordering is in
+  migration before the code deploy no longer causes an outage.
+  The full ordering is in
   [the schema reference](../reference/schema.md#adding-a-physical-column).
 
 **Add a search query or change the filter.**

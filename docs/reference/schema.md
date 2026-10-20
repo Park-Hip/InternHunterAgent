@@ -152,21 +152,46 @@ deliberate cheap-growth path.
 ### Adding a physical column
 
 The serving path tolerates a column it does not know.
-Since ADR-0063 the agent role holds column-level `SELECT` on the 16 visible columns only, so a new physical column is invisible until a migration grants it.
-At boot the schema guard checks that the 16 visible columns exist with their expected PostgreSQL types and logs any extra physical column as `api.schema_extra_columns`; it does not refuse boot.
-The privilege guard then confirms the agent role holds no privilege on the new column, or on any other relation.
+Since ADR-0063 the agent role holds column-level `SELECT` on the 16 visible columns only, so a
+new physical column is invisible until a migration grants it.
+At boot the schema guard checks that the 16 visible columns exist with their expected PostgreSQL
+types and logs any extra physical column as `api.schema_extra_columns`; it does not refuse boot.
+The privilege guard then confirms the agent role holds no privilege on the new column, or on any
+other relation.
 
 Change in one pull request:
 
-1. Add the Alembic revision (nullable or with a default) and update `CleanJob` and `NormalizedJob` in `models.py`, the normalizer, and both dicts in `upsert_clean_jobs`.
-2. If the column stays hidden, add it to `HIDDEN_COLUMNS` in `src/core/column_contract.py`. No grant, prompt, or fixture change follows. The SQL validator and the prompt audit then reject its name explicitly, while the grant remains the boundary for a star or whole-row read.
-3. If the column should become visible, add it to `VISIBLE_COLUMNS` in the same module, add a migration that grants `SELECT` on it to `internhunter_agent`, and update the prompt surfaces, `evals/fixtures/seed_eval_db.sql`, and this reference. `fetch_job_details` and both guards follow the contract automatically.
+1. Add the Alembic revision (nullable or with a default) and update `CleanJob` and
+   `NormalizedJob` in `models.py`, the normalizer, and both dicts in `upsert_clean_jobs`.
+2. If the column stays hidden, add it to `HIDDEN_COLUMNS` in `src/core/column_contract.py`.
+   No grant, prompt, or fixture change follows.
+   The SQL validator and the prompt audit then reject its name explicitly, while the grant
+   remains the boundary for a star or whole-row read.
+3. If the column should become visible, add it to `VISIBLE_COLUMNS` in the same module, add a
+   migration that grants `SELECT` on it to `internhunter_agent`, and update the prompt surfaces,
+   `evals/fixtures/seed_eval_db.sql`, and this reference.
+   `fetch_job_details` and both guards follow the contract automatically.
 
 Ordering across deploys is asymmetric, and the tolerance is deliberate:
 
-- **A hidden addition** is safe in any order for serving: apply the migration, restart, and boot succeeds because the extra column is ignored and un-granted. Ingestion still compares the physical table with the ORM exactly (`assert_clean_jobs_schema`), so apply the migration with the ORM deploy for ingestion, or let a nightly run abort at `schema_check` rather than write a partial row.
-- **A visible addition** is a contract change, not a free additive one. The privilege guard demands exactly the declared grant set in both directions, so a grant that lands before the code release refuses boot just as a code release that lands before the grant does. Ship the contract, prompt, fixture, and grant migration together, apply the grant migration, and restart the new release as one coordinated cutover.
-- **A new grant is never tolerated.** If a migration grants the agent role anything beyond the current contract, or anything on another relation, the next boot refuses until the matching contract release is live. That is the enforcement that makes the hidden-by-default rule real.
+- **A hidden addition** is safe in any order for serving: apply the migration, restart, and boot
+  succeeds because the extra column is ignored and un-granted.
+  Ingestion still compares the physical table with the ORM exactly (`assert_clean_jobs_schema`),
+  so apply the migration with the ORM deploy for ingestion, or let a nightly run abort at
+  `schema_check` rather than write a partial row.
+- **A visible addition** is a contract change, not a free additive one.
+  The privilege guard demands exactly the declared grant set in both directions, so a grant that
+  lands before the code release refuses boot just as a code release that lands before the grant
+  does.
+  Ship the contract, prompt, fixture, and grant migration in one release, then choose a
+  maintenance window: apply the grant migration and bring up the release that declares the column.
+  Do not restart the previous release in that window; its guard does not know the new grant and
+  will also refuse boot.
+  That is expected, not a reason to grant more.
+- **A new grant is never tolerated.**
+  If a migration grants the agent role anything beyond the current contract, or anything on
+  another relation, the next boot refuses until the matching contract release is live.
+  That is the enforcement that makes the hidden-by-default rule real.
 
 Verify with `uv run pytest tests/api/test_schema_guard.py tests/api/test_privilege_guard.py tests/test_prompt_consistency.py`.
 

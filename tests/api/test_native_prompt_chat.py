@@ -16,6 +16,7 @@ of in production.
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 from collections.abc import Iterator
@@ -32,7 +33,6 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from src.agents.runtime.prompts import load_prompt_versions
 from src.agents.runtime.react_agent import AgentRuntime
 from src.agents.tracing import langfuse
 from src.agents.tracing.prompt_registry import PROMPT_DEFINITIONS, get_prompt_registry
@@ -62,10 +62,17 @@ RELEASE_TEXT = {
 }
 
 
+_PROMPT_SURFACE_BY_NAME = {
+    definition.name: definition.surface for definition in PROMPT_DEFINITIONS
+}
+
+
 def _release_prompt_tags() -> set[str]:
+    """Tags hashed from the served text, computed independently of the loader."""
     return {
-        f"prompt:{surface}:{version}"
-        for surface, version in load_prompt_versions().items()
+        f"prompt:{_PROMPT_SURFACE_BY_NAME[name]}:"
+        f"{hashlib.sha256(text.encode('utf-8')).hexdigest()[:12]}"
+        for name, text in RELEASE_TEXT.items()
     }
 
 

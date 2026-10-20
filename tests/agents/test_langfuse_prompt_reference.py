@@ -20,6 +20,7 @@ from src.agents.tracing.prompt_registry import (
     ResolvedPrompt,
     prompt_refresh_interval_seconds,
 )
+from src.core.config import settings
 
 CONFIGURATION = {
     "deployment_label": "production",
@@ -180,6 +181,85 @@ def test_registry_uses_the_release_text_when_langfuse_returns_a_fallback() -> No
     assert resolved.prompt_client is None
     assert resolved.content == "release:sql_generation"
     assert resolved.version == "v-sql_generation"
+
+
+def test_configured_release_versions_are_content_hashes_of_the_configured_texts() -> (
+    None
+):
+    """#700: the version is derived from the text that serves, not a YAML label."""
+    prompts = settings.prompts_yaml["prompts"]
+
+    for definition in PROMPT_DEFINITIONS:
+        resolved = PromptRegistry._release(definition)
+        text = prompts[definition.yaml_key].strip()
+
+        assert resolved.content == text
+        assert resolved.version == hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+def test_release_version_hashes_the_stripped_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        settings,
+        "prompts_yaml",
+        {
+            "prompts": {
+                "system_prompt": "  System text.  ",
+                "schema_context": "Schema text.",
+                "sql_generation": "SQL text.",
+            }
+        },
+    )
+
+    versions = {
+        definition.surface: PromptRegistry._release(definition).version
+        for definition in PROMPT_DEFINITIONS
+    }
+
+    assert versions == {
+        "system": hashlib.sha256(b"System text.").hexdigest()[:12],
+        "schema_context": hashlib.sha256(b"Schema text.").hexdigest()[:12],
+        "sql_generation": hashlib.sha256(b"SQL text.").hexdigest()[:12],
+    }
+
+
+def test_editing_one_surface_changes_only_its_hash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompts = {
+        "system_prompt": "System text.",
+        "schema_context": "Schema text.",
+        "sql_generation": "SQL text.",
+    }
+    monkeypatch.setattr(settings, "prompts_yaml", {"prompts": prompts})
+    before = {
+        definition.surface: PromptRegistry._release(definition).version
+        for definition in PROMPT_DEFINITIONS
+    }
+
+    monkeypatch.setattr(
+        settings,
+        "prompts_yaml",
+        {"prompts": {**prompts, "sql_generation": "SQL text with one more rule."}},
+    )
+    after = {
+        definition.surface: PromptRegistry._release(definition).version
+        for definition in PROMPT_DEFINITIONS
+    }
+
+    assert after["sql_generation"] != before["sql_generation"]
+    assert after["system"] == before["system"]
+    assert after["schema_context"] == before["schema_context"]
+
+
+def test_release_refuses_a_missing_surface_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "prompts_yaml", {"prompts": {}})
+
+    with pytest.raises(ValueError, match="prompts.system_prompt"):
+        PromptRegistry._release(PROMPT_DEFINITIONS[0])
 
 
 def test_registry_refreshes_every_required_surface_and_turns_read_memory() -> None:

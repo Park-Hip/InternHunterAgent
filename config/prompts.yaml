@@ -1,22 +1,3 @@
-# Prompt lineage versions. Bump only the named surface whose text changes, so evaluation
-# evidence for unrelated prompt surfaces remains comparable.
-prompt_versions:
-  # v1 (issue #708): all three surfaces were rewritten from scratch as the MVP baseline
-  # and measured against evals/datasets/baseline.yaml. The legacy lineage (system v14,
-  # schema_context v12, sql_generation v15) is abandoned, so the count restarts here.
-  # Scope, tool use, grounding, and language only; data meanings live in schema_context.
-  # v2 (issue #721): paging by a trailing OFFSET. The prompt says a later page continues
-  # the list and a page past the end means there are no more postings.
-  system: v2
-  # v1 (issue #708): the column guide carries the canonical values and their Vietnamese
-  # aliases, so the SQL prompt no longer repeats them as rules.
-  schema_context: v1
-  # v1 (issue #708): eight rules. Earlier rules come back only when a baseline dataset
-  # failure shows they are needed.
-  # v2 (issue #721): rule 9 writes OFFSET only for a next-page request and keeps the
-  # stated order, so a later page starts where the previous one stopped.
-  sql_generation: v2
-
 prompts:
   system_prompt: |
     You are Resumi. You help students and freshers in Vietnam explore AI and Data job postings from VietnamWorks.

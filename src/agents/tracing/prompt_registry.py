@@ -1,4 +1,4 @@
-"""Release-pinned prompt text with a native Langfuse link when the texts agree.
+"""The served release prompt text with a native Langfuse link when the texts agree.
 
 A request never calls Langfuse. The registry resolves every surface once at
 boot, keeps the result in memory, and a background task refreshes the link on
@@ -63,12 +63,13 @@ PROMPT_FETCH_MAX_RETRIES: Final = 0
 class ResolvedPrompt:
     """The release text that serves and the optional Langfuse trace link.
 
-    `content` and `version` always come from the release pin in
-    `config/prompts.yaml`; a managed Langfuse text never reaches the model.
-    `prompt_client` carries the managed prompt only while its text equals the
-    release text, so a linked generation can never claim a version the model
-    did not read. `is_fallback` is True whenever no managed prompt is linked:
-    missing credentials, a failed fetch, or drift.
+    `content` and `version` always come from the release text in
+    `config/prompts.yaml`; `version` is the content hash of that text, and a
+    managed Langfuse text never reaches the model. `prompt_client` carries the
+    managed prompt only while its text equals the release text, so a linked
+    generation can never claim a version the model did not read. `is_fallback`
+    is True whenever no managed prompt is linked: missing credentials, a failed
+    fetch, or drift.
     """
 
     surface: PromptSurface
@@ -274,7 +275,7 @@ class PromptRegistry:
 
     @staticmethod
     def _release(definition: PromptDefinition) -> ResolvedPrompt:
-        """Read the release-pinned text and version from config/prompts.yaml."""
+        """Read the release text from config/prompts.yaml and hash it for lineage."""
         prompts_root = settings.prompts_yaml.get("prompts")
         if not isinstance(prompts_root, dict):
             raise ValueError("Missing 'prompts' section in config/prompts.yaml")
@@ -284,19 +285,17 @@ class PromptRegistry:
                 f"Missing or empty 'prompts.{definition.yaml_key}' in config/prompts.yaml"
             )
 
-        versions = settings.prompts_yaml.get("prompt_versions")
-        version = (
-            versions.get(definition.surface) if isinstance(versions, dict) else None
-        )
-        if not isinstance(version, str) or not version.strip():
-            raise ValueError(
-                f"Missing release-pinned prompt_versions.{definition.surface} in config/prompts.yaml"
-            )
+        text = content.strip()
+        # The version is the text's own digest, so an edit cannot leave lineage
+        # stale and nothing has to be bumped by hand. Truncated to 12 hex (48
+        # bits) so the three surfaces fit one Langfuse metadata value under the
+        # SDK's 200-character limit; `_text_hash` keeps the full digest for the
+        # drift comparison.
         return ResolvedPrompt(
             surface=definition.surface,
             name=definition.name,
-            content=content.strip(),
-            version=version.strip(),
+            content=text,
+            version=_text_hash(text)[:12],
             prompt_client=None,
             is_fallback=True,
         )
@@ -315,7 +314,7 @@ def _positive_seconds(prompts: dict[str, Any], key: str) -> int:
 
 
 def _text_hash(text: str) -> str:
-    """The hash both sides of a drift comparison are reported with."""
+    """The SHA-256 digest of one text, whole in drift and truncated as a version."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 

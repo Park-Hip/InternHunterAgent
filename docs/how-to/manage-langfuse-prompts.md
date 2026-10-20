@@ -48,7 +48,8 @@ The retired semantic release gate is not a promotion control; its current status
 ## Roll back
 
 Revert the prompt commit so the text, and with it the content hash, returns together; deploy the revert, then register the restored text with `--label production`.
-Git keeps the reverted text as history, and Langfuse keeps every immutable version, so the trace link restores on the first refresh after the register run, within `agent.prompts.refresh_interval_seconds`.
+Git keeps the reverted text as history, and Langfuse keeps every immutable version, so the trace link restores on the second refresh after the register run, within two `agent.prompts.refresh_interval_seconds`, or at the next boot.
+The first refresh still reads the Langfuse SDK's cached version, because its `agent.prompts.cache_ttl_seconds` cache has expired by then and the SDK returns the expired entry while it refetches in the background.
 Move labels only through the script: a hand-moved `production` label on text that differs from the deployed YAML only produces drift, and on text that matches it is exactly what the script produces.
 If remote resolution is unavailable, the deployed release keeps serving its checked-in text unlinked, and no turn waits on the outage (#698).
 

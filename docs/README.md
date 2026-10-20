@@ -7,6 +7,7 @@ Each document has one owner and one intended reader.
 | [Architecture](architecture.md) | Product scope, architecture, layer laws, serving design | Product and engineering |
 | [Composition module guide](modules/composition.md) | How the web service boots: import versus lifespan, the boot guards, the shared MCP server, teardown, and what would now be decided differently | Maintainers |
 | [Model config module guide](modules/model-config.md) | Which models serve, why two profiles, what the timeouts, retries, and turn deadline protect against, and what would now be decided differently | Maintainers |
+| [Prompts module guide](modules/prompts.md) | What the models read, how a turn gets its prompt text, why git is the authority and Langfuse only a link, how lineage reaches the trace, and what would now be decided differently | Maintainers |
 | [Runtime module guide](modules/runtime.md) | What happens in one turn, the stream machinery, conversation memory, failure paths, and what would now be decided differently | Maintainers |
 | [Ingestion module guide](modules/ingestion.md) | How the nightly VietnamWorks ingestion works: stages, gates, field mapping, reading a run, safe changes | Maintainers |
 | [Desktop UI foundation](ui/desktop-foundation.md) | Approved employer overview and Vietnamese demo design intent, with implementation gates | UI maintainers and implementers |

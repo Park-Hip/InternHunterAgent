@@ -20,7 +20,9 @@
       "duration_ms": null,
       "error": null,
       "row_count": null,
-      "truncated": false
+      "truncated": false,
+      "page_offset": null,
+      "rows_returned": null
     }
   ],
   [
@@ -37,7 +39,9 @@
       "duration_ms": 42,
       "error": null,
       "row_count": 7,
-      "truncated": false
+      "truncated": false,
+      "page_offset": null,
+      "rows_returned": null
     }
   ],
   [

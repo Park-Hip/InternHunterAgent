@@ -250,6 +250,33 @@ class StaticServingTests(unittest.TestCase):
         self.assertIn("upsertToolCard", app)
         self.assertIn(".toolcard", styles)
 
+    def test_a_page_past_the_end_reads_as_no_more_results(self) -> None:
+        """#726: an empty later page is not a partial list of rows.
+
+        The card needs the page start and the rows-this-call-returned count to
+        distinguish a valid past-the-end page (`page_offset > 0`,
+        `rows_returned = 0`, `row_count > 0`) from a search that matched
+        nothing. The no-more-results branch must win over the truncated branch,
+        or the card keeps claiming "hiển thị một phần" while showing no row. CI has no client-side DOM
+        harness, so this pins the source shape; the `past-end-page` captures in
+        `scripts/ui_screenshots.py` check the rendered result.
+        """
+        app = self.client.get("/app.js").text
+
+        start = app.index("function isPastEndPage(event)")
+        describe = app[start : app.index("// Coalesce token paints", start)]
+
+        self.assertIn("event.page_offset > 0", describe)
+        self.assertIn("event.rows_returned === 0", describe)
+        self.assertIn("event.row_count > 0", describe)
+        self.assertIn("không còn kết quả để hiển thị", describe)
+        self.assertIn("tổng ${event.row_count} kết quả", describe)
+        self.assertLess(
+            describe.index("không còn kết quả để hiển thị"),
+            describe.index("hiển thị một phần"),
+            "the past-the-end branch must be checked before the truncated branch",
+        )
+
     def test_tool_event_is_part_of_the_published_stream_contract(self) -> None:
         """The union in schemas.py is what the OpenAPI document publishes, so a
         new event type must appear in the schema, not only in the code."""

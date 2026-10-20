@@ -210,11 +210,26 @@ function upsertToolCard(ctx, event) {
   scrollToEnd();
 }
 
+// A later page can be valid and empty: the offset is past the last match row.
+// The total still counts the whole match set, so this is not a partial page of
+// rows and must not borrow the partial copy below (#726).
+function isPastEndPage(event) {
+  return (
+    typeof event.page_offset === "number" &&
+    event.page_offset > 0 &&
+    event.rows_returned === 0 &&
+    typeof event.row_count === "number" &&
+    event.row_count > 0
+  );
+}
+
 // The count, stated honestly. `truncated` matters: a bare number would imply the
 // answer shows every match, which is the impression to avoid.
 function describeResult(event) {
   const parts = [];
-  if (typeof event.row_count === "number") {
+  if (isPastEndPage(event)) {
+    parts.push(`không còn kết quả để hiển thị · tổng ${event.row_count} kết quả`);
+  } else if (typeof event.row_count === "number") {
     parts.push(
       event.truncated
         ? `hiển thị một phần · ${event.row_count} kết quả`

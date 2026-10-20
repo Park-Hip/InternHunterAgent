@@ -141,7 +141,7 @@ def _ambient_langchain_config() -> RunnableConfig | None:
     return {"callbacks": callbacks}
 
 
-def _publish_result_facts(sql: str, result: QueryResult) -> None:
+def _publish_result_facts(sql: str, result: QueryResult, page_offset: int = 0) -> None:
     # Publish what this tool knows about its result, and nothing it does not.
     # A listing's count is the real match total, so the interface shows "20 of
     # 161" rather than the shown rows only. A count query's single row holds
@@ -153,9 +153,14 @@ def _publish_result_facts(sql: str, result: QueryResult) -> None:
             row_count=counted_total(result.columns, result.rows), truncated=False
         )
     elif shape == "rows":
+        # The page facts let the card tell an empty later page from a search
+        # that matched nothing (#726). Both have zero returned rows, but only
+        # the later page has a positive offset and a non-zero total.
         publish_tool_result(
             row_count=result.total_rows,
             truncated=result.row_count < result.total_rows,
+            page_offset=page_offset,
+            rows_returned=result.row_count,
         )
     else:
         # Absent, not zero: the query ran, but it has no match count to state.
@@ -226,5 +231,5 @@ async def run_query_clean_jobs(request: str) -> QueryResult:
         row_count=len(rows),
         total_rows=bounded.total_rows,
     )
-    _publish_result_facts(bounded_sql, result)
+    _publish_result_facts(bounded_sql, result, bounds.offset)
     return result

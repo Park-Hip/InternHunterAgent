@@ -81,6 +81,8 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(holder.row_count, 161)
         self.assertTrue(holder.truncated)
+        self.assertEqual(holder.page_offset, 0)
+        self.assertEqual(holder.rows_returned, 20)
         self.assertTrue(holder.published)
 
     @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
@@ -112,6 +114,8 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(holder.row_count, 161)
         self.assertTrue(holder.truncated)
+        self.assertEqual(holder.page_offset, 20)
+        self.assertEqual(holder.rows_returned, 20)
 
     @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
     @patch("src.agents.tools.query_clean_jobs.validate_sql")
@@ -137,9 +141,12 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.total_rows, 161)
         mock_execute.assert_called_once_with(HAPPY_SQL, 20, 200)
 
-        # The total is the match set, not the empty page.
+        # The total is the match set, not the empty page. The page facts let the
+        # card say "no more results" instead of "a partial list" (#726).
         self.assertEqual(holder.row_count, 161)
         self.assertTrue(holder.truncated)
+        self.assertEqual(holder.page_offset, 200)
+        self.assertEqual(holder.rows_returned, 0)
 
     @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
     @patch("src.agents.tools.query_clean_jobs.validate_sql")
@@ -166,6 +173,8 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.total_rows, 0)
         self.assertEqual(holder.row_count, 0)
         self.assertFalse(holder.truncated)
+        self.assertEqual(holder.page_offset, 0)
+        self.assertEqual(holder.rows_returned, 0)
 
     @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
     @patch("src.agents.tools.query_clean_jobs.validate_sql")
@@ -188,6 +197,8 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.row_count, 1)
         self.assertEqual(holder.row_count, 70)
         self.assertFalse(holder.truncated)
+        self.assertIsNone(holder.page_offset)
+        self.assertIsNone(holder.rows_returned)
 
     @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
     @patch("src.agents.tools.query_clean_jobs.validate_sql")
@@ -229,6 +240,8 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.rows, [[17500625.5]])
         self.assertIsNone(holder.row_count)
         self.assertFalse(holder.truncated)
+        self.assertIsNone(holder.page_offset)
+        self.assertIsNone(holder.rows_returned)
         self.assertTrue(holder.published)
 
     @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")

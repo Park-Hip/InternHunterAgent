@@ -211,11 +211,13 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
-    def test_allows_distinct_function_with_dangerous_suffix(self) -> None:
+    def test_rejects_function_name_with_dangerous_suffix(self) -> None:
+        # `x$lo_import` is its own function name, not `lo_import`; the allowlist
+        # reads the parsed name and refuses it as an unknown function (#742).
         result = validate_sql("SELECT x$lo_import('/tmp/x') FROM clean_jobs")
 
-        self.assertTrue(result.valid)
-        self.assertEqual(result.reason, "")
+        self.assertFalse(result.valid)
+        self.assertIn("Function is not allowed", result.reason)
 
     def test_rejects_dblink_function(self) -> None:
         result = validate_sql(
@@ -231,11 +233,14 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(result.reason)
 
-    def test_allows_case_distinct_quoted_function(self) -> None:
+    def test_rejects_case_distinct_quoted_function(self) -> None:
+        # A quoted identifier keeps its case, so this calls `LO_IMPORT`, which
+        # is not the allowlisted `lo_import` (PostgreSQL would not find it
+        # either).
         result = validate_sql('SELECT "LO_IMPORT"(1) FROM clean_jobs')
 
-        self.assertTrue(result.valid)
-        self.assertEqual(result.reason, "")
+        self.assertFalse(result.valid)
+        self.assertIn("Function is not allowed", result.reason)
 
     def test_rejects_schema_qualified_quoted_dblink_function(self) -> None:
         result = validate_sql(
@@ -372,6 +377,272 @@ class ValidateSqlTests(unittest.TestCase):
         self.assertEqual(result.reason, "")
 
 
+class ParsedStatementShapeTests(unittest.TestCase):
+    """#742: the statement shape is read from PostgreSQL's parse tree.
+
+    These are the probe cases from #617 row 5 and #736: a CTE, a parenthesised
+    SELECT, a set-returning function in FROM, server identity functions, and
+    the bound forms (FETCH FIRST, LIMIT ALL, a non-literal LIMIT) that the text
+    scans refused with the wrong reason or corrupted.
+    """
+
+    def test_accepts_a_cte(self) -> None:
+        result = validate_sql(
+            "WITH per_city AS ("
+            "SELECT trim(one_city) AS city, count(*) AS count "
+            "FROM clean_jobs, string_to_table(location, ',') AS one_city "
+            "GROUP BY 1) "
+            "SELECT city, count FROM per_city ORDER BY count DESC, city"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_a_parenthesised_select(self) -> None:
+        result = validate_sql("(SELECT id, title FROM clean_jobs ORDER BY id)")
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_a_parenthesised_select_with_its_own_limit(self) -> None:
+        result = validate_sql("(SELECT id FROM clean_jobs ORDER BY id LIMIT 3)")
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_like_with_an_escape_character(self) -> None:
+        # PostgreSQL rewrites LIKE ... ESCAPE into the like_escape helper, so
+        # the tree names a function the model did not write.
+        result = validate_sql(
+            "SELECT id FROM clean_jobs WHERE title LIKE '%100\\%' ESCAPE '\\'"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_similar_to(self) -> None:
+        result = validate_sql(
+            "SELECT id FROM clean_jobs WHERE title SIMILAR TO '%(Python|SQL)%'"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_string_to_table_in_a_lateral_join(self) -> None:
+        result = validate_sql(
+            "SELECT one_city, count(*) AS count FROM clean_jobs "
+            "CROSS JOIN LATERAL string_to_table(location, ',') AS one_city "
+            "GROUP BY one_city ORDER BY count DESC, one_city"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_unnest_of_string_to_array(self) -> None:
+        result = validate_sql(
+            "SELECT one_tech, count(*) AS count FROM clean_jobs, "
+            "unnest(string_to_array(tech_stack, ',')) AS one_tech "
+            "GROUP BY one_tech ORDER BY count DESC, one_tech"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_a_set_operation(self) -> None:
+        result = validate_sql(
+            "SELECT id FROM clean_jobs WHERE is_internship "
+            "UNION SELECT id FROM clean_jobs WHERE job_level = 'Fresher/Entry level' "
+            "ORDER BY id"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_one_reference_per_scope(self) -> None:
+        # The guard dataset's A02: the outer query and a scalar subquery each
+        # read clean_jobs once. That is two scopes, not a self-join.
+        result = validate_sql(
+            "SELECT id FROM clean_jobs "
+            "WHERE salary_max >= (SELECT avg(salary_max) FROM clean_jobs)"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_public_clean_jobs(self) -> None:
+        result = validate_sql("SELECT id FROM public.clean_jobs ORDER BY id")
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_comment_text_inside_a_string_literal(self) -> None:
+        result = validate_sql(
+            "SELECT id FROM clean_jobs WHERE title <> 'a -- b /* c */'"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_treats_a_cte_name_as_local(self) -> None:
+        result = validate_sql(
+            "WITH raw_jobs AS (SELECT id FROM clean_jobs) "
+            "SELECT id FROM raw_jobs ORDER BY id"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_reads_a_non_recursive_cte_self_reference_as_a_table(self) -> None:
+        # Without RECURSIVE the name inside the CTE body is the real table, so
+        # the tree, not the name alone, decides what was read.
+        result = validate_sql(
+            "WITH raw_jobs AS (SELECT id FROM raw_jobs) SELECT id FROM raw_jobs"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertIn("may only reference the clean_jobs table: raw_jobs", result.reason)
+
+    def test_a_recursive_cte_may_reference_itself(self) -> None:
+        result = validate_sql(
+            "WITH RECURSIVE numbers AS ("
+            "SELECT 1 AS n UNION ALL SELECT n + 1 FROM numbers WHERE n < 5) "
+            "SELECT n FROM numbers"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_an_allowlisted_schema_qualified_function(self) -> None:
+        result = validate_sql("SELECT pg_catalog.lower(title) FROM clean_jobs")
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_accepts_a_visible_column_aliased_with_a_hidden_name(self) -> None:
+        # The alias is output naming, not a read of the hidden column.
+        result = validate_sql("SELECT title AS source FROM clean_jobs")
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_rejects_each_server_identity_function(self) -> None:
+        cases = {
+            "SELECT version()": "version",
+            "SELECT current_user": "current_user",
+            "SELECT current_database()": "current_database",
+            "SELECT inet_server_addr()": "inet_server_addr",
+            "SELECT current_setting('data_directory')": "current_setting",
+            "SELECT pg_backend_pid()": "pg_backend_pid",
+            "SELECT current_catalog": "current_catalog",
+        }
+        for sql, name in cases.items():
+            with self.subTest(sql=sql):
+                result = validate_sql(sql)
+
+                self.assertFalse(result.valid)
+                self.assertIn(
+                    "Server identity functions are not allowed", result.reason
+                )
+                self.assertIn(name, result.reason)
+
+    def test_rejects_a_schema_qualified_identity_function(self) -> None:
+        result = validate_sql("SELECT pg_catalog.version()")
+
+        self.assertFalse(result.valid)
+        self.assertIn("Server identity functions are not allowed: version", result.reason)
+
+    def test_rejects_a_function_outside_the_allowlist(self) -> None:
+        result = validate_sql("SELECT md5(title) FROM clean_jobs")
+
+        self.assertFalse(result.valid)
+        self.assertIn("Function is not allowed: md5", result.reason)
+
+    def test_rejects_a_data_modifying_cte(self) -> None:
+        result = validate_sql(
+            "WITH removed AS (DELETE FROM clean_jobs RETURNING id) "
+            "SELECT count(*) AS count FROM removed"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertIn("Data-modifying statements are not allowed", result.reason)
+
+    def test_rejects_a_row_locking_clause(self) -> None:
+        result = validate_sql("SELECT id FROM clean_jobs FOR UPDATE")
+
+        self.assertFalse(result.valid)
+        self.assertIn("Row locking clauses are not allowed", result.reason)
+
+    def test_rejects_a_self_join(self) -> None:
+        result = validate_sql(
+            "SELECT count(*) AS count FROM clean_jobs a JOIN clean_jobs b "
+            "ON a.location = b.location"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertIn("may only reference the clean_jobs table once", result.reason)
+
+    def test_rejects_pg_catalog_schema(self) -> None:
+        result = validate_sql("SELECT relname FROM pg_catalog.pg_class")
+
+        self.assertFalse(result.valid)
+        self.assertIn("Access to system tables is not allowed", result.reason)
+
+    def test_rejects_a_hidden_column_in_a_subquery(self) -> None:
+        result = validate_sql(
+            "SELECT id FROM (SELECT external_id AS id FROM clean_jobs) AS q"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertIn("Hidden column", result.reason)
+
+    def test_rejects_a_non_literal_limit(self) -> None:
+        result = validate_sql("SELECT id FROM clean_jobs LIMIT 2+1")
+
+        self.assertFalse(result.valid)
+        self.assertIn("LIMIT must be an integer literal", result.reason)
+
+    def test_rejects_a_negative_limit(self) -> None:
+        result = validate_sql("SELECT id FROM clean_jobs LIMIT -1")
+
+        self.assertFalse(result.valid)
+        self.assertIn("LIMIT must not be negative", result.reason)
+
+    def test_a_non_literal_bound_inside_a_cte_is_part_of_the_cte(self) -> None:
+        # Only the statement's own bound is the page. A bound inside a CTE is
+        # that CTE's row count, and PostgreSQL can run it as written.
+        result = validate_sql(
+            "WITH newest AS (SELECT id FROM clean_jobs ORDER BY id LIMIT 2+1) "
+            "SELECT id FROM newest ORDER BY id"
+        )
+
+        self.assertTrue(result.valid, result.reason)
+
+    def test_rejects_a_fetch_with_ties(self) -> None:
+        result = validate_sql(
+            "SELECT id FROM clean_jobs ORDER BY id FETCH FIRST 3 ROWS WITH TIES"
+        )
+
+        self.assertFalse(result.valid)
+        self.assertIn("WITH TIES", result.reason)
+
+    def test_rejects_a_leading_semicolon(self) -> None:
+        result = validate_sql("; SELECT id FROM clean_jobs")
+
+        self.assertFalse(result.valid)
+        self.assertIn("Multiple statements", result.reason)
+
+    def test_rejects_a_table_statement(self) -> None:
+        result = validate_sql("TABLE clean_jobs")
+
+        self.assertFalse(result.valid)
+        self.assertIn("Only SELECT statements are allowed", result.reason)
+
+    def test_rejects_a_syntax_error_with_the_parser_message(self) -> None:
+        result = validate_sql("SELECT id FROM clean_jobs WHERE")
+
+        self.assertFalse(result.valid)
+        self.assertIn("SQL syntax error", result.reason)
+
+    def test_an_unterminated_literal_is_a_syntax_error(self) -> None:
+        # The scanner raises before the parser runs; the failure still gets a
+        # named reason instead of escaping as an internal error.
+        result = validate_sql("SELECT 'unclosed")
+
+        self.assertFalse(result.valid)
+        self.assertIn("SQL syntax error", result.reason)
+
+    def test_an_unterminated_comment_is_a_syntax_error(self) -> None:
+        result = validate_sql("SELECT id FROM clean_jobs /* unclosed")
+
+        self.assertFalse(result.valid)
+        self.assertIn("SQL syntax error", result.reason)
+
+
 class HiddenColumnTests(unittest.TestCase):
     def test_rejects_each_hidden_column(self) -> None:
         for column in sorted(HIDDEN_COLUMNS):
@@ -501,6 +772,23 @@ class IdTiebreakTests(unittest.TestCase):
                 "SELECT id FROM clean_jobs WHERE title = 'ORDER BY id'"
             )
         )
+
+    def test_accepts_an_order_on_a_set_operation(self) -> None:
+        self.assertTrue(
+            has_id_tiebreak(
+                "SELECT id FROM clean_jobs UNION SELECT id FROM clean_jobs ORDER BY id"
+            )
+        )
+
+    def test_rejects_a_quoted_case_distinct_id(self) -> None:
+        # Quoted identifiers keep their case, so "ID" is not the id column.
+        self.assertFalse(has_id_tiebreak('SELECT id FROM clean_jobs ORDER BY "ID"'))
+
+    def test_rejects_a_computed_id_key(self) -> None:
+        self.assertFalse(has_id_tiebreak("SELECT id FROM clean_jobs ORDER BY id + 0"))
+
+    def test_rejects_a_statement_the_guard_refuses(self) -> None:
+        self.assertFalse(has_id_tiebreak("DELETE FROM clean_jobs"))
 
     def test_reads_the_order_up_to_the_bound_that_follows_it(self) -> None:
         self.assertTrue(

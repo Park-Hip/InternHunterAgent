@@ -89,6 +89,56 @@ cases:
       reference_sql: SELECT * FROM (VALUES (7, 3)) AS reviewed(hanoi, hcmc)
     note: 7 Python postings in Hanoi, 3 in Ho Chi Minh City.
 
+  - id: R08-split-city
+    class: reviewed
+    question: Ở mỗi thành phố có bao nhiêu tin tuyển dụng?
+    reviewed_sql: >-
+      SELECT trim(one_city) AS city, count(*) AS count
+      FROM clean_jobs, string_to_table(location, ',') AS one_city
+      GROUP BY 1 ORDER BY count DESC, city
+    guard: valid
+    result:
+      mode: rows_equal
+      reference_sql: SELECT * FROM (VALUES ('Hanoi', 11), ('Ho Chi Minh City', 9), ('Da Nang', 4)) AS reviewed(city, count)
+    note: >-
+      The split form of R03, and the shape the text guard refused: a
+      set-returning function in FROM (#742). The fixture stores one city per
+      posting, so the counts match R03; the executor test proves a posting that
+      lists two cities is counted once under each.
+
+  - id: R09-cte-split-tech
+    class: reviewed
+    question: Kỹ năng nào được yêu cầu nhiều nhất?
+    reviewed_sql: >-
+      WITH per_tech AS (
+        SELECT trim(one_tech) AS tech, count(*) AS count
+        FROM clean_jobs, unnest(string_to_array(tech_stack, ',')) AS one_tech
+        WHERE tech_stack IS NOT NULL
+        GROUP BY 1
+      )
+      SELECT tech, count FROM per_tech ORDER BY count DESC, tech LIMIT 5
+    guard: valid
+    result:
+      mode: rows_equal
+      reference_sql: SELECT * FROM (VALUES ('SQL', 15), ('Python', 12), ('Excel', 5), ('PyTorch', 4), ('Spark', 4)) AS reviewed(tech, count)
+    note: >-
+      A CTE over a split column (#742). SQL 15 and Python 12 lead; the tie at 4
+      is broken by the second sort key.
+
+  - id: R10-fetch-first
+    class: reviewed
+    question: 5 tin có mức lương tối thiểu cao nhất, tính bằng USD?
+    reviewed_sql: >-
+      SELECT id FROM clean_jobs WHERE salary_currency = 'USD'
+      ORDER BY salary_min DESC FETCH FIRST 5 ROWS ONLY
+    guard: valid
+    result:
+      mode: ids_only
+      reference_sql: SELECT id FROM clean_jobs WHERE id IN (1, 6, 14, 3, 10) ORDER BY id
+    note: >-
+      R06 with the SQL-standard bound. The parser reads FETCH FIRST as the
+      statement's own limit, so the executor does not append a second LIMIT.
+
   # -- the guard's floor: these must stay rejected ------------------------------
   - id: H02-hidden-bookkeeping
     class: hidden
@@ -129,6 +179,27 @@ cases:
     guard: rejected
     expected_reason_contains: may only reference the clean_jobs table
     note: clean_jobs is the only table the agent may reach.
+
+  - id: C07-identity
+    class: cost
+    question: (attack) print the database build and role
+    reviewed_sql: SELECT version() AS build, current_user AS role, current_database() AS database
+    guard: rejected
+    expected_reason_contains: Server identity functions are not allowed
+    note: >-
+      No grant governs these calls, so the guard names them rather than leaving
+      the server to answer (#617 row 5, F4).
+
+  - id: C08-nonliteral-limit
+    class: cost
+    question: 2 tin đầu tiên sau khi bỏ qua 1 tin.
+    reviewed_sql: SELECT id FROM clean_jobs ORDER BY id LIMIT 1+1 OFFSET 1
+    guard: rejected
+    expected_reason_contains: LIMIT must be an integer literal
+    note: >-
+      A bound the executor cannot honour as written. It is refused before
+      execution instead of producing a second LIMIT and an `unavailable` syntax
+      error (#736).
 
   # -- accepted risks: the guard is lexical and these stay as reviewed ----------
   - id: A01-open-ended

@@ -46,14 +46,14 @@ directly to the fixture without the loader, run `uv run python -m evals.fixtures
 afterward. A star or hidden-column read now fails with SQLSTATE 42501 instead of returning
 the five hidden ingestion columns, and the tool maps that refusal to `rejected`.
 
-The gate runs every reviewed case in [`evals/datasets/sql_guard.yaml`](../../evals/datasets/sql_guard.yaml) through the same pipeline the tool uses - `validate_sql`, `resolve_bounds`, then the fixture - and scores two deterministic metrics:
+The gate runs every reviewed case in [`evals/datasets/sql_guard.yaml`](../../evals/datasets/sql_guard.yaml) through the guard (`validate_sql`) and then runs the reviewed SQL as written against the fixture; it scores two deterministic metrics:
 
 | Metric | Grades |
 | --- | --- |
 | `guard_correctness` | The `validate_sql` verdict against the reviewed one. A rejected case also pins the rule that must reject it, so widening the validator cannot quietly drop the guard's floor |
 | `result_equivalence` | The rows the reviewed SQL returns on the fixture, against a reviewer-written reference, through `evals/sql_check.py` |
 
-The corpus has 15 cases in five classes: `reviewed` questions the guard must accept, the guard's floor (`hidden` and `cost` statements that must stay rejected), `ambiguous` accepted risks (A01-A03) that pin today's behavior and name the risk, and one injection carried by posting text.
+The corpus has 20 cases in five classes: `reviewed` questions the guard must accept, including the CTE and split-column breakdowns and the `FETCH FIRST` bound; the guard's floor (`hidden` and `cost` statements that must stay rejected); `ambiguous` accepted risks (A01-A03) that pin today's behavior and name the risk; and one injection carried by posting text.
 An accepted risk is a case, not prose: a guard that starts refusing one turns the gate red and the [ADR-0060 risk table](../decisions/adr-0060-retire-the-agent-v0-bundle.md) has to move with it.
 
 **The gate fails rather than skips.** If the fixture database is unreachable it exits 2 with a message naming the command that starts it. An unavailable database reported as green is the failure mode this gate exists to remove.
@@ -63,7 +63,7 @@ An accepted risk is a case, not prose: a guard that starts refusing one turns th
 | Condition | Why it fails |
 | --- | --- |
 | A verdict other than the reviewed one | The reviewed statement is the case's assertion; reviewed SQL the guard rejects, or forbidden SQL it accepts, is a defect |
-| A rejected case rejected by a different rule | The floor is a pass/fail condition: the self-join, `pg_sleep`, multi-table, and hidden-column rules must each still reject their own case |
+| A rejected case rejected by a different rule | The floor is a pass/fail condition: the self-join, `pg_sleep`, multi-table, hidden-column, and server identity rules must each still reject their own case |
 | A result other than the reviewed one | The reference was reviewed, and `tests/evals/test_sql_gate.py` pins the gate's grading and its refusals |
 
 The gate is deliberately stricter than a rate. A percentage would let a false success be offset by an easy pass. If a future maintainer wants a rate, that is a new decision with its own evidence.

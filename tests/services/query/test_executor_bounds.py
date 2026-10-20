@@ -17,6 +17,9 @@ using the database:
   column-level ``SELECT`` on the 16 contract columns and no table-level
   ``SELECT`` (#722), so the database, not the validator, refuses the forms a
   hidden-column token check cannot see.
+- **A split breakdown runs and counts once per value.** A CTE and a
+  set-returning function in ``FROM`` are accepted by the guard (#742), and a
+  posting that lists two cities is counted under each of them.
 
 The write case goes through ``_bounded_session`` rather than
 ``execute_bounded_select``: the executor appends a trailing ``LIMIT``, so
@@ -319,6 +322,26 @@ class TestBounds:
         with pytest.raises(UnstableOrderError):
             execute_bounded_select(statement, 5, 20)
 
+    def test_a_cte_page_with_a_total_order_runs(
+        self, reader_engine, monkeypatch
+    ) -> None:
+        # #742: the order check reads the statement's outermost ORDER BY, even
+        # when the rows come from a CTE.
+        monkeypatch.setattr(
+            "src.services.query.executor.execution_limits",
+            lambda: {"statement_timeout_ms": 5000, "max_result_bytes": 262_144},
+        )
+
+        bounded = execute_bounded_select(
+            "WITH ranked AS (SELECT id FROM clean_jobs) "
+            "SELECT id FROM ranked ORDER BY id",
+            5,
+            20,
+        )
+
+        assert bounded.rows == [[21], [22], [23], [24]]
+        assert bounded.total_rows == FIXTURE_ROWS
+
 
 class TestErrorMapping:
     def test_a_missing_column_maps_to_undefined_column_error(self, reader_engine) -> None:
@@ -381,3 +404,97 @@ class TestTheColumnBoundary:
         assert validation.valid is True
         with pytest.raises(PermissionDeniedError):
             execute_bounded_select(validation.sql, 20)
+
+
+class TestSplitBreakdowns:
+    """#742: a CTE and a set-returning function in FROM run as written.
+
+    ``validate_sql`` accepts the shape and the database proves the figures.
+    The fixture stores one city per posting, so the multi-value proof changes
+    one row inside a transaction and rolls it back: a posting that lists two
+    cities is counted once under each of them.
+    """
+
+    def test_a_cte_split_breakdown_runs(self, reader_engine, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "src.services.query.executor.execution_limits",
+            lambda: {"statement_timeout_ms": 5000, "max_result_bytes": 262_144},
+        )
+
+        bounded = execute_bounded_select(
+            "WITH per_city AS ("
+            "SELECT trim(one_city) AS city, count(*) AS count "
+            "FROM clean_jobs, string_to_table(location, ',') AS one_city "
+            "GROUP BY 1) "
+            "SELECT city, count FROM per_city ORDER BY count DESC, city",
+            20,
+        )
+
+        assert bounded.rows == [
+            ["Hanoi", 11],
+            ["Ho Chi Minh City", 9],
+            ["Da Nang", 4],
+        ]
+        assert bounded.total_rows == 3
+
+    def test_an_unnest_split_breakdown_runs(self, reader_engine, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "src.services.query.executor.execution_limits",
+            lambda: {"statement_timeout_ms": 5000, "max_result_bytes": 262_144},
+        )
+
+        bounded = execute_bounded_select(
+            "SELECT trim(one_tech) AS tech, count(*) AS count "
+            "FROM clean_jobs, unnest(string_to_array(tech_stack, ',')) AS one_tech "
+            "WHERE tech_stack IS NOT NULL "
+            "GROUP BY 1 ORDER BY count DESC, tech",
+            20,
+        )
+
+        assert bounded.rows[:2] == [["SQL", 15], ["Python", 12]]
+
+    def test_a_cte_page_counts_the_whole_match_set(
+        self, reader_engine, monkeypatch
+    ) -> None:
+        # #742: the companion count wraps the CTE, so a short page still reports
+        # the whole match set.
+        monkeypatch.setattr(
+            "src.services.query.executor.execution_limits",
+            lambda: {"statement_timeout_ms": 5000, "max_result_bytes": 262_144},
+        )
+
+        bounded = execute_bounded_select(
+            "WITH per_city AS ("
+            "SELECT trim(one_city) AS city, count(*) AS count "
+            "FROM clean_jobs, string_to_table(location, ',') AS one_city "
+            "GROUP BY 1) "
+            "SELECT city, count FROM per_city ORDER BY count DESC, city",
+            2,
+        )
+
+        assert bounded.rows == [["Hanoi", 11], ["Ho Chi Minh City", 9]]
+        assert bounded.total_rows == 3
+
+    def test_a_split_city_counts_a_posting_once_per_city_it_lists(self, engine) -> None:
+        statement = (
+            "SELECT trim(one_city) AS city, count(*) AS count "
+            "FROM clean_jobs, string_to_table(location, ',') AS one_city "
+            "WHERE id = 1 GROUP BY 1 ORDER BY city"
+        )
+
+        with engine.connect() as connection:
+            transaction = connection.begin()
+            try:
+                connection.execute(
+                    text(
+                        "UPDATE clean_jobs SET location = 'Hanoi, Da Nang' "
+                        "WHERE id = 1"
+                    )
+                )
+                rows = [tuple(row) for row in connection.execute(text(statement))]
+            finally:
+                # The fixture is shared; the multi-city row exists for the
+                # length of this transaction only.
+                transaction.rollback()
+
+        assert rows == [("Da Nang", 1), ("Hanoi", 1)]

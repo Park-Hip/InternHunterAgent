@@ -443,6 +443,11 @@ has.
   its own total, and a count or other aggregate carries its figures in `rows` with no match count
   attached, so the card can never state a number the answer does not. The statement reported as
   `sql` retains the OFFSET, so the model can say the rows continue an earlier list.
+  An offset page is refused before it runs unless its top-level ORDER BY includes `id`
+  (ADR-0064). PostgreSQL promises no row order without ORDER BY, and a non-unique order such as
+  `created_on` can swap tied rows between calls, so the page would repeat or skip rows (#727).
+  The refusal is the `rejected` failure kind with a detail that names the fix, and the SQL-generation
+  prompt orders every list of postings with that id tiebreaker so the failure is the exception.
 - `get_job_details(ids)` is a **deterministic, parameterized** fetch by id with no model call and no
   SQL generation, because ids carry no natural-language ambiguity. It returns the full
   `description` for a few postings, bounded by `agent.query.max_detail_ids`. This is the *only* path

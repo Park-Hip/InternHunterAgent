@@ -50,6 +50,9 @@ Code guarantees, held by unit tests whatever the model says:
 - Facts come from code, not from the model: rows returned, total matched, and the SQL that ran,
   including any page offset
   ([ADR-0062](../decisions/adr-0062-tools-return-facts-the-prompt-owns-wording.md)).
+- An offset page has a total order or is refused: the outermost ORDER BY must include `id`, the
+  unique key, before any OFFSET runs
+  ([ADR-0064](../decisions/adr-0064-offset-pages-require-a-total-order.md)).
 
 The tools return facts and the system prompt owns all wording. The prompts are
 `config/prompts.yaml` `system_prompt`, `schema_context`, and `sql_generation`; traces identify each

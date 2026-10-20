@@ -20,11 +20,14 @@ from src.services.query.executor import (
     QueryTimeoutError,
     ResultTooLargeError,
     UndefinedColumnError,
+    UnstableOrderError,
     execute_bounded_select,
     execution_limits,
 )
 
-BASE_SQL = "SELECT id, title FROM clean_jobs WHERE is_internship = true"
+BASE_SQL = (
+    "SELECT id, title FROM clean_jobs WHERE is_internship = true ORDER BY id"
+)
 
 
 class _UndefinedColumnWithPrimary(UndefinedColumn):
@@ -159,6 +162,38 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
         self.assertEqual(statements[2], f"{BASE_SQL} LIMIT 5 OFFSET 20")
         self.assertEqual(bounded.rows, [[index] for index in range(21, 26)])
         self.assertEqual(bounded.total_rows, 161)
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_refuses_an_offset_page_without_an_id_order(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        # #727: without a total order the second page can repeat or skip rows,
+        # so the statement never reaches the database.
+        with self.assertRaises(UnstableOrderError):
+            execute_bounded_select(
+                "SELECT id, title FROM clean_jobs WHERE is_internship = true",
+                5,
+                20,
+            )
+
+        mock_agent_session_factory.assert_not_called()
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_allows_an_offset_page_ordered_by_a_stated_field_then_id(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.return_value = _result(["id"], [[21], [22]], total=24)
+
+        execute_bounded_select(
+            "SELECT id FROM clean_jobs"
+            " ORDER BY created_on DESC NULLS LAST, id",
+            2,
+            20,
+        )
+
+        statements = _statements(session)
+        self.assertIn("OFFSET 20", statements[2])
 
     @patch("src.services.query.executor.agent_session_factory")
     def test_counts_when_the_offset_is_non_zero_even_if_the_page_is_short(

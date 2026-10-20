@@ -33,6 +33,7 @@ from psycopg.errors import InsufficientPrivilege, UndefinedColumn
 from src.core.config import settings
 from src.core.db import agent_session_factory
 from src.services.query.models import BoundedRows
+from src.services.query.sql_validator import has_id_tiebreak
 
 
 class ExecutorError(Exception):
@@ -71,6 +72,22 @@ class QueryTimeoutError(ExecutorError):
     def __init__(self, timeout_ms: int) -> None:
         super().__init__(f"statement exceeded the {timeout_ms} ms limit")
         self.timeout_ms = timeout_ms
+
+
+class UnstableOrderError(ExecutorError):
+    """Raised when a page starts at an offset without a total order.
+
+    PostgreSQL promises no row order for a query without ORDER BY, and an
+    order on a non-unique column can swap tied rows between calls. Either way,
+    an OFFSET page can repeat or skip rows, so the statement is refused before
+    it runs (#727). The detail names the fix for the model.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "a page with OFFSET needs a stable order: include id in the "
+            "ORDER BY, for example ORDER BY created_on DESC NULLS LAST, id"
+        )
 
 
 class ResultTooLargeError(ExecutorError):
@@ -136,7 +153,15 @@ def execute_bounded_select(base_sql: str, limit: int, offset: int = 0) -> Bounde
     one transaction, so they see one snapshot. The byte budget is checked
     before that count runs, and both statements are bounded by the session's
     statement timeout.
+
+    An offset page is refused unless ``base_sql`` has a top-level ORDER BY
+    that includes ``id``. Without a total order PostgreSQL may return the rows
+    in a different order between the two calls, so the page would repeat or
+    skip rows (#727).
     """
+    if offset > 0 and not has_id_tiebreak(base_sql):
+        raise UnstableOrderError()
+
     limits = execution_limits()
     with _bounded_session() as session:
         statement = f"{base_sql} LIMIT {limit}"

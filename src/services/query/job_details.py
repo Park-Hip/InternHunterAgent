@@ -2,7 +2,7 @@ from sqlalchemy import text
 
 from src.services.query.executor import (
     ResultTooLargeError,
-    _bounded_session,
+    bounded_session,
     execution_limits,
     row_bytes,
 )
@@ -32,7 +32,7 @@ def fetch_job_details(ids: list[int]) -> list[dict]:
     # The read runs through the shared bounded session, so the statement
     # timeout, the read-only transaction, and the byte budget apply here too
     # (#702 E6).
-    with _bounded_session() as session:
+    with bounded_session() as session:
         result = session.execute(
             text(f"SELECT {FULL_DETAIL_COLUMNS} FROM clean_jobs WHERE id = ANY(:ids)"),
             {"ids": ids},

@@ -11,7 +11,13 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from psycopg.errors import InsufficientPrivilege, UndefinedColumn
+from psycopg.errors import (
+    ConnectionFailure,
+    InsufficientPrivilege,
+    QueryCanceled,
+    SyntaxError,
+    UndefinedColumn,
+)
 from sqlalchemy.exc import DBAPIError, OperationalError
 
 from src.services.query.executor import (
@@ -19,6 +25,7 @@ from src.services.query.executor import (
     PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
+    SqlSyntaxError,
     UndefinedColumnError,
     UnstableOrderError,
     execute_bounded_select,
@@ -42,6 +49,14 @@ class _UndefinedColumnWithoutPrimary(UndefinedColumn):
     """A driver error with no server diagnostic attached."""
 
     diag = None
+
+
+class _SyntaxErrorWithPrimary(SyntaxError):
+    """SQLSTATE 42601 carrying the parser's primary message, as on the wire."""
+
+    @property
+    def diag(self) -> SimpleNamespace:
+        return SimpleNamespace(message_primary='syntax error at or near "LIMIT"')
 
 
 class _PrivilegeDeniedOnCleanJobs(InsufficientPrivilege):
@@ -359,7 +374,7 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
             OperationalError(
                 "SELECT pg_sleep(3)",
                 {},
-                Exception("canceling statement due to statement timeout"),
+                QueryCanceled("canceling statement due to statement timeout"),
             ),
         ]
 
@@ -374,6 +389,51 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
             "statement exceeded the"
             f" {execution_limits()['statement_timeout_ms']} ms limit",
         )
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_maps_a_syntax_error_to_sql_syntax_error(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.side_effect = [
+            _result([], []),
+            _result([], []),
+            OperationalError(
+                "SELECT id FROM clean_jobs LIMIT 20 LIMIT 20",
+                {},
+                _SyntaxErrorWithPrimary('syntax error at or near "LIMIT"'),
+            ),
+        ]
+
+        with self.assertRaises(SqlSyntaxError) as raised:
+            execute_bounded_select(BASE_SQL, 20)
+
+        self.assertEqual(
+            raised.exception.message_primary, 'syntax error at or near "LIMIT"'
+        )
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_a_connection_timeout_is_not_bucketed_as_a_statement_timeout(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        # #744: the message says "timeout", but the SQLSTATE is the connection
+        # class (08xxx), so the failure is an outage, not the statement budget.
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.side_effect = [
+            _result([], []),
+            _result([], []),
+            OperationalError(
+                "SELECT id FROM clean_jobs",
+                {},
+                ConnectionFailure("connection timeout expired"),
+            ),
+        ]
+
+        with self.assertRaises(ExecutorError) as raised:
+            execute_bounded_select(BASE_SQL, 20)
+
+        self.assertNotIsInstance(raised.exception, QueryTimeoutError)
+        self.assertNotIsInstance(raised.exception, SqlSyntaxError)
 
     @patch("src.services.query.executor.agent_session_factory")
     def test_raises_executor_error_on_operational_error(

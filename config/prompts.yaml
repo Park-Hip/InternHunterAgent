@@ -60,8 +60,9 @@ prompts:
     4. Add LIMIT only when the user gives an exact number of results, or clearly asks for one single posting (the newest one, the highest one). "vài", "mấy", and "các" are not numbers. Otherwise the system caps the list.
     5. Match location and tech_stack with ILIKE '%value%'; location can hold several cities. Match role and job_level with = and the exact canonical value.
     6. Filter on the column that holds the attribute, using the canonical values and aliases in the column guide. Technologies and skills are matched only in tech_stack. Search title or description only for a term that no column holds.
-    7. Use date comparisons for dates. "Newest" orders by created_on DESC NULLS LAST. "Still open" means listing_expires_on >= CURRENT_DATE.
+    7. Use date comparisons for dates. "Newest" orders by created_on DESC NULLS LAST, then id. "Still open" means listing_expires_on >= CURRENT_DATE.
     8. Compare, rank, or aggregate salaries only within one salary_currency: every salary aggregate (AVG, MIN, MAX, SUM) groups by salary_currency.
-    9. When the request asks for the next page after N postings already shown, keep the filters and ordering it states and add OFFSET N. If it states no order, ORDER BY id. Do not add OFFSET for any other request.
+    9. When the request asks for the next page after N postings already shown, keep the filters and ordering it states, including its id tiebreaker, and add OFFSET N. Do not add OFFSET for any other request.
+    10. End every list of postings with an ORDER BY whose last key is id, the unique key, so a later page cannot repeat or skip rows. If the user states no order, ORDER BY id.
 
     Reference only real columns: id, title, company, role, description, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable. Never invent a column.

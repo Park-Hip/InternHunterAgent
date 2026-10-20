@@ -41,6 +41,7 @@ from src.services.query.executor import (
     QueryTimeoutError,
     ResultTooLargeError,
     UndefinedColumnError,
+    UnstableOrderError,
     execute_bounded_select,
 )
 from src.services.query.models import QueryResult
@@ -212,6 +213,12 @@ async def run_query_clean_jobs(request: str) -> QueryResult:
             "the query reads beyond the 16 declared columns; select those "
             "columns explicitly instead of using * or a whole-row expression",
         ) from exc
+    except UnstableOrderError as exc:
+        # A page past an offset needs a total order. The detail tells the
+        # model how to rewrite the statement, so it can retry instead of
+        # returning a page that may repeat or skip rows (#727).
+        logger.warning("query_clean_jobs.unstable_order", error=str(exc))
+        raise ToolFailure("rejected", str(exc)) from exc
     except ExecutorError as exc:
         logger.error("query_clean_jobs.db_error", error=str(exc))
         raise ToolFailure(

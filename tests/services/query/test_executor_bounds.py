@@ -42,6 +42,7 @@ from src.services.query.executor import (
     QueryTimeoutError,
     ResultTooLargeError,
     UndefinedColumnError,
+    UnstableOrderError,
     _bounded_session,
     execute_bounded_select,
 )
@@ -302,6 +303,21 @@ class TestBounds:
         # model can say "no more postings" instead of "nothing matched".
         assert bounded.rows == []
         assert bounded.total_rows == fixture_count == FIXTURE_ROWS
+
+    @pytest.mark.parametrize(
+        "statement",
+        [
+            "SELECT id FROM clean_jobs",
+            "SELECT id FROM clean_jobs ORDER BY created_on DESC NULLS LAST",
+        ],
+    )
+    def test_an_offset_page_without_a_total_order_is_refused(
+        self, reader_engine, statement
+    ) -> None:
+        # #727: no ORDER BY, or an order on a column with ties, can move the
+        # page boundary between calls. The executor refuses before it runs.
+        with pytest.raises(UnstableOrderError):
+            execute_bounded_select(statement, 5, 20)
 
 
 class TestErrorMapping:

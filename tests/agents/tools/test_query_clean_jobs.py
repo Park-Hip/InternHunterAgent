@@ -31,13 +31,16 @@ from src.services.query.executor import (
     QueryTimeoutError,
     ResultTooLargeError,
     UndefinedColumnError,
+    UnstableOrderError,
 )
 from src.services.query.models import BoundedRows, ValidationResult
 from tests.langfuse_prompts import native_prompt_client, prompt_link
 
 from src.agents.tools.query_clean_jobs import SQL_GENERATION_OBSERVATION_NAME
 
-HAPPY_SQL = "SELECT id, title FROM clean_jobs WHERE location ILIKE '%Hanoi%'"
+HAPPY_SQL = (
+    "SELECT id, title FROM clean_jobs WHERE location ILIKE '%Hanoi%' ORDER BY id"
+)
 
 
 @contextmanager
@@ -383,6 +386,34 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         mock_logger.warning.assert_called_once_with(
             "query_clean_jobs.column_denied",
             error="permission denied for clean_jobs",
+        )
+
+    @patch("src.agents.tools.query_clean_jobs.logger")
+    @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_an_offset_page_without_a_stable_order_is_rejected(
+        self, mock_generate_sql, mock_validate_sql, mock_execute, mock_logger
+    ) -> None:
+        """#727: the refusal names the fix, so the model can page deterministically."""
+        from src.agents.tools.query_clean_jobs import run_query_clean_jobs
+
+        sql = "SELECT id, title FROM clean_jobs LIMIT 20 OFFSET 20"
+        mock_generate_sql.return_value = sql
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql=sql)
+        mock_execute.side_effect = UnstableOrderError()
+
+        with _bound_holder() as holder:
+            with self.assertRaises(ToolFailure) as raised:
+                await run_query_clean_jobs("the next 20")
+
+        self.assertEqual(raised.exception.kind, "rejected")
+        self.assertIn("include id in the ORDER BY", raised.exception.detail)
+        self.assertFalse(holder.published)
+        mock_logger.warning.assert_called_once()
+        self.assertEqual(
+            mock_logger.warning.call_args.args[0],
+            "query_clean_jobs.unstable_order",
         )
 
     @patch("src.agents.tools.query_clean_jobs.logger")

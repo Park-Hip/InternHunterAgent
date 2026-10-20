@@ -4,7 +4,11 @@ from pathlib import Path
 
 import yaml
 
-from src.services.query.sql_validator import HIDDEN_COLUMNS, validate_sql
+from src.services.query.sql_validator import (
+    HIDDEN_COLUMNS,
+    has_id_tiebreak,
+    validate_sql,
+)
 
 PROMPTS_PATH = Path(__file__).resolve().parents[3] / "config" / "prompts.yaml"
 # The one line in `sql_generation` that declares the agent-visible columns. The
@@ -429,6 +433,88 @@ class HiddenColumnContractTests(unittest.TestCase):
 
         self.assertEqual(HIDDEN_COLUMNS & declared, frozenset())
         self.assertEqual(HIDDEN_COLUMNS | declared, frozenset(EXPECTED_COLUMNS))
+
+
+class IdTiebreakTests(unittest.TestCase):
+    """#727: a page boundary needs a total order, so ORDER BY includes id."""
+
+    def test_rejects_a_query_without_an_order(self) -> None:
+        self.assertFalse(has_id_tiebreak("SELECT id FROM clean_jobs"))
+
+    def test_accepts_id_as_the_only_sort_key(self) -> None:
+        self.assertTrue(has_id_tiebreak("SELECT id FROM clean_jobs ORDER BY id"))
+
+    def test_accepts_id_after_another_sort_key(self) -> None:
+        self.assertTrue(
+            has_id_tiebreak(
+                "SELECT id FROM clean_jobs"
+                " ORDER BY created_on DESC NULLS LAST, id"
+            )
+        )
+
+    def test_accepts_a_qualified_id(self) -> None:
+        self.assertTrue(
+            has_id_tiebreak(
+                "SELECT c.id FROM clean_jobs AS c ORDER BY created_on, c.id"
+            )
+        )
+
+    def test_accepts_a_quoted_id(self) -> None:
+        self.assertTrue(
+            has_id_tiebreak('SELECT id FROM clean_jobs ORDER BY "id" ASC')
+        )
+
+    def test_rejects_an_order_by_a_non_unique_column(self) -> None:
+        # created_on has ties, so the page can move between calls without id.
+        self.assertFalse(
+            has_id_tiebreak(
+                "SELECT id FROM clean_jobs ORDER BY created_on DESC NULLS LAST"
+            )
+        )
+
+    def test_rejects_a_sort_key_that_merely_contains_id(self) -> None:
+        self.assertFalse(
+            has_id_tiebreak("SELECT id FROM clean_jobs ORDER BY order_id")
+        )
+        self.assertFalse(
+            has_id_tiebreak("SELECT id FROM clean_jobs ORDER BY lower(id)")
+        )
+
+    def test_ignores_an_order_inside_a_subquery(self) -> None:
+        # The inner ORDER BY does not order the rows the outer page slices.
+        self.assertFalse(
+            has_id_tiebreak(
+                "SELECT id FROM (SELECT id FROM clean_jobs ORDER BY id) AS q"
+            )
+        )
+
+    def test_ignores_an_order_inside_a_window(self) -> None:
+        self.assertFalse(
+            has_id_tiebreak(
+                "SELECT row_number() OVER (ORDER BY id), id FROM clean_jobs"
+            )
+        )
+
+    def test_ignores_order_by_text_inside_a_string_literal(self) -> None:
+        self.assertFalse(
+            has_id_tiebreak(
+                "SELECT id FROM clean_jobs WHERE title = 'ORDER BY id'"
+            )
+        )
+
+    def test_reads_the_order_up_to_the_bound_that_follows_it(self) -> None:
+        self.assertTrue(
+            has_id_tiebreak(
+                "SELECT id FROM clean_jobs ORDER BY created_on, id LIMIT 5 OFFSET 20"
+            )
+        )
+
+    def test_rejects_an_order_that_ends_at_the_bound_without_id(self) -> None:
+        self.assertFalse(
+            has_id_tiebreak(
+                "SELECT id FROM clean_jobs ORDER BY created_on LIMIT 5 OFFSET 20"
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -11,10 +11,12 @@ from typing import Literal
 
 #: The closed set of failure kinds a job-query tool can report.
 #:
-#: ``rejected`` is the validator refusing the statement, ``unknown_column`` a
-#: column the schema does not have, ``timeout`` the server cancelling a slow
-#: statement, ``too_large`` the byte budget refusing an oversized result, and
-#: ``unavailable`` any other database failure.
+#: ``rejected`` is a deterministic refusal the model can act on: the
+#: validator's shape check, the executor's offset-order check, or the
+#: database's column grant. ``unknown_column`` is a column the schema does not
+#: have, ``timeout`` the server cancelling a slow statement, ``too_large`` the
+#: byte budget refusing an oversized result, and ``unavailable`` any other
+#: database failure.
 FailureKind = Literal[
     "rejected", "unknown_column", "timeout", "too_large", "unavailable"
 ]

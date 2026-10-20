@@ -76,6 +76,27 @@ FROM_CLAUSE_LIST_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# One SQL identifier: unquoted (folded to lowercase) or double-quoted.
+IDENTIFIER = r'(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_]*)'
+
+# One top-level sort key: a column reference, optionally table-qualified,
+# followed by the direction/null/USING clauses PostgreSQL accepts. A computed
+# expression is not matched: only the primary key's own value gives a total
+# order for paging.
+SORT_KEY_PATTERN = re.compile(
+    rf"({IDENTIFIER})(?:\s*\.\s*({IDENTIFIER}))?"
+    r"(?:\s+(?:ASC|DESC))?"
+    r"(?:\s+NULLS\s+(?:FIRST|LAST))?"
+    r"(?:\s+USING\s+[<>=]+)?",
+    re.IGNORECASE,
+)
+
+# Clause keywords that end the ORDER BY list, so an ORDER BY is checked only
+# up to the part of the statement it applies to.
+ORDER_BY_END_KEYWORDS = frozenset(
+    {"limit", "offset", "fetch", "for", "union", "intersect", "except"}
+)
+
 
 def _invalid(sql: str, reason: str) -> ValidationResult:
     return ValidationResult(valid=False, sql=sql, reason=reason)
@@ -226,3 +247,138 @@ def validate_sql(sql: str) -> ValidationResult:
         return _invalid(statement, "Query may only reference the clean_jobs table")
 
     return ValidationResult(valid=True, sql=statement)
+
+
+def has_id_tiebreak(sql: str) -> bool:
+    """Whether a SELECT's top-level ORDER BY includes ``id`` as a sort key.
+
+    A page boundary is only stable when the order is total. PostgreSQL promises
+    no row order for a query without ORDER BY, and an order on a non-unique
+    column such as ``created_on`` can swap tied rows between two calls, so an
+    OFFSET page can repeat or skip rows even though the OFFSET is correct.
+    ``id`` is the primary key, so a top-level ORDER BY that includes it as a
+    sort key orders every row uniquely (#727).
+
+    Only the outermost ORDER BY counts: an ORDER BY inside a subquery or a
+    window function does not order the rows the page slices. The statement is
+    assumed to have passed ``validate_sql``, which strips string-literal
+    contents before this scan.
+    """
+    try:
+        masked = SQL_LITERAL_OR_UNICODE_IDENTIFIER_PATTERN.sub(
+            _mask_literal_or_normalize_identifier, sql
+        )
+    except ValueError:
+        # An invalid Unicode identifier is rejected by validate_sql. Treat it
+        # as unordered here so a caller cannot reach execution with it.
+        return False
+
+    order_by = _top_level_order_by(masked)
+    if order_by is None:
+        return False
+    return any(_is_id_sort_key(key) for key in _split_sort_keys(order_by))
+
+
+def _top_level_order_by(sql: str) -> str | None:
+    """Return the text after the outermost ORDER BY, up to its clause end."""
+    tokens = _top_level_tokens(sql)
+    for index, (_, token) in enumerate(tokens):
+        if token.casefold() != "order":
+            continue
+        if index + 1 == len(tokens) or tokens[index + 1][1].casefold() != "by":
+            continue
+        body_start = tokens[index + 1][0] + len(tokens[index + 1][1])
+        body_end = len(sql)
+        for later_start, later_token in tokens[index + 2 :]:
+            if later_token.casefold() in ORDER_BY_END_KEYWORDS:
+                body_end = later_start
+                break
+        return sql[body_start:body_end]
+    return None
+
+
+def _top_level_tokens(sql: str) -> list[tuple[int, str]]:
+    """Every unquoted word at parenthesis depth zero, with its start offset."""
+    tokens: list[tuple[int, str]] = []
+    depth = 0
+    index = 0
+    while index < len(sql):
+        character = sql[index]
+        if character == '"':
+            index = _skip_delimited_identifier(sql, index)
+        elif character == "(":
+            depth += 1
+            index += 1
+        elif character == ")":
+            depth = max(0, depth - 1)
+            index += 1
+        elif depth == 0 and (
+            character.isascii() and (character.isalpha() or character == "_")
+        ):
+            end = index + 1
+            while (
+                end < len(sql)
+                and sql[end].isascii()
+                and (sql[end].isalnum() or sql[end] == "_")
+            ):
+                end += 1
+            tokens.append((index, sql[index:end]))
+            index = end
+        else:
+            index += 1
+    return tokens
+
+
+def _skip_delimited_identifier(sql: str, start: int) -> int:
+    """Return the offset just past the double-quoted identifier at ``start``."""
+    index = start + 1
+    while index < len(sql):
+        if sql[index] == '"':
+            if index + 1 < len(sql) and sql[index + 1] == '"':
+                index += 2
+                continue
+            return index + 1
+        index += 1
+    return index
+
+
+def _split_sort_keys(order_by: str) -> list[str]:
+    """Split an ORDER BY list on its top-level commas."""
+    keys: list[str] = []
+    depth = 0
+    start = 0
+    index = 0
+    while index < len(order_by):
+        character = order_by[index]
+        if character == '"':
+            index = _skip_delimited_identifier(order_by, index)
+        elif character == "(":
+            depth += 1
+            index += 1
+        elif character == ")":
+            depth = max(0, depth - 1)
+            index += 1
+        elif character == "," and depth == 0:
+            keys.append(order_by[start:index])
+            start = index + 1
+            index += 1
+        else:
+            index += 1
+    keys.append(order_by[start:])
+    return keys
+
+
+def _is_id_sort_key(key: str) -> bool:
+    match = SORT_KEY_PATTERN.fullmatch(key.strip())
+    if match is None:
+        return False
+    return _is_id_identifier(match.group(2) or match.group(1))
+
+
+def _is_id_identifier(identifier: str) -> bool:
+    if identifier.startswith('"'):
+        # A quoted identifier keeps its case, so only the exact stored name
+        # matches the id column.
+        return identifier[1:-1].replace('""', '"') == "id"
+    # Unquoted PostgreSQL identifiers fold to lowercase.
+    return identifier.casefold() == "id"

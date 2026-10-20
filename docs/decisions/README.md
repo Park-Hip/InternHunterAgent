@@ -44,6 +44,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0061](adr-0061-user-facing-copy-is-server-owned-vietnamese.md) | User-facing copy at the public boundary is server-owned Vietnamese | Product scope |
 | [ADR-0062](adr-0062-tools-return-facts-the-prompt-owns-wording.md) | Tools return typed facts, and the system prompt owns all wording | Agent runtime |
 | [ADR-0063](adr-0063-database-owns-agent-column-boundary.md) | The database owns the agent column boundary | Data governance |
+| [ADR-0064](adr-0064-offset-pages-require-a-total-order.md) | An OFFSET page requires a total order | Data honesty |
 
 Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
 superseded by ADR-0052 and keep their files with a `Superseded by` status.

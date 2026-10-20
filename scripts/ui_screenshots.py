@@ -18,6 +18,9 @@ are captured for review as well. The stopped fixture presses Dừng mid-turn; th
 error payload is built from the server's own constants, and the no-answer
 fixtures exercise both cases the card must distinguish: a query that ran and
 matched nothing, and a model that wrote nothing.
+Two multi-call retrieval turns pin the turn-level rule: an early zero followed
+by a match must not leave the card up, and a match followed by a zero must show
+the card for the latest call.
 
 Writes PNGs to `.playwright-cli/ui/` and prints one path per line, so an agent
 can `read` them back and critique the result.
@@ -66,6 +69,23 @@ STOPPED_SELECTOR = (
 # misleading image.
 ZERO_RESULT_SELECTOR = (
     "article.turn:has(.turn__nodata)" ':has(.toolcard[data-status="ok"])'
+)
+
+# The latest result decides. A later matching call must clear the earlier zero:
+# the rendered answer is present, no no-answer card is, and both completed tool
+# cards stay visible as the evidence that led there. Waiting for less would let
+# the very bug #725 reports pass on a blank image.
+LATE_MATCH_SELECTOR = (
+    "article.turn:not(:has(.turn__nodata))"
+    ":has(.turn__answer--markdown)"
+    ':has(.toolcard[data-status="ok"] + .toolcard[data-status="ok"])'
+)
+
+# The mirror case: a match followed by a zero must still show the card, and its
+# detail line must be about the latest call rather than the earlier one.
+FINAL_ZERO_SELECTOR = (
+    "article.turn:has(.turn__nodata)"
+    ':has(.toolcard[data-status="ok"] + .toolcard[data-status="ok"])'
 )
 
 
@@ -125,7 +145,7 @@ def capture(
 
 
 def build_harnesses() -> list[Harness]:
-    """The stopped, error, zero-result, and empty-answer turns.
+    """The stopped, error, no-answer, and multi-call retrieval turns.
 
     The error payload is built from the server's own constants, and the
     no-answer fixtures carry the same `answer_source` the service emits, so
@@ -193,6 +213,98 @@ def build_harnesses() -> list[Harness]:
                         },
                     ),
                     ("token", {"text": "Không tìm thấy tin tuyển dụng phù hợp."}),
+                    (
+                        "metadata",
+                        {
+                            "trace_id": None,
+                            "trace_url": None,
+                            "answer_source": "model",
+                        },
+                    ),
+                    ("done", {}),
+                ]
+            ),
+        ),
+        Harness(
+            name="late-match",
+            selector=LATE_MATCH_SELECTOR,
+            html=_harness_html(
+                [
+                    ("session", session),
+                    (
+                        "tool",
+                        {
+                            "name": "query_clean_jobs",
+                            "status": "ok",
+                            "call_id": "screenshot-late-zero",
+                            "arguments": {"question": HARNESS_QUESTION},
+                            "duration_ms": 38,
+                            "row_count": 0,
+                            "truncated": False,
+                        },
+                    ),
+                    (
+                        "tool",
+                        {
+                            "name": "query_clean_jobs",
+                            "status": "ok",
+                            "call_id": "screenshot-late-match",
+                            "arguments": {"question": "AI Engineer tại Đà Nẵng"},
+                            "duration_ms": 41,
+                            "row_count": 2,
+                            "truncated": False,
+                        },
+                    ),
+                    (
+                        "token",
+                        {"text": "Tìm thấy 2 tin tuyển dụng phù hợp với câu hỏi."},
+                    ),
+                    (
+                        "metadata",
+                        {
+                            "trace_id": None,
+                            "trace_url": None,
+                            "answer_source": "model",
+                        },
+                    ),
+                    ("done", {}),
+                ]
+            ),
+        ),
+        Harness(
+            name="final-zero",
+            selector=FINAL_ZERO_SELECTOR,
+            html=_harness_html(
+                [
+                    ("session", session),
+                    (
+                        "tool",
+                        {
+                            "name": "query_clean_jobs",
+                            "status": "ok",
+                            "call_id": "screenshot-final-match",
+                            "arguments": {"question": HARNESS_QUESTION},
+                            "duration_ms": 44,
+                            "row_count": 2,
+                            "truncated": False,
+                        },
+                    ),
+                    (
+                        "tool",
+                        {
+                            "name": "query_clean_jobs",
+                            "status": "ok",
+                            "call_id": "screenshot-final-zero",
+                            "arguments": {"question": "AI Engineer tại Đà Nẵng, lương trên 20 triệu"},
+                            "duration_ms": 39,
+                            "row_count": 0,
+                            "truncated": False,
+                        },
+                    ),
+                    (
+                        "token",
+                        {"text": "Lần truy vấn gần nhất không tìm thấy tin nào phù hợp."},
+                    ),
                     (
                         "metadata",
                         {

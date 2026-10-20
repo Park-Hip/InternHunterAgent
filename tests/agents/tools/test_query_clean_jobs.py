@@ -30,6 +30,7 @@ from src.services.query.executor import (
     PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
+    SqlSyntaxError,
     UndefinedColumnError,
     UnstableOrderError,
 )
@@ -427,6 +428,31 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             mock_logger.warning.call_args.args[0],
             "query_clean_jobs.unstable_order",
+        )
+
+    @patch("src.agents.tools.query_clean_jobs.logger")
+    @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_a_syntax_error_is_rejected_with_the_parser_message(
+        self, mock_generate_sql, mock_validate_sql, mock_execute, mock_logger
+    ) -> None:
+        """#744: a 42601 refusal is deterministic, and the parser names the fix."""
+        from src.agents.tools.query_clean_jobs import run_query_clean_jobs
+
+        mock_generate_sql.return_value = HAPPY_SQL
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql=HAPPY_SQL)
+        mock_execute.side_effect = SqlSyntaxError('syntax error at or near "LIMIT"')
+
+        with _bound_holder() as holder:
+            with self.assertRaises(ToolFailure) as raised:
+                await run_query_clean_jobs("slow question")
+
+        self.assertEqual(raised.exception.kind, "rejected")
+        self.assertEqual(raised.exception.detail, 'syntax error at or near "LIMIT"')
+        self.assertFalse(holder.published)
+        mock_logger.warning.assert_called_once_with(
+            "query_clean_jobs.sql_syntax", error='syntax error at or near "LIMIT"'
         )
 
     @patch("src.agents.tools.query_clean_jobs.logger")

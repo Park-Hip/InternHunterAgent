@@ -17,6 +17,7 @@ to ``request`` and the switch from rendered text to typed JSON are the
 compatibility decision this issue owns (#465).
 """
 
+import logging
 import os
 from typing import Annotated
 
@@ -66,6 +67,18 @@ def job_details_description() -> str:
     return GET_JOB_DETAILS_DESCRIPTION.format(max_detail_ids=load_max_detail_ids())
 
 
+def to_tool_error(failure: ToolFailure) -> ToolError:
+    """Translate one behavior failure into the MCP ToolError the model sees.
+
+    FastMCP logs a ``ToolError`` at the level the error carries. A refusal the
+    model can recover from - ``rejected`` and the other named kinds - is normal
+    serving, so it is logged at WARNING; ``unavailable`` is a genuine server
+    fault and stays ERROR (#744).
+    """
+    log_level = logging.ERROR if failure.kind == "unavailable" else logging.WARNING
+    return ToolError(f"{failure.kind}: {failure.detail}", log_level=log_level)
+
+
 def create_job_mcp_server() -> FastMCP:
     """Build the job-query MCP server with the v1 tool pair."""
     mcp = FastMCP(MCP_SERVER_NAME)
@@ -77,7 +90,7 @@ def create_job_mcp_server() -> FastMCP:
         try:
             return await run_query_clean_jobs(request)
         except ToolFailure as failure:
-            raise ToolError(f"{failure.kind}: {failure.detail}") from failure
+            raise to_tool_error(failure) from failure
 
     @mcp.tool(name=GET_JOB_DETAILS_TOOL, description=job_details_description())
     async def get_job_details(
@@ -89,7 +102,7 @@ def create_job_mcp_server() -> FastMCP:
         try:
             return await run_get_job_details(ids)
         except ToolFailure as failure:
-            raise ToolError(f"{failure.kind}: {failure.detail}") from failure
+            raise to_tool_error(failure) from failure
 
     return mcp
 

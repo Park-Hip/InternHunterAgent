@@ -7,6 +7,7 @@ in-process: no model call, no database, and the behaviors are replaced.
 
 from __future__ import annotations
 
+import logging
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -22,6 +23,7 @@ from src.agents.mcp.job_server import (
     REQUEST_ARGUMENT_DESCRIPTION,
     create_job_mcp_server,
     job_details_description,
+    to_tool_error,
 )
 from src.agents.tools.failures import ToolFailure
 from src.agents.tools.get_job_details import load_max_detail_ids
@@ -174,6 +176,20 @@ class JobMcpServerContractTests(unittest.IsolatedAsyncioTestCase):
             _text_of(call), 'unknown_column: column "remote" does not exist'
         )
         self.assertIsNone(call.structured_content)
+
+    def test_a_recoverable_failure_is_logged_at_warning(self) -> None:
+        # #744: a model-recoverable refusal is normal serving, so the MCP layer
+        # must not log it as a server fault.
+        error = to_tool_error(ToolFailure("rejected", "Only SELECT statements are allowed"))
+
+        self.assertEqual(error.log_level, logging.WARNING)
+
+    def test_an_unavailable_failure_is_logged_at_error(self) -> None:
+        error = to_tool_error(
+            ToolFailure("unavailable", "the database could not run the query")
+        )
+
+        self.assertEqual(error.log_level, logging.ERROR)
 
     async def test_a_behavior_failure_raises_by_default(self) -> None:
         failure = ToolFailure("unavailable", "the database could not run the query")

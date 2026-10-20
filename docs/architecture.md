@@ -373,6 +373,7 @@ The versioned system prompt is served by `src/agents/runtime/prompts.py` from `c
 One resolved bundle supplies the system, schema-context, and SQL-generation prompts for each request.
 It steers the model to use the job-data tool for any question that depends on stored postings, rather than answering from its own parameters.
 Prompt change (edit, merge, deploy, register), candidate evaluation, and rollback are owned by the [Langfuse prompt management guide](how-to/manage-langfuse-prompts.md).
+The prompt surfaces, how a turn reads them, and their trace lineage are described in [the prompts module guide](modules/prompts.md).
 The runtime extracts the final answer from the last message and returns it as a plain string.
 
 The system prompt owns every user-facing word about a tool result; the tools return facts and no

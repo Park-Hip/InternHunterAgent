@@ -638,7 +638,7 @@ layer:
 | Event | Payload | When |
 |---|---|---|
 | `session` | `{session_id}` | first, before any token |
-| `tool` | `{name, status, call_id, arguments, duration_ms, error, row_count, truncated}` | when each tool call starts and ends |
+| `tool` | `{name, status, call_id, arguments, duration_ms, error, row_count, truncated, page_offset, rows_returned}` | when each tool call starts and ends |
 | `token` | `{text}` | each surviving chunk, many |
 | `metadata` | `{trace_id, trace_url, answer_source}` (`model` or `fallback`) | once, after the token stream ends |
 | `error` | `{message, code, retryable}` | in place of further tokens on mid-run failure |

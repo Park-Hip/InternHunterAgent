@@ -13,11 +13,12 @@ what you look at.
 
 A second phase replays one canned server sequence per fixture through the real
 page and the real app.js, with fetch() stubbed, so the stopped turn, the error
-turn, and both no-answer turns - states a static page cannot reach on its own -
-are captured for review as well. The stopped fixture presses Dừng mid-turn; the
-error payload is built from the server's own constants, and the no-answer
-fixtures exercise both cases the card must distinguish: a query that ran and
-matched nothing, and a model that wrote nothing.
+turn, the past-end page, and both no-answer turns - states a static page cannot
+reach on its own - are captured for review as well.
+The stopped fixture presses Dừng mid-turn; the error payload is built from the
+server's own constants, and the no-answer fixtures exercise both cases the card
+must distinguish: a query that ran and matched nothing, and a model that wrote
+nothing.
 Two multi-call retrieval turns pin the turn-level rule: an early zero followed
 by a match must not leave the card up, and a match followed by a zero must show
 the card for the latest call.
@@ -69,6 +70,13 @@ STOPPED_SELECTOR = (
 # misleading image.
 ZERO_RESULT_SELECTOR = (
     "article.turn:has(.turn__nodata)" ':has(.toolcard[data-status="ok"])'
+)
+
+# A past-the-end page must render its own no-more-results state instead of the
+# partial-list copy, even though the match total is non-zero (#726).
+PAST_END_SELECTOR = (
+    "article.turn"
+    ':has(.toolcard[data-status="ok"] .toolcard__status:has-text("không còn kết quả để hiển thị"))'
 )
 
 # The latest result decides. A later matching call must clear the earlier zero:
@@ -145,7 +153,7 @@ def capture(
 
 
 def build_harnesses() -> list[Harness]:
-    """The stopped, error, no-answer, and multi-call retrieval turns.
+    """The stopped, error, no-answer, past-end, and multi-call retrieval turns.
 
     The error payload is built from the server's own constants, and the
     no-answer fixtures carry the same `answer_source` the service emits, so
@@ -213,6 +221,44 @@ def build_harnesses() -> list[Harness]:
                         },
                     ),
                     ("token", {"text": "Không tìm thấy tin tuyển dụng phù hợp."}),
+                    (
+                        "metadata",
+                        {
+                            "trace_id": None,
+                            "trace_url": None,
+                            "answer_source": "model",
+                        },
+                    ),
+                    ("done", {}),
+                ]
+            ),
+        ),
+        Harness(
+            name="past-end-page",
+            selector=PAST_END_SELECTOR,
+            html=_harness_html(
+                [
+                    ("session", session),
+                    (
+                        "tool",
+                        {
+                            "name": "query_clean_jobs",
+                            "status": "ok",
+                            "call_id": "screenshot-past-end",
+                            "arguments": {"question": HARNESS_QUESTION},
+                            "duration_ms": 38,
+                            "row_count": 161,
+                            "truncated": True,
+                            "page_offset": 200,
+                            "rows_returned": 0,
+                        },
+                    ),
+                    (
+                        "token",
+                        {
+                            "text": "Trang này nằm sau trang cuối; tổng cộng 161 tin phù hợp."
+                        },
+                    ),
                     (
                         "metadata",
                         {

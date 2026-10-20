@@ -110,6 +110,13 @@ class StreamToolEvent(BaseModel):
     #: True when the returned rows were capped. A count without this would imply
     #: the answer shows every match, which is exactly the impression to avoid.
     truncated: bool = False
+    #: Where the returned rows started in the match set, when the tool ran a row
+    #: listing. None means the tool did not report a page.
+    page_offset: int | None = None
+    #: How many rows this call returned. Distinct from ``row_count``, which is
+    #: the whole match set: zero here on a later page means the page starts past
+    #: the end, not that the search matched nothing.
+    rows_returned: int | None = None
 
 
 class StreamDoneEvent(BaseModel):

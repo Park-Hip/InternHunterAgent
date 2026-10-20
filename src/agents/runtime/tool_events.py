@@ -82,6 +82,8 @@ class ToolResultFacts:
 
     row_count: int | None = None
     truncated: bool = False
+    page_offset: int | None = None
+    rows_returned: int | None = None
     published: bool = False
 
 
@@ -102,7 +104,13 @@ def reset_result_holder(token: ResultFactsToken) -> None:
     _last_holder.reset(token)
 
 
-def publish_tool_result(*, row_count: int | None, truncated: bool = False) -> None:
+def publish_tool_result(
+    *,
+    row_count: int | None,
+    truncated: bool = False,
+    page_offset: int | None = None,
+    rows_returned: int | None = None,
+) -> None:
     """Record result facts for the tool call in progress, if one is observed.
 
     A tool running outside the observed agent simply publishes nothing, which is
@@ -113,6 +121,8 @@ def publish_tool_result(*, row_count: int | None, truncated: bool = False) -> No
         return
     holder.row_count = row_count
     holder.truncated = truncated
+    holder.page_offset = page_offset
+    holder.rows_returned = rows_returned
     holder.published = True
 
 
@@ -147,6 +157,8 @@ async def emit_tool_event(
             error=error,
             row_count=facts.row_count if facts else None,
             truncated=bool(facts.truncated) if facts else False,
+            page_offset=facts.page_offset if facts else None,
+            rows_returned=facts.rows_returned if facts else None,
         )
     )
 

@@ -127,7 +127,7 @@ A listing question costs more: in one run on `778becc`, "Liệt kê chi tiết t
 | Event | Payload | When |
 |---|---|---|
 | `session` | `session_id` | First, before the agent runs |
-| `tool` | `name`, `status` (`running`, `ok`, `error`), `call_id`, `arguments`, `duration_ms`, `error`, `row_count`, `truncated` | When each tool call starts and ends, interleaved with tokens |
+| `tool` | `name`, `status` (`running`, `ok`, `error`), `call_id`, `arguments`, `duration_ms`, `error`, `row_count`, `truncated`, `page_offset`, `rows_returned` | When each tool call starts and ends, interleaved with tokens |
 | `token` | `text` | Each chunk of answer text, many |
 | `metadata` | `trace_id`, `trace_url`, `answer_source` (`model` or `fallback`) | Once, after the last token; never on a failed turn |
 | `error` | `message`, `code`, `retryable` | In place of further tokens when the turn fails |
@@ -138,6 +138,8 @@ A failed turn is `session`, whatever arrived before the failure, `error`, `done`
 `metadata.answer_source` is `fallback` when the service injected the empty-answer sentence, and `model` otherwise.
 The web client keys the no-answer card on that field, never on the fallback text.
 For the query-ran case, the client keeps the latest `tool` event that carries a numeric `row_count`; a later match clears an earlier zero, and a call with `row_count: null` leaves the last known count untouched.
+`row_count` is the whole match set; `page_offset` and `rows_returned` describe the page the tool fetched.
+The card uses those page fields to tell an empty later page from a search that matched nothing (#726).
 The published schema is `STREAM_EVENT_SCHEMA` in `src/api/schemas.py`, built from the models in `src/agents/models.py`; [the architecture document](../architecture.md), section 4.2, records why SSE and why `session` comes first.
 
 **The answer-only filter.**
@@ -178,7 +180,7 @@ flowchart TD
 | Producer task and queue in the runtime | Tool events come from middleware deep inside the graph, while tokens come from the stream; both must reach the user in real time and in order | Tool cards would arrive after the answer |
 | Internal signals (`RuntimeCompleted`, `RuntimeFailed`) | The producer's end-of-stream marker and its failure channel share the queue with tokens so a turn stays in one order, but they are not public events: the service consumes them and never forwards one | A finished turn and a failed one would look the same to the service, and a failure would have to be smuggled into a public frame (#679) |
 | `ContextVar` emitter (`bind_tool_event_emitter`) | The compiled agent is cached and shared across turns, so its middleware cannot hold per-turn state; the binding is copied into the producer task when it is created | A concurrent turn could receive another turn's tool events |
-| Result holder (`ToolResultFacts`) | A tool may run in a copied context, where a `ContextVar` rebinding is invisible to the middleware; a shared mutable holder survives that | The tool card would lose its `row_count` |
+| Result holder (`ToolResultFacts`) | A tool may run in a copied context, where a `ContextVar` rebinding is invisible to the middleware; a shared mutable holder survives that | The tool card would lose its `row_count` and page facts |
 | Consume task and queue in the service | The deadline waits on a queue, not on the generator; cancelling a wait on a queue is safe, cancelling an async generator mid-step is not | An expired deadline could hang in generator cleanup, which ADR-0048 forbids |
 | Completion handshake (`completion_event`) | The runtime yields `metadata`, then keeps the Langfuse span open until the service has sent `done` | The span would close before the stream finished, and the recorded completion latency would be wrong |
 | Queues of size 1 | Backpressure: the model is never read faster than the browser receives | A slow or vanished client could leave a backlog of events in memory |

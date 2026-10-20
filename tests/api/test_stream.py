@@ -253,6 +253,14 @@ class StreamOpenAPITests(unittest.TestCase):
             {"message", "code", "retryable"}.issubset(error_schema["properties"])
         )
 
+        tool_ref = discriminator["mapping"]["tool"]
+        tool_schema = event_schema["$defs"][tool_ref.rsplit("/", maxsplit=1)[-1]]
+        self.assertTrue(
+            {"row_count", "truncated", "page_offset", "rows_returned"}.issubset(
+                tool_schema["properties"]
+            )
+        )
+
         metadata_ref = discriminator["mapping"]["metadata"]
         metadata_schema = event_schema["$defs"][
             metadata_ref.rsplit("/", maxsplit=1)[-1]
@@ -300,6 +308,8 @@ class StreamPublishedContractTests(unittest.TestCase):
                 error=None,
                 row_count=7,
                 truncated=False,
+                page_offset=0,
+                rows_returned=7,
             )
             yield StreamMetadataEvent(
                 type="metadata",
@@ -329,6 +339,12 @@ class StreamPublishedContractTests(unittest.TestCase):
                     f"the {event_type!r} frame omits {sorted(missing)}, which the "
                     f"published schema marks as required",
                 )
+
+        tool_payload = next(
+            payload for event_type, payload in events if event_type == "tool"
+        )
+        self.assertEqual(tool_payload["page_offset"], 0)
+        self.assertEqual(tool_payload["rows_returned"], 7)
 
     def test_the_error_frame_satisfies_the_published_schema(self) -> None:
         async def _fake_astream(**kwargs):

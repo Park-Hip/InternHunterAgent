@@ -133,6 +133,33 @@ class ToolObservationMiddlewareTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNone(error_event.row_count)
         self.assertFalse(error_event.truncated)
+        self.assertIsNone(error_event.page_offset)
+        self.assertIsNone(error_event.rows_returned)
+
+    async def test_result_facts_carry_the_page_bounds(self) -> None:
+        """The card needs the page start and the shown-row count to tell an
+        empty later page from a search that matched nothing (#726)."""
+
+        async def handler(_request):
+            publish_tool_result(
+                row_count=161,
+                truncated=True,
+                page_offset=200,
+                rows_returned=0,
+            )
+            return object()
+
+        await ToolObservationMiddleware().awrap_tool_call(
+            _request("query_clean_jobs", {"request": "the page after the end"}),
+            handler,
+        )
+
+        ok_event = self.collector.events[1]
+        self.assertEqual(ok_event.status, "ok")
+        self.assertEqual(ok_event.row_count, 161)
+        self.assertTrue(ok_event.truncated)
+        self.assertEqual(ok_event.page_offset, 200)
+        self.assertEqual(ok_event.rows_returned, 0)
 
     async def test_a_failing_tool_leaves_no_result_holder_bound(self) -> None:
         """A released holder, so nothing later in this context reads stale facts."""

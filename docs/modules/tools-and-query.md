@@ -15,7 +15,7 @@ It does not own the prompt text ([the prompts guide](prompts.md)), the ReAct loo
 - **Request.** One standalone question in the user's language, restating every filter from earlier turns that still applies.
   The agent writes it; the tool does not read conversation history.
 - **SQL generation.** One `sql_generation` model call that receives the SQL rules, the schema context, and the request, and returns one `SELECT`.
-- **Validation.** A deterministic, non-parsing scope check: one statement, `SELECT` only, allowlisted table, no write verbs, no comments, no server-side functions, no hidden names.
+- **Validation.** A deterministic scope check read from PostgreSQL's parse tree: one statement, `SELECT` only, allowlisted table and functions, no comments, no hidden names.
 - **Bounded read.** One transaction on the agent role, read-only at repeatable read, with a server-side statement timeout, a row cap, and a byte budget.
 - **Facts.** The SQL, columns, rows, and real match total as typed JSON. The system prompt, not this module, owns the sentence the reader sees.
 
@@ -56,7 +56,7 @@ flowchart LR
 2. **The MCP wrapper keeps the public contract.** `query_clean_jobs` takes `request`; `get_job_details` takes a list of `id`s. A `ToolFailure` becomes a `ToolError`, which the adapter turns into a `status="error"` tool message.
 3. **SQL generation is one model call.** `generate_sql` joins `sql_generation`, `schema_context`, and the question into one message and calls the `sql_generation` profile from `config/settings.yaml`. Inside an agent, the ambient LangChain callbacks keep the generation in the trace; a plain MCP client gets an explicit Langfuse generation instead.
 4. **Validation is the trust boundary.** `validate_sql` returns the cleaned statement or a reason. Only a valid statement reaches the database.
-5. **Bounds are resolved before execution.** `resolve_bounds` strips a trailing `LIMIT` and `OFFSET`, honors a user limit only when it is at most `agent.query.max_rows` (20), and otherwise fetches the cap. An `OFFSET` is a position and is never capped.
+5. **Bounds are resolved before execution.** `resolve_bounds` reads the statement's own `LIMIT`, `OFFSET`, or `FETCH FIRST` from the parse tree, honors a user limit only when it is at most `agent.query.max_rows` (20), and otherwise fetches the cap. A non-literal bound is refused with a named reason. An `OFFSET` is a position and is never capped.
 6. **Execution is one bounded transaction.** The session first sets `REPEATABLE READ, READ ONLY`, then the server-side `statement_timeout` (2000 ms), then runs `base_sql LIMIT n [OFFSET m]`. The companion `SELECT count(*) FROM (base_sql) AS q` runs only when needed and sees the same snapshot.
 7. **The result becomes facts.** Listing rows drop `description` (the detail tool fetches it), `Decimal` becomes `int` or `float`, dates become ISO strings, and `NULL` stays `null`.
 
@@ -112,23 +112,19 @@ The full procedure is in [the schema reference](../reference/schema.md#adding-a-
 
 ## 4. The validator: what it catches, and what it cannot
 
-`validate_sql` checks, in order:
+`validate_sql` parses the statement once with PostgreSQL's own grammar through `pglast`, and `src/services/query/statement.py` reads every fact from the tree:
 
-1. the statement is not empty;
-2. no `;` remains, so it is one statement;
-3. it starts with `SELECT`;
-4. it contains no `--`, `/*`, or `*/`;
-5. no server-side file, network, or blocking function call appears;
-6. no denylisted write, DDL, or procedure verb appears as a whole token;
-7. no `pg_` catalog or `information_schema` reference appears;
-8. no hidden column name appears as a whole token;
-9. every `FROM` or `JOIN` target is `clean_jobs`, and there is no old-style comma join.
+1. it is not empty, it is one statement, and it starts with `SELECT`, `WITH`, or a parenthesised `SELECT`;
+2. it contains no SQL comments;
+3. PostgreSQL parses it and the top-level node is a `SELECT`, including CTEs, subqueries, set operations, and set-returning functions in `FROM`;
+4. it does not write: no `SELECT INTO`, no row locking, and no data-modifying statement in a `WITH` clause;
+5. every relation is `clean_jobs`, `public.clean_jobs`, or a CTE in scope, and there is no self-join;
+6. every function is on the explicit allowlist, while server identity functions and server-side calls are refused by name;
+7. no hidden column is named; and
+8. its bounds are integer literals, with `FETCH ... WITH TIES` refused.
 
-String literals are blanked before checks 5 to 9, so `WHERE description ILIKE '%replace%'` is not a write, and `source_url` is not `source`.
-Double-quoted and Unicode-escaped identifiers are normalized before the hidden-name check, so quoting a hidden name does not evade it.
-
-It is a scope filter, not a SQL parser.
-It cannot see through a star (`SELECT *`), an aliased star (`c.*`), a subquery or CTE that selects `*`, a whole-row reference (`SELECT clean_jobs`), or `to_jsonb(clean_jobs)`.
+Because the checks read the tree, a `--` inside a string literal stays data, a CTE is not mistaken for a relation, and `LIMIT 2 + 1` is refused as a non-literal bound instead of becoming a second `LIMIT`.
+A star, an aliased star, a whole-row reference, or a CTE that selects `*` is still outside what this filter models as a column read.
 That is why the column grant exists: PostgreSQL refuses every one of those forms for the agent role, and the tool maps the refusal to a `rejected` failure that tells the model to select the declared columns explicitly (ADR-0063).
 
 ## 5. Bounds and failures
@@ -157,7 +153,7 @@ The detail is short, English, and safe: a driver message that could name the dat
 
 - **Model-written SQL, not a structured query API.** A structured API would be easier to bound but would cap the questions the agent can answer. The price is a validator, a prompt contract, and a database grant that must all agree; the validator and the grant are tested separately because either alone is a single point of failure.
 - **Facts, not sentences.** The tools return `sql`, `columns`, `rows`, and totals; the system prompt owns every user-facing word (#702). This keeps wording changes out of the data path and makes the same facts reusable by the card, the model, and the evals.
-- **The database owns the column boundary.** A token check cannot see a star, an alias, a CTE, or a whole-row reference. The grant can (#722, ADR-0063). The validator stays a shape filter, and the tests pin both layers.
+- **The database owns the column boundary.** The parser proves the statement's shape and scope, but a star and a whole-row reference still pass it as a read. The grant can refuse them (#722, ADR-0063). The validator stays a shape filter, and the tests pin both layers.
 - **The whole page is measured in memory.** The byte budget is a simple, deterministic guard that runs before the companion count. Streaming would complicate the tool contract for a result that is already capped at 20 rows.
 - **What would now be decided differently.** The contract used to be copied into the guards, the validator, the fixture loader, and the detail projection, and the schema guard demanded an exact column match. That made an additive migration an outage and let the copies drift. #743 replaced both with `src/core/column_contract.py` and a guard that checks only what the agent reads. The grant remains the boundary.
 
@@ -178,9 +174,10 @@ The detail is short, English, and safe: a driver message that could name the dat
 | `src/agents/tools/query_clean_jobs.py` → `generate_sql`, `run_query_clean_jobs` | SQL generation, validation, bounds, execution, typed facts |
 | `src/agents/tools/get_job_details.py` → `run_get_job_details` | The detail tool's id cap and typed result |
 | `src/agents/tools/failures.py` → `ToolFailure`, `FailureKind` | The closed failure vocabulary |
-| `src/services/query/sql_validator.py` → `validate_sql`, `has_id_tiebreak` | The scope checks and the total-order rule |
+| `src/services/query/sql_validator.py` → `validate_sql`, `has_id_tiebreak` | The public scope-check and total-order entry points |
+| `src/services/query/statement.py` → `parse_statement`, `StatementError` | The one parse; relations, functions, hidden names, bounds, and order facts from the tree |
 | `src/services/query/executor.py` → `execute_bounded_select`, `_bounded_session` | Read-only transaction, timeout, row cap, byte budget, error mapping |
-| `src/services/query/row_bound.py` → `resolve_bounds` | User limit, cap, and page offset |
+| `src/services/query/row_bound.py` → `resolve_bounds` | User limit, cap, and page offset read from the tree |
 | `src/services/query/job_details.py` → `fetch_job_details`, `FULL_DETAIL_COLUMNS` | The 16-column detail projection |
 | `src/services/query/table_formatter.py` → `shape_rows`, `json_value` | JSON-native facts and the listing's description drop |
 | `src/core/column_contract.py` → `VISIBLE_COLUMNS`, `HIDDEN_COLUMNS` | The one application-side column contract |

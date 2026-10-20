@@ -37,6 +37,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from src.core.column_contract import HIDDEN_COLUMN_NAMES  # noqa: E402
 from src.services.ingestion.models import CleanJob  # noqa: E402
 
 PROMPTS_PATH = ROOT / "config" / "prompts.yaml"
@@ -51,15 +52,10 @@ DECLARED_PATTERN = re.compile(
 WORD_PATTERN = re.compile(r"[a-z_][a-z0-9_]*")
 
 # Ingestion bookkeeping and lifecycle columns. The agent must not name any of
-# them: they are not in the prompt's column guide, and the schema guard that
-# checks the physical table does not check a model's projection.
-HIDDEN_COLUMNS = (
-    "source",
-    "external_id",
-    "posted_date",
-    "first_seen_at",
-    "last_seen_at",
-)
+# them: they are not in the prompt's column guide, and the PostgreSQL grant is
+# the boundary that refuses a star or whole-row read. One contract module owns
+# the names; the ORM still declares the physical table.
+HIDDEN_COLUMNS = HIDDEN_COLUMN_NAMES
 
 
 def load_prompts() -> dict[str, str]:

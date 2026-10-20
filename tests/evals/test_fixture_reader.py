@@ -22,13 +22,12 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 
 from evals.fixtures.loader import (
-    FIXTURE_HIDDEN_COLUMNS,
-    FIXTURE_VISIBLE_COLUMNS,
     fixture_database_endpoint,
     fixture_database_reachable,
     fixture_reader_database_url,
     load_fixture,
 )
+from src.core.column_contract import HIDDEN_COLUMN_NAMES, VISIBLE_COLUMN_NAMES
 
 
 @pytest.fixture(scope="module")
@@ -56,7 +55,7 @@ def reader_engine(fixture):
 
 
 def test_the_reader_role_has_only_the_contract_columns(reader_engine) -> None:
-    visible = ", ".join(FIXTURE_VISIBLE_COLUMNS)
+    visible = ", ".join(VISIBLE_COLUMN_NAMES)
     with reader_engine.connect() as conn:
         row = conn.execute(
             text(f"SELECT {visible} FROM clean_jobs ORDER BY id LIMIT 1")
@@ -69,7 +68,7 @@ def test_the_reader_role_has_only_the_contract_columns(reader_engine) -> None:
                 "'public.clean_jobs', 'SELECT')"
             )
         ).scalar_one() is False
-        for column in FIXTURE_HIDDEN_COLUMNS:
+        for column in HIDDEN_COLUMN_NAMES:
             assert conn.execute(
                 text(
                     "SELECT has_column_privilege(current_user, "

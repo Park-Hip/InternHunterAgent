@@ -223,7 +223,8 @@ Two records show the pairing; they do not measure how often it holds live.
   `SELECT` on the 16 visible columns and no table-level grant, so PostgreSQL refuses a hidden
   column, a whole row, or `SELECT *` even when the query never names a hidden column.
   `HIDDEN_COLUMNS` in `src/services/query/sql_validator.py` remains the explicit-name check, and
-  `fetch_job_details` keeps its 16-column projection.
+  `fetch_job_details` keeps its 16-column projection. Both read the names from
+  `src/core/column_contract.py`.
 
 **Deletion.**
 
@@ -308,18 +309,22 @@ Coupled: the timing keys to the workflow timeout; the role and city maps to serv
 **Add a `clean_jobs` column.**
 
 - Change in one pull request: an Alembic revision after `uv run alembic heads`, `CleanJob` and
-  `NormalizedJob` in `models.py`, the normalizer, both dicts in `upsert_clean_jobs`, and
-  `EXPECTED_COLUMNS` in `src/api/schema_guard.py`.
-- If the agent should see it, also update the prompt surfaces in `config/prompts.yaml`,
-  `fetch_job_details`, [the schema reference](../reference/schema.md), and
-  `evals/fixtures/seed_eval_db.sql`.
-  Add a migration that grants `SELECT` on the new column to `internhunter_agent`; the column grant
-  is the visibility boundary (#722, ADR-0063).
-  If hidden, do not grant it; add it to `HIDDEN_COLUMNS` in `src/services/query/sql_validator.py`
-  and to `NON_AGENT_VISIBLE_COLUMNS` in `tests/test_prompt_consistency.py`.
-- Both guards demand an exact column match, Render deploys `main` on merge, and production is
-  migrated by hand, so no single order keeps both green.
-  Use a temporary tolerance in two steps, as #624 did.
+  `NormalizedJob` in `models.py`, the normalizer, both dicts in `upsert_clean_jobs`, and the column
+  in `src/core/column_contract.py`.
+- The physical table and the ORM must match exactly for `assert_clean_jobs_schema()` at
+  `schema_check`, so ingestion refuses to run against a migrated table whose ORM change has not
+  deployed. That is the writer's fail-closed check, separate from the serving guard.
+- If the agent should not see it, add it to `HIDDEN_COLUMNS` in the contract module. Do not grant
+  it. The validator's `HIDDEN_COLUMNS` and the prompt audit read the same list, and the PostgreSQL
+  grant is the boundary for star or whole-row reads.
+- If the agent should see it, add it to `VISIBLE_COLUMNS` in the contract module and update the
+  prompt surfaces, [the schema reference](../reference/schema.md), and
+  `evals/fixtures/seed_eval_db.sql`. Add a migration that grants `SELECT` on the new column to
+  `internhunter_agent`; the grant and the code release that declares the column are one
+  coordinated cutover.
+- The serving schema guard tolerates an un-granted physical column, so applying a hidden addition's
+  migration before the code deploy no longer causes an outage. The full ordering is in
+  [the schema reference](../reference/schema.md#adding-a-physical-column).
 
 **Add a search query or change the filter.**
 Edit `queries` or `job_function`, run a manual dispatch, and check `fetched` stays well above

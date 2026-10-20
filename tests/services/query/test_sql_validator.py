@@ -422,7 +422,10 @@ class HiddenColumnTests(unittest.TestCase):
 
 class HiddenColumnContractTests(unittest.TestCase):
     def test_hidden_columns_partition_the_physical_contract(self) -> None:
-        from src.api.schema_guard import EXPECTED_COLUMNS
+        from src.core.column_contract import (
+            CONTRACT_COLUMN_NAMES,
+            HIDDEN_COLUMN_NAMES,
+        )
 
         prompt = yaml.safe_load(PROMPTS_PATH.read_text(encoding="utf-8"))["prompts"][
             "sql_generation"
@@ -431,8 +434,9 @@ class HiddenColumnContractTests(unittest.TestCase):
         self.assertIsNotNone(match)
         declared = {column.strip() for column in match.group(1).split(",") if column.strip()}
 
+        self.assertEqual(HIDDEN_COLUMNS, frozenset(HIDDEN_COLUMN_NAMES))
         self.assertEqual(HIDDEN_COLUMNS & declared, frozenset())
-        self.assertEqual(HIDDEN_COLUMNS | declared, frozenset(EXPECTED_COLUMNS))
+        self.assertEqual(HIDDEN_COLUMNS | declared, CONTRACT_COLUMN_NAMES)
 
 
 class IdTiebreakTests(unittest.TestCase):

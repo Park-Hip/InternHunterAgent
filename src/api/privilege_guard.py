@@ -7,132 +7,182 @@ still has ``CONNECT`` and ``USAGE``, and then cannot read anything. That failure
 as the first user request, looking like a configuration mistake.
 
 This module turns it into a boot failure instead. It is the second half of the serving
-guard: ``assert_serving_schema`` checks that the table is the expected shape, and this
-checks that the role the agent reads through can read the 16 visible columns, cannot read
-a hidden one, and cannot write it. The hidden-column check is load-bearing: the role holds
-column-level ``SELECT`` on the 16 contract columns and no table-level ``SELECT`` (#722),
-so a table-level grant, a hidden-column grant, or an owner role all fail here instead of
-reaching a user.
+guard: ``assert_serving_schema`` checks the columns the agent reads, and this checks the
+role's entire effective privilege set from the PostgreSQL catalogs. The only privilege it
+may hold anywhere is column-level ``SELECT`` on the 16 visible columns of
+``public.clean_jobs`` (#722, ADR-0063). Anything else - a table-level grant, a grant on a
+hidden column, a write, or any privilege on another relation such as ``raw_jobs`` or the
+checkpoint tables - refuses boot.
+
+The old version probed the 16 visible columns, the five hidden ones, and one write. That
+proved narrow facts and let a grant on any other relation boot. The census below asks the
+catalog for everything and compares the complete set, so a stray grant has nowhere to hide.
+It also fails closed when the agent DSN names another database: there is no "nothing to
+check" deployment, because the role the agent uses is always the role this guard inspects.
 """
 
 from __future__ import annotations
 
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError
-from sqlalchemy.engine import make_url
-from psycopg.errors import InsufficientPrivilege
 
-from src.core.config import settings
+from src.core.column_contract import VISIBLE_COLUMN_NAMES
 from src.core.db import agent_session_factory
 from src.core.logger import logger
 
 
 class AgentPrivilegeError(RuntimeError):
-    """The agent read role cannot read the table, can read a hidden column, or can
-    write it. Refuses to serve."""
+    """The agent read role holds a privilege outside the serving contract. Refuses to serve."""
 
 
-_READ_PROBE = "SELECT id, title, company, role, description, tech_stack, job_level, location, source_url, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable FROM clean_jobs LIMIT 1"
-# The same five columns as `src/services/query/sql_validator.HIDDEN_COLUMNS`,
-# duplicated rather than imported for the same reason `EXPECTED_COLUMNS` is
-# duplicated in `src/api/schema_guard.py`: the serving guard does not import the
-# query service. The grant migration lists them once more; all three sets change
-# together.
-_HIDDEN_COLUMNS = ("source", "external_id", "posted_date", "first_seen_at", "last_seen_at")
-# A write that changes nothing. The point is that the database refuses it, not that
-# it would have succeeded: `WHERE false` means the probe is safe even if the guard
-# is wrong about the role.
-_WRITE_PROBE = "UPDATE clean_jobs SET company = company WHERE false"
+#: One row per effective privilege the agent role holds on a non-system relation.
+#:
+#: ``has_*_privilege`` resolves inherited and PUBLIC grants, so the census reflects what
+#: the role can actually do. Column checks run separately because a table-level grant
+#: implies every column; that makes a table grant show up here as 21 column rows, which
+#: the expected set rejects just as clearly as the table row itself.
+#:
+#: ``MAINTAIN`` exists only on PostgreSQL 17+. The lateral row is filtered by server
+#: version before ``has_table_privilege`` is called with it, so the same statement runs on
+#: 16 (the local and CI version) without "unrecognized privilege type".
+_PRIVILEGE_CENSUS = """
+WITH relations AS (
+    SELECT n.nspname AS schema_name,
+           c.relname AS relation_name,
+           c.oid AS relation_oid,
+           c.relkind
+    FROM pg_catalog.pg_class AS c
+    JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+    WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname NOT LIKE 'pg_toast%'
+      AND n.nspname NOT LIKE 'pg_temp_%'
+      AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+),
+relation_privileges AS (
+    SELECT 'relation' AS scope,
+           r.schema_name,
+           r.relation_name,
+           NULL::text AS column_name,
+           p.privilege
+    FROM relations AS r
+    CROSS JOIN LATERAL (
+        SELECT unnest(
+            ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE',
+                  'REFERENCES', 'TRIGGER']
+        ) AS privilege
+        UNION ALL
+        SELECT 'MAINTAIN'
+        WHERE current_setting('server_version_num')::int >= 170000
+    ) AS p
+    WHERE r.relkind <> 'S'
+      AND pg_catalog.has_table_privilege(
+          current_user,
+          pg_catalog.format('%I.%I', r.schema_name, r.relation_name),
+          p.privilege
+      )
+),
+sequence_privileges AS (
+    SELECT 'relation' AS scope,
+           r.schema_name,
+           r.relation_name,
+           NULL::text AS column_name,
+           p.privilege
+    FROM relations AS r
+    CROSS JOIN (VALUES ('SELECT'), ('UPDATE'), ('USAGE')) AS p(privilege)
+    WHERE r.relkind = 'S'
+      AND pg_catalog.has_sequence_privilege(
+          current_user,
+          pg_catalog.format('%I.%I', r.schema_name, r.relation_name),
+          p.privilege
+      )
+),
+column_privileges AS (
+    SELECT 'column' AS scope,
+           r.schema_name,
+           r.relation_name,
+           a.attname AS column_name,
+           p.privilege
+    FROM relations AS r
+    JOIN pg_catalog.pg_attribute AS a
+      ON a.attrelid = r.relation_oid
+     AND a.attnum > 0
+     AND NOT a.attisdropped
+    CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('REFERENCES'))
+        AS p(privilege)
+    WHERE r.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND pg_catalog.has_column_privilege(
+          current_user,
+          pg_catalog.format('%I.%I', r.schema_name, r.relation_name),
+          a.attname,
+          p.privilege
+      )
+)
+SELECT scope, schema_name, relation_name, column_name, privilege
+FROM relation_privileges
+UNION ALL
+SELECT scope, schema_name, relation_name, column_name, privilege
+FROM sequence_privileges
+UNION ALL
+SELECT scope, schema_name, relation_name, column_name, privilege
+FROM column_privileges
+"""
+
+Privilege = tuple[str, str, str, str | None, str]
 
 
-def _same_database() -> bool:
-    """Whether both DSNs name one database, which is the production topology."""
-    try:
-        agent = make_url(settings.AGENT_DATABASE_URL)
-        serving = make_url(settings.DATABASE_URL)
-    except Exception as exc:  # a malformed DSN is a configuration failure, not a skip
-        raise AgentPrivilegeError(f"agent or serving DSN is unreadable: {exc}") from exc
-    return (agent.host, agent.port or 5432, agent.database) == (
-        serving.host,
-        serving.port or 5432,
-        serving.database,
+def _expected_privileges() -> frozenset[Privilege]:
+    """The complete privilege set the serving contract allows."""
+    return frozenset(
+        ("column", "public", "clean_jobs", column, "SELECT")
+        for column in VISIBLE_COLUMN_NAMES
     )
 
 
-def assert_agent_privileges() -> bool:
-    """Fail unless the agent read role has exactly the serving privileges.
+def _describe(privileges: set[Privilege] | frozenset[Privilege]) -> list[str]:
+    """Render privilege tuples compactly, with the column only when there is one."""
+    return sorted(
+        f"{schema}.{relation}"
+        + (f".{column}" if column is not None else "")
+        + f":{privilege}"
+        for scope, schema, relation, column, privilege in privileges
+    )
 
-    The role must read the 16 visible columns, must be refused every hidden
-    column, and must be refused a write. Returns ``True`` when the check ran and
-    ``False`` when it could not, which is only when the agent DSN names a
-    different database from the serving DSN. A deployment whose agent role is
-    configured against another database is not blocked by a check that has
-    nothing to check; it is told the check was skipped.
+
+def assert_agent_privileges() -> None:
+    """Refuse boot unless the agent role holds exactly the 16 column grants.
+
+    Raises AgentPrivilegeError when the role cannot be reached, when the census
+    fails, or when the effective privilege set differs from the contract in
+    either direction. The message names the missing and unexpected grants and
+    points at the re-grant procedure in ``docs/how-to/operate.md``.
     """
-    if not _same_database():
-        logger.warning(
-            "api.agent_privilege_check_skipped",
-            reason="the agent DSN names a different database from the serving DSN",
-        )
-        return False
-
     try:
         with agent_session_factory() as session:
-            session.execute(text(_READ_PROBE)).mappings().all()
-            hidden_denied = _hidden_columns_are_denied(session)
-            refused = _write_is_refused(session)
-    except AgentPrivilegeError:
-        raise
+            actual = {
+                (row[0], row[1], row[2], row[3], row[4])
+                for row in session.execute(text(_PRIVILEGE_CENSUS))
+            }
     except (OperationalError, DBAPIError) as exc:
         raise AgentPrivilegeError(
-            f"the agent read role cannot read clean_jobs: {exc}. Re-apply the role "
-            "sequence in docs/how-to/operate.md; a table rebuild drops the grant."
+            f"failed to inspect the agent read role's privileges: {exc}. Re-apply the "
+            "role sequence in docs/how-to/operate.md; a table rebuild drops the grant."
         ) from exc
 
-    if not hidden_denied:
-        raise AgentPrivilegeError(
-            "the agent read role can read a hidden column, which the serving contract "
-            "forbids. Revoke table-level SELECT and grant only the 16 visible columns; "
-            "see docs/how-to/operate.md."
+    expected = _expected_privileges()
+    missing = expected - actual
+    unexpected = actual - expected
+
+    if missing or unexpected:
+        logger.error(
+            "api.agent_privilege_drift",
+            missing=_describe(missing),
+            unexpected=_describe(unexpected),
         )
-    if not refused:
         raise AgentPrivilegeError(
-            "the agent read role can write clean_jobs, which the serving contract forbids"
+            "the agent read role's privileges do not match the serving contract: "
+            f"missing={_describe(missing)} unexpected={_describe(unexpected)}. "
+            "Grant SELECT on exactly the 16 visible columns of public.clean_jobs and "
+            "nothing else; see docs/how-to/operate.md."
         )
-    logger.info("api.agent_privileges_ok", read=True, hidden=False, write=False)
-    return True
 
-
-def _hidden_columns_are_denied(session) -> bool:
-    """Whether PostgreSQL refuses every hidden-column read by the agent role.
-
-    Each probe is a zero-row select, so the privilege is proven without reading
-    data. A refused statement aborts its transaction and the session is rolled
-    back before the next probe. Only an insufficient-privilege refusal counts
-    as a denial: any other database error escapes to the caller, so a dropped
-    connection cannot read as a passed check.
-    """
-    for column in _HIDDEN_COLUMNS:
-        try:
-            session.execute(text(f"SELECT {column} FROM clean_jobs LIMIT 0"))
-        except DBAPIError as exc:
-            if not isinstance(exc.orig, InsufficientPrivilege):
-                raise
-            session.rollback()
-            continue
-        session.rollback()
-        return False
-    return True
-
-
-def _write_is_refused(session) -> bool:
-    """Whether the database refused the write probe.
-
-    A refused statement aborts its transaction, which is expected and is why the probe
-    runs last.
-    """
-    try:
-        session.execute(text(_WRITE_PROBE))
-    except (OperationalError, DBAPIError):
-        return True
-    return False
+    logger.info("api.agent_privileges_ok", columns=len(expected), extra_privileges=0)

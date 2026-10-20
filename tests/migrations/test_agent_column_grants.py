@@ -16,6 +16,7 @@ from sqlalchemy import create_engine, text
 
 from alembic import command
 from alembic.config import Config
+from src.core.column_contract import HIDDEN_COLUMN_NAMES, VISIBLE_COLUMN_NAMES
 from src.services.ingestion.models import ingestion_teardown_statements
 
 SCRATCH_DSN = os.environ.get("SCRATCH_DATABASE_URL")
@@ -27,25 +28,6 @@ pytestmark = pytest.mark.skipif(
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENT_ROLE = "internhunter_agent"
-VISIBLE_COLUMNS = (
-    "id",
-    "title",
-    "company",
-    "role",
-    "description",
-    "tech_stack",
-    "location",
-    "source_url",
-    "job_level",
-    "listing_expires_on",
-    "created_on",
-    "is_internship",
-    "salary_min",
-    "salary_max",
-    "salary_currency",
-    "is_salary_negotiable",
-)
-HIDDEN_COLUMNS = ("source", "external_id", "posted_date", "first_seen_at", "last_seen_at")
 
 
 def _config() -> Config:
@@ -99,9 +81,9 @@ def test_the_grant_migration_scopes_the_agent_role_to_the_visible_columns() -> N
 
     with engine.connect() as conn:
         assert _table_select(conn) is False
-        for column in VISIBLE_COLUMNS:
+        for column in VISIBLE_COLUMN_NAMES:
             assert _column_select(conn, column) is True, column
-        for column in HIDDEN_COLUMNS:
+        for column in HIDDEN_COLUMN_NAMES:
             assert _column_select(conn, column) is False, column
 
     command.downgrade(config, "1d032eb356bf")

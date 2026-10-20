@@ -178,6 +178,10 @@ error names this section. Re-apply steps 2 to 4 above.
 The check is skipped, with a warning, when `AGENT_DATABASE_URL` names a different database from
 `DATABASE_URL`, because that arrangement has nothing for the check to inspect.
 
+The evaluation fixture does not share this role. Its loader provisions a dedicated
+`internhunter_eval_reader` with the same column-level grants and re-applies them after every
+fixture rebuild, so rebuilding the fixture cannot silently widen the evaluation boundary (#730).
+
 **Rotation.** When rotating the reader credential, generate a new password, update the Render
 secret, and revoke the old role after confirming the new one works:
 

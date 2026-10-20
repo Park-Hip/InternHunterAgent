@@ -21,7 +21,8 @@ This hub is the navigation map and the full command and module reference.
 ## Quick commands
 
 ```sh
-# Start the fixture database and load the frozen dataset
+# Start the fixture database and load the frozen dataset.
+# The loader also provisions internhunter_eval_reader with column-level SELECT.
 docker compose up -d postgres
 uv run python -m evals.fixtures.loader
 
@@ -46,6 +47,13 @@ uv run python -m evals.baseline_sql score evals/runs/baseline/<name>.json --data
 
 Use `--out` to write the JSON report elsewhere.
 The default output lands in the gitignored `evals/runs/` directory.
+
+The fixture loader rebuilds and seeds with the owner DSN in `eval.fixture.database_url`, then
+provisions `internhunter_eval_reader` with column-level `SELECT` on the 16 contract columns.
+The evaluation path binds `AGENT_DATABASE_URL` to `eval.fixture.reader_database_url` and scores
+through the same role, so a star query or a hidden-column read fails as it does in production
+(#730). Rebuilding the fixture re-applies the grants; see
+[`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md).
 
 ## Datasets
 
@@ -88,7 +96,8 @@ Tests live in [`tests/evals/`](../tests/evals/).
 | Test file | Production module | Behavior pinned |
 |---|---|---|
 | `test_datasets.py` | [`datasets.py`](datasets.py) | Registry selection and scenario-grammar validation |
-| `test_env.py` | [`env.py`](env.py) | Fixture environment binding before any `src` import |
+| `test_env.py` | [`env.py`](env.py) | Fixture environment binding before any `src` import, owner versus reader DSN |
+| `test_fixture_reader.py` | [`fixtures/loader.py`](fixtures/loader.py) | Reader-role provisioning, column grants after a rebuild, star denial, `rejected` mapping |
 | `test_judge.py` | [`judge.py`](judge.py) | Config-to-model wiring, provider arm selection |
 | `test_metrics.py` | [`metrics.py`](metrics.py) | Metric construction, tool expectations, field adaptation |
 | `test_report.py` | [`report.py`](report.py) | Result grouping and table rendering |
@@ -111,7 +120,7 @@ evals/
 ├── sql_check.py                  Generated-SQL vs reference-result comparison
 ├── report.py                     Result grouping and table rendering
 ├── sql_gate.py                   Credential-free SQL guard gate
-├── env.py                        Fixture database binding before any src import
+├── env.py                        Fixture owner/reader binding before any src import
 ├── _paths.py                     Shared path constants
 │
 ├── datasets/

@@ -112,7 +112,12 @@ eval:
     temperature: 0.0
     timeout_seconds: 120   # client socket timeout; default 30 was too tight for gemma CoT prompts that take 50-90s to score (measured on #266 retries of hlp-referent/hlp-senior-title/hlp-abstraction FAIL cases)
   fixture:
+    # Owner DSN: only the fixture loader builds and seeds with it.
     database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval
+    # Non-owner reader DSN: the evaluation tool and scoring path. The loader
+    # provisions this role with column-level SELECT on the 16 contract columns,
+    # mirroring production's internhunter_agent role (#730).
+    reader_database_url: postgresql+psycopg://internhunter_eval_reader:internhunter_eval@localhost:5433/internhunter_eval
   capture:
     max_attempts: 3
     consecutive_quota_failures_before_halt: 3

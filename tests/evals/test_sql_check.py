@@ -3,11 +3,26 @@
 import pytest
 
 from evals import sql_check
+from evals.fixtures.loader import fixture_reader_database_url
 
 
 def test_projection() -> None:
     assert sql_check.projected_columns("SELECT id, title FROM clean_jobs") == ["id", "title"]
     assert sql_check.projected_columns("SELECT j.id AS job_id FROM clean_jobs j") == ["job_id"]
+
+
+def test_execution_defaults_to_the_fixture_reader(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scoring must use the restricted role, not the fixture owner (#730)."""
+    used = []
+
+    def fake_create_engine(url):
+        used.append(url)
+        raise RuntimeError("stop before connecting")
+
+    monkeypatch.setattr(sql_check, "create_engine", fake_create_engine)
+    with pytest.raises(RuntimeError, match="stop before connecting"):
+        sql_check.execute_query("SELECT id FROM clean_jobs")
+    assert used == [fixture_reader_database_url()]
 
 
 def test_identity_not_row_shape(monkeypatch: pytest.MonkeyPatch) -> None:

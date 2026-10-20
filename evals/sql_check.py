@@ -1,4 +1,9 @@
-"""Compare generated SQL with reference results on the read-only fixture database."""
+"""Compare generated SQL with reference results on the read-only fixture database.
+
+Queries run through the fixture reader role, the same column-granted, non-owner
+role the evaluation tool uses (#730). A generated star or hidden-column read
+therefore fails here as it does in production instead of returning 21 columns.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +15,7 @@ from typing import Any
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from evals.fixtures.loader import fixture_database_url
+from evals.fixtures.loader import fixture_reader_database_url
 
 _SELECT = re.compile(r"\s*SELECT\s+(?:DISTINCT\s+)?(.*?)\s+FROM\s", re.I | re.S)
 _COUNT = re.compile(r"\s*COUNT\s*\(\s*\*\s*\)\s+AS\s+count\s*", re.I)
@@ -29,7 +34,7 @@ def projected_columns(sql: str) -> list[str] | None:
 
 
 def execute_query(sql: str, database_url: str | None = None) -> list[dict[str, Any]]:
-    engine = create_engine(database_url or fixture_database_url())
+    engine = create_engine(database_url or fixture_reader_database_url())
     try:
         with engine.begin() as connection:
             connection.execute(text("SET TRANSACTION READ ONLY"))

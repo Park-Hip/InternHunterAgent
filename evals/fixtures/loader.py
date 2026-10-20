@@ -27,9 +27,59 @@ SETTINGS_PATH = REPO_ROOT / "config" / "settings.yaml"
 # before failing, which is what made a missing local Postgres cost minutes.
 FIXTURE_REACHABILITY_TIMEOUT_SECONDS = 2.0
 
+# The 16-column agent contract. Mirrors the #722 grant migration, the prompt's
+# schema context, src/api/privilege_guard.py, and src/services/query/sql_validator.py.
+# A visibility change updates all of them together.
+FIXTURE_VISIBLE_COLUMNS = (
+    "id",
+    "title",
+    "company",
+    "role",
+    "description",
+    "tech_stack",
+    "location",
+    "source_url",
+    "job_level",
+    "listing_expires_on",
+    "created_on",
+    "is_internship",
+    "salary_min",
+    "salary_max",
+    "salary_currency",
+    "is_salary_negotiable",
+)
+FIXTURE_HIDDEN_COLUMNS = (
+    "source",
+    "external_id",
+    "posted_date",
+    "first_seen_at",
+    "last_seen_at",
+)
+
+
+def _fixture_config() -> dict:
+    settings_yaml = yaml.safe_load(SETTINGS_PATH.read_text(encoding="utf-8"))
+    eval_cfg = (settings_yaml or {}).get("eval")
+    if not isinstance(eval_cfg, dict):
+        raise ValueError("Missing 'eval' section in config/settings.yaml")
+
+    fixture_cfg = eval_cfg.get("fixture")
+    if not isinstance(fixture_cfg, dict):
+        raise ValueError("Missing 'eval.fixture' section in config/settings.yaml")
+    return fixture_cfg
+
+
+def _required_fixture_url(fixture_cfg: dict, key: str) -> str:
+    value = fixture_cfg.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            f"Missing or empty 'eval.fixture.{key}' in config/settings.yaml"
+        )
+    return value
+
 
 def fixture_database_url() -> str:
-    """Resolve the fixture DSN. Sole owner: driver, loader, and grading all call this.
+    """Resolve the fixture owner DSN, used only to build and seed the fixture.
 
     Reads the YAML directly instead of going through ``src.core.config.settings``,
     and that is load-bearing rather than lazy. ``load_settings()`` constructs and
@@ -40,21 +90,45 @@ def fixture_database_url() -> str:
     would be ignored - so a capture would silently run the agent against
     production data instead of the frozen fixture.
     """
-    settings_yaml = yaml.safe_load(SETTINGS_PATH.read_text(encoding="utf-8"))
-    eval_cfg = (settings_yaml or {}).get("eval")
-    if not isinstance(eval_cfg, dict):
-        raise ValueError("Missing 'eval' section in config/settings.yaml")
+    return _required_fixture_url(_fixture_config(), "database_url")
 
-    fixture_cfg = eval_cfg.get("fixture")
-    if not isinstance(fixture_cfg, dict):
-        raise ValueError("Missing 'eval.fixture' section in config/settings.yaml")
 
-    database_url = fixture_cfg.get("database_url")
-    if not isinstance(database_url, str) or not database_url.strip():
+def fixture_reader_database_url() -> str:
+    """Resolve the non-owner DSN the evaluation path reads the fixture through.
+
+    The loader owns ``eval.fixture.database_url`` and must keep it for rebuilds.
+    The tool, executor, and SQL scoring use this DSN instead, so the evaluation
+    path exercises the same column-level boundary as production (#730). The URL
+    is validated as the same database under a different login role here, before
+    any connection is attempted.
+    """
+    fixture_cfg = _fixture_config()
+    owner = make_url(_required_fixture_url(fixture_cfg, "database_url"))
+    reader = make_url(_required_fixture_url(fixture_cfg, "reader_database_url"))
+
+    def endpoint(url):
+        return (url.host or "localhost", url.port or 5432, url.database)
+
+    if endpoint(owner) != endpoint(reader):
         raise ValueError(
-            "Missing or empty 'eval.fixture.database_url' in config/settings.yaml"
+            "'eval.fixture.reader_database_url' must name the same database as "
+            "'eval.fixture.database_url'"
         )
-    return database_url
+    if not reader.username:
+        raise ValueError(
+            "'eval.fixture.reader_database_url' must name a login role"
+        )
+    if reader.username == owner.username:
+        raise ValueError(
+            "'eval.fixture.reader_database_url' must name a non-owner role, not "
+            f"the fixture owner {owner.username!r}"
+        )
+    if not reader.password:
+        raise ValueError(
+            "'eval.fixture.reader_database_url' must include the fixture reader "
+            "password so the loader can provision the role"
+        )
+    return _required_fixture_url(fixture_cfg, "reader_database_url")
 
 
 def fixture_database_endpoint() -> tuple[str, int]:
@@ -224,6 +298,142 @@ def _ensure_database_exists(dsn: str) -> None:
         engine.dispose()
 
 
+def _quote_ident(value: str) -> str:
+    """Quote one PostgreSQL identifier, including the role and database names."""
+    return '"' + value.replace('"', '""') + '"'
+
+
+def _quote_literal(value: str) -> str:
+    """Quote one PostgreSQL string literal."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _provision_reader_role(dsn: str) -> None:
+    """Create or refresh the fixture reader and re-apply its column grants.
+
+    PostgreSQL grants belong to the table object, so every rebuild drops them.
+    This runs after the migration chain and seed on every ``load_fixture()``,
+    which is what makes "rebuild the fixture" sufficient: no separate grant step
+    can be forgotten. The role is dedicated to the fixture, never the production
+    ``internhunter_agent`` role, so resetting its password cannot touch a serving
+    credential.
+
+    The post-condition is checked in the database rather than assumed: the role
+    must read the 16 contract columns, must have no table-level ``SELECT``, and
+    must be refused every hidden column. If any of that is false the loader
+    fails instead of leaving an evaluation path that measures the wrong boundary.
+    """
+    reader = make_url(fixture_reader_database_url())
+    owner = make_url(dsn)
+    role = reader.username
+    password = reader.password
+    # fixture_reader_database_url() has already validated both.
+    assert role is not None and password is not None
+
+    quoted_role = _quote_ident(role)
+    quoted_database = _quote_ident(owner.database or "")
+    visible = ", ".join(_quote_ident(column) for column in FIXTURE_VISIBLE_COLUMNS)
+    hidden = ", ".join(_quote_ident(column) for column in FIXTURE_HIDDEN_COLUMNS)
+
+    engine = create_engine(dsn)
+    try:
+        with engine.begin() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM pg_roles WHERE rolname = :role"), {"role": role}
+            ).scalar()
+            if exists:
+                conn.execute(
+                    text(
+                        f"ALTER ROLE {quoted_role} LOGIN PASSWORD "
+                        f"{_quote_literal(password)}"
+                    )
+                )
+            else:
+                conn.execute(
+                    text(
+                        f"CREATE ROLE {quoted_role} LOGIN PASSWORD "
+                        f"{_quote_literal(password)}"
+                    )
+                )
+
+            conn.execute(
+                text(f"GRANT CONNECT ON DATABASE {quoted_database} TO {quoted_role}")
+            )
+            conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {quoted_role}"))
+            # Table-level SELECT implies every column, including the hidden five.
+            # Revoking it first is what makes the column grants the boundary.
+            conn.execute(
+                text(
+                    f"REVOKE ALL PRIVILEGES ON TABLE public.clean_jobs "
+                    f"FROM {quoted_role}"
+                )
+            )
+            # A table-level revoke does not clear column grants, so drop any
+            # stale hidden-column grant explicitly before adding the visible set.
+            conn.execute(
+                text(
+                    f"REVOKE SELECT ({hidden}) ON TABLE public.clean_jobs "
+                    f"FROM {quoted_role}"
+                )
+            )
+            conn.execute(
+                text(
+                    f"GRANT SELECT ({visible}) ON TABLE public.clean_jobs "
+                    f"TO {quoted_role}"
+                )
+            )
+            conn.execute(
+                text(
+                    f"REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE "
+                    f"public.clean_jobs FROM {quoted_role}"
+                )
+            )
+
+            owner_role = conn.execute(
+                text(
+                    "SELECT pg_get_userbyid(relowner) FROM pg_class "
+                    "WHERE oid = 'public.clean_jobs'::regclass"
+                )
+            ).scalar_one()
+            if owner_role == role:
+                raise ValueError("the fixture reader role must not own clean_jobs")
+            if conn.execute(
+                text(
+                    "SELECT has_table_privilege(:role, 'public.clean_jobs', "
+                    "'SELECT')"
+                ),
+                {"role": role},
+            ).scalar_one():
+                raise ValueError(
+                    "the fixture reader role still has table-level SELECT on "
+                    "clean_jobs"
+                )
+            for column in FIXTURE_HIDDEN_COLUMNS:
+                if conn.execute(
+                    text(
+                        "SELECT has_column_privilege(:role, 'public.clean_jobs', "
+                        ":column, 'SELECT')"
+                    ),
+                    {"role": role, "column": column},
+                ).scalar_one():
+                    raise ValueError(
+                        "the fixture reader role can read hidden column "
+                        f"{column!r}"
+                    )
+            if not conn.execute(
+                text(
+                    "SELECT has_column_privilege(:role, 'public.clean_jobs', "
+                    "'id', 'SELECT')"
+                ),
+                {"role": role},
+            ).scalar_one():
+                raise ValueError(
+                    "the fixture reader role cannot read the contract columns"
+                )
+    finally:
+        engine.dispose()
+
+
 def load_fixture() -> None:
     """Rebuild the dedicated fixture schema through Alembic and load seed data."""
     dsn = fixture_database_url()
@@ -231,6 +441,7 @@ def load_fixture() -> None:
     _drop_fixture_schema(dsn)
     _upgrade_schema(dsn)
     _run_sql_file(dsn, SEED_SQL_PATH)
+    _provision_reader_role(dsn)
 
 
 def reset_fixture() -> None:

@@ -22,7 +22,31 @@ uv run python -m evals.fixtures.loader
 uv run python -m evals --gate
 ```
 
-It runs every reviewed case in [`evals/datasets/sql_guard.yaml`](../../evals/datasets/sql_guard.yaml) through the same pipeline the tool uses - `validate_sql`, `resolve_bounds`, then the fixture - and scores two deterministic metrics:
+### The fixture reader role
+
+The fixture loader owns the `internhunter_eval` schema as `internhunter` and uses the
+owner DSN only to build and seed it. The evaluation path must not read as that owner,
+because PostgreSQL lets a table owner bypass grants. `evals/fixtures/loader.py` therefore
+provisions a dedicated `internhunter_eval_reader` login role and grants it `CONNECT`,
+schema `USAGE`, and column-level `SELECT` on the 16 contract columns of `clean_jobs`.
+The role holds no table-level `SELECT` and no write privilege, mirroring production's
+`internhunter_agent` boundary from [#722](https://github.com/Park-Hip/InternHunterAgent/issues/722).
+
+`evals/env.py` binds `AGENT_DATABASE_URL` to `eval.fixture.reader_database_url`, so the
+tool, the executor, and `evals/sql_check.py` all read through the restricted role.
+`DATABASE_URL` stays on the owner for fixture loading. The DSNs are non-secret and are
+local or CI only; the loader resets the reader password from that config on every rebuild.
+
+**A table rebuild re-applies the grants.** `load_fixture()` and `reset_fixture()` drop and
+recreate the schema, apply the Alembic chain, seed the 24 rows, and then call the reader
+provisioning step again. That step verifies the post-condition in PostgreSQL (visible
+columns readable, table-level and hidden-column `SELECT` absent) and fails the loader
+rather than leaving an evaluation on the wrong side of the boundary. If you apply Alembic
+directly to the fixture without the loader, run `uv run python -m evals.fixtures.loader`
+afterward. A star or hidden-column read now fails with SQLSTATE 42501 instead of returning
+the five hidden ingestion columns, and the tool maps that refusal to `rejected`.
+
+The gate runs every reviewed case in [`evals/datasets/sql_guard.yaml`](../../evals/datasets/sql_guard.yaml) through the same pipeline the tool uses - `validate_sql`, `resolve_bounds`, then the fixture - and scores two deterministic metrics:
 
 | Metric | Grades |
 | --- | --- |
@@ -91,7 +115,7 @@ A deterministic metric that is not exactly 1.0 exits nonzero. That is the defaul
 Asking for a metric that the selected scenarios do not declare is an error, not an empty report. `uv run python -m evals --only sql_accuracy --ids SAF-DESTRUCTIVE-REFUSAL-1` names the metric and exits nonzero rather than printing nothing and passing.
 `--allow-fail` turns a below-threshold deterministic score back into a printed finding for exploratory runs. It does not excuse a metric that could not be evaluated: errors, unrun cases, and infrastructure failures exit nonzero in every mode.
 Judge metrics stay reported-only. A judge score is continuous in `[0, 1]`, so requiring 1.0 of it would fail every run and prove nothing; no judge threshold is configured yet.
-The fixture loader still exports `fixture_database_url()` for other research scripts.
+The fixture loader still exports `fixture_database_url()` for owner-side research scripts and `fixture_reader_database_url()` for anything that should read through the agent boundary.
 
 To compare the 12 preserved v8 human labels with the current judge once credentials are available, run `uv run pytest -o addopts='' -m eval -s tests/evals/test_holdout_judge.py`.
 Disagreements are printed as findings for the dataset redesign, not hidden or treated as calibrated thresholds.

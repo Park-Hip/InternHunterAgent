@@ -5,20 +5,17 @@ from pathlib import Path
 
 import yaml
 
+from src.core.column_contract import (
+    CONTRACT_COLUMN_NAMES,
+    HIDDEN_COLUMN_NAMES,
+    VISIBLE_COLUMN_NAMES,
+)
 from src.services.ingestion.models import CleanJob
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMPTS_PATH = ROOT / "config" / "prompts.yaml"
-NON_AGENT_VISIBLE_COLUMNS = frozenset(
-    {
-        "source",
-        "external_id",
-        "posted_date",
-        "first_seen_at",
-        "last_seen_at",
-    }
-)
+NON_AGENT_VISIBLE_COLUMNS = frozenset(HIDDEN_COLUMN_NAMES)
 # The one line that declares which columns the model may reference.
 DECLARED_PATTERN = re.compile(
     r"Reference only real columns:\s*(.+?)\.\s+Never invent a column", re.DOTALL
@@ -76,6 +73,37 @@ def test_prompt_column_lists_match_the_agent_visible_model_columns() -> None:
 
     assert schema_context_columns(prompt_blocks["schema_context"]) == expected_columns
     assert sql_generation_columns(prompt_blocks["sql_generation"]) == expected_columns
+
+
+def test_the_application_contract_matches_the_orm_and_the_prompt() -> None:
+    """One contract module feeds the guards and the query service.
+
+    The ORM still declares the physical table and the prompt YAML still declares
+    the model's vocabulary. This is the test that notices when one of those
+    declarations moves without the other two.
+    """
+    model_columns = {column.name for column in CleanJob.__table__.columns}
+    prompt_blocks = prompts()
+
+    assert set(VISIBLE_COLUMN_NAMES) == agent_visible_model_columns()
+    assert CONTRACT_COLUMN_NAMES == model_columns
+    assert schema_context_columns(prompt_blocks["schema_context"]) == set(
+        VISIBLE_COLUMN_NAMES
+    )
+    assert sql_generation_columns(prompt_blocks["sql_generation"]) == set(
+        VISIBLE_COLUMN_NAMES
+    )
+
+
+def test_the_sql_generation_prompt_lists_the_contract_in_order() -> None:
+    """The prompt's declared order is the order `fetch_job_details` returns."""
+    prompt = prompts()["sql_generation"]
+    match = DECLARED_PATTERN.search(prompt)
+    assert match is not None
+
+    declared = [column.strip() for column in match.group(1).split(",")]
+
+    assert declared == list(VISIBLE_COLUMN_NAMES)
 
 
 def test_the_served_sql_prompt_never_names_an_undeclared_column() -> None:

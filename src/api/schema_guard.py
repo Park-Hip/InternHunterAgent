@@ -1,19 +1,21 @@
 """Boot-time schema guard for the serving (read) path.
 
-Fails the FastAPI boot loudly if the live ``clean_jobs`` table has drifted from
-the contract the serving path relies on, instead of erroring mid-query on a
-renamed or missing column.
+Fails the FastAPI boot loudly if a column the serving path relies on is missing
+or has changed type, instead of erroring mid-query on a renamed column.
 
-This mirrors the write-path guard in ``src/services/ingestion/safety.py`` but is
-a separate serving-layer function: it imports only from ``src.core.*`` and does
-not pull the ingestion package into the serving path. The expected column set is
-therefore duplicated here as a frozen literal rather than derived from the
-ingestion ORM (see ``EXPECTED_COLUMNS``).
+The guard deliberately tolerates extra physical columns. Since ADR-0063 the
+agent reads through a role that holds column-level ``SELECT`` on exactly the 16
+visible columns, so a column this guard does not know is already invisible to
+the agent. Refusing boot on one used to turn every additive migration into an
+outage: migrations deploy separately from code, and the next restart demanded a
+release whose frozen column literal already listed the new column. The
+complete contract now lives in ``src.core.column_contract``.
 """
 
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError
 
+from src.core.column_contract import CONTRACT_COLUMN_NAMES, VISIBLE_COLUMN_TYPES
 from src.core.db import session_factory
 from src.core.logger import logger
 
@@ -22,75 +24,53 @@ class SchemaGuardError(RuntimeError):
     """Raised when the serving-path clean_jobs schema check fails. Aborts boot."""
 
 
-# The frozen clean_jobs contract: 16 agent-visible columns + source/external_id/
-# posted_date bookkeeping + first_seen_at/last_seen_at lifecycle.
-# Duplicated here deliberately to keep the serving path free of any
-# src.services.ingestion import (layer-isolation rule, T0021.1). A legitimate
-# schema change must update this constant AND the ingestion ORM in tandem.
-EXPECTED_COLUMNS: frozenset[str] = frozenset(
-    {
-        "id",
-        "source",
-        "external_id",
-        "source_url",
-        "title",
-        "company",
-        "role",
-        "description",
-        "tech_stack",
-        "job_level",
-        "location",
-        "posted_date",
-        "listing_expires_on",
-        "created_on",
-        "is_internship",
-        "salary_min",
-        "salary_max",
-        "salary_currency",
-        "is_salary_negotiable",
-        "first_seen_at",
-        "last_seen_at",
-    }
-)
-
-
 def assert_serving_schema() -> None:
-    """Compare live clean_jobs columns against the frozen serving contract.
+    """Check the visible clean_jobs columns and their PostgreSQL types.
 
-    Raises SchemaGuardError naming the diff if they disagree (exact match: both
-    missing and unexpected columns fail), if the table is absent, or if the
-    database cannot be inspected.
+    Raises SchemaGuardError naming the missing or retyped columns. Extra
+    physical columns are logged and ignored: the agent grant, not this guard,
+    keeps them out of an answer.
     """
     stmt = text(
-        "SELECT column_name FROM information_schema.columns"
+        "SELECT column_name, data_type FROM information_schema.columns"
         " WHERE table_name = 'clean_jobs' AND table_schema = 'public'"
     )
 
     try:
         with session_factory() as session:
-            result = session.execute(stmt)
-            actual = {row[0] for row in result}
+            actual = {row[0]: row[1] for row in session.execute(stmt)}
     except (OperationalError, DBAPIError) as exc:
         raise SchemaGuardError(f"Failed to inspect clean_jobs schema: {exc}") from exc
 
     if not actual:
         raise SchemaGuardError(
             "clean_jobs table not found in the database (information_schema query "
-            "returned no columns) — refusing to serve"
+            "returned no columns) - refusing to serve"
         )
 
-    missing = EXPECTED_COLUMNS - actual
-    unexpected = actual - EXPECTED_COLUMNS
+    missing = sorted(set(VISIBLE_COLUMN_TYPES) - set(actual))
+    wrong_types = sorted(
+        (name, expected, actual[name])
+        for name, expected in VISIBLE_COLUMN_TYPES.items()
+        if name in actual and actual[name] != expected
+    )
+    extra = sorted(set(actual) - CONTRACT_COLUMN_NAMES)
 
-    if missing or unexpected:
+    if missing or wrong_types:
         logger.error(
             "api.schema_drift",
-            missing=sorted(missing),
-            unexpected=sorted(unexpected),
+            missing=missing,
+            wrong_types=[list(item) for item in wrong_types],
         )
         raise SchemaGuardError(
-            f"clean_jobs schema drift detected: missing={sorted(missing)} "
-            f"unexpected={sorted(unexpected)}"
+            f"clean_jobs schema drift detected: missing={missing} "
+            f"wrong_type={wrong_types}"
         )
 
-    logger.info("api.schema_ok", columns=len(EXPECTED_COLUMNS))
+    if extra:
+        logger.info("api.schema_extra_columns", columns=extra)
+    logger.info(
+        "api.schema_ok",
+        columns=len(VISIBLE_COLUMN_TYPES),
+        extra_columns=len(extra),
+    )

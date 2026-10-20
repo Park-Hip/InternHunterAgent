@@ -3,7 +3,7 @@
 The read shares the executor's bounded session with the listing tool (#702 E6),
 so the statement order, the byte budget, and the error mapping are asserted
 here at the seam the details path uses. The column contract guard stays: this
-projection mirrors config/prompts.yaml -> prompts.schema_context.
+projection is the application contract in `src/core/column_contract.py`.
 """
 
 import re
@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 from sqlalchemy.exc import DBAPIError, OperationalError
 
+from src.core.column_contract import HIDDEN_COLUMN_NAMES, VISIBLE_COLUMN_NAMES
 from src.services.query.executor import (
     ExecutorError,
     QueryTimeoutError,
@@ -19,35 +20,6 @@ from src.services.query.executor import (
     execution_limits,
 )
 from src.services.query.job_details import fetch_job_details
-
-
-CONTRACT_COLUMNS = (
-    "id",
-    "title",
-    "company",
-    "role",
-    "description",
-    "tech_stack",
-    "location",
-    "source_url",
-    "job_level",
-    "listing_expires_on",
-    "created_on",
-    "is_internship",
-    "salary_min",
-    "salary_max",
-    "salary_currency",
-    "is_salary_negotiable",
-)
-
-# Present in clean_jobs but deliberately outside prompts.schema_context.
-OUT_OF_CONTRACT_COLUMNS = (
-    "first_seen_at",
-    "last_seen_at",
-    "posted_date",
-    "source",
-    "external_id",
-)
 
 
 def _selected_columns(statement: str) -> set[str]:
@@ -146,11 +118,11 @@ class FetchJobDetailsTests(unittest.TestCase):
     def test_selects_exactly_the_schema_context_column_contract(
         self, mock_agent_session_factory: MagicMock
     ) -> None:
-        """Guard: the projection must mirror config/prompts.yaml -> prompts.schema_context.
+        """Guard: the projection must equal the application column contract.
 
-        schema_context tells the model that unlisted columns do not exist. If this
+        The contract tells the model that unlisted columns do not exist. If this
         query ever widens (a SELECT * regression, or a new column added to the table
-        without updating schema_context), the agent silently gains vocabulary the
+        without updating the contract), the agent silently gains vocabulary the
         prompt denies it. Both directions are asserted: a dropped column and a leak.
         """
         session = _mock_session(mock_agent_session_factory)
@@ -163,14 +135,14 @@ class FetchJobDetailsTests(unittest.TestCase):
 
         self.assertNotIn("*", statement, "wildcard SELECT leaks every column to the agent")
 
-        for column in CONTRACT_COLUMNS:
+        for column in VISIBLE_COLUMN_NAMES:
             self.assertIn(column, selected, f"contract column {column} is not selected")
 
-        for column in OUT_OF_CONTRACT_COLUMNS:
+        for column in HIDDEN_COLUMN_NAMES:
             self.assertNotIn(column, selected, f"out-of-contract column {column} leaked")
 
         # Catches anything outside both lists too (e.g. a column added to the table later).
-        self.assertEqual(selected, set(CONTRACT_COLUMNS))
+        self.assertEqual(selected, set(VISIBLE_COLUMN_NAMES))
 
     @patch("src.services.query.job_details.execution_limits")
     @patch("src.services.query.executor.agent_session_factory")

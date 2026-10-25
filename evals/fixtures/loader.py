@@ -15,6 +15,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, make_url
 import yaml
 
+from src.core.column_contract import HIDDEN_COLUMN_NAMES, VISIBLE_COLUMN_NAMES
 from src.services.ingestion.models import ingestion_teardown_statements
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -26,35 +27,6 @@ SETTINGS_PATH = REPO_ROOT / "config" / "settings.yaml"
 # trip: a full psycopg connect can spend the OS-level IPv6 and IPv4 timeouts
 # before failing, which is what made a missing local Postgres cost minutes.
 FIXTURE_REACHABILITY_TIMEOUT_SECONDS = 2.0
-
-# The 16-column agent contract. Mirrors the #722 grant migration, the prompt's
-# schema context, src/api/privilege_guard.py, and src/services/query/sql_validator.py.
-# A visibility change updates all of them together.
-FIXTURE_VISIBLE_COLUMNS = (
-    "id",
-    "title",
-    "company",
-    "role",
-    "description",
-    "tech_stack",
-    "location",
-    "source_url",
-    "job_level",
-    "listing_expires_on",
-    "created_on",
-    "is_internship",
-    "salary_min",
-    "salary_max",
-    "salary_currency",
-    "is_salary_negotiable",
-)
-FIXTURE_HIDDEN_COLUMNS = (
-    "source",
-    "external_id",
-    "posted_date",
-    "first_seen_at",
-    "last_seen_at",
-)
 
 
 def _fixture_config() -> dict:
@@ -332,8 +304,8 @@ def _provision_reader_role(dsn: str) -> None:
 
     quoted_role = _quote_ident(role)
     quoted_database = _quote_ident(owner.database or "")
-    visible = ", ".join(_quote_ident(column) for column in FIXTURE_VISIBLE_COLUMNS)
-    hidden = ", ".join(_quote_ident(column) for column in FIXTURE_HIDDEN_COLUMNS)
+    visible = ", ".join(_quote_ident(column) for column in VISIBLE_COLUMN_NAMES)
+    hidden = ", ".join(_quote_ident(column) for column in HIDDEN_COLUMN_NAMES)
 
     engine = create_engine(dsn)
     try:
@@ -408,7 +380,7 @@ def _provision_reader_role(dsn: str) -> None:
                     "the fixture reader role still has table-level SELECT on "
                     "clean_jobs"
                 )
-            for column in FIXTURE_HIDDEN_COLUMNS:
+            for column in HIDDEN_COLUMN_NAMES:
                 if conn.execute(
                     text(
                         "SELECT has_column_privilege(:role, 'public.clean_jobs', "

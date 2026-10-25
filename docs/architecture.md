@@ -415,6 +415,8 @@ raised as a failure kind; database errors including timeouts are caught and rais
 detail, never crashing the process.
 The model only *proposes* SQL, which is why a generation step is acceptable without granting raw
 execution capability.
+That path, its bounds, the 16-column contract, and the two boot guards are owned by the
+[tools and query module guide](modules/tools-and-query.md).
 
 An earlier draft specified parameterized tools exposing typed arguments such as `title` and
 `tech_stack`.
@@ -875,6 +877,11 @@ deliberate cheap-growth path.
   but the agent role holds column-level `SELECT` on the 16 contract columns only (#722, ADR-0063),
   so a new column is denied until a migration grants it and the schema description the model reads,
   plus the honesty rules where relevant, are updated.
+  Adding the column without a grant does not stop boot: the serving schema guard checks the 16
+  visible names and types and ignores extra physical columns, and the privilege guard refuses any
+  grant beyond the contract. Making the column visible is a coordinated contract change, not a free
+  additive one. The procedure is in
+  [the schema reference](reference/schema.md#adding-a-physical-column).
 - **Adding tables, joins, or renames is the boundary** where this stops being free, because it
   crosses the validator's single-table allowlist. Staying single-table is the design choice that
   keeps evolution cheap.

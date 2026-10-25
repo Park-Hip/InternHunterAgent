@@ -91,8 +91,8 @@ flowchart TD
 | Settings | Loads and validates `Settings` and every YAML file, before any other import | `src/core/config.py` → `load_settings` (called at composition import) | Import fails, uvicorn exits 1, in under two seconds |
 | MCP server | Registers the v1 tool pair, `query_clean_jobs` and `get_job_details` | `src/agents/mcp/job_server.py` → `create_job_mcp_server` | Import fails, uvicorn exits 1 |
 | App | Builds FastAPI with the lifespan, and `/mcp` before the static catch-all if enabled | `src/api/app.py` → `create_app` | Import fails |
-| Schema guard | Live `clean_jobs` columns must equal `EXPECTED_COLUMNS` exactly | `src/api/schema_guard.py` → `assert_serving_schema` | `SchemaGuardError`; uvicorn exits 3 |
-| Privilege guard | Agent role reads the 16 visible columns, cannot read a hidden column, and is refused a write | `src/api/privilege_guard.py` → `assert_agent_privileges` | `AgentPrivilegeError`; skipped with a warning if the DSNs name different databases |
+| Schema guard | The 16 visible `clean_jobs` columns exist with their expected PostgreSQL types; extra physical columns are logged and ignored | `src/api/schema_guard.py` → `assert_serving_schema` | `SchemaGuardError`; uvicorn exits 3 |
+| Privilege guard | The agent role's complete catalog privilege set is exactly `SELECT` on the 16 visible columns, on `public.clean_jobs` and no other relation | `src/api/privilege_guard.py` → `assert_agent_privileges` | `AgentPrivilegeError`; uvicorn exits 3, including when the agent DSN names another database |
 | Credential guard | Each served profile's selected deployment has a nonempty API key | `src/agents/runtime/provider.py` → `assert_profile_credential` | `ProviderCredentialError`; uvicorn exits 3 |
 | Pool | Creates and opens the checkpointer pool without waiting for a connection | `src/core/checkpointer.py` → `build_checkpointer_pool` | - |
 | Langfuse init | Creates the client and callback handler when both keys are set and `LANGFUSE_ENABLED` is not false; never raises | `src/agents/tracing/langfuse.py` → `init_langfuse` | Logged; tracing disabled; boot continues |
@@ -107,10 +107,11 @@ flowchart TD
 **Why the guards run first.**
 uvicorn accepts no request until the lifespan finishes, so a guard that raises means the process
 never answers, and a deploy never passes Render's `/api/v1/health` check.
-That is the point: the schema guard turns a renamed column into a refused boot instead of a 500 on
-the first question, the privilege guard does the same for a lost or broadened `GRANT` after a table
-rebuild (#509, #722), and the credential guard does the same for a missing provider key that would otherwise fail
-every question (#641).
+That is the point: the schema guard turns a missing or retyped visible column into a refused boot
+instead of a 500 on the first question, the privilege guard does the same for a lost grant, a
+table-level or hidden-column grant, or any privilege on another relation after a table rebuild
+(#509, #722, #743), and the credential guard does the same for a missing provider key that would
+otherwise fail every question (#641).
 The database guards run in a worker thread (`asyncio.to_thread`) because they use synchronous
 SQLAlchemy; the credential guard only reads settings, so it runs inline.
 Each connection attempt is bounded by the service-owned `database.connect_timeout_seconds` (10 s),
@@ -195,9 +196,9 @@ or after it, because the diagnostic is not awaited.
 |---|---|---|
 | Traceback through `composition.py` at `load_settings()`, exit 1, under two seconds | Import | Settings failed: a missing `DATABASE_URL` or `AGENT_DATABASE_URL`, bad YAML, an invalid `agent` section. Nothing else is imported yet |
 | `Langfuse tracing disabled...` | Lifespan | `LANGFUSE_ENABLED` is false, the keys are missing, or client creation failed; serving is unaffected |
-| `api.schema_drift`, `SchemaGuardError`, `Application startup failed`, exit 3 | Lifespan | `clean_jobs` differs from `EXPECTED_COLUMNS`; a migration and the guard disagree |
-| `AgentPrivilegeError` naming the operate how-to | Lifespan | The agent role lost `SELECT` or can write; re-apply the role steps |
-| `api.agent_privilege_check_skipped` | Lifespan | The two DSNs name different databases; nothing was checked |
+| `api.schema_drift`, `SchemaGuardError`, `Application startup failed`, exit 3 | Lifespan | A visible `clean_jobs` column is missing or has the wrong PostgreSQL type; the contract and the table disagree |
+| `api.schema_extra_columns` | Lifespan | An extra physical column was found and ignored; the agent's grant, not the guard, keeps it out of an answer |
+| `AgentPrivilegeError` naming the missing or unexpected privileges and the operate how-to | Lifespan | The agent role holds anything other than `SELECT` on the 16 visible columns; re-apply the role steps, and check for a stray grant on another relation |
 | `ProviderCredentialError` naming the variable and the operate how-to | Lifespan | A deployment a served profile selects has no key; set it in the Render dashboard and redeploy |
 | `SchemaGuardError` naming `connection timeout expired`, `Application startup failed`, exit 3 | Lifespan | The database is unreachable; the connect attempt is bounded by `database.connect_timeout_seconds`, see section 6 |
 | `Langfuse startup authentication failed` | After boot | Tracing keys are wrong; serving is unaffected, and turns serve a null `trace_url` |
@@ -265,8 +266,9 @@ that import `src.serving.composition` all name it; move them in one pull request
 | `src/serving/composition.py` → module body | The import-time configuration contract |
 | `src/serving/composition.py` → `app`, `_mcp_server`, `_mcp_asgi` | Import-time assembly and the MCP switch |
 | `src/api/app.py` → `create_app`, `_register_mcp_before_static` | How the lifespan and `/mcp` are attached |
-| `src/api/schema_guard.py` → `assert_serving_schema`, `EXPECTED_COLUMNS` | Schema guard |
-| `src/api/privilege_guard.py` → `assert_agent_privileges` | Privilege guard |
+| `src/api/schema_guard.py` → `assert_serving_schema` | Schema guard (types and missing visible columns) |
+| `src/api/privilege_guard.py` → `assert_agent_privileges` | Privilege census and complete grant-set guard |
+| `src/core/column_contract.py` → `VISIBLE_COLUMNS`, `HIDDEN_COLUMNS` | The one application-side clean_jobs contract |
 | `src/agents/runtime/provider.py` → `assert_profile_credential`, `build_model` | Credential guard and model construction |
 | `src/core/checkpointer.py` → `build_checkpointer_pool`, `build_checkpointer`, `delete_stale_threads` | Pool, checkpoint tables, and the retention sweep's deletion |
 | `src/core/db.py` → `connect_timeout_seconds` | The service-owned connect bound carried by both engines and the checkpointer pool |

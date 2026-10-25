@@ -36,6 +36,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, OperationalError
 
+from src.core.column_contract import HIDDEN_COLUMN_NAMES, VISIBLE_COLUMN_NAMES
 from src.services.query.executor import (
     ExecutorError,
     PermissionDeniedError,
@@ -59,28 +60,6 @@ READER_ROLE = "iha_query_reader_test"
 READER_PASSWORD = "reader_test_password"
 
 FIXTURE_ROWS = 24
-
-# The 16 contract columns and the five hidden ones, in the same order as
-# src/api/privilege_guard.py and the grant migration.
-VISIBLE_COLUMNS = (
-    "id",
-    "title",
-    "company",
-    "role",
-    "description",
-    "tech_stack",
-    "location",
-    "source_url",
-    "job_level",
-    "listing_expires_on",
-    "created_on",
-    "is_internship",
-    "salary_min",
-    "salary_max",
-    "salary_currency",
-    "is_salary_negotiable",
-)
-HIDDEN_COLUMNS = ("source", "external_id", "posted_date", "first_seen_at", "last_seen_at")
 
 INSERT_STATEMENT = (
     "INSERT INTO clean_jobs (source, external_id, title, company, role) "
@@ -126,13 +105,13 @@ def provision_reader_role(engine) -> str:
         conn.execute(text(f"REVOKE ALL PRIVILEGES ON clean_jobs FROM {READER_ROLE}"))
         conn.execute(
             text(
-                f"REVOKE SELECT ({', '.join(HIDDEN_COLUMNS)})"
+                f"REVOKE SELECT ({', '.join(HIDDEN_COLUMN_NAMES)})"
                 f" ON clean_jobs FROM {READER_ROLE}"
             )
         )
         conn.execute(
             text(
-                f"GRANT SELECT ({', '.join(VISIBLE_COLUMNS)})"
+                f"GRANT SELECT ({', '.join(VISIBLE_COLUMN_NAMES)})"
                 f" ON clean_jobs TO {READER_ROLE}"
             )
         )
@@ -363,15 +342,15 @@ class TestTheColumnBoundary:
             execute_bounded_select(statement, 20)
 
     def test_explicit_contract_columns_still_return_rows(self, reader_engine) -> None:
-        columns = ", ".join(VISIBLE_COLUMNS)
+        columns = ", ".join(VISIBLE_COLUMN_NAMES)
 
         bounded = execute_bounded_select(
             f"SELECT {columns} FROM clean_jobs ORDER BY id", 1
         )
 
-        assert list(bounded.columns) == list(VISIBLE_COLUMNS)
+        assert list(bounded.columns) == list(VISIBLE_COLUMN_NAMES)
         assert len(bounded.rows) == 1
-        assert len(bounded.rows[0]) == len(VISIBLE_COLUMNS)
+        assert len(bounded.rows[0]) == len(VISIBLE_COLUMN_NAMES)
 
     def test_a_star_over_a_projected_subquery_still_works(self, reader_engine) -> None:
         bounded = execute_bounded_select(

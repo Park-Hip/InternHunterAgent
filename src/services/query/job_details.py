@@ -1,5 +1,6 @@
 from sqlalchemy import text
 
+from src.core.column_contract import VISIBLE_COLUMN_NAMES
 from src.services.query.executor import (
     ResultTooLargeError,
     bounded_session,
@@ -8,12 +9,7 @@ from src.services.query.executor import (
 )
 
 #: Columns fetched for one posting, in order: the frozen 16-column contract.
-FULL_DETAIL_COLUMNS = (
-    "id, title, company, role, description, tech_stack, "
-    "location, source_url, job_level, listing_expires_on, created_on, "
-    "is_internship, salary_min, salary_max, salary_currency, "
-    "is_salary_negotiable"
-)
+FULL_DETAIL_COLUMNS = ", ".join(VISIBLE_COLUMN_NAMES)
 
 
 def fetch_job_details(ids: list[int]) -> list[dict]:
@@ -21,13 +17,12 @@ def fetch_job_details(ids: list[int]) -> list[dict]:
         return []
 
     limits = execution_limits()
-    # This column list mirrors config/prompts.yaml -> prompts.schema_context,
-    # the 16-column frozen contract, in that file's own order. The two must
-    # change together: schema_context tells the model "unlisted columns do not
-    # exist in this schema", while this query decides what the model actually
-    # receives. Selecting anything beyond the contract (clean_jobs also holds
-    # first_seen_at, last_seen_at, posted_date, source, external_id)
-    # hands the agent vocabulary it was never given and never calibrated for.
+    # This column list is the frozen 16-column contract from
+    # src/core/column_contract.py. The prompt's schema context is its own
+    # literal declaration of the same set, and the consistency test keeps the
+    # two equal. Selecting anything beyond the contract (clean_jobs also holds
+    # source, external_id, posted_date, first_seen_at, last_seen_at) hands the
+    # agent vocabulary it was never given and the database grant would refuse.
     #
     # The read runs through the shared bounded session, so the statement
     # timeout, the read-only transaction, and the byte budget apply here too

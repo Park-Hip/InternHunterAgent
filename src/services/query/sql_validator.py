@@ -1,5 +1,6 @@
 import re
 
+from src.core.column_contract import HIDDEN_COLUMN_NAMES
 from src.services.query.models import ValidationResult
 
 ALLOWED_TABLE = "clean_jobs"
@@ -8,11 +9,9 @@ ALLOWED_TABLE = "clean_jobs"
 # are outside the agent-visible contract declared by `prompts.sql_generation`
 # ("Reference only real columns"). The model is never told about them, so naming
 # one is a silent contract break: the query executes and the answer looks fine.
-# The test suite asserts this set plus the prompt's declared columns partition
-# `src.api.schema_guard.EXPECTED_COLUMNS`.
-HIDDEN_COLUMNS = frozenset(
-    {"source", "external_id", "posted_date", "first_seen_at", "last_seen_at"}
-)
+# The names come from the one contract module; this is the explicit-name check,
+# while the PostgreSQL grant is what refuses a star or whole-row read.
+HIDDEN_COLUMNS = frozenset(HIDDEN_COLUMN_NAMES)
 
 # Write / DDL / procedure verbs that must never appear as a bare word (token) in a
 # query. Matched case-insensitively against whole words only (see TOKEN_PATTERN), so

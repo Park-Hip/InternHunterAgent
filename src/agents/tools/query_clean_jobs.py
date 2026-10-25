@@ -40,6 +40,7 @@ from src.services.query.executor import (
     PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
+    SqlSyntaxError,
     UndefinedColumnError,
     UnstableOrderError,
     execute_bounded_select,
@@ -224,6 +225,13 @@ async def run_query_clean_jobs(request: str) -> QueryResult:
         # returning a page that may repeat or skip rows (#727).
         logger.warning("query_clean_jobs.unstable_order", error=str(exc))
         raise ToolFailure("rejected", str(exc)) from exc
+    except SqlSyntaxError as exc:
+        # A syntax error in the generated statement is a deterministic refusal
+        # the model can correct, not a database outage (#744). The parser's
+        # message names the offending token, so relaying it lets the model
+        # rewrite the statement instead of retrying it unchanged.
+        logger.warning("query_clean_jobs.sql_syntax", error=str(exc))
+        raise ToolFailure("rejected", exc.message_primary) from exc
     except ExecutorError as exc:
         logger.error("query_clean_jobs.db_error", error=str(exc))
         raise ToolFailure(

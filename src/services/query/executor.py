@@ -74,6 +74,20 @@ class QueryTimeoutError(ExecutorError):
         self.timeout_ms = timeout_ms
 
 
+class SqlSyntaxError(ExecutorError):
+    """Raised when PostgreSQL refuses a malformed statement (SQLSTATE 42601).
+
+    Carries the parser's primary message so the tool can relay an actionable
+    detail to the model (#744). The message names the syntax problem in the
+    generated statement, never the database host, so it is safe to send to the
+    model.
+    """
+
+    def __init__(self, message_primary: str) -> None:
+        super().__init__(message_primary)
+        self.message_primary = message_primary
+
+
 class UnstableOrderError(ExecutorError):
     """Raised when a page starts at an offset without a total order.
 
@@ -114,8 +128,11 @@ def execution_limits() -> dict[str, int]:
 
 
 @contextmanager
-def _bounded_session() -> Iterator[Session]:
+def bounded_session() -> Iterator[Session]:
     """One agent-role session with the read-only and timeout bounds applied.
+
+    This is the public seam the details fetch shares so both reads keep one
+    timeout, one read-only transaction, and one byte budget (#702 E6).
 
     ``SET TRANSACTION`` must be the first statement of the transaction: it is
     read-only at repeatable read, so every statement in the session sees one
@@ -163,7 +180,7 @@ def execute_bounded_select(base_sql: str, limit: int, offset: int = 0) -> Bounde
         raise UnstableOrderError()
 
     limits = execution_limits()
-    with _bounded_session() as session:
+    with bounded_session() as session:
         statement = f"{base_sql} LIMIT {limit}"
         if offset:
             statement += f" OFFSET {offset}"
@@ -188,16 +205,47 @@ def execute_bounded_select(base_sql: str, limit: int, offset: int = 0) -> Bounde
 
 
 def _map_db_error(exc: OperationalError | DBAPIError, timeout_ms: int) -> ExecutorError:
-    """Translate one driver failure into the executor's error vocabulary."""
+    """Translate one driver failure into the executor's error vocabulary.
+
+    The mapping keys on SQLSTATE, never on the error text (#744). A message
+    that happens to say "timeout" without SQLSTATE 57014 is a connection
+    outage, not the statement budget, so a connection timeout stays
+    ``unavailable`` while a cancelled statement stays ``timeout``. A syntax
+    error (42601) is a rejection the model can rewrite, not an outage.
+    """
     orig = getattr(exc, "orig", None)
     if isinstance(orig, UndefinedColumn):
         message_primary = getattr(getattr(orig, "diag", None), "message_primary", None)
         return UndefinedColumnError(message_primary or "unknown column")
     if _is_clean_jobs_privilege_denial(orig):
         return PermissionDeniedError()
-    if _is_timeout(exc):
+    sqlstate = _sqlstate(orig)
+    if sqlstate == "57014":
         return QueryTimeoutError(timeout_ms)
+    if sqlstate == "42601":
+        message_primary = getattr(getattr(orig, "diag", None), "message_primary", None)
+        return SqlSyntaxError(message_primary or "syntax error in the generated SQL")
     return ExecutorError(f"Failed to execute query: {exc}")
+
+
+def _sqlstate(orig: object) -> str | None:
+    """Return the SQLSTATE of a driver error, or ``None`` when unknown.
+
+    Prefers the server diagnostic (``diag.sqlstate``) and falls back to the
+    psycopg exception class code, which the driver sets for every error type it
+    recognises. A client-side connection failure carries neither, so it falls
+    through to the generic ``unavailable`` mapping instead of being bucketed by
+    a misleading message.
+    """
+    if orig is None:
+        return None
+    diag_sqlstate = getattr(getattr(orig, "diag", None), "sqlstate", None)
+    if isinstance(diag_sqlstate, str) and diag_sqlstate:
+        return diag_sqlstate
+    cls_sqlstate = getattr(orig, "sqlstate", None)
+    if isinstance(cls_sqlstate, str) and cls_sqlstate:
+        return cls_sqlstate
+    return None
 
 
 def _is_clean_jobs_privilege_denial(orig: object) -> bool:
@@ -220,15 +268,3 @@ def row_bytes(rows: list[Any]) -> int:
     if not rows:
         return 0
     return len(json.dumps(rows, default=str, ensure_ascii=False).encode("utf-8"))
-
-
-def _is_timeout(exc: Exception) -> bool:
-    """Whether the failure is the server cancelling a statement."""
-    for candidate in (exc, getattr(exc, "orig", None)):
-        if candidate is None:
-            continue
-        if type(candidate).__name__ in {"QueryCanceled", "LockNotAvailable", "StatementTimeout"}:
-            return True
-        if "timeout" in str(candidate).casefold() or "canceling statement" in str(candidate).casefold():
-            return True
-    return False

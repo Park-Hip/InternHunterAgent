@@ -18,7 +18,7 @@ using the database:
   ``SELECT`` (#722), so the database, not the validator, refuses the forms a
   hidden-column token check cannot see.
 
-The write case goes through ``_bounded_session`` rather than
+The write case goes through ``bounded_session`` rather than
 ``execute_bounded_select``: the executor appends a trailing ``LIMIT``, so
 handing it an ``INSERT`` would fail as a syntax error and prove nothing about
 the read-only transaction.
@@ -41,9 +41,10 @@ from src.services.query.executor import (
     PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
+    SqlSyntaxError,
     UndefinedColumnError,
     UnstableOrderError,
-    _bounded_session,
+    bounded_session,
     execute_bounded_select,
 )
 from src.services.query.sql_validator import validate_sql
@@ -203,7 +204,7 @@ class TestLeastPrivilege:
         monkeypatch.setattr("src.services.query.executor.agent_session_factory", engine.connect)
 
         with pytest.raises(ExecutorError):
-            with _bounded_session() as session:
+            with bounded_session() as session:
                 session.execute(text(INSERT_STATEMENT))
 
         with engine.connect() as verify:
@@ -326,6 +327,14 @@ class TestErrorMapping:
             execute_bounded_select("SELECT remote FROM clean_jobs", 20)
 
         assert raised.value.message_primary == 'column "remote" does not exist'
+
+    def test_a_syntax_error_maps_to_sql_syntax_error(self, reader_engine) -> None:
+        # #744: a 42601 refusal reaches the executor as SqlSyntaxError, carrying
+        # the parser's message, rather than as an outage the model cannot act on.
+        with pytest.raises(SqlSyntaxError) as raised:
+            execute_bounded_select("SELECT id FROM clean_jobs LIMIT 20 LIMIT 20", 20)
+
+        assert "LIMIT" in raised.value.message_primary
 
 
 class TestTheColumnBoundary:

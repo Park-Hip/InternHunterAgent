@@ -10,6 +10,7 @@ import re
 import unittest
 from unittest.mock import MagicMock, patch
 
+from psycopg.errors import QueryCanceled
 from sqlalchemy.exc import DBAPIError, OperationalError
 
 from src.services.query.executor import (
@@ -216,7 +217,7 @@ class FetchJobDetailsTests(unittest.TestCase):
             OperationalError(
                 "SELECT description FROM clean_jobs WHERE id = ANY(:ids)",
                 {},
-                Exception("canceling statement due to statement timeout"),
+                QueryCanceled("canceling statement due to statement timeout"),
             ),
         ]
 

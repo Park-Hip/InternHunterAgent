@@ -37,7 +37,7 @@ from src.services.query.executor import (
 from src.services.query.models import BoundedRows, ValidationResult
 from tests.langfuse_prompts import native_prompt_client, prompt_link
 
-from src.agents.tools.query_clean_jobs import SQL_GENERATION_OBSERVATION_NAME
+from src.agents.tracing.sql_generation import SQL_GENERATION_OBSERVATION_NAME
 
 HAPPY_SQL = (
     "SELECT id, title FROM clean_jobs WHERE location ILIKE '%Hanoi%' ORDER BY id"
@@ -596,7 +596,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         fake_client = _RecordingLangfuseClient()
 
         with patch(
-            "src.agents.tools.query_clean_jobs.get_langfuse_client",
+            "src.agents.tracing.sql_generation.get_langfuse_client",
             return_value=fake_client,
         ):
             self.assertEqual(await generate_sql("any question"), "SELECT 1")
@@ -651,7 +651,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         try:
             with (
                 patch(
-                    "src.agents.tools.query_clean_jobs.get_langfuse_client"
+                    "src.agents.tracing.sql_generation.get_langfuse_client"
                 ) as langfuse_client,
                 tracer.start_as_current_span("query_clean_jobs") as span,
             ):
@@ -690,7 +690,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         mock_build_model.return_value = fake_model
 
         with patch(
-            "src.agents.tools.query_clean_jobs.get_langfuse_client", return_value=None
+            "src.agents.tracing.sql_generation.get_langfuse_client", return_value=None
         ):
             self.assertEqual(await generate_sql("any question"), "SELECT 1")
 
@@ -716,7 +716,7 @@ class GenerateSqlContentCoercionTests(unittest.IsolatedAsyncioTestCase):
         mock_build_model.return_value = fake_model
 
         with patch(
-            "src.agents.tools.query_clean_jobs.get_langfuse_client", return_value=None
+            "src.agents.tracing.sql_generation.get_langfuse_client", return_value=None
         ):
             self.assertEqual(await generate_sql("any question"), "SELECT 2")
 

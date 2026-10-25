@@ -8,7 +8,7 @@ detail request could not chain on an id the reader never saw.
 
 This script is the check that would have caught it. It reads the prompt the
 generator actually serves (`sql_generation` + `schema_context`, joined exactly
-as `src.agents.tools.query_clean_jobs.generate_sql` joins them), takes the
+as `src/services/query/generator.py` joins them), takes the
 declared allowlist from the prompt's own "Reference only real columns" line,
 tokenises the body, and reports every `clean_jobs` column as declared or not and
 used or not.

@@ -68,7 +68,7 @@ def sql_span_of(tool_span: dict[str, Any] | None, trace: dict[str, Any]) -> dict
     """The SQL-generation span belonging to a tool span, child position first.
 
     `generate_sql` forwards LangChain's ambient config to the nested model call
-    (see `src/agents/tools/query_clean_jobs.py`); without that forwarding the
+    (see `src/agents/tracing/sql_generation.py`); without that forwarding the
     LLM call would be invisible to DeepEval. The MCP transport does not carry
     `RunnableConfig` into the tool, so the ambient config is read from
     `var_child_runnable_config` instead.

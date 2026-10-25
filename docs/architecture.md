@@ -400,7 +400,8 @@ Two tools ship.
 `query_clean_jobs` runs a fixed, deterministic pipeline rather than handing SQL power to the model.
 
 1. The resolved schema-context prompt supplies the table shape to the model.
-2. A dedicated model call turns the request into a candidate `SELECT`.
+2. `src/services/query/generator.py` turns the request into a candidate `SELECT` through an injected
+   model client; the injected client owns the provider call and its tracing.
 3. `src/services/query/sql_validator.py` is the **SQL-shape boundary**: a deterministic, read-only
    check that parses the statement once with PostgreSQL's grammar. It enforces `SELECT`-only, the
    relation and function allowlists, and the hidden-name rule from the tree rather than the text

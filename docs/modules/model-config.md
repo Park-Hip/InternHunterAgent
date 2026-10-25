@@ -1,6 +1,6 @@
 # Model config module guide
 
-> **Last verified:** 2026-10-17
+> **Last verified:** 2026-10-25
 
 > **Eviction:** Rewritten whenever `agent.providers`, `agent.react`, `agent.sql_generation`, or `src/agents/runtime/provider.py` changes; removed when the module is retired.
 
@@ -170,7 +170,7 @@ Anything else, including a 500, becomes `internal_error` with `retryable: false`
    `factory.py` and `query_clean_jobs.py` pass only a profile name.
 5. **Traces always name the `react` deployment.**
    The `provider:` and `model:` tags come from `react`, even on a trace whose SQL was written by `sql_generation`.
-   The SQL generation observation itself is attributed correctly: inside the agent, LangChain's callback records the model, and outside it `generate_sql` names `sql_generation`'s model explicitly.
+   The SQL generation observation itself is attributed correctly: inside the agent, LangChain's callback records the model, and outside it `TracedSqlGenerationModel` names `sql_generation`'s model explicitly.
 6. **Cost is priced from a separate file.**
    `config/langfuse_models.yaml` prices exactly one model, and `scripts/provision_langfuse_models.py` pushes it to Langfuse.
    Nothing checks it against `settings.yaml`, so changing a model without that file leaves its traces unpriced (#653 was the last case).
@@ -259,6 +259,7 @@ Only behind an eval comparison, and only for `react` (section 7).
 | `src/serving/composition.py` → `_assert_served_profile_credentials`, `_served_profiles` | The boot key check, and which profiles count as served |
 | `src/agents/runtime/factory.py` → `agent_factory` | The `react` caller |
 | `src/agents/tools/query_clean_jobs.py` → `generate_sql` | The `sql_generation` caller |
+| `src/agents/tracing/sql_generation.py` → `TracedSqlGenerationModel` | The traced model call and its explicit attribution |
 | `src/agents/service.py` → `collect_agent_response`, `stream_agent_response`; `src/core/errors.py` → `classify_provider_busy_error` | The turn deadline and how failures reach the user |
 | `src/agents/tracing/langfuse.py` → `_base_langfuse_tags`, `_react_model_name` | Trace attribution |
 | `config/langfuse_models.yaml`, `scripts/provision_langfuse_models.py` | Cost pricing |

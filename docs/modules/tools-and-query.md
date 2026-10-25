@@ -1,6 +1,6 @@
 # Tools and query module guide
 
-> **Last verified:** 2026-10-20
+> **Last verified:** 2026-10-25
 
 > **Eviction:** Rewritten when the tool surface, `src/services/query/`, the `clean_jobs` contract, or either boot guard changes shape, removed when the read-only query path is retired.
 
@@ -40,7 +40,7 @@ flowchart LR
     U(["User question"]) --> R["ReAct model<br/>system prompt"]
     R -->|"tool call: request"| M["MCP wrapper<br/>job_server.py"]
     M --> Q["run_query_clean_jobs"]
-    Q --> G["generate_sql<br/>sql_generation + schema_context"]
+    Q --> G["services/query/generator.py<br/>sql_generation + schema_context"]
     G --> V["validate_sql<br/>scope checks"]
     V -->|"invalid"| F["ToolFailure: rejected"]
     V -->|"valid SELECT"| B["resolve_bounds<br/>max_rows, OFFSET"]
@@ -54,7 +54,7 @@ flowchart LR
 
 1. **The agent chooses a tool.** The runtime sees two LangChain tools discovered from the in-process FastMCP server by `list_job_tools`; there is no loopback socket.
 2. **The MCP wrapper keeps the public contract.** `query_clean_jobs` takes `request`; `get_job_details` takes a list of `id`s. A `ToolFailure` becomes a `ToolError`, which the adapter turns into a `status="error"` tool message.
-3. **SQL generation is one model call.** `generate_sql` joins `sql_generation`, `schema_context`, and the question into one message and calls the `sql_generation` profile from `config/settings.yaml`. Inside an agent, the ambient LangChain callbacks keep the generation in the trace; a plain MCP client gets an explicit Langfuse generation instead.
+3. **SQL generation is one service call.** `src/services/query/generator.py` joins `sql_generation`, `schema_context`, and the request into one message and calls the injected model client. The tool supplies `TracedSqlGenerationModel`, which builds the `sql_generation` profile from `config/settings.yaml`: inside an agent the ambient LangChain callbacks keep the generation in the trace, while a plain MCP client gets an explicit Langfuse generation instead.
 4. **Validation is the trust boundary.** `validate_sql` returns the cleaned statement or a reason. Only a valid statement reaches the database.
 5. **Bounds are resolved before execution.** `resolve_bounds` reads the statement's own `LIMIT`, `OFFSET`, or `FETCH FIRST` from the parse tree, honors a user limit only when it is at most `agent.query.max_rows` (20), and otherwise fetches the cap. A non-literal bound is refused with a named reason. An `OFFSET` is a position and is never capped.
 6. **Execution is one bounded transaction.** The session first sets `REPEATABLE READ, READ ONLY`, then the server-side `statement_timeout` (2000 ms), then runs `base_sql LIMIT n [OFFSET m]`. The companion `SELECT count(*) FROM (base_sql) AS q` runs only when needed and sees the same snapshot.
@@ -171,7 +171,9 @@ The detail is short, English, and safe: a driver message that could name the dat
 |---|---|
 | `src/agents/mcp/job_server.py` → `create_job_mcp_server`, `mcp_endpoint_enabled` | The two public MCP tools, descriptions, and the optional `/mcp` endpoint |
 | `src/agents/mcp/adapter.py` → `list_job_tools` | In-process tool discovery |
-| `src/agents/tools/query_clean_jobs.py` → `generate_sql`, `run_query_clean_jobs` | SQL generation, validation, bounds, execution, typed facts |
+| `src/agents/tools/query_clean_jobs.py` → `generate_sql`, `run_query_clean_jobs` | Dependency resolution, validation, bounds, execution, typed facts |
+| `src/agents/tracing/sql_generation.py` → `TracedSqlGenerationModel` | The injected model client and its trace attachment |
+| `src/services/query/generator.py` → `generate_sql`, `build_prompt` | Prompt assembly and the model seam, with no runtime or tracing |
 | `src/agents/tools/get_job_details.py` → `run_get_job_details` | The detail tool's id cap and typed result |
 | `src/agents/tools/failures.py` → `ToolFailure`, `FailureKind` | The closed failure vocabulary |
 | `src/services/query/sql_validator.py` → `validate_sql`, `has_id_tiebreak` | The public scope-check and total-order entry points |

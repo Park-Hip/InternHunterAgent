@@ -1,10 +1,14 @@
 """Framework-neutral implementation of the read-only clean-jobs search ability.
 
-This module owns the single source of truth for natural-language-to-SQL
-generation, validation, execution, and the typed result. The MCP tool wrapper
-(see src/agents/mcp/job_server.py) calls ``run_query_clean_jobs`` directly; the
-LangChain agent reaches the same implementation through the in-process MCP
-adapter.
+This module is the tool adapter for the deterministic query path: it resolves
+the serving dependencies, asks ``src/services/query/`` for one statement,
+validates and bounds it, executes it, and maps failures. SQL generation itself
+lives in the service, so the query path can be exercised with a stub model and
+no agent runtime.
+
+The MCP tool wrapper (see src/agents/mcp/job_server.py) calls
+``run_query_clean_jobs`` directly; the LangChain agent reaches the same
+implementation through the in-process MCP adapter.
 
 The tool returns facts, never sentences (#702): the SQL that ran, the columns,
 the rows, and the real match total. The system prompt owns every user-facing
@@ -12,18 +16,12 @@ word. Failures are raised as :class:`ToolFailure` and reach the model as
 error-status tool messages.
 
 Nothing here depends on LangChain tool decoration or a transportable
-``RunnableConfig``. The SQL generation reads LangChain's ambient config when
-one is present (so nested callbacks keep observing it within an agent), and
-falls back to an explicit Langfuse generation otherwise, so the function works
-identically for a plain MCP client with no LangChain context.
+``RunnableConfig``. The traced model client in
+``src/agents/tracing/sql_generation.py`` owns the ambient-config and explicit
+generation branches, so this module imports no Langfuse symbol.
 """
 
 import asyncio
-from typing import Any
-
-from langchain.messages import HumanMessage
-from langchain_core.runnables import RunnableConfig
-from langchain_core.runnables.config import var_child_runnable_config
 
 from src.agents.runtime.prompts import (
     load_schema_context_resolution_async,
@@ -32,9 +30,10 @@ from src.agents.runtime.prompts import (
 from src.agents.runtime.provider import build_model
 from src.agents.runtime.tool_events import publish_tool_result
 from src.agents.tools.failures import ToolFailure
-from src.agents.tracing.langfuse import get_langfuse_client, langfuse_prompt_attributes
+from src.agents.tracing.sql_generation import TracedSqlGenerationModel
 from src.core.config import settings
 from src.core.logger import logger
+from src.services.query import generator
 from src.services.query.executor import (
     ExecutorError,
     PermissionDeniedError,
@@ -51,8 +50,6 @@ from src.services.query.row_bound import resolve_bounds
 from src.services.query.sql_validator import validate_sql
 from src.services.query.statement import StatementError
 from src.services.query.table_formatter import shape_rows
-
-SQL_GENERATION_OBSERVATION_NAME = "sql_generation"
 
 
 def load_max_rows() -> int:
@@ -73,75 +70,21 @@ def load_max_rows() -> int:
     return max_rows
 
 
-def _content_to_text(content: str | list[Any]) -> str:
-    if isinstance(content, str):
-        return content
-
-    parts: list[str] = []
-    for block in content:
-        if isinstance(block, str):
-            parts.append(block)
-        elif isinstance(block, dict):
-            text = block.get("text", "")
-            if isinstance(text, str):
-                parts.append(text)
-    return "".join(parts)
-
-
-async def generate_sql(question: str) -> str:
-    """Generate SQL for one question with an explicit traceable generation."""
+async def generate_sql(request: str) -> str:
+    """Generate SQL for one request through the query service."""
     schema_context = await load_schema_context_resolution_async()
     sql_generation_prompt = await load_sql_generation_prompt_resolution_async()
-    model = build_model("sql_generation")
-    messages = [
-        HumanMessage(
-            content=(
-                f"{sql_generation_prompt.content}\n\n{schema_context.content}"
-                f"\n\nQuestion: {question}"
-            )
-        )
-    ]
-
-    # Inside a LangChain agent, MCP does not transport RunnableConfig into the
-    # tool, so reading the ambient config here preserves the nested SQL
-    # generation for Langfuse and DeepEval callbacks exactly as the previous
-    # decorated tool did by forwarding its injected config.
-    ambient_config = _ambient_langchain_config()
-    if ambient_config is not None:
-        with langfuse_prompt_attributes(sql_generation_prompt):
-            response = await model.ainvoke(messages, config=ambient_config)
-        return _content_to_text(response.content).strip()
-
-    # No ambient LangChain config (a plain MCP client over Streamable HTTP).
-    # Emit an explicit Langfuse generation so the SQL call stays observable.
-    client = get_langfuse_client()
-    if client is None:
-        response = await model.ainvoke(messages)
-        return _content_to_text(response.content).strip()
-
-    with client.start_as_current_observation(
-        as_type="generation",
-        name=SQL_GENERATION_OBSERVATION_NAME,
-        model=settings.agent.deployment_for("sql_generation").model,
-        input={"question": question},
-        prompt=sql_generation_prompt.prompt_client,
-    ) as generation:
-        response = await model.ainvoke(messages)
-        generation.update(output=_content_to_text(response.content).strip())
-
-    return _content_to_text(response.content).strip()
-
-
-def _ambient_langchain_config() -> RunnableConfig | None:
-    # A tool running inside a LangChain agent exposes the ambient config here
-    # even though MCP does not transport RunnableConfig into the tool.
-    config = var_child_runnable_config.get()
-    if config is None:
-        return None
-    callbacks = config.get("callbacks")
-    if not callbacks:
-        return None
-    return {"callbacks": callbacks}
+    model = TracedSqlGenerationModel(
+        model=build_model("sql_generation"),
+        request=request,
+        sql_generation_prompt=sql_generation_prompt,
+    )
+    return await generator.generate_sql(
+        request=request,
+        sql_generation=sql_generation_prompt.content,
+        schema_context=schema_context.content,
+        model=model,
+    )
 
 
 def _publish_result_facts(sql: str, result: QueryResult, page_offset: int = 0) -> None:

@@ -1,6 +1,6 @@
 # Prompts module guide
 
-> **Last verified:** 2026-10-20
+> **Last verified:** 2026-10-25
 
 > **Eviction:** Rewritten whenever `config/prompts.yaml` changes shape, or `src/agents/runtime/prompts.py`, `src/agents/tracing/prompt_registry.py`, `scripts/register_langfuse_prompts.py`, or `agent.prompts` changes, removed when the module is retired.
 
@@ -85,7 +85,7 @@ The `# Reading tool results` section of `system` says what each fact means for t
 So the system prompt owns every user-facing word, and a prompt edit is a behaviour change with no code safety net.
 
 **How the SQL model's message is built.**
-`generate_sql` in `src/agents/tools/query_clean_jobs.py` joins `sql_generation`, a blank line, `schema_context`, a blank line, and `Question: …`.
+`src/services/query/generator.py` joins `sql_generation`, a blank line, `schema_context`, a blank line, and `Question: …`.
 The SQL model never sees the conversation, only the ReAct model's standalone rewrite of the request.
 For "Liệt kê các việc Data Analyst ở Hà Nội" it wrote `WHERE role = 'Data Analyst' AND location ILIKE '%Hanoi%' ORDER BY id`, which uses the canonical role, the city alias from the column guide, and the id tiebreaker.
 For the follow-up "Xem thêm" the ReAct model rewrote the request as "..., sắp xếp theo id, bỏ qua 20 tin đã hiển thị, lấy 20 tin tiếp theo", and the SQL model added `LIMIT 20 OFFSET 20`.
@@ -325,7 +325,8 @@ An unregistered surface serves unlinked and costs nothing on a turn.
 | `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup`, `refresh_prompt_links_forever` | Boot resolution and the background refresh |
 | `src/agents/runtime/prompts.py` → `resolve_prompt_bundle_async`, `refresh_prompt_bundle_async`, `prompt_bundle_context`, `ResolvedPromptBundle` | One bundle per turn, and the eval driver's own refresh |
 | `src/agents/runtime/react_agent.py` → `AgentRuntime.astream`, `AgentRuntime._active_agent` | Where a turn reads its bundle, and the agent cache per system prompt |
-| `src/agents/tools/query_clean_jobs.py` → `generate_sql` | How the SQL model's message is built and linked |
+| `src/agents/tools/query_clean_jobs.py` → `generate_sql`; `src/services/query/generator.py` → `generate_sql` | How the SQL model's message is built |
+| `src/agents/tracing/sql_generation.py` → `TracedSqlGenerationModel` | How the SQL model's call is linked to its prompt |
 | `src/agents/mcp/job_server.py` → `QUERY_CLEAN_JOBS_DESCRIPTION`, `GET_JOB_DETAILS_DESCRIPTION` | The tool text the model reads |
 | `src/agents/tracing/langfuse.py` → `langfuse_request_trace`, `langfuse_prompt_attributes` | Tags, metadata, and native links |
 | `scripts/register_langfuse_prompts.py` → `synchronize_prompts`, `check_prompt_drift` | Registering a release and checking drift |

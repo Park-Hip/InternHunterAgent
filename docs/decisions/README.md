@@ -45,6 +45,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0062](adr-0062-tools-return-facts-the-prompt-owns-wording.md) | Tools return typed facts, and the system prompt owns all wording | Agent runtime |
 | [ADR-0063](adr-0063-database-owns-agent-column-boundary.md) | The database owns the agent column boundary | Data governance |
 | [ADR-0064](adr-0064-offset-pages-require-a-total-order.md) | An OFFSET page requires a total order | Data honesty |
+| [ADR-0065](adr-0065-postgres-parser-validates-agent-sql.md) | PostgreSQL's parser validates and bounds agent SQL | Agent runtime |
 
 Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
 superseded by ADR-0052 and keep their files with a `Superseded by` status.

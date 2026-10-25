@@ -321,9 +321,9 @@ or tracing.
 "Never over-engineer" is enforced concretely, not aspirationally.
 
 - **SQL is model-proposed, then deterministically validated.** The tool calls a model to *propose* a
-  `SELECT`, but a deterministic hand-rolled validator approves it before execution. The generator is
-  untrusted; the validator, not the model, is what makes the path safe. There is no model-driven
-  query-planning or execution layer.
+  `SELECT`, but a deterministic validator that reads PostgreSQL's own parse tree approves it before
+  execution. The generator is untrusted; the validator, not the model, is what makes the path safe.
+  There is no model-driven query-planning or execution layer.
 - **Bounded by construction, not by prompt.** Output size, like query safety, is a deterministic
   guarantee the tool enforces, never a behavior the model is trusted to produce. The tool caps
   result rows and field lengths regardless of what SQL the model proposed. A prompt instruction to
@@ -401,9 +401,11 @@ Two tools ship.
 
 1. The resolved schema-context prompt supplies the table shape to the model.
 2. A dedicated model call turns the request into a candidate `SELECT`.
-3. `src/services/query/sql_validator.py` is the **SQL-shape boundary**: a deterministic, hand-rolled
-   read-only validator with `SELECT`-only enforcement and allowlist and denylist checks. It rejects
-   a hidden column named directly; the database grant is the column boundary (#722, ADR-0063).
+3. `src/services/query/sql_validator.py` is the **SQL-shape boundary**: a deterministic, read-only
+   check that parses the statement once with PostgreSQL's grammar. It enforces `SELECT`-only, the
+   relation and function allowlists, and the hidden-name rule from the tree rather than the text
+   (#742, ADR-0065). It rejects a hidden column named directly; the database grant is the column
+   boundary (#722, ADR-0063).
 4. Only validated SQL reaches `src/services/query/executor.py`, run in one read-only, repeatable-read
    transaction off the event loop that also holds the counting statement.
 5. Rows are shaped by `src/services/query/table_formatter.py` into JSON-native values, and the tool
@@ -433,8 +435,8 @@ has.
 - `query_clean_jobs` runs the pipeline above, and the tool boundary enforces two deterministic
   guarantees the model cannot override. It **never projects the `description` blob** into its
   result, and it **caps result rows** at `agent.query.max_rows`. The fetch bound is system-owned,
-  not model-owned: `src/services/query/row_bound.py` inspects any trailing `LIMIT` and `OFFSET` the
-  model wrote. A `LIMIT` is a signal of *explicit user intent*, because the SQL-generation prompt
+  not model-owned: `src/services/query/row_bound.py` reads any `LIMIT`, `OFFSET`, or `FETCH FIRST`
+  the model wrote from the parse tree. A `LIMIT` is a signal of *explicit user intent*, because the SQL-generation prompt
   only asks for one when the user requested a specific count. If that `LIMIT` is within the safety
   cap it is honored exactly; otherwise the tool fetches `max_rows`. A trailing `OFFSET` is a page
   start and is never capped: `LIMIT n OFFSET m` runs as that statement, and `OFFSET m` without a

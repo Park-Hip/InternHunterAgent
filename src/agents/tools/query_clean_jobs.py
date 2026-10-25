@@ -49,6 +49,7 @@ from src.services.query.models import QueryResult
 from src.services.query.result_shape import classify_result_shape, counted_total
 from src.services.query.row_bound import resolve_bounds
 from src.services.query.sql_validator import validate_sql
+from src.services.query.statement import StatementError
 from src.services.query.table_formatter import shape_rows
 
 SQL_GENERATION_OBSERVATION_NAME = "sql_generation"
@@ -185,7 +186,14 @@ async def run_query_clean_jobs(request: str) -> QueryResult:
         raise ToolFailure("rejected", validation.reason)
 
     max_rows = load_max_rows()
-    bounds = resolve_bounds(validation.sql, max_rows)
+    try:
+        bounds = resolve_bounds(validation.sql, max_rows)
+    except StatementError as exc:
+        # validate_sql already refuses an unusable bound; this is the same
+        # refusal for a caller that reached the bound step with stale SQL.
+        logger.warning("query_clean_jobs.bounds_rejected", reason=exc.reason)
+        raise ToolFailure("rejected", exc.reason) from exc
+
     bounded_sql = f"{bounds.base_sql} LIMIT {bounds.limit}"
     if bounds.offset:
         bounded_sql += f" OFFSET {bounds.offset}"

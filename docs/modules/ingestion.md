@@ -222,7 +222,7 @@ Two records show the pairing; they do not measure how often it holds live.
 - The boundary is the agent role's column-level grant (#722, ADR-0063): `internhunter_agent` has
   `SELECT` on the 16 visible columns and no table-level grant, so PostgreSQL refuses a hidden
   column, a whole row, or `SELECT *` even when the query never names a hidden column.
-  `HIDDEN_COLUMNS` in `src/services/query/sql_validator.py` remains the explicit-name check, and
+  The hidden-name check in `src/services/query/statement.py` remains the explicit-name check, and
   `fetch_job_details` keeps its 16-column projection. Both read the names from
   `src/core/column_contract.py`.
 
@@ -317,7 +317,7 @@ Coupled: the timing keys to the workflow timeout; the role and city maps to serv
   That is the writer's fail-closed check, separate from the serving guard.
 - If the agent should not see it, add it to `HIDDEN_COLUMNS` in the contract module.
   Do not grant it.
-  The validator's `HIDDEN_COLUMNS` and the prompt audit read the same list, and the PostgreSQL
+  The validator's hidden-name check and the prompt audit read the same list, and the PostgreSQL
   grant is the boundary for star or whole-row reads.
 - If the agent should see it, add it to `VISIBLE_COLUMNS` in the contract module and update the
   prompt surfaces, [the schema reference](../reference/schema.md), and

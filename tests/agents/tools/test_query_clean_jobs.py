@@ -30,7 +30,7 @@ from src.services.query.executor import (
     PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
-    SqlSyntaxError,
+    SqlStatementRejectedError,
     UndefinedColumnError,
     UnstableOrderError,
 )
@@ -442,7 +442,9 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
 
         mock_generate_sql.return_value = HAPPY_SQL
         mock_validate_sql.return_value = ValidationResult(valid=True, sql=HAPPY_SQL)
-        mock_execute.side_effect = SqlSyntaxError('syntax error at or near "LIMIT"')
+        mock_execute.side_effect = SqlStatementRejectedError(
+            'syntax error at or near "LIMIT"'
+        )
 
         with _bound_holder() as holder:
             with self.assertRaises(ToolFailure) as raised:
@@ -452,8 +454,59 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raised.exception.detail, 'syntax error at or near "LIMIT"')
         self.assertFalse(holder.published)
         mock_logger.warning.assert_called_once_with(
-            "query_clean_jobs.sql_syntax", error='syntax error at or near "LIMIT"'
+            "query_clean_jobs.statement_rejected",
+            error='syntax error at or near "LIMIT"',
         )
+
+    @patch("src.agents.tools.query_clean_jobs.logger")
+    @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_a_grouping_error_is_rejected_with_postgresqls_message(
+        self, mock_generate_sql, mock_validate_sql, mock_execute, mock_logger
+    ) -> None:
+        """#751: a class 42 grouping error is a rewrite, not a database outage."""
+        from src.agents.tools.query_clean_jobs import run_query_clean_jobs
+
+        detail = (
+            'column "clean_jobs.id" must appear in the GROUP BY clause or be '
+            "used in an aggregate function"
+        )
+        mock_generate_sql.return_value = HAPPY_SQL
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql=HAPPY_SQL)
+        mock_execute.side_effect = SqlStatementRejectedError(detail)
+
+        with _bound_holder() as holder:
+            with self.assertRaises(ToolFailure) as raised:
+                await run_query_clean_jobs("count postings per location")
+
+        self.assertEqual(raised.exception.kind, "rejected")
+        self.assertEqual(raised.exception.detail, detail)
+        self.assertFalse(holder.published)
+        mock_logger.warning.assert_called_once_with(
+            "query_clean_jobs.statement_rejected", error=detail
+        )
+
+    @patch("src.agents.tools.query_clean_jobs.logger")
+    @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")
+    @patch("src.agents.tools.query_clean_jobs.validate_sql")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_a_grouping_error_never_reaches_the_model_as_unavailable(
+        self, mock_generate_sql, mock_validate_sql, mock_execute, mock_logger
+    ) -> None:
+        """The outage kind and its ERROR log are reserved for real faults (#751)."""
+        from src.agents.tools.query_clean_jobs import run_query_clean_jobs
+
+        mock_generate_sql.return_value = HAPPY_SQL
+        mock_validate_sql.return_value = ValidationResult(valid=True, sql=HAPPY_SQL)
+        mock_execute.side_effect = SqlStatementRejectedError("grouping error")
+
+        with self.assertRaises(ToolFailure) as raised:
+            await run_query_clean_jobs("count postings per location")
+
+        self.assertNotEqual(raised.exception.kind, "unavailable")
+        mock_logger.error.assert_not_called()
+        mock_logger.warning.assert_called_once()
 
     @patch("src.agents.tools.query_clean_jobs.logger")
     @patch("src.agents.tools.query_clean_jobs.execute_bounded_select")

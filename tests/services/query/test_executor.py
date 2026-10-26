@@ -13,6 +13,8 @@ from unittest.mock import MagicMock, patch
 
 from psycopg.errors import (
     ConnectionFailure,
+    DatatypeMismatch,
+    GroupingError,
     InsufficientPrivilege,
     QueryCanceled,
     SyntaxError,
@@ -25,7 +27,7 @@ from src.services.query.executor import (
     PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
-    SqlSyntaxError,
+    SqlStatementRejectedError,
     UndefinedColumnError,
     UnstableOrderError,
     execute_bounded_select,
@@ -57,6 +59,33 @@ class _SyntaxErrorWithPrimary(SyntaxError):
     @property
     def diag(self) -> SimpleNamespace:
         return SimpleNamespace(message_primary='syntax error at or near "LIMIT"')
+
+
+class _GroupingErrorWithPrimary(GroupingError):
+    """SQLSTATE 42803 carrying the server's primary message, as on the wire."""
+
+    @property
+    def diag(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            message_primary='column "clean_jobs.id" must appear in the GROUP BY '
+            "clause or be used in an aggregate function"
+        )
+
+
+class _DatatypeMismatchWithPrimary(DatatypeMismatch):
+    """SQLSTATE 42804 carrying the server's primary message, as on the wire."""
+
+    @property
+    def diag(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            message_primary="CASE types integer and character varying cannot be matched"
+        )
+
+
+class _GroupingErrorWithoutPrimary(GroupingError):
+    """SQLSTATE 42803 with no server diagnostic attached."""
+
+    diag = None
 
 
 class _PrivilegeDeniedOnCleanJobs(InsufficientPrivilege):
@@ -347,6 +376,9 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
     def test_leaves_a_privilege_denial_on_another_object_unavailable(
         self, mock_agent_session_factory: MagicMock
     ) -> None:
+        # #751: 42501 is class 42, but a denial on another object is an
+        # operational grant fault, not the model's statement, so it stays an
+        # outage rather than becoming a rejection.
         session = _mock_session(mock_agent_session_factory)
         session.execute.side_effect = [
             _result([], []),
@@ -362,6 +394,7 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
             execute_bounded_select(BASE_SQL, 20)
 
         self.assertNotIsInstance(raised.exception, PermissionDeniedError)
+        self.assertNotIsInstance(raised.exception, SqlStatementRejectedError)
 
     @patch("src.services.query.executor.agent_session_factory")
     def test_maps_statement_timeout_to_query_timeout_error(
@@ -391,7 +424,7 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
         )
 
     @patch("src.services.query.executor.agent_session_factory")
-    def test_maps_a_syntax_error_to_sql_syntax_error(
+    def test_maps_a_syntax_error_to_a_statement_rejection(
         self, mock_agent_session_factory: MagicMock
     ) -> None:
         session = _mock_session(mock_agent_session_factory)
@@ -405,7 +438,7 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
             ),
         ]
 
-        with self.assertRaises(SqlSyntaxError) as raised:
+        with self.assertRaises(SqlStatementRejectedError) as raised:
             execute_bounded_select(BASE_SQL, 20)
 
         self.assertEqual(
@@ -413,7 +446,102 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
         )
 
     @patch("src.services.query.executor.agent_session_factory")
-    def test_a_connection_timeout_is_not_bucketed_as_a_statement_timeout(
+    def test_maps_a_grouping_error_to_a_statement_rejection(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        # #751: 42803 is class 42, so it is a statement the model can rewrite.
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.side_effect = [
+            _result([], []),
+            _result([], []),
+            OperationalError(
+                "SELECT COUNT(*) AS count, location FROM clean_jobs "
+                "GROUP BY location ORDER BY location, id",
+                {},
+                _GroupingErrorWithPrimary(),
+            ),
+        ]
+
+        with self.assertRaises(SqlStatementRejectedError) as raised:
+            execute_bounded_select(BASE_SQL, 20)
+
+        self.assertIn(
+            'column "clean_jobs.id" must appear in the GROUP BY clause',
+            raised.exception.message_primary,
+        )
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_maps_a_datatype_mismatch_to_a_statement_rejection(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        # #751: 42804 is class 42 even though the parser cannot type-check it.
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.side_effect = [
+            _result([], []),
+            _result([], []),
+            OperationalError(
+                "SELECT CASE WHEN id > 0 THEN id ELSE title END FROM clean_jobs",
+                {},
+                _DatatypeMismatchWithPrimary(),
+            ),
+        ]
+
+        with self.assertRaises(SqlStatementRejectedError) as raised:
+            execute_bounded_select(BASE_SQL, 20)
+
+        self.assertEqual(
+            raised.exception.message_primary,
+            "CASE types integer and character varying cannot be matched",
+        )
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_a_statement_rejection_relays_only_the_primary_message(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        # #751 acceptance: the driver string can name the database host, so only
+        # diag.message_primary may travel to the model.
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.side_effect = [
+            _result([], []),
+            _result([], []),
+            OperationalError(
+                'connection to server at "db.internal" failed',
+                {},
+                _GroupingErrorWithPrimary(),
+            ),
+        ]
+
+        with self.assertRaises(SqlStatementRejectedError) as raised:
+            execute_bounded_select(BASE_SQL, 20)
+
+        self.assertEqual(
+            raised.exception.message_primary,
+            'column "clean_jobs.id" must appear in the GROUP BY clause or be '
+            "used in an aggregate function",
+        )
+        self.assertNotIn("db.internal", raised.exception.message_primary)
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_a_class_42_error_without_a_primary_message_stays_actionable(
+        self, mock_agent_session_factory: MagicMock
+    ) -> None:
+        session = _mock_session(mock_agent_session_factory)
+        session.execute.side_effect = [
+            _result([], []),
+            _result([], []),
+            OperationalError("SELECT 1", {}, _GroupingErrorWithoutPrimary()),
+        ]
+
+        with self.assertRaises(SqlStatementRejectedError) as raised:
+            execute_bounded_select(BASE_SQL, 20)
+
+        self.assertEqual(
+            raised.exception.message_primary,
+            "the database rejected the generated statement",
+        )
+
+    @patch("src.services.query.executor.agent_session_factory")
+    def test_an_unclassified_connection_failure_is_not_a_statement_rejection(
         self, mock_agent_session_factory: MagicMock
     ) -> None:
         # #744: the message says "timeout", but the SQLSTATE is the connection
@@ -433,7 +561,7 @@ class ExecuteBoundedSelectTests(unittest.TestCase):
             execute_bounded_select(BASE_SQL, 20)
 
         self.assertNotIsInstance(raised.exception, QueryTimeoutError)
-        self.assertNotIsInstance(raised.exception, SqlSyntaxError)
+        self.assertNotIsInstance(raised.exception, SqlStatementRejectedError)
 
     @patch("src.services.query.executor.agent_session_factory")
     def test_raises_executor_error_on_operational_error(

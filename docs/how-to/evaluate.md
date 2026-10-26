@@ -98,6 +98,51 @@ Each selected scenario is captured once and scored on its applicable metrics.
 Use `--ids HLP-LIST-1,SAF-INDIRECT-INJECTION-1` to narrow a run, or `--only tool_correctness,sql_accuracy` to omit the judge.
 Omitting the judge does **not** remove the serving-model credential requirement for a live capture.
 
+## Milestone runs
+
+A milestone run is the committed evidence behind a reported number.
+It is one immutable directory, `evals/runs/<date>-<label>/`, written by the command that produces the evidence:
+
+```sh
+# Agent run over the v1 scenarios
+uv run python -m evals --dataset default --milestone agent-v1
+
+# Layer 1 text-to-SQL run over the baseline dataset
+uv run python -m evals.baseline_sql generate --milestone baseline-v1
+uv run python -m evals.baseline_sql score evals/runs/2026-10-26-baseline-v1 \
+  --database-url "$BASELINE_DATABASE_URL"
+
+# Re-score a committed run without a serving model (a SQL metric still needs its database)
+uv run python -m evals --rescore evals/runs/2026-10-26-agent-v1
+uv run python -m evals --rescore evals/runs/2026-10-26-baseline-v1 \
+  --database-url "$BASELINE_DATABASE_URL"
+```
+
+A Layer 1 run is written by `generate` and completed by `score`; until `score` runs, its manifest says `status: generated` and re-scoring refuses it.
+
+The directory holds three files:
+
+| File | Contents |
+| --- | --- |
+| `manifest.yaml` | The lineage: commit (and whether the tree was dirty), prompt versions per surface, model and temperature per surface, the relevant settings, the dataset digest, and the snapshot manifest checksum from [#756](https://github.com/Park-Hip/InternHunterAgent/issues/756). The manifest also digests the other two files. |
+| `captures.json` | The evidence scoring reads. An agent run stores each turn's question, answer, tool calls, generated SQL, and conversation history. A baseline run stores each question's generated SQL. |
+| `scores.json` | The scores the run recorded, grouped by metric exactly as the CLI prints them. |
+
+`--milestone` refuses to overwrite an existing run: a date and label identify one run, and a re-score must not silently replace its evidence.
+`.gitignore` keeps every other file under `evals/runs/` local, and unignores only directories whose name starts with an ISO date.
+
+**Re-scoring contract.** `--rescore` recomputes every recorded deterministic metric from `captures.json` and requires each score, reason, and detail to match `scores.json` exactly.
+A missing row, an extra row, or a changed score is a mismatch and exits nonzero.
+Judge metrics are reported as not re-scored: they need a model call, so claiming they reproduced would be false.
+The manifest digest is verified first, so editing the evidence is a refusal rather than a silent re-score of different data.
+
+**Content rights ([#757](https://github.com/Park-Hip/InternHunterAgent/issues/757)).** Committed runs keep answers verbatim and drop tool output, the same contract ADR-0046 uses for replays.
+The full snapshot dump stays private ([#756](https://github.com/Park-Hip/InternHunterAgent/issues/756)); an answer that quotes a handful of postings is evidence, not a copy of the corpus.
+Each manifest records this decision under `retention` so a reviewer does not have to infer it.
+
+A run captured from a retained replay states the replay's lineage as-is, including a legacy file-wide label or `null` when the replay has none.
+It never substitutes the working tree's current prompt hashes for the hashes that produced the capture ([#729](https://github.com/Park-Hip/InternHunterAgent/issues/729)).
+
 ## Credential-free deterministic check
 
 Use `--capture` to score retained, previously captured evidence without calling a provider:

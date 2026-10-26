@@ -180,8 +180,8 @@ async def capture_scenario(scenario: dict[str, Any], prompts: Any) -> list[dict[
     return captured
 
 
-def load_capture(path: Path) -> dict[str, list[dict[str, Any]]]:
-    """Read first capture per scenario from a retained v1 replay, never execute it."""
+def load_replay(path: Path) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    """Read a retained v1 replay and its manifest, never execute either."""
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or not isinstance(payload.get("scenarios"), dict):
         raise ValueError("Capture must contain a scenarios object")
@@ -195,7 +195,29 @@ def load_capture(path: Path) -> dict[str, list[dict[str, Any]]]:
             seam["conversation_history"] = history.copy()
             records[sid].append(seam)
             history.append({"question": seam["question"], "answer": seam["answer"]})
-    return records
+    manifest = payload.get("manifest") if isinstance(payload.get("manifest"), dict) else {}
+    return records, manifest
+
+
+def load_capture(path: Path) -> dict[str, list[dict[str, Any]]]:
+    """Read first capture per scenario from a retained v1 replay, never execute it."""
+    return load_replay(path)[0]
+
+
+def replay_prompt_versions(manifest: dict[str, Any]) -> dict[str, str] | None:
+    """The capture's own lineage, reported as-is rather than replaced by today's (#729).
+
+    Older replays carry one file-wide ``prompt_version`` label; newer ones carry
+    one content hash per surface. Neither is normalized: the report must say
+    what produced the evidence, including a legacy label or nothing at all.
+    """
+    versions = manifest.get("prompt_versions")
+    if isinstance(versions, dict) and versions:
+        return {str(surface): str(version) for surface, version in versions.items()}
+    version = manifest.get("prompt_version")
+    if isinstance(version, str) and version:
+        return {"prompt": version}
+    return None
 
 
 def score_turn(capture: dict[str, Any], scenario: dict[str, Any], names: list[str], turn_index: int, database_url: str | None = None) -> list[dict[str, Any]]:
@@ -243,6 +265,16 @@ def score_turn(capture: dict[str, Any], scenario: dict[str, Any], names: list[st
     return results
 
 
+def score_captures(scenarios: list[dict[str, Any]], captures: dict[str, list[dict[str, Any]]], names: list[str], database_url: str | None = None) -> list[dict[str, Any]]:
+    """Score already-captured turns, the shared path for offline runs and re-scoring."""
+    results: list[dict[str, Any]] = []
+    for scenario in scenarios:
+        selected = [name for name in names if name in scenario["metrics"]]
+        for index, turn in enumerate(captures[scenario["id"]]):
+            results.extend(score_turn(turn, scenario, selected, index, database_url))
+    return results
+
+
 async def run_dataset(spec: DatasetSpec, *, metric_names: list[str] | None = None, ids: list[str] | None = None, capture_path: Path | None = None, database_url: str | None = None) -> dict[str, Any]:
     """Run the selected dataset; offline mode scores only scenarios in the capture."""
     from evals.env import bind_fixture_environment
@@ -259,7 +291,10 @@ async def run_dataset(spec: DatasetSpec, *, metric_names: list[str] | None = Non
         if unknown_ids:
             raise ValueError(f"Unknown scenario IDs: {sorted(unknown_ids)}")
         scenarios = [s for s in scenarios if s["id"] in ids]
-    offline = load_capture(capture_path) if capture_path else None
+    offline: dict[str, list[dict[str, Any]]] | None = None
+    capture_manifest: dict[str, Any] = {}
+    if capture_path:
+        offline, capture_manifest = load_replay(capture_path)
     if offline is not None:
         missing = {s["id"] for s in scenarios if s["id"] not in offline}
         if ids and missing:
@@ -267,10 +302,12 @@ async def run_dataset(spec: DatasetSpec, *, metric_names: list[str] | None = Non
         scenarios = [s for s in scenarios if s["id"] in offline]
         if not scenarios:
             raise ValueError("No dataset scenarios found in capture")
+    prompt_versions: dict[str, str] | None = replay_prompt_versions(capture_manifest) if offline is not None else None
+    prompt_versions_source = ("capture" if prompt_versions else "absent") if offline is not None else "live"
     try:
         prompts: Any = None
         if offline is None:
-            from src.agents.runtime.prompts import refresh_prompt_bundle_async
+            from src.agents.runtime.prompts import load_resolved_prompt_versions_async, refresh_prompt_bundle_async
             from src.agents.tracing.langfuse import init_langfuse
 
             # The driver owns the Langfuse client for its own process, the same
@@ -281,6 +318,7 @@ async def run_dataset(spec: DatasetSpec, *, metric_names: list[str] | None = Non
             # driver resolves the bundle itself (#698).
             init_langfuse()
             prompts = await refresh_prompt_bundle_async()
+            prompt_versions = await load_resolved_prompt_versions_async()
         results: list[dict[str, Any]] = []
         captures: dict[str, list[dict[str, Any]]] = {}
         consecutive_quota_failures = 0
@@ -313,7 +351,18 @@ async def run_dataset(spec: DatasetSpec, *, metric_names: list[str] | None = Non
                 f"Requested metrics were never scored: {sorted(unexercised)}. "
                 f"Selected scenarios {selected_ids} declare none of them."
             )
-        return {"dataset": str(spec.path), "capture_source": str(capture_path) if capture_path else "live", "generated_at": datetime.now(timezone.utc).isoformat(), "metrics": names, "captures": captures, "by_metric": group_by_metric(results)}
+        return {
+            "dataset": str(spec.path),
+            "dataset_name": getattr(spec, "name", Path(spec.path).stem),
+            "capture_source": str(capture_path) if capture_path else "live",
+            "capture_manifest": capture_manifest or None,
+            "prompt_versions": prompt_versions,
+            "prompt_versions_source": prompt_versions_source,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "metrics": names,
+            "captures": captures,
+            "by_metric": group_by_metric(results),
+        }
     finally:
         if offline is None:
             from src.agents.tracing.langfuse import shutdown_langfuse

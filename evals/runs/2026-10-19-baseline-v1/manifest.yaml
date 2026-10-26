@@ -1,0 +1,100 @@
+schema_version: 1
+run_id: 2026-10-19-baseline-v1
+label: baseline-v1
+runner: baseline_sql
+generated_at: '2026-10-19T13:40:50+00:00'
+git:
+  commit: d7c6041f63f0f543f2d4126e7aadfaa2e5bb625a
+  branch: main
+  dirty: false
+dataset:
+  name: baseline
+  path: evals/datasets/baseline.yaml
+  sha256: faf0e789ff9f122f31907c11f757282c81e0005b3fd70c2e4c008d3b071aaeea
+  record_count: 36
+capture:
+  source: 'recovered #708 generation and score artifacts'
+  sanitized: false
+prompts:
+  versions:
+    system: v1
+    schema_context: v1
+    sql_generation: v1
+  source: live
+models:
+  source: live
+  react:
+    deployment: deepseek_flash
+    model: deepseek/deepseek-flash
+    temperature: 0.2
+    max_tokens: 2048
+    timeout: 30
+    max_attempts: 2
+    streaming: true
+    provider_options:
+      thinking: disabled
+  sql_generation:
+    deployment: deepseek_flash
+    model: deepseek/deepseek-flash
+    temperature: 0.0
+    max_tokens: 1024
+    timeout: 30
+    max_attempts: 2
+    streaming: false
+    provider_options:
+      thinking: disabled
+settings:
+  agent:
+    stream_turn_timeout_seconds: 120
+    memory:
+      max_turns: 6
+      retention_days: 30
+    query:
+      max_rows: 20
+      max_detail_ids: 3
+      statement_timeout_ms: 2000
+      max_result_bytes: 262144
+    prompts:
+      deployment_label: production
+      cache_ttl_seconds: 60
+      fetch_timeout_seconds: 2
+      refresh_interval_seconds: 300
+  eval:
+    capture:
+      max_attempts: 3
+      consecutive_quota_failures_before_halt: 3
+    judge:
+      provider: google
+      model: gemma-4-31b-it
+      temperature: 0.0
+      timeout_seconds: 120
+snapshot:
+  manifest: evals/datasets/baseline_manifest.yaml
+  manifest_sha256: 5a0d3550498b1965e26b0f58388b4ffe80463ca9a794b2739027aeb69716a189
+  snapshot: internhunter_snapshot_20261018
+  capture_date: '2026-10-18'
+  row_count: 367
+  checksum: '0000000000000000000000000000000000000000000000000000000000000000'
+  migration_revision: ee7a6592db2a
+metrics:
+- sql_accuracy
+evidence:
+  captures: captures.json
+  scores: scores.json
+  captures_sha256: e6bc148cd7368c5f37162c5e5b66dadfad3c284f8132fe3554cc423f6d8a4758
+  scores_sha256: d2fa67ddf4c35d83aa9641220c81d15dfe24fc106b7f3dd36134e61f4ecffd80
+retention:
+  answers: not_collected
+  tool_output: not_collected
+  decision: ADR-0046 commits answers and drops tool output; the full scraped snapshot
+    stays private (#756).
+generation:
+  created_at: '2026-10-19T13:40:50+00:00'
+  model: deepseek/deepseek-flash
+  records: 32
+status: scored
+provenance:
+  recovered_from: 'the #708 run files that were written under a gitignored folder'
+  generation: baseline.json
+  scores: baseline.score.json
+  note: The generation and recorded scores were recovered; the snapshot dump was not.

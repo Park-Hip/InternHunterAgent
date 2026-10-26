@@ -42,8 +42,9 @@ def _validate_tool_expectations(sid: str, scenario: dict[str, Any]) -> None:
 class DatasetSpec:
     """A single dataset reference: one scenario file and its grammar."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, name: str | None = None) -> None:
         self.path = path
+        self.name = name or path.stem
 
     def scenarios(self) -> list[dict[str, Any]]:
         payload = yaml.safe_load(self.path.read_text(encoding="utf-8"))
@@ -79,7 +80,7 @@ class DatasetSpec:
 # ---------------------------------------------------------------------------
 
 _REGISTRY: dict[str, DatasetSpec] = {
-    "default": DatasetSpec(DATASETS_DIR / "scenarios.yaml"),
+    "default": DatasetSpec(DATASETS_DIR / "scenarios.yaml", "default"),
 }
 
 

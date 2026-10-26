@@ -32,6 +32,10 @@ uv run python -m evals --gate
 # Live capture + scoring of the v1 scenarios (needs the serving-model credential)
 uv run python -m evals --dataset default --out evals/runs/local-report.json
 
+# A committed milestone run with a lineage manifest and re-scorable evidence
+uv run python -m evals --dataset default --milestone agent-v1
+uv run python -m evals --rescore evals/runs/2026-10-26-agent-v1
+
 # Offline scoring of a retained capture (no model call)
 uv run python -m evals --only tool_correctness,sql_accuracy \
   --capture evals/replays/t0025.9-committed.json \
@@ -41,12 +45,15 @@ uv run python -m evals --only tool_correctness,sql_accuracy \
 ```sh
 # Baseline text-to-SQL run (#708): one model call per question, then offline scoring.
 # The snapshot is a local copy of production clean_jobs; see the module docstring.
-uv run python -m evals.baseline_sql generate --out evals/runs/baseline/<name>.json
-uv run python -m evals.baseline_sql score evals/runs/baseline/<name>.json --database-url <snapshot URL>
+uv run python -m evals.baseline_sql generate --milestone baseline-v1
+uv run python -m evals.baseline_sql score evals/runs/2026-10-26-baseline-v1 --database-url <snapshot URL>
+uv run python -m evals --rescore evals/runs/2026-10-26-baseline-v1 --database-url <snapshot URL>
 ```
 
-Use `--out` to write the JSON report elsewhere.
-The default output lands in the gitignored `evals/runs/` directory.
+Use `--out` to write a standalone JSON report elsewhere; `--milestone <label>` writes
+`evals/runs/<date>-<label>/` with a lineage manifest and the evidence needed to re-score
+it offline. Only dated milestone directories are committed; other output under
+`evals/runs/` stays local and gitignored.
 
 The fixture loader rebuilds and seeds with the owner DSN in `eval.fixture.database_url`, then
 provisions `internhunter_eval_reader` with column-level `SELECT` on the 16 contract columns.
@@ -105,6 +112,7 @@ Tests live in [`tests/evals/`](../tests/evals/).
 | `test_sql_check.py` | [`sql_check.py`](sql_check.py) | SQL comparison modes with query results stubbed |
 | `test_sql_gate.py` | [`sql_gate.py`](sql_gate.py) + [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml) | Dataset grammar, guard/result grading, gate refusals |
 | `test_baseline_sql.py` | [`baseline_sql.py`](baseline_sql.py) + [`datasets/baseline.yaml`](datasets/baseline.yaml) | Baseline dataset grammar, offline scoring with execution stubbed |
+| `test_milestone.py` | [`milestone.py`](milestone.py) | Manifest lineage, sanitized evidence, evidence digests, re-score reproduction, gitignore boundary |
 | `test_holdout_judge.py` | [`judge.py`](judge.py) + [`calibration_v8.yaml`](calibration_v8.yaml) | Opt-in judge-versus-human check over the retained v8 holdout |
 
 ## The map
@@ -120,6 +128,7 @@ evals/
 ├── sql_check.py                  Generated-SQL vs reference-result comparison
 ├── report.py                     Result grouping and table rendering
 ├── sql_gate.py                   Credential-free SQL guard gate
+├── milestone.py                  Committed run folders, lineage manifests, re-scoring
 ├── env.py                        Fixture owner/reader binding before any src import
 ├── _paths.py                     Shared path constants
 │
@@ -139,7 +148,7 @@ evals/
 │
 ├── pipeline.md                   Pipeline, metric contract, and commands reference
 │
-├── runs/                         Raw reports - local, gitignored
+├── runs/                         Dated milestone runs - committed; other reports local
 ├── replays/                      Committed sanitized replays - retained evidence
 │
 └── archive/                      Historical v1 records (readable history, not fixtures)

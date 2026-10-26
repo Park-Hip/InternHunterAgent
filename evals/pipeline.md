@@ -4,7 +4,7 @@
 
 > **Eviction:** This document leaves when the harness commands, metric contract, or result terms change.
 
-> **Source:** `evals/__main__.py`, `evals/run.py`, `evals/metrics.py`, `evals/sql_check.py`, `evals/sql_gate.py`
+> **Source:** `evals/__main__.py`, `evals/run.py`, `evals/metrics.py`, `evals/sql_check.py`, `evals/sql_gate.py`, `evals/milestone.py`
 
 The rebuilt harness has one CLI and three ways to run it.
 [`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md) is the canonical how-to; this document is the reference for what the pipeline does under the hood.
@@ -54,6 +54,23 @@ Judge metrics need a judge credential, are continuous in `[0, 1]`, and are repor
 
 `sql_accuracy` and `memory` were kept off the governed v0 path by the Stage 4 decision (#487); that
 path is retired (ADR-0060), and the v1 scenarios still declare both.
+
+## Milestone runs
+
+A milestone run is the committed record behind a reported number.
+`--milestone <label>` writes `evals/runs/<date>-<label>/` with three files:
+`manifest.yaml` (commit, prompt versions, models and temperatures, settings, dataset digest, snapshot manifest checksum), `captures.json` (question, answer, tool calls, generated SQL), and `scores.json` (the grouped scores).
+The manifest digests the evidence files, and a re-score refuses a mismatch.
+
+```text
+capture or replay → score → group → write captures.json + scores.json + manifest.yaml
+                                      ↓
+                          --rescore: verify digest → score captures.json → compare scores.json
+```
+
+Only deterministic metrics are re-scored. Judge metrics need a model call and are reported as recorded-only.
+`evals/baseline_sql.py` uses the same folder contract for the Layer 1 text-to-SQL run, with one generated SQL record per question.
+Committed runs keep answers verbatim and drop tool output (ADR-0046, #757); the full snapshot stays private (#756).
 
 The SQL guard gate declares its own metrics in [`sql_gate.py`](sql_gate.py):
 `guard_correctness` (the validator verdict and the pinned rejection rule) and
@@ -140,4 +157,13 @@ uv run python -m evals --only tool_correctness,sql_accuracy
 uv run python -m evals --only tool_correctness,sql_accuracy \
   --capture evals/replays/t0025.9-committed.json \
   --ids SAF-DESTRUCTIVE-REFUSAL-1,HLP-CONTEXT-1
+
+# Committed milestone run and its credential-free re-score
+uv run python -m evals --dataset default --milestone agent-v1
+uv run python -m evals --rescore evals/runs/2026-10-26-agent-v1
+
+# Layer 1 milestone run, then score and re-score it on the snapshot
+uv run python -m evals.baseline_sql generate --milestone baseline-v1
+uv run python -m evals.baseline_sql score evals/runs/2026-10-26-baseline-v1 --database-url <snapshot URL>
+uv run python -m evals --rescore evals/runs/2026-10-26-baseline-v1 --database-url <snapshot URL>
 ```

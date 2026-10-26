@@ -70,14 +70,27 @@ by the first 12 hex of the SHA-256 of its text.
 - **Layer 2, answer quality:** a small agent run over multi-turn and detail questions, with B3, B4,
   and B5 marked by hand. No model judge until hand review is too slow.
 - **Pass bars:** B2 at least 85% on held-out; B3 and B4 at 100%.
-- **Model credit:** run at milestones only, and save every run's output so re-scoring is free.
+- **Model credit:** run at milestones only, and commit every run under
+  [`evals/runs/`](../../evals/runs/) with the evidence re-scoring reads, so a re-score is free
+  ([milestone runs](../how-to/evaluate.md#milestone-runs)).
 
 ## Baseline results (2026-10-19, prompts v1)
 
-| Layer | Result |
-|---|---|
-| Layer 1 | 31/32: dev 22/22, held-out 9/10. The one failure, 025, reads an ambiguous deadline question as a single posting. |
-| Layer 2 | 12 cases, 21 turns (022, 024, 026 to 032, 007, 033, 035). B3, B4, B5, and B6 held in every turn: totals and partial lists stated, the empty result said plainly, no SQL, column name, or id shown, and every follow-up kept its filters. |
+| Layer | Result | Evidence |
+|---|---|---|
+| Layer 1 | 31/32: dev 22/22, held-out 9/10. The one failure, 025, reads an ambiguous deadline question as a single posting. | [committed run](../../evals/runs/2026-10-19-baseline-v1/manifest.yaml) |
+| Layer 2 | 12 cases, 21 turns (022, 024, 026 to 032, 007, 033, 035). B3, B4, B5, and B6 held in every turn: totals and partial lists stated, the empty result said plainly, no SQL, column name, or id shown, and every follow-up kept its filters. | hand-marked, no committed run |
+
+The Layer 1 run is committed with the generated SQL, the recorded score per question, and the lineage manifest that names the commit, the prompts, the model, and the dataset digest.
+Re-score it from its own evidence without a model call:
+
+```
+uv run python -m evals --rescore evals/runs/2026-10-19-baseline-v1 \
+  --database-url "$BASELINE_DATABASE_URL"
+```
+
+The Layer 2 marks were made by hand before the milestone-run contract existed, and the run files are not recoverable.
+Those numbers stay historical until a Layer 2 run is committed.
 
 The held-out Layer 1 score is optimistic: rules 3 and 4 of `sql_generation` were written after
 held-out failures 025 and 026.

@@ -6,9 +6,13 @@ __pycache__/
 .uv-cache
 .deepeval/
 .deepeval-cache.json
-# Scoring runs are local working artifacts by default; dated calibration evidence
-# referenced by an ADR is re-included explicitly so it lands in review.
+# Scoring runs are local working artifacts by default. A milestone run is a
+# directory named <date>-<label>/ and is committed with its lineage manifest
+# (#757); everything else under evals/runs/ stays local. Dated calibration
+# evidence referenced by an ADR is re-included explicitly so it lands in review.
 evals/runs/*
+!evals/runs/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*/
+!evals/runs/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*/**
 !evals/runs/iha266-calibration-v7-judge-scores.json
 !evals/runs/iha266-calibration-v7-agreement-report.json
 !evals/runs/iha346-calibration-v8-judge-scores.json

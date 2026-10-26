@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "runner": "baseline_sql",
+  "records": [
+    {
+      "id": "001",
+      "question": "Mình muốn tìm internship AI Engineer, có những tin nào vậy?",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'AI Engineer' AND is_internship = true;",
+      "error": null
+    },
+    {
+      "id": "002",
+      "question": "Có việc Data Analyst cho fresher ở TP.HCM không?",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'Data Analyst' AND job_level = 'Fresher/Entry level' AND location ILIKE '%Ho Chi Minh City%'",
+      "error": null
+    },
+    {
+      "id": "003",
+      "question": "Tìm giúp mình các vị trí AI Engineer ở Hà Nội.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'AI Engineer' AND location ILIKE '%Hanoi%'",
+      "error": null
+    },
+    {
+      "id": "004",
+      "question": "Có job Data Engineer ở HCM yêu cầu Python không?",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'Data Engineer' AND location ILIKE '%Ho Chi Minh City%' AND tech_stack ILIKE '%Python%'",
+      "error": null
+    },
+    {
+      "id": "005",
+      "question": "Mình là fresher, có việc nào ở level Fresher không?",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE job_level = 'Fresher/Entry level'",
+      "error": null
+    },
+    {
+      "id": "006",
+      "question": "Tìm việc Machine Learning nhé, ở đâu cũng được.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'ML Engineer'",
+      "error": null
+    },
+    {
+      "id": "007",
+      "question": "tim internship IT support o ha noi voi",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE is_internship = true AND location ILIKE '%Hanoi%' AND (title ILIKE '%IT support%' OR description ILIKE '%IT support%')",
+      "error": null
+    },
+    {
+      "id": "008",
+      "question": "Có việc Data Engineer nào dùng SQL không?",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'Data Engineer' AND tech_stack ILIKE '%SQL%';",
+      "error": null
+    },
+    {
+      "id": "009",
+      "question": "Cho mình xin mấy tin Data Analyst có Power BI.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'Data Analyst' AND tech_stack ILIKE '%Power BI%'",
+      "error": null
+    },
+    {
+      "id": "010",
+      "question": "Có job AI Engineer level Fresher không?",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'AI Engineer' AND job_level = 'Fresher/Entry level'",
+      "error": null
+    },
+    {
+      "id": "011",
+      "question": "Tìm các vị trí yêu cầu cả Spark và Airflow.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE tech_stack ILIKE '%Spark%' AND tech_stack ILIKE '%Airflow%'",
+      "error": null
+    },
+    {
+      "id": "012",
+      "question": "tim viec Data Analyst o Da Nang, minh khong tim internship",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'Data Analyst' AND location ILIKE '%Da Nang%' AND is_internship = false",
+      "error": null
+    },
+    {
+      "id": "013",
+      "question": "co vi tri Data Engineer cap Manager khong?",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'Data Engineer' AND job_level = 'Manager'",
+      "error": null
+    },
+    {
+      "id": "014",
+      "question": "tim viec co Python, uu tien internship nha",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE tech_stack ILIKE '%Python%' ORDER BY is_internship DESC, created_on DESC NULLS LAST",
+      "error": null
+    },
+    {
+      "id": "015",
+      "question": "Trong tháng 6/2026 có bao nhiêu việc làm AI ở TP.HCM?",
+      "sql": "SELECT COUNT(*) AS count FROM clean_jobs WHERE role = 'AI Engineer' AND location ILIKE '%Ho Chi Minh City%' AND created_on >= '2026-06-01' AND created_on < '2026-07-01'",
+      "error": null
+    },
+    {
+      "id": "016",
+      "question": "Có bao nhiêu việc làm AI yêu cầu Python?",
+      "sql": "SELECT COUNT(*) AS count FROM clean_jobs WHERE role = 'AI Engineer' AND tech_stack ILIKE '%Python%';",
+      "error": null
+    },
+    {
+      "id": "017",
+      "question": "AI o Ha Noi yeu cau Python co bao nhieu tin?",
+      "sql": "SELECT COUNT(*) AS count FROM clean_jobs WHERE role = 'AI Engineer' AND location ILIKE '%Hanoi%' AND tech_stack ILIKE '%Python%'",
+      "error": null
+    },
+    {
+      "id": "018",
+      "question": "Hiện có bao nhiêu tin thực tập?",
+      "sql": "SELECT COUNT(*) AS count FROM clean_jobs WHERE is_internship = true;",
+      "error": null
+    },
+    {
+      "id": "019",
+      "question": "Tháng 6/2026 hệ thống có thêm bao nhiêu tin Data Engineer?",
+      "sql": "SELECT COUNT(*) AS count FROM clean_jobs WHERE role = 'Data Engineer' AND created_on >= DATE '2026-06-01' AND created_on < DATE '2026-07-01'",
+      "error": null
+    },
+    {
+      "id": "020",
+      "question": "Thống kê số tin theo từng job level giúp mình.",
+      "sql": "SELECT job_level, COUNT(*) AS count FROM clean_jobs GROUP BY job_level",
+      "error": null
+    },
+    {
+      "id": "021",
+      "question": "Có bao nhiêu tin tuyển dụng đã ghi mức lương, chia theo currency nhé.",
+      "sql": "SELECT salary_currency, COUNT(*) AS count FROM clean_jobs WHERE salary_min IS NOT NULL OR salary_max IS NOT NULL GROUP BY salary_currency",
+      "error": null
+    },
+    {
+      "id": "022",
+      "question": "Tìm giúp mình các tin Data Scientist mới nhất.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'Data Scientist' ORDER BY created_on DESC NULLS LAST;",
+      "error": null
+    },
+    {
+      "id": "023",
+      "question": "Mở chi tiết tin AI Engineer ở Hà Nội mới nhất giúp mình.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'AI Engineer' AND location ILIKE '%Hanoi%' ORDER BY created_on DESC NULLS LAST LIMIT 1",
+      "error": null
+    },
+    {
+      "id": "024",
+      "question": "Tìm tin Data Analyst level Fresher cho mình.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'Data Analyst' AND job_level = 'Fresher/Entry level'",
+      "error": null
+    },
+    {
+      "id": "025",
+      "question": "han cuoi ung tuyen cua tin Data Analyst o TPHCM la ngay nao?",
+      "sql": "SELECT id, title, company, location, source_url, listing_expires_on FROM clean_jobs WHERE role = 'Data Analyst' AND location ILIKE '%Ho Chi Minh City%' AND listing_expires_on >= CURRENT_DATE ORDER BY listing_expires_on DESC NULLS LAST LIMIT 1",
+      "error": null
+    },
+    {
+      "id": "026",
+      "question": "Tìm vài tin AI Engineer mới nhất cho mình.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'AI Engineer' ORDER BY created_on DESC NULLS LAST",
+      "error": null
+    },
+    {
+      "id": "027",
+      "question": "Tìm các tin AI Engineer level Fresher giúp mình.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'AI Engineer' AND job_level = 'Fresher/Entry level'",
+      "error": null
+    },
+    {
+      "id": "028",
+      "question": "Tìm các việc làm yêu cầu Python nhé.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE tech_stack ILIKE '%Python%'",
+      "error": null
+    },
+    {
+      "id": "029",
+      "question": "Có những tin Data Analyst nào?",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'Data Analyst'",
+      "error": null
+    },
+    {
+      "id": "030",
+      "question": "Cho mình xem các tin AI Engineer mới nhất.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'AI Engineer' ORDER BY created_on DESC NULLS LAST;",
+      "error": null
+    },
+    {
+      "id": "031",
+      "question": "tim cac tin AI Engineer",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'AI Engineer'",
+      "error": null
+    },
+    {
+      "id": "032",
+      "question": "Tìm việc Data Science giúp mình.",
+      "sql": "SELECT id, title, company, location, source_url FROM clean_jobs WHERE role = 'Data Scientist'",
+      "error": null
+    }
+  ]
+}

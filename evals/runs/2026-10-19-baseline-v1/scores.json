@@ -1,0 +1,487 @@
+{
+  "schema_version": 1,
+  "metrics": [
+    "sql_accuracy"
+  ],
+  "by_metric": {
+    "sql_accuracy": [
+      {
+        "scenario_id": "001",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 1,
+          "actual_count": 1,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "002",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 3,
+          "actual_count": 3,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "003",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 37,
+          "actual_count": 37,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "004",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 13,
+          "actual_count": 13,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "005",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 14,
+          "actual_count": 14,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "006",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 4,
+          "actual_count": 4,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "007",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 0,
+          "actual_count": 0,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "008",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 29,
+          "actual_count": 29,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "009",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 40,
+          "actual_count": 40,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "010",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 5,
+          "actual_count": 5,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "011",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 8,
+          "actual_count": 8,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "012",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 1,
+          "actual_count": 1,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "013",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 2,
+          "actual_count": 2,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "014",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 161,
+          "actual_count": 161,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "015",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 1,
+          "actual_count": 1,
+          "expected": 4,
+          "actual": 4
+        }
+      },
+      {
+        "scenario_id": "016",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 1,
+          "actual_count": 1,
+          "expected": 40,
+          "actual": 40
+        }
+      },
+      {
+        "scenario_id": "017",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 1,
+          "actual_count": 1,
+          "expected": 32,
+          "actual": 32
+        }
+      },
+      {
+        "scenario_id": "018",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 1,
+          "actual_count": 1,
+          "expected": 2,
+          "actual": 2
+        }
+      },
+      {
+        "scenario_id": "019",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 1,
+          "actual_count": 1,
+          "expected": 6,
+          "actual": 6
+        }
+      },
+      {
+        "scenario_id": "020",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 5,
+          "actual_count": 5,
+          "missing_rows": [],
+          "unexpected_rows": []
+        }
+      },
+      {
+        "scenario_id": "021",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 2,
+          "actual_count": 2,
+          "missing_rows": [],
+          "unexpected_rows": []
+        }
+      },
+      {
+        "scenario_id": "022",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 11,
+          "actual_count": 11,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "023",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 1,
+          "actual_count": 1,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "024",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 4,
+          "actual_count": 4,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "025",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 0.0,
+        "reason": "FAIL",
+        "details": {
+          "validator": "accepted",
+          "reference_count": 29,
+          "actual_count": 1,
+          "missing_ids": [
+            12,
+            32,
+            34,
+            40,
+            48,
+            80,
+            124,
+            130,
+            142,
+            146,
+            1163,
+            1217,
+            1316,
+            1619,
+            1852,
+            2027,
+            2030,
+            2031,
+            2035,
+            2049,
+            2050,
+            2095,
+            2124,
+            2142,
+            2144,
+            2423,
+            3040,
+            3125
+          ],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "026",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 50,
+          "actual_count": 50,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "027",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 5,
+          "actual_count": 5,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "028",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 161,
+          "actual_count": 161,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "029",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 70,
+          "actual_count": 70,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "030",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 50,
+          "actual_count": 50,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "031",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 50,
+          "actual_count": 50,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      },
+      {
+        "scenario_id": "032",
+        "turn": 1,
+        "metric": "sql_accuracy",
+        "score": 1.0,
+        "reason": null,
+        "details": {
+          "validator": "accepted",
+          "reference_count": 11,
+          "actual_count": 11,
+          "missing_ids": [],
+          "unexpected_ids": []
+        }
+      }
+    ]
+  }
+}

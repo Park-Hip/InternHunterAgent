@@ -247,14 +247,17 @@ def run_sql_gate(spec: SqlGuardDataset, *, ids: list[str] | None = None) -> dict
     _bind_environment()
     from src.services.query.sql_validator import validate_sql
 
-    _require_fixture()
     cases = spec.cases()
     if ids:
         wanted = set(ids)
         cases = [case for case in cases if case["id"] in wanted]
         missing = wanted - {case["id"] for case in cases}
         if missing:
+            # Reject a typo before asking for the fixture: an unknown id is a
+            # usage error, not an unavailable database.
             raise ValueError(f"Unknown dataset ids: {sorted(missing)}")
+
+    _require_fixture()
 
     results: list[dict[str, Any]] = []
     for case in cases:

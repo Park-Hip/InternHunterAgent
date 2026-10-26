@@ -1,4 +1,4 @@
-"""Run the evaluation dataset live, score a retained capture offline, or gate the SQL guard."""
+"""Run the evaluation dataset live, score a capture offline, commit or re-score a milestone run, or gate the SQL guard."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import evals.milestone as milestone
 from evals.datasets import dataset, default_dataset_name, list_datasets
 from evals.metrics import METRIC_BY_NAME, MetricKind, metric
 from evals.report import print_table, to_table_rows
@@ -36,20 +37,63 @@ def main(argv: list[str] | None = None) -> int:
         "capture, no model, no judge. Fails when the fixture database is unreachable "
         "rather than skipping it.",
     )
+    parser.add_argument(
+        "--milestone",
+        metavar="LABEL",
+        help="Also write this run as evals/runs/<date>-<label>/ with a lineage "
+        "manifest and the evidence needed to re-score it offline.",
+    )
+    parser.add_argument(
+        "--rescore",
+        type=Path,
+        metavar="RUN_DIR",
+        help="Re-score a committed milestone run from its own evidence and verify "
+        "its recorded deterministic scores. Makes no model call.",
+    )
+    parser.add_argument(
+        "--database-url",
+        help="Snapshot database for a baseline re-score (default: $BASELINE_DATABASE_URL)",
+    )
     args = parser.parse_args(argv)
 
     if args.gate:
         return _run_gate(args)
+    if args.rescore:
+        return _run_rescore(args)
     names = args.only.split(",") if args.only else list(METRIC_BY_NAME)
     ids = args.ids.split(",") if args.ids else None
     try:
         report = asyncio.run(run_dataset(dataset(args.dataset), metric_names=names, ids=ids, capture_path=args.capture))
     except (ValueError, KeyError, OSError) as exc:
         parser.error(str(exc))
+    if args.milestone:
+        try:
+            run_dir = milestone.write_agent_run(report, args.milestone)
+        except milestone.MilestoneError as exc:
+            parser.error(str(exc))
+        print(f"Milestone run written to {run_dir}")
     write_report(report, args.out)
     print_table(to_table_rows(report["by_metric"]))
+    print(f"Prompt lineage ({report['prompt_versions_source']}): {report['prompt_versions']}")
     print(f"Report written to {args.out}")
     return _exit_code(report["by_metric"], args.allow_fail)
+
+
+def _run_rescore(args: argparse.Namespace) -> int:
+    try:
+        result = milestone.rescore(args.rescore, database_url=args.database_url)
+    except (milestone.MilestoneError, ValueError, KeyError, OSError) as exc:
+        print(f"RESCORE FAILED: {exc}", file=sys.stderr)
+        return 2
+    print(
+        f"Re-scored {result['run_id']} from {result['run_dir']}: "
+        f"{result['reproduced_rows']} row(s), {len(result['mismatches'])} mismatch(es)"
+    )
+    for name in result["skipped_metrics"]:
+        print(f"NOT RE-SCORED {name}: a judge call is not reproducible offline")
+    for mismatch in result["mismatches"]:
+        print(f"MISMATCH {mismatch}", file=sys.stderr)
+    return 1 if result["mismatches"] else 0
 
 
 def _exit_code(by_metric: dict[str, list[dict[str, Any]]], allow_fail: bool) -> int:

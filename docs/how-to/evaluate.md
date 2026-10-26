@@ -121,3 +121,17 @@ To compare the 12 preserved v8 human labels with the current judge once credenti
 Disagreements are printed as findings for the dataset redesign, not hidden or treated as calibrated thresholds.
 
 See [`evals/archive/Instrument_Report.md`](../../evals/archive/Instrument_Report.md) for historical baseline context, not current scores.
+
+## Restoring the baseline snapshot
+
+The baseline questions run against a frozen production snapshot
+(`internhunter_snapshot_20261018`, 367 rows). The dump is stored privately; restore it
+into a fresh database with:
+
+```sh
+uv run python scripts/restore_snapshot.py --dump <path-to-dump> --database-url <snapshot URL>
+uv run python -m evals.snapshot_manifest --database-url <snapshot URL>
+```
+
+The second command verifies the loaded rows against the committed manifest
+(`evals/datasets/baseline_manifest.yaml`) and refuses to score on a mismatch.

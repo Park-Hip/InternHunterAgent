@@ -45,7 +45,7 @@ from src.services.query.executor import (
     PermissionDeniedError,
     QueryTimeoutError,
     ResultTooLargeError,
-    SqlSyntaxError,
+    SqlStatementRejectedError,
     UndefinedColumnError,
     UnstableOrderError,
     bounded_session,
@@ -330,13 +330,43 @@ class TestErrorMapping:
 
         assert raised.value.message_primary == 'column "remote" does not exist'
 
-    def test_a_syntax_error_maps_to_sql_syntax_error(self, reader_engine) -> None:
-        # #744: a 42601 refusal reaches the executor as SqlSyntaxError, carrying
-        # the parser's message, rather than as an outage the model cannot act on.
-        with pytest.raises(SqlSyntaxError) as raised:
+    def test_a_syntax_error_maps_to_a_statement_rejection(self, reader_engine) -> None:
+        # #744: a 42601 refusal reaches the executor as a statement rejection,
+        # carrying the parser's message, rather than as an outage the model
+        # cannot act on.
+        with pytest.raises(SqlStatementRejectedError) as raised:
             execute_bounded_select("SELECT id FROM clean_jobs LIMIT 20 LIMIT 20", 20)
 
         assert "LIMIT" in raised.value.message_primary
+
+    def test_a_grouping_error_maps_to_a_statement_rejection(self, reader_engine) -> None:
+        # #751: 42803 is class 42, and the server's message names the exact
+        # rewrite the model needs instead of reporting a database outage.
+        with pytest.raises(SqlStatementRejectedError) as raised:
+            execute_bounded_select(
+                "SELECT COUNT(*) AS count, location FROM clean_jobs "
+                "GROUP BY location ORDER BY location, id",
+                20,
+            )
+
+        assert (
+            'column "clean_jobs.id" must appear in the GROUP BY clause'
+            in raised.value.message_primary
+        )
+
+    def test_a_datatype_mismatch_maps_to_a_statement_rejection(
+        self, reader_engine
+    ) -> None:
+        # #751: the parser cannot type-check a statement, so 42804 must be
+        # classified by SQLSTATE rather than left as an outage.
+        with pytest.raises(SqlStatementRejectedError) as raised:
+            execute_bounded_select(
+                "SELECT CASE WHEN id > 0 THEN id ELSE title END AS value "
+                "FROM clean_jobs",
+                20,
+            )
+
+        assert "cannot be matched" in raised.value.message_primary
 
 
 class TestTheColumnBoundary:

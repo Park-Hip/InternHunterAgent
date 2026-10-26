@@ -74,13 +74,21 @@ class QueryTimeoutError(ExecutorError):
         self.timeout_ms = timeout_ms
 
 
-class SqlSyntaxError(ExecutorError):
-    """Raised when PostgreSQL refuses a malformed statement (SQLSTATE 42601).
+class SqlStatementRejectedError(ExecutorError):
+    """Raised when PostgreSQL refuses the generated statement deterministically.
 
-    Carries the parser's primary message so the tool can relay an actionable
-    detail to the model (#744). The message names the syntax problem in the
-    generated statement, never the database host, so it is safe to send to the
-    model.
+    SQLSTATE class 42 is "syntax error or access rule violation": a syntax
+    error (42601), a grouping error (42803), a datatype mismatch (42804), an
+    undefined function (42883), and the rest. Each is a mistake in the
+    statement that the model can rewrite, not a database outage (#751).
+
+    Carries the server's primary message so the tool can relay an actionable
+    detail to the model (#744). The message names the problem in the generated
+    statement, never the database host, so it is safe to send to the model.
+
+    Two class 42 codes keep their own handlers: the ``clean_jobs`` column
+    grant (42501) is :class:`PermissionDeniedError`, and an unknown column
+    (42703) is :class:`UndefinedColumnError`.
     """
 
     def __init__(self, message_primary: str) -> None:
@@ -210,22 +218,46 @@ def _map_db_error(exc: OperationalError | DBAPIError, timeout_ms: int) -> Execut
     The mapping keys on SQLSTATE, never on the error text (#744). A message
     that happens to say "timeout" without SQLSTATE 57014 is a connection
     outage, not the statement budget, so a connection timeout stays
-    ``unavailable`` while a cancelled statement stays ``timeout``. A syntax
-    error (42601) is a rejection the model can rewrite, not an outage.
+    ``unavailable`` while a cancelled statement stays ``timeout``.
+
+    SQLSTATE class 42 is the generated statement's own mistake - syntax,
+    grouping, datatypes, function signatures - so it is a rejection the model
+    can rewrite, not an outage (#751). The two codes that already had a kind
+    keep it: the ``clean_jobs`` column grant (42501) and an unknown column
+    (42703).
     """
     orig = getattr(exc, "orig", None)
-    if isinstance(orig, UndefinedColumn):
-        message_primary = getattr(getattr(orig, "diag", None), "message_primary", None)
+    sqlstate = _sqlstate(orig)
+    message_primary = _message_primary(orig)
+
+    if isinstance(orig, UndefinedColumn) or sqlstate == "42703":
         return UndefinedColumnError(message_primary or "unknown column")
     if _is_clean_jobs_privilege_denial(orig):
         return PermissionDeniedError()
-    sqlstate = _sqlstate(orig)
+    if sqlstate == "42501":
+        # A denial on another object is an operational grant fault, not a
+        # mistake in the model's statement, so it stays an outage.
+        return ExecutorError(f"Failed to execute query: {exc}")
     if sqlstate == "57014":
         return QueryTimeoutError(timeout_ms)
-    if sqlstate == "42601":
-        message_primary = getattr(getattr(orig, "diag", None), "message_primary", None)
-        return SqlSyntaxError(message_primary or "syntax error in the generated SQL")
+    if sqlstate is not None and sqlstate.startswith("42"):
+        return SqlStatementRejectedError(
+            message_primary or "the database rejected the generated statement"
+        )
     return ExecutorError(f"Failed to execute query: {exc}")
+
+
+def _message_primary(orig: object) -> str | None:
+    """Return the server's primary diagnostic message, or ``None``.
+
+    Only ``diag.message_primary`` is relayed: it describes the offending
+    statement and never carries the driver's connection detail, which can name
+    the database host.
+    """
+    message = getattr(getattr(orig, "diag", None), "message_primary", None)
+    if isinstance(message, str) and message:
+        return message
+    return None
 
 
 def _sqlstate(orig: object) -> str | None:

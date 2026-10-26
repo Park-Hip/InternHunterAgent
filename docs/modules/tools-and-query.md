@@ -190,7 +190,7 @@ A split breakdown such as `FROM clean_jobs, string_to_table(location, ',') AS ci
   A star, an aliased star, a whole-row reference, or a CTE that selects `*` is outside what this filter models as a column read.
   That is why the column grant exists: PostgreSQL refuses every one of those forms for the agent role, and the tool maps the refusal to a `rejected` failure that tells the model to select the declared columns explicitly (ADR-0063).
 - **Types and grouping.**
-  The parser checks grammar, not meaning, so a type mismatch or an `ORDER BY` column missing from `GROUP BY` reaches PostgreSQL and fails there (section 6).
+  The parser checks grammar, not meaning, so a type mismatch or an `ORDER BY` column missing from `GROUP BY` reaches PostgreSQL and fails there as a rejection the model can rewrite (section 6).
 - **Whether the SQL answers the question.**
   A valid statement can still group the wrong thing; that is the prompt's job and the baseline's to measure.
 
@@ -224,14 +224,14 @@ A driver message that could name the database host never travels to the model.
 | The validator refuses the statement, including a non-literal bound | `rejected` | The rule, for example "Server identity functions are not allowed: version" | Rewrite the statement |
 | An `OFFSET` page without `id` in the outermost `ORDER BY` | `rejected` | How to add the tiebreak | Rewrite with `ORDER BY ..., id` |
 | The column grant refuses a star or whole-row read (42501) | `rejected` | Select the 16 declared columns explicitly | Rewrite with named columns |
-| A syntax error the parser accepted but the server did not (42601) | `rejected` | PostgreSQL's message | Rewrite the statement |
+| A deterministic refusal from SQLSTATE class 42: syntax (42601), grouping (42803), datatype mismatch (42804), undefined function (42883) | `rejected` | PostgreSQL's primary message | Rewrite the statement |
 | An unknown column (42703) | `unknown_column` | PostgreSQL's message naming the column | Say the data has no such field |
 | The statement timeout fires (57014) | `timeout` | "statement exceeded the 2000 ms limit" | Narrow the query |
 | The rows exceed the byte budget | `too_large` | Select fewer columns | Narrow the projection |
 | Any other database error | `unavailable` | "the database could not run the query" | Report that the search failed |
 
-Two gaps remain.
-Every other error in SQLSTATE class 42, such as a grouping error (42803) or a type mismatch (42804), is a mistake the model could fix but is reported as `unavailable` and logged at ERROR (#751).
+A permission denial on an object other than the `clean_jobs` column grant is an operational grant fault rather than a mistake in the generated statement, so it stays `unavailable` even though SQLSTATE 42501 is in class 42.
+One gap remains.
 A failure of the SQL-generation call itself is not mapped at all: the model reads `Error calling tool 'query_clean_jobs': ` followed by the raw exception text, with no kind (#754).
 
 `unavailable` is logged at ERROR; every other kind is a refusal the model can recover from and is logged at WARNING.
@@ -250,7 +250,7 @@ A failure of the SQL-generation call itself is not mapped at all: the model read
    `location` and `tech_stack` hold comma-separated values, so `GROUP BY location` counts "Hanoi, Ho Chi Minh City" as its own city.
    The validator accepts the split form, but the prompt does not ask for it yet: on the snapshot the served chat route answers Hanoi 196 instead of 233, and a top-skills question took 5 tool calls and 17 s (#750).
 6. **The paging rule leaks into aggregates.**
-   The prompt's rule to end every list of postings with `id` is sometimes applied to a `GROUP BY` statement, which PostgreSQL refuses with a grouping error that reaches the model as `unavailable` (#750, #751).
+   The prompt's rule to end every list of postings with `id` is sometimes applied to a `GROUP BY` statement, which PostgreSQL refuses with a grouping error that reaches the model as `rejected`, carrying the server's message, so the next rewrite can drop the stray column (#750, #751).
 7. **Only one query setting is checked at boot.**
    The `get_job_details` description embeds `agent.query.max_detail_ids` when composition builds the MCP server, so a bad value fails boot, while a bad `max_rows`, `statement_timeout_ms`, or `max_result_bytes` fails only the first query (#616).
 8. **A user can dictate SQL to the tool.**
@@ -292,7 +292,7 @@ A failure of the SQL-generation call itself is not mapped at all: the model read
 **Decided differently, not yet changed.**
 
 - **`agent.query` should be typed and validated at boot** with the rest of `agent.*`, replacing three hand-written loaders (#616).
-- **The failure vocabulary should be closed in practice, not only in the type:** class 42 errors as `rejected` (#751), and generation failures as `unavailable` (#754).
+- **Generation failures should be closed in practice, not only in the type:** a failure of the SQL-generation call should reach the model as `unavailable` with a bounded detail (#754).
 
 ## 9. Changing it safely
 

@@ -23,18 +23,20 @@ from typing import Any
 
 import yaml
 
-from evals.sql_check import compare_result_sets
 from evals import snapshot_manifest
-
-def verify_snapshot(database_url: str) -> None:
-    return snapshot_manifest.verify_snapshot(database_url)
-
-def verify_manifest(database_url: str) -> None:
-    return snapshot_manifest.verify_manifest(database_url)
+from evals.sql_check import compare_result_sets
 from src.agents.runtime.prompts import load_resolved_prompt_versions
 from src.agents.tools.query_clean_jobs import generate_sql
 from src.core.config import settings
 from src.services.query.sql_validator import validate_sql
+
+
+def verify_snapshot(database_url: str) -> None:
+    return snapshot_manifest.verify_snapshot(database_url)
+
+
+def verify_manifest(database_url: str) -> None:
+    return snapshot_manifest.verify_manifest(database_url)
 
 DATASET = Path(__file__).parent / "datasets" / "baseline.yaml"
 SNAPSHOT_DATE = "2026-10-18"

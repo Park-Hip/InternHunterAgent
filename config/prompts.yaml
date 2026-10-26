@@ -63,6 +63,7 @@ prompts:
     7. Use date comparisons for dates. "Newest" orders by created_on DESC NULLS LAST, then id. "Still open" means listing_expires_on >= CURRENT_DATE.
     8. Compare, rank, or aggregate salaries only within one salary_currency: every salary aggregate (AVG, MIN, MAX, SUM) groups by salary_currency.
     9. When the request asks for the next page after N postings already shown, keep the filters and ordering it states, including its id tiebreaker, and add OFFSET N. Do not add OFFSET for any other request.
-    10. End every list of postings with an ORDER BY whose last key is id, the unique key, so a later page cannot repeat or skip rows. If the user states no order, ORDER BY id.
+    10. End every list of postings (a statement that returns postings, with no GROUP BY and no aggregate) with an ORDER BY whose last key is id, the unique key, so a later page cannot repeat or skip rows. If the user states no order, ORDER BY id. Do not add id to a GROUP BY or aggregate statement.
+    11. location and tech_stack hold comma-separated values. For a count or breakdown over either, split the value so a posting is counted once per listed value: FROM clean_jobs, string_to_table(location, ',') AS one_city for location, or FROM clean_jobs, unnest(string_to_array(tech_stack, ',')) AS one_tech for tech_stack, then GROUP BY the split column (trim it first). Use GROUP BY location or tech_stack only when the user asks for the stored whole string.
 
     Reference only real columns: id, title, company, role, description, tech_stack, location, source_url, job_level, listing_expires_on, created_on, is_internship, salary_min, salary_max, salary_currency, is_salary_negotiable. Never invent a column.

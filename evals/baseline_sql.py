@@ -135,7 +135,7 @@ def _score_milestone(run_dir: Path, database_url: str) -> None:
     if not isinstance(records, list):
         raise ValueError(f"{run_dir} is not a baseline milestone run")
     results = score_records(records, database_url)
-    from evals.report import group_by_metric
+    from evals.reporting import group_by_metric
 
     by_metric = group_by_metric(_score_rows(results))
     milestone.write_scores(run_dir, metrics=["sql_accuracy"], by_metric=by_metric)
@@ -202,7 +202,10 @@ def main() -> None:
         return
     if not args.database_url:
         parser.error("score needs --database-url or BASELINE_DATABASE_URL")
-    score(args.run, args.database_url)
+    try:
+        score(args.run, args.database_url)
+    except (snapshot_manifest.SnapshotMismatch, OSError, ValueError) as exc:
+        parser.exit(2, f"SCORE FAILED: {exc}\n")
 
 
 if __name__ == "__main__":

@@ -42,7 +42,7 @@ from typing import Any
 import yaml
 
 from evals._paths import EVALS_ROOT
-from evals.report import group_by_metric
+from evals.reporting import group_by_metric
 
 GUARD_METRIC = "guard_correctness"
 RESULT_METRIC = "result_equivalence"
@@ -253,8 +253,8 @@ def run_sql_gate(spec: SqlGuardDataset, *, ids: list[str] | None = None) -> dict
         cases = [case for case in cases if case["id"] in wanted]
         missing = wanted - {case["id"] for case in cases}
         if missing:
-            # Reject a typo before asking for the fixture: an unknown id is a
-            # usage error, not an unavailable database.
+            # Refuse a bad selection before touching the database: the typo is
+            # the reported defect either way, and this check needs no fixture.
             raise ValueError(f"Unknown dataset ids: {sorted(missing)}")
 
     _require_fixture()

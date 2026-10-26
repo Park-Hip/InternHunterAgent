@@ -55,10 +55,9 @@ If remote resolution is unavailable, the deployed release keeps serving its chec
 
 ## Evaluate a candidate
 
-The evaluation harness resolves the prompt bundle once through the same registry, so a candidate run serves the branch's `config/prompts.yaml` text, exactly as serving would.
-The one-shot driver has no background refresh, so it resolves its own links at startup.
-Put the proposed text on a branch and run the scenario suite there; treat the report and its traces as review evidence.
-In an isolated evaluation environment with its own Langfuse credentials, set `agent.prompts.deployment_label: candidate` and seed the branch's text with `uv run python scripts/register_langfuse_prompts.py --label candidate`.
-The `candidate` label shapes only the trace link: the suite still serves the branch's checked-in text, and the label names the version its traces linked to.
+Nothing evaluates a candidate automatically: the legacy harness is deleted and the SQL guard gate never calls a model ([ADR-0066](../decisions/adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md)).
+Put the proposed text on a branch and exercise the API there, then treat its traces as review evidence.
+In an isolated environment with its own Langfuse credentials, set `agent.prompts.deployment_label: candidate` and seed the branch's text with `uv run python scripts/register_langfuse_prompts.py --label candidate`.
+The `candidate` label shapes only the trace link: the process still serves the branch's checked-in text, and the label names the version its traces linked to.
 The script refuses any label other than `candidate` or `production`, so a candidate run can never rewrite the `production` lineage or the serving text.
 Promotion is the merge-and-deploy procedure above; nothing is promoted by moving labels in the Langfuse UI.

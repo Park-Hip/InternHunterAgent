@@ -21,10 +21,6 @@ ENCODING_MARKER = "<!-- lint-allow-encoding -->"
 LINK_PATH_MARKER = "<!-- lint-allow-link-path -->"
 LINK_PATH_BLOCK_BEGIN = "<!-- lint-allow-link-path:begin -->"
 LINK_PATH_BLOCK_END = "<!-- lint-allow-link-path:end -->"
-SCENARIO_ID_MARKER = "<!-- lint-allow-scenario-id -->"
-SCENARIOS = ROOT / "evals" / "datasets" / "scenarios.yaml"
-SCENARIO_ID = re.compile(r"\b(?:HLP|HON|SAF)-[A-Z0-9]+(?:-[A-Z0-9]+)*\b")
-REGISTRY_ID = re.compile(r"^- id: (\S+)", re.M)
 TECH_STACK = ROOT / "docs" / "reference" / "configuration.md"
 PYPROJECT = ROOT / "pyproject.toml"
 DEPS_BEGIN = "<!-- deps:begin -->"
@@ -98,17 +94,12 @@ def is_repo_path(value: str) -> bool:
 
 
 def check_link_path(files: list[Path]) -> list[Finding]:
-    """Report live repository paths referenced by Markdown that no longer exist.
-
-    The retained v1 evals records under ``evals/archive/`` cite modules the #476
-    rebuild deleted, so they stay exempt from this check. Every other Markdown
-    file under ``evals/`` is a live manual and is checked.
-    """
+    """Report live repository paths referenced by Markdown that no longer exist."""
     findings: list[Finding] = []
     link_pattern = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
     code_pattern = re.compile(r"`([^`]+)`")
     for path in files:
-        if is_archive(path) or path.is_relative_to(ROOT / "evals" / "archive"):
+        if is_archive(path):
             continue
         in_fence = False
         link_path_allowed = False
@@ -190,40 +181,10 @@ def check_stack(_: list[Path]) -> list[Finding]:
     return findings
 
 
-def registered_scenario_ids(text: str) -> set[str]:
-    """Return the scenario IDs the scenario registry defines."""
-    return set(REGISTRY_ID.findall(text))
-
-
-def check_scenario_id(files: list[Path], registry: Path = SCENARIOS) -> list[Finding]:
-    """Keep every live documented scenario ID resolvable in the scenario registry."""
-    if not registry.exists():
-        return [Finding("scenario-id", registry, 0, "scenario registry is missing")]
-    known = registered_scenario_ids(registry.read_text(encoding="utf-8"))
-    if not known:
-        return [Finding("scenario-id", registry, 0, "scenario registry defines no IDs")]
-    try:
-        location = registry.relative_to(ROOT).as_posix()
-    except ValueError:
-        location = registry.as_posix()
-    findings: list[Finding] = []
-    for path in files:
-        if is_archive(path) or path == registry:
-            continue
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if SCENARIO_ID_MARKER in line:
-                continue
-            for identifier in SCENARIO_ID.findall(line):
-                if identifier not in known:
-                    findings.append(Finding("scenario-id", path, number, f"{identifier} is absent from {location}"))
-    return findings
-
-
 CHECKS = {
     "link-path": check_link_path,
     "encoding": check_encoding,
     "stack": check_stack,
-    "scenario-id": check_scenario_id,
 }
 
 

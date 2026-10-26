@@ -26,15 +26,15 @@ api:
 
 observability:
   langfuse:
-    # Environments partition whole processes. The evaluation driver binds its
-    # own environment before importing the agent runtime.
+    # Environments partition whole processes: set LANGFUSE_TRACING_ENVIRONMENT
+    # to classify a process, or leave the default for a local run.
     environments:
       default: local
       allowed: [local, production, evaluation]
     # These are the only dimensions allowed to become Langfuse tags. Keep this
     # vocabulary intentionally small so trace filtering remains usable.
     tag_taxonomy:
-      entry_points: ["api:chat-stream", "eval:driver", "eval:spike"]
+      entry_points: ["api:chat-stream", "eval:spike"]
 
 agent:
   # Named deployments are the serving allowlist. Model names must use LiteLLM's
@@ -106,11 +106,6 @@ agent:
     max_result_bytes: 262144
 
 eval:
-  judge:
-    provider: google       # Google AI Studio (Gemini API); was openrouter (ox-alpha), before that groq
-    model: gemma-4-31b-it  # served by AI Studio directly; OpenRouter fallback stays available in build_judge()
-    temperature: 0.0
-    timeout_seconds: 120   # client socket timeout; default 30 was too tight for gemma CoT prompts that take 50-90s to score (measured on #266 retries of hlp-referent/hlp-senior-title/hlp-abstraction FAIL cases)
   fixture:
     # Owner DSN: only the fixture loader builds and seeds with it.
     database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval
@@ -118,6 +113,3 @@ eval:
     # provisions this role with column-level SELECT on the 16 contract columns,
     # mirroring production's internhunter_agent role (#730).
     reader_database_url: postgresql+psycopg://internhunter_eval_reader:internhunter_eval@localhost:5433/internhunter_eval
-  capture:
-    max_attempts: 3
-    consecutive_quota_failures_before_halt: 3

@@ -25,7 +25,6 @@ class ConfigLoadTests(unittest.TestCase):
         required_env = {
             "DATABASE_URL": "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter",
             "AGENT_DATABASE_URL": "postgresql+psycopg://internhunter_agent:internhunter@localhost:5433/internhunter",
-            "GROQ_API_KEY": "groq-test-key",
             "LANGFUSE_SECRET_KEY": "langfuse-secret",
             "LANGFUSE_PUBLIC_KEY": "langfuse-public",
         }
@@ -51,7 +50,6 @@ class ConfigLoadTests(unittest.TestCase):
 
     def test_load_settings_raises_clear_error_for_missing_required_env_var(self) -> None:
         required_env = {
-            "GROQ_API_KEY": "groq-test-key",
             "LANGFUSE_SECRET_KEY": "langfuse-secret",
             "LANGFUSE_PUBLIC_KEY": "langfuse-public",
         }
@@ -89,9 +87,6 @@ class ConfigLoadTests(unittest.TestCase):
         with patch.dict(os.environ, selected_provider_env, clear=True):
             settings = config_module.load_settings(force_reload=True)
 
-        self.assertIsNone(settings.GROQ_API_KEY)
-        self.assertIsNone(settings.GOOGLE_API_KEY)
-        self.assertIsNone(settings.OPENROUTER_API_KEY)
         agent = settings.agent
         assert agent is not None
         react = agent.deployment_for("react")

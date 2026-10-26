@@ -1,7 +1,7 @@
-"""Offline tests for evals.env — fixture environment binding.
+"""Offline tests for evals.env: fixture environment binding.
 
-No network calls, no provider credentials. Tests that bind_fixture_environment
-sets the expected environment variables.
+No network calls, no provider credentials. Tests assert that
+bind_fixture_environment sets the expected environment variables.
 """
 
 from __future__ import annotations
@@ -50,17 +50,3 @@ class TestBindFixtureEnvironment:
         )
         with pytest.raises(ValueError, match="non-owner role"):
             fixture_reader_database_url()
-
-    def test_sets_tracing_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("LANGFUSE_TRACING_ENVIRONMENT", raising=False)
-        monkeypatch.delenv("LANGFUSE_ENABLED", raising=False)
-        monkeypatch.delenv("LANGFUSE_RELEASE", raising=False)
-        bind_fixture_environment()
-        assert os.environ["LANGFUSE_TRACING_ENVIRONMENT"] == "evaluation"
-        assert os.environ["LANGFUSE_ENABLED"] == "true"
-        assert os.environ["LANGFUSE_RELEASE"] != ""
-
-    def test_does_not_overwrite_existing_langfuse_release(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("LANGFUSE_RELEASE", "my-release")
-        bind_fixture_environment()
-        assert os.environ["LANGFUSE_RELEASE"] == "my-release"

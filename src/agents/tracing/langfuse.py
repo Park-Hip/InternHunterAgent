@@ -322,13 +322,13 @@ async def langfuse_request_trace(
 def init_langfuse() -> None:
     """Create the process client and callback handler, or leave tracing disabled.
 
-    Ownership is explicit: the serving lifespan and the evaluation driver call
-    this for their own process and hand the client to `shutdown_langfuse` the
-    same way. Importing this module does nothing, so a broken configuration can
-    no longer surface first as a tracing warning, and a client can no longer
-    outlive the process that was supposed to end it. A client that already
-    exists is left alone, so a second lifespan in one process reuses it instead
-    of leaking another. This never raises: tracing must not block boot.
+    Ownership is explicit: the serving lifespan calls this for its own process
+    and hands the client to `shutdown_langfuse` the same way. Importing this
+    module does nothing, so a broken configuration can no longer surface first
+    as a tracing warning, and a client can no longer outlive the process that
+    was supposed to end it. A client that already exists is left alone, so a
+    second lifespan in one process reuses it instead of leaking another. This
+    never raises: tracing must not block boot.
     """
     global _langfuse, _langfuse_handler
     if _langfuse is not None:

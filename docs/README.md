@@ -15,7 +15,7 @@ Each document has one owner and one intended reader.
 | [Operate how-to](how-to/operate.md) | Deploy topology, configuration, database procedures, ingestion pipeline and cron, incidents | Operators |
 | [Latency observability how-to](how-to/latency-observability.md) | Stream latency metric definitions, dimensions, and percentile publication gate | Operators and engineering |
 | [Langfuse prompt management how-to](how-to/manage-langfuse-prompts.md) | Release-pinned prompt text, native trace linkage, drift checks, and rollback | Operators and evaluation work |
-| [Evaluate how-to](how-to/evaluate.md) | Running, grading, freezing, and inspecting evaluations | Evaluation work |
+| [Evaluate how-to](how-to/evaluate.md) | Running the SQL guard gate and the text-to-SQL baseline against the frozen fixture and snapshot | Evaluation work |
 | [Release certification how-to](how-to/release-gate.md) | Why no live semantic model-quality certification is published, and what deterministic release evidence remains | Release maintainers |
 | [Configuration reference](reference/configuration.md) | Stack, dependencies, tunables, hosted services, quotas | Engineering |
 | [Schema reference](reference/schema.md) | Frozen agent-visible `clean_jobs` columns and evolution path | Engineering and evaluation |

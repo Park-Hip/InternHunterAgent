@@ -33,6 +33,9 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The fixture-backed test modules load the fixture themselves when this
+    # service is reachable and skip otherwise; the SQL guard gate runs as its own
+    # job below so an unreachable database fails loudly there.
     services:
       postgres:
         image: postgres:16
@@ -50,14 +53,10 @@ jobs:
     env:
       # Dummy values — the standard suite mocks the DB and LLMs; these only
       # satisfy Settings validation at load. NEVER real credentials.
-      GROQ_API_KEY: "unused-in-ci"
       DATABASE_URL: "postgresql+psycopg://ci:ci@localhost:5432/ci"
       AGENT_DATABASE_URL: "postgresql+psycopg://ci_agent:ci@localhost:5432/ci"
       LANGFUSE_SECRET_KEY: "unused-in-ci"
       LANGFUSE_PUBLIC_KEY: "unused-in-ci"
-      # Importing deepeval otherwise phones home. The replay gate claims to make
-      # no outbound call, so keep that literally true.
-      DEEPEVAL_TELEMETRY_OPT_OUT: "1"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -65,8 +64,6 @@ jobs:
         with:
           version: "0.8.15"
           # Cache the uv download/build cache (~/.cache/uv), keyed on uv.lock.
-          # Cold run still pays full install; warm runs skip re-downloading and
-          # rebuilding the heavy dev deps (deepeval et al.), the dominant cost.
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
@@ -81,14 +78,7 @@ jobs:
       # declare (issue #604). No database, no network, no secrets.
       - run: uv run python scripts/audit_sql_prompt_columns.py
 
-      # eval-marked tests are auto-deselected by pyproject addopts; do not add -m.
       - run: uv run pytest -q
-
-      # Score retained captures against the fixture without calling the agent or judge.
-      # Live capture requires a serving provider credential and is intentionally not CI.
-      - run: uv run python -m evals.fixtures.loader
-
-      - run: uv run python -m evals --only tool_correctness,sql_accuracy --capture evals/replays/t0025.9-committed.json --ids SAF-DESTRUCTIVE-REFUSAL-1,HLP-CONTEXT-1
 
   migration-check:
     name: Migration chain & ORM sync
@@ -117,10 +107,8 @@ jobs:
       # one used by the upgrade / check steps above.
       SCRATCH_DATABASE_URL: "postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_scratch"
       # Dummy values — only needed to satisfy Settings validation at load.
-      GROQ_API_KEY: "unused-in-ci"
       LANGFUSE_SECRET_KEY: "unused-in-ci"
       LANGFUSE_PUBLIC_KEY: "unused-in-ci"
-      DEEPEVAL_TELEMETRY_OPT_OUT: "1"
       # required by createdb so the scratch-db step does not prompt interactively
       PGPASSWORD: internhunter
     steps:
@@ -173,9 +161,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    env:
-      GROQ_API_KEY: "unused-in-ci"
-      DEEPEVAL_TELEMETRY_OPT_OUT: "1"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -191,6 +176,11 @@ jobs:
       - name: Load the pinned fixture
         run: uv run python -m evals.fixtures.loader
 
+      # The integration cases in this module need the loaded fixture; the
+      # checks job runs the suite without one and skips them.
+      - name: Verify the gate's grading and refusals
+        run: uv run pytest tests/evals -q
+
       - name: Gate the reviewed SQL guard cases
-        run: uv run python -m evals --gate
+        run: uv run python -m evals
 

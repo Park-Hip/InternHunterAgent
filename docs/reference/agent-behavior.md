@@ -70,9 +70,10 @@ by the first 12 hex of the SHA-256 of its text.
 - **Layer 2, answer quality:** a small agent run over multi-turn and detail questions, with B3, B4,
   and B5 marked by hand. No model judge until hand review is too slow.
 - **Pass bars:** B2 at least 85% on held-out; B3 and B4 at 100%.
-- **Model credit:** run at milestones only, and commit every run under
+- **Model credit:** run at milestones only, and commit each Layer 1 run under
   [`evals/runs/`](../../evals/runs/) with the evidence re-scoring reads, so a re-score is free
   ([milestone runs](../how-to/evaluate.md#milestone-runs)).
+  A Layer 2 run is marked by hand and has no committed runner.
 
 ## Baseline results (2026-10-19, prompts v1)
 
@@ -89,8 +90,8 @@ uv run python -m evals --rescore evals/runs/2026-10-19-baseline-v1 \
   --database-url "$BASELINE_DATABASE_URL"
 ```
 
-The Layer 2 marks were made by hand before the milestone-run contract existed, and the run files are not recoverable.
-Those numbers stay historical until a Layer 2 run is committed.
+The Layer 2 marks were made by hand before the committed-run contract existed, and the run files are not recoverable.
+Those numbers stay historical until a Layer 2 run is recorded by hand.
 
 The held-out Layer 1 score is optimistic: rules 3 and 4 of `sql_generation` were written after
 held-out failures 025 and 026.

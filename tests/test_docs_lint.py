@@ -112,39 +112,12 @@ def test_tech_stack_matches_pyproject() -> None:
     assert docs_lint.check_stack([]) == []
 
 
-def write_scenario_registry(tmp_path: Path, *ids: str) -> Path:
-    registry = tmp_path / "scenarios.yaml"
-    registry.write_text("".join(f"- id: {identifier}\n  input: ask something\n" for identifier in ids), encoding="utf-8")
-    return registry
-
-
-def test_registered_scenario_ids_reads_registry_entries_only() -> None:
-    text = "- id: HLP-COUNT-1\n  expected: mentions id: not-an-entry\n- id: SAF-INJECTION-REFUSAL-1\n"
-
-    assert docs_lint.registered_scenario_ids(text) == {"HLP-COUNT-1", "SAF-INJECTION-REFUSAL-1"}
-
-
-def test_scenario_id_reports_an_unknown_id_and_allows_marked_examples(tmp_path: Path) -> None:
-    registry = write_scenario_registry(tmp_path, "HLP-COUNT-1")
-    document = tmp_path / "guide.md"
-    document.write_text("`HLP-COUNT-1` passes but HLP-RENAMED-1 does not.\n", encoding="utf-8")
-
-    findings = docs_lint.check_scenario_id([document], registry)
-
-    assert len(findings) == 1
-    assert "HLP-RENAMED-1" in findings[0].message
-    document.write_text("Try HLP-NOT-A-SCENARIO-9. <!-- lint-allow-scenario-id -->\n", encoding="utf-8")
-    assert docs_lint.check_scenario_id([document], registry) == []
-
-
-def test_scenario_id_reports_a_missing_registry_and_skips_archives(tmp_path: Path) -> None:
-    assert docs_lint.check_scenario_id([], tmp_path / "absent.yaml")[0].check == "scenario-id"
+def test_archives_are_exempt_from_live_paths() -> None:
     archive = docs_lint.ROOT / "docs" / "archive" / "old.md"
+    live = docs_lint.ROOT / "docs" / "how-to" / "evaluate.md"
+
     assert docs_lint.is_archive(archive)
-
-
-def test_documented_scenario_ids_all_exist() -> None:
-    assert docs_lint.check_scenario_id(docs_lint.markdown_files()) == []
+    assert not docs_lint.is_archive(live)
 
 
 def test_the_committed_documentation_is_clean() -> None:

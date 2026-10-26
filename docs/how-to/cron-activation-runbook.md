@@ -448,7 +448,7 @@ old guide is obsolete.
 
 **Required GitHub Actions secrets** (maintainer-configured): `DATABASE_URL` (Neon **direct,
 non-pooled**),
-`HEALTHCHECKS_URL`. `AGENT_DATABASE_URL` / `GROQ_API_KEY` / `LANGFUSE_SECRET_KEY` /
+`HEALTHCHECKS_URL`. `AGENT_DATABASE_URL` / `LANGFUSE_SECRET_KEY` /
 `LANGFUSE_PUBLIC_KEY` are **placeholder literals**
 in the workflow (`"unused-by-ingestion"`), not real secrets — the CLI validates their presence at
 import but reads none of their values (proven by T0019.6 Check B).

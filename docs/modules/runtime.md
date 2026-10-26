@@ -270,7 +270,7 @@ The last column is the one that matters: does the conversation still work afterw
 `POST /api/v1/agent/chat` is not a second path: `collect_agent_response` drives `stream_agent_response` and folds its events into the JSON body (#689).
 It is bounded by the same `agent.stream_turn_timeout_seconds`, and the `error` event decides the status: a `provider_busy` event becomes the route's retryable `503` with the busy message, `429` when the provider rate-limited the turn, and any other failure becomes its generic `500`.
 The status the JSON route needs rides the internal `status_code` field on the event, which the SSE route strips, so the published payload is unchanged.
-The web client and the eval driver do not use the route; the API contract keeps it for clients that need a finished JSON body.
+The web client does not use the route; the API contract keeps it for clients that need a finished JSON body.
 
 ## 7. Behaviours that surprise a new developer
 

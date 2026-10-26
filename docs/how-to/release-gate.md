@@ -18,20 +18,23 @@ provider credit on changing or rerunning the gate.
 
 Release readiness is the deterministic CI evidence plus local evaluation tooling:
 
-- The `checks` job runs lint, type checks, the full offline test suite, the committed fixture
-  loader, and the replay gate on every pull request.
+- The `checks` job runs lint, type checks, the SQL prompt/column audit, and the full offline test
+  suite on every pull request.
+- The `sql-guard-gate` job loads the pinned fixture, runs the gate's own tests, and runs the
+  reviewed SQL guard cases through the validator and the executor boundary.
 - The `docs` and `migration-check` jobs run documentation hygiene and the migration chain.
-- Local evaluation tooling under [`evals/`](../../evals/README.md) remains available for
-  deterministic grading and diagnostic semantic scoring.
+- Local evaluation tooling under [`evals/`](../../evals/README.md) runs the same gate and the
+  text-to-SQL baseline against the frozen snapshot.
 
-A diagnostic semantic score is evidence, not a release gate.
+A semantic judge score is not part of release certification. The judge was deleted with the legacy
+harness ([ADR-0066](../decisions/adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md)).
 
 ## What is not published
 
 No current semantic model-quality certification is published from this release process.
-The combined calibration corpus and the per-class bars in
-[`evals/archive/calibration/thresholds.md`](../../evals/archive/calibration/thresholds.md) remain recorded
-diagnostic evidence, but the release does not assert model quality from them.
+The combined calibration corpus and the per-class bars were part of the deleted legacy harness;
+their measurements remain in git history and in [ADR-0052](../decisions/adr-0052-per-class-release-thresholds-real-sweep.md),
+but the release does not assert model quality from them.
 
 ## Why the gate was retired
 

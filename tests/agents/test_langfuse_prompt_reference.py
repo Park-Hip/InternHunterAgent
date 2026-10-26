@@ -9,10 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.agents.runtime.prompts import (
-    refresh_prompt_bundle_async,
-    resolve_prompt_bundle_async,
-)
+from src.agents.runtime.prompts import resolve_prompt_bundle_async
 from src.agents.tracing.prompt_registry import (
     PROMPT_DEFINITIONS,
     PromptDefinition,
@@ -385,23 +382,3 @@ async def test_registry_refresh_does_not_block_the_event_loop() -> None:
 
     assert observed["loop_progressed"] is True
     assert refreshed["system"].prompt_client is not None
-
-
-@pytest.mark.asyncio
-async def test_evaluation_capture_resolves_its_own_bundle(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The one-shot eval driver has no background refresh, so it resolves once."""
-    client = MagicMock()
-    client.get_prompt.side_effect = lambda name, **_kwargs: _matching_prompts()[name]
-    registry = _registry(client)
-    monkeypatch.setattr(
-        "src.agents.runtime.prompts.get_prompt_registry", lambda: registry
-    )
-
-    with _configuration(), _release():
-        bundle = await refresh_prompt_bundle_async()
-
-    assert client.get_prompt.call_count == 3
-    assert bundle.system.prompt_client is not None
-    assert bundle.system.is_fallback is False

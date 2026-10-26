@@ -176,8 +176,8 @@ Replacing it is a later boundary change ([component index](../refactor/component
 The arrow only points down: none of those import `src.serving`.
 The API layer gets the lifespan and the MCP app as arguments to `create_app`, and the runtime
 through `app.state`.
-`evals/run.py` deliberately builds its own MCP server rather than importing composition, which
-would pull in the API layer, the pool, and the production database.
+Nothing outside serving imports composition; the evaluation tooling calls the query layer directly
+rather than booting the web service.
 
 **Process model.**
 One process (`WEB_CONCURRENCY=1` in `render.yaml`, which uvicorn reads as its worker count), so

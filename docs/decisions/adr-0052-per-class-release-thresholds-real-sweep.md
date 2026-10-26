@@ -1,6 +1,6 @@
 # Per-class release thresholds from the real corpus re-sweep
 
-> **Status:** Active · **Decided:** 2026-09-02
+> **Status:** Superseded by ADR-0066 · **Decided:** 2026-09-02
 
 ## Context
 
@@ -104,3 +104,9 @@ deselected by default) and `uv run pytest -m eval -v` (live gate) pass; the live
 56/56 `AVAILABLE` with zero unavailable and no class recall below 1.0.
 `uv run python scripts/docs_lint.py` is clean. The combined agreement report is regenerable with
 `uv run python -m evals.calibration_score --agreement-of evals/runs/iha-v8-judge-combined-judge-scores.json`.
+
+## Superseded
+
+[ADR-0066](adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md) deletes the calibration
+corpora, the judge, and the runs this record measured.
+No per-class threshold is enforced; a future release bar is a new decision with its own evidence.

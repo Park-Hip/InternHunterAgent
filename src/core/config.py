@@ -212,16 +212,11 @@ class AgentSettings(BaseModel):
 
 
 class Settings(BaseSettings):
-    # No serving provider key is declared here: serving reads each selected
+    # No provider key is declared here: serving reads each selected
     # deployment's key by name through `get_configured_secret`, and the serving
     # lifespan validates the deployment each served profile selects before the
-    # pool opens. The declared keys below are read by the evaluation judge
-    # (evals/judge.py), so no single key is required to load settings: a
-    # checkout that holds only the keys it needs still runs. See
+    # pool opens. A checkout that holds only the keys it needs still runs. See
     # docs/decisions/adr-0045-deepseek-serves-the-agent.md.
-    GROQ_API_KEY: str | None = None
-    GOOGLE_API_KEY: str | None = None
-    OPENROUTER_API_KEY: str | None = None
     DATABASE_URL: str = Field(..., min_length=1)
     AGENT_DATABASE_URL: str = Field(..., min_length=1)
     HEALTHCHECKS_URL: str | None = None

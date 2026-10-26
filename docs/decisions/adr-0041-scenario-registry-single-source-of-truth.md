@@ -1,6 +1,6 @@
 # The scenario registry is the single source of truth for evaluation cases
 
-> **Status:** Active · **Decided:** 2026-08-12
+> **Status:** Superseded by ADR-0066 · **Decided:** 2026-08-12
 
 ## Decision
 
@@ -12,3 +12,10 @@ The 29-scenario set is kept as authored: coverage is audited, not re-authored.
 
 Every documented scenario id is a reference into the registry (enforced by the docs linter);
 grading rules and expectations change there, not in prose.
+
+## Superseded
+
+[ADR-0066](adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md) deletes the scenario
+registry and the docs check that read it.
+The principle survives per dataset: `evals/datasets/sql_guard.yaml` owns the gate cases, and
+`evals/datasets/baseline.yaml` owns the baseline questions.

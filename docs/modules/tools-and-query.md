@@ -57,7 +57,7 @@ The tool is the adapter that resolves those dependencies.
 That adapter, not the query service, owns the Langfuse branch, so generation runs in a test with a stub model and no runtime or tracing import.
 
 Composition calls both guards at boot, before the agent is built, and discovers the tools once with `list_job_tools`.
-Outside serving, `evals/run.py` builds the same MCP server, `evals/baseline_sql.py` calls `generate_sql` and `validate_sql` directly, and `evals/sql_gate.py` runs `validate_sql` on reviewed SQL with no model.
+Outside serving, `evals/baseline_sql.py` calls `generate_sql` and `validate_sql` directly, and `evals/sql_gate.py` runs `validate_sql` on reviewed SQL with no model.
 
 ## 3. The path a question takes
 

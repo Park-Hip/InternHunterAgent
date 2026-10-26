@@ -56,11 +56,11 @@ def fixture_database_url() -> str:
     Reads the YAML directly instead of going through ``src.core.config.settings``,
     and that is load-bearing rather than lazy. ``load_settings()`` constructs and
     *caches* ``Settings()``, which takes both database URLs from the environment
-    and ``.env``. ``evals/driver.py`` calls this to discover the fixture DSN and
-    only then writes it into both database URLs. Resolving through ``settings`` would
+    and ``.env``. ``evals/env.py`` calls this to discover the fixture DSN and only
+    then writes it into both database URLs. Resolving through ``settings`` would
     freeze the cache against the serving database first, and every later write
-    would be ignored - so a capture would silently run the agent against
-    production data instead of the frozen fixture.
+    would be ignored - so the gate would read production data instead of the
+    frozen fixture.
     """
     return _required_fixture_url(_fixture_config(), "database_url")
 

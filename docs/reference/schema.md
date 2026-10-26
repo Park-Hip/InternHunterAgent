@@ -314,7 +314,7 @@ Every breaking schema migration must complete these coordination points before t
 | `config/prompts.yaml` | Engineering + agent | `schema_context`, `system_prompt`, `sql_generation` |
 | `src/api/schemas.py` | Engineering | Pydantic field types |
 | `evals/fixtures/seed_eval_db.sql` | Evaluation | Fixture data in new format |
-| Evaluation baselines | Evaluation | T0011.5 calibration and few-shot references |
+| Evaluation baselines | Evaluation | Baseline reference SQL, gate cases, and the snapshot manifest |
 | Production migration approval | Maintainer | Explicit sign-off before contraction |
 
 #### Worked example: `tech_stack` text → PostgreSQL array

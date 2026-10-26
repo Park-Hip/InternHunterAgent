@@ -29,16 +29,13 @@ It never contains secret values.
 | Variable | Where set | Render mode | Ingestion workflow | Notes |
 |---|---|---|---|---|
 | `DEEPSEEK_API_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Not used | Serves the agent ([ADR-0045](../decisions/adr-0045-deepseek-serves-the-agent.md)). Required at boot while a served profile selects `deepseek`, which both do; unset or empty refuses startup. |
-| `GROQ_API_KEY` | `.env` only | Deliberately undeclared | Literal unused placeholder | Optional eval-judge alternate branch (`evals/judge.py`); not on the serving path, and no `config/settings.yaml` deployment references it. Ingestion does not call an LLM. |
-| `OPENROUTER_API_KEY` | `.env` only | Deliberately undeclared | Not used | Eval-judge fallback key (OpenRouter arm of `build_judge()`); not declared for Render. The active judge runs on Google AI Studio via `GOOGLE_API_KEY`. |
-| `GOOGLE_API_KEY` | `.env` only | Deliberately undeclared | Not used | Active eval-judge key (`gemma-4-31b-it` via Google AI Studio); not declared for Render. |
 | `DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | GitHub `DATABASE_URL` secret | Cron and migrations use Neon's direct, non-pooled host. |
 | `AGENT_DATABASE_URL` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Agent-facing SQL reads use a dedicated least-privilege credential. Ingestion validates its presence but does not read it. Absence must fail closed. Do not fall back to `DATABASE_URL`. |
 | `LANGFUSE_SECRET_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Optional. With the public key, enables tracing and native prompt trace links; not read by ingestion. |
 | `LANGFUSE_PUBLIC_KEY` | `.env`; Render dashboard | Secret, `sync: false` | Literal unused placeholder | Optional. With the secret key, enables tracing and native prompt trace links; not read by ingestion. |
 | `LANGFUSE_BASE_URL` | `.env`; Render dashboard | Dashboard value, `sync: false` | Not used | Optional Langfuse endpoint. Without it, Langfuse is disabled rather than targeting a local default. |
 | `LANGFUSE_TRACING_ENVIRONMENT` | `.env`; `render.yaml` | Tracked `production` value | Not used | Defaults to `local`; allowed values are `local`, `production`, and `evaluation`. |
-| `LANGFUSE_RELEASE` | Optional `.env`; eval driver | Deliberately undeclared | Eval driver supplies its current git SHA | Optional local release override; Render's automatic `RENDER_GIT_COMMIT` takes precedence. |
+| `LANGFUSE_RELEASE` | Optional `.env` only | Deliberately undeclared | Not used | Optional local release override; Render's automatic `RENDER_GIT_COMMIT` takes precedence. |
 | `HEALTHCHECKS_URL` | Optional `.env` only | Deliberately undeclared | GitHub `HEALTHCHECKS_URL` secret | Dead-man ping URL; not declared for Render. |
 | `WEB_CONCURRENCY` | Render `render.yaml` | Tracked value | Not used | Fixed at `1` for the Free web service. |
 | `PORT` | Render `render.yaml` | Tracked value | Not used | Fixed at `8000`. |
@@ -396,10 +393,8 @@ external host, credential, or healthcheck from this document; provisioning is a 
   dashboard-managed unless the maintainer deliberately performs a Blueprint sync.
 - A failed Langfuse initialization logs a startup warning and disables tracing for that process;
   serving continues and the incident response table is the recovery path.
-- The evaluation driver intentionally enables Langfuse in the `evaluation` environment.
-  Each capture can therefore consume Langfuse Hobby-plan event ingestion and retained trace storage.
-  Run the smallest scenario selection needed, and disable tracing explicitly only when an offline
-  capture does not need trace, dataset-run, or score linkage.
+- A traced exploratory session consumes Langfuse Hobby-plan event ingestion and retained trace
+  storage. Set `LANGFUSE_ENABLED=false` for a local run that does not need trace or score linkage.
 
 ## Keep-alive and idle pools
 

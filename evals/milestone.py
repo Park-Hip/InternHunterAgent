@@ -4,12 +4,11 @@ A milestone run is one directory, ``evals/runs/<date>-<label>/``, holding three
 files:
 
 ``manifest.yaml``
-    The lineage of the run: the commit, the prompt versions per surface, the
-    model and temperature per surface, the relevant settings, the dataset
-    digest, and the snapshot manifest checksum (#756).
+    The lineage of the run: the commit, the prompt versions, the model and
+    temperature, the relevant settings, the dataset digest, and the snapshot
+    manifest checksum (#756).
 ``captures.json``
-    The evidence scoring reads. For an agent run it holds one sanitized turn
-    list per scenario; for a baseline text-to-SQL run it holds one generation
+    The evidence scoring reads: for a baseline text-to-SQL run, one generation
     record per question.
 ``scores.json``
     The scores the run recorded, grouped by metric exactly as the CLI prints
@@ -19,11 +18,9 @@ The manifest binds the other two files by digest, so a mismatch is a refusal
 rather than a silent re-score of different evidence.
 
 **Content rights (#757).** The full production snapshot cannot be committed
-(#756), but an answer is a small excerpt, and ADR-0046 already commits answers
-in a replay. Milestone runs therefore keep answers verbatim and drop
-``tool_output``, which can enumerate every returned posting. The decision is
-recorded in each manifest under ``retention`` so a reviewer does not have to
-infer it.
+(#756), and a baseline run stores only the SQL the model generated, never the
+rows it returned. The decision is recorded in each manifest under ``retention``
+so a reviewer does not have to infer it.
 """
 
 from __future__ import annotations
@@ -47,13 +44,12 @@ MANIFEST_NAME = "manifest.yaml"
 CAPTURES_NAME = "captures.json"
 SCORES_NAME = "scores.json"
 
-RUNNER_AGENT = "agent"
 RUNNER_BASELINE_SQL = "baseline_sql"
+BASELINE_METRICS = ("sql_accuracy",)
 
 # End on a letter or digit: Windows silently drops a trailing dot, so a label
 # like "v1." would name a different directory than the manifest claims.
 _LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9._-]*[a-z0-9_-])?$")
-_AGENT_TURN_FIELDS = ("question", "answer", "tools_called", "sql_text", "conversation_history")
 
 
 class MilestoneError(RuntimeError):
@@ -105,17 +101,12 @@ def settings_snapshot() -> dict[str, Any]:
     """
     config = _config_yaml()
     agent = config.get("agent") or {}
-    evaluation = config.get("eval") or {}
     return {
         "agent": {
             "stream_turn_timeout_seconds": agent.get("stream_turn_timeout_seconds"),
             "memory": agent.get("memory"),
             "query": agent.get("query"),
             "prompts": agent.get("prompts"),
-        },
-        "eval": {
-            "capture": evaluation.get("capture"),
-            "judge": evaluation.get("judge"),
         },
     }
 
@@ -184,32 +175,6 @@ def _relative(path: Path) -> str:
         return str(path)
 
 
-def sanitize_turn(turn: dict[str, Any]) -> dict[str, Any]:
-    """Project one captured turn onto the evidence a committed run may retain."""
-    clean = {key: turn[key] for key in _AGENT_TURN_FIELDS if key in turn}
-    history = clean.get("conversation_history")
-    if isinstance(history, list):
-        clean["conversation_history"] = [
-            {"question": item.get("question"), "answer": item.get("answer")}
-            for item in history
-            if isinstance(item, dict)
-        ]
-    return clean
-
-
-def sanitized_captures(captures: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "sanitized": True,
-        "retained": list(_AGENT_TURN_FIELDS),
-        "dropped": ["tool_output"],
-        "scenarios": {
-            scenario_id: [sanitize_turn(turn) for turn in turns]
-            for scenario_id, turns in captures.items()
-        },
-    }
-
-
 def _write_json(path: Path, payload: Any) -> None:
     path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n",
@@ -240,7 +205,6 @@ def _run_id(label: str, run_date: date | None) -> tuple[str, str]:
 
 def _base_manifest(
     *,
-    runner: str,
     label: str,
     run_id: str,
     dataset_name: str,
@@ -249,25 +213,24 @@ def _base_manifest(
     prompt_versions: Any,
     prompt_versions_source: str,
     metrics: list[str],
-    models: dict[str, Any] | None,
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
         "label": label,
-        "runner": runner,
+        "runner": RUNNER_BASELINE_SQL,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "git": git_state(),
         "dataset": dataset_identity(dataset_name, dataset_path),
         "capture": {
             "source": capture_source,
-            "sanitized": runner == RUNNER_AGENT,
+            "sanitized": False,
         },
         "prompts": {
             "versions": prompt_versions,
             "source": prompt_versions_source,
         },
-        "models": models if models is not None else models_snapshot(),
+        "models": models_snapshot(),
         "settings": settings_snapshot(),
         "snapshot": snapshot_manifest_identity(),
         "metrics": metrics,
@@ -276,10 +239,10 @@ def _base_manifest(
             "scores": SCORES_NAME,
         },
         "retention": {
-            "answers": "verbatim" if runner == RUNNER_AGENT else "not_collected",
-            "tool_output": "dropped" if runner == RUNNER_AGENT else "not_collected",
+            "answers": "not_collected",
+            "tool_output": "not_collected",
             "decision": (
-                "ADR-0046 commits answers and drops tool output; the full scraped "
+                "A baseline run stores the generated SQL only; the full scraped "
                 "snapshot stays private (#756)."
             ),
         },
@@ -308,61 +271,6 @@ def _write_run_dir(
     return run_dir
 
 
-def write_agent_run(
-    report: dict[str, Any],
-    label: str,
-    *,
-    root: Path = RUNS_ROOT,
-    run_date: date | None = None,
-) -> Path:
-    """Write one capture-and-score report as a committed milestone run."""
-    dataset_path = Path(report["dataset"])
-    if not dataset_path.is_absolute():
-        dataset_path = ROOT / dataset_path
-    dataset_name = report.get("dataset_name") or dataset_path.stem
-    source = report.get("prompt_versions_source") or (
-        "capture" if report.get("capture_source") not in (None, "live") else "live"
-    )
-    capture_manifest = report.get("capture_manifest")
-    models = models_snapshot() if source == "live" else _captured_models(capture_manifest)
-    capture_source = report.get("capture_source") or "live"
-    if capture_source != "live":
-        path = Path(capture_source)
-        capture_source = _relative(path if path.is_absolute() else ROOT / path)
-    day, run_id = _run_id(label, run_date)
-    manifest = _base_manifest(
-        runner=RUNNER_AGENT,
-        label=label,
-        run_id=run_id,
-        dataset_name=dataset_name,
-        dataset_path=dataset_path,
-        capture_source=capture_source,
-        prompt_versions=report.get("prompt_versions"),
-        prompt_versions_source=source,
-        metrics=list(report.get("metrics") or []),
-        models=models,
-    )
-    if capture_manifest:
-        manifest["capture"]["manifest"] = capture_manifest
-    return _write_run_dir(
-        run_dir=root / run_id,
-        manifest=manifest,
-        captures=sanitized_captures(report.get("captures") or {}),
-        scores=_scores_payload(list(report.get("metrics") or []), report.get("by_metric") or {}),
-    )
-
-
-def _captured_models(capture_manifest: Any) -> dict[str, Any]:
-    if isinstance(capture_manifest, dict) and isinstance(capture_manifest.get("models"), dict):
-        return {"source": "capture", **capture_manifest["models"]}
-    return {
-        "source": "unknown",
-        "react": None,
-        "sql_generation": None,
-        "note": "the capture names no model; the replay predates the lineage contract",
-    }
-
-
 def write_baseline_run(
     generations: dict[str, Any],
     label: str,
@@ -379,7 +287,6 @@ def write_baseline_run(
 
     day, run_id = _run_id(label, run_date)
     manifest = _base_manifest(
-        runner=RUNNER_BASELINE_SQL,
         label=label,
         run_id=run_id,
         dataset_name="baseline",
@@ -388,7 +295,6 @@ def write_baseline_run(
         prompt_versions=generations.get("prompt_versions"),
         prompt_versions_source="live",
         metrics=[],
-        models=models_snapshot(),
     )
     manifest["generation"] = {
         "created_at": generations.get("created_at"),
@@ -517,63 +423,40 @@ def compare_scores(
 
 
 def _reproducible_metrics(metrics: list[str]) -> list[str]:
-    from evals.metrics import METRIC_BY_NAME, MetricKind
-
-    return [
-        name
-        for name in metrics
-        if name in METRIC_BY_NAME and METRIC_BY_NAME[name].kind == MetricKind.DETERMINISTIC
-    ]
+    """The recorded metrics the baseline can recompute without a model."""
+    return [name for name in metrics if name in BASELINE_METRICS]
 
 
 def rescore(run_dir: Path, *, database_url: str | None = None) -> dict[str, Any]:
-    """Re-score a committed run from its own evidence and compare to its scores.
+    """Re-score a committed baseline run from its own evidence.
 
-    Judge metrics are reported as skipped, never as reproduced: they need a
-    judge call, so calling them reproducible would be a false claim. Every
-    deterministic row must match exactly, including its reason and details.
+    Every deterministic row must match the recorded score, reason, and details
+    exactly. A metric outside the baseline contract is reported as skipped
+    rather than claimed as reproduced.
     """
     manifest = read_manifest(run_dir)
     captures = read_captures(run_dir)
     scores = read_scores(run_dir)
     verify_evidence(manifest, captures, scores)
 
+    if manifest.get("runner") != RUNNER_BASELINE_SQL:
+        raise MilestoneError(f"unknown milestone runner: {manifest.get('runner')!r}")
+
     metrics = list(manifest.get("metrics") or [])
     reproducible = _reproducible_metrics(metrics)
     if not reproducible:
         raise MilestoneError("the run records no deterministic metric to re-score")
 
-    runner = manifest.get("runner")
-    if runner == RUNNER_AGENT:
-        from evals.env import bind_fixture_environment
+    from evals import baseline_sql
+    from evals.reporting import group_by_metric
 
-        bind_fixture_environment()
-        from evals.datasets import dataset
-        from evals.report import group_by_metric
-        from evals.run import score_captures
-
-        captured = captures.get("scenarios")
-        if not isinstance(captured, dict):
-            raise MilestoneError("agent run evidence has no scenarios object")
-        spec = dataset(manifest["dataset"]["name"])
-        scenarios = [case for case in spec.scenarios() if case["id"] in captured]
-        rows = score_captures(scenarios, captured, reproducible, database_url)
-        reproduced = group_by_metric(rows)
-    elif runner == RUNNER_BASELINE_SQL:
-        from evals import baseline_sql
-
-        records = captures.get("records")
-        if not isinstance(records, list):
-            raise MilestoneError("baseline run evidence has no records list")
-        database_url = database_url or os.environ.get("BASELINE_DATABASE_URL")
-        if not database_url:
-            raise MilestoneError("baseline re-scoring needs --database-url or BASELINE_DATABASE_URL")
-        rows = baseline_sql.metric_rows(records, database_url)
-        from evals.report import group_by_metric
-
-        reproduced = group_by_metric(rows)
-    else:
-        raise MilestoneError(f"unknown milestone runner: {runner!r}")
+    records = captures.get("records")
+    if not isinstance(records, list):
+        raise MilestoneError("baseline run evidence has no records list")
+    database_url = database_url or os.environ.get("BASELINE_DATABASE_URL")
+    if not database_url:
+        raise MilestoneError("baseline re-scoring needs --database-url or BASELINE_DATABASE_URL")
+    reproduced = group_by_metric(baseline_sql.metric_rows(records, database_url))
 
     mismatches = compare_scores(flat_rows(scores.get("by_metric") or {}), flat_rows(reproduced), metrics=reproducible)
     return {

@@ -164,7 +164,7 @@ Anything else, including a 500, becomes `internal_error` with `retryable: false`
    Nothing falls back: `stream_turn_timeout_seconds` must be a positive integer, and a missing or invalid value refuses boot too (#656, amending ADR-0048).
 2. **A missing key refuses boot, but only for a served profile** (#641).
    With `DEEPSEEK_API_KEY` unset or blank, the lifespan raises `ProviderCredentialError` and uvicorn exits 3.
-   `GROQ_API_KEY` is not a deployment key any more (it survives only as the eval judge's optional alternate branch), so nothing validates it at boot; `sql_generation`'s key is checked only once the v1 tool is registered.
+   Only a key named by a selected deployment is validated, so an unused vendor key changes nothing; `sql_generation`'s key is checked once the tool is registered.
 3. **`max_attempts: 2` means two requests**, because the `ChatLiteLLM` argument it feeds counts attempts; `0` is refused at load, since a call must happen at least once (section 5).
 4. **The model's own settings are invisible to callers.**
    `factory.py` and `query_clean_jobs.py` pass only a profile name.
@@ -224,7 +224,7 @@ Each item below was observed on 2026-10-16 and is tracked by an issue.
    Resolved by #654: it is renamed to `max_attempts`, validation requires at least 1, and the configuration reference records which errors are retried.
    Retries stay on LangChain's layer; LiteLLM's `num_retries` was rejected because it also retries 4xx responses and, by default, retries immediately instead of backing off.
 3. **The unused Groq deployment.**
-   Resolved by #655: the serving allowlist now holds only deployments a profile selects, and the Groq option contract went with the deployment; `Settings.GROQ_API_KEY` stays for the eval judge's branch.
+   Resolved by #655: the serving allowlist now holds only deployments a profile selects, and the Groq option contract went with the deployment. The unused judge key went with the deleted judge (ADR-0066).
 4. **Pointers to a deleted decision log** (#657).
    Resolved by #657: `render.yaml`, the operate how-to, and the architecture document now cite ADR-0045, as the `Settings` comment does.
 

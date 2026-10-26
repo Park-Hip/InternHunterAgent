@@ -87,15 +87,13 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           HEALTHCHECKS_URL: ${{ secrets.HEALTHCHECKS_URL }}
-          # AGENT_DATABASE_URL, GROQ_API_KEY, and Langfuse keys are not read by
-          # any ingestion code path. Of these, src/core/config.py's Settings model
-          # requires only AGENT_DATABASE_URL (no default); the Groq and Langfuse
-          # keys are optional. Settings validate lazily, on the first settings
-          # access, and the loader cannot run without that placeholder. These are
-          # placeholders, never real credentials, because ingestion is
-          # deterministic and calls no LLM.
+          # AGENT_DATABASE_URL and Langfuse keys are not read by any ingestion
+          # code path. Of these, src/core/config.py's Settings model requires
+          # only AGENT_DATABASE_URL (no default); the Langfuse keys are optional.
+          # Settings validate lazily, on the first settings access, and the loader
+          # cannot run without that placeholder. These are placeholders, never
+          # real credentials, because ingestion is deterministic and calls no LLM.
           AGENT_DATABASE_URL: "unused-by-ingestion"
-          GROQ_API_KEY: "unused-by-ingestion"
           LANGFUSE_SECRET_KEY: "unused-by-ingestion"
           LANGFUSE_PUBLIC_KEY: "unused-by-ingestion"
         run: uv run python -m src.services.ingestion.loader

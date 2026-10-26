@@ -45,8 +45,9 @@ tells you what it found, including when a result set was truncated.
   `clean_jobs` table with a frozen column contract. The corpus refreshes nightly, and its measured
   date is reported by `/api/v1/ready` rather than pinned in this file. It does not establish current
   vacancies.
-- **Measured, not vibed.** A DeepEval harness scores the agent against a versioned golden
-  dataset, with an LLM judge on a separate provider and scores written back to Langfuse.
+- **Measured, not vibed.** A baseline of frozen questions scores generated SQL against reference
+  results on a pinned snapshot, and a credential-free gate pins the SQL guard and executor
+  boundary on every pull request.
 - **Traced end to end, when tracing is configured.** With Langfuse credentials set, every turn
   produces a Langfuse trace surfaced back to the UI; without them, tracing degrades to a no-op and
   serving continues.
@@ -82,8 +83,8 @@ docker compose up -d                       # Postgres on host port 5433
 
 `.env.example` already points `DATABASE_URL` at that container, so `DEEPSEEK_API_KEY` is the only
 value you must supply to run the agent: it is the provider both profiles select in
-`config/settings.yaml`. Serving on Groq again would need a reviewed `agent.providers` entry plus
-`GROQ_API_KEY`; the Gemini key enables the eval harness.
+`config/settings.yaml`. Serving on another provider would need a reviewed `agent.providers` entry
+plus that provider's key. The SQL guard gate needs no model credential.
 Langfuse keys are optional locally: without them the app runs with tracing disabled.
 
 Initialise the schema (idempotent — safe to re-run):

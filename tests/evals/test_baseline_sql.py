@@ -6,12 +6,20 @@ from pathlib import Path
 import pytest
 import yaml
 
-from evals import baseline_sql
+from evals import baseline_sql, snapshot_manifest
 from evals.sql_check import projected_columns
 
 
 def dataset() -> list[dict]:
     return yaml.safe_load(baseline_sql.DATASET.read_text(encoding="utf-8"))
+
+
+def test_the_committed_snapshot_manifest_pins_a_real_checksum() -> None:
+    manifest = snapshot_manifest.load_manifest()
+
+    checksum = manifest["checksum"]
+    assert len(checksum) == 64
+    assert checksum != "0" * 64
 
 
 def test_the_baseline_dataset_follows_its_grammar() -> None:

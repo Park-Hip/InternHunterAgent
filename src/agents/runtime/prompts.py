@@ -79,23 +79,13 @@ def _bundle(prompts: Mapping[PromptSurface, ResolvedPrompt]) -> ResolvedPromptBu
 
 
 async def resolve_prompt_bundle_async() -> ResolvedPromptBundle:
-    """Return the bundle one request or evaluation capture runs on.
+    """Return the bundle one request runs on.
 
     The registry resolved every surface at boot and a background task keeps the
     link fresh, so this is a memory read: a request can neither wait on Langfuse
     nor pay again for a fetch that failed (#698).
     """
     return _bundle(get_prompt_registry().resolved())
-
-
-async def refresh_prompt_bundle_async() -> ResolvedPromptBundle:
-    """Resolve every surface once, the way boot does, and return the bundle.
-
-    For a process that has no background refresh to fill memory: the evaluation
-    driver is one invocation, so it resolves its own links rather than serving
-    a bundle nothing has warmed.
-    """
-    return _bundle(await get_prompt_registry().refresh_async())
 
 
 def load_system_prompt_resolution() -> ResolvedPrompt:

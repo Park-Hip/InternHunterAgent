@@ -57,7 +57,8 @@ def compare_result_sets(
         raise ValueError(f"Unknown SQL comparison mode: {mode}")
     if mode in {"ids_only", "zero_results"} and "id" not in (projected_columns(reference_sql) or []):
         raise ValueError("Reference SQL must project id")
-    if mode == "aggregate_count" and not _COUNT.fullmatch((_SELECT.match(reference_sql) or [None, ""])[1]):
+    reference_match = _SELECT.match(reference_sql)
+    if mode == "aggregate_count" and not _COUNT.fullmatch(reference_match[1] if reference_match else ""):
         raise ValueError("Count reference must project COUNT(*) AS count")
     try:
         generated = execute_query(generated_sql, database_url)
@@ -71,7 +72,8 @@ def compare_result_sets(
         generated = generated[:display_limit]
     details: dict[str, Any] = {"actual_count": len(generated), "fetched_count": fetched_count, "reference_count": len(reference)}
     if mode == "aggregate_count":
-        if not _SELECT.match(generated_sql) or not _COUNT.fullmatch(_SELECT.match(generated_sql)[1]):
+        generated_match = _SELECT.match(generated_sql)
+        if not generated_match or not _COUNT.fullmatch(generated_match[1]):
             return {**details, "status": "FAIL", "reason": "Count query must project only COUNT(*) AS count"}
         if len(reference) != 1 or len(reference[0]) != 1:
             raise ValueError("Count reference must return one aggregate")

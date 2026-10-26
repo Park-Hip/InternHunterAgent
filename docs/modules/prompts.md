@@ -140,8 +140,6 @@ The bundle is then entered with `prompt_bundle_context`, a `ContextVar` every ne
 | One agent per (version, text) | `create_agent` bakes the system prompt in; unchanged text reuses the cached agent | Every turn would recompile, or a new release text would be ignored |
 | An explicit label, never `latest` | Saving a version in the Langfuse UI changes nothing, not even the link | A draft would become the trace's reference |
 
-The evaluation driver has no background task, so `evals/run.py` calls `refresh_prompt_bundle_async` once at startup instead of reading a snapshot nothing has filled.
-
 ## 4. Why git is the authority, and Langfuse only a link
 
 The original design, from #448, made Langfuse the authority: a prompt changed without a deploy, an evaluated version was promoted by moving the `production` label, and the YAML was only a fallback for an outage.
@@ -201,7 +199,6 @@ On 2026-10-19, with every surface linked, the same three generations linked to `
 
 **Eval lineage.**
 `evals/baseline_sql.py`, the #708 Layer 1 runner, writes the content hashes into each saved run as `prompt_versions`, so a saved run says which text it measured.
-The scenario report written by `evals/run.py` still holds no prompt version; its traces carry the tags above.
 
 ## 6. Failure paths
 
@@ -323,7 +320,7 @@ An unregistered surface serves unlinked and costs nothing on a turn.
 | `config/settings.yaml` → `agent.prompts` | The label, the cache lifetime, the fetch timeout, and the refresh interval |
 | `src/agents/tracing/prompt_registry.py` → `PromptRegistry.resolve`, `PromptRegistry.refresh_async`, `PromptRegistry._refresh_surface`, `PromptRegistry._release` | The in-memory snapshot, the content-hash version, the link, and drift |
 | `src/agents/tracing/langfuse.py` → `prepare_native_prompts_startup`, `refresh_prompt_links_forever` | Boot resolution and the background refresh |
-| `src/agents/runtime/prompts.py` → `resolve_prompt_bundle_async`, `refresh_prompt_bundle_async`, `prompt_bundle_context`, `ResolvedPromptBundle` | One bundle per turn, and the eval driver's own refresh |
+| `src/agents/runtime/prompts.py` → `resolve_prompt_bundle_async`, `prompt_bundle_context`, `ResolvedPromptBundle` | One bundle per turn |
 | `src/agents/runtime/react_agent.py` → `AgentRuntime.astream`, `AgentRuntime._active_agent` | Where a turn reads its bundle, and the agent cache per system prompt |
 | `src/agents/tools/query_clean_jobs.py` → `generate_sql`; `src/services/query/generator.py` → `generate_sql` | How the SQL model's message is built |
 | `src/agents/tracing/sql_generation.py` → `TracedSqlGenerationModel` | How the SQL model's call is linked to its prompt |

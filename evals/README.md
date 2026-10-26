@@ -1,48 +1,33 @@
-# `evals/` - The Evaluation Instrument
+# `evals/` - Evaluation tooling
 
-> **Last verified:** 2026-10-17.
+> **Last verified:** 2026-10-26.
 
-> **Eviction:** This hub leaves when the evaluation layout, commands, metric contract, or result terms change.
+> **Eviction:** This hub leaves when the evaluation layout, commands, or result terms change.
 
-This directory measures the agent against the frozen fixture and the behavior contract.
-The rebuilt harness (#476) has one CLI, `python -m evals`: the scenario dataset for capture and
-scoring, and the credential-free SQL guard gate.
-[`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md) is the canonical step-by-step for running it.
-This hub is the navigation map and the full command and module reference.
+This directory holds two plain-Python checks of agent behavior, with no model judge:
 
-## Role routing
+- The credential-free SQL guard gate, which grades reviewed SQL statements against the validator
+  and the seeded fixture.
+- The text-to-SQL baseline, which generates SQL once and scores it offline against the frozen
+  production snapshot.
 
-| Role | Start here | Then read |
-|---|---|---|
-| **Operator** | [`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md) | [pipeline.md](pipeline.md) |
-| **Contributor** | [authoring/index.md](authoring/index.md) | [pipeline.md](pipeline.md) |
-| **Maintainer** | [`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md) | [`archive/`](archive/) for historical baselines and calibration evidence |
+[`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md) is the canonical step-by-step.
+This hub is the navigation map and the module reference.
+The legacy scenario harness, replays, calibration corpus, and DeepEval judge were deleted in
+[ADR-0066](../docs/decisions/adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md);
+git history is their archive.
 
 ## Quick commands
 
 ```sh
-# Start the fixture database and load the frozen dataset.
+# Start the fixture database and load the frozen 24-row dataset.
 # The loader also provisions internhunter_eval_reader with column-level SELECT.
 docker compose up -d postgres
 uv run python -m evals.fixtures.loader
 
-# Credential-free SQL guard gate (the CI gate)
-uv run python -m evals --gate
+# Credential-free SQL guard gate (the CI gate).
+uv run python -m evals
 
-# Live capture + scoring of the v1 scenarios (needs the serving-model credential)
-uv run python -m evals --dataset default --out evals/runs/local-report.json
-
-# A committed milestone run with a lineage manifest and re-scorable evidence
-uv run python -m evals --dataset default --milestone agent-v1
-uv run python -m evals --rescore evals/runs/2026-10-26-agent-v1
-
-# Offline scoring of a retained capture (no model call)
-uv run python -m evals --only tool_correctness,sql_accuracy \
-  --capture evals/replays/t0025.9-committed.json \
-  --ids SAF-DESTRUCTIVE-REFUSAL-1,HLP-CONTEXT-1
-```
-
-```sh
 # Baseline text-to-SQL run (#708): one model call per question, then offline scoring.
 # The snapshot is a local copy of production clean_jobs; see the module docstring.
 uv run python -m evals.baseline_sql generate --milestone baseline-v1
@@ -50,51 +35,46 @@ uv run python -m evals.baseline_sql score evals/runs/2026-10-26-baseline-v1 --da
 uv run python -m evals --rescore evals/runs/2026-10-26-baseline-v1 --database-url <snapshot URL>
 ```
 
-Use `--out` to write a standalone JSON report elsewhere; `--milestone <label>` writes
-`evals/runs/<date>-<label>/` with a lineage manifest and the evidence needed to re-score
-it offline. Only dated milestone directories are committed; other output under
-`evals/runs/` stays local and gitignored.
+`--out` writes the gate report elsewhere; the default is the gitignored
+`evals/runs/sql-gate-latest.json`.<!-- lint-allow-link-path -->
+`--ids` narrows the gate to named cases.
+`--milestone <label>` on `generate` writes `evals/runs/<date>-<label>/` with a lineage manifest and
+the evidence needed to re-score it offline.
+Only dated milestone directories are committed; other output under `evals/runs/` stays local and
+gitignored.
+`--rescore` verifies a committed baseline run from its own evidence and makes no model call.
 
 The fixture loader rebuilds and seeds with the owner DSN in `eval.fixture.database_url`, then
 provisions `internhunter_eval_reader` with column-level `SELECT` on the 16 contract columns.
-The evaluation path binds `AGENT_DATABASE_URL` to `eval.fixture.reader_database_url` and scores
-through the same role, so a star query or a hidden-column read fails as it does in production
-(#730). Rebuilding the fixture re-applies the grants; see
+The gate binds `AGENT_DATABASE_URL` to that reader role, so a star query or a hidden-column read
+fails as it does in production (#730).
+The baseline never reads the fixture: `score` takes the snapshot URL you pass and verifies its
+manifest first.
+Rebuilding the fixture re-applies the grants; see
 [`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md).
 
 ## Datasets
 
 | Dataset | File | What it describes | How it runs |
 |---|---|---|---|
-| `default` | [`datasets/scenarios.yaml`](datasets/scenarios.yaml) | 50 v1 scenarios (34 single-turn, 16 conversational) | A live capture against the serving agent, or a retained capture |
-| baseline | [`datasets/baseline.yaml`](datasets/baseline.yaml) | 36 MVP baseline questions (#708), 24 dev and 12 held-out, with reference SQL for a production snapshot | [`baseline_sql.py`](baseline_sql.py): `generate` once, then `score` offline |
+| SQL guard | [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml) | Reviewed, floor, accepted-risk, and injection SQL cases | [`python -m evals`](__main__.py) through [`sql_gate.py`](sql_gate.py) |
+| Baseline | [`datasets/baseline.yaml`](datasets/baseline.yaml) | 36 MVP baseline questions (#708), 24 dev and 12 held-out, with reference SQL for a production snapshot | [`baseline_sql.py`](baseline_sql.py): `generate` once, then `score` offline |
 
-The registry and its validation live in [`datasets.py`](datasets.py).
-Datasets never mix: a new version is a new entry, never an edit to an existing registry.
-
-The SQL guard gate reads its own reviewed corpus, [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml),
-through [`sql_gate.py`](sql_gate.py) rather than the registry: the gate cases are reviewed SQL
-statements, not capture scenarios.
+Each dataset file owns its own grammar and cases.
+The baseline snapshot identity lives in [`datasets/baseline_manifest.yaml`](datasets/baseline_manifest.yaml)
+and is verified by [`snapshot_manifest.py`](snapshot_manifest.py).
 
 ## Metrics
 
-Metrics are declared in [`metrics.py`](metrics.py) and selected per scenario by its `metrics` list.
+The gate declares two deterministic metrics in [`sql_gate.py`](sql_gate.py):
 
-| Metric | Kind | Credential-free | Scores |
-|---|---|---|---|
-| `tool_correctness` | deterministic | yes | Required tools were called, with no unexpected tools |
-| `sql_accuracy` | deterministic | yes | Generated SQL returns the reference result on the fixture |
-| `grounded` | judge | no | Answer is supported by the retrieved tool output |
-| `on_topic` | judge | no | Answer responds to the question and its constraints |
-| `memory` | judge | no | Answer uses the previous conversation turns and their constraints |
-| `rubric` | judge | no | Answer satisfies the scenario's own rubric |
+| Metric | Scores |
+|---|---|
+| `guard_correctness` | The `validate_sql` verdict against the reviewed one, and the rule that must reject a rejected case |
+| `result_equivalence` | The rows the reviewed SQL returns on the fixture, against a reviewer-written reference |
 
-`sql_accuracy` and `memory` were kept off the governed v0 path by the Stage 4 decision (#487): that
-path wrote no SQL and was single-turn. Both stay in the registry because the v1 scenarios declare
-them.
-
-The SQL guard gate declares its own two metrics in [`sql_gate.py`](sql_gate.py):
-`guard_correctness` and `result_equivalence`.
+The baseline reports pass counts per split from [`sql_check.py`](sql_check.py) comparison modes;
+it is a diagnostic run, not a pass/fail gate.
 
 ## Test-to-module mapping
 
@@ -102,18 +82,12 @@ Tests live in [`tests/evals/`](../tests/evals/).
 
 | Test file | Production module | Behavior pinned |
 |---|---|---|
-| `test_datasets.py` | [`datasets.py`](datasets.py) | Registry selection and scenario-grammar validation |
 | `test_env.py` | [`env.py`](env.py) | Fixture environment binding before any `src` import, owner versus reader DSN |
 | `test_fixture_reader.py` | [`fixtures/loader.py`](fixtures/loader.py) | Reader-role provisioning, column grants after a rebuild, star denial, `rejected` mapping |
-| `test_judge.py` | [`judge.py`](judge.py) | Config-to-model wiring, provider arm selection |
-| `test_metrics.py` | [`metrics.py`](metrics.py) | Metric construction, tool expectations, field adaptation |
-| `test_report.py` | [`report.py`](report.py) | Result grouping and table rendering |
-| `test_run.py` | [`run.py`](run.py) | Capture and scoring with the database boundary stubbed |
 | `test_sql_check.py` | [`sql_check.py`](sql_check.py) | SQL comparison modes with query results stubbed |
 | `test_sql_gate.py` | [`sql_gate.py`](sql_gate.py) + [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml) | Dataset grammar, guard/result grading, gate refusals |
 | `test_baseline_sql.py` | [`baseline_sql.py`](baseline_sql.py) + [`datasets/baseline.yaml`](datasets/baseline.yaml) | Baseline dataset grammar, offline scoring with execution stubbed |
-| `test_milestone.py` | [`milestone.py`](milestone.py) | Manifest lineage, sanitized evidence, evidence digests, re-score reproduction, gitignore boundary |
-| `test_holdout_judge.py` | [`judge.py`](judge.py) + [`calibration_v8.yaml`](calibration_v8.yaml) | Opt-in judge-versus-human check over the retained v8 holdout |
+| `test_milestone.py` | [`milestone.py`](milestone.py) | Manifest lineage, evidence digests, baseline re-score reproduction, gitignore boundary |
 
 ## The map
 
@@ -121,65 +95,28 @@ Tests live in [`tests/evals/`](../tests/evals/).
 evals/
 ├── README.md                     This navigation hub
 ├── __main__.py                   CLI entry: python -m evals
-├── datasets.py                   Dataset registry and scenario-grammar validation
-├── run.py                        Capture and scoring pipeline
-├── metrics.py                    Declared metrics and their required capture fields
-├── judge.py                      Shared DeepEval judge (provider arms)
-├── sql_check.py                  Generated-SQL vs reference-result comparison
-├── report.py                     Result grouping and table rendering
 ├── sql_gate.py                   Credential-free SQL guard gate
+├── reporting.py                  Shared result grouping and table rendering
 ├── milestone.py                  Committed run folders, lineage manifests, re-scoring
+├── sql_check.py                  Generated-SQL vs reference-result comparison
+├── baseline_sql.py               Baseline generation and offline scoring
+├── snapshot_manifest.py          Frozen-snapshot identity and verification
+├── manifest.py                   Compatibility re-export of snapshot_manifest
+├── baseline_manifest.py          Compatibility re-export of snapshot_manifest
 ├── env.py                        Fixture owner/reader binding before any src import
 ├── _paths.py                     Shared path constants
 │
 ├── datasets/
-│   ├── scenarios.yaml            The v1 scenario registry (50 scenarios)
-│   └── sql_guard.yaml            The reviewed SQL guard corpus (15 cases)
+│   ├── sql_guard.yaml            The reviewed SQL guard corpus (20 cases)
+│   ├── baseline.yaml             The 36 baseline questions
+│   └── baseline_manifest.yaml    Committed identity of the frozen snapshot
 │
-├── fixtures/
-│   ├── loader.py                 Fixture database build/reset
-│   └── seed_eval_db.sql          The frozen 24-row fixture dataset
+├── manifest.yaml                 Duplicate snapshot manifest name
+├── snapshot_manifest.yaml        Duplicate snapshot manifest name
 │
-├── authoring/                    How to author and edit scenarios
-│   └── index.md                  Grammar, metric contract, step-by-step runbooks
+├── runs/                         Dated baseline milestone runs - committed; other reports local
 │
-├── calibration_v7.yaml           Immutable human-labelled corpus (retained evidence)
-├── calibration_v8.yaml           Immutable independent holdout (retained evidence)
-│
-├── pipeline.md                   Pipeline, metric contract, and commands reference
-│
-├── runs/                         Dated milestone runs - committed; other reports local
-├── replays/                      Committed sanitized replays - retained evidence
-│
-└── archive/                      Historical v1 records (readable history, not fixtures)
-    ├── replays/                  Archived replays
-    ├── deterministic/            Deleted-grader deep dive
-    ├── semantic/                 Deleted semantic-scorer docs
-    ├── calibration/              Deleted calibration-sweep docs
-    ├── replay/                   Deleted replay docs
-    ├── disagreements/            Deleted disagreement workflow
-    ├── Operating_Manual.md       v1 maintainer manual
-    ├── Instrument_Report.md      v1 baseline reports
-    ├── IMPLEMENTATION_PLAN.md    v1 pass-rate plan
-    ├── t0027_deepseek_arm.md     Provider bake-off record
-    ├── V6_Grader_Audit_2026-08-23.md Grader audit record
-    ├── v1_error_analysis.md
-    ├── v1_scenario_matrix.md
-    └── calibration_v6.yaml
+└── fixtures/
+    ├── loader.py                 Fixture database build/reset and reader grants
+    └── seed_eval_db.sql          The frozen 24-row fixture dataset
 ```
-
-## Multi-turn coverage
-
-The v1 registry reserves `memory` for conversational scenarios: all 16 `type: conversational` scenarios declare it, and no single-turn scenario does.
-A conversational scenario declares its turns as a list under `turns`; a single-turn scenario declares one `input`.
-The capture records every turn in order, and `memory` judges the final answer against the accumulated conversation.
-See [authoring/index.md](authoring/index.md) for the exact grammar.
-
-## Historical records
-
-The manuals that described the deleted v1 modules (`grader.py`, `driver.py`, `score.py`, `replay.py`, `execution_accuracy.py`, `scenarios_v1.yaml`, and their friends) are preserved in [`archive/`](archive/).
-They are readable history, not current operating instructions.
-Read [`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md) for how evaluation works today.
-
-Committed replays under [`replays/`](replays/) are sanitized evidence of earlier behavior.
-Raw reports under [`runs/`](runs/) are local and gitignored because they can contain telemetry and trace identifiers.

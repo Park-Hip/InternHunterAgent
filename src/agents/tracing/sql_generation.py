@@ -5,9 +5,9 @@ and its observability. Keeping both branches here means ``src/services/query/``
 imports no Langfuse code, and the tool imports no Langfuse symbol directly.
 
 Inside a LangChain agent, MCP does not transport ``RunnableConfig`` into the
-tool, so reading the ambient config preserves the nested SQL generation for
-Langfuse and DeepEval callbacks. A plain MCP client has no ambient config, so it
-gets one explicit generation instead; with tracing disabled the call is plain.
+tool, so reading the ambient config preserves the nested SQL generation for the
+Langfuse callback. A plain MCP client has no ambient config, so it gets one
+explicit generation instead; with tracing disabled the call is plain.
 """
 
 from __future__ import annotations

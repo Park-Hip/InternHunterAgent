@@ -73,7 +73,7 @@ process from the same FastMCP server the agent uses (`src/agents/mcp/job_server.
 The prior `agent.provider` and per-profile `provider` plus `model` fields are replaced by named `agent.providers` deployments.
 Each deployment is a lowercase provider-qualified LiteLLM model plus an `api_key_env` name, and each profile selects it through `deployment`.
 The provider is derived from the model prefix, so the earlier per-deployment `provider` key is now refused rather than kept in sync.
-The bundled deployment references `DEEPSEEK_API_KEY`; the optional eval-judge Groq branch still reads `GROQ_API_KEY` from `.env`.
+The bundled deployment references `DEEPSEEK_API_KEY`.
 Do not place an API key value in YAML, documentation, a Langfuse tag, or a log message.
 
 ```yaml
@@ -115,7 +115,7 @@ Other documents link here rather than restating.
 | ORM and driver | SQLAlchemy and psycopg | >=2.0 / >=3.2 | `src/services/query/` |
 | Migrations | Alembic | >=1.14 | `alembic/`, `alembic.ini` |
 | Tracing | Langfuse Cloud | >=4.15.6,<5.0.0 | `src/agents/tracing/` |
-| Evaluation | DeepEval with a Gemini judge | >=4.0.7 | `evals/`, `config/settings.yaml` |
+| Evaluation | Plain Python: SQL guard gate and baseline runner | - | `evals/`, `config/settings.yaml` |
 | Hosting | Render Docker web service | Free tier | `render.yaml`, `docker/Dockerfile` |
 
 ### 2 Dependencies
@@ -137,9 +137,6 @@ Other documents link here rather than restating.
 |---|---|---|
 | `langchain` | `>=1.4.2,<1.5.0` with the `mcp` extra | ReAct agent runtime and tool binding. The `mcp` extra pulls in FastMCP and provides `langchain.mcp.MCPAdapter`, which discovers the read-only job-query tools in process (see `src/agents/mcp/`). |
 | `langchain-litellm` | `>=0.8.0,<0.9.0` | In-process provider-neutral serving adapter. It brings LiteLLM for provider-qualified models and serves the configured deployment allowlist. |
-| `langchain-groq` | `>=1.1.2,<1.2.0` | Evaluation judge's Groq alternate branch. It is not on the serving path. |
-| `langchain-openai` | `>=1.5.0,<1.6.0` | Evaluation-judge fallback via OpenRouter's OpenAI-compatible endpoint, never on the serving path. |
-| `langchain-google-genai` | `>=4.3.5,<4.4.0` | Evaluation judge (`gemma-4-31b-it`) via Google AI Studio, never on the serving path. Restored after the OpenRouter detour; the retired arm was Gemini 2.5 Flash. |
 | `langgraph-checkpoint-postgres` | `>=3.1.0,<3.2.0` | Short-term conversation memory, session id to thread id. |
 
 **Data**
@@ -181,7 +178,6 @@ Other documents link here rather than restating.
 | `pytest-mock` | Mocking helpers. |
 | `mypy` | Type checking over `src/`, with the pydantic plugin. |
 | `ruff` | Lint and format. `scripts/` is excluded; throwaway spikes live there. |
-| `deepeval` | Evaluation harness for the scenario and three-seam metric runs. |
 
 <!-- deps:end -->
 
@@ -193,7 +189,6 @@ Run `uv run pytest tests/agents/runtime/test_factory.py tests/agents/runtime/tes
 Then run the full verification gate: `uv run pytest`, `uv run ruff check .`, `uv run mypy`, and `uv run python scripts/docs_lint.py`.
 Record the resolved versions and check results in the pull request before merging the widened range.
 
-On Windows, invoke live DeepEval checks with `PYTHONUTF8=1` and the eval marker.
 The fixture count tests skip when the evaluation database is unavailable, and the trace extractor
 expects the nested SQL-generation span to be a child of its tool span, falling back to the
 pre-MCP hierarchy where that span is a sibling sharing the tool span's parent.
@@ -212,17 +207,15 @@ operation, see [how-to/operate.md](../how-to/operate.md).
 
 ### 5 Provider quotas and cost
 
-The serving agent is metered and the judge is on a free tier, which keeps evaluation work off the
-serving provider's account ([ADR-0017](../decisions/adr-0017-judge-provider-separate-from-serving.md)).
+The serving deployment is the only provider integration, and it is metered per turn.
+The SQL guard gate never calls it, and the baseline pays for one `generate` pass while `score` runs
+offline ([ADR-0066](../decisions/adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md)).
 
 DeepSeek has no free tier and publishes no per-minute or per-day token limit, only account
 concurrency.
-A full 29-scenario evaluation run measured about four cents at list rates, spending roughly 3.7K
-tokens per turn across 77 turns.
-Serving traffic on the demo is the same per-turn shape.
-For the measured derivation see [T0027.3 DeepSeek arm](../../evals/archive/t0027_deepseek_arm.md); for the
-judge-side rate-limit caveats see
-the evaluation strategy record on git tag docs-history-pre-redesign, sections 4a and 4b.
+Serving traffic on the demo is the measured per-turn shape.
+For the historical per-turn derivation see the evaluation strategy record on git tag
+docs-history-pre-redesign, sections 4a and 4b.
 
 ### 6 Deliberately not used
 

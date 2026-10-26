@@ -26,16 +26,11 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0034](adr-0034-vietnamworks-robots-and-terms-gate.md) | VietnamWorks automation passed the robots.txt and terms gate | Legal/source |
 | [ADR-0036](adr-0036-source-market-vietnamese-job-boards.md) | The source market is Vietnamese job boards, not global ATS aggregators | Product scope |
 | [ADR-0037](adr-0037-frozen-fixture-baselines.md) | Evaluation baselines freeze fixture data with the agent-visible contract | Evaluation |
-| [ADR-0041](adr-0041-scenario-registry-single-source-of-truth.md) | The scenario registry is the single source of truth for evaluation cases | Evaluation |
-| [ADR-0042](adr-0042-grader-authority-at-calibration.md) | Grader authority passes from human to grader at calibration | Evaluation |
-| [ADR-0043](adr-0043-deepeval-harness-kept-http-discarded.md) | Keep the DeepEval harness, discard its HTTP transport | Evaluation |
 | [ADR-0044](adr-0044-temperature-zero-rejected-for-react.md) | Temperature 0 is rejected for the ReAct seam | Agent runtime |
 | [ADR-0045](adr-0045-deepseek-serves-the-agent.md) | DeepSeek serves the agent, on measured throughput | Agent runtime |
-| [ADR-0046](adr-0046-replays-retain-evidence-not-telemetry.md) | Frozen replays retain evidence, not per-turn telemetry | Evaluation |
 | [ADR-0048](adr-0048-streamed-agent-turn-serving-deadline.md) | Each streamed agent turn has an end-to-end serving deadline | Operations |
 | [ADR-0049](adr-0049-cancel-streamed-generation-on-client-disconnect.md) | Streamed generation stops when its client disconnects | Operations |
 | [ADR-0050](adr-0050-sse-comments-keep-silent-streams-alive.md) | SSE comments keep silent streams alive | Operations |
-| [ADR-0052](adr-0052-per-class-release-thresholds-real-sweep.md) | Per-class release thresholds from the real corpus re-sweep | Evaluation |
 | [ADR-0054](adr-0054-litellm-configured-serving-deployments.md) | LiteLLM serves trusted configured deployments | Agent runtime |
 | [ADR-0057](adr-0057-nightly-ingestion-restored.md) | Nightly VietnamWorks ingestion is restored | Product scope |
 | [ADR-0058](adr-0058-single-source-mvp-ingestion.md) | Ingestion is one authorized source feeding one serving table | Data governance |
@@ -46,9 +41,16 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0063](adr-0063-database-owns-agent-column-boundary.md) | The database owns the agent column boundary | Data governance |
 | [ADR-0064](adr-0064-offset-pages-require-a-total-order.md) | An OFFSET page requires a total order | Data honesty |
 | [ADR-0065](adr-0065-postgres-parser-validates-agent-sql.md) | PostgreSQL's parser validates and bounds agent SQL | Agent runtime |
+| [ADR-0066](adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md) | Evaluation is the baseline and the SQL guard gate | Evaluation |
+
+Record ADR-0066 deletes the legacy scenario harness and DeepEval.
+It supersedes ADR-0041 (scenario registry), ADR-0042 (grader authority at calibration), ADR-0043
+(keep the DeepEval harness), ADR-0046 (replays retain evidence), and ADR-0052 (per-class release
+thresholds); all five keep their files with a `Superseded by` status and record what still holds.
 
 Records ADR-0047 (aggregate recall-first 0.30) and ADR-0051 (synthetic v8 placeholder) are
 superseded by ADR-0052 and keep their files with a `Superseded by` status.
+ADR-0052 is in turn superseded by ADR-0066.
 Records ADR-0055 (evidence-first ingestion contract) and ADR-0056 (per-source ingestion gates)
 are superseded by ADR-0058 and keep their files with a `Superseded by` status.
 Record ADR-0038 (scheduled ingestion required for MVP) is superseded by ADR-0053, and ADR-0053 is

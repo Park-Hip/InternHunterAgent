@@ -130,7 +130,7 @@ def test_build_langfuse_config_validates_the_closed_api_tag_taxonomy() -> None:
 
 def test_build_langfuse_tags_labels_evaluation_scenario_and_repeat() -> None:
     tags = langfuse.build_langfuse_tags(
-        entry_point="eval:driver",
+        entry_point="eval:spike",
         scenario_id="HLP-COUNT-1",
         repeat=2,
     )
@@ -235,9 +235,9 @@ async def test_stream_observation_updates_the_bound_request_span_across_tasks() 
 
 @pytest.mark.asyncio
 async def test_request_trace_tags_an_evaluation_scenario_and_repeat() -> None:
-    """`evals/harness.py` names `scenario_id` and `repeat` at this call site.
+    """Evaluation callers pass `scenario_id` and `repeat` at this call site.
 
-    Every test that drives the harness replaces this function with a `**kwargs`
+    Every test that drove such a caller replaced this function with a `**kwargs`
     stub, so the real signature was never bound and a capture failed with a
     `TypeError` before reaching the model. Exercise the real function.
     """
@@ -255,7 +255,7 @@ async def test_request_trace_tags_an_evaluation_scenario_and_repeat() -> None:
         propagate.return_value.__exit__.return_value = None
 
         async with langfuse.langfuse_request_trace(
-            entry_point="eval:driver",
+            entry_point="eval:spike",
             scenario_id="HLP-COUNT-1",
             repeat=2,
             trace_name="eval-HLP-COUNT-1",

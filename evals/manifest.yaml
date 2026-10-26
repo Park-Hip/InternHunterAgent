@@ -22,4 +22,4 @@ contract_columns:
   - salary_max
   - salary_currency
   - is_salary_negotiable
-checksum: "0000000000000000000000000000000000000000000000000000000000000000"
+checksum: "a7a2a0d08b816fd05b9d3b09eacc7e351d662bdcf2b47ac07840ccf0649c8b42"

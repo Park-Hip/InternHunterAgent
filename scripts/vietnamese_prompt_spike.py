@@ -55,7 +55,7 @@ class Arm(TypedDict):
 
 
 # These are hand-written translations for this throwaway spike. They are intentionally
-# not scenario-registry cases and not a future prompt catalogue.
+# not evaluation cases and not a future prompt catalogue.
 VIETNAMESE_SYSTEM_PROMPT = """Ban la Resumi, tro ly than thien va dang tin cay giup nguoi dung tim hieu cac tin tuyen dung AI/Data va thuc tap. Hay trung thuc ve nhung gi du lieu co va khong co.
 
 # Ban co the giup gi

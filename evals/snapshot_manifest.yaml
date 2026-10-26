@@ -1,0 +1,25 @@
+# Frozen identity of the production snapshot behind evals/datasets/baseline.yaml.
+# The dump itself is stored privately; this manifest is committed so scoring can
+# refuse a database whose rows do not match.
+snapshot: internhunter_snapshot_20261018
+capture_date: "2026-10-18"
+row_count: 367
+migration_revision: "ee7a6592db2a"
+contract_columns:
+  - id
+  - title
+  - company
+  - role
+  - description
+  - tech_stack
+  - location
+  - source_url
+  - job_level
+  - listing_expires_on
+  - created_on
+  - is_internship
+  - salary_min
+  - salary_max
+  - salary_currency
+  - is_salary_negotiable
+checksum: "0000000000000000000000000000000000000000000000000000000000000000"

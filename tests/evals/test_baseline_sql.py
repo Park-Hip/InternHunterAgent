@@ -51,6 +51,7 @@ def test_score_replaces_current_date_and_reports_each_question(
         return {"status": "PASS"}
 
     monkeypatch.setattr(baseline_sql, "compare_result_sets", fake_compare)
+    monkeypatch.setattr(baseline_sql, "verify_snapshot", lambda url: None)
     baseline_sql.score(run, "postgresql://unused")
 
     assert calls == [(
@@ -72,6 +73,7 @@ def test_score_records_a_failed_generation_without_executing(
         {"id": question["id"], "question": "q", "sql": None, "error": "TimeoutError: slow"},
     ]}), encoding="utf-8")
     monkeypatch.setattr(baseline_sql, "compare_result_sets", lambda *a, **k: pytest.fail("executed"))
+    monkeypatch.setattr(baseline_sql, "verify_snapshot", lambda url: None)
 
     baseline_sql.score(run, "postgresql://unused")
 

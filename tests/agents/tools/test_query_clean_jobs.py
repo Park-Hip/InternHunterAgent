@@ -589,6 +589,40 @@ class QueryCleanJobsBehaviorTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("connection refused", mock_logger.error.call_args.kwargs["error"])
 
+    @patch("src.agents.tools.query_clean_jobs.logger")
+    @patch("src.agents.tools.query_clean_jobs.generate_sql")
+    async def test_a_generation_failure_is_unavailable_with_a_fixed_detail(
+        self, mock_generate_sql, mock_logger
+    ) -> None:
+        """#754: a provider fault never reaches the model as raw text."""
+        from src.agents.tools.query_clean_jobs import run_query_clean_jobs
+
+        causes = (
+            TimeoutError("provider timed out after 30 s at api.internal"),
+            RuntimeError("connection to api.internal refused"),
+        )
+        for cause in causes:
+            with self.subTest(cause=type(cause).__name__):
+                mock_generate_sql.side_effect = cause
+                mock_logger.reset_mock()
+
+                with _bound_holder() as holder:
+                    with self.assertRaises(ToolFailure) as raised:
+                        await run_query_clean_jobs("internships in Hanoi")
+
+                self.assertEqual(raised.exception.kind, "unavailable")
+                self.assertEqual(
+                    raised.exception.detail, "the SQL generator did not answer"
+                )
+                self.assertNotIn("api.internal", str(raised.exception))
+                self.assertFalse(holder.published)
+                self.assertEqual(
+                    mock_logger.error.call_args.args[0],
+                    "query_clean_jobs.generation_failed",
+                )
+                self.assertEqual(mock_logger.error.call_args.kwargs["error"], str(cause))
+                self.assertTrue(mock_logger.error.call_args.kwargs["exc_info"])
+
 
 class _FakeGeneration:
     def __init__(self) -> None:

@@ -205,6 +205,23 @@ class JobMcpServerContractTests(unittest.IsolatedAsyncioTestCase):
             "unavailable: the database could not run the query", str(raised.exception)
         )
 
+    async def test_an_unmapped_exception_never_reaches_the_model_verbatim(
+        self,
+    ) -> None:
+        """#754: FastMCP masking is the backstop for any unmapped failure."""
+        behavior = AsyncMock(
+            side_effect=RuntimeError("connection to db.internal failed")
+        )
+        with patch("src.agents.mcp.job_server.run_query_clean_jobs", behavior):
+            async with Client(create_job_mcp_server()) as client:
+                call = await client.call_tool(
+                    QUERY_CLEAN_JOBS_TOOL, {"request": "x"}, raise_on_error=False
+                )
+
+        self.assertTrue(call.is_error)
+        self.assertEqual(_text_of(call), "Error calling tool 'query_clean_jobs'")
+        self.assertNotIn("db.internal", _text_of(call))
+
     async def test_empty_ids_never_reach_the_behavior(self) -> None:
         behavior = AsyncMock(
             side_effect=AssertionError("the behavior must not run for empty ids")

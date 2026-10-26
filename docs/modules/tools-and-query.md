@@ -1,6 +1,6 @@
 # Tools and query module guide
 
-> **Last verified:** 2026-10-25
+> **Last verified:** 2026-10-26
 
 > **Eviction:** Rewritten when the tool surface, `src/services/query/`, the `clean_jobs` contract, or either boot guard changes shape, removed when the read-only query path is retired.
 
@@ -67,6 +67,7 @@ flowchart LR
     R -->|"tool call: request"| M["MCP wrapper<br/>job_server.py"]
     M --> Q["run_query_clean_jobs"]
     Q --> G["services/query/generator.py<br/>sql_generation + schema_context"]
+    G -->|"generation fails"| F3["ToolFailure: unavailable"]
     G --> V["validate_sql<br/>parse tree"]
     V -->|"refused"| F["ToolFailure: rejected"]
     V -->|"valid SELECT"| B["resolve_bounds<br/>max_rows, OFFSET"]
@@ -87,6 +88,7 @@ flowchart LR
    `src/services/query/generator.py` joins `sql_generation`, `schema_context`, and the request into one message and calls the injected model client.
    The tool supplies `TracedSqlGenerationModel`, which builds the `sql_generation` profile from `config/settings.yaml`.
    Inside an agent, the ambient LangChain callbacks keep the generation in the trace; a plain MCP client gets an explicit Langfuse generation instead.
+   A provider timeout, rate limit, or transport fault maps to `unavailable` with a fixed detail, and the cause stays server-side (#754).
 4. **Validation is the trust boundary.**
    `validate_sql` returns the normalized statement or a reason that names the rule.
    Only a valid statement reaches the database.
@@ -228,13 +230,14 @@ A driver message that could name the database host never travels to the model.
 | An unknown column (42703) | `unknown_column` | PostgreSQL's message naming the column | Say the data has no such field |
 | The statement timeout fires (57014) | `timeout` | "statement exceeded the 2000 ms limit" | Narrow the query |
 | The rows exceed the byte budget | `too_large` | Select fewer columns | Narrow the projection |
+| The SQL-generation call times out or the provider fails | `unavailable` | "the SQL generator did not answer" | Report that the search failed |
 | Any other database error | `unavailable` | "the database could not run the query" | Report that the search failed |
 
 A permission denial on an object other than the `clean_jobs` column grant is an operational grant fault rather than a mistake in the generated statement, so it stays `unavailable` even though SQLSTATE 42501 is in class 42.
-One gap remains.
-A failure of the SQL-generation call itself is not mapped at all: the model reads `Error calling tool 'query_clean_jobs': ` followed by the raw exception text, with no kind (#754).
 
 `unavailable` is logged at ERROR; every other kind is a refusal the model can recover from and is logged at WARNING.
+The generation cause is logged with its traceback, so the model's bounded detail does not cost diagnosability.
+As a backstop, the MCP server sets `mask_error_details`, so an exception no path maps reaches the model as FastMCP's generic message rather than its raw text.
 
 ## 7. Behaviours that surprise a new developer
 
@@ -292,7 +295,6 @@ A failure of the SQL-generation call itself is not mapped at all: the model read
 **Decided differently, not yet changed.**
 
 - **`agent.query` should be typed and validated at boot** with the rest of `agent.*`, replacing three hand-written loaders (#616).
-- **Generation failures should be closed in practice, not only in the type:** a failure of the SQL-generation call should reach the model as `unavailable` with a bounded detail (#754).
 
 ## 9. Changing it safely
 

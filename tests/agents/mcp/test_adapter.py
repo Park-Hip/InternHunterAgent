@@ -135,6 +135,25 @@ class AdapterToolResultTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNone(message.artifact)
 
+    async def test_a_generation_failure_arrives_as_unavailable_without_raw_text(
+        self,
+    ) -> None:
+        """#754: the SQL-generation call is inside the failure vocabulary."""
+        raising = AsyncMock(
+            side_effect=TimeoutError("provider timed out after 30 s at api.internal")
+        )
+        with patch("src.agents.tools.query_clean_jobs.generate_sql", raising):
+            message = await self.tools[QUERY_CLEAN_JOBS_TOOL].ainvoke(
+                _tool_call(QUERY_CLEAN_JOBS_TOOL, {"request": "việc làm AI"})
+            )
+
+        self.assertEqual(message.status, "error")
+        self.assertEqual(
+            _text_of(message), "unavailable: the SQL generator did not answer"
+        )
+        self.assertNotIn("timed out", _text_of(message))
+        self.assertIsNone(message.artifact)
+
     async def test_empty_ids_are_refused_before_the_behavior_runs(self) -> None:
         behavior = AsyncMock(
             side_effect=AssertionError("the behavior must not run for empty ids")

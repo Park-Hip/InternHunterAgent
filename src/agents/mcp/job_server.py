@@ -80,8 +80,14 @@ def to_tool_error(failure: ToolFailure) -> ToolError:
 
 
 def create_job_mcp_server() -> FastMCP:
-    """Build the job-query MCP server with the v1 tool pair."""
-    mcp = FastMCP(MCP_SERVER_NAME)
+    """Build the job-query MCP server with the v1 tool pair.
+
+    ``mask_error_details`` is the backstop for the failure vocabulary: every
+    mapped failure is a ``ToolError`` that passes through unchanged, and an
+    exception no path mapped reaches the model as FastMCP's generic message
+    instead of its raw text (#754).
+    """
+    mcp = FastMCP(MCP_SERVER_NAME, mask_error_details=True)
 
     @mcp.tool(name=QUERY_CLEAN_JOBS_TOOL, description=QUERY_CLEAN_JOBS_DESCRIPTION)
     async def query_clean_jobs(

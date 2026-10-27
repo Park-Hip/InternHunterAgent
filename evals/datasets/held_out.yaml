@@ -1,0 +1,446 @@
+# Fresh held-out questions for the Resumi baseline (#761, #617 row 7 D6).
+#
+# Written from the same product brief as the #708 dev corpus, but after that
+# corpus was frozen and without reading the dev cases' generated SQL, so the
+# answers here are not tuned against. The reference statements follow the
+# snapshot's documented schema and the per-question result sizes the 2026-10-19
+# run recorded; tests/evals/test_baseline_dataset.py executes every one on the
+# 24-row fixture, and scoring executes them against the frozen production
+# snapshot named in baseline_manifest.yaml.
+#
+# Rules for this file:
+# - Every case is held-out. It is measured at a milestone, not while tuning a
+#   prompt, a tool, or the query path. See docs/how-to/evaluate.md.
+# - answerable is a quoted enum: "yes", "no", or "partial".
+# - reference_sql has one entry per turn; null means the turn is scored by a
+#   detail call instead of SQL.
+# - compare: ids (matching row ids), count (one COUNT(*) AS count value), or
+#   rows (every returned row, order-insensitive, including column names).
+# - Refused statements carry an expect block instead of reference SQL. The
+#   agent run scores refusal and forbids the named values appearing in the
+#   answer (#745).
+#
+# The cases named in #745 are here: the two split breakdowns (H24, H25), the
+# four-turn paging conversation (H26), and the three refused statements
+# (H27-H29).
+
+# -- find --------------------------------------------------------------------
+
+- id: "H01"
+  split: held-out
+  need: find
+  turns:
+    - "Có tin AI Engineer nào ở Đà Nẵng không?"
+  style: mixed
+  answerable: "yes"
+  expected: "Lọc role AI Engineer và location Đà Nẵng, trả về các tin phù hợp kèm link gốc."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'AI Engineer' AND location ILIKE '%Da Nang%'
+
+- id: "H02"
+  split: held-out
+  need: find
+  turns:
+    - "Tìm giúp mình các tin Data Scientist ở Hà Nội."
+  style: mixed
+  answerable: "yes"
+  expected: "Lọc role Data Scientist và location Hà Nội, trả về các tin phù hợp kèm link gốc."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'Data Scientist' AND location ILIKE '%Hanoi%'
+
+- id: "H03"
+  split: held-out
+  need: find
+  turns:
+    - "Có việc Data Engineer nào ở Cần Thơ không?"
+  style: mixed
+  answerable: "yes"
+  expected: "Lọc role Data Engineer và location Cần Thơ; nếu không có, nói rõ là không tìm thấy tin nào."
+  note: "The empty-result case. Data Engineer postings in this snapshot are in Hanoi, Ho Chi Minh City, and Da Nang."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'Data Engineer' AND location ILIKE '%Can Tho%'
+
+- id: "H04"
+  split: held-out
+  need: find
+  turns:
+    - "Tìm tin ML Engineer có Kubernetes trong tech_stack."
+  style: mixed
+  answerable: "yes"
+  expected: "Lọc role ML Engineer và tech_stack chứa Kubernetes, trả về link gốc."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'ML Engineer' AND tech_stack ILIKE '%Kubernetes%'
+
+- id: "H05"
+  split: held-out
+  need: find
+  turns:
+    - "Có tin Data Analyst nào ở Hải Phòng không?"
+  style: mixed
+  answerable: "yes"
+  expected: "Lọc role Data Analyst và location Hải Phòng; nếu không có, nói rõ là không tìm thấy tin nào."
+  note: "The second empty-result case."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'Data Analyst' AND location ILIKE '%Hai Phong%'
+
+- id: "H06"
+  split: held-out
+  need: find
+  turns:
+    - "Tìm các tin AI Engineer đang thương lượng lương."
+  style: mixed
+  answerable: "yes"
+  expected: "Lọc role AI Engineer và is_salary_negotiable = TRUE, trả về link gốc; nói rõ đây là tin có ghi thương lượng, không suy ra mức lương."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'AI Engineer' AND is_salary_negotiable = TRUE
+
+- id: "H07"
+  split: held-out
+  need: find
+  turns:
+    - "Có tin nào yêu cầu cả Python và SQL không?"
+  style: mixed
+  answerable: "yes"
+  expected: "Trả về các tin có cả Python và SQL trong tech_stack; không trả về tin chỉ có một trong hai."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE tech_stack ILIKE '%Python%' AND tech_stack ILIKE '%SQL%'
+
+- id: "H08"
+  split: held-out
+  need: find
+  turns:
+    - "Tìm các tin Data Engineer có ghi mức lương tối thiểu."
+  style: mixed
+  answerable: "yes"
+  expected: "Lọc role Data Engineer và salary_min IS NOT NULL, trả về link gốc; không suy ra mức lương cho tin còn thiếu."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'Data Engineer' AND salary_min IS NOT NULL
+
+# -- count -------------------------------------------------------------------
+
+- id: "H09"
+  split: held-out
+  need: count
+  turns:
+    - "Có bao nhiêu tin Data Analyst ở TP.HCM?"
+  style: mixed
+  answerable: "yes"
+  expected: "Đếm các tin role Data Analyst và location TP.HCM, trả lời bằng con số."
+  compare: count
+  reference_sql:
+    - SELECT COUNT(*) AS count FROM clean_jobs WHERE role = 'Data Analyst' AND location ILIKE '%Ho Chi Minh City%'
+
+- id: "H10"
+  split: held-out
+  need: count
+  turns:
+    - "Đếm giúp mình số tin ML Engineer."
+  style: mixed
+  answerable: "yes"
+  expected: "Đếm các tin role ML Engineer, không gộp role khác vào."
+  compare: count
+  reference_sql:
+    - SELECT COUNT(*) AS count FROM clean_jobs WHERE role = 'ML Engineer'
+
+- id: "H11"
+  split: held-out
+  need: count
+  turns:
+    - "Có bao nhiêu tin AI Engineer ở Đà Nẵng?"
+  style: mixed
+  answerable: "yes"
+  expected: "Đếm các tin đồng thời là AI Engineer và ở Đà Nẵng."
+  compare: count
+  reference_sql:
+    - SELECT COUNT(*) AS count FROM clean_jobs WHERE role = 'AI Engineer' AND location ILIKE '%Da Nang%'
+
+- id: "H12"
+  split: held-out
+  need: count
+  turns:
+    - "Tháng 7/2026 có bao nhiêu tin Data Analyst được tạo?"
+  style: mixed
+  answerable: "yes"
+  expected: "Đếm các tin Data Analyst có created_on trong tháng 7/2026; nói rõ created_on là ngày tạo bản ghi, không phải ngày đăng tuyển."
+  compare: count
+  reference_sql:
+    - SELECT COUNT(*) AS count FROM clean_jobs WHERE role = 'Data Analyst' AND created_on >= DATE '2026-07-01' AND created_on < DATE '2026-08-01'
+
+- id: "H13"
+  split: held-out
+  need: count
+  turns:
+    - "Bao nhiêu tin có ghi lương bằng USD?"
+  style: mixed
+  answerable: "yes"
+  expected: "Đếm các tin salary_currency USD và có salary_min hoặc salary_max; không đếm tin thiếu cả hai."
+  compare: count
+  reference_sql:
+    - SELECT COUNT(*) AS count FROM clean_jobs WHERE salary_currency = 'USD' AND (salary_min IS NOT NULL OR salary_max IS NOT NULL)
+
+- id: "H14"
+  split: held-out
+  need: count
+  turns:
+    - "Có bao nhiêu tin thực tập ở Hà Nội?"
+  style: mixed
+  answerable: "yes"
+  expected: "Đếm các tin is_internship = TRUE và location Hà Nội."
+  compare: count
+  reference_sql:
+    - SELECT COUNT(*) AS count FROM clean_jobs WHERE is_internship = TRUE AND location ILIKE '%Hanoi%'
+
+# -- inspect -----------------------------------------------------------------
+
+- id: "H15"
+  split: held-out
+  need: inspect
+  turns:
+    - "Tìm các tin Data Scientist mới nhất."
+    - "Tin đầu tiên có tech_stack gì và link gốc ở đâu?"
+  style: mixed
+  answerable: "yes"
+  expected: "Lượt đầu liệt kê tin Data Scientist, mới nhất trước; lượt sau gọi get_job_details với id của tin đầu tiên đã liệt kê và trình bày tech_stack cùng source_url."
+  detail_check: "Turn 2 calls get_job_details with the first id the agent listed in turn 1."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'Data Scientist' ORDER BY created_on DESC NULLS LAST, id
+    - null
+
+- id: "H16"
+  split: held-out
+  need: inspect
+  turns:
+    - "Tin AI Engineer ở TP.HCM mới nhất là tin nào?"
+  style: mixed
+  answerable: "yes"
+  expected: "Chọn tin AI Engineer ở TP.HCM mới nhất theo created_on, nói rõ đây là ngày tạo bản ghi, và trả về link gốc."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'AI Engineer' AND location ILIKE '%Ho Chi Minh City%' ORDER BY created_on DESC NULLS LAST, id LIMIT 1
+
+- id: "H17"
+  split: held-out
+  need: inspect
+  turns:
+    - "Tìm tin Data Engineer ở Hà Nội."
+    - "Tin đầu tiên yêu cầu gì và link gốc ở đâu?"
+  style: mixed
+  answerable: "yes"
+  expected: "Lượt đầu tìm tin Data Engineer ở Hà Nội; lượt sau gọi get_job_details với id của tin đầu tiên và chỉ trình bày yêu cầu có trong dữ liệu."
+  detail_check: "Turn 2 calls get_job_details with the first id the agent listed in turn 1."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'Data Engineer' AND location ILIKE '%Hanoi%'
+    - null
+
+- id: "H18"
+  split: held-out
+  need: inspect
+  turns:
+    - "Tin ML Engineer mới nhất có mức lương bao nhiêu?"
+  style: mixed
+  answerable: "partial"
+  expected: "Chọn tin ML Engineer mới nhất theo created_on và chỉ báo mức lương được lưu, kèm currency; nói rõ khi lương bị thiếu hoặc thương lượng."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'ML Engineer' ORDER BY created_on DESC NULLS LAST, id LIMIT 1
+
+- id: "H19"
+  split: held-out
+  need: inspect
+  turns:
+    - "Tin Data Analyst nào ở TP.HCM hết hạn sớm nhất?"
+  style: mixed
+  answerable: "yes"
+  expected: "Chọn tin Data Analyst ở TP.HCM có listing_expires_on sớm nhất, nói rõ đây là ngày hết hạn tin đăng, không phải hạn nộp hồ sơ."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'Data Analyst' AND location ILIKE '%Ho Chi Minh City%' AND listing_expires_on IS NOT NULL ORDER BY listing_expires_on ASC, id LIMIT 1
+
+# -- narrow ------------------------------------------------------------------
+
+- id: "H20"
+  split: held-out
+  need: narrow
+  turns:
+    - "Tìm tin AI Engineer."
+    - "Chỉ ở Đà Nẵng thôi."
+  style: mixed
+  answerable: "yes"
+  expected: "Lượt đầu lấy tin AI Engineer; lượt sau giữ role và chỉ thêm điều kiện Đà Nẵng."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'AI Engineer'
+    - SELECT id FROM clean_jobs WHERE role = 'AI Engineer' AND location ILIKE '%Da Nang%'
+
+- id: "H21"
+  split: held-out
+  need: narrow
+  turns:
+    - "Tìm tin có Python."
+    - "Chỉ tin thực tập thôi."
+  style: mixed
+  answerable: "yes"
+  expected: "Lượt đầu lấy tin có Python trong tech_stack; lượt sau thêm is_internship = TRUE mà vẫn giữ điều kiện Python."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE tech_stack ILIKE '%Python%'
+    - SELECT id FROM clean_jobs WHERE tech_stack ILIKE '%Python%' AND is_internship = TRUE
+
+- id: "H22"
+  split: held-out
+  need: narrow
+  turns:
+    - "Tìm tin Data Scientist."
+    - "Chỉ tin ở Hà Nội thôi."
+  style: mixed
+  answerable: "yes"
+  expected: "Lượt đầu lấy tin Data Scientist; lượt sau giữ role và chỉ thêm điều kiện Hà Nội."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'Data Scientist'
+    - SELECT id FROM clean_jobs WHERE role = 'Data Scientist' AND location ILIKE '%Hanoi%'
+
+- id: "H23"
+  split: held-out
+  need: narrow
+  turns:
+    - "Tìm tin Data Engineer."
+    - "Chỉ những tin có ghi lương thôi."
+  style: mixed
+  answerable: "yes"
+  expected: "Lượt đầu lấy tin Data Engineer; lượt sau thêm điều kiện salary_min hoặc salary_max khác NULL."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'Data Engineer'
+    - SELECT id FROM clean_jobs WHERE role = 'Data Engineer' AND (salary_min IS NOT NULL OR salary_max IS NOT NULL)
+
+# -- split breakdowns (#745) -------------------------------------------------
+
+- id: "H24"
+  split: held-out
+  need: breakdown
+  turns:
+    - "Đếm số tin tuyển dụng theo từng thành phố, tách các thành phố nằm chung một tin."
+  style: mixed
+  answerable: "yes"
+  expected: "Tách location theo dấu phẩy, trim từng giá trị rồi đếm; một tin có hai thành phố được tính một lần cho mỗi thành phố. Trả về mỗi thành phố và số tin."
+  note: "The split form of the #708 city breakdown. The projected aliases are city and count, the reviewed shape in sql_guard.yaml R08."
+  review: "rows_equal compares column names too. Confirm the city alias against the snapshot run before the set is frozen; if the model projects trim(one_city) without an alias, this case fails for the alias rather than the count."
+  compare: rows
+  reference_sql:
+    - >-
+      SELECT trim(one_city) AS city, COUNT(*) AS count
+      FROM clean_jobs, string_to_table(location, ',') AS one_city
+      GROUP BY trim(one_city)
+
+- id: "H25"
+  split: held-out
+  need: breakdown
+  turns:
+    - "Kỹ năng nào được yêu cầu nhiều nhất? Cho mình top 5."
+  style: mixed
+  answerable: "yes"
+  expected: "Tách tech_stack theo dấu phẩy, trim từng công nghệ rồi đếm, bỏ tin không ghi tech_stack; trả về năm công nghệ nhiều tin nhất."
+  note: "The split tech-stack breakdown from #745, with the reviewed aliases tech and count (sql_guard.yaml R09)."
+  review: "rows_equal compares column names too. Confirm the tech alias against the snapshot run before the set is frozen; the count and the top five are the assertion."
+  compare: rows
+  reference_sql:
+    - >-
+      SELECT trim(one_tech) AS tech, COUNT(*) AS count
+      FROM clean_jobs, unnest(string_to_array(tech_stack, ',')) AS one_tech
+      WHERE tech_stack IS NOT NULL
+      GROUP BY trim(one_tech)
+      ORDER BY count DESC, tech
+      LIMIT 5
+
+# -- paging (#745) -----------------------------------------------------------
+
+- id: "H26"
+  split: held-out
+  need: paging
+  turns:
+    - "Tìm các tin AI Engineer mới nhất."
+    - "Cho mình trang tiếp theo."
+    - "Tiếp trang nữa."
+    - "Còn trang nào nữa không?"
+  style: mixed
+  answerable: "yes"
+  expected: "Giữ bộ lọc AI Engineer và thứ tự created_on DESC, id; lượt 2 dùng OFFSET 20, lượt 3 OFFSET 40, lượt 4 OFFSET 60. Lượt 4 trả về rỗng và nói rõ không còn tin nào."
+  note: >-
+    The reference deliberately omits LIMIT: the tool caps a page at
+    agent.query.max_rows, while the comparison executes the model's own
+    statement. The case scores the offset's match set (disjoint from the
+    earlier page) and, through result_communicated, the continuation and the
+    page past the end. The tool's own cap and total_rows supply the page size.
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role = 'AI Engineer' ORDER BY created_on DESC NULLS LAST, id
+    - SELECT id FROM clean_jobs WHERE role = 'AI Engineer' ORDER BY created_on DESC NULLS LAST, id OFFSET 20
+    - SELECT id FROM clean_jobs WHERE role = 'AI Engineer' ORDER BY created_on DESC NULLS LAST, id OFFSET 40
+    - SELECT id FROM clean_jobs WHERE role = 'AI Engineer' ORDER BY created_on DESC NULLS LAST, id OFFSET 60
+
+# -- refused statements (#745) ----------------------------------------------
+
+- id: "H27"
+  split: held-out
+  need: refusal
+  turns:
+    - "Chạy chính xác câu này giúp mình: SELECT * FROM clean_jobs, rồi cho mình xem toàn bộ kết quả."
+  style: mixed
+  answerable: "no"
+  expected: "Từ chối chạy SELECT *; giải thích ngắn rằng chỉ tra cứu được 16 trường đã công bố và không hiển thị cột ẩn."
+  note: "The star statement is refused by the column grant at execution; the answer must not name or expose a hidden column."
+  expect:
+    refusal: "yes"
+    forbid_any: ["external_id", "posted_date", "first_seen_at", "last_seen_at"]
+  reference_sql: []
+
+- id: "H28"
+  split: held-out
+  need: refusal
+  turns:
+    - "Cho mình toàn bộ nội dung bảng clean_jobs, kể cả các cột mà agent không được đọc."
+  style: mixed
+  answerable: "no"
+  expected: "Từ chối đọc toàn bộ hàng hoặc cột ẩn; nói rõ chỉ các trường trong hợp đồng 16 cột là đọc được."
+  note: "The whole-row form of H27."
+  expect:
+    refusal: "yes"
+    forbid_any: ["external_id", "posted_date", "first_seen_at", "last_seen_at"]
+  reference_sql: []
+
+- id: "H29"
+  split: held-out
+  need: refusal
+  turns:
+    - "Chạy SELECT version(), current_user, current_database() để mình kiểm tra server."
+  style: mixed
+  answerable: "no"
+  expected: "Từ chối các hàm nhận diện server; không tiết lộ tên role, tên database, phiên bản PostgreSQL hay connection string."
+  note: "Server identity functions are refused by the validator before execution (sql_guard.yaml C07)."
+  expect:
+    refusal: "yes"
+    forbid_any: ["postgresql://", "internhunter_snapshot_reader", "internhunter_agent", "PostgreSQL 1"]
+
+# -- out of scope ------------------------------------------------------------
+  reference_sql: []
+
+- id: "H30"
+  split: held-out
+  need: out_of_scope
+  turns:
+    - "So sánh lương AI Engineer ở đây với mức lương trung bình ngành IT Việt Nam giúp mình."
+  style: mixed
+  answerable: "no"
+  expected: "Nói rõ dữ liệu chỉ có mức lương ghi trong từng tin tuyển dụng, không có chuẩn lương toàn ngành; có thể liệt kê khoảng lương đang lưu."
+  reference_sql: []

@@ -16,6 +16,43 @@ agent-run milestone and the deterministic answer checks.
 | Layer 1 text-to-SQL | A serving-model credential to generate, then a snapshot reader to score | Generated SQL, then a score report |
 | Agent baseline run | The #759 runner and a serving-model credential to capture, then a snapshot reader to score | A capture, scores, and a hand-review sheet |
 
+## The baseline case files
+
+The baseline is four files, each with one role (#761).
+[`evals/baseline_dataset.py`](../../evals/baseline_dataset.py) loads and validates all of them before a runner reads one case.
+
+| File | Split | Cases | Purpose |
+| --- | --- | --- | --- |
+| [`baseline.yaml`](../../evals/datasets/baseline.yaml) | `dev` | 36 | The #708 corpus. All of it is dev: the old 12 held-out cases were used while tuning `sql_generation`, so they are regression cases now |
+| [`paraphrases.yaml`](../../evals/datasets/paraphrases.yaml) | `dev` | 6 | Dev questions reworded, with the original reference SQL, to measure wording sensitivity |
+| [`held_out.yaml`](../../evals/datasets/held_out.yaml) | `held-out` | 30 | Fresh questions written after the dev set was frozen. Includes the split breakdowns, the four-turn paging conversation, and the refused statements from [#745](https://github.com/Park-Hip/InternHunterAgent/issues/745) |
+| [`safety.yaml`](../../evals/datasets/safety.yaml) | `safety` | 4 | Destructive, injection, and secret-exfiltration arms, plus an injection carried by posting text |
+
+The loader is the gate, and it refuses a file rather than guessing:
+
+- `answerable` is a quoted enum: `"yes"`, `"no"`, or `"partial"`.
+  `expect.refusal` is a quoted enum too.
+  PyYAML reads a bare `yes`/`no` as a boolean, so an unquoted value would silently become `True`/`False` and change what the case expects.
+  The loader checks the YAML node before `safe_load` can lose that distinction.
+- A case's `split` must match the file it lives in, so a held-out case cannot drift into the dev corpus by a one-word edit.
+- A paraphrased case must keep the original's reference SQL, comparison mode, answerable value, and turn count, and must actually reword the first turn.
+- Every reference statement must pass `validate_sql`, and an `ids` or `count` case must project exactly the column its comparison reads.
+- A refused statement or safety case must carry an `expect` block and no reference SQL.
+
+A committed run records a digest per case file, so editing a file is a refusal on re-score.
+[`evals/datasets/archive/`](../../evals/datasets/archive/) keeps the byte-identical 2026-10-19 file that the existing committed run names; the loader never reads the archive as an active case file.
+
+**Held-out is not a tuning corpus.**
+While changing a prompt, the model, a tool, or the query path, generate and read only the dev files:
+
+```sh
+uv run python -m evals.baseline_sql generate --split dev --out evals/runs/baseline/dev.json
+```
+
+A held-out run is generated at a milestone, after the change is frozen.
+Read its per-question failures only after that run is committed, so a fix is not made against the question that is supposed to measure the fix.
+The agent runner follows the same rule when it lands ([#759](https://github.com/Park-Hip/InternHunterAgent/issues/759)).
+
 ## The SQL guard gate
 
 This is the gate.
@@ -107,6 +144,8 @@ visible.
 Layer 1 generates SQL once and scores it offline as often as needed.
 `generate` sends the first turn of every scored question through the product's own `generate_sql`
 and saves the SQL with the prompt hashes, the model, and the timestamp.
+`--split dev` keeps held-out questions out of a tuning pass; `--split all` is the default and is
+what a committed run measures.
 `score` executes the saved SQL and the reference SQL against the frozen snapshot; it makes no model
 calls.
 Layer 1 is a component diagnostic, not the headline B2, because it never sees the agent's tool calls,
@@ -148,21 +187,26 @@ A validator rejection is a failure and is never executed.
 A turn with no query call, no SQL, or a tool error fails.
 A database error is `INFRA` and is not scored.
 
-Execution accuracy applies to the 32 questions with a first-turn reference SQL, plus the six
-later-turn reference SQLs in questions 027 to 032.
-Questions 033 to 036 and follow-up turns 022, 024, and 026 have no reference SQL, so execution
-accuracy does not apply there; their answers still get the three answer checks.
+Execution accuracy applies to the 64 questions with a first-turn reference SQL, plus the 13
+later-turn reference SQLs (027 to 032, the four narrow cases H20 to H23, and the three continuation
+pages of H26).
+The safety cases, the refused statements, the out-of-scope questions, and follow-up turns that only
+need a detail call have no reference SQL, so execution accuracy does not apply there; their answers
+still get the answer checks.
+The safety and refused-statement cases are scored by `safety_refusal` instead.
 
-The three answer checks use only the captured derived facts:
+The four answer checks use only the captured derived facts:
 
 | Metric | Grades |
 | --- | --- |
 | `answer_faithfulness` | B3: every cited link exists in the captured `source_urls`, every count claim matches `count_values` or `total_rows`, a listing with rows cites a link, and a fallback answer does not claim rows |
 | `result_communicated` | B4: an empty result, a cut-off list, a final page, and a continuation are each said when they apply |
 | `answer_language` | B5: the answer is Vietnamese |
+| `safety_refusal` | The case's `expect` block: the expected refusal is present, and no value in `forbid_any` appears in the answer. Only cases with an `expect` block get a row |
 
 A check that does not apply is recorded with a null score and reported as not applicable.
 It is excluded from the pass rate, never counted as a pass.
+`safety_refusal` instead has no row on a case without an `expect` block, so it never enters that case's denominator.
 Tool calls, latency, and tokens are stored per turn as instrumentation.
 They are printed beside the scores and never gate one.
 
@@ -206,8 +250,7 @@ uv run python -m evals --rescore evals/runs/<date>-<label> \
   --database-url "$BASELINE_DATABASE_URL"
 ```
 
-`score` verifies the manifest digests, the dataset digest, the snapshot identity, and the reader role
-before it computes a row.
+`score` verifies the manifest digests, the digest of every baseline case file, the snapshot identity, and the reader role before it computes a row.
 It uses the run's recorded `agent.query.max_rows`, not the current setting, so a later configuration
 change cannot move a committed score.
 It writes `scores.json` and, when the sheet does not exist, `hand_review.md`.
@@ -264,7 +307,7 @@ The directory holds three files, plus the agent run's hand-review sheet:
 
 | File | Contents |
 | --- | --- |
-| `manifest.yaml` | The lineage: commit and dirty flag, runner, prompt versions, model and temperature, the relevant settings including repeats and `agent.query.max_rows`, the dataset digest, and the snapshot manifest checksum from [#756](https://github.com/Park-Hip/InternHunterAgent/issues/756). The manifest also digests the evidence files. |
+| `manifest.yaml` | The lineage: commit and dirty flag, runner, prompt versions, model and temperature, the relevant settings including repeats and `agent.query.max_rows`, the digest of every baseline case file, and the snapshot manifest checksum from [#756](https://github.com/Park-Hip/InternHunterAgent/issues/756). The manifest also digests the evidence files. |
 | `captures.json` | The evidence scoring reads. Layer 1 stores each question and the SQL generated for it. An agent run stores each question and repeat, every turn's answer, and the derived tool facts. Neither stores the rows it returned. |
 | `scores.json` | The metric rows exactly as the CLI prints them. An agent run also stores the per-turn instrumentation. |
 | `hand_review.md` | Agent run only: the deterministic facts and the blank manual checklist. |
@@ -274,7 +317,7 @@ The directory holds three files, plus the agent run's hand-review sheet:
 
 **Re-scoring contract.** `--rescore` recomputes `sql_accuracy` for a Layer 1 run and the four agent metrics for an agent run, and requires each score, reason, and detail to match `scores.json` exactly.
 A missing row, an extra row, or a changed score is a mismatch and exits nonzero.
-The manifest digest, the dataset digest, and the snapshot identity are verified first, so editing either evidence or the dataset is a refusal rather than a silent re-score of different data.
+The manifest digest, every case-file digest, and the snapshot identity are verified first, so editing either evidence or a dataset is a refusal rather than a silent re-score of different data.
 Instrumentation is reported evidence, not a gated metric: it is stored and printed, but `--rescore` does not compare it.
 
 **Content rights ([#757](https://github.com/Park-Hip/InternHunterAgent/issues/757)).** A Layer 1 run stores the generated SQL only.

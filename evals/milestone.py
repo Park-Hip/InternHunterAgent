@@ -5,8 +5,8 @@ files:
 
 ``manifest.yaml``
     The lineage of the run: the commit, the prompt versions, the model and
-    temperature, the relevant settings, the dataset digest, and the snapshot
-    manifest checksum (#756).
+    temperature, the relevant settings, a digest per baseline case file, and the
+    snapshot manifest checksum (#756).
 ``captures.json``
     The evidence scoring reads: for a baseline text-to-SQL run, one generation
     record per question; for an agent run, one conversation record per question
@@ -54,6 +54,7 @@ AGENT_METRICS = (
     "answer_faithfulness",
     "result_communicated",
     "answer_language",
+    "safety_refusal",
 )
 
 # End on a letter or digit: Windows silently drops a trailing dot, so a label
@@ -164,20 +165,36 @@ def models_snapshot() -> dict[str, Any]:
     return snapshot
 
 
-def dataset_identity(name: str, path: Path) -> dict[str, Any]:
-    """Identify the dataset by digest, not only by a mutable registry name."""
-    count: int | None = None
-    try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-        if isinstance(payload, list):
-            count = len(payload)
-    except (OSError, yaml.YAMLError):
-        count = None
+def baseline_identity() -> dict[str, Any]:
+    """Identify the four baseline files as one dataset a run can re-verify.
+
+    A run is only meaningful against the case set it read. The primary file
+    keeps the historical ``path``/``sha256`` pair, and ``files`` binds every
+    split so a later edit to the held-out or safety file is detected too (#761).
+    """
+    from evals import baseline_dataset
+
+    files: list[dict[str, Any]] = []
+    total = 0
+    for entry in baseline_dataset.identities():
+        path = ROOT / entry["path"]
+        files.append(
+            {
+                **entry,
+                "sha256": canonical_file_sha256(path) if path.exists() else None,
+            }
+        )
+        total += entry["record_count"]
+    primary = files[0]
     return {
-        "name": name,
-        "path": _relative(path),
-        "sha256": canonical_file_sha256(path) if path.exists() else None,
-        "record_count": count,
+        "name": "baseline",
+        "path": primary["path"],
+        "sha256": primary["sha256"],
+        "record_count": total,
+        "files": files,
+        "files_sha256": payload_sha256(
+            [(entry["name"], entry["sha256"], entry["record_count"]) for entry in files]
+        ),
     }
 
 
@@ -249,8 +266,7 @@ def _base_manifest(
     *,
     label: str,
     run_id: str,
-    dataset_name: str,
-    dataset_path: Path,
+    dataset: dict[str, Any],
     capture_source: str,
     prompt_versions: Any,
     prompt_versions_source: str,
@@ -274,7 +290,7 @@ def _base_manifest(
         "runner": runner,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "git": git_state(),
-        "dataset": dataset_identity(dataset_name, dataset_path),
+        "dataset": dataset,
         "capture": {
             "source": capture_source,
             "sanitized": False,
@@ -329,14 +345,11 @@ def write_baseline_run(
     ``score`` fills ``scores.json`` when the snapshot is available, so generate
     and score can be days apart without losing the lineage.
     """
-    from evals import baseline_sql
-
     day, run_id = _run_id(label, run_date)
     manifest = _base_manifest(
         label=label,
         run_id=run_id,
-        dataset_name="baseline",
-        dataset_path=baseline_sql.DATASET,
+        dataset=baseline_identity(),
         capture_source="live",
         prompt_versions=generations.get("prompt_versions"),
         prompt_versions_source="live",
@@ -345,6 +358,7 @@ def write_baseline_run(
     manifest["generation"] = {
         "created_at": generations.get("created_at"),
         "model": generations.get("model"),
+        "split": generations.get("split"),
         "records": len(generations.get("records") or []),
     }
     captures = {
@@ -375,15 +389,14 @@ def write_agent_run(
     score later. ``score`` fills ``scores.json`` and the hand-review sheet from
     the capture without a model call.
     """
-    from evals import baseline_agent, baseline_sql
+    from evals import baseline_agent
 
     baseline_agent.validate_capture(captures, require_complete=True)
     day, run_id = _run_id(label, run_date)
     manifest = _base_manifest(
         label=label,
         run_id=run_id,
-        dataset_name="baseline",
-        dataset_path=baseline_sql.DATASET,
+        dataset=baseline_identity(),
         capture_source="live",
         prompt_versions=captures.get("prompt_versions"),
         prompt_versions_source="live",
@@ -456,29 +469,39 @@ def verify_dataset(manifest: dict[str, Any]) -> None:
     against new truth while the evidence digests still matched.
     """
     dataset = manifest.get("dataset") or {}
-    path = dataset.get("path")
-    expected = dataset.get("sha256")
-    if not path or not expected:
-        return
-    resolved = (ROOT / str(path)).resolve()
-    try:
-        resolved.relative_to(ROOT.resolve())
-    except ValueError as exc:
-        raise MilestoneError(f"dataset path leaves the repository: {path!r}") from exc
-    if not resolved.exists():
-        raise MilestoneError(f"the run's dataset is missing: {path}")
-    # The committed run from before the canonical digest recorded the raw
-    # Windows CRLF hash. Accept that form while new runs record the LF digest,
-    # so a legitimate re-score does not depend on the checkout's line endings.
-    digests = {
-        canonical_file_sha256(resolved),
-        file_sha256(resolved),
-        _crlf_sha256(resolved),
-    }
-    if expected not in digests:
-        raise MilestoneError(
-            f"the run's dataset has changed since it was scored: {path}"
-        )
+    entries = list(dataset.get("files") or [])
+    if not entries:
+        path = dataset.get("path")
+        expected = dataset.get("sha256")
+        if not path or not expected:
+            return
+        entries = [{"path": path, "sha256": expected}]
+    for entry in entries:
+        path = entry.get("path")
+        expected = entry.get("sha256")
+        if not path or not expected:
+            continue
+        resolved = (ROOT / str(path)).resolve()
+        try:
+            resolved.relative_to(ROOT.resolve())
+        except ValueError as exc:
+            raise MilestoneError(
+                f"dataset path leaves the repository: {path!r}"
+            ) from exc
+        if not resolved.exists():
+            raise MilestoneError(f"the run's dataset is missing: {path}")
+        # The committed run from before the canonical digest recorded the raw
+        # Windows CRLF hash. Accept that form while new runs record the LF digest,
+        # so a legitimate re-score does not depend on the checkout's line endings.
+        digests = {
+            canonical_file_sha256(resolved),
+            file_sha256(resolved),
+            _crlf_sha256(resolved),
+        }
+        if expected not in digests:
+            raise MilestoneError(
+                f"the run's dataset has changed since it was scored: {path}"
+            )
 
 
 def verify_evidence(manifest: dict[str, Any], captures: dict[str, Any], scores: dict[str, Any]) -> None:

@@ -54,11 +54,17 @@ def test_a_baseline_run_writes_the_folder_and_its_lineage_manifest(tmp_path: Pat
     assert manifest["run_id"] == "2026-10-26-baseline-unit"
     assert manifest["runner"] == milestone.RUNNER_BASELINE_SQL
     assert manifest["git"]["commit"]
-    assert manifest["dataset"] == {
-        "name": "baseline",
-        "path": "evals/datasets/baseline.yaml",
-        "sha256": manifest["dataset"]["sha256"],
-        "record_count": 36,
+    dataset = manifest["dataset"]
+    assert dataset["name"] == "baseline"
+    assert dataset["path"] == "evals/datasets/baseline.yaml"
+    assert dataset["sha256"]
+    assert dataset["record_count"] == 76
+    assert dataset["files_sha256"]
+    assert {entry["name"] for entry in dataset["files"]} == {
+        "baseline",
+        "paraphrases",
+        "held_out",
+        "safety",
     }
     assert manifest["prompts"] == {
         "versions": {"system": "system-hash", "sql_generation": "sql-hash"},

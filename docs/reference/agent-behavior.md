@@ -62,21 +62,26 @@ by the first 12 hex of the SHA-256 of its text.
 
 - **Data:** the frozen snapshot `internhunter_snapshot_20261018` of production `clean_jobs`
   (367 rows), because nightly ingestion changes the live data.
-- **Questions:** [`evals/datasets/baseline.yaml`](../../evals/datasets/baseline.yaml), 36 questions
-  and 45 turns written by a separate AI from the problem statement, split into dev (tune against it)
-  and held-out (never tune against it). Every reference SQL was checked against the snapshot.
+- **Questions:** the baseline case files under [`evals/datasets/`](../../evals/datasets/), 76 cases and 94 turns, written by a separate AI from the problem statement.
+  The 36 #708 questions are all dev now, because the 12 that were once held-out were used while tuning `sql_generation`.
+  Six dev paraphrases measure wording sensitivity.
+  Thirty fresh held-out questions were written after the dev set was frozen and are never read while a change is tuned.
+  Four safety cases cover destructive, injection, and secret-exfiltration requests, plus an injection carried by posting text.
+  The #708 reference SQL was checked against the snapshot.
+  The fresh held-out statements follow the same reviewed shapes; every one executes on the fixture, and scoring executes it against the snapshot.
+  [`evals/baseline_dataset.py`](../../evals/baseline_dataset.py) validates every case, including the quoted `answerable` enum.
 - **Layer 1, text-to-SQL:** `evals/baseline_sql.py` runs the generated and reference SQL on the
   snapshot and compares result sets. It scores `sql_accuracy` for the first turn only, as a component
   diagnostic. It is not the headline B2, because it never sees the validator verdict or the answer.
-- **Agent run, headline:** `evals/baseline_agent.py` scores `execution_accuracy` (B2) on the SQL
-  behind the last `query_clean_jobs` call of each turn that has a reference, through the reader role.
-  It also scores deterministic answer checks: `answer_faithfulness` (B3), `result_communicated` (B4),
-  and `answer_language` (B5). The six later-turn reference SQLs in 027 to 032 are scored; B6 and the
-  behaviors code cannot settle are on a hand-review sheet. No model judge is used.
+- **Agent run, headline:** `evals/baseline_agent.py` scores `execution_accuracy` (B2) on the SQL behind the last `query_clean_jobs` call of each turn that has a reference, through the reader role.
+  It also scores deterministic answer checks: `answer_faithfulness` (B3), `result_communicated` (B4), and `answer_language` (B5).
+  `safety_refusal` scores the cases with an `expect` block: the refusal is present and no forbidden value leaks.
+  The later-turn reference SQLs are scored; B6 and the behaviors code cannot settle are on a hand-review sheet.
+  No model judge is used.
 - **Runner:** the agent conversation runner is
   [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759). Until it lands, no agent run is
   committed and no agent metric is reported.
-- **Pass bars:** B2 at least 85% on held-out; B3 and B4 at 100%.
+- **Pass bars:** B2 at least 85% on held-out; B3 and B4 at 100%; every safety case passes.
 - **Model credit:** run at milestones only, and commit each Layer 1 or agent run under
   [`evals/runs/`](../../evals/runs/) with the evidence re-scoring reads, so a re-score is free
   ([milestone runs](../how-to/evaluate.md#milestone-runs)).
@@ -88,13 +93,17 @@ by the first 12 hex of the SHA-256 of its text.
 | Layer 1 | 31/32: dev 22/22, held-out 9/10. The one failure, 025, reads an ambiguous deadline question as a single posting. | [committed run](../../evals/runs/2026-10-19-baseline-v1/manifest.yaml) |
 | Layer 2, historical | 12 cases, 21 turns (022, 024, 026 to 032, 007, 033, 035). B3, B4, B5, and B6 held in every turn: totals and partial lists stated, the empty result said plainly, no SQL, column name, or id shown, and every follow-up kept its filters. | hand-marked before the committed-run contract existed, no committed run |
 
-The Layer 1 run is committed with the generated SQL, the recorded score per question, and the lineage manifest that names the commit, the prompts, the model, and the dataset digest.
+The Layer 1 run is committed with the generated SQL, the recorded score per question, and the lineage manifest that names the commit, the prompts, the model, and the digests of the case files.
 Re-score it from its own evidence without a model call:
 
 ```
 uv run python -m evals --rescore evals/runs/2026-10-19-baseline-v1 \
   --database-url "$BASELINE_DATABASE_URL"
 ```
+
+The `dev 22/22, held-out 9/10` breakdown is historical.
+Those 12 held-out cases are dev now, so a re-score reproduces the same 32 score rows but reports them all as dev.
+The 31/32 total is the reproducible result.
 
 The Layer 2 marks were made by hand before the committed-run contract existed, and the run files are not recoverable.
 The agent-run contract and scorer were added in
@@ -105,6 +114,8 @@ this baseline yet.
 
 The held-out Layer 1 score is optimistic: rules 3 and 4 of `sql_generation` were written after
 held-out failures 025 and 026.
+Those 12 cases are dev now, and the fresh held-out set has no committed run, so no held-out number
+is reported for it yet.
 
 ## Rule for adding complexity
 
@@ -113,5 +124,6 @@ A new prompt rule or test must:
 1. Fix a failure seen more than once, on a dev or held-out question.
 2. Go at the lowest layer that works: data or column description, then tool facts, then a prompt
    rule as the last resort.
-3. Be checked on paraphrases and the held-out set, not only the input that failed.
+3. Be checked on the dev paraphrases first, then on the fresh held-out set at the next milestone, not only on the input that failed.
+   A held-out run is committed before its failures are read, so a fix is not made against the question that measures it.
 4. Record what it fixes, so it can be deleted once it stops mattering.

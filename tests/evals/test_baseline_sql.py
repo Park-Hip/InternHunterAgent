@@ -4,14 +4,13 @@ import json
 from pathlib import Path
 
 import pytest
-import yaml
 
-from evals import baseline_sql, snapshot_manifest
+from evals import baseline_dataset, baseline_sql, snapshot_manifest
 from evals.sql_check import ReaderRoleError, projected_columns
 
 
 def dataset() -> list[dict]:
-    return yaml.safe_load(baseline_sql.DATASET.read_text(encoding="utf-8"))
+    return baseline_dataset.load_cases()
 
 
 def test_the_committed_snapshot_manifest_pins_a_real_checksum() -> None:
@@ -26,21 +25,34 @@ def test_the_baseline_dataset_follows_its_grammar() -> None:
     questions = dataset()
     ids = [q["id"] for q in questions]
 
-    assert len(ids) == len(set(ids)) == 36
-    assert {q["split"] for q in questions} == {"dev", "held-out"}
+    assert len(ids) == len(set(ids)) == 76
+    assert {q["split"] for q in questions} == {"dev", "held-out", "safety"}
     for q in questions:
         assert not q["reference_sql"] or len(q["reference_sql"]) == len(q["turns"]), q["id"]
         if not q["reference_sql"]:
-            assert q["need"] == "out_of_scope", q["id"]
+            assert q["need"] in {"out_of_scope", "refusal", "safety"}, q["id"]
             continue
         assert q["compare"] in baseline_sql.COMPARE_MODES, q["id"]
         for sql in filter(None, q["reference_sql"]):
             columns = projected_columns(sql)
-            assert sql.lstrip().upper().startswith("SELECT") and ";" not in sql, q["id"]
+            assert sql.lstrip().upper().startswith(("SELECT", "WITH")) and ";" not in sql, q["id"]
             if q["compare"] == "ids":
                 assert columns == ["id"], q["id"]
             if q["compare"] == "count":
                 assert columns == ["count"], q["id"]
+
+
+def test_the_dev_tuning_split_excludes_held_out_and_safety() -> None:
+    dev = baseline_sql.scored_questions("dev")
+    held_out = baseline_sql.scored_questions("held-out")
+
+    assert dev and held_out
+    assert all(question["split"] == "dev" for question in dev)
+    assert all(question["split"] == "held-out" for question in held_out)
+    assert len(dev) + len(held_out) == len(baseline_sql.scored_questions())
+    assert not {question["id"] for question in dev} & {
+        question["id"] for question in held_out
+    }
 
 
 def test_score_replaces_current_date_and_reports_each_question(

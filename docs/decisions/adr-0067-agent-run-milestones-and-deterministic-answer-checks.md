@@ -116,3 +116,9 @@ Revert this change.
 The scorer and the capture contract are plain Python, the settings have no runtime side effect, and no
 stored data or external contract is involved.
 An uncommitted agent run directory is local evidence and can be deleted with the revert.
+
+## Amended by
+
+[ADR-0068](adr-0068-baseline-dataset-splits-and-safety-smoke-set.md) adds a fifth deterministic
+metric, `safety_refusal`, and moves the cases into four files with one role each.
+The capture contract, the four metrics above, and the milestone layout are otherwise unchanged.

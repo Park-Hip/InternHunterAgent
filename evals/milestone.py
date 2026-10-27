@@ -59,6 +59,7 @@ AGENT_METRICS = (
 # End on a letter or digit: Windows silently drops a trailing dot, so a label
 # like "v1." would name a different directory than the manifest claims.
 _LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9._-]*[a-z0-9_-])?$")
+_LINE_BREAK = re.compile(rb"\r\n?")
 
 
 class MilestoneError(RuntimeError):
@@ -67,6 +68,23 @@ class MilestoneError(RuntimeError):
 
 def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def canonical_file_sha256(path: Path) -> str:
+    """Hash a text file with LF line endings, so a checkout is platform-independent.
+
+    Git may materialize the same tracked file with CRLF on Windows and LF on
+    Linux. A dataset digest taken from raw bytes would then refuse a legitimate
+    re-score on the other platform, so new run manifests record the canonical
+    text digest.
+    """
+    return hashlib.sha256(_LINE_BREAK.sub(b"\n", path.read_bytes())).hexdigest()
+
+
+def _crlf_sha256(path: Path) -> str:
+    """The raw digest a Windows checkout would have produced before canonicalization."""
+    text = _LINE_BREAK.sub(b"\n", path.read_bytes())
+    return hashlib.sha256(text.replace(b"\n", b"\r\n")).hexdigest()
 
 
 def payload_sha256(payload: Any) -> str:
@@ -158,7 +176,7 @@ def dataset_identity(name: str, path: Path) -> dict[str, Any]:
     return {
         "name": name,
         "path": _relative(path),
-        "sha256": file_sha256(path) if path.exists() else None,
+        "sha256": canonical_file_sha256(path) if path.exists() else None,
         "record_count": count,
     }
 
@@ -449,7 +467,15 @@ def verify_dataset(manifest: dict[str, Any]) -> None:
         raise MilestoneError(f"dataset path leaves the repository: {path!r}") from exc
     if not resolved.exists():
         raise MilestoneError(f"the run's dataset is missing: {path}")
-    if file_sha256(resolved) != expected:
+    # The committed run from before the canonical digest recorded the raw
+    # Windows CRLF hash. Accept that form while new runs record the LF digest,
+    # so a legitimate re-score does not depend on the checkout's line endings.
+    digests = {
+        canonical_file_sha256(resolved),
+        file_sha256(resolved),
+        _crlf_sha256(resolved),
+    }
+    if expected not in digests:
         raise MilestoneError(
             f"the run's dataset has changed since it was scored: {path}"
         )

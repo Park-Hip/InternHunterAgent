@@ -131,7 +131,7 @@ def test_a_changed_dataset_is_refused(
     manifest = {
         "dataset": {
             "path": "baseline.yaml",
-            "sha256": milestone.file_sha256(dataset),
+            "sha256": milestone.canonical_file_sha256(dataset),
         }
     }
     monkeypatch.setattr(milestone, "ROOT", tmp_path)
@@ -141,6 +141,42 @@ def test_a_changed_dataset_is_refused(
     dataset.write_text("- id: '002'\n", encoding="utf-8")
     with pytest.raises(milestone.MilestoneError, match="changed"):
         milestone.verify_dataset(manifest)
+
+
+def test_a_dataset_digest_ignores_line_endings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = tmp_path / "baseline.yaml"
+    dataset.write_bytes(b"- id: '001'\n")
+    manifest = {
+        "dataset": {
+            "path": "baseline.yaml",
+            "sha256": milestone.canonical_file_sha256(dataset),
+        }
+    }
+    monkeypatch.setattr(milestone, "ROOT", tmp_path)
+
+    dataset.write_bytes(b"- id: '001'\r\n")
+
+    milestone.verify_dataset(manifest)
+
+
+def test_a_legacy_crlf_dataset_digest_still_verifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = tmp_path / "baseline.yaml"
+    dataset.write_bytes(b"- id: '001'\r\n")
+    manifest = {
+        "dataset": {
+            "path": "baseline.yaml",
+            "sha256": milestone.file_sha256(dataset),
+        }
+    }
+    monkeypatch.setattr(milestone, "ROOT", tmp_path)
+
+    dataset.write_bytes(b"- id: '001'\n")
+
+    milestone.verify_dataset(manifest)
 
 
 def test_a_dated_milestone_directory_is_not_gitignored() -> None:

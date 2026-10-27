@@ -42,6 +42,10 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0064](adr-0064-offset-pages-require-a-total-order.md) | An OFFSET page requires a total order | Data honesty |
 | [ADR-0065](adr-0065-postgres-parser-validates-agent-sql.md) | PostgreSQL's parser validates and bounds agent SQL | Agent runtime |
 | [ADR-0066](adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md) | Evaluation is the baseline and the SQL guard gate | Evaluation |
+| [ADR-0067](adr-0067-agent-run-milestones-and-deterministic-answer-checks.md) | Agent-run milestones score the SQL the agent ran, with deterministic answer checks | Evaluation |
+
+Record ADR-0067 replaces item 6 of ADR-0066, so an agent-run milestone is allowed.
+The rest of ADR-0066 remains active.
 
 Record ADR-0066 deletes the legacy scenario harness and DeepEval.
 It supersedes ADR-0041 (scenario registry), ADR-0042 (grader authority at calibration), ADR-0043

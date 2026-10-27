@@ -48,6 +48,10 @@ It is required, and a missing, non-integer, boolean, or non-positive value refus
 `database.connect_timeout_seconds` bounds every connection attempt (TCP, TLS, and authentication) so an unreachable database refuses boot within the bound; the configured value overrides any `connect_timeout` in a DSN.
 `agent.memory.max_turns` bounds the model's window, counted in complete turns, and `agent.memory.retention_days` bounds storage: the serving process deletes every thread whose newest checkpoint is older than that age, once at boot and then daily.
 `agent.query.*` controls retrieval bounds, and `api.*` owns hardening controls including the positive finite `stream_heartbeat_seconds` SSE comment cadence (validated during settings load and application startup).
+`eval.baseline.layer1_repeats` and `eval.baseline.agent_repeats` set the repeat counts the runners record; both must be positive integers.
+Layer 1 stays at one because `agent.sql_generation.temperature` is 0.0.
+An agent run repeats every conversation and records the count.
+It also records `agent.query.max_rows`, and re-scoring follows the run's recorded values rather than a later configuration change.
 `ingestion.*` configures the pipeline.
 Per project convention, parameters are configured here rather than hard-coded.
 
@@ -115,7 +119,7 @@ Other documents link here rather than restating.
 | ORM and driver | SQLAlchemy and psycopg | >=2.0 / >=3.2 | `src/services/query/` |
 | Migrations | Alembic | >=1.14 | `alembic/`, `alembic.ini` |
 | Tracing | Langfuse Cloud | >=4.15.6,<5.0.0 | `src/agents/tracing/` |
-| Evaluation | Plain Python: SQL guard gate and baseline runner | - | `evals/`, `config/settings.yaml` |
+| Evaluation | Plain Python: SQL guard gate, Layer 1 runner, and agent-run scorer | - | `evals/`, `config/settings.yaml` |
 | Hosting | Render Docker web service | Free tier | `render.yaml`, `docker/Dockerfile` |
 
 ### 2 Dependencies
@@ -208,8 +212,13 @@ operation, see [how-to/operate.md](../how-to/operate.md).
 ### 5 Provider quotas and cost
 
 The serving deployment is the only provider integration, and it is metered per turn.
-The SQL guard gate never calls it, and the baseline pays for one `generate` pass while `score` runs
-offline ([ADR-0066](../decisions/adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md)).
+The SQL guard gate never calls it.
+Layer 1 pays for one SQL-generation call per reference-scored question, then `score` runs offline.
+An agent run pays for the model calls inside every captured turn and repeat, then its scorer runs
+offline.
+Both commit the evidence a re-score reads
+([ADR-0066](../decisions/adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md),
+[ADR-0067](../decisions/adr-0067-agent-run-milestones-and-deterministic-answer-checks.md)).
 
 DeepSeek has no free tier and publishes no per-minute or per-day token limit, only account
 concurrency.

@@ -2,6 +2,8 @@
 
 > **Status:** Active · **Decided:** 2026-10-26
 >
+> **Superseded in part by:** [ADR-0067](adr-0067-agent-run-milestones-and-deterministic-answer-checks.md), which replaces item 6 and allows an agent-run milestone
+>
 > **Supersedes:** [ADR-0041](adr-0041-scenario-registry-single-source-of-truth.md),
 > [ADR-0042](adr-0042-grader-authority-at-calibration.md),
 > [ADR-0043](adr-0043-deepeval-harness-kept-http-discarded.md),
@@ -108,3 +110,9 @@ Both are plain Python, and neither calls a judge.
 Revert this change.
 The deleted files remain in git history, and no migration, stored state, or external contract is
 involved.
+
+## Superseded in part
+
+[ADR-0067](adr-0067-agent-run-milestones-and-deterministic-answer-checks.md) replaces item 6 of this
+record: an agent-run milestone is now allowed.
+The rest of this record remains active.

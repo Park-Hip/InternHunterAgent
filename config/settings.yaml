@@ -106,6 +106,14 @@ agent:
     max_result_bytes: 262144
 
 eval:
+  baseline:
+    # Layer 1 is one temperature-0 generation per question: repetition adds no
+    # information when the profile is deterministic, so it stays at one.
+    layer1_repeats: 1
+    # The agent run repeats every conversation. The runner records the count in
+    # the run, and scoring reports per-repeat rows so variance stays visible
+    # rather than being averaged away (#760, 5f).
+    agent_repeats: 3
   fixture:
     # Owner DSN: only the fixture loader builds and seeds with it.
     database_url: postgresql+psycopg://internhunter:internhunter@localhost:5433/internhunter_eval

@@ -29,7 +29,8 @@ from typing import Any
 import yaml
 
 from evals import snapshot_manifest
-from evals.sql_check import compare_result_sets
+from evals.baseline_config import load_baseline_settings
+from evals.sql_check import compare_result_sets, verify_reader_role
 from src.agents.runtime.prompts import load_resolved_prompt_versions
 from src.agents.tools.query_clean_jobs import generate_sql
 from src.core.config import settings
@@ -62,19 +63,31 @@ async def generate(
     milestone_root: Path | None = None,
 ) -> dict[str, Any]:
     # Read the settings first, so a configuration error stops the run before any model call.
+    baseline = load_baseline_settings()
     model = settings.agent.deployment_for("sql_generation").model
     records = []
-    for question in scored_questions():
-        try:
-            sql, error = await generate_sql(question["turns"][0]), None
-        except Exception as exc:  # a provider failure is recorded, not fatal
-            sql, error = None, f"{type(exc).__name__}: {exc}"
-        records.append({"id": question["id"], "question": question["turns"][0], "sql": sql, "error": error})
-        print(question["id"], "error" if error else "ok", flush=True)
+    for repeat in range(1, baseline.layer1_repeats + 1):
+        for question in scored_questions():
+            try:
+                sql, error = await generate_sql(question["turns"][0]), None
+            except Exception as exc:  # a provider failure is recorded, not fatal
+                sql, error = None, f"{type(exc).__name__}: {exc}"
+            record = {
+                "id": question["id"],
+                "question": question["turns"][0],
+                "sql": sql,
+                "error": error,
+            }
+            if baseline.layer1_repeats > 1:
+                record["repeat"] = repeat
+            records.append(record)
+            label = f"{question['id']} repeat {repeat}" if baseline.layer1_repeats > 1 else question["id"]
+            print(label, "error" if error else "ok", flush=True)
     run = {
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "model": model,
         "prompt_versions": load_resolved_prompt_versions(),
+        "repeats": baseline.layer1_repeats,
         "records": records,
     }
     if out is not None:
@@ -90,24 +103,43 @@ async def generate(
 
 
 def score_records(records: list[dict[str, Any]], database_url: str) -> list[dict[str, Any]]:
-    """Score generation records against the snapshot; shared by score and rescore."""
+    """Score generation records against the snapshot; shared by score and rescore.
+
+    The reader-role check comes first: a score made through the owner or a role
+    with table-level privilege would not describe the boundary production
+    enforces (#760, 5b). A validator rejection is a failure and is never run.
+    """
+    verify_reader_role(database_url)
     verify_snapshot(database_url)
     questions = {q["id"]: q for q in scored_questions()}
     results = []
     for record in records:
         question = questions[record["id"]]
-        result: dict[str, Any] = {"id": record["id"], "split": question["split"], "need": question["need"]}
+        result: dict[str, Any] = {
+            "id": record["id"],
+            "split": question["split"],
+            "need": question["need"],
+        }
+        if "repeat" in record:
+            result["repeat"] = record["repeat"]
         if record["sql"] is None:
             result |= {"status": "ERROR", "reason": record["error"]}
         else:
             as_of = question.get("as_of", SNAPSHOT_DATE)
             sql = _CURRENT_DATE.sub(f"DATE '{as_of}'", record["sql"])
             validation = validate_sql(record["sql"])
-            result["validator"] = "accepted" if validation.valid else f"rejected: {validation.reason}"
-            result |= compare_result_sets(
-                sql, question["reference_sql"][0], database_url,
-                mode=COMPARE_MODES[question["compare"]],
+            result["validator"] = (
+                "accepted" if validation.valid else f"rejected: {validation.reason}"
             )
+            if not validation.valid:
+                result |= {"status": "FAIL", "reason": "validator_rejected"}
+            else:
+                result |= compare_result_sets(
+                    sql,
+                    question["reference_sql"][0],
+                    database_url,
+                    mode=COMPARE_MODES[question["compare"]],
+                )
         results.append(result)
     return results
 
@@ -127,6 +159,11 @@ def _score_milestone(run_dir: Path, database_url: str) -> None:
     from evals import milestone
 
     manifest = milestone.read_manifest(run_dir)
+    if manifest.get("runner") != milestone.RUNNER_BASELINE_SQL:
+        raise ValueError(
+            f"{run_dir} is a {manifest.get('runner')!r} run, not a baseline SQL run; "
+            "score an agent run with `python -m evals.baseline_agent score`"
+        )
     captures = milestone.read_captures(run_dir)
     # A score must describe the evidence the manifest names: refuse an edited
     # capture rather than overwrite the run with scores for different SQL.
@@ -150,18 +187,40 @@ def metric_rows(records: list[dict[str, Any]], database_url: str) -> list[dict[s
 
 def _score_rows(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Project baseline rows onto the generic metric-row shape re-scoring compares."""
-    return [
-        {
+    rows: list[dict[str, Any]] = []
+    detail_keys = (
+        "validator",
+        "reference_count",
+        "actual_count",
+        "expected",
+        "actual",
+        "missing_ids",
+        "unexpected_ids",
+        "missing_rows",
+        "unexpected_rows",
+        "reason",
+        "error",
+    )
+    for row in results:
+        metric_row: dict[str, Any] = {
             "scenario_id": row["id"],
             "turn": 1,
             "metric": "sql_accuracy",
-            "score": 1.0 if row["status"] == "PASS" else 0.0 if row["status"] == "FAIL" else None,
+            "score": (
+                1.0
+                if row["status"] == "PASS"
+                else 0.0
+                if row["status"] == "FAIL"
+                else None
+            ),
             "reason": row["status"] if row["status"] != "PASS" else None,
-            "details": {key: row[key] for key in ("validator", "reference_count", "actual_count", "expected", "actual", "missing_ids", "unexpected_ids", "missing_rows", "unexpected_rows", "reason", "error") if key in row},
+            "details": {key: row[key] for key in detail_keys if key in row},
             **({"error": row["error"]} if row.get("error") else {}),
         }
-        for row in results
-    ]
+        if "repeat" in row:
+            metric_row["repeat"] = row["repeat"]
+        rows.append(metric_row)
+    return rows
 
 
 def _print_summary(results: list[dict[str, Any]], out: Path) -> None:

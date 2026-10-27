@@ -23,8 +23,8 @@ Release readiness is the deterministic CI evidence plus local evaluation tooling
 - The `sql-guard-gate` job loads the pinned fixture, runs the gate's own tests, and runs the
   reviewed SQL guard cases through the validator and the executor boundary.
 - The `docs` and `migration-check` jobs run documentation hygiene and the migration chain.
-- Local evaluation tooling under [`evals/`](../../evals/README.md) runs the same gate and the
-  text-to-SQL baseline against the frozen snapshot.
+- Local evaluation tooling under [`evals/`](../../evals/README.md) runs the same gate, the Layer 1
+  diagnostic, and the agent-run scorer against the frozen snapshot.
 
 A semantic judge score is not part of release certification. The judge was deleted with the legacy
 harness ([ADR-0066](../decisions/adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md)).

@@ -24,9 +24,11 @@ from sqlalchemy.exc import DBAPIError
 from evals.fixtures.loader import (
     fixture_database_endpoint,
     fixture_database_reachable,
+    fixture_database_url,
     fixture_reader_database_url,
     load_fixture,
 )
+from evals.sql_check import ReaderRoleError, verify_reader_role
 from src.core.column_contract import HIDDEN_COLUMN_NAMES, VISIBLE_COLUMN_NAMES
 
 
@@ -76,6 +78,22 @@ def test_the_reader_role_has_only_the_contract_columns(reader_engine) -> None:
                 ),
                 {"column": column},
             ).scalar_one() is False
+
+
+def test_the_reader_has_the_snapshot_revision(reader_engine) -> None:
+    """Snapshot identity reads the revision through the same scoring role."""
+    with reader_engine.connect() as conn:
+        revision = conn.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one()
+    assert revision
+
+
+def test_scoring_accepts_only_the_reader_role(fixture) -> None:
+    verify_reader_role(fixture_reader_database_url())
+
+    with pytest.raises(ReaderRoleError):
+        verify_reader_role(fixture_database_url())
 
 
 def test_a_star_read_is_refused_by_postgresql(reader_engine) -> None:

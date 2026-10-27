@@ -4,8 +4,10 @@
 `generate_sql` (one model call each) and saves the SQL. `score` executes the saved SQL and
 the reference SQL against the frozen snapshot and compares the result sets; it makes no
 model calls. Follow-up turns need the agent to rewrite them, so the agent run scores them.
+`--split dev` keeps the held-out file out of a tuning pass (#761).
 
     uv run python -m evals.baseline_sql generate --milestone baseline-v1
+    uv run python -m evals.baseline_sql generate --split dev --out evals/runs/baseline/dev.json
     uv run python -m evals.baseline_sql score evals/runs/<date>-baseline-v1 \
       --database-url "$BASELINE_DATABASE_URL"
 
@@ -26,9 +28,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-import yaml
-
-from evals import snapshot_manifest
+from evals import baseline_dataset, snapshot_manifest
 from evals.baseline_config import load_baseline_settings
 from evals.sql_check import compare_result_sets, verify_reader_role
 from src.agents.runtime.prompts import load_resolved_prompt_versions
@@ -44,16 +44,25 @@ def verify_snapshot(database_url: str) -> None:
 def verify_manifest(database_url: str) -> None:
     return snapshot_manifest.verify_manifest(database_url)
 
-DATASET = Path(__file__).parent / "datasets" / "baseline.yaml"
+DATASET = baseline_dataset.BASELINE.path
 SNAPSHOT_DATE = "2026-10-18"
-COMPARE_MODES = {"ids": "ids_only", "count": "aggregate_count", "rows": "rows_equal"}
+COMPARE_MODES = baseline_dataset.COMPARE_MODES
 _CURRENT_DATE = re.compile(r"\bCURRENT_DATE\b", re.IGNORECASE)
 
 
-def scored_questions() -> list[dict[str, Any]]:
-    """Questions whose first turn has a reference SQL."""
-    questions = yaml.safe_load(DATASET.read_text(encoding="utf-8"))
-    return [q for q in questions if q["reference_sql"] and q["reference_sql"][0]]
+def scored_questions(split: str | None = None) -> list[dict[str, Any]]:
+    """Cases whose first turn has a reference SQL.
+
+    ``split`` narrows the list to ``dev`` or ``held-out``. The default covers
+    every split, which is what a committed run measures; the how-to uses
+    ``dev`` while tuning so the held-out cases stay unread (#761).
+    """
+    cases = baseline_dataset.scored_cases()
+    if split in (None, "all"):
+        return cases
+    if split not in {"dev", "held-out"}:
+        raise ValueError(f"unknown baseline split {split!r}; expected dev or held-out")
+    return [case for case in cases if case["split"] == split]
 
 
 async def generate(
@@ -61,13 +70,14 @@ async def generate(
     *,
     milestone_label: str | None = None,
     milestone_root: Path | None = None,
+    split: str | None = None,
 ) -> dict[str, Any]:
     # Read the settings first, so a configuration error stops the run before any model call.
     baseline = load_baseline_settings()
     model = settings.agent.deployment_for("sql_generation").model
     records = []
     for repeat in range(1, baseline.layer1_repeats + 1):
-        for question in scored_questions():
+        for question in scored_questions(split):
             try:
                 sql, error = await generate_sql(question["turns"][0]), None
             except Exception as exc:  # a provider failure is recorded, not fatal
@@ -88,6 +98,7 @@ async def generate(
         "model": model,
         "prompt_versions": load_resolved_prompt_versions(),
         "repeats": baseline.layer1_repeats,
+        "split": split or "all",
         "records": records,
     }
     if out is not None:
@@ -224,7 +235,7 @@ def _score_rows(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _print_summary(results: list[dict[str, Any]], out: Path) -> None:
-    for split in ("dev", "held-out"):
+    for split in ("dev", "held-out", "safety"):
         rows = [r for r in results if r["split"] == split]
         if not rows:
             continue
@@ -247,6 +258,15 @@ def main() -> None:
         "--milestone", metavar="LABEL",
         help="write evals/runs/<date>-<label>/ with a lineage manifest",
     )
+    generating.add_argument(
+        "--split",
+        choices=("dev", "held-out", "all"),
+        default="all",
+        help=(
+            "score only one split (default: all). Use dev while tuning; "
+            "held-out is measured at a milestone (#761)"
+        ),
+    )
     scoring = commands.add_parser("score")
     scoring.add_argument("run", type=Path, help="a legacy run JSON or a milestone run directory")
     scoring.add_argument(
@@ -257,7 +277,7 @@ def main() -> None:
     if args.command == "generate":
         if not args.out and not args.milestone:
             parser.error("generate needs --out or --milestone")
-        asyncio.run(generate(args.out, milestone_label=args.milestone))
+        asyncio.run(generate(args.out, milestone_label=args.milestone, split=args.split))
         return
     if not args.database_url:
         parser.error("score needs --database-url or BASELINE_DATABASE_URL")

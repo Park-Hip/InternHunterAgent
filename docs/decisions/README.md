@@ -43,6 +43,7 @@ git tag `docs-history-pre-redesign`.
 | [ADR-0065](adr-0065-postgres-parser-validates-agent-sql.md) | PostgreSQL's parser validates and bounds agent SQL | Agent runtime |
 | [ADR-0066](adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md) | Evaluation is the baseline and the SQL guard gate | Evaluation |
 | [ADR-0067](adr-0067-agent-run-milestones-and-deterministic-answer-checks.md) | Agent-run milestones score the SQL the agent ran, with deterministic answer checks | Evaluation |
+| [ADR-0068](adr-0068-baseline-dataset-splits-and-safety-smoke-set.md) | The baseline is split by role, and safety is a scored smoke set | Evaluation |
 
 Record ADR-0067 replaces item 6 of ADR-0066, so an agent-run milestone is allowed.
 The rest of ADR-0066 remains active.

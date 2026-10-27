@@ -1,0 +1,88 @@
+# Paraphrases of a subset of the dev corpus (#761).
+#
+# One dev question, asked another way, with the same reference SQL and the same
+# comparison mode. They are dev cases: a prompt or tool change may be tuned
+# against them. The point is wording sensitivity, so a paraphrase must not be a
+# copy of the original turn and must not change the answer.
+#
+# `paraphrase_of` names the dev case. The loader refuses a paraphrase whose
+# reference SQL or comparison mode differs from the case it paraphrases.
+# answerable is a quoted enum: "yes", "no", or "partial".
+
+- id: "P01"
+  split: dev
+  need: find
+  paraphrase_of: "001"
+  turns:
+    - "Có internship nào cho AI Engineer không?"
+  style: diacritics
+  answerable: "yes"
+  expected: "Lọc is_internship = TRUE và role AI Engineer, trả về các tin phù hợp cùng link gốc."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE is_internship = TRUE AND role ILIKE '%AI Engineer%'
+
+- id: "P02"
+  split: dev
+  need: find
+  paraphrase_of: "003"
+  turns:
+    - "Tìm việc AI Engineer ở Hà Nội giúp mình với."
+  style: mixed
+  answerable: "yes"
+  expected: "Tìm theo role AI Engineer và location Hà Nội, trả về các tin phù hợp cùng link gốc."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role ILIKE '%AI Engineer%' AND location ILIKE '%Hanoi%'
+
+- id: "P03"
+  split: dev
+  need: find
+  paraphrase_of: "005"
+  turns:
+    - "Mình mới ra trường, có tin nào ở level fresher không?"
+  style: diacritics
+  answerable: "yes"
+  expected: "Lọc job_level Fresher/Entry level và trả về các tin cùng link gốc."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE job_level = 'Fresher/Entry level'
+
+- id: "P04"
+  split: dev
+  need: find
+  paraphrase_of: "008"
+  turns:
+    - "Data Engineer mà dùng SQL thì có tin nào?"
+  style: mixed
+  answerable: "yes"
+  expected: "Tìm các tin Data Engineer có SQL trong tech_stack và trả về link gốc."
+  compare: ids
+  reference_sql:
+    - SELECT id FROM clean_jobs WHERE role ILIKE '%Data Engineer%' AND tech_stack ILIKE '%SQL%'
+
+- id: "P05"
+  split: dev
+  need: count
+  paraphrase_of: "015"
+  turns:
+    - "Tháng 6 năm 2026, TP.HCM có bao nhiêu tin AI?"
+  style: diacritics
+  answerable: "yes"
+  expected: "Đếm các tin AI Engineer tại TP.HCM có created_on trong tháng 6/2026; nói rõ đây là ngày tạo bản ghi."
+  compare: count
+  reference_sql:
+    - SELECT COUNT(*) AS count FROM clean_jobs WHERE role ILIKE '%AI Engineer%' AND location ILIKE '%Ho Chi Minh City%' AND created_on >= DATE '2026-06-01' AND created_on < DATE '2026-07-01'
+
+- id: "P06"
+  split: dev
+  need: count
+  paraphrase_of: "018"
+  turns:
+    - "Hiện có mấy tin thực tập vậy?"
+  style: mixed
+  answerable: "yes"
+  expected: "Đếm các tin có is_internship = TRUE và trả lời bằng con số, không liệt kê."
+  compare: count
+  reference_sql:
+    - SELECT COUNT(*) AS count FROM clean_jobs WHERE is_internship = TRUE

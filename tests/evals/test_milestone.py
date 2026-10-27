@@ -114,10 +114,69 @@ def test_every_committed_run_matches_its_manifest() -> None:
         run_dir = path.parent
         manifest = milestone.read_manifest(run_dir)
         assert manifest["run_id"] == run_dir.name
-        assert manifest["runner"] == milestone.RUNNER_BASELINE_SQL
+        assert manifest["runner"] in (
+            milestone.RUNNER_BASELINE_SQL,
+            milestone.RUNNER_AGENT,
+        )
         captures = milestone.read_captures(run_dir)
         scores = milestone.read_scores(run_dir)
         milestone.verify_evidence(manifest, captures, scores)
+
+
+def test_a_changed_dataset_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = tmp_path / "baseline.yaml"
+    dataset.write_text("- id: '001'\n", encoding="utf-8")
+    manifest = {
+        "dataset": {
+            "path": "baseline.yaml",
+            "sha256": milestone.canonical_file_sha256(dataset),
+        }
+    }
+    monkeypatch.setattr(milestone, "ROOT", tmp_path)
+
+    milestone.verify_dataset(manifest)
+
+    dataset.write_text("- id: '002'\n", encoding="utf-8")
+    with pytest.raises(milestone.MilestoneError, match="changed"):
+        milestone.verify_dataset(manifest)
+
+
+def test_a_dataset_digest_ignores_line_endings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = tmp_path / "baseline.yaml"
+    dataset.write_bytes(b"- id: '001'\n")
+    manifest = {
+        "dataset": {
+            "path": "baseline.yaml",
+            "sha256": milestone.canonical_file_sha256(dataset),
+        }
+    }
+    monkeypatch.setattr(milestone, "ROOT", tmp_path)
+
+    dataset.write_bytes(b"- id: '001'\r\n")
+
+    milestone.verify_dataset(manifest)
+
+
+def test_a_legacy_crlf_dataset_digest_still_verifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = tmp_path / "baseline.yaml"
+    dataset.write_bytes(b"- id: '001'\r\n")
+    manifest = {
+        "dataset": {
+            "path": "baseline.yaml",
+            "sha256": milestone.file_sha256(dataset),
+        }
+    }
+    monkeypatch.setattr(milestone, "ROOT", tmp_path)
+
+    dataset.write_bytes(b"- id: '001'\n")
+
+    milestone.verify_dataset(manifest)
 
 
 def test_a_dated_milestone_directory_is_not_gitignored() -> None:
@@ -139,6 +198,7 @@ def test_baseline_score_then_rescore_reproduces_the_recorded_rows(
 ) -> None:
     run_dir = _write(tmp_path, "baseline-score")
     monkeypatch.setattr(baseline_sql, "verify_snapshot", lambda _url: None)
+    monkeypatch.setattr(baseline_sql, "verify_reader_role", lambda _url: None)
     monkeypatch.setattr(
         baseline_sql,
         "compare_result_sets",
@@ -157,6 +217,7 @@ def test_rescore_reports_a_changed_score_as_a_mismatch(
 ) -> None:
     run_dir = _write(tmp_path, "baseline-mismatch")
     monkeypatch.setattr(baseline_sql, "verify_snapshot", lambda _url: None)
+    monkeypatch.setattr(baseline_sql, "verify_reader_role", lambda _url: None)
     monkeypatch.setattr(
         baseline_sql,
         "compare_result_sets",
@@ -179,6 +240,7 @@ def test_baseline_score_through_the_shared_metric_shape_is_stable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(baseline_sql, "verify_snapshot", lambda _url: None)
+    monkeypatch.setattr(baseline_sql, "verify_reader_role", lambda _url: None)
     monkeypatch.setattr(
         baseline_sql,
         "compare_result_sets",

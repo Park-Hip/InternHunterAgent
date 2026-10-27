@@ -9,10 +9,12 @@ files:
     manifest checksum (#756).
 ``captures.json``
     The evidence scoring reads: for a baseline text-to-SQL run, one generation
-    record per question.
+    record per question; for an agent run, one conversation record per question
+    and repeat, with the answers and the derived tool facts.
 ``scores.json``
     The scores the run recorded, grouped by metric exactly as the CLI prints
-    them.
+    them, plus the per-turn instrumentation an agent run reports but does not
+    gate on.
 
 The manifest binds the other two files by digest, so a mismatch is a refusal
 rather than a silent re-score of different evidence.
@@ -45,11 +47,19 @@ CAPTURES_NAME = "captures.json"
 SCORES_NAME = "scores.json"
 
 RUNNER_BASELINE_SQL = "baseline_sql"
+RUNNER_AGENT = "agent"
 BASELINE_METRICS = ("sql_accuracy",)
+AGENT_METRICS = (
+    "execution_accuracy",
+    "answer_faithfulness",
+    "result_communicated",
+    "answer_language",
+)
 
 # End on a letter or digit: Windows silently drops a trailing dot, so a label
 # like "v1." would name a different directory than the manifest claims.
 _LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9._-]*[a-z0-9_-])?$")
+_LINE_BREAK = re.compile(rb"\r\n?")
 
 
 class MilestoneError(RuntimeError):
@@ -58,6 +68,23 @@ class MilestoneError(RuntimeError):
 
 def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def canonical_file_sha256(path: Path) -> str:
+    """Hash a text file with LF line endings, so a checkout is platform-independent.
+
+    Git may materialize the same tracked file with CRLF on Windows and LF on
+    Linux. A dataset digest taken from raw bytes would then refuse a legitimate
+    re-score on the other platform, so new run manifests record the canonical
+    text digest.
+    """
+    return hashlib.sha256(_LINE_BREAK.sub(b"\n", path.read_bytes())).hexdigest()
+
+
+def _crlf_sha256(path: Path) -> str:
+    """The raw digest a Windows checkout would have produced before canonicalization."""
+    text = _LINE_BREAK.sub(b"\n", path.read_bytes())
+    return hashlib.sha256(text.replace(b"\n", b"\r\n")).hexdigest()
 
 
 def payload_sha256(payload: Any) -> str:
@@ -101,12 +128,16 @@ def settings_snapshot() -> dict[str, Any]:
     """
     config = _config_yaml()
     agent = config.get("agent") or {}
+    eval_cfg = config.get("eval") or {}
     return {
         "agent": {
             "stream_turn_timeout_seconds": agent.get("stream_turn_timeout_seconds"),
             "memory": agent.get("memory"),
             "query": agent.get("query"),
             "prompts": agent.get("prompts"),
+        },
+        "eval": {
+            "baseline": eval_cfg.get("baseline"),
         },
     }
 
@@ -145,7 +176,7 @@ def dataset_identity(name: str, path: Path) -> dict[str, Any]:
     return {
         "name": name,
         "path": _relative(path),
-        "sha256": file_sha256(path) if path.exists() else None,
+        "sha256": canonical_file_sha256(path) if path.exists() else None,
         "record_count": count,
     }
 
@@ -189,8 +220,19 @@ def _write_manifest(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
-def _scores_payload(metrics: list[str], by_metric: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
-    return {"schema_version": SCHEMA_VERSION, "metrics": metrics, "by_metric": by_metric}
+def _scores_payload(
+    metrics: list[str],
+    by_metric: dict[str, list[dict[str, Any]]],
+    instrumentation: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "metrics": metrics,
+        "by_metric": by_metric,
+    }
+    if instrumentation is not None:
+        payload["instrumentation"] = instrumentation
+    return payload
 
 
 def _run_id(label: str, run_date: date | None) -> tuple[str, str]:
@@ -213,12 +255,23 @@ def _base_manifest(
     prompt_versions: Any,
     prompt_versions_source: str,
     metrics: list[str],
+    runner: str = RUNNER_BASELINE_SQL,
+    retention: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if retention is None:
+        retention = {
+            "answers": "not_collected",
+            "tool_output": "not_collected",
+            "decision": (
+                "A baseline run stores the generated SQL only; the full scraped "
+                "snapshot stays private (#756)."
+            ),
+        }
     return {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
         "label": label,
-        "runner": RUNNER_BASELINE_SQL,
+        "runner": runner,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "git": git_state(),
         "dataset": dataset_identity(dataset_name, dataset_path),
@@ -238,14 +291,7 @@ def _base_manifest(
             "captures": CAPTURES_NAME,
             "scores": SCORES_NAME,
         },
-        "retention": {
-            "answers": "not_collected",
-            "tool_output": "not_collected",
-            "decision": (
-                "A baseline run stores the generated SQL only; the full scraped "
-                "snapshot stays private (#756)."
-            ),
-        },
+        "retention": retention,
     }
 
 
@@ -314,6 +360,60 @@ def write_baseline_run(
     )
 
 
+def write_agent_run(
+    captures: dict[str, Any],
+    label: str,
+    *,
+    root: Path = RUNS_ROOT,
+    run_date: date | None = None,
+) -> Path:
+    """Write one complete agent capture as a gen-only milestone run.
+
+    The runner from #759 owns the conversation and the tool facts; this writer
+    owns the committed evidence layout. The capture is validated before it is
+    written, because an incomplete or leaky capture cannot be turned into a
+    score later. ``score`` fills ``scores.json`` and the hand-review sheet from
+    the capture without a model call.
+    """
+    from evals import baseline_agent, baseline_sql
+
+    baseline_agent.validate_capture(captures, require_complete=True)
+    day, run_id = _run_id(label, run_date)
+    manifest = _base_manifest(
+        label=label,
+        run_id=run_id,
+        dataset_name="baseline",
+        dataset_path=baseline_sql.DATASET,
+        capture_source="live",
+        prompt_versions=captures.get("prompt_versions"),
+        prompt_versions_source="live",
+        metrics=[],
+        runner=RUNNER_AGENT,
+        retention={
+            "answers": "committed",
+            "tool_output": "not_collected",
+            "result_rows": "not_collected",
+            "decision": (
+                "An agent run stores each answer and the derived tool facts "
+                "(SQL, counts, links, shape); it never stores full result rows, "
+                "so the private snapshot stays out of the repository (#756)."
+            ),
+        },
+    )
+    manifest["generation"] = {
+        "created_at": captures.get("created_at"),
+        "model": captures.get("model"),
+        "repeats": captures.get("repeats"),
+        "records": len(captures.get("records") or []),
+    }
+    return _write_run_dir(
+        run_dir=root / run_id,
+        manifest=manifest,
+        captures=captures,
+        scores=_scores_payload([], {}),
+    )
+
+
 def read_manifest(run_dir: Path) -> dict[str, Any]:
     path = run_dir / MANIFEST_NAME
     if not path.exists():
@@ -348,7 +448,41 @@ def read_scores(run_dir: Path) -> dict[str, Any]:
     return payload
 
 
+def verify_dataset(manifest: dict[str, Any]) -> None:
+    """Refuse evidence scored against a dataset that has since changed.
+
+    The capture records bind the questions and SQL the run read. Without this
+    check, editing a reference statement would silently re-score old answers
+    against new truth while the evidence digests still matched.
+    """
+    dataset = manifest.get("dataset") or {}
+    path = dataset.get("path")
+    expected = dataset.get("sha256")
+    if not path or not expected:
+        return
+    resolved = (ROOT / str(path)).resolve()
+    try:
+        resolved.relative_to(ROOT.resolve())
+    except ValueError as exc:
+        raise MilestoneError(f"dataset path leaves the repository: {path!r}") from exc
+    if not resolved.exists():
+        raise MilestoneError(f"the run's dataset is missing: {path}")
+    # The committed run from before the canonical digest recorded the raw
+    # Windows CRLF hash. Accept that form while new runs record the LF digest,
+    # so a legitimate re-score does not depend on the checkout's line endings.
+    digests = {
+        canonical_file_sha256(resolved),
+        file_sha256(resolved),
+        _crlf_sha256(resolved),
+    }
+    if expected not in digests:
+        raise MilestoneError(
+            f"the run's dataset has changed since it was scored: {path}"
+        )
+
+
 def verify_evidence(manifest: dict[str, Any], captures: dict[str, Any], scores: dict[str, Any]) -> None:
+    verify_dataset(manifest)
     evidence = manifest.get("evidence") or {}
     expected_captures = evidence.get("captures_sha256")
     expected_scores = evidence.get("scores_sha256")
@@ -363,10 +497,16 @@ def write_scores(
     *,
     metrics: list[str],
     by_metric: dict[str, list[dict[str, Any]]],
+    instrumentation: list[dict[str, Any]] | None = None,
 ) -> None:
-    """Persist scores into an existing run and re-bind the manifest digest."""
+    """Persist scores into an existing run and re-bind the manifest digest.
+
+    ``instrumentation`` is reported evidence, not a gate: it is stored beside
+    the metric rows for an agent run and left out for the baseline run, whose
+    contract has no turn to instrument.
+    """
     manifest = read_manifest(run_dir)
-    scores = _scores_payload(metrics, by_metric)
+    scores = _scores_payload(metrics, by_metric, instrumentation)
     _write_json(run_dir / SCORES_NAME, scores)
     manifest["metrics"] = metrics
     manifest["status"] = "scored" if any(by_metric.values()) else "generated"
@@ -380,8 +520,24 @@ def flat_rows(by_metric: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]
     return [row for rows in by_metric.values() for row in rows]
 
 
-def _row_key(row: dict[str, Any]) -> tuple[Any, Any, Any]:
-    return (row.get("scenario_id"), row.get("turn"), row.get("metric"))
+def _row_repeat(row: dict[str, Any]) -> int:
+    """A row without ``repeat`` is repeat 1, including the committed baseline run."""
+    value = row.get("repeat")
+    return 1 if value is None else int(value)
+
+
+def _row_key(row: dict[str, Any]) -> tuple[Any, Any, Any, int]:
+    return (
+        row.get("scenario_id"),
+        row.get("turn"),
+        row.get("metric"),
+        _row_repeat(row),
+    )
+
+
+def _row_label(key: tuple[Any, Any, Any, int]) -> str:
+    repeat = "" if key[3] == 1 else f" repeat {key[3]}"
+    return f"{key[2]}[{key[0]}] turn {key[1]}{repeat}"
 
 
 def _row_fingerprint(row: dict[str, Any]) -> dict[str, Any]:
@@ -405,7 +561,7 @@ def compare_scores(
     reproduced_rows = {_row_key(row): row for row in reproduced if row.get("metric") in wanted}
     mismatches: list[str] = []
     for key in sorted(recorded_rows, key=lambda item: tuple(str(part) for part in item)):
-        label = f"{key[2]}[{key[0]}] turn {key[1]}"
+        label = _row_label(key)
         if key not in reproduced_rows:
             mismatches.append(f"{label}: recorded, but the re-score produced no row")
             continue
@@ -417,51 +573,73 @@ def compare_scores(
     for key in sorted(reproduced_rows, key=lambda item: tuple(str(part) for part in item)):
         if key not in recorded_rows:
             mismatches.append(
-                f"{key[2]}[{key[0]}] turn {key[1]}: produced by the re-score, absent from the run"
+                f"{_row_label(key)}: produced by the re-score, absent from the run"
             )
     return mismatches
 
 
-def _reproducible_metrics(metrics: list[str]) -> list[str]:
-    """The recorded metrics the baseline can recompute without a model."""
-    return [name for name in metrics if name in BASELINE_METRICS]
+def _reproducible_metrics(metrics: list[str], *, runner: str) -> list[str]:
+    """The recorded metrics this runner can recompute without a model."""
+    contract = AGENT_METRICS if runner == RUNNER_AGENT else BASELINE_METRICS
+    return [name for name in metrics if name in contract]
 
 
 def rescore(run_dir: Path, *, database_url: str | None = None) -> dict[str, Any]:
-    """Re-score a committed baseline run from its own evidence.
+    """Re-score a committed milestone run from its own evidence.
 
     Every deterministic row must match the recorded score, reason, and details
-    exactly. A metric outside the baseline contract is reported as skipped
-    rather than claimed as reproduced.
+    exactly. A metric outside the runner's contract is reported as skipped
+    rather than claimed as reproduced. Neither runner calls a model.
     """
     manifest = read_manifest(run_dir)
     captures = read_captures(run_dir)
     scores = read_scores(run_dir)
     verify_evidence(manifest, captures, scores)
 
-    if manifest.get("runner") != RUNNER_BASELINE_SQL:
-        raise MilestoneError(f"unknown milestone runner: {manifest.get('runner')!r}")
+    runner = manifest.get("runner")
+    if runner not in (RUNNER_BASELINE_SQL, RUNNER_AGENT):
+        raise MilestoneError(f"unknown milestone runner: {runner!r}")
 
     metrics = list(manifest.get("metrics") or [])
-    reproducible = _reproducible_metrics(metrics)
+    reproducible = _reproducible_metrics(metrics, runner=runner)
     if not reproducible:
         raise MilestoneError("the run records no deterministic metric to re-score")
 
-    from evals import baseline_sql
-    from evals.reporting import group_by_metric
-
-    records = captures.get("records")
-    if not isinstance(records, list):
-        raise MilestoneError("baseline run evidence has no records list")
     database_url = database_url or os.environ.get("BASELINE_DATABASE_URL")
     if not database_url:
-        raise MilestoneError("baseline re-scoring needs --database-url or BASELINE_DATABASE_URL")
-    reproduced = group_by_metric(baseline_sql.metric_rows(records, database_url))
+        raise MilestoneError(
+            "baseline re-scoring needs --database-url or BASELINE_DATABASE_URL"
+        )
 
-    mismatches = compare_scores(flat_rows(scores.get("by_metric") or {}), flat_rows(reproduced), metrics=reproducible)
+    from evals.reporting import group_by_metric
+
+    if runner == RUNNER_BASELINE_SQL:
+        from evals import baseline_sql
+
+        records = captures.get("records")
+        if not isinstance(records, list):
+            raise MilestoneError("baseline run evidence has no records list")
+        reproduced = group_by_metric(baseline_sql.metric_rows(records, database_url))
+    else:
+        from evals import baseline_agent
+
+        reproduced = group_by_metric(
+            baseline_agent.metric_rows(
+                captures,
+                database_url,
+                max_rows=baseline_agent.run_max_rows(manifest),
+            )
+        )
+
+    mismatches = compare_scores(
+        flat_rows(scores.get("by_metric") or {}),
+        flat_rows(reproduced),
+        metrics=reproducible,
+    )
     return {
         "run_id": manifest.get("run_id"),
         "run_dir": str(run_dir),
+        "runner": runner,
         "metrics": reproducible,
         "skipped_metrics": [name for name in metrics if name not in reproducible],
         "recorded_rows": len(flat_rows(scores.get("by_metric") or {})),

@@ -69,11 +69,12 @@ def _run_rescore(args: argparse.Namespace) -> int:
         print(f"RESCORE FAILED: {exc}", file=sys.stderr)
         return 2
     print(
-        f"Re-scored {result['run_id']} from {result['run_dir']}: "
-        f"{result['reproduced_rows']} row(s), {len(result['mismatches'])} mismatch(es)"
+        f"Re-scored {result['run_id']} ({result['runner']}) from "
+        f"{result['run_dir']}: {result['reproduced_rows']} row(s), "
+        f"{len(result['mismatches'])} mismatch(es)"
     )
     for name in result["skipped_metrics"]:
-        print(f"NOT RE-SCORED {name}: not a reproducible baseline metric")
+        print(f"NOT RE-SCORED {name}: not a deterministic metric for this runner")
     for mismatch in result["mismatches"]:
         print(f"MISMATCH {mismatch}", file=sys.stderr)
     return 1 if result["mismatches"] else 0

@@ -290,7 +290,9 @@ The trace URL is built from the project id resolved once at boot, with no I/O on
 3. **Run the prompt tests:** `uv run pytest tests/test_prompt_consistency.py tests/test_prompt_surface.py tests/agents -q`.
 4. **Measure on the branch.**
    For `sql_generation` or `schema_context`, run Layer 1: `evals.baseline_sql generate` sends each first-turn question through the product's own `generate_sql` once and saves the SQL with the prompt hashes, and `score` compares it with the reference SQL on the snapshot without a model call.
-   Layer 1 never reads `system`, so for a `system` change run the Layer 2 cases and review them by hand; no code guarantees a hedge.
+   Layer 1 never reads `system`, so for a `system` change run the agent baseline once the
+   [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759) runner lands; until then review the
+   Layer 2 cases by hand and say in the pull request that no deterministic check covers the change.
    The commands are in [the evaluation README](../../evals/README.md).
 5. **Merge, and let Render deploy.**
    Until the next step, the new text serves unlinked and `prompt.drift` is logged.
@@ -328,5 +330,6 @@ An unregistered surface serves unlinked and costs nothing on a turn.
 | `src/agents/tracing/langfuse.py` → `langfuse_request_trace`, `langfuse_prompt_attributes` | Tags, metadata, and native links |
 | `scripts/register_langfuse_prompts.py` → `synchronize_prompts`, `check_prompt_drift` | Registering a release and checking drift |
 | `evals/baseline_sql.py` | Layer 1 of the baseline, which records the prompt hashes it measured |
+| `evals/baseline_agent.py` | The agent run's capture contract and offline B2 to B5 checks |
 | `tests/test_prompt_consistency.py`, `tests/test_prompt_surface.py`, `tests/agents/test_langfuse_prompt_reference.py`, `tests/agents/runtime/test_prompts.py`, `tests/api/test_native_prompt_chat.py`, `tests/scripts/test_register_langfuse_prompts.py` | The behaviour pinned by tests |
 | [ADR-0062](../decisions/adr-0062-tools-return-facts-the-prompt-owns-wording.md), [the agent behavior baseline](../reference/agent-behavior.md), [the prompt management how-to](../how-to/manage-langfuse-prompts.md) | Why tools return facts, how prompts are measured, and the operator procedure |

@@ -16,9 +16,106 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from evals.fixtures.loader import fixture_reader_database_url
+from src.core.column_contract import HIDDEN_COLUMN_NAMES, VISIBLE_COLUMN_NAMES
 
 _SELECT = re.compile(r"\s*SELECT\s+(?:DISTINCT\s+)?(.*?)\s+FROM\s", re.I | re.S)
 _COUNT = re.compile(r"\s*COUNT\s*\(\s*\*\s*\)\s+AS\s+count\s*", re.I)
+
+
+class ReaderRoleError(ValueError):
+    """The scoring connection is not the column-granted, non-owner reader role.
+
+    Scoring through the owner or a role with table-level privilege would let a
+    star or hidden-column read pass, so a score would no longer describe the
+    boundary production enforces (#730, #760).
+    """
+
+
+def verify_reader_role(database_url: str) -> None:
+    """Refuse to score unless *database_url* is a non-owner column reader.
+
+    The checks are made in PostgreSQL rather than trusted from the DSN: the
+    connected role must not own ``clean_jobs``, must not be a superuser (both
+    bypass grants), must hold no table-level ``SELECT`` or write privilege, must
+    read every visible column, and must be refused every hidden column.
+    """
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            role, superuser = connection.execute(
+                text(
+                    "SELECT current_user, rolsuper FROM pg_roles "
+                    "WHERE rolname = current_user"
+                )
+            ).one()
+            owner = connection.execute(
+                text(
+                    "SELECT pg_get_userbyid(relowner) FROM pg_class "
+                    "WHERE oid = 'public.clean_jobs'::regclass"
+                )
+            ).scalar_one()
+            if superuser:
+                raise ReaderRoleError(
+                    f"scoring role {role!r} is a superuser; it bypasses the column grants"
+                )
+            if role == owner:
+                raise ReaderRoleError(
+                    f"scoring role {role!r} owns clean_jobs; the owner bypasses the column grants"
+                )
+            if connection.execute(
+                text(
+                    "SELECT has_table_privilege(current_user, "
+                    "'public.clean_jobs', 'SELECT')"
+                )
+            ).scalar_one():
+                raise ReaderRoleError(
+                    f"scoring role {role!r} has table-level SELECT on clean_jobs"
+                )
+            for privilege in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
+                if connection.execute(
+                    text(
+                        "SELECT has_table_privilege(current_user, "
+                        "'public.clean_jobs', :privilege)"
+                    ),
+                    {"privilege": privilege},
+                ).scalar_one():
+                    raise ReaderRoleError(
+                        f"scoring role {role!r} has {privilege} on clean_jobs"
+                    )
+            missing = [
+                column
+                for column in VISIBLE_COLUMN_NAMES
+                if not connection.execute(
+                    text(
+                        "SELECT has_column_privilege(current_user, "
+                        "'public.clean_jobs', :column, 'SELECT')"
+                    ),
+                    {"column": column},
+                ).scalar_one()
+            ]
+            if missing:
+                raise ReaderRoleError(
+                    f"scoring role {role!r} cannot read the contract columns: "
+                    + ", ".join(missing)
+                )
+            readable_hidden = [
+                column
+                for column in HIDDEN_COLUMN_NAMES
+                if connection.execute(
+                    text(
+                        "SELECT has_column_privilege(current_user, "
+                        "'public.clean_jobs', :column, 'SELECT')"
+                    ),
+                    {"column": column},
+                ).scalar_one()
+            ]
+            if readable_hidden:
+                raise ReaderRoleError(
+                    f"scoring role {role!r} can read hidden columns: "
+                    + ", ".join(readable_hidden)
+                )
+    finally:
+        engine.dispose()
 
 
 def projected_columns(sql: str) -> list[str] | None:

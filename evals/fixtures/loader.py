@@ -332,6 +332,15 @@ def _provision_reader_role(dsn: str) -> None:
                 text(f"GRANT CONNECT ON DATABASE {quoted_database} TO {quoted_role}")
             )
             conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {quoted_role}"))
+            # Snapshot identity reads the migration revision through the same
+            # scoring connection. It is one version string, not posting data,
+            # and the validator refuses every table but clean_jobs (#760, 5b).
+            conn.execute(
+                text(
+                    f"GRANT SELECT ON TABLE public.alembic_version "
+                    f"TO {quoted_role}"
+                )
+            )
             # Table-level SELECT implies every column, including the hidden five.
             # Revoking it first is what makes the column grants the boundary.
             conn.execute(

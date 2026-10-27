@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from evals import baseline_sql, snapshot_manifest
-from evals.sql_check import projected_columns
+from evals.sql_check import ReaderRoleError, projected_columns
 
 
 def dataset() -> list[dict]:
@@ -60,6 +60,7 @@ def test_score_replaces_current_date_and_reports_each_question(
 
     monkeypatch.setattr(baseline_sql, "compare_result_sets", fake_compare)
     monkeypatch.setattr(baseline_sql, "verify_snapshot", lambda url: None)
+    monkeypatch.setattr(baseline_sql, "verify_reader_role", lambda url: None)
     baseline_sql.score(run, "postgresql://unused")
 
     assert calls == [(
@@ -82,8 +83,108 @@ def test_score_records_a_failed_generation_without_executing(
     ]}), encoding="utf-8")
     monkeypatch.setattr(baseline_sql, "compare_result_sets", lambda *a, **k: pytest.fail("executed"))
     monkeypatch.setattr(baseline_sql, "verify_snapshot", lambda url: None)
+    monkeypatch.setattr(baseline_sql, "verify_reader_role", lambda url: None)
 
     baseline_sql.score(run, "postgresql://unused")
 
     scored = json.loads(run.with_suffix(".score.json").read_text(encoding="utf-8"))
     assert scored[0] == {**scored[0], "status": "ERROR", "reason": "TimeoutError: slow"}
+
+
+def test_score_verifies_the_reader_role_before_any_comparison(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    question = dataset()[0]
+    run = tmp_path / "run.json"
+    run.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "id": question["id"],
+                        "question": "q",
+                        "error": None,
+                        "sql": question["reference_sql"][0],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    calls: list[str] = []
+
+    def refuse(_url: str) -> None:
+        raise ReaderRoleError("scoring role owns clean_jobs")
+
+    monkeypatch.setattr(baseline_sql, "verify_reader_role", refuse)
+    monkeypatch.setattr(
+        baseline_sql,
+        "verify_snapshot",
+        lambda _url: calls.append("snapshot"),
+    )
+    monkeypatch.setattr(
+        baseline_sql,
+        "compare_result_sets",
+        lambda *a, **k: calls.append("compare") or {"status": "PASS"},
+    )
+
+    with pytest.raises(ReaderRoleError, match="owns clean_jobs"):
+        baseline_sql.score(run, "postgresql://unused")
+    assert calls == []
+
+
+def test_a_validator_rejection_fails_without_executing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = dataset()[0]
+    monkeypatch.setattr(baseline_sql, "verify_reader_role", lambda url: None)
+    monkeypatch.setattr(baseline_sql, "verify_snapshot", lambda url: None)
+    monkeypatch.setattr(
+        baseline_sql, "compare_result_sets", lambda *a, **k: pytest.fail("executed")
+    )
+
+    rows = baseline_sql.metric_rows(
+        [
+            {
+                "id": question["id"],
+                "question": "q",
+                "sql": "DELETE FROM clean_jobs",
+                "error": None,
+            }
+        ],
+        "postgresql://unused",
+    )
+
+    assert rows[0]["score"] == 0.0
+    assert rows[0]["reason"] == "FAIL"
+    assert rows[0]["details"]["reason"] == "validator_rejected"
+    assert "rejected" in rows[0]["details"]["validator"]
+
+
+def test_layer1_repeats_are_recorded_as_distinct_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = dataset()[0]
+    monkeypatch.setattr(baseline_sql, "verify_reader_role", lambda url: None)
+    monkeypatch.setattr(baseline_sql, "verify_snapshot", lambda url: None)
+    monkeypatch.setattr(
+        baseline_sql,
+        "compare_result_sets",
+        lambda *a, **k: {"status": "PASS", "reference_count": 1, "actual_count": 1},
+    )
+
+    rows = baseline_sql.metric_rows(
+        [
+            {
+                "id": question["id"],
+                "question": "q",
+                "sql": question["reference_sql"][0],
+                "error": None,
+                "repeat": repeat,
+            }
+            for repeat in (1, 2)
+        ],
+        "postgresql://unused",
+    )
+
+    assert [row["repeat"] for row in rows] == [1, 2]

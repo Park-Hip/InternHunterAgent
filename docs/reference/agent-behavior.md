@@ -63,24 +63,30 @@ by the first 12 hex of the SHA-256 of its text.
 - **Data:** the frozen snapshot `internhunter_snapshot_20261018` of production `clean_jobs`
   (367 rows), because nightly ingestion changes the live data.
 - **Questions:** [`evals/datasets/baseline.yaml`](../../evals/datasets/baseline.yaml), 36 questions
-  written by a separate AI from the problem statement, split into dev (tune against it) and
-  held-out (never tune against it). Every reference SQL was checked against the snapshot.
+  and 45 turns written by a separate AI from the problem statement, split into dev (tune against it)
+  and held-out (never tune against it). Every reference SQL was checked against the snapshot.
 - **Layer 1, text-to-SQL:** `evals/baseline_sql.py` runs the generated and reference SQL on the
-  snapshot and compares result sets. It scores B1, B2, and B6 for the first turn.
-- **Layer 2, answer quality:** a small agent run over multi-turn and detail questions, with B3, B4,
-  and B5 marked by hand. No model judge until hand review is too slow.
+  snapshot and compares result sets. It scores `sql_accuracy` for the first turn only, as a component
+  diagnostic. It is not the headline B2, because it never sees the validator verdict or the answer.
+- **Agent run, headline:** `evals/baseline_agent.py` scores `execution_accuracy` (B2) on the SQL
+  behind the last `query_clean_jobs` call of each turn that has a reference, through the reader role.
+  It also scores deterministic answer checks: `answer_faithfulness` (B3), `result_communicated` (B4),
+  and `answer_language` (B5). The six later-turn reference SQLs in 027 to 032 are scored; B6 and the
+  behaviors code cannot settle are on a hand-review sheet. No model judge is used.
+- **Runner:** the agent conversation runner is
+  [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759). Until it lands, no agent run is
+  committed and no agent metric is reported.
 - **Pass bars:** B2 at least 85% on held-out; B3 and B4 at 100%.
-- **Model credit:** run at milestones only, and commit each Layer 1 run under
+- **Model credit:** run at milestones only, and commit each Layer 1 or agent run under
   [`evals/runs/`](../../evals/runs/) with the evidence re-scoring reads, so a re-score is free
   ([milestone runs](../how-to/evaluate.md#milestone-runs)).
-  A Layer 2 run is marked by hand and has no committed runner.
 
 ## Baseline results (2026-10-19, prompts v1)
 
 | Layer | Result | Evidence |
 |---|---|---|
 | Layer 1 | 31/32: dev 22/22, held-out 9/10. The one failure, 025, reads an ambiguous deadline question as a single posting. | [committed run](../../evals/runs/2026-10-19-baseline-v1/manifest.yaml) |
-| Layer 2 | 12 cases, 21 turns (022, 024, 026 to 032, 007, 033, 035). B3, B4, B5, and B6 held in every turn: totals and partial lists stated, the empty result said plainly, no SQL, column name, or id shown, and every follow-up kept its filters. | hand-marked, no committed run |
+| Layer 2, historical | 12 cases, 21 turns (022, 024, 026 to 032, 007, 033, 035). B3, B4, B5, and B6 held in every turn: totals and partial lists stated, the empty result said plainly, no SQL, column name, or id shown, and every follow-up kept its filters. | hand-marked before the committed-run contract existed, no committed run |
 
 The Layer 1 run is committed with the generated SQL, the recorded score per question, and the lineage manifest that names the commit, the prompts, the model, and the dataset digest.
 Re-score it from its own evidence without a model call:
@@ -91,7 +97,11 @@ uv run python -m evals --rescore evals/runs/2026-10-19-baseline-v1 \
 ```
 
 The Layer 2 marks were made by hand before the committed-run contract existed, and the run files are not recoverable.
-Those numbers stay historical until a Layer 2 run is recorded by hand.
+The agent-run contract and scorer were added in
+[#760](https://github.com/Park-Hip/InternHunterAgent/issues/760), but the runner is #759 and no agent
+run is committed.
+Those numbers stay historical until one is, and no B2 headline, B3, B4, or B5 number is reported from
+this baseline yet.
 
 The held-out Layer 1 score is optimistic: rules 3 and 4 of `sql_generation` were written after
 held-out failures 025 and 026.

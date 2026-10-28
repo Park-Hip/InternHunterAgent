@@ -287,8 +287,8 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual((await anext(stream)).type, "session")
         self.assertEqual((await anext(stream)).text, "first")
-        await asyncio.wait_for(second_event_buffered.wait(), timeout=0.1)
-        await asyncio.wait_for(stream.aclose(), timeout=0.1)
+        await asyncio.wait_for(second_event_buffered.wait(), timeout=1)
+        await asyncio.wait_for(stream.aclose(), timeout=1)
         self.assertTrue(runtime_cancelled.is_set())
 
     @patch("src.agents.service.settings")
@@ -296,11 +296,17 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
     async def test_stream_deadline_cancels_runtime_and_yields_one_safe_error_then_done(
         self, mock_logger, mock_settings
     ) -> None:
-        mock_settings.agent.stream_turn_timeout_seconds = 0.01
+        # The deadline is long enough that the runtime task is guaranteed to
+        # start before it expires. A 10 ms deadline raced task startup under a
+        # loaded full-suite run: the task was cancelled before its generator
+        # ever ran, so the test waited for a cancellation that could not happen.
+        mock_settings.agent.stream_turn_timeout_seconds = 1
+        stream_started = asyncio.Event()
         cancellation_received = asyncio.Event()
         cleaned_up = asyncio.Event()
 
         async def blocked_stream(**_kwargs):
+            stream_started.set()
             try:
                 await asyncio.Event().wait()
             except asyncio.CancelledError:
@@ -314,18 +320,21 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         runtime = MagicMock()
         runtime.astream = MagicMock(side_effect=blocked_stream)
 
+        stream = stream_agent_response(
+            query="what internships are available?",
+            runtime=runtime,
+            session_id="session-timeout",
+        )
+        events = [await anext(stream)]
+        next_event = asyncio.ensure_future(anext(stream))
+        await asyncio.wait_for(stream_started.wait(), timeout=1)
         started_at = asyncio.get_running_loop().time()
-        events = [
-            event
-            async for event in stream_agent_response(
-                query="what internships are available?",
-                runtime=runtime,
-                session_id="session-timeout",
-            )
-        ]
+        events.append(await next_event)
+        async for event in stream:
+            events.append(event)
 
-        self.assertLess(asyncio.get_running_loop().time() - started_at, 0.1)
-        await asyncio.wait_for(cancellation_received.wait(), timeout=0.1)
+        self.assertLess(asyncio.get_running_loop().time() - started_at, 2)
+        await asyncio.wait_for(cancellation_received.wait(), timeout=1)
         self.assertFalse(cleaned_up.is_set())
         self.assertEqual(
             [event.model_dump() for event in events],
@@ -347,7 +356,6 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             yield StreamTokenEvent(type="token", text="A subsequent turn succeeds.")
             yield StreamMetadataEvent(type="metadata", trace_id=None, trace_url=None)
 
-        mock_settings.agent.stream_turn_timeout_seconds = 1
         runtime.astream = MagicMock(side_effect=completed_stream)
         follow_up_events = [
             event
@@ -363,7 +371,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
             ["session", "token", "metadata", "done"],
         )
 
-        await asyncio.wait_for(cleaned_up.wait(), timeout=0.3)
+        await asyncio.wait_for(cleaned_up.wait(), timeout=1)
 
     @patch("src.agents.service.settings")
     async def test_deadline_completes_as_error_after_done(self, mock_settings) -> None:
@@ -425,7 +433,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         # so the producer buffers the second event and blocks putting the third
         # into the full size-1 queue.
         self.assertEqual((await anext(stream)).text, "first")
-        await asyncio.wait_for(third_token_requested.wait(), timeout=0.1)
+        await asyncio.wait_for(third_token_requested.wait(), timeout=1)
         await asyncio.sleep(0.15)  # let the deadline expire while we idle
 
         self.assertEqual((await anext(stream)).type, "error")
@@ -437,7 +445,7 @@ class StreamAgentResponseTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(StopAsyncIteration):
             await asyncio.wait_for(anext(stream), timeout=0.2)
         observation.complete.assert_called_once_with("error")
-        await asyncio.wait_for(runtime_cancelled.wait(), timeout=0.1)
+        await asyncio.wait_for(runtime_cancelled.wait(), timeout=1)
 
     @patch("src.agents.service.logger")
     async def test_stream_failure_logs_and_yields_generic_message(

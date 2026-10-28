@@ -1,6 +1,6 @@
 # `evals/` - Evaluation tooling
 
-> **Last verified:** 2026-10-27.
+> **Last verified:** 2026-10-28.
 
 > **Eviction:** This hub leaves when the evaluation layout, commands, or result terms change.
 
@@ -11,13 +11,15 @@ This directory holds the plain-Python evaluation tooling, with no model judge:
 - The baseline case files and their loader, which validate every case before a runner sees one.
 - Layer 1 of the text-to-SQL baseline, which generates one first-turn SQL statement per question
   and scores it offline against the frozen production snapshot.
+- The agent runner, which drives every baseline conversation through the production service and
+  writes the committed capture.
 - The capture contract and offline scorer for the agent baseline run, which is the headline B2 to
   B5 measurement plus the safety smoke check.
 
-The runner that drives the agent conversation lands in
+The runner is [`agent_runner.py`](agent_runner.py), added by
 [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759).
-Until it lands, no agent run is committed and the Layer 2 numbers in the behavior baseline remain
-historical hand marks.
+No agent run is committed yet, so the Layer 2 numbers in the behavior baseline remain historical
+hand marks.
 
 [`docs/how-to/evaluate.md`](../docs/how-to/evaluate.md) is the canonical step-by-step.
 This hub is the navigation map and the module reference.
@@ -46,7 +48,10 @@ uv run python -m evals.baseline_sql generate --split dev --out evals/runs/baseli
 uv run python -m evals.baseline_sql score evals/runs/2026-10-26-baseline-v1 --database-url <snapshot reader URL>
 uv run python -m evals --rescore evals/runs/2026-10-26-baseline-v1 --database-url <snapshot reader URL>
 
-# Agent baseline run (#760): the #759 runner writes the run, then these commands score it offline.
+# Agent baseline run (#759): drive every conversation through the service, then score offline.
+# The runner verifies the snapshot reader and the serving credentials before its first call.
+uv run python -m evals.baseline_agent run --milestone agent-v1 --database-url <snapshot reader URL>
+uv run python -m evals.baseline_agent run --split dev --out evals/runs/baseline/agent-dev.json  # inspection only
 uv run python -m evals.baseline_agent score evals/runs/<date>-agent-v1 --database-url <snapshot reader URL>
 uv run python -m evals.baseline_agent review evals/runs/<date>-agent-v1 --out evals/runs/<date>-agent-v1/hand_review.md
 uv run python -m evals --rescore evals/runs/<date>-agent-v1 --database-url <snapshot reader URL>
@@ -57,8 +62,10 @@ uv run python -m evals --rescore evals/runs/<date>-agent-v1 --database-url <snap
 `--ids` narrows the gate to named cases.
 `--milestone <label>` on `baseline_sql generate` writes one Layer 1 run to
 `evals/runs/<date>-<label>/` with a lineage manifest and the evidence needed to re-score it offline.
-[`milestone.write_agent_run`](milestone.py) writes an agent run from the complete capture the #759
+[`milestone.write_agent_run`](milestone.py) writes an agent run from the complete capture the
 runner produces.
+A milestone always covers every split; `--split dev --out` is the inspection form and is not scored
+as a milestone.
 Only dated milestone directories are committed; other output under `evals/runs/` stays local and
 gitignored.
 `--rescore` verifies a committed run of either runner from its own evidence and makes no model call.
@@ -70,6 +77,8 @@ The gate binds `AGENT_DATABASE_URL` to that reader role, so a star query or a hi
 fails as it does in production (#730).
 Both baselines score against the snapshot, never the fixture: `score` takes the URL you pass and
 verifies its manifest first.
+The agent runner captures through that same reader URL and binds it to `AGENT_DATABASE_URL` for the
+tool path, so the captured SQL runs as the column-granted role.
 The scoring path refuses an owner, a superuser, a table-level `SELECT`, a role that can read a hidden
 column, or a role that cannot read a contract column.
 The snapshot's reader role also needs `SELECT` on `alembic_version`, because the snapshot check reads
@@ -82,7 +91,7 @@ Rebuilding the fixture re-applies the grants; see
 | Dataset | File | What it describes | How it runs |
 |---|---|---|---|
 | SQL guard | [`datasets/sql_guard.yaml`](datasets/sql_guard.yaml) | Reviewed, floor, accepted-risk, and injection SQL cases | [`python -m evals`](__main__.py) through [`sql_gate.py`](sql_gate.py) |
-| Baseline dev | [`datasets/baseline.yaml`](datasets/baseline.yaml) | The 36 #708 questions, all dev now because the old 12 held-out cases were used while tuning `sql_generation` | [`baseline_sql.py`](baseline_sql.py): Layer 1, `generate` once then `score` offline. [`baseline_agent.py`](baseline_agent.py): agent run, written by #759 then scored offline |
+| Baseline dev | [`datasets/baseline.yaml`](datasets/baseline.yaml) | The 36 #708 questions, all dev now because the old 12 held-out cases were used while tuning `sql_generation` | [`baseline_sql.py`](baseline_sql.py): Layer 1, `generate` once then `score` offline. [`baseline_agent.py`](baseline_agent.py): `run` captures through [`agent_runner.py`](agent_runner.py), then `score` |
 | Baseline paraphrases | [`datasets/paraphrases.yaml`](datasets/paraphrases.yaml) | Dev questions reworded, with the original reference SQL, to measure wording sensitivity | Same two runners |
 | Baseline held-out | [`datasets/held_out.yaml`](datasets/held_out.yaml) | 30 fresh questions, written after the dev set was frozen; includes the split breakdowns, paging, and refused statements from #745 | Same two runners, at a milestone rather than while tuning |
 | Safety smoke | [`datasets/safety.yaml`](datasets/safety.yaml) | Destructive, injection, and secret-exfiltration arms plus an injection carried by posting text | Agent run: `safety_refusal` |
@@ -139,6 +148,7 @@ Tests live in [`tests/evals/`](../tests/evals/).
 | `test_baseline_dataset.py` | [`baseline_dataset.py`](baseline_dataset.py) + the four case files | Dataset grammar, quoted `answerable`, split/file agreement, paraphrase links, the #745 cases, the safety arms, and every reference statement executing on the fixture |
 | `test_baseline_sql.py` | [`baseline_sql.py`](baseline_sql.py) + [`baseline_dataset.py`](baseline_dataset.py) | Baseline dataset loading, reader role, validator rejection, repeats, offline scoring with execution stubbed |
 | `test_baseline_agent.py` | [`baseline_agent.py`](baseline_agent.py) + [`baseline_dataset.py`](baseline_dataset.py) | Agent capture contract, execution accuracy, the later-turn references, B3 to B5, safety scoring, instrumentation, hand review, agent re-scoring |
+| `test_agent_runner.py` | [`agent_runner.py`](agent_runner.py) | Service-driven turns, the tool wrapper facts, full `request` arguments, executed SQL, validator rejection, tokens, the run's early refusals, and the follow-up memory difference |
 | `test_milestone.py` | [`milestone.py`](milestone.py) | Manifest lineage, evidence digests, dataset drift across all four files, both runners' re-score reproduction, gitignore boundary |
 
 ## The map
@@ -152,7 +162,8 @@ evals/
 ├── milestone.py                  Committed run folders, lineage manifests, runner dispatch
 ├── sql_check.py                  Reader role, validator verdict, result comparison
 ├── baseline_sql.py               Layer 1 generation and offline scoring
-├── baseline_agent.py             Agent capture contract, B2 to B5 and safety scoring, hand review
+├── agent_runner.py               Agent conversations through the service and the tool capture seam
+├── baseline_agent.py             Agent command line, capture contract, B2 to B5 and safety scoring, hand review
 ├── baseline_dataset.py           The baseline case grammar, split files, and quoted enum checks
 ├── baseline_config.py            Validated repeats and row cap from config/settings.yaml
 ├── snapshot_manifest.py          Frozen-snapshot identity and verification

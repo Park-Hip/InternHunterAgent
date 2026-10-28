@@ -290,9 +290,9 @@ The trace URL is built from the project id resolved once at boot, with no I/O on
 3. **Run the prompt tests:** `uv run pytest tests/test_prompt_consistency.py tests/test_prompt_surface.py tests/agents -q`.
 4. **Measure on the branch.**
    For `sql_generation` or `schema_context`, run Layer 1: `evals.baseline_sql generate` sends each first-turn question through the product's own `generate_sql` once and saves the SQL with the prompt hashes, and `score` compares it with the reference SQL on the snapshot without a model call.
-   Layer 1 never reads `system`, so for a `system` change run the agent baseline once the
-   [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759) runner lands; until then review the
-   Layer 2 cases by hand and say in the pull request that no deterministic check covers the change.
+   Layer 1 never reads `system`, so for a `system` change run the agent runner with
+   `--split dev --out` to read the dev conversations and tool facts; deterministic scoring needs a
+   complete milestone run after the change is frozen.
    The commands are in [the evaluation README](../../evals/README.md).
 5. **Merge, and let Render deploy.**
    Until the next step, the new text serves unlinked and `prompt.drift` is logged.

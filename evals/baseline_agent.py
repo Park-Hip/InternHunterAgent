@@ -1,8 +1,8 @@
-"""Score a committed agent baseline run without a model call.
+"""Run and score an agent baseline through the application service.
 
-The runner from #759 drives each baseline conversation through the production
+``evals.agent_runner`` drives each baseline conversation through the production
 service and writes one capture record per question and repeat. This module owns
-the evidence contract and the offline scorer:
+the command line, the evidence contract, and the offline scorer:
 
 ``captures.json``
     ``schema_version``, ``runner`` (``agent``), ``repeats``, ``records`` plus the
@@ -29,18 +29,21 @@ leaks (#761). Tool calls, latency, and tokens are reported per turn but never
 gate a score. The hand-review sheet, not this module, covers what code cannot
 check.
 
-Score a committed run:
+Capture a run, then score it offline:
 
+    uv run python -m evals.baseline_agent run --milestone <label> \\
+      --database-url "$BASELINE_DATABASE_URL"
     uv run python -m evals.baseline_agent score evals/runs/<date>-<label> \\
       --database-url "$BASELINE_DATABASE_URL"
 
-The same run is re-scored by ``python -m evals --rescore``. Both commands make
-no model call.
+The same run is re-scored by ``python -m evals --rescore``. ``score``,
+``review``, and ``--rescore`` make no model call.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 from collections.abc import Iterable
 import math
 import os
@@ -57,6 +60,7 @@ from evals import baseline_dataset, milestone, snapshot_manifest
 from evals.baseline_config import load_baseline_settings
 from evals.baseline_sql import COMPARE_MODES, SNAPSHOT_DATE
 from evals.sql_check import compare_result_sets, verify_reader_role
+from src.core.config import ConfigLoadError
 from src.services.query.sql_validator import validate_sql
 
 SCHEMA_VERSION = milestone.SCHEMA_VERSION
@@ -1280,14 +1284,41 @@ def review(run_dir: Path, out: Path | None) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
-    scoring = commands.add_parser("score")
+    running = commands.add_parser(
+        "run", help="drive every baseline conversation through the service"
+    )
+    running.add_argument(
+        "--milestone",
+        metavar="LABEL",
+        help="write evals/runs/<date>-<label>/ with the complete capture",
+    )
+    running.add_argument(
+        "--out",
+        type=Path,
+        help="write a standalone capture JSON here instead of a milestone",
+    )
+    running.add_argument(
+        "--split",
+        choices=("dev", "held-out", "safety", "all"),
+        default="all",
+        help=(
+            "capture only one split into --out (default: all). Use dev while "
+            "tuning; a milestone always requires every split"
+        ),
+    )
+    running.add_argument(
+        "--database-url",
+        default=os.environ.get("BASELINE_DATABASE_URL"),
+        help="reader URL of the frozen snapshot (default: $BASELINE_DATABASE_URL)",
+    )
+    scoring = commands.add_parser("score", help="score a captured run offline")
     scoring.add_argument("run", type=Path, help="an agent milestone run directory")
     scoring.add_argument(
         "--database-url",
         default=os.environ.get("BASELINE_DATABASE_URL"),
         help="reader URL of the frozen snapshot (default: $BASELINE_DATABASE_URL)",
     )
-    reviewing = commands.add_parser("review")
+    reviewing = commands.add_parser("review", help="render the hand-review sheet")
     reviewing.add_argument("run", type=Path, help="an agent milestone run directory")
     reviewing.add_argument(
         "--out",
@@ -1295,8 +1326,25 @@ def main() -> None:
         help="write the sheet here instead of stdout",
     )
     args = parser.parse_args()
+    command = args.command
     try:
-        if args.command == "score":
+        if command == "run":
+            if not args.milestone and not args.out:
+                parser.error("run needs --milestone or --out")
+            if not args.database_url:
+                parser.error("run needs --database-url or BASELINE_DATABASE_URL")
+            from evals import agent_runner
+
+            asyncio.run(
+                agent_runner.run(
+                    database_url=args.database_url,
+                    milestone_label=args.milestone,
+                    out=args.out,
+                    split=args.split,
+                )
+            )
+            return
+        if command == "score":
             if not args.database_url:
                 parser.error("score needs --database-url or BASELINE_DATABASE_URL")
             score(args.run, args.database_url)
@@ -1305,6 +1353,7 @@ def main() -> None:
     except (
         milestone.MilestoneError,
         snapshot_manifest.SnapshotMismatch,
+        ConfigLoadError,
         CaptureError,
         SQLAlchemyError,
         psycopg.Error,
@@ -1312,7 +1361,7 @@ def main() -> None:
         KeyError,
         OSError,
     ) as exc:
-        parser.exit(2, f"AGENT SCORE FAILED: {exc}\n")
+        parser.exit(2, f"AGENT {command.upper()} FAILED: {exc}\n")
 
 
 if __name__ == "__main__":

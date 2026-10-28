@@ -78,9 +78,9 @@ by the first 12 hex of the SHA-256 of its text.
   `safety_refusal` scores the cases with an `expect` block: the refusal is present and no forbidden value leaks.
   The later-turn reference SQLs are scored; B6 and the behaviors code cannot settle are on a hand-review sheet.
   No model judge is used.
-- **Runner:** the agent conversation runner is
-  [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759). Until it lands, no agent run is
-  committed and no agent metric is reported.
+- **Runner:** [`evals/agent_runner.py`](../../evals/agent_runner.py) drives the conversations through
+  `stream_agent_response`, added in [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759).
+  No agent run is committed yet, so no agent metric is reported.
 - **Pass bars:** B2 at least 85% on held-out; B3 and B4 at 100%; every safety case passes.
 - **Model credit:** run at milestones only, and commit each Layer 1 or agent run under
   [`evals/runs/`](../../evals/runs/) with the evidence re-scoring reads, so a re-score is free
@@ -107,8 +107,8 @@ The 31/32 total is the reproducible result.
 
 The Layer 2 marks were made by hand before the committed-run contract existed, and the run files are not recoverable.
 The agent-run contract and scorer were added in
-[#760](https://github.com/Park-Hip/InternHunterAgent/issues/760), but the runner is #759 and no agent
-run is committed.
+[#760](https://github.com/Park-Hip/InternHunterAgent/issues/760), and the runner landed in
+[#759](https://github.com/Park-Hip/InternHunterAgent/issues/759), but no agent run is committed.
 Those numbers stay historical until one is, and no B2 headline, B3, B4, or B5 number is reported from
 this baseline yet.
 

@@ -1,6 +1,6 @@
 # Agent-run milestones score the SQL the agent ran, with deterministic answer checks
 
-> **Status:** Active, provisional until the runner in [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759) lands · **Decided:** 2026-10-26
+> **Status:** Active · **Decided:** 2026-10-26
 >
 > **Supersedes:** item 6 of [ADR-0066](adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md), the clause that ruled out an agent-run milestone
 
@@ -13,9 +13,12 @@ B3 to B5 were hand-marked once, over 12 cases and 21 turns, with no committed ev
 [#760](https://github.com/Park-Hip/InternHunterAgent/issues/760) changes both: the headline B2 is the SQL the agent actually ran, and the answer checks become deterministic.
 
 The runner that drives a real baseline conversation through the application service is
-[#759](https://github.com/Park-Hip/InternHunterAgent/issues/759), and it is still open.
-This record fixes the evidence contract and the offline scorer before that runner exists, so the runner
+[#759](https://github.com/Park-Hip/InternHunterAgent/issues/759).
+This record fixes the evidence contract and the offline scorer before the runner exists, so the runner
 cannot define its own metric or its own evidence shape.
+The runner later landed in [`evals/agent_runner.py`](../../evals/agent_runner.py); because the tool
+does not return the model's pre-bound statement to a caller, its captures record the executed
+statement and use the executed basis rather than inventing a `generated_sql` field.
 
 ## Decision
 
@@ -29,9 +32,11 @@ cannot define its own metric or its own evidence shape.
    Full result rows are never captured, so the private snapshot stays out of the repository.
 3. **B2 is execution accuracy of the agent's query.** `execution_accuracy` scores the last
    `query_clean_jobs` call in a turn.
-   The `generated_sql` is the exact-match basis because the tool's own row cap and offset are not the
-   model's SQL; a capture that holds only `executed_sql` uses it, and a truncated executed statement
-   loses the tool's cap with the basis recorded.
+   The `generated_sql` is the exact-match basis when a capture has it, because the tool's own row cap
+   and offset are not the model's SQL; the #759 runner captures the executed statement instead and
+   records that basis.
+   When a truncated executed statement ends in the tool's cap, the scorer removes that cap and
+   records `executed_without_cap`.
    The statement is compared with its reference through the non-owner reader role.
    A validator rejection is a failure and is never executed.
    A turn with no query call, no SQL, or a tool error fails; a database error is unscored, not a bad
@@ -62,9 +67,8 @@ cannot define its own metric or its own evidence shape.
    snapshot identity, and the reader role before it computes a row.
    `python -m evals --rescore` recomputes every deterministic row and refuses a mismatch; it calls no
    model.
-10. **This is provisional.** The runner is #759.
-    Until it lands and a real run is committed, no agent metric is reported, and the historical Layer
-    2 hand marks stay historical.
+10. **A committed run is still required.** The runner landed in #759; until a real run is committed,
+    no agent metric is reported, and the historical Layer 2 hand marks stay historical.
 
 ## What still holds from earlier records
 
@@ -84,8 +88,10 @@ cannot define its own metric or its own evidence shape.
 
 ## Consequences
 
-- `evals/baseline_agent.py` owns the capture contract, the four metrics, the hand-review sheet, and the
-  scoring CLI.
+- `evals/baseline_agent.py` owns the command line, the capture contract, the four metrics, the
+  hand-review sheet, and the scoring CLI.
+  `evals/agent_runner.py` owns the conversations, the eval-side tool wrapper, the per-turn token
+  capture, and the in-memory conversation state.
   `evals/milestone.py` writes an agent run, refuses a changed dataset, verifies repeats, and dispatches
   re-scoring by runner.
 - `config/settings.yaml` gains `eval.baseline.layer1_repeats: 1` and
@@ -104,6 +110,8 @@ cannot define its own metric or its own evidence shape.
 | Check | Method | Expected result |
 | --- | --- | --- |
 | The capture contract refuses leaked rows | `uv run pytest tests/evals/test_baseline_agent.py -k "capture or full"` | Green |
+| The runner captures through the service | `uv run pytest tests/evals/test_agent_runner.py` | Green, no provider or database call |
+| A follow-up depends on memory | `uv run pytest tests/evals/test_agent_runner.py -k "memory"` | The real runtime answers the second turn differently with memory and identically without it |
 | The six later-turn references are scored | `uv run pytest tests/evals/test_baseline_agent.py -k "six_later_turns"` | Green |
 | The scorer is offline and repeat-aware | `uv run pytest tests/evals/test_baseline_agent.py` | Green, no model call |
 | A committed agent run re-scores | `uv run python -m evals --rescore <agent run> --database-url <reader URL>` | Every deterministic row reproduces |

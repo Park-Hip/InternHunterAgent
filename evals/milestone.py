@@ -252,12 +252,17 @@ def _scores_payload(
     return payload
 
 
-def _run_id(label: str, run_date: date | None) -> tuple[str, str]:
+def validate_label(label: str) -> None:
+    """Refuse a label that would name a different directory than it claims."""
     if _LABEL.fullmatch(label) is None:
         raise MilestoneError(
             f"label {label!r} must be lowercase letters, digits, '.', '_' or '-', "
             "and must not end with '.'"
         )
+
+
+def _run_id(label: str, run_date: date | None) -> tuple[str, str]:
+    validate_label(label)
     day = (run_date or datetime.now(timezone.utc).date()).isoformat()
     return day, f"{day}-{label}"
 

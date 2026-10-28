@@ -2,8 +2,9 @@
 
 The evaluation path has three parts: the credential-free SQL guard gate, the Layer 1 text-to-SQL
 diagnostic, and the agent baseline run.
-The agent run is the headline B2 to B5 measurement, but its conversation runner is
-[#759](https://github.com/Park-Hip/InternHunterAgent/issues/759) and has not landed.
+The agent run is the headline B2 to B5 measurement.
+Its conversation runner is [`evals/agent_runner.py`](../../evals/agent_runner.py) and drives every
+baseline conversation through `stream_agent_response` ([#759](https://github.com/Park-Hip/InternHunterAgent/issues/759)).
 There is no model judge, and no judge provider is called.
 The scenario harness and DeepEval judge were deleted with the legacy evaluation path
 ([ADR-0066](../decisions/adr-0066-evaluation-is-the-baseline-and-the-sql-guard-gate.md)).
@@ -14,7 +15,7 @@ agent-run milestone and the deterministic answer checks.
 | --- | --- | --- |
 | SQL guard gate | The fixture database | One JSON report and a shell exit code |
 | Layer 1 text-to-SQL | A serving-model credential to generate, then a snapshot reader to score | Generated SQL, then a score report |
-| Agent baseline run | The #759 runner and a serving-model credential to capture, then a snapshot reader to score | A capture, scores, and a hand-review sheet |
+| Agent baseline run | A serving-model credential and the snapshot reader to capture, then the reader again to score | A committed capture, scores, and a hand-review sheet |
 
 ## The baseline case files
 
@@ -51,7 +52,7 @@ uv run python -m evals.baseline_sql generate --split dev --out evals/runs/baseli
 
 A held-out run is generated at a milestone, after the change is frozen.
 Read its per-question failures only after that run is committed, so a fix is not made against the question that is supposed to measure the fix.
-The agent runner follows the same rule when it lands ([#759](https://github.com/Park-Hip/InternHunterAgent/issues/759)).
+The agent runner follows the same rule: use `--split dev --out` while tuning, and a milestone run after the change is frozen.
 
 ## The SQL guard gate
 
@@ -168,17 +169,43 @@ It reports pass counts for the `dev` and `held-out` splits and prints each non-p
 An agent run is the headline measurement for B2 to B5.
 It drives each baseline conversation through the application service, so it includes the follow-up
 turns, the tool calls, the validator, and the answer a user reads.
-The runner is [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759).
-Until it lands, the scorer, the writer, and the hand-review sheet are ready, but no agent run is
-committed.
+The runner is [`evals/agent_runner.py`](../../evals/agent_runner.py) and runs from the
+`baseline_agent` command:
+
+```sh
+uv run python -m evals.baseline_agent run --milestone agent-v1 \
+  --database-url "$BASELINE_DATABASE_URL"
+```
+
+It verifies the reader role and the snapshot before its first model call, asserts both serving-model
+credentials, then drives `stream_agent_response` with an in-memory checkpointer so every follow-up
+sees its conversation.
+`--split dev --out evals/runs/baseline/agent-dev.json` is an inspection form: it writes the dev
+capture without a milestone, and deterministic scoring still needs a complete milestone run.
+A milestone requires every split.
+The command writes the capture only; score it offline with the commands below.
+
+### The capture point for executed SQL
+
+The production MCP tools are discovered as usual and wrapped on the eval side.
+The wrapper sees the exact tool arguments and the `ToolMessage` the production tool returns.
+On success, `ToolMessage.artifact["structured_content"]` is the typed `QueryResult`, whose `sql`
+field is the bounded statement `query_clean_jobs` actually executed.
+That value is recorded as `executed_sql`.
+The model's pre-bound `generated_sql` is not returned to a caller without a production change, so
+this runner does not capture it; the scorer uses the executed statement as its basis.
+A rejection arrives as an error-status message beginning with `rejected:` and is recorded as the
+validator verdict.
+No eval-only branch is added to the service or the tool.
 
 ### What it scores
 
 `execution_accuracy` is B2: the exact result of the SQL behind the last `query_clean_jobs` call in a
 turn.
-The `generated_sql` is the exact-match basis because the tool's own `LIMIT` and `OFFSET` are not the
-model's SQL.
-A capture that holds only `executed_sql` uses that statement as-is.
+The capture field `generated_sql` is the exact-match basis when a capture has it, because the tool's
+own `LIMIT` and `OFFSET` are not the model's SQL.
+The runner records `executed_sql` instead, so a run from this runner is compared on its executed
+statement and records that basis.
 When a truncated executed statement ends in the tool's row cap, the scorer removes that cap and
 records `executed_without_cap` as the basis.
 The comparison runs through the reader role and follows the question's `ids`, `count`, or `rows`
@@ -228,7 +255,11 @@ The runner writes one capture record per question and repeat through
 `total_rows` is the real match total, `rows_returned` is the page length, and `count_values` holds the
 figures an aggregate row returned.
 A page size never substitutes for a match total.
+`truncated` is true only when a non-empty page shows part of a larger match set; an empty page past
+the end is `no_more`, not `truncated`.
 `answer_source` is `model` or `fallback`.
+The runner records the full `request` argument, not the short form published in the public tool event.
+It records `executed_sql` and leaves `generated_sql` out, for the capture-point reason above.
 A validator rejection is recorded as `false`, as `{"valid": false, "reason": "..."}`, or as a string
 starting with `reject`; the scorer never executes it.
 Full result rows under `rows`, `raw_rows`, `jobs`, or `tool_output` are refused, because the full
@@ -237,6 +268,10 @@ production snapshot cannot be committed (#756).
 ### Scoring and review
 
 ```sh
+# Capture a committed run: needs the serving credential and the snapshot reader.
+uv run python -m evals.baseline_agent run --milestone agent-v1 \
+  --database-url "$BASELINE_DATABASE_URL"
+
 # Score a committed agent run: no model call, but the snapshot is needed.
 uv run python -m evals.baseline_agent score evals/runs/<date>-<label> \
   --database-url "$BASELINE_DATABASE_URL"
@@ -288,8 +323,9 @@ uv run python -m evals.baseline_sql generate --milestone baseline-v1
 uv run python -m evals.baseline_sql score evals/runs/2026-10-26-baseline-v1 \
   --database-url "$BASELINE_DATABASE_URL"
 
-# Agent baseline run: the #759 runner writes the capture through
-# milestone.write_agent_run, then these commands score it offline.
+# Agent baseline run: capture through the service, then score offline.
+uv run python -m evals.baseline_agent run --milestone agent-v1 \
+  --database-url "$BASELINE_DATABASE_URL"
 uv run python -m evals.baseline_agent score evals/runs/<date>-agent-v1 \
   --database-url "$BASELINE_DATABASE_URL"
 uv run python -m evals.baseline_agent review evals/runs/<date>-agent-v1 \
@@ -301,7 +337,7 @@ uv run python -m evals --rescore evals/runs/2026-10-26-baseline-v1 \
 ```
 
 A Layer 1 run is written by `generate` and completed by `score`; until `score` runs, its manifest says `status: generated` and re-scoring refuses it.
-An agent run is written by the #759 runner and completed by `baseline_agent score` in the same way.
+An agent run is written by `run` and completed by `baseline_agent score` in the same way.
 
 The directory holds three files, plus the agent run's hand-review sheet:
 
@@ -353,6 +389,8 @@ GRANT SELECT ON TABLE public.alembic_version TO internhunter_snapshot_reader;
 ```
 
 Point `BASELINE_DATABASE_URL` at that reader role.
+The agent runner takes that URL as `--database-url` and binds it to `AGENT_DATABASE_URL` for the tool
+path, so the captured tool reads use the same column-granted role as the offline score.
 The scorer refuses a superuser, the table owner, table-level `SELECT`, a write privilege, a role that can read a hidden column, or a role that cannot read a contract column.
 The reader also needs `SELECT` on `alembic_version`, because the snapshot check reads the migration revision; without it the revision cannot be verified and scoring refuses.
 Verify the loaded rows and the revision with the reader URL:

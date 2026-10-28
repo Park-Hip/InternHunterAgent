@@ -15,6 +15,7 @@ This directory holds the plain-Python evaluation tooling, with no model judge:
   writes the committed capture.
 - The capture contract and offline scorer for the agent baseline run, which is the headline B2 to
   B5 measurement plus the safety smoke check.
+- The per-question regression diff and absolute floor check between two committed runs.
 
 The runner is [`agent_runner.py`](agent_runner.py), added by
 [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759).
@@ -55,6 +56,9 @@ uv run python -m evals.baseline_agent run --split dev --out evals/runs/baseline/
 uv run python -m evals.baseline_agent score evals/runs/<date>-agent-v1 --database-url <snapshot reader URL>
 uv run python -m evals.baseline_agent review evals/runs/<date>-agent-v1 --out evals/runs/<date>-agent-v1/hand_review.md
 uv run python -m evals --rescore evals/runs/<date>-agent-v1 --database-url <snapshot reader URL>
+
+# Per-question diff and absolute floors between two committed runs (#762).
+uv run python -m evals --diff evals/runs/<last> evals/runs/<new> [--explained <ids>]
 ```
 
 `--out` writes the gate report elsewhere; the default is the gitignored
@@ -69,6 +73,9 @@ as a milestone.
 Only dated milestone directories are committed; other output under `evals/runs/` stays local and
 gitignored.
 `--rescore` verifies a committed run of either runner from its own evidence and makes no model call.
+`--diff` verifies both manifests and their evidence digests, prints the per-question changes, and
+checks the absolute floors;
+`--explained` names the regressions a pull request explains.
 
 The fixture loader rebuilds and seeds with the owner DSN in `eval.fixture.database_url`, then
 provisions `internhunter_eval_reader` with column-level `SELECT` on the 16 contract columns and
@@ -134,6 +141,8 @@ A null score is not applicable and is excluded from the pass rate, never counted
 Tool calls, latency, and tokens are recorded beside the rows as instrumentation and never gate.
 The generated `hand_review.md` covers invented postings, wording, concision, and filter retention for
 a human; there is no model judge.
+The regression diff adds no metric: it compares these rows between two committed runs and blocks an
+unexplained newly failing question or a floor breach (#762).
 
 ## Test-to-module mapping
 
@@ -150,6 +159,7 @@ Tests live in [`tests/evals/`](../tests/evals/).
 | `test_baseline_agent.py` | [`baseline_agent.py`](baseline_agent.py) + [`baseline_dataset.py`](baseline_dataset.py) | Agent capture contract, execution accuracy, the later-turn references, B3 to B5, safety scoring, instrumentation, hand review, agent re-scoring |
 | `test_agent_runner.py` | [`agent_runner.py`](agent_runner.py) | Service-driven turns, the tool wrapper facts, full `request` arguments, executed SQL, validator rejection, tokens, the run's early refusals, and the follow-up memory difference |
 | `test_milestone.py` | [`milestone.py`](milestone.py) | Manifest lineage, evidence digests, dataset drift across all four files, both runners' re-score reproduction, gitignore boundary |
+| `test_regression.py` | [`regression.py`](regression.py) + [`milestone.py`](milestone.py) | Per-question verdicts, lost evidence, floor arithmetic, run comparability, and the `--diff` CLI |
 
 ## The map
 
@@ -160,6 +170,7 @@ evals/
 ├── sql_gate.py                   Credential-free SQL guard gate
 ├── reporting.py                  Shared result grouping and table rendering
 ├── milestone.py                  Committed run folders, lineage manifests, runner dispatch
+├── regression.py                 Per-question diff and absolute floors between committed runs
 ├── sql_check.py                  Reader role, validator verdict, result comparison
 ├── baseline_sql.py               Layer 1 generation and offline scoring
 ├── agent_runner.py               Agent conversations through the service and the tool capture seam

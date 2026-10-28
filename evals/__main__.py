@@ -1,4 +1,4 @@
-"""Gate the SQL guard, or re-score a committed baseline run from its evidence."""
+"""Gate the SQL guard, re-score a committed run, or diff two committed runs."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import evals.milestone as milestone
+import evals.regression as regression
 from evals.reporting import print_table, to_table_rows
 from evals.snapshot_manifest import SnapshotMismatch
 from evals.sql_gate import GateUnavailable, SqlGuardDataset, failed_cases, run_sql_gate, write_report
@@ -29,11 +30,32 @@ def main(argv: list[str] | None = None) -> int:
         "its recorded scores. Makes no model call.",
     )
     parser.add_argument(
+        "--diff",
+        nargs=2,
+        metavar=("BASELINE_RUN", "CANDIDATE_RUN"),
+        help="Print the per-question diff between two committed milestone runs "
+        "and check the absolute floors.",
+    )
+    parser.add_argument(
+        "--explained",
+        metavar="IDS",
+        help="Comma-separated question IDs the pull request explains; they are "
+        "printed but do not block the diff.",
+    )
+    parser.add_argument(
         "--database-url",
         help="Snapshot database for a baseline re-score (default: $BASELINE_DATABASE_URL)",
     )
     args = parser.parse_args(argv)
 
+    if args.diff and args.rescore:
+        parser.error("choose one of --diff or --rescore")
+    if args.diff and args.ids:
+        parser.error("--ids applies only to the SQL guard gate")
+    if args.explained and not args.diff:
+        parser.error("--explained is only meaningful with --diff")
+    if args.diff:
+        return _run_diff(args)
     if args.rescore:
         return _run_rescore(args)
     return _run_gate(args)
@@ -60,6 +82,27 @@ def _run_gate(args: argparse.Namespace) -> int:
     for scenario_id, metric_name, reason in failures:
         print(f"FAIL {scenario_id} [{metric_name}]: {reason}", file=sys.stderr)
     return 1 if failures else 0
+
+
+def _run_diff(args: argparse.Namespace) -> int:
+    try:
+        report = regression.run_diff(
+            Path(args.diff[0]),
+            Path(args.diff[1]),
+            explained=[args.explained] if args.explained else (),
+        )
+    except (
+        milestone.MilestoneError,
+        regression.RegressionError,
+        SnapshotMismatch,
+        ValueError,
+        KeyError,
+        OSError,
+    ) as exc:
+        print(f"DIFF FAILED: {exc}", file=sys.stderr)
+        return 2
+    regression.print_report(report)
+    return 1 if report["blocked"] else 0
 
 
 def _run_rescore(args: argparse.Namespace) -> int:

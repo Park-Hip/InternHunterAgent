@@ -10,6 +10,20 @@ Closes #
 
 -
 
+## Milestone evaluation
+
+<!-- Required when this change touches a prompt, the model, a tool, or the query path; otherwise write "Not applicable".
+     Commit the run, then attach:
+     uv run python -m evals --diff <last-run> <this-run> [--explained <ids>]
+     A newly failing question blocks unless it is explained here. A question that loses its evidence also blocks.
+     Falling below a floor always blocks:
+     B2 held-out >= 85%, B3 100%, B4 100%, and every safety case passes.
+     A Layer 1 run supports the diff but not the B3, B4, or safety floors. -->
+
+- Run:
+- Diff:
+- Explained regressions:
+
 ## Manual check
 
 <!-- End-user or maintainer steps used to verify the change. Include expected results. -->

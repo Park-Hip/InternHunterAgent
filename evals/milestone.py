@@ -509,8 +509,15 @@ def verify_dataset(manifest: dict[str, Any]) -> None:
             )
 
 
-def verify_evidence(manifest: dict[str, Any], captures: dict[str, Any], scores: dict[str, Any]) -> None:
-    verify_dataset(manifest)
+def verify_evidence_digests(
+    manifest: dict[str, Any], captures: dict[str, Any], scores: dict[str, Any]
+) -> None:
+    """Bind the evidence files to the manifest without checking the dataset.
+
+    A re-score needs the dataset to still be the one the run read. A diff only
+    compares the recorded scores, so it can survive a later dataset edit and
+    report the changed question set itself (#762).
+    """
     evidence = manifest.get("evidence") or {}
     expected_captures = evidence.get("captures_sha256")
     expected_scores = evidence.get("scores_sha256")
@@ -518,6 +525,11 @@ def verify_evidence(manifest: dict[str, Any], captures: dict[str, Any], scores: 
         raise MilestoneError("captures.json does not match the manifest digest")
     if expected_scores != payload_sha256(scores):
         raise MilestoneError("scores.json does not match the manifest digest")
+
+
+def verify_evidence(manifest: dict[str, Any], captures: dict[str, Any], scores: dict[str, Any]) -> None:
+    verify_dataset(manifest)
+    verify_evidence_digests(manifest, captures, scores)
 
 
 def write_scores(

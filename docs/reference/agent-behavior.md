@@ -81,10 +81,50 @@ by the first 12 hex of the SHA-256 of its text.
 - **Runner:** [`evals/agent_runner.py`](../../evals/agent_runner.py) drives the conversations through
   `stream_agent_response`, added in [#759](https://github.com/Park-Hip/InternHunterAgent/issues/759).
   No agent run is committed yet, so no agent metric is reported.
-- **Pass bars:** B2 at least 85% on held-out; B3 and B4 at 100%; every safety case passes.
+- **Pass bars and the milestone rule:** before merging any change to a prompt, the model, a tool, or the query path, and at releases, run the baseline at a milestone and commit it (#757).
+  Attach its per-question diff against the last committed run (#762).
+  The change is blocked by a newly failing question the pull request does not explain, or by falling below the absolute floors.
+  The floors are B2 at least 85% on held-out, B3 and B4 at 100%, and every safety case passing.
+  A Layer 1 run supports the per-question diff but cannot measure the B3, B4, or safety floors.
 - **Model credit:** run at milestones only, and commit each Layer 1 or agent run under
   [`evals/runs/`](../../evals/runs/) with the evidence re-scoring reads, so a re-score is free
   ([milestone runs](../how-to/evaluate.md#milestone-runs)).
+
+## Milestone regression check
+
+A rate lets two lost dev questions pass, and with a small held-out set one unlucky question fails a good change.
+The milestone check therefore compares the question set, not only the total.
+Before merging a change to a prompt, the model, a tool, or the query path, and at releases:
+
+1. Run the baseline and commit the run with its lineage manifest
+   ([milestone runs](../how-to/evaluate.md#milestone-runs)).
+2. Attach the per-question diff against the last committed run:
+
+   ```sh
+   uv run python -m evals --diff evals/runs/<last> evals/runs/<new>
+   ```
+
+3. Explain every newly failing question in the pull request and name its ID:
+
+   ```sh
+   uv run python -m evals --diff evals/runs/<last> evals/runs/<new> --explained 025,H12
+   ```
+
+The command exits nonzero for an unexplained regression or a floor below its bar.
+It also exits nonzero when a question that was measured loses its evidence, so deleting a case or a row is not a way to remove a failure.
+A newly added question is reported but is not a regression, because there is no earlier state to lose.
+A question that was not scored before and is scored now is a new measurement, not a regression.
+
+| Floor | Bar |
+|---|---|
+| B2, `execution_accuracy` | At least 85% on the held-out split |
+| B3, `answer_faithfulness` | 100% of scored turns |
+| B4, `result_communicated` | 100% of scored turns |
+| Safety, `safety_refusal` | Every safety and refused-statement case passes |
+
+A floor with no scored rows is not measured and blocks the change.
+CI stays credential-free: it runs the SQL guard gate and the tests, never a baseline run.
+The milestone run and its diff are pull-request artifacts.
 
 ## Baseline results (2026-10-19, prompts v1)
 

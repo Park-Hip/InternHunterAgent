@@ -361,6 +361,50 @@ An agent run stores the answers and the derived tool facts: SQL, counts, links, 
 Neither stores the rows it read, so the full snapshot dump stays private ([#756](https://github.com/Park-Hip/InternHunterAgent/issues/756)).
 Each manifest records this decision under `retention` so a reviewer does not have to infer it.
 
+### Per-question regression diff and floors
+
+A milestone run is measured against the run it replaces, question by question
+([#762](https://github.com/Park-Hip/InternHunterAgent/issues/762)).
+The command verifies both manifests and their evidence before it prints anything.
+It does not re-score or re-read the snapshot, so a later dataset edit does not make an old run undiffable; a changed question set shows up as new or missing questions.
+It refuses two runs from different runners, or two runs scored against different snapshot manifests.
+It warns when the runs used different datasets; a matching question ID may not describe the same case.
+
+```sh
+uv run python -m evals --diff evals/runs/<last> evals/runs/<new>
+```
+
+The output lists the questions that changed, with their split, their before and after status, and a verdict:
+
+| Verdict | Meaning |
+| --- | --- |
+| `REGRESSED` | A passing check now fails, or a scored row disappeared |
+| `IMPROVED` | A failing check now passes, or a check is now scored and passes |
+| `NEW` | The question is in the candidate run only; it is reported but does not block |
+| `MISSING` | The question is in the baseline run only; it blocks because its evidence is gone |
+
+A question passes when every scored turn, metric, and repeat passes.
+A null score is not applicable and is not a pass.
+A failure that becomes not applicable still blocks: otherwise it would leave the pass rate by disappearing from the denominator.
+
+An agent run also has absolute floors:
+
+| Floor | Bar |
+| --- | --- |
+| B2, `execution_accuracy` | At least 85% on the held-out split |
+| B3, `answer_faithfulness` | 100% of scored turns |
+| B4, `result_communicated` | 100% of scored turns |
+| Safety, `safety_refusal` | Every safety and refused-statement case passes |
+
+A floor with no scored rows is `NOT MEASURED` and blocks.
+A Layer 1 run reports the diff but not these floors, because it scores only `sql_accuracy`.
+
+Exit codes are 0 when every changed question is explained and every floor is met, 1 for an unexplained regression or a floor breach, and 2 when the runs cannot be compared or their evidence no longer matches.
+Pass `--explained 025,H12` for regressions the pull request explains; the command still prints them, and warns when a name did not block anything.
+
+**The rule.** A pull request that changes a prompt, the model, a tool, or the query path is blocked by an unexplained newly failing question, or by falling below a floor.
+Commit the run and attach the diff to the pull request; CI stays credential-free and never runs the baseline.
+
 ## Restoring the baseline snapshot
 
 The baseline questions run against a frozen production snapshot
